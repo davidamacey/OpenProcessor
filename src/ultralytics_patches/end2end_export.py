@@ -609,7 +609,10 @@ class End2End_TRT(torch.nn.Module):
         self.v10detect = v10detect
 
         if is_det_model and not self.v10detect:
-            self.model.model[-1].end2end = False
+            # Note: end2end is now a read-only property in ultralytics
+            # It checks for 'one2one' attribute, so we ensure one2one is not present
+            if hasattr(self.model.model[-1], 'one2one'):
+                delattr(self.model.model[-1], 'one2one')
             self.patch_model = ONNX_EfficientNMS_TRT
             self.end2end = self.patch_model(
                 class_agnostic,
@@ -624,7 +627,10 @@ class End2End_TRT(torch.nn.Module):
             )
             self.end2end.eval()
         elif not is_det_model and not self.v10detect:
-            self.model.model[-1].end2end = False
+            # Note: end2end is now a read-only property in ultralytics
+            # It checks for 'one2one' attribute, so we ensure one2one is not present
+            if hasattr(self.model.model[-1], 'one2one'):
+                delattr(self.model.model[-1], 'one2one')
             self.patch_model = ONNX_End2End_MASK_TRT
             self.end2end = self.patch_model(
                 class_agnostic,
