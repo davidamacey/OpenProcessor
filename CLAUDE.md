@@ -2,6 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Python Environment
+
+**ALWAYS use the project's virtual environment for all Python operations:**
+
+```bash
+# Activate the venv first
+source .venv/bin/activate
+
+# Then run Python commands
+python script.py
+pytest tests/
+pre-commit run --all-files
+```
+
+**When running Python scripts or commands:**
+- ✅ CORRECT: `source .venv/bin/activate && python tests/test_full_system.py`
+- ✅ CORRECT: `source .venv/bin/activate && pre-commit run --all-files`
+- ❌ WRONG: `python tests/test_full_system.py` (uses system Python)
+- ❌ WRONG: `python3 tests/test_full_system.py` (uses system Python3)
+
+The `.venv` directory contains all required dependencies including:
+- FastAPI, uvicorn, pydantic
+- pre-commit, ruff, mypy, bandit
+- pytest, requests
+- All ML libraries (torch, transformers, opencv, etc.)
+
 ## Project Overview
 
 High-performance visual AI API built on FastAPI and NVIDIA Triton Inference Server. The system provides a unified, capability-based REST API for computer vision tasks.
@@ -275,10 +301,18 @@ docker compose down
 ### Testing
 
 ```bash
-# Test all endpoints
-make test-all
+# Comprehensive test suite (all endpoints, ingest, search)
+source .venv/bin/activate
+python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
 
-# Test specific capabilities
+# Visual validation (draws bounding boxes on images)
+python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
+
+# View annotated images
+ls test_results/*.jpg
+
+# Quick API tests (legacy Makefile targets)
+make test-all
 make test-detect
 make test-faces
 make test-embed

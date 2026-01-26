@@ -60,9 +60,11 @@ GRPC_CHANNEL_OPTIONS = [
     ('grpc.max_receive_message_length', 100 * 1024 * 1024),  # 100MB
     # Connection pooling - allow many concurrent streams per connection
     ('grpc.max_concurrent_streams', 1000),
-    # HTTP/2 flow control optimization
-    ('grpc.http2.min_time_between_pings_ms', 10000),  # Min 10s between pings
-    ('grpc.http2.max_pings_without_data', 0),  # Allow pings without data
+    # HTTP/2 flow control optimization - relaxed for high-concurrency batch processing
+    ('grpc.http2.min_time_between_pings_ms', 5000),  # Min 5s between pings (was 10s)
+    ('grpc.http2.max_pings_without_data', 2),  # Allow 2 pings without data (was 0 = unlimited)
+    # Increase BDP (Bandwidth Delay Product) ping interval to reduce ping frequency
+    ('grpc.http2.bdp_probe', 0),  # Disable BDP probing to reduce automatic pings
     # TCP optimization for low latency
     # NOTE: grpc.tcp_nodelay is not supported in Python gRPC, using socket option
     # ('grpc.so_reuseport', 1),  # Enable port reuse for multi-process  # noqa: ERA001
