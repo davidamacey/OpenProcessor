@@ -1,0 +1,93 @@
+# Face Pipeline C++ Backend Configuration
+#
+# High-performance face detection + recognition:
+# - Receives 640x640 (detection) and HD image (cropping)
+# - YOLO11-face detection (internal BLS call)
+# - GPU bilinear face cropping (CUDA kernel)
+# - ArcFace embedding (internal BLS call)
+# - L2 normalization (CUDA kernel)
+#
+# All face data stays on GPU - zero CPU round-trips!
+
+name: "face_pipeline_cpp"
+backend: "face_pipeline"
+max_batch_size: 0  # Variable batch handled internally
+
+input [
+  {
+    name: "face_images"
+    data_type: TYPE_FP32
+    dims: [ 1, 3, 640, 640 ]
+  },
+  {
+    name: "original_image"
+    data_type: TYPE_FP32
+    dims: [ 1, 3, -1, -1 ]
+  },
+  {
+    name: "orig_shape"
+    data_type: TYPE_INT32
+    dims: [ 2 ]
+  }
+]
+
+output [
+  {
+    name: "num_faces"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "boxes"
+    data_type: TYPE_FP32
+    dims: [ -1, 4 ]
+  },
+  {
+    name: "landmarks"
+    data_type: TYPE_FP32
+    dims: [ -1, 10 ]
+  },
+  {
+    name: "scores"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "embeddings"
+    data_type: TYPE_FP32
+    dims: [ -1, 512 ]
+  },
+  {
+    name: "quality"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 4
+    kind: KIND_GPU
+    gpus: [0]
+  }
+]
+
+# Model parameters
+parameters [
+  {
+    key: "yolo_model"
+    value: { string_value: "yolo11_face_small_trt_end2end" }
+  },
+  {
+    key: "arcface_model"
+    value: { string_value: "arcface_w600k_r50" }
+  },
+  {
+    key: "confidence_threshold"
+    value: { string_value: "0.5" }
+  },
+  {
+    key: "face_margin"
+    value: { string_value: "0.4" }
+  }
+]

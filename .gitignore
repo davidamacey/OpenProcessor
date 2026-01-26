@@ -44,11 +44,8 @@ yolov*[0-9]/  # Matches yolov8/, yolov11/ etc. but not yolov11_small_trt/
 benchmarks/triton_bench
 
 # Benchmark results (auto-generated)
-benchmarks/results/*.json
-benchmarks/results/*.csv
-benchmarks/results/*.png
-benchmarks/results/*.html
-benchmarks/results/*.txt
+results/
+benchmarks/results/
 
 # Load test results
 load_test_results/

@@ -95,6 +95,26 @@ def find_images(directory: Path, max_images: int = 1000) -> list[Path]:
     return sorted(images)
 
 
+def find_images_multi(directories: list[Path], max_images: int = 1000) -> list[Path]:
+    """Recursively find image files from multiple directories."""
+    extensions = {'.jpg', '.jpeg', '.png', '.webp'}
+    images = []
+
+    for directory in directories:
+        if not directory.exists():
+            logger.warning(f'Directory not found: {directory}')
+            continue
+
+        for root, _, files in os.walk(directory):
+            for f in files:
+                if Path(f).suffix.lower() in extensions:
+                    images.append(Path(root) / f)
+                    if len(images) >= max_images:
+                        return images
+
+    return sorted(images)
+
+
 def ingest_single_image(image_path: Path) -> dict | None:
     """Ingest single image using /track_e/ingest endpoint which handles all indexing."""
     try:
@@ -158,7 +178,7 @@ def ingest_batch_images(image_paths: list[Path]) -> list[dict]:
                 'image_paths': ','.join(paths_str),
                 'skip_duplicates': 'false',
                 'detect_near_duplicates': 'false',
-                'enable_ocr': 'false',  # OCR is slow, disable for bulk ingest
+                'enable_ocr': 'true',  # Enable OCR for full ML pipeline
             },
             timeout=300,
         )
@@ -574,14 +594,21 @@ async def main(args):
         else:
             logger.info('\nStep 1: Indexes will be created automatically during ingestion')
 
-        # Step 2: Find images
-        images_dir = Path(args.images_dir)
-        if not images_dir.exists():
-            logger.error(f'Directory not found: {images_dir}')
-            return 1
-
-        logger.info(f'\nStep 2: Finding images in {images_dir}...')
-        images = find_images(images_dir, args.max_images)
+        # Step 2: Find images from one or multiple directories
+        if args.images_dirs:
+            # Parse comma-separated directories
+            dir_list = [Path(d.strip()) for d in args.images_dirs.split(',')]
+            logger.info(f'\nStep 2: Finding images in {len(dir_list)} directories...')
+            for d in dir_list:
+                logger.info(f'  - {d}')
+            images = find_images_multi(dir_list, args.max_images)
+        else:
+            images_dir = Path(args.images_dir)
+            if not images_dir.exists():
+                logger.error(f'Directory not found: {images_dir}')
+                return 1
+            logger.info(f'\nStep 2: Finding images in {images_dir}...')
+            images = find_images(images_dir, args.max_images)
         logger.info(f'Found {len(images)} images')
 
         if not images:
@@ -711,7 +738,16 @@ async def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Multi-Index Ingestion Pipeline')
-    parser.add_argument('--images-dir', type=str, required=True, help='Images directory')
+    parser.add_argument(
+        '--images-dir',
+        type=str,
+        help='Single images directory (use --images-dirs for multiple)',
+    )
+    parser.add_argument(
+        '--images-dirs',
+        type=str,
+        help='Comma-separated list of image directories to process',
+    )
     parser.add_argument('--max-images', type=int, default=5000, help='Max images to process')
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size for ingestion')
     parser.add_argument('--workers', type=int, default=16, help='Number of parallel workers')
@@ -723,6 +759,10 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
+
+    # Validate that at least one directory option is provided
+    if not args.images_dir and not args.images_dirs:
+        parser.error('Either --images-dir or --images-dirs is required')
 
     # Allow overriding globals from command line
     if args.batch_size:

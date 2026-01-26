@@ -1,0 +1,36 @@
+# Dockerfile for building Face Pipeline C++ Backend
+#
+# Build with:
+#   docker build -f Dockerfile.build -t face-pipeline-builder .
+#   docker run --rm -v $(pwd):/workspace face-pipeline-builder
+#
+# Output: libtriton_face_pipeline.so
+
+FROM nvcr.io/nvidia/tritonserver:24.01-py3 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    rapidjson-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Get Triton backend and common repos for headers
+WORKDIR /opt
+RUN git clone --depth 1 --branch r24.01 https://github.com/triton-inference-server/backend.git triton-backend && \
+    git clone --depth 1 --branch r24.01 https://github.com/triton-inference-server/common.git triton-common && \
+    git clone --depth 1 --branch r24.01 https://github.com/triton-inference-server/core.git triton-core
+
+# Set up build environment
+ENV TRITON_BACKEND_REPO=/opt/triton-backend
+ENV TRITON_COMMON_REPO=/opt/triton-common
+ENV TRITON_CORE_REPO=/opt/triton-core
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+
+WORKDIR /workspace
+
+# Build script
+CMD ["bash", "-c", "mkdir -p build && cd build && cmake .. && make -j$(nproc) && cp libtriton_face_pipeline.so ../"]
