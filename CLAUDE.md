@@ -115,6 +115,24 @@ models/
 
 All endpoints available on port **4603**.
 
+### API Versioning
+
+All API endpoints are available at both the root path and under the `/v1` prefix:
+- `/detect` and `/v1/detect` - Both work identically
+- `/faces/recognize` and `/v1/faces/recognize` - Both work identically
+
+**Versioned endpoints are recommended** for production use as they ensure compatibility
+when new API versions are released. The current supported version is **v1**.
+
+Check API version via:
+```bash
+curl http://localhost:4603/ | jq '.api_versions'
+# {"current":"v1","supported":["v1"],"deprecated":[]}
+
+curl http://localhost:4603/health | jq '{version, api_version}'
+# {"version":"6.0.0","api_version":"v1"}
+```
+
 ### /detect - Object Detection
 
 | Method | Endpoint | Description |
