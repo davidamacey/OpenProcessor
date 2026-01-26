@@ -111,8 +111,8 @@ DEFAULT_MODELS: dict[str, dict[str, Any]] = {
 
 # Export settings
 IMG_SIZE = 640
-DEVICE = 0  # GPU 0
-HALF = True  # FP16 precision
+DEVICE = 0 if torch.cuda.is_available() else 'cpu'  # GPU 0 or CPU fallback
+HALF = bool(torch.cuda.is_available())  # FP16 on GPU, FP32 on CPU
 WORKSPACE_GB = 4  # TensorRT workspace size in GB
 
 # NMS settings (for end2end exports)
@@ -150,8 +150,8 @@ def check_gpu_memory(required_gb: float = 4.0) -> bool:
                     f'Low GPU memory: {free_memory_gb:.1f}GB available, {required_gb}GB recommended'
                 )
             return True
-        logger.error('CUDA not available')
-        return False
+        logger.warning('CUDA not available to PyTorch, but continuing (TensorRT may still work)')
+        return True  # TensorRT export doesn't require torch.cuda.is_available()
     except Exception as e:
         logger.warning(f'Could not check GPU memory: {e}')
         return True  # Continue anyway
@@ -1340,7 +1340,7 @@ Examples:
     logger.info(f'Models: {", ".join(models_to_export.keys())}')
     logger.info(f'Formats: {", ".join(args.formats)}')
     logger.info(f'Image size: {IMG_SIZE}x{IMG_SIZE}')
-    logger.info(f'Device: cuda:{DEVICE}')
+    logger.info(f'Device: {f"cuda:{DEVICE}" if DEVICE != "cpu" else "cpu"}')
     logger.info(f'Precision: {"FP16" if HALF else "FP32"}')
     logger.info(f'Workspace: {WORKSPACE_GB}GB')
     if 'onnx_end2end' in args.formats or 'trt_end2end' in args.formats or 'all' in args.formats:

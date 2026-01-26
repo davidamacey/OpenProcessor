@@ -1,0 +1,35 @@
+{
+  "formats": [
+    "onnx_end2end",
+    "trt_end2end"
+  ],
+  "models": [
+    "yolo11s_test_upload"
+  ],
+  "results": [
+    {
+      "model": "yolo11s_test_upload",
+      "triton_name": "yolo11s_test_upload",
+      "max_batch": 32,
+      "topk": 300,
+      "num_classes": 80,
+      "class_names_count": 80,
+      "onnx_end2end": {
+        "status": "success",
+        "path": "/app/models/yolo11s_test_upload_end2end/1/model.onnx",
+        "host_path": "./models/yolo11s_test_upload_end2end/1/model.onnx",
+        "has_nms": true,
+        "output_format": "num_dets, det_boxes, det_scores, det_classes",
+        "box_format": "[0,1] normalized"
+      },
+      "trt_end2end": {
+        "status": "success",
+        "path": "/app/models/yolo11s_test_upload_trt_end2end/1/model.plan",
+        "host_path": "./models/yolo11s_test_upload_trt_end2end/1/model.plan",
+        "has_nms": true,
+        "output_format": "num_dets, det_boxes, det_scores, det_classes",
+        "source": "end2end_onnx"
+      }
+    }
+  ]
+}
