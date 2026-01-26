@@ -40,6 +40,7 @@ from src.routers import (
     persons_router,
     query_router,
     search_router,
+    v1_router,
 )
 
 
@@ -376,6 +377,9 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
+
+    # Versioned API - All endpoints also available under /v1
+    application.include_router(v1_router)  # /v1/* - Versioned API
 
     return application
 
