@@ -249,7 +249,7 @@ Ingest a single image with automatic indexing to appropriate OpenSearch indexes.
 )
 async def ingest_image(
     search_service: VisualSearchDep,
-    file: UploadFile = File(..., description='Image file (JPEG/PNG)'),
+    image: UploadFile = File(..., description='Image file (JPEG/PNG)'),
     image_id: str | None = Form(
         None,
         description='Unique image identifier. Auto-generated UUID if not provided.',
@@ -293,7 +293,7 @@ async def ingest_image(
 
     try:
         # Read image bytes
-        image_bytes = await file.read()
+        image_bytes = await image.read()
         if not image_bytes:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -437,14 +437,14 @@ Check the `error_details` field for per-image error information.
 )
 async def ingest_batch(
     search_service: VisualSearchDep,
-    files: list[UploadFile] = File(..., description='Image files (JPEG/PNG), max 64'),
+    images: list[UploadFile] = File(..., description='Image files (JPEG/PNG), max 64'),
     image_ids: str | None = Form(
         None,
-        description='JSON array of image IDs corresponding to files. Auto-generated if not provided.',
+        description='JSON array of image IDs corresponding to images. Auto-generated if not provided.',
     ),
     image_paths: str | None = Form(
         None,
-        description='JSON array of image paths corresponding to files.',
+        description='JSON array of image paths corresponding to images.',
     ),
     skip_duplicates: bool = Form(
         True,
@@ -476,20 +476,20 @@ async def ingest_batch(
 
     try:
         # Validate batch size
-        if len(files) == 0:
+        if len(images) == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='No files provided',
+                detail='No images provided',
             )
 
-        if len(files) > 64:
+        if len(images) > 64:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Maximum 64 images per batch',
             )
 
         # Parse image_ids JSON array if provided
-        parsed_ids: list[str | None] = [None] * len(files)
+        parsed_ids: list[str | None] = [None] * len(images)
         if image_ids:
             try:
                 ids_list = json.loads(image_ids)
@@ -498,10 +498,10 @@ async def ingest_batch(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail='image_ids must be a JSON array',
                     )
-                if len(ids_list) != len(files):
+                if len(ids_list) != len(images):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'image_ids length ({len(ids_list)}) must match files length ({len(files)})',
+                        detail=f'image_ids length ({len(ids_list)}) must match images length ({len(images)})',
                     )
                 parsed_ids = ids_list
             except json.JSONDecodeError as e:
@@ -511,7 +511,7 @@ async def ingest_batch(
                 ) from e
 
         # Parse image_paths JSON array if provided
-        parsed_paths: list[str | None] = [None] * len(files)
+        parsed_paths: list[str | None] = [None] * len(images)
         if image_paths:
             try:
                 paths_list = json.loads(image_paths)
@@ -520,10 +520,10 @@ async def ingest_batch(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail='image_paths must be a JSON array',
                     )
-                if len(paths_list) != len(files):
+                if len(paths_list) != len(images):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'image_paths length ({len(paths_list)}) must match files length ({len(files)})',
+                        detail=f'image_paths length ({len(paths_list)}) must match images length ({len(images)})',
                     )
                 parsed_paths = paths_list
             except json.JSONDecodeError as e:
@@ -534,10 +534,10 @@ async def ingest_batch(
 
         # Read all image bytes and prepare data tuples
         images_data: list[tuple[bytes, str, str | None]] = []
-        for i, file in enumerate(files):
-            image_bytes = await file.read()
+        for i, img in enumerate(images):
+            image_bytes = await img.read()
             if not image_bytes:
-                logger.warning(f'Empty file at index {i}: {file.filename}')
+                logger.warning(f'Empty image at index {i}: {img.filename}')
                 continue
 
             img_id = parsed_ids[i] or str(uuid.uuid4())
@@ -547,7 +547,7 @@ async def ingest_batch(
         if not images_data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='All files are empty',
+                detail='All images are empty',
             )
 
         # Call service layer batch method
@@ -620,7 +620,7 @@ async def ingest_batch(
 
         return BatchIngestResponse(
             status=status_value,
-            total=result.get('total', len(files)),
+            total=result.get('total', len(images)),
             processed=result.get('processed', 0),
             duplicates=result.get('duplicates', 0),
             errors_count=result.get('errors_count', 0),

@@ -344,9 +344,6 @@ def ocr_batch(
 
 @router.post('/search')
 async def search_by_ocr(
-    search_service: Annotated[
-        'VisualSearchService', None  # Type hint for docs, actual injection below
-    ] = None,
     text: str = Query(..., min_length=1, description='Text to search for'),
     page: int = Query(0, ge=0, description='Page number (0-indexed)'),
     size: int = Query(20, ge=1, le=100, description='Results per page'),
