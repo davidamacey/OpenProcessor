@@ -107,6 +107,17 @@ class Settings(BaseSettings):
     api_version: str = Field(default='6.0.0', description='API version')
 
     # ==========================================================================
+    # Logging Configuration
+    # ==========================================================================
+    log_level: str = Field(
+        default='INFO', description='Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)'
+    )
+
+    json_logs: bool = Field(
+        default=True, description='Enable JSON-formatted logs (True for production, False for dev)'
+    )
+
+    # ==========================================================================
     # Computed Properties
     # ==========================================================================
     @property
