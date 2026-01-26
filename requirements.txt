@@ -6,7 +6,7 @@ orjson  # 2-3x faster JSON encoding/decoding vs stdlib json
 pydantic-settings  # Pydantic v2 settings management
 
 # YOLO and Triton
-ultralytics
+ultralytics<8.4  # Pin to <8.4: v8.4 introduced YOLO26 and breaking changes to end2end property
 tritonclient[all]
 
 # Model Export Dependencies
