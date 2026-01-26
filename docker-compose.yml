@@ -12,7 +12,6 @@ services:
       - 4602:8002  # Metrics
     volumes:
       - ./models:/models
-      - ./backends/face_pipeline:/opt/tritonserver/backends/face_pipeline:ro  # Custom C++ backend
     command:
       - tritonserver
       - --model-store=/models
