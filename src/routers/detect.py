@@ -40,9 +40,7 @@ MAX_BATCH_SIZE = 64
 @router.post('', response_model=InferenceResult)
 def detect_single(
     image: Annotated[UploadFile, File(description='Image file (JPEG/PNG)')],
-    model_name: Annotated[
-        str, Query(description='Triton model name')
-    ] = DEFAULT_MODEL,
+    model_name: Annotated[str, Query(description='Triton model name')] = DEFAULT_MODEL,
     confidence: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum confidence threshold')
     ] = 0.25,
@@ -80,8 +78,7 @@ def detect_single(
         # Filter detections by confidence if threshold differs from model default
         if confidence > 0.25:
             result['detections'] = [
-                det for det in result['detections']
-                if det['confidence'] >= confidence
+                det for det in result['detections'] if det['confidence'] >= confidence
             ]
             result['num_detections'] = len(result['detections'])
 
@@ -98,12 +95,8 @@ def detect_single(
 
 @router.post('/batch', response_model=BatchInferenceResult)
 def detect_batch(
-    images: Annotated[
-        list[UploadFile], File(description='Image files (JPEG/PNG), max 64')
-    ],
-    model_name: Annotated[
-        str, Query(description='Triton model name')
-    ] = DEFAULT_MODEL,
+    images: Annotated[list[UploadFile], File(description='Image files (JPEG/PNG), max 64')],
+    model_name: Annotated[str, Query(description='Triton model name')] = DEFAULT_MODEL,
     confidence: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum confidence threshold')
     ] = 0.25,
@@ -148,20 +141,24 @@ def detect_batch(
             try:
                 image_bytes = image.file.read()
                 if not image_bytes:
-                    failed_images.append({
-                        'filename': filename,
-                        'index': idx,
-                        'error': 'Empty image file',
-                    })
+                    failed_images.append(
+                        {
+                            'filename': filename,
+                            'index': idx,
+                            'error': 'Empty image file',
+                        }
+                    )
                     continue
                 images_data.append((image_bytes, filename, idx))
             except Exception as e:
                 logger.warning(f'Failed to read {filename}: {e}')
-                failed_images.append({
-                    'filename': filename,
-                    'index': idx,
-                    'error': str(e),
-                })
+                failed_images.append(
+                    {
+                        'filename': filename,
+                        'index': idx,
+                        'error': str(e),
+                    }
+                )
 
         if not images_data:
             return BatchInferenceResult(
@@ -184,28 +181,29 @@ def detect_batch(
                 # Filter detections by confidence
                 detections = result['detections']
                 if confidence > 0.25:
-                    detections = [
-                        det for det in detections
-                        if det['confidence'] >= confidence
-                    ]
+                    detections = [det for det in detections if det['confidence'] >= confidence]
 
-                all_results.append({
-                    'filename': filename,
-                    'image_index': idx,
-                    'detections': detections,
-                    'num_detections': len(detections),
-                    'status': 'success',
-                    'track': 'C',
-                    'image': result['image'],
-                })
+                all_results.append(
+                    {
+                        'filename': filename,
+                        'image_index': idx,
+                        'detections': detections,
+                        'num_detections': len(detections),
+                        'status': 'success',
+                        'track': 'C',
+                        'image': result['image'],
+                    }
+                )
 
             except Exception as e:
                 logger.warning(f'Detection failed for {filename}: {e}')
-                failed_images.append({
-                    'filename': filename,
-                    'index': idx,
-                    'error': str(e),
-                })
+                failed_images.append(
+                    {
+                        'filename': filename,
+                        'index': idx,
+                        'error': str(e),
+                    }
+                )
 
         return BatchInferenceResult(
             total_images=len(images),

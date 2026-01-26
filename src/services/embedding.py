@@ -125,7 +125,7 @@ class EmbeddingService:
         output = InferRequestedOutput('image_embeddings')
 
         response = await client.infer(
-            model_name=self.settings.models.CLIP_MODELS['image_encoder'],
+            model_name=self.settings.models.CLIP_IMAGE_MODEL,
             inputs=[input_tensor],
             outputs=[output],
         )
@@ -176,7 +176,7 @@ class EmbeddingService:
         output = InferRequestedOutput('text_embeddings')
 
         response = await client.infer(
-            model_name=self.settings.models.CLIP_MODELS['text_encoder'],
+            model_name=self.settings.models.CLIP_TEXT_MODEL,
             inputs=[input_tensor],
             outputs=[output],
         )

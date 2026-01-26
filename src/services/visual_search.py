@@ -550,7 +550,9 @@ class VisualSearchService:
         _t_preprocess_end = _time.perf_counter()
         _preprocess_ms = (_t_preprocess_end - _t_preprocess_start) * 1000
         _preprocess_per_img = _preprocess_ms / len(to_process) if to_process else 0
-        logger.info(f'[PROFILE] CPU Preprocessing: {_preprocess_ms:.1f}ms total, {_preprocess_per_img:.1f}ms/img')
+        logger.info(
+            f'[PROFILE] CPU Preprocessing: {_preprocess_ms:.1f}ms total, {_preprocess_per_img:.1f}ms/img'
+        )
 
         # === PROFILING: Triton Inference ===
         _t_inference_start = _time.perf_counter()
@@ -558,18 +560,16 @@ class VisualSearchService:
         def run_single_from_tensor(prep: PreprocessResult | None) -> dict:
             """Run unified ensemble from preprocessed tensor (faster than Python backend)."""
             if prep is None:
-                return {'error': 'Preprocessing failed', 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
+                return {
+                    'error': 'Preprocessing failed',
+                    'num_dets': 0,
+                    'num_faces': 0,
+                    'num_texts': 0,
+                }
             try:
-                # Use the Triton ensemble for parallel YOLO+CLIP+embedding (no OCR)
-                result = client.infer_unified_direct_ensemble(prep)
-                # Add empty OCR fields (OCR handled separately if needed)
-                result['num_texts'] = 0
-                result['texts'] = []
-                result['text_boxes'] = []
-                result['text_boxes_normalized'] = []
-                result['text_det_scores'] = []
-                result['text_rec_scores'] = []
-                return result
+                # Use the Triton ensemble for parallel YOLO+CLIP+embedding+faces
+                # Note: OCR is handled separately if needed
+                return client.infer_unified_complete_from_tensors(prep, face_model='yolo11')
             except Exception as e:
                 logger.debug(f'Unified ensemble inference failed: {e}')
                 return {'error': str(e), 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
@@ -588,7 +588,9 @@ class VisualSearchService:
         _t_inference_end = _time.perf_counter()
         _inference_ms = (_t_inference_end - _t_inference_start) * 1000
         _inference_per_img = _inference_ms / len(to_process) if to_process else 0
-        logger.info(f'[PROFILE] Triton Inference: {_inference_ms:.1f}ms total, {_inference_per_img:.1f}ms/img')
+        logger.info(
+            f'[PROFILE] Triton Inference: {_inference_ms:.1f}ms total, {_inference_per_img:.1f}ms/img'
+        )
 
         # Extract face results from unified response (already included)
         face_results = [
@@ -731,9 +733,7 @@ class VisualSearchService:
         indexed['ocr'] = 0
         if enable_ocr:
             # OCR results are already in inference_results from unified_complete pipeline
-            async def index_ocr_from_unified(
-                result: dict, img_id: str, img_path: str
-            ) -> bool:
+            async def index_ocr_from_unified(result: dict, img_id: str, img_path: str) -> bool:
                 num_texts = result.get('num_texts', 0)
                 if num_texts == 0:
                     return False
@@ -1223,7 +1223,7 @@ class VisualSearchService:
             dict with query_face info and search results
         """
         # Run face detection + recognition to get embeddings via InferenceService
-        result = self.inference.infer_faces(image_bytes)
+        result = self.inference.recognize_faces(image_bytes)
 
         if result.get('num_faces', 0) == 0:
             return {
@@ -1242,7 +1242,7 @@ class VisualSearchService:
             }
 
         # Get query face info and embedding
-        query_embedding = np.array(result['embeddings'][face_index])
+        query_embedding = np.array(result['face_embeddings'][face_index])
         face_data = result['faces'][face_index]
         query_face = {
             'box': face_data['box'],

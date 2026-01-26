@@ -10,6 +10,7 @@ Provides endpoints for MobileCLIP embeddings:
 
 import logging
 import uuid
+from functools import lru_cache
 from io import BytesIO
 
 import numpy as np
@@ -41,7 +42,7 @@ class ImageEmbeddingResponse(BaseModel):
     embedding: list[float] = Field(..., description='512-dim L2-normalized embedding')
     embedding_norm: float = Field(..., description='L2 norm (should be ~1.0)')
     indexed: bool = Field(default=False, description='Whether image was stored')
-    image_id: str | None = Field(None, description='ID if indexed')
+    image_id: str | None = Field(default=None, description='ID if indexed')
     status: str = Field(default='success')
 
 
@@ -62,7 +63,7 @@ class BatchEmbeddingResult(BaseModel):
     embedding: list[float] = Field(..., description='512-dim L2-normalized embedding')
     embedding_norm: float = Field(..., description='L2 norm (should be ~1.0)')
     status: str = Field(default='success')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class BatchEmbeddingResponse(BaseModel):
@@ -94,15 +95,11 @@ class BoxEmbeddingsResponse(BaseModel):
 # Service Instance
 # =============================================================================
 
-_inference_service: InferenceService | None = None
 
-
+@lru_cache(maxsize=1)
 def get_inference_service() -> InferenceService:
-    """Get or create InferenceService instance."""
-    global _inference_service
-    if _inference_service is None:
-        _inference_service = InferenceService()
-    return _inference_service
+    """Get or create InferenceService instance (cached)."""
+    return InferenceService()
 
 
 # =============================================================================
@@ -164,7 +161,7 @@ def embed_image(
         raise
     except Exception as e:
         logger.error(f'Image embedding failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Embedding generation failed: {str(e)}') from e
+        raise HTTPException(status_code=500, detail=f'Embedding generation failed: {e!s}') from e
 
 
 @router.post('/text', response_model=TextEmbeddingResponse)
@@ -202,7 +199,7 @@ def embed_text(
 
     except Exception as e:
         logger.error(f'Text embedding failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Embedding generation failed: {str(e)}') from e
+        raise HTTPException(status_code=500, detail=f'Embedding generation failed: {e!s}') from e
 
 
 @router.post('/batch', response_model=BatchEmbeddingResponse)
@@ -397,4 +394,6 @@ def embed_boxes(
         raise
     except Exception as e:
         logger.error(f'Box embeddings failed: {e}')
-        raise HTTPException(status_code=500, detail=f'Box embedding extraction failed: {str(e)}') from e
+        raise HTTPException(
+            status_code=500, detail=f'Box embedding extraction failed: {e!s}'
+        ) from e

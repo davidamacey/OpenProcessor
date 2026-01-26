@@ -97,9 +97,7 @@ class Settings(BaseSettings):
     # ==========================================================================
     # API Configuration
     # ==========================================================================
-    api_title: str = Field(
-        default='Visual Search API', description='API title for OpenAPI docs'
-    )
+    api_title: str = Field(default='Visual Search API', description='API title for OpenAPI docs')
 
     api_description: str = Field(
         default='Unified visual search with object detection, face recognition, and CLIP embeddings',

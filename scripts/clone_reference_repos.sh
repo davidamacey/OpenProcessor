@@ -77,9 +77,9 @@ list_repos() {
             status="CLONED"
         fi
 
-        if [[ " ${ESSENTIAL[*]} " =~ " $repo " ]]; then
+        if [[ " ${ESSENTIAL[*]} " =~ ${repo} ]]; then
             category="essential"
-        elif [[ " ${RECOMMENDED[*]} " =~ " $repo " ]]; then
+        elif [[ " ${RECOMMENDED[*]} " =~ ${repo} ]]; then
             category="recommended"
         fi
 

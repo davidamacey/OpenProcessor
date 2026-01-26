@@ -7,6 +7,7 @@ All methods use CPU preprocessing with direct TRT model calls via Triton gRPC.
 
 import hashlib
 import logging
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -233,11 +234,7 @@ class InferenceService:
             box = result['face_boxes'][i]
             landmarks = result['face_landmarks'][i]
             score = float(result['face_scores'][i])
-            quality = (
-                float(result['face_quality'][i])
-                if len(result['face_quality']) > i
-                else None
-            )
+            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
 
             # Box is already normalized from yolo11_face_pipeline
             norm_box = [float(x) for x in box]
@@ -328,11 +325,7 @@ class InferenceService:
             box = result['face_boxes'][i]
             landmarks = result['face_landmarks'][i]
             score = float(result['face_scores'][i])
-            quality = (
-                float(result['face_quality'][i])
-                if len(result['face_quality']) > i
-                else None
-            )
+            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
 
             # Box is already normalized
             norm_box = [float(x) for x in box]
@@ -553,9 +546,17 @@ class InferenceService:
                 ocr_result = client.infer_ocr(image_bytes)
                 result['num_texts'] = ocr_result['num_texts']
                 result['texts'] = ocr_result['texts']
-                result['text_boxes'] = ocr_result['text_boxes'].tolist() if len(ocr_result['text_boxes']) > 0 else []
-                result['text_boxes_normalized'] = ocr_result['text_boxes_normalized'].tolist() if len(ocr_result['text_boxes_normalized']) > 0 else []
-                result['text_scores'] = ocr_result['text_scores'].tolist() if len(ocr_result['text_scores']) > 0 else []
+                result['text_boxes'] = (
+                    ocr_result['text_boxes'].tolist() if len(ocr_result['text_boxes']) > 0 else []
+                )
+                result['text_boxes_normalized'] = (
+                    ocr_result['text_boxes_normalized'].tolist()
+                    if len(ocr_result['text_boxes_normalized']) > 0
+                    else []
+                )
+                result['text_scores'] = (
+                    ocr_result['text_scores'].tolist() if len(ocr_result['text_scores']) > 0 else []
+                )
             except Exception as e:
                 logger.warning(f'OCR failed: {e}')
                 result['num_texts'] = 0
@@ -568,13 +569,7 @@ class InferenceService:
         return result
 
 
-# Singleton instance
-_inference_service: InferenceService | None = None
-
-
+@lru_cache(maxsize=1)
 def get_inference_service() -> InferenceService:
-    """Get singleton inference service instance."""
-    global _inference_service
-    if _inference_service is None:
-        _inference_service = InferenceService()
-    return _inference_service
+    """Get singleton inference service instance (cached)."""
+    return InferenceService()

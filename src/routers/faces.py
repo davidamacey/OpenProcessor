@@ -41,14 +41,14 @@ router = APIRouter(
 class FaceBox(BaseModel):
     """Face bounding box with landmarks."""
 
-    box: list[float] = Field(
-        ..., description='Face bounding box [x1, y1, x2, y2] normalized [0,1]'
-    )
+    box: list[float] = Field(..., description='Face bounding box [x1, y1, x2, y2] normalized [0,1]')
     landmarks: list[float] = Field(
         ..., description='5-point facial landmarks [lx1,ly1,...,lx5,ly5] normalized [0,1]'
     )
     score: float = Field(..., description='Detection confidence score')
-    quality: float | None = Field(None, description='Face quality score (frontality, sharpness)')
+    quality: float | None = Field(
+        default=None, description='Face quality score (frontality, sharpness)'
+    )
 
 
 class FaceDetectResponse(BaseModel):
@@ -56,8 +56,8 @@ class FaceDetectResponse(BaseModel):
 
     num_faces: int = Field(..., description='Number of faces detected')
     faces: list[FaceBox] = Field(default_factory=list, description='Detected faces')
-    image: ImageMetadata | None = Field(None, description='Original image dimensions')
-    total_time_ms: float | None = Field(None, description='Processing time in ms')
+    image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
+    total_time_ms: float | None = Field(default=None, description='Processing time in ms')
 
 
 class FaceRecognizeResponse(BaseModel):
@@ -68,8 +68,8 @@ class FaceRecognizeResponse(BaseModel):
     embeddings: list[list[float]] = Field(
         default_factory=list, description='512-dim ArcFace embeddings per face'
     )
-    image: ImageMetadata | None = Field(None, description='Original image dimensions')
-    total_time_ms: float | None = Field(None, description='Processing time in ms')
+    image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
+    total_time_ms: float | None = Field(default=None, description='Processing time in ms')
 
 
 class FaceVerifyResponse(BaseModel):
@@ -80,7 +80,7 @@ class FaceVerifyResponse(BaseModel):
     threshold: float = Field(..., description='Threshold used for matching')
     image1: dict = Field(..., description='Face info from first image')
     image2: dict = Field(..., description='Face info from second image')
-    total_time_ms: float | None = Field(None, description='Processing time in ms')
+    total_time_ms: float | None = Field(default=None, description='Processing time in ms')
 
 
 class FaceSearchResult(BaseModel):
@@ -88,10 +88,10 @@ class FaceSearchResult(BaseModel):
 
     face_id: str = Field(..., description='Face document ID')
     image_id: str = Field(..., description='Source image ID')
-    image_path: str | None = Field(None, description='Source image path')
+    image_path: str | None = Field(default=None, description='Source image path')
     score: float = Field(..., description='Similarity score')
-    person_id: str | None = Field(None, description='Person ID if assigned')
-    person_name: str | None = Field(None, description='Person name if known')
+    person_id: str | None = Field(default=None, description='Person ID if assigned')
+    person_name: str | None = Field(default=None, description='Person name if known')
     box: list[float] = Field(..., description='Face box in source image')
     confidence: float = Field(..., description='Original detection confidence')
 
@@ -102,8 +102,8 @@ class FaceSearchResponse(BaseModel):
     query_face: FaceBox = Field(..., description='Query face used for search')
     results: list[FaceSearchResult] = Field(default_factory=list, description='Search results')
     total_results: int = Field(..., description='Number of results returned')
-    search_time_ms: float | None = Field(None, description='Search execution time')
-    total_time_ms: float | None = Field(None, description='Total processing time')
+    search_time_ms: float | None = Field(default=None, description='Search execution time')
+    total_time_ms: float | None = Field(default=None, description='Total processing time')
 
 
 class FaceIdentifyMatch(BaseModel):
@@ -111,10 +111,10 @@ class FaceIdentifyMatch(BaseModel):
 
     face_id: str = Field(..., description='Matched face ID')
     image_id: str = Field(..., description='Source image ID')
-    image_path: str | None = Field(None, description='Source image path')
+    image_path: str | None = Field(default=None, description='Source image path')
     score: float = Field(..., description='Similarity score')
-    person_id: str | None = Field(None, description='Person ID if assigned')
-    person_name: str | None = Field(None, description='Person name if known')
+    person_id: str | None = Field(default=None, description='Person ID if assigned')
+    person_name: str | None = Field(default=None, description='Person name if known')
 
 
 class FaceIdentifyResult(BaseModel):
@@ -122,7 +122,7 @@ class FaceIdentifyResult(BaseModel):
 
     query_face: FaceBox = Field(..., description='Query face info')
     identified: bool = Field(..., description='Whether a match was found above threshold')
-    best_match: FaceIdentifyMatch | None = Field(None, description='Best matching face')
+    best_match: FaceIdentifyMatch | None = Field(default=None, description='Best matching face')
     all_matches: list[FaceIdentifyMatch] = Field(
         default_factory=list, description='All matches above threshold'
     )
@@ -135,7 +135,7 @@ class FaceIdentifyResponse(BaseModel):
     results: list[FaceIdentifyResult] = Field(
         default_factory=list, description='Identification results per face'
     )
-    total_time_ms: float | None = Field(None, description='Total processing time')
+    total_time_ms: float | None = Field(default=None, description='Total processing time')
 
 
 # =============================================================================

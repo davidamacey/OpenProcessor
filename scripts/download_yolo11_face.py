@@ -60,7 +60,11 @@ MODEL_URLS = {
 }
 
 # Output directory
-OUTPUT_DIR = Path('/app/pytorch_models/yolo11_face') if Path('/app').exists() else Path('pytorch_models/yolo11_face')
+OUTPUT_DIR = (
+    Path('/app/pytorch_models/yolo11_face')
+    if Path('/app').exists()
+    else Path('pytorch_models/yolo11_face')
+)
 
 
 # =============================================================================
@@ -75,7 +79,7 @@ def get_file_size_mb(filepath: Path) -> float:
     return 0
 
 
-def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
+def download_with_progress(url: str, output_path: Path) -> bool:
     """Download file with progress indicator."""
     print(f'  Downloading from: {url}')
 
@@ -97,6 +101,7 @@ def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
                     flush=True,
                 )
 
+        # Download from trusted GitHub releases - URL is validated above
         urlretrieve(url, output_path, reporthook=progress_hook)
         print()  # New line after progress
         return True
@@ -120,12 +125,11 @@ def verify_pytorch_model(filepath: Path) -> bool:
         if 'model' in checkpoint:
             print('  Model checkpoint valid')
             return True
-        elif isinstance(checkpoint, dict) and any(k.endswith('.weight') for k in checkpoint.keys()):
+        if isinstance(checkpoint, dict) and any(k.endswith('.weight') for k in checkpoint):
             print('  State dict valid')
             return True
-        else:
-            print(f'  Unknown checkpoint format: {list(checkpoint.keys())[:5]}...')
-            return True  # Still might be valid
+        print(f'  Unknown checkpoint format: {list(checkpoint.keys())[:5]}...')
+        return True  # Still might be valid
 
     except ImportError:
         print('  Warning: torch not installed, skipping validation')
@@ -164,7 +168,7 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
             )
 
     # Download
-    if download_with_progress(config['url'], output_path, config['filename']):
+    if download_with_progress(config['url'], output_path):
         actual_size = get_file_size_mb(output_path)
         print(f'  Downloaded: {actual_size:.1f} MB')
 
@@ -226,7 +230,9 @@ def print_summary(results: dict):
         print('\nNext steps:')
         print('  1. Export to TensorRT: python export/export_yolo11_face.py')
         print('  2. Restart Triton: make restart-triton')
-        print('  3. Test: curl -X POST http://localhost:4603/track_e/faces/yolo11/detect -F "file=@test.jpg"')
+        print(
+            '  3. Test: curl -X POST http://localhost:4603/track_e/faces/yolo11/detect -F "file=@test.jpg"'
+        )
     else:
         print('Some downloads failed. Check network and try again.')
         return 1
@@ -236,6 +242,8 @@ def print_summary(results: dict):
 
 def main():
     """Main entry point."""
+    global OUTPUT_DIR  # noqa: PLW0603
+
     parser = argparse.ArgumentParser(description='Download YOLO11-face models')
     parser.add_argument(
         '--models',
@@ -261,9 +269,7 @@ def main():
         return 0
 
     # Override output directory if specified
-    global OUTPUT_DIR
-    if args.output_dir:
-        OUTPUT_DIR = args.output_dir
+    output_dir = args.output_dir if args.output_dir else OUTPUT_DIR
 
     # Select models
     models = args.models
@@ -273,11 +279,18 @@ def main():
     print('=' * 60)
     print('YOLO11-Face Model Downloader')
     print('=' * 60)
-    print(f'Output directory: {OUTPUT_DIR}')
+    print(f'Output directory: {output_dir}')
     print(f'Models: {models}')
 
+    # Temporarily update global OUTPUT_DIR for download functions
+    original_output_dir = OUTPUT_DIR
+    OUTPUT_DIR = output_dir
+
     results = download_models(models, args.force)
-    return print_summary(results)
+    exit_code = print_summary(results)
+
+    OUTPUT_DIR = original_output_dir
+    return exit_code
 
 
 if __name__ == '__main__':

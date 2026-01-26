@@ -6,6 +6,7 @@ Provides health checks, service info, and connection pool statistics.
 
 import logging
 import os
+from typing import Any
 
 import psutil
 import torch
@@ -62,7 +63,7 @@ def root():
 
 
 @router.get('/health')
-def health():
+def health() -> dict[str, Any]:
     """
     Health check with service status and performance metrics.
 
@@ -78,7 +79,7 @@ def health():
     process = psutil.Process(os.getpid())
     memory_info = process.memory_info()
 
-    health_data = {
+    health_data: dict[str, Any] = {
         'status': 'healthy',
         'services': {
             'triton': {

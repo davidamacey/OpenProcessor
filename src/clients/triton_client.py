@@ -18,7 +18,7 @@ Performance:
 
 import io
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
@@ -33,6 +33,10 @@ from src.utils.affine import (
     get_jpeg_dimensions_fast,
 )
 from src.utils.retry import retry_sync
+
+
+if TYPE_CHECKING:
+    from src.services.cpu_preprocess import PreprocessResult
 
 
 logger = logging.getLogger(__name__)
@@ -1548,7 +1552,9 @@ class TritonClient:
         resized = cv2.resize(img_hd, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
         top, bottom = int(pad_y), YOLO_SIZE - int(pad_y) - new_h
         left, right = int(pad_x), YOLO_SIZE - int(pad_x) - new_w
-        padded = cv2.copyMakeBorder(resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
+        padded = cv2.copyMakeBorder(
+            resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
+        )
         face_input = padded.transpose(2, 0, 1).astype(np.float32) / 255.0
 
         # Call YOLO11-face directly (no BLS)
@@ -1560,7 +1566,9 @@ class TritonClient:
             InferRequestedOutput('det_scores'),
             InferRequestedOutput('det_classes'),
         ]
-        yolo_response = self._infer_with_retry('yolo11_face_small_trt_end2end', yolo_inputs, yolo_outputs)
+        yolo_response = self._infer_with_retry(
+            'yolo11_face_small_trt_end2end', yolo_inputs, yolo_outputs
+        )
 
         num_dets = int(yolo_response.as_numpy('num_dets').flatten()[0])
         if num_dets == 0:
@@ -1649,7 +1657,9 @@ class TritonClient:
         arcface_inputs = [InferInput('input.1', list(face_crops.shape), 'FP32')]
         arcface_inputs[0].set_data_from_numpy(face_crops)
         arcface_outputs = [InferRequestedOutput('683')]
-        arcface_response = self._infer_with_retry('arcface_w600k_r50', arcface_inputs, arcface_outputs)
+        arcface_response = self._infer_with_retry(
+            'arcface_w600k_r50', arcface_inputs, arcface_outputs
+        )
         embeddings = arcface_response.as_numpy('683')
 
         # L2 normalize
@@ -1826,9 +1836,7 @@ class TritonClient:
 
         # face_model: [1, 1], BYTES
         face_model_input = InferInput('face_model', [1, 1], 'BYTES')
-        face_model_input.set_data_from_numpy(
-            np.array([[face_model.encode('utf-8')]], dtype=object)
-        )
+        face_model_input.set_data_from_numpy(np.array([[face_model.encode('utf-8')]], dtype=object))
 
         inputs = [yolo_input, clip_input, original_input, affine_input, face_model_input]
 
@@ -1869,7 +1877,9 @@ class TritonClient:
         _t_triton_done = _time.perf_counter()
         _input_prep_ms = (_t_input_prep - _t_start) * 1000
         _triton_ms = (_t_triton_done - _t_input_prep) * 1000
-        logger.debug(f'[PROFILE] Input prep: {_input_prep_ms:.1f}ms, Triton call: {_triton_ms:.1f}ms')
+        logger.debug(
+            f'[PROFILE] Input prep: {_input_prep_ms:.1f}ms, Triton call: {_triton_ms:.1f}ms'
+        )
 
         # Parse detection outputs (handle batch dimension variations)
         num_dets_raw = response.as_numpy('num_dets')
@@ -2003,9 +2013,7 @@ class TritonClient:
             'padding': prep.padding,
         }
 
-    def infer_unified_direct_ensemble(
-        self, prep: 'PreprocessResult'
-    ) -> dict[str, Any]:
+    def infer_unified_direct_ensemble(self, prep: 'PreprocessResult') -> dict[str, Any]:
         """
         Call unified_direct_ensemble with preprocessed tensors.
 
@@ -2074,7 +2082,9 @@ class TritonClient:
 
         # Parse embedding outputs
         global_embedding_raw = response.as_numpy('global_embeddings')
-        global_embedding = global_embedding_raw[0] if global_embedding_raw.ndim == 2 else global_embedding_raw
+        global_embedding = (
+            global_embedding_raw[0] if global_embedding_raw.ndim == 2 else global_embedding_raw
+        )
 
         box_embeddings_raw = response.as_numpy('box_embeddings')
         normalized_boxes_raw = response.as_numpy('normalized_boxes')
@@ -2269,11 +2279,13 @@ class TritonClient:
 
                 # Filter by confidence
                 mask = scores >= conf_threshold
-                all_results.append({
-                    'num_faces': int(mask.sum()),
-                    'boxes': boxes[mask],
-                    'scores': scores[mask],
-                })
+                all_results.append(
+                    {
+                        'num_faces': int(mask.sum()),
+                        'boxes': boxes[mask],
+                        'scores': scores[mask],
+                    }
+                )
 
         return all_results
 
@@ -2313,9 +2325,7 @@ class TritonClient:
 
             output = InferRequestedOutput('683')
 
-            response = self._infer_with_retry(
-                'arcface_w600k_r50', [input_tensor], [output]
-            )
+            response = self._infer_with_retry('arcface_w600k_r50', [input_tensor], [output])
 
             embeddings = response.as_numpy('683')
             all_embeddings.append(embeddings)
@@ -2357,9 +2367,7 @@ class TritonClient:
                 InferRequestedOutput('det_classes'),
             ]
 
-            response = self._infer_with_retry(
-                'yolov11_small_trt_end2end', [input_tensor], outputs
-            )
+            response = self._infer_with_retry('yolov11_small_trt_end2end', [input_tensor], outputs)
 
             num_dets = response.as_numpy('num_dets')
             det_boxes = response.as_numpy('det_boxes')
@@ -2368,12 +2376,14 @@ class TritonClient:
 
             for j in range(batch_size):
                 n_det = int(num_dets[j, 0])
-                all_results.append({
-                    'num_dets': n_det,
-                    'boxes': det_boxes[j, :n_det],
-                    'scores': det_scores[j, :n_det],
-                    'classes': det_classes[j, :n_det],
-                })
+                all_results.append(
+                    {
+                        'num_dets': n_det,
+                        'boxes': det_boxes[j, :n_det],
+                        'scores': det_scores[j, :n_det],
+                        'classes': det_classes[j, :n_det],
+                    }
+                )
 
         return all_results
 

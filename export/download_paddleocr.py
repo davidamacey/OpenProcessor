@@ -90,7 +90,11 @@ DICTIONARIES = {
 }
 
 # Output directory
-OUTPUT_DIR = Path('/app/pytorch_models/paddleocr') if Path('/app').exists() else Path('pytorch_models/paddleocr')
+OUTPUT_DIR = (
+    Path('/app/pytorch_models/paddleocr')
+    if Path('/app').exists()
+    else Path('pytorch_models/paddleocr')
+)
 
 
 # =============================================================================
@@ -127,6 +131,7 @@ def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
                     flush=True,
                 )
 
+        # Download from trusted GitHub/Gitee releases - url is validated above
         urlretrieve(url, output_path, reporthook=progress_hook)
         print()  # New line after progress
         return True
@@ -151,12 +156,16 @@ def verify_onnx_model(filepath: Path) -> bool:
         # Print input/output info
         inputs = []
         for i in model.graph.input:
-            dims = [d.dim_value if d.dim_value else d.dim_param for d in i.type.tensor_type.shape.dim]
+            dims = [
+                d.dim_value if d.dim_value else d.dim_param for d in i.type.tensor_type.shape.dim
+            ]
             inputs.append(f'{i.name}: {dims}')
 
         outputs = []
         for o in model.graph.output:
-            dims = [d.dim_value if d.dim_value else d.dim_param for d in o.type.tensor_type.shape.dim]
+            dims = [
+                d.dim_value if d.dim_value else d.dim_param for d in o.type.tensor_type.shape.dim
+            ]
             outputs.append(f'{o.name}: {dims}')
 
         print(f'  Inputs: {inputs}')
@@ -204,12 +213,11 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
                     # For dictionaries, just check file exists
                     print('  Skipping download (use --force to re-download)')
                     return True
-        else:
-            # Dictionary file
-            if actual_size > 0:
-                print(f'  Already exists: {actual_size:.2f} MB')
-                print('  Skipping download (use --force to re-download)')
-                return True
+        # Dictionary file
+        elif actual_size > 0:
+            print(f'  Already exists: {actual_size:.2f} MB')
+            print('  Skipping download (use --force to re-download)')
+            return True
 
     # Try each URL
     for i, url in enumerate(config['urls']):
@@ -229,14 +237,13 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
                     return True
                 print('  Model verification failed, trying next source...')
                 output_path.unlink(missing_ok=True)
-            else:
-                # Dictionary file - just check it's not empty
-                if actual_size > 0:
-                    # Count lines for dictionary
-                    with open(output_path, 'r', encoding='utf-8') as f:
-                        lines = len(f.readlines())
-                    print(f'  Dictionary: {lines} characters')
-                    return True
+            # Dictionary file - just check it's not empty
+            elif actual_size > 0:
+                # Count lines for dictionary
+                with open(output_path, encoding='utf-8') as f:
+                    lines = len(f.readlines())
+                print(f'  Dictionary: {lines} characters')
+                return True
 
     print(f'\n  Failed to download {model_id} from all sources')
     return False
@@ -296,9 +303,8 @@ def print_summary(results: dict):
         print('  1. Export detection to TRT: python export/export_paddleocr_det.py')
         print('  2. Export recognition to TRT: python export/export_paddleocr_rec.py')
         return 0
-    else:
-        print('Some downloads failed. Check network and try again.')
-        return 1
+    print('Some downloads failed. Check network and try again.')
+    return 1
 
 
 def main():

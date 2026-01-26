@@ -48,7 +48,7 @@ class TrainResponse(BaseModel):
     empty_clusters: int = Field(..., description='Number of empty clusters')
     documents_updated: int = Field(..., description='Documents with cluster assignments')
     training_time_s: float = Field(..., description='Training time in seconds')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class AssignResponse(BaseModel):
@@ -58,8 +58,8 @@ class AssignResponse(BaseModel):
     index_name: str = Field(..., description='Index processed')
     documents_found: int = Field(default=0, description='Unclustered documents found')
     documents_updated: int = Field(default=0, description='Documents assigned to clusters')
-    message: str | None = Field(None, description='Status message')
-    error: str | None = Field(None, description='Error message if failed')
+    message: str | None = Field(default=None, description='Status message')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class FaissStats(BaseModel):
@@ -72,7 +72,7 @@ class FaissStats(BaseModel):
     min_cluster_size: int = Field(..., description='Minimum cluster size')
     max_cluster_size: int = Field(..., description='Maximum cluster size')
     empty_clusters: int = Field(..., description='Number of empty clusters')
-    trained_at: str | None = Field(None, description='Training timestamp')
+    trained_at: str | None = Field(default=None, description='Training timestamp')
 
 
 class ClusterInfo(BaseModel):
@@ -87,24 +87,24 @@ class ClusterStatsResponse(BaseModel):
 
     status: str = Field(..., description="'success' or 'error'")
     index_name: str = Field(..., description='Index name')
-    faiss: FaissStats | None = Field(None, description='FAISS index statistics')
+    faiss: FaissStats | None = Field(default=None, description='FAISS index statistics')
     opensearch_clusters: list[ClusterInfo] = Field(
         default_factory=list, description='Top clusters from OpenSearch'
     )
     total_clusters_in_opensearch: int = Field(
         default=0, description='Total clusters with documents'
     )
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class ClusterMember(BaseModel):
     """Single member of a cluster."""
 
     image_id: str = Field(..., description='Image identifier')
-    image_path: str | None = Field(None, description='Image file path')
-    cluster_distance: float | None = Field(None, description='Distance to centroid')
-    score: float | None = Field(None, description='Detection confidence (if applicable)')
-    class_id: int | None = Field(None, description='COCO class ID (if applicable)')
+    image_path: str | None = Field(default=None, description='Image file path')
+    cluster_distance: float | None = Field(default=None, description='Distance to centroid')
+    score: float | None = Field(default=None, description='Detection confidence (if applicable)')
+    class_id: int | None = Field(default=None, description='COCO class ID (if applicable)')
 
 
 class ClusterMembersResponse(BaseModel):
@@ -117,7 +117,7 @@ class ClusterMembersResponse(BaseModel):
     size: int = Field(..., description='Page size')
     count: int = Field(..., description='Number of members returned')
     members: list[ClusterMember] = Field(default_factory=list, description='Cluster members')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class BalanceCheckResponse(BaseModel):
@@ -130,8 +130,8 @@ class BalanceCheckResponse(BaseModel):
     empty_ratio: float = Field(..., description='Ratio of empty clusters')
     vectors_since_training: int = Field(..., description='New vectors since training')
     needs_rebalance: bool = Field(..., description='Whether rebalancing is recommended')
-    reason: str | None = Field(None, description='Reason for rebalance recommendation')
-    error: str | None = Field(None, description='Error message if failed')
+    reason: str | None = Field(default=None, description='Reason for rebalance recommendation')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class AlbumInfo(BaseModel):
@@ -150,7 +150,7 @@ class ListAlbumsResponse(BaseModel):
     status: str = Field(..., description="'success' or 'error'")
     total_albums: int = Field(..., description='Total number of albums')
     albums: list[dict[str, Any]] = Field(default_factory=list, description='Album list')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 # =============================================================================
@@ -422,7 +422,9 @@ async def get_cluster_members(
 @router.post('/rebalance/{index}', response_model=TrainResponse)
 async def rebalance_clusters(
     search_service: VisualSearchDep,
-    index: Annotated[str, Path(description='Index to rebalance: global, vehicles, people, or faces')],
+    index: Annotated[
+        str, Path(description='Index to rebalance: global, vehicles, people, or faces')
+    ],
 ):
     """
     Force rebalance clusters by re-training.
@@ -529,9 +531,7 @@ async def check_cluster_balance(
 @router.get('/albums', response_model=ListAlbumsResponse)
 async def list_albums(
     search_service: VisualSearchDep,
-    min_size: Annotated[
-        int, Query(ge=1, description='Minimum cluster size to include')
-    ] = 5,
+    min_size: Annotated[int, Query(ge=1, description='Minimum cluster size to include')] = 5,
 ):
     """
     List auto-generated albums from global index clusters.

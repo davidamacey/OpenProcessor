@@ -33,19 +33,19 @@ class PredictResponse(BaseModel):
     status: str = Field(default='success')
 
     # Image metadata
-    image: ImageMetadata | None = Field(None, description='Original image dimensions')
+    image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
 
     # Model metadata
-    model: ModelMetadata | None = Field(None, description='Model and backend information')
+    model: ModelMetadata | None = Field(default=None, description='Model and backend information')
 
     # Embedding info
     embedding_norm: float | None = Field(
-        None, description='L2 norm of image embedding (should be ~1.0)'
+        default=None, description='L2 norm of image embedding (should be ~1.0)'
     )
 
     # Timing (injected by middleware)
     total_time_ms: float | None = Field(
-        None, description='Total end-to-end request time in milliseconds'
+        default=None, description='Total end-to-end request time in milliseconds'
     )
 
 
@@ -108,7 +108,7 @@ class ImageEmbeddingResponse(BaseModel):
     embedding: list[float] = Field(..., description='512-dim L2-normalized embedding')
     embedding_norm: float = Field(..., description='L2 norm (should be ~1.0)')
     indexed: bool = Field(default=False, description='Whether image was stored')
-    image_id: str | None = Field(None, description='ID if indexed')
+    image_id: str | None = Field(default=None, description='ID if indexed')
     status: str = Field(default='success')
 
 
@@ -129,8 +129,8 @@ class TextEmbeddingResponse(BaseModel):
 class ImageIngestRequest(BaseModel):
     """Request model for image ingestion."""
 
-    image_id: str | None = Field(None, description='Unique identifier')
-    metadata: dict[str, Any] | None = Field(None, description='Optional metadata')
+    image_id: str | None = Field(default=None, description='Unique identifier')
+    metadata: dict[str, Any] | None = Field(default=None, description='Optional metadata')
 
 
 class ImageIngestResponse(BaseModel):
@@ -146,11 +146,11 @@ class ImageIngestResponse(BaseModel):
 class VisualSearchRequest(BaseModel):
     """Request model for visual search."""
 
-    query_text: str | None = Field(None, description='Text query')
+    query_text: str | None = Field(default=None, description='Text query')
     top_k: int = Field(10, ge=1, le=100, description='Number of results')
-    min_score: float | None = Field(None, ge=0.0, le=1.0, description='Min similarity')
-    filter_metadata: dict[str, Any] | None = Field(None, description='Metadata filters')
-    class_filter: list[int] | None = Field(None, description='Filter by COCO class IDs')
+    min_score: float | None = Field(default=None, ge=0.0, le=1.0, description='Min similarity')
+    filter_metadata: dict[str, Any] | None = Field(default=None, description='Metadata filters')
+    class_filter: list[int] | None = Field(default=None, description='Filter by COCO class IDs')
 
 
 class SearchResult(BaseModel):
@@ -195,7 +195,9 @@ class FaceDetection(BaseModel):
         ..., description='5-point facial landmarks [lx1,ly1,...,lx5,ly5] normalized [0,1]'
     )
     score: float = Field(..., description='Detection confidence score')
-    quality: float | None = Field(None, description='Face quality score (frontality, sharpness)')
+    quality: float | None = Field(
+        default=None, description='Face quality score (frontality, sharpness)'
+    )
 
 
 class FaceDetectResponse(BaseModel):
@@ -246,9 +248,9 @@ class FaceFullResponse(BaseModel):
 
     # Global embedding (MobileCLIP 512-dim)
     image_embedding: list[float] | None = Field(
-        None, description='MobileCLIP global image embedding'
+        default=None, description='MobileCLIP global image embedding'
     )
-    embedding_norm: float | None = Field(None, description='L2 norm of global embedding')
+    embedding_norm: float | None = Field(default=None, description='L2 norm of global embedding')
 
     status: str = Field(default='success')
 
@@ -317,10 +319,12 @@ class PersonFacesResponse(BaseModel):
 class FaceIngestRequest(BaseModel):
     """Request for face ingestion."""
 
-    person_id: str | None = Field(None, description='Person ID to assign face to')
-    face_id: str | None = Field(None, description='Face ID (auto-generated if not provided)')
-    source_image_id: str | None = Field(None, description='ID of source image')
-    metadata: dict | None = Field(None, description='Additional metadata')
+    person_id: str | None = Field(default=None, description='Person ID to assign face to')
+    face_id: str | None = Field(
+        default=None, description='Face ID (auto-generated if not provided)'
+    )
+    source_image_id: str | None = Field(default=None, description='ID of source image')
+    metadata: dict | None = Field(default=None, description='Additional metadata')
 
 
 class FaceIngestResponse(BaseModel):

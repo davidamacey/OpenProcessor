@@ -25,6 +25,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from src.clients.triton_pool import TritonClientManager
 from src.utils.retry import retry_sync
 
+
 logger = logging.getLogger(__name__)
 
 # Constants matching the face pipeline
@@ -33,7 +34,6 @@ ARCFACE_SIZE = 112
 EMBED_DIM = 512
 MAX_FACES = 128
 FACE_MARGIN = 0.4  # MTCNN-style 40% margin
-CONF_THRESHOLD = 0.5
 
 
 class FastFaceClient:
@@ -48,7 +48,7 @@ class FastFaceClient:
         self.client = TritonClientManager.get_sync_client(triton_url)
         self.yolo_model = 'yolo11_face_small_trt_end2end'
         self.arcface_model = 'arcface_w600k_r50'
-        logger.info(f'FastFaceClient initialized (direct gRPC, no BLS)')
+        logger.info('FastFaceClient initialized (direct gRPC, no BLS)')
 
     def _letterbox_preprocess(self, img: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         """
@@ -78,8 +78,7 @@ class FastFaceClient:
             right = YOLO_SIZE - left - new_w
 
         padded = cv2.copyMakeBorder(
-            resized, top, bottom, left, right,
-            cv2.BORDER_CONSTANT, value=(114, 114, 114)
+            resized, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114)
         )
 
         # CHW, normalize, float32
@@ -134,13 +133,17 @@ class FastFaceClient:
         # L2 normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
         norms = np.maximum(norms, 1e-10)
-        embeddings = embeddings / norms
-
-        return embeddings
+        return embeddings / norms
 
     def _decode_yolo_output(
-        self, output: dict, orig_h: int, orig_w: int,
-        scale: float, pad_x: float, pad_y: float
+        self,
+        output: dict,
+        orig_h: int,
+        orig_w: int,
+        scale: float,
+        pad_x: float,
+        pad_y: float,
+        confidence: float = 0.5,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Decode End2End YOLO output with inverse letterbox."""
         num_dets = int(output['num_dets'].flatten()[0])
@@ -164,12 +167,10 @@ class FastFaceClient:
         boxes_px[:, [1, 3]] = np.clip(boxes_px[:, [1, 3]], 0, orig_h)
 
         # Filter by confidence
-        mask = scores >= CONF_THRESHOLD
+        mask = scores >= confidence
         return boxes_px[mask], scores[mask]
 
-    def _crop_faces(
-        self, img: np.ndarray, boxes: np.ndarray
-    ) -> np.ndarray:
+    def _crop_faces(self, img: np.ndarray, boxes: np.ndarray) -> np.ndarray:
         """
         Crop faces with MTCNN-style margin expansion.
 
@@ -218,8 +219,7 @@ class FastFaceClient:
                 continue
 
             face_resized = cv2.resize(
-                face_crop, (ARCFACE_SIZE, ARCFACE_SIZE),
-                interpolation=cv2.INTER_LINEAR
+                face_crop, (ARCFACE_SIZE, ARCFACE_SIZE), interpolation=cv2.INTER_LINEAR
             )
 
             # Convert BGR to RGB, CHW, normalize for ArcFace
@@ -234,9 +234,7 @@ class FastFaceClient:
 
         return np.stack(crops, axis=0)  # [N, 3, 112, 112]
 
-    def _compute_quality(
-        self, boxes: np.ndarray, orig_h: int, orig_w: int
-    ) -> np.ndarray:
+    def _compute_quality(self, boxes: np.ndarray, orig_h: int, orig_w: int) -> np.ndarray:
         """Compute face quality scores (vectorized)."""
         if len(boxes) == 0:
             return np.array([])
@@ -252,10 +250,10 @@ class FastFaceClient:
         margin = 0.02
         boundary_score = np.ones(len(boxes))
         at_edge = (
-            (boxes[:, 0] < orig_w * margin) |
-            (boxes[:, 2] > orig_w * (1 - margin)) |
-            (boxes[:, 1] < orig_h * margin) |
-            (boxes[:, 3] > orig_h * (1 - margin))
+            (boxes[:, 0] < orig_w * margin)
+            | (boxes[:, 2] > orig_w * (1 - margin))
+            | (boxes[:, 1] < orig_h * margin)
+            | (boxes[:, 3] > orig_h * (1 - margin))
         )
         boundary_score[at_edge] *= 0.8
 
@@ -265,9 +263,7 @@ class FastFaceClient:
         quality = np.clip(size_score * boundary_score * aspect_ratio, 0, 1)
         return quality.astype(np.float32)
 
-    def recognize(
-        self, image_bytes: bytes, confidence: float = 0.5
-    ) -> dict[str, Any]:
+    def recognize(self, image_bytes: bytes, confidence: float = 0.5) -> dict[str, Any]:
         """
         Detect faces and extract ArcFace embeddings.
 
@@ -280,8 +276,6 @@ class FastFaceClient:
         Returns:
             Dict with num_faces, boxes, scores, embeddings, quality
         """
-        global CONF_THRESHOLD
-        CONF_THRESHOLD = confidence
 
         # Decode image
         img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
@@ -305,7 +299,7 @@ class FastFaceClient:
 
         # Decode detections
         boxes, scores = self._decode_yolo_output(
-            yolo_output, orig_h, orig_w, scale, pad_x, pad_y
+            yolo_output, orig_h, orig_w, scale, pad_x, pad_y, confidence
         )
 
         num_faces = len(boxes)

@@ -113,6 +113,7 @@ async def retry_async[T](
             delay = min(base_delay * (exponential_base**attempt), max_delay)
 
             # Add jitter to prevent thundering herd
+            # Note: random.random() is acceptable here for non-cryptographic jitter
             jitter_amount = delay * jitter * random.random()
             delay += jitter_amount
 
@@ -158,6 +159,7 @@ def retry_sync[T](
                 break
 
             delay = min(base_delay * (exponential_base**attempt), max_delay)
+            # Note: random.random() is acceptable here for non-cryptographic jitter
             jitter_amount = delay * jitter * random.random()
             delay += jitter_amount
 

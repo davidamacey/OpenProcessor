@@ -15,7 +15,6 @@ All tensors are CHW format, FP32, normalized to [0, 1] range.
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -46,12 +45,12 @@ class PreprocessResult:
     @property
     def hd_h(self) -> int:
         """Height of HD tensor."""
-        return self.hd_tensor.shape[1]
+        return int(self.hd_tensor.shape[1])
 
     @property
     def hd_w(self) -> int:
         """Width of HD tensor."""
-        return self.hd_tensor.shape[2]
+        return int(self.hd_tensor.shape[2])
 
     @property
     def orig_h(self) -> int:
@@ -159,8 +158,8 @@ def letterbox_cpu(
 
     # Create affine transformation matrix for inverse transform
     # Maps from letterboxed coords to original image coords
-    # Forward: x_letterbox = x_orig * scale + pad_x
-    # Inverse: x_orig = (x_letterbox - pad_x) / scale
+    # Forward: x_letterbox = x_orig * scale + pad_x  # noqa: ERA001
+    # Inverse: x_orig = (x_letterbox - pad_x) / scale  # noqa: ERA001
     affine_matrix = np.array(
         [
             [scale, 0, left],
@@ -206,9 +205,7 @@ def center_crop_cpu(
     normalized = cropped.astype(np.float32) / 255.0
 
     # HWC -> CHW
-    tensor = np.transpose(normalized, (2, 0, 1))
-
-    return tensor
+    return np.transpose(normalized, (2, 0, 1))
 
 
 def resize_hd_cpu(
@@ -245,9 +242,7 @@ def resize_hd_cpu(
     normalized = resized.astype(np.float32) / 255.0
 
     # HWC -> CHW
-    tensor = np.transpose(normalized, (2, 0, 1))
-
-    return tensor
+    return np.transpose(normalized, (2, 0, 1))
 
 
 def preprocess_single(
@@ -291,9 +286,7 @@ def preprocess_single(
     orig_h, orig_w = img_rgb.shape[:2]
 
     # Run all preprocessing functions
-    yolo_tensor, affine_matrix, scale, padding = letterbox_cpu(
-        img_rgb, target_size=yolo_size
-    )
+    yolo_tensor, affine_matrix, scale, padding = letterbox_cpu(img_rgb, target_size=yolo_size)
     clip_tensor = center_crop_cpu(img_rgb, target_size=clip_size)
     hd_tensor = resize_hd_cpu(img_rgb, max_size=hd_max_size)
 
@@ -344,11 +337,9 @@ def preprocess_batch(
     if batch_size == 0:
         return []
 
-    results: list[Optional[PreprocessResult]] = [None] * batch_size
+    results: list[PreprocessResult | None] = [None] * batch_size
 
-    def process_single_indexed(
-        idx: int, img_bytes: bytes
-    ) -> tuple[int, Optional[PreprocessResult]]:
+    def process_single_indexed(idx: int, img_bytes: bytes) -> tuple[int, PreprocessResult | None]:
         """Process a single image and return (index, result)."""
         try:
             result = preprocess_single(
@@ -366,8 +357,7 @@ def preprocess_batch(
     workers = min(max_workers, batch_size)
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(process_single_indexed, i, img)
-            for i, img in enumerate(images_bytes)
+            executor.submit(process_single_indexed, i, img) for i, img in enumerate(images_bytes)
         ]
 
         for future in futures:
