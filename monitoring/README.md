@@ -89,23 +89,75 @@ docker compose logs -f grafana
 
 ## Alerts
 
-Alert rules are configured in `monitoring/alerts/triton-alerts.yml`
+Two alerting systems are configured:
+
+### Prometheus Alerts (Legacy)
+
+Rules in `monitoring/alerts/triton-alerts.yml` - evaluated by Prometheus.
+
+### Grafana Unified Alerting (Recommended)
+
+Rules in `monitoring/grafana-alerting.yml` - evaluated by Grafana with built-in notifications.
+
+**Alert Groups:**
+
+| Group | Alerts |
+|-------|--------|
+| API Service Health | Error rate, slow response time |
+| Triton Inference Server | Server down, high latency, model not ready, high queue |
+| GPU Resources | High utilization, memory pressure, temperature |
+| System Resources | CPU, memory, load average |
+| OpenSearch Health | Cluster status |
 
 ### Alert Thresholds
 
 | Alert | Warning | Critical | Duration |
 |-------|---------|----------|----------|
+| API Error Rate | >5% | - | 2m |
+| API P95 Latency | >500ms | - | 2m |
 | Inference Latency | >100ms | >500ms | 2m / 1m |
 | Failure Rate | >1% | >5% | 2m / 1m |
 | GPU Utilization | >95% | - | 5m |
 | GPU Memory | >90% | >95% | 5m / 2m |
+| GPU Temperature | >80°C | - | 2m |
 | Queue Depth | >50 | - | 2m |
 | Model Not Ready | - | Any | 1m |
+| System Memory | >90% | - | 5m |
+| System CPU | >90% | - | 5m |
+| System Load | >2.0/cpu | - | 5m |
+
+### Configuring Notifications
+
+Edit `monitoring/grafana-alerting.yml` to configure notification channels:
+
+```yaml
+# Slack notifications
+- uid: slack-alerts
+  type: slack
+  settings:
+    url: "${SLACK_WEBHOOK_URL}"
+    recipient: "#alerts"
+
+# Email notifications
+- uid: email-alerts
+  type: email
+  settings:
+    addresses: "ops@example.com"
+```
+
+Then add environment variables to docker-compose.yml:
+
+```yaml
+grafana:
+  environment:
+    - SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
+    - ALERT_WEBHOOK_URL=https://your-webhook.example.com/alerts
+```
 
 ### Viewing Active Alerts
 
-1. **Prometheus**: http://localhost:4604/alerts
-2. **Grafana**: Create alert panels in dashboards
+1. **Grafana Alerting**: http://localhost:4605/alerting/list
+2. **Prometheus**: http://localhost:4604/alerts
 
 ## Logs with Loki
 
@@ -328,8 +380,9 @@ prometheus:
 
 For production deployments, consider:
 
-- [ ] Set up Alertmanager for notifications (Slack, PagerDuty, email)
-- [ ] Configure alert routing by severity
+- [x] Set up alerting with notifications (Grafana unified alerting configured)
+- [x] Configure alert routing by severity (critical vs warning routing)
+- [ ] Add notification channels (Slack, PagerDuty, email) - edit grafana-alerting.yml
 - [ ] Add remote write to long-term storage
 - [ ] Enable authentication for external access
 - [ ] Set up backup for Grafana dashboards
@@ -346,10 +399,11 @@ monitoring/
 ├── prometheus.yml                         # Prometheus config (Triton + Node Exporter)
 ├── grafana-datasources.yml               # Grafana datasources (Prometheus + Loki)
 ├── grafana-dashboards.yml                # Dashboard auto-provisioning config
+├── grafana-alerting.yml                  # Grafana unified alerting rules & notifications
 ├── loki-config.yml                       # Loki log aggregation config
 ├── promtail-config.yml                   # Promtail log shipping config
 ├── alerts/
-│   └── triton-alerts.yml                 # Prometheus alert rules
+│   └── triton-alerts.yml                 # Prometheus alert rules (legacy)
 └── dashboards/
     └── triton-unified-dashboard.json     # All-in-one unified dashboard (auto-loaded)
 ```

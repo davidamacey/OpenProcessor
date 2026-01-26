@@ -1,0 +1,781 @@
+# Grafana Unified Alerting Configuration
+# This file configures Grafana's native alerting system with:
+# - Alert rules for API, Triton, and system metrics
+# - Contact points for notifications
+# - Notification policies for routing
+
+apiVersion: 1
+
+# =============================================================================
+# Contact Points - Where alerts are sent
+# =============================================================================
+contactPoints:
+  # Default contact point - customize with your notification channels
+  - orgId: 1
+    name: default-notifications
+    receivers:
+      # Webhook for custom integrations (Discord, custom scripts, etc.)
+      - uid: webhook-default
+        type: webhook
+        settings:
+          url: "${ALERT_WEBHOOK_URL:-http://localhost:9999/alerts}"
+          httpMethod: POST
+        disableResolveMessage: false
+
+      # Uncomment and configure for Slack notifications
+      # - uid: slack-alerts
+      #   type: slack
+      #   settings:
+      #     url: "${SLACK_WEBHOOK_URL}"
+      #     recipient: "#alerts"
+      #     mentionChannel: here
+      #     text: |
+      #       {{ range .Alerts }}
+      #       *{{ .Status | toUpper }}* - {{ .Labels.alertname }}
+      #       {{ .Annotations.summary }}
+      #       {{ end }}
+
+      # Uncomment and configure for email notifications
+      # - uid: email-alerts
+      #   type: email
+      #   settings:
+      #     addresses: "ops@example.com"
+      #     singleEmail: true
+
+  # Critical alerts - for urgent notifications
+  - orgId: 1
+    name: critical-notifications
+    receivers:
+      - uid: webhook-critical
+        type: webhook
+        settings:
+          url: "${ALERT_WEBHOOK_URL:-http://localhost:9999/alerts/critical}"
+          httpMethod: POST
+        disableResolveMessage: false
+
+# =============================================================================
+# Notification Policies - How alerts are routed
+# =============================================================================
+policies:
+  - orgId: 1
+    receiver: default-notifications
+    group_by:
+      - alertname
+      - severity
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      # Critical alerts go to critical channel with faster notification
+      - receiver: critical-notifications
+        matchers:
+          - severity = critical
+        group_wait: 10s
+        group_interval: 1m
+        repeat_interval: 1h
+        continue: false
+
+# =============================================================================
+# Alert Rules
+# =============================================================================
+groups:
+  # -------------------------------------------------------------------------
+  # API Service Health Alerts
+  # -------------------------------------------------------------------------
+  - orgId: 1
+    name: API Service Health
+    folder: Visual AI Alerts
+    interval: 30s
+    rules:
+      # API High Error Rate
+      - uid: api-high-error-rate
+        title: API High Error Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(rate(http_requests_total{status=~"5.."}[5m])) /
+                sum(rate(http_requests_total[5m])) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is above 5% - check logs for details"
+        labels:
+          severity: warning
+          component: api
+
+      # API Slow Response Time
+      - uid: api-slow-response
+        title: API Slow Response Time
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                histogram_quantile(0.95,
+                  rate(http_request_duration_seconds_bucket[5m])) * 1000
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [500]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          summary: "API p95 response time is high"
+          description: "API p95 latency is above 500ms"
+        labels:
+          severity: warning
+          component: api
+
+  # -------------------------------------------------------------------------
+  # Triton Inference Server Alerts
+  # -------------------------------------------------------------------------
+  - orgId: 1
+    name: Triton Inference Server
+    folder: Visual AI Alerts
+    interval: 30s
+    rules:
+      # Triton Server Down
+      - uid: triton-server-down
+        title: Triton Server Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job="triton"}
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: "Triton Inference Server is DOWN"
+          description: "Triton server is not responding - all inference will fail"
+        labels:
+          severity: critical
+          component: triton
+
+      # High Inference Latency
+      - uid: triton-high-latency
+        title: Triton High Inference Latency
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (rate(nv_inference_compute_infer_duration_us[5m]) /
+                 rate(nv_inference_request_success[5m])) / 1000
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [100]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          summary: "High inference latency on {{ $labels.model }}"
+          description: "Average inference latency is above 100ms"
+        labels:
+          severity: warning
+          component: triton
+
+      # Model Not Ready
+      - uid: triton-model-not-ready
+        title: Triton Model Not Ready
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: nv_model_ready_state == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: count
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 1m
+        annotations:
+          summary: "Model {{ $labels.model }} is not ready"
+          description: "Model is in not-ready state - inference requests will fail"
+        labels:
+          severity: critical
+          component: triton
+
+      # High Request Queue
+      - uid: triton-high-queue
+        title: Triton High Request Queue
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(nv_inference_pending_request_count)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [50]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: last
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          summary: "High inference request queue"
+          description: "More than 50 requests pending - consider scaling"
+        labels:
+          severity: warning
+          component: triton
+
+  # -------------------------------------------------------------------------
+  # GPU Resource Alerts
+  # -------------------------------------------------------------------------
+  - orgId: 1
+    name: GPU Resources
+    folder: Visual AI Alerts
+    interval: 30s
+    rules:
+      # High GPU Utilization
+      - uid: gpu-high-utilization
+        title: High GPU Utilization
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: nv_gpu_utilization * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [95]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "High GPU utilization on {{ $labels.gpu_uuid }}"
+          description: "GPU utilization above 95% for 5+ minutes"
+        labels:
+          severity: warning
+          component: gpu
+
+      # High GPU Memory
+      - uid: gpu-high-memory
+        title: High GPU Memory Usage
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (nv_gpu_memory_used_bytes / nv_gpu_memory_total_bytes) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [90]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "High GPU memory usage on {{ $labels.gpu_uuid }}"
+          description: "GPU memory usage above 90%"
+        labels:
+          severity: warning
+          component: gpu
+
+      # GPU Temperature Warning
+      - uid: gpu-high-temperature
+        title: High GPU Temperature
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: nv_gpu_temperature
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [80]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: max
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          summary: "High GPU temperature on {{ $labels.gpu_uuid }}"
+          description: "GPU temperature above 80°C - check cooling"
+        labels:
+          severity: warning
+          component: gpu
+
+  # -------------------------------------------------------------------------
+  # System Resource Alerts
+  # -------------------------------------------------------------------------
+  - orgId: 1
+    name: System Resources
+    folder: Visual AI Alerts
+    interval: 30s
+    rules:
+      # High System Memory
+      - uid: system-high-memory
+        title: High System Memory Usage
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [90]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "High system memory usage"
+          description: "System memory usage above 90%"
+        labels:
+          severity: warning
+          component: system
+
+      # High CPU Usage
+      - uid: system-high-cpu
+        title: High System CPU Usage
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [90]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "High system CPU usage"
+          description: "System CPU usage above 90% for 5+ minutes"
+        labels:
+          severity: warning
+          component: system
+
+      # High Load Average
+      - uid: system-high-load
+        title: High System Load Average
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                node_load5 / count(count(node_cpu_seconds_total{mode="idle"}) by (cpu))
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [2]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        annotations:
+          summary: "High system load average"
+          description: "Load average per CPU is above 2.0"
+        labels:
+          severity: warning
+          component: system
+
+  # -------------------------------------------------------------------------
+  # OpenSearch Alerts
+  # -------------------------------------------------------------------------
+  - orgId: 1
+    name: OpenSearch Health
+    folder: Visual AI Alerts
+    interval: 60s
+    rules:
+      # OpenSearch Cluster Status
+      - uid: opensearch-cluster-status
+        title: OpenSearch Cluster Unhealthy
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                opensearch_cluster_status{color!="green"}
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: count
+              type: classic_conditions
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              expression: B
+              type: threshold
+        noDataState: OK
+        execErrState: OK
+        for: 2m
+        annotations:
+          summary: "OpenSearch cluster is not healthy"
+          description: "Cluster status is not green - check cluster health"
+        labels:
+          severity: warning
+          component: opensearch
