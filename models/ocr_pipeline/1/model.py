@@ -445,10 +445,11 @@ class TritonPythonModel:
 
     def _call_recognition(self, text_crops: list[np.ndarray]) -> tuple[list[str], list[float]]:
         """
-        Call recognition model via BLS using PaddleOCR preprocessing.
+        Recognition model via BLS with optimized preprocessing.
 
-        Uses dynamic width TensorRT model (supports 8-2048 width).
-        Each crop is processed individually to preserve aspect ratio.
+        TensorRT engine supports batch=1 only, so each crop is processed
+        individually. Parallelism achieved via 4 model instances handling
+        concurrent API requests.
         """
         if not text_crops or self.ctc_decode is None:
             return [], []
@@ -457,9 +458,9 @@ class TritonPythonModel:
         MIN_WIDTH = 8
         MAX_WIDTH = 2048
 
-        logger.debug(f'Recognition: {len(text_crops)} crops (dynamic width)')
+        n_crops = len(text_crops)
+        logger.debug(f'Recognition: {n_crops} crops')
 
-        # Process each crop individually to preserve aspect ratio
         all_results = []
 
         for i, crop in enumerate(text_crops):
@@ -486,22 +487,26 @@ class TritonPythonModel:
             infer_response = infer_request.exec()
 
             if infer_response.has_error():
-                raise RuntimeError(f'Recognition failed: {infer_response.error().message()}')
+                logger.warning(f'Recognition failed for crop {i}: {infer_response.error().message()}')
+                all_results.append(('', 0.0))
+                continue
 
             output_tensor = pb_utils.get_output_tensor_by_name(infer_response, 'fetch_name_0')
             output = self._triton_to_numpy(output_tensor)
 
             # Decode CTC
             batch_results = self.ctc_decode(output)
-            all_results.extend(batch_results)
+            all_results.append(batch_results[0])
 
             if i < 3:
-                logger.debug(f'  Crop {i}: {w}x{h} -> width={target_w}, text="{batch_results[0][0][:30]}..."')
+                text, score = batch_results[0]
+                logger.debug(f'  Crop {i}: width={target_w}, text="{text[:30]}..." score={score:.3f}')
 
         # Extract texts and scores
         texts = [r[0] for r in all_results]
         scores = [r[1] for r in all_results]
 
+        logger.debug(f'Recognition complete: {len(texts)} texts')
         return texts, scores
 
     def _resize_norm_img(self, img: np.ndarray, imgW: int) -> np.ndarray:

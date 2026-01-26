@@ -158,22 +158,26 @@ class OcrService:
             return self._empty_result(error=str(e))
 
     def extract_text_batch(
-        self, image_bytes_list: list[bytes], filter_by_score: bool = True
+        self, image_bytes_list: list[bytes], filter_by_score: bool = True, max_workers: int = 16
     ) -> list[dict[str, Any]]:
         """
-        Extract text from multiple images.
+        Extract text from multiple images in parallel.
 
         Args:
             image_bytes_list: List of JPEG/PNG image bytes
             filter_by_score: If True, filter results by confidence thresholds
+            max_workers: Maximum parallel threads (default 16)
 
         Returns:
             List of OCR results for each image
         """
-        results = []
-        for image_bytes in image_bytes_list:
-            result = self.extract_text(image_bytes, filter_by_score)
-            results.append(result)
+        from concurrent.futures import ThreadPoolExecutor
+
+        def process_single(img_bytes: bytes) -> dict[str, Any]:
+            return self.extract_text(img_bytes, filter_by_score)
+
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(image_bytes_list))) as executor:
+            results = list(executor.map(process_single, image_bytes_list))
         return results
 
     def get_full_text(self, ocr_result: dict[str, Any], separator: str = ' ') -> str:
