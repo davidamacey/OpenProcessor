@@ -1,0 +1,221 @@
+# Track E: Unified Direct Ensemble (CPU-preprocessed input)
+#
+# Efficient GPU pipeline accepting CPU-preprocessed tensors:
+# 1. YOLO detection (parallel with step 2)
+# 2. MobileCLIP global embedding (parallel with step 1)
+# 3. Unified Extractor: Per-box embeddings + person-only face detection
+#
+# Key Difference from yolo_unified_ensemble:
+# - Accepts preprocessed FP32 tensors instead of raw JPEG bytes
+# - No DALI preprocessing step - done on CPU client-side
+# - 8x faster preprocessing, same GPU inference
+#
+# Input: CPU-preprocessed tensors + affine matrix
+# Outputs: YOLO detections + box embeddings + face embeddings
+
+name: "unified_direct_ensemble"
+platform: "ensemble"
+max_batch_size: 64
+
+input [
+  {
+    name: "yolo_images"
+    data_type: TYPE_FP32
+    dims: [ 3, 640, 640 ]
+  },
+  {
+    name: "clip_images"
+    data_type: TYPE_FP32
+    dims: [ 3, 256, 256 ]
+  },
+  {
+    name: "original_images"
+    data_type: TYPE_FP32
+    dims: [ 3, -1, -1 ]
+  },
+  {
+    name: "affine_matrices"
+    data_type: TYPE_FP32
+    dims: [ 2, 3 ]
+  }
+]
+
+output [
+  # YOLO detections
+  {
+    name: "num_dets"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "det_boxes"
+    data_type: TYPE_FP32
+    dims: [ 300, 4 ]
+  },
+  {
+    name: "det_scores"
+    data_type: TYPE_FP32
+    dims: [ 300 ]
+  },
+  {
+    name: "det_classes"
+    data_type: TYPE_INT32
+    dims: [ 300 ]
+  },
+  # MobileCLIP embeddings
+  {
+    name: "global_embeddings"
+    data_type: TYPE_FP32
+    dims: [ 512 ]
+  },
+  {
+    name: "box_embeddings"
+    data_type: TYPE_FP32
+    dims: [ 300, 512 ]
+  },
+  {
+    name: "normalized_boxes"
+    data_type: TYPE_FP32
+    dims: [ 300, 4 ]
+  },
+  # Face detection outputs
+  {
+    name: "num_faces"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  },
+  {
+    name: "face_embeddings"
+    data_type: TYPE_FP32
+    dims: [ 64, 512 ]
+  },
+  {
+    name: "face_boxes"
+    data_type: TYPE_FP32
+    dims: [ 64, 4 ]
+  },
+  {
+    name: "face_landmarks"
+    data_type: TYPE_FP32
+    dims: [ 64, 10 ]
+  },
+  {
+    name: "face_scores"
+    data_type: TYPE_FP32
+    dims: [ 64 ]
+  },
+  {
+    name: "face_person_idx"
+    data_type: TYPE_INT32
+    dims: [ 64 ]
+  }
+]
+
+ensemble_scheduling {
+  step [
+    # Step 1: YOLO detection (parallel with Step 2)
+    # Accepts preprocessed 640x640 tensor directly
+    {
+      model_name: "yolov11_small_trt_end2end"
+      model_version: -1
+      input_map {
+        key: "images"
+        value: "yolo_images"
+      }
+      output_map {
+        key: "num_dets"
+        value: "num_dets"
+      }
+      output_map {
+        key: "det_boxes"
+        value: "det_boxes"
+      }
+      output_map {
+        key: "det_scores"
+        value: "det_scores"
+      }
+      output_map {
+        key: "det_classes"
+        value: "det_classes"
+      }
+    },
+
+    # Step 2: Global image embedding (parallel with Step 1)
+    # Accepts preprocessed 256x256 tensor directly
+    {
+      model_name: "mobileclip2_s2_image_encoder"
+      model_version: -1
+      input_map {
+        key: "images"
+        value: "clip_images"
+      }
+      output_map {
+        key: "image_embeddings"
+        value: "global_embeddings"
+      }
+    },
+
+    # Step 3: Unified embedding extractor (box + face)
+    # Runs MobileCLIP on all boxes, SCRFD+ArcFace on person boxes only
+    {
+      model_name: "unified_embedding_extractor"
+      model_version: -1
+      input_map {
+        key: "original_image"
+        value: "original_images"
+      }
+      input_map {
+        key: "det_boxes"
+        value: "det_boxes"
+      }
+      input_map {
+        key: "det_classes"
+        value: "det_classes"
+      }
+      input_map {
+        key: "det_scores"
+        value: "det_scores"
+      }
+      input_map {
+        key: "num_dets"
+        value: "num_dets"
+      }
+      input_map {
+        key: "affine_matrix"
+        value: "affine_matrices"
+      }
+      output_map {
+        key: "box_embeddings"
+        value: "box_embeddings"
+      }
+      output_map {
+        key: "normalized_boxes"
+        value: "normalized_boxes"
+      }
+      output_map {
+        key: "num_faces"
+        value: "num_faces"
+      }
+      output_map {
+        key: "face_embeddings"
+        value: "face_embeddings"
+      }
+      output_map {
+        key: "face_boxes"
+        value: "face_boxes"
+      }
+      output_map {
+        key: "face_landmarks"
+        value: "face_landmarks"
+      }
+      output_map {
+        key: "face_scores"
+        value: "face_scores"
+      }
+      output_map {
+        key: "face_person_idx"
+        value: "face_person_idx"
+      }
+    }
+  ]
+}
