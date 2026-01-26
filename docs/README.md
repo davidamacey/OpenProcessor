@@ -101,8 +101,6 @@ triton-api/
 ├── models/                   # Triton model repository
 ├── benchmarks/               # Performance testing
 ├── docs/                     # This directory
-│   ├── archive/              # Old documentation versions
-│   └── Technical/            # Additional technical docs
 └── monitoring/               # Prometheus and Grafana
 ```
 
@@ -153,21 +151,6 @@ make export-ocr              # PP-OCRv5 models
 ```bash
 curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 ```
-
----
-
-## Archived Documentation
-
-Older versions of documentation have been moved to [archive/](archive/):
-
-- OCR_SETUP_GUIDE.md (consolidated into OCR.md)
-- OCR_IMPLEMENTATION_PLAN.md (consolidated into OCR.md)
-- OCR_DEPLOYMENT_CHECKLIST.md (consolidated into OCR.md)
-- PERFORMANCE_OPTIMIZATION.md (consolidated into PERFORMANCE.md)
-- OPTIMIZATION_SUMMARY.md (consolidated into PERFORMANCE.md)
-- GRPC_CONNECTION_SCALING.md (consolidated into PERFORMANCE.md)
-- PRODUCTION_ARCHITECTURE.md (consolidated into ARCHITECTURE.md)
-- THREAD_SAFETY_FIX.md (consolidated into ARCHITECTURE.md)
 
 ---
 
