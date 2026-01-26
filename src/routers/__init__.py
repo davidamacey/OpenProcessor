@@ -14,6 +14,7 @@ Routers:
 - clusters: FAISS IVF clustering and albums
 - query: Data retrieval and statistics
 - ocr: PP-OCRv5 text extraction
+- v1: Versioned API (all endpoints under /v1)
 """
 
 from src.routers.analyze import router as analyze_router
@@ -28,6 +29,7 @@ from src.routers.ocr import router as ocr_router
 from src.routers.persons import router as persons_router
 from src.routers.query import router as query_router
 from src.routers.search import router as search_router
+from src.routers.v1 import router as v1_router
 
 
 __all__ = [
@@ -43,4 +45,5 @@ __all__ = [
     'persons_router',
     'query_router',
     'search_router',
+    'v1_router',
 ]

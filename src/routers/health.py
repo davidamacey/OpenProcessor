@@ -34,17 +34,24 @@ def root():
 
     return {
         'service': 'Visual AI API',
+        'version': settings.api_version,
+        'api_versions': {
+            'current': 'v1',
+            'supported': ['v1'],
+            'deprecated': [],
+        },
         'status': 'running',
         'endpoints': {
-            'detection': '/detect',
-            'faces': '/faces',
-            'embed': '/embed',
-            'search': '/search',
-            'ingest': '/ingest',
-            'analyze': '/analyze',
-            'ocr': '/ocr',
-            'clusters': '/clusters',
-            'query': '/query',
+            'detection': '/detect (or /v1/detect)',
+            'faces': '/faces (or /v1/faces)',
+            'embed': '/embed (or /v1/embed)',
+            'search': '/search (or /v1/search)',
+            'ingest': '/ingest (or /v1/ingest)',
+            'analyze': '/analyze (or /v1/analyze)',
+            'ocr': '/ocr (or /v1/ocr)',
+            'clusters': '/clusters (or /v1/clusters)',
+            'query': '/query (or /v1/query)',
+            'persons': '/persons (or /v1/persons)',
         },
         'models': {
             'detection': settings.models.YOLO_MODEL,
@@ -81,6 +88,8 @@ def health() -> dict[str, Any]:
 
     health_data: dict[str, Any] = {
         'status': 'healthy',
+        'version': settings.api_version,
+        'api_version': 'v1',
         'services': {
             'triton': {
                 'url': settings.triton_url,
