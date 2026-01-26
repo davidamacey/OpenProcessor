@@ -37,6 +37,7 @@ from src.routers import (
     ingest_router,
     models_router,
     ocr_router,
+    persons_router,
     query_router,
     search_router,
 )
@@ -366,6 +367,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router)  # /health - Health checks
     application.include_router(detect_router)  # /detect - Object detection
     application.include_router(faces_router)  # /faces - Face detection/recognition
+    application.include_router(persons_router)  # /persons - Person management
     application.include_router(embed_router)  # /embed - CLIP embeddings
     application.include_router(search_router)  # /search - Visual similarity search
     application.include_router(ingest_router)  # /ingest - Data ingestion
