@@ -1,9 +1,9 @@
 """
-CPU Preprocessing Module for Track F.
+CPU Preprocessing Module.
 
-Replaces DALI GPU preprocessing with CPU-based preprocessing using cv2 and numpy.
-This enables deployment on systems without DALI or for benchmarking CPU vs GPU
-preprocessing overhead.
+Provides CPU-based preprocessing using cv2 and numpy as an alternative to DALI
+GPU preprocessing. Useful for deployment on systems without DALI or for
+benchmarking CPU vs GPU preprocessing overhead.
 
 Preprocessing functions:
 - letterbox_cpu: YOLO letterbox (640x640, matches Ultralytics LetterBox)
@@ -383,7 +383,7 @@ def preprocess_for_triton(
     clip_size: int = 256,
 ) -> tuple[np.ndarray, np.ndarray, float, tuple[float, float], tuple[int, int]]:
     """
-    Preprocess image for direct Triton inference (Track F style).
+    Preprocess image for direct Triton inference with CPU preprocessing.
 
     Returns tensors with batch dimension added, ready for Triton InferInput.
 

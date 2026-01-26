@@ -23,8 +23,8 @@
 
 ```bash
 # Clear indexes
-curl -s -X DELETE "http://localhost:4603/track_e/index"
-curl -s -X POST "http://localhost:4603/track_e/index/create"
+curl -s -X DELETE "http://localhost:4603/query/index"
+curl -s -X POST "http://localhost:4603/query/index/create"
 
 # Run ingestion benchmark
 python scripts/ingest_all_indexes.py \

@@ -30,7 +30,7 @@ For Triton clients, use src.clients:
 # InferenceResult moved to schemas
 from src.schemas.detection import InferenceResult
 
-# Affine transformation (Track D)
+# Affine transformation for DALI preprocessing
 from .affine import (
     calculate_affine_matrix,
     clear_affine_cache,
@@ -39,7 +39,7 @@ from .affine import (
     prepare_triton_inputs,
 )
 
-# Caching (Track E)
+# Caching for visual search
 from .cache import (
     EmbeddingCache,
     clear_all_caches,
@@ -50,7 +50,7 @@ from .cache import (
 )
 from .image_processing import decode_image, validate_image
 
-# PyTorch utilities (Track A)
+# PyTorch utilities
 from .pytorch_utils import (
     cleanup_pytorch_models,
     format_detections,

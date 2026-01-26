@@ -405,7 +405,7 @@ Expected output:
 python scripts/test_ocr_pipeline.py
 
 # Or use curl
-curl -X POST http://localhost:4603/track_e/ocr/predict \
+curl -X POST http://localhost:4603/ocr/predict \
     -F "image=@test_images/ocr-synthetic/hello_world.jpg"
 ```
 
@@ -416,7 +416,7 @@ curl -X POST http://localhost:4603/track_e/ocr/predict \
 ### Extract Text (Single Image)
 
 ```bash
-curl -X POST http://localhost:4603/track_e/ocr/predict \
+curl -X POST http://localhost:4603/ocr/predict \
     -F "image=@your_image.jpg" \
     -F "min_det_score=0.5" \
     -F "min_rec_score=0.8"
@@ -439,7 +439,7 @@ Response:
 ### Batch Processing
 
 ```bash
-curl -X POST http://localhost:4603/track_e/ocr/predict_batch \
+curl -X POST http://localhost:4603/ocr/batch \
     -F "images=@image1.jpg" \
     -F "images=@image2.jpg" \
     -F "images=@image3.jpg"
@@ -448,7 +448,7 @@ curl -X POST http://localhost:4603/track_e/ocr/predict_batch \
 ### Search Images by Text
 
 ```bash
-curl -X POST http://localhost:4603/track_e/search/ocr \
+curl -X POST http://localhost:4603/search/ocr \
     -H "Content-Type: application/json" \
     -d '{"query": "invoice", "top_k": 10}'
 ```
@@ -462,7 +462,7 @@ def extract_text(image_path: str, api_url: str = "http://localhost:4603") -> dic
     """Extract text from an image using OCR API."""
     with open(image_path, 'rb') as f:
         response = requests.post(
-            f"{api_url}/track_e/ocr/predict",
+            f"{api_url}/ocr/predict",
             files={"image": f},
             data={"min_det_score": 0.5, "min_rec_score": 0.8}
         )

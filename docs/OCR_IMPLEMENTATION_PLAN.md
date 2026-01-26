@@ -180,13 +180,13 @@ OCR_INDEX_SETTINGS = {
 
 ```python
 # OCR-specific endpoints
-POST /track_e/ocr/predict          # Extract text + boxes from image
-POST /track_e/ocr/predict_batch    # Batch OCR processing
-POST /track_e/search/ocr           # Search images by text content
-GET  /track_e/ocr/{image_id}       # Get all OCR results for an image
+POST /ocr/predict          # Extract text + boxes from image
+POST /ocr/predict_batch    # Batch OCR processing
+POST /search/ocr           # Search images by text content
+GET  /ocr/{image_id}       # Get all OCR results for an image
 
 # Updated ingestion endpoint
-POST /track_e/ingest
+POST /ingest
     ?enable_ocr=true               # Default: True
     ?enable_faces=true             # Default: True
     ?skip_duplicates=true          # Default: True
@@ -255,11 +255,11 @@ POST /track_e/ingest
    - Add `infer_ocr_batch()` method
 
 10. **Extend `src/routers/track_e.py`**
-    - Add `/track_e/ocr/predict` endpoint
-    - Add `/track_e/ocr/predict_batch` endpoint
-    - Add `/track_e/search/ocr` endpoint
-    - Add `/track_e/ocr/{image_id}` endpoint
-    - Update `/track_e/ingest` with `enable_ocr` parameter
+    - Add `/ocr/predict` endpoint
+    - Add `/ocr/predict_batch` endpoint
+    - Add `/search/ocr` endpoint
+    - Add `/ocr/{image_id}` endpoint
+    - Update `/ingest` with `enable_ocr` parameter
 
 ### Phase 4: Unified Ingestion (Day 4)
 
@@ -290,9 +290,9 @@ The implementation is complete when:
 1. **Model Export**: `paddleocr_det_trt` and `paddleocr_rec_trt` load in Triton
 2. **DALI Pipeline**: `penta_preprocess_dali` outputs 5 branches correctly
 3. **OCR Pipeline**: `ocr_pipeline` returns text + boxes for test images
-4. **API Works**: `/track_e/ocr/predict` returns valid OCR results
-5. **Search Works**: `/track_e/search/ocr` finds images by text content
-6. **Ingestion Works**: `/track_e/ingest` with `enable_ocr=true` indexes text
+4. **API Works**: `/ocr/predict` returns valid OCR results
+5. **Search Works**: `/search/ocr` finds images by text content
+6. **Ingestion Works**: `/ingest` with `enable_ocr=true` indexes text
 7. **Tests Pass**: `make test-ocr` and all existing tests pass
 
 ---

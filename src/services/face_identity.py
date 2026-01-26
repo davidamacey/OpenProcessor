@@ -241,7 +241,7 @@ class FaceIdentityService:
         image_bytes: bytes,
         top_k: int = 5,
         threshold: float = 0.6,
-        face_detector: str = 'scrfd',
+        face_detector: str = 'yolo11',
     ) -> dict:
         """
         1:N face identification - find matching persons in database.
@@ -257,7 +257,7 @@ class FaceIdentityService:
             top_k: Number of top matches to return per face
             threshold: Minimum similarity threshold (0.0-1.0).
                       Recommended: 0.5-0.6 for same person verification.
-            face_detector: Face detector to use ('scrfd' or 'yolo11')
+            face_detector: Face detector to use ('yolo11' or 'scrfd')
 
         Returns:
             dict with:

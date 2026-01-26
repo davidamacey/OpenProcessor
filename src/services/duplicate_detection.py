@@ -1,5 +1,5 @@
 """
-Track E: Near-Duplicate Detection Service
+Near-Duplicate Detection Service
 
 Finds and groups visually similar images using CLIP embeddings.
 

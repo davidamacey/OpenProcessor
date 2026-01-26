@@ -1,40 +1,42 @@
 """
-Unified YOLO Inference FastAPI Service
-All 5 Performance Tracks in One Application
+Unified Visual AI API Service.
 
-This unified service provides all tracks through a single endpoint structure:
-- Track A: PyTorch Direct (baseline) - /pytorch/predict/{model_name}
-- Track B: Standard TRT + CPU NMS - /predict/{model_name}
-- Track C: End2End TRT + GPU NMS - /predict/{model_name}_end2end
-- Track D: DALI + TRT (Full GPU) - /predict/{model_name}_gpu_e2e_*
-- Track E: Visual Search - /track_e/*
+A high-performance FastAPI service providing comprehensive visual AI capabilities:
+- Object detection (YOLO11)
+- Face detection and recognition (YOLO11-face + ArcFace)
+- Image and text embeddings (MobileCLIP)
+- Visual similarity search (OpenSearch k-NN)
+- Data ingestion with duplicate detection
+- OCR text extraction (PP-OCRv5)
+- Clustering and album organization (FAISS IVF)
 
-Simplified deployment: One Docker container, all endpoints available.
+All inference runs through NVIDIA Triton Inference Server for optimal GPU utilization.
 """
 
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
 
-import numpy as np
 import orjson
-import torch
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse, Response
-from ultralytics import YOLO
 
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
-from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory, app_state
+from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.routers import (
+    analyze_router,
+    clusters_router,
+    detect_router,
+    embed_router,
+    faces_router,
     health_router,
+    ingest_router,
     models_router,
-    track_a_router,
-    track_e_router,
-    track_f_router,
-    triton_router,
+    ocr_router,
+    query_router,
+    search_router,
 )
 
 
@@ -102,11 +104,9 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     Startup:
     - Create shared ThreadPoolExecutor for CPU-bound tasks
     - Create AsyncTritonPool for high-throughput inference
-    - Load PyTorch models for Track A (if enabled)
     - Shared Triton gRPC client auto-created on first use
 
     Shutdown:
-    - Clean up PyTorch models
     - Close AsyncTritonPool
     - Shutdown shared ThreadPoolExecutor
     - Close all Triton gRPC connections
@@ -140,35 +140,9 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     await _async_triton_pool.initialize()
     logger.info('AsyncTritonPool initialized (4 channels, max_concurrent=64)')
 
-    if settings.enable_pytorch:
-        logger.info('Loading PyTorch models for Track A...')
-        for model_name, model_path in settings.models.PYTORCH_MODELS.items():
-            try:
-                logger.info(f'Loading {model_name} from {model_path}')
-                model = YOLO(model_path, task='detect')
-
-                # Warmup with FP16 if GPU available
-                dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
-                if torch.cuda.is_available():
-                    _ = model(dummy_img, verbose=False, half=True)
-                    logger.info('  Model uses FP16 inference')
-                else:
-                    _ = model(dummy_img, verbose=False)
-
-                app_state.pytorch_models[model_name] = model
-                logger.info(f'  {model_name} loaded successfully')
-
-            except Exception as e:
-                logger.error(f'Failed to load {model_name}: {e}')
-                raise
-
-        logger.info(f'PyTorch models loaded: {list(app_state.pytorch_models.keys())}')
-    else:
-        logger.info('Track A (PyTorch) DISABLED - GPU memory reserved for Triton')
-
     logger.info('=== SERVICE READY ===')
-    logger.info(f'Active Tracks: {"A, B, C, D, E" if settings.enable_pytorch else "B, C, D, E"}')
     logger.info(f'Triton URL: {settings.triton_url}')
+    logger.info(f'OpenSearch URL: {settings.opensearch_url}')
 
     yield
 
@@ -176,10 +150,6 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     # SHUTDOWN
     # =========================================================================
     logger.info('=== SHUTDOWN: Cleaning Up ===')
-
-    # Clean up PyTorch models
-    app_state.pytorch_models.clear()
-    logger.info('PyTorch models cleaned up')
 
     # Close AsyncTritonPool
     if _async_triton_pool is not None:
@@ -220,9 +190,13 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     application = FastAPI(
-        title=settings.api_title,
-        description=settings.api_description,
-        version=settings.api_version,
+        title='Visual AI API',
+        description=(
+            'High-performance visual AI service providing object detection, '
+            'face recognition, image embeddings, visual search, and OCR. '
+            'All inference runs through NVIDIA Triton Inference Server.'
+        ),
+        version='6.0.0',
         lifespan=lifespan,
         default_response_class=ORJSONResponse,
     )
@@ -238,11 +212,11 @@ def create_app() -> FastAPI:
         start_time = time.time()
 
         # Validate file size for upload endpoints
-        if request.method == 'POST' and 'predict' in request.url.path:
+        if request.method == 'POST':
             content_length = request.headers.get('content-length')
             # Batch endpoints allow up to 10GB for large photo library processing
-            # Single image endpoints use default limit (50MB)
-            is_batch_endpoint = 'predict_batch' in request.url.path
+            # Single endpoints use default limit (50MB)
+            is_batch_endpoint = '/batch' in request.url.path
             max_size = (
                 10 * 1024 * 1024 * 1024 if is_batch_endpoint else settings.max_file_size_bytes
             )
@@ -265,7 +239,15 @@ def create_app() -> FastAPI:
         content_type = response.headers.get('content-type', '')
         is_inference_endpoint = any(
             path in request.url.path
-            for path in ['/predict', '/pytorch/predict', '/track_e/', '/track_f/']
+            for path in [
+                '/detect',
+                '/faces',
+                '/embed',
+                '/search',
+                '/ingest',
+                '/analyze',
+                '/ocr',
+            ]
         )
 
         if 'application/json' in content_type and is_inference_endpoint:
@@ -310,13 +292,18 @@ def create_app() -> FastAPI:
 
         return response
 
-    # Include Routers
-    application.include_router(health_router)
-    application.include_router(track_a_router)
-    application.include_router(triton_router)
-    application.include_router(track_e_router)
-    application.include_router(track_f_router)
-    application.include_router(models_router)
+    # Include Routers - Clean API structure without track naming
+    application.include_router(health_router)      # /health - Health checks
+    application.include_router(detect_router)      # /detect - Object detection
+    application.include_router(faces_router)       # /faces - Face detection/recognition
+    application.include_router(embed_router)       # /embed - CLIP embeddings
+    application.include_router(search_router)      # /search - Visual similarity search
+    application.include_router(ingest_router)      # /ingest - Data ingestion
+    application.include_router(analyze_router)     # /analyze - Combined analysis
+    application.include_router(clusters_router)    # /clusters - Clustering/albums
+    application.include_router(query_router)       # /query - Data retrieval
+    application.include_router(ocr_router)         # /ocr - Text extraction
+    application.include_router(models_router)      # /models - Model management
 
     return application
 
