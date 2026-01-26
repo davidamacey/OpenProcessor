@@ -106,23 +106,56 @@ var allTracks = []Track{
 	{ID: "D_streaming", Name: "DALI+TRT Streaming", URL: "http://localhost:4603/predict/small_gpu_e2e_streaming", Description: "Full GPU (low latency)"},
 	{ID: "D_balanced", Name: "DALI+TRT Balanced", URL: "http://localhost:4603/predict/small_gpu_e2e", Description: "Full GPU (balanced)"},
 	{ID: "D_batch", Name: "DALI+TRT Batch", URL: "http://localhost:4603/predict/small_gpu_e2e_batch", Description: "Full GPU (max throughput)"},
+	// Track E: Detection + Embedding endpoints
+	{ID: "E_detect", Name: "YOLO Detection Only", URL: "http://localhost:4603/track_e/detect", Description: "YOLO detection (no embedding)"},
 	{ID: "E", Name: "DALI+YOLO+CLIP (simple)", URL: "http://localhost:4603/track_e/predict", Description: "YOLO + global embedding (single image)"},
 	{ID: "E_full", Name: "DALI+YOLO+CLIP (full)", URL: "http://localhost:4603/track_e/predict_full", Description: "YOLO + global + per-box embeddings"},
 	{ID: "E_batch16", Name: "DALI+YOLO+CLIP Batch-16", URL: "http://localhost:4603/track_e/predict_batch", Description: "Batch 16 images per request"},
 	{ID: "E_batch32", Name: "DALI+YOLO+CLIP Batch-32", URL: "http://localhost:4603/track_e/predict_batch", Description: "Batch 32 images per request"},
 	{ID: "E_batch64", Name: "DALI+YOLO+CLIP Batch-64", URL: "http://localhost:4603/track_e/predict_batch", Description: "Batch 64 images per request"},
-	{ID: "E_faces", Name: "SCRFD+ArcFace (faces)", URL: "http://localhost:4603/track_e/faces/recognize", Description: "Face detection + ArcFace embeddings"},
-	{ID: "E_faces_detect", Name: "SCRFD Only (detect)", URL: "http://localhost:4603/track_e/faces/detect", Description: "Face detection only (no embeddings)"},
+	// Track E: Face detection + recognition (YOLO11-face is default, same as ingest)
+	{ID: "E_faces", Name: "YOLO11-face+ArcFace", URL: "http://localhost:4603/track_e/faces/yolo11/recognize", Description: "YOLO11-face detection + ArcFace embeddings (same as ingest)"},
+	{ID: "E_faces_scrfd", Name: "SCRFD+ArcFace (legacy)", URL: "http://localhost:4603/track_e/faces/recognize", Description: "SCRFD face detection + ArcFace embeddings"},
+	{ID: "E_faces_fast", Name: "Fast Face (direct gRPC)", URL: "http://localhost:4603/track_e/faces/fast/recognize", Description: "Direct gRPC - fastest face pipeline"},
+	{ID: "E_faces_detect", Name: "Face Detection Only", URL: "http://localhost:4603/track_e/faces/detect", Description: "Face detection only (no embeddings)"},
 	{ID: "E_quad", Name: "Quad Pipeline (full)", URL: "http://localhost:4603/track_e/faces/full", Description: "YOLO + CLIP + SCRFD + ArcFace (unified)"},
+	// Track E: OCR
+	{ID: "E_ocr", Name: "OCR Only", URL: "http://localhost:4603/track_e/ocr/predict", Description: "PP-OCRv5 text extraction"},
+	// Track E: Unified pipelines
 	{ID: "E_unified", Name: "Unified (person-only)", URL: "http://localhost:4603/track_e/unified", Description: "YOLO + CLIP + face detection on person crops"},
+	{ID: "E_analyze", Name: "Analyze (all features)", URL: "http://localhost:4603/track_e/analyze", Description: "YOLO + CLIP + faces + OCR (full analysis)"},
 	{ID: "F", Name: "CPU+TRT Direct", URL: "http://localhost:4603/track_f/predict", Description: "CPU preprocessing + direct TRT (no DALI)"},
+	// Ingest endpoints (full pipeline: YOLO + CLIP + faces + OpenSearch indexing)
+	{ID: "E_ingest", Name: "Ingest Single", URL: "http://localhost:4603/track_e/ingest", Description: "Single image ingest (CPU preprocess)"},
+	{ID: "E_ingest_batch8", Name: "Ingest Batch-8", URL: "http://localhost:4603/track_e/ingest_batch", Description: "Batch 8 ingest (CPU preprocess)"},
+	{ID: "E_ingest_batch16", Name: "Ingest Batch-16", URL: "http://localhost:4603/track_e/ingest_batch", Description: "Batch 16 ingest (CPU preprocess)"},
+	{ID: "E_ingest_batch32", Name: "Ingest Batch-32", URL: "http://localhost:4603/track_e/ingest_batch", Description: "Batch 32 ingest (CPU preprocess)"},
+	// Optimized ingest endpoints (bypasses Python BLS bottleneck)
+	{ID: "E_opt8", Name: "Optimized Batch-8", URL: "http://localhost:4603/track_e/ingest_batch_optimized", Description: "OPTIMIZED: CPU crop + batched GPU"},
+	{ID: "E_opt16", Name: "Optimized Batch-16", URL: "http://localhost:4603/track_e/ingest_batch_optimized", Description: "OPTIMIZED: CPU crop + batched GPU"},
+	{ID: "E_opt32", Name: "Optimized Batch-32", URL: "http://localhost:4603/track_e/ingest_batch_optimized", Description: "OPTIMIZED: CPU crop + batched GPU"},
+	// Parallel ingest endpoints (per-image workers + Triton auto-batching)
+	{ID: "E_par8", Name: "Parallel Batch-8", URL: "http://localhost:4603/track_e/ingest_parallel", Description: "PARALLEL: per-image workers + Triton auto-batch"},
+	{ID: "E_par16", Name: "Parallel Batch-16", URL: "http://localhost:4603/track_e/ingest_parallel", Description: "PARALLEL: per-image workers + Triton auto-batch"},
+	{ID: "E_par32", Name: "Parallel Batch-32", URL: "http://localhost:4603/track_e/ingest_parallel", Description: "PARALLEL: per-image workers + Triton auto-batch"},
+	{ID: "E_par64", Name: "Parallel Batch-64", URL: "http://localhost:4603/track_e/ingest_parallel", Description: "PARALLEL: per-image workers + Triton auto-batch"},
 }
 
 // Track configs for batch tracks
 var trackConfigs = map[string]TrackConfig{
-	"E_batch16": {IsBatch: true, BatchSize: 16},
-	"E_batch32": {IsBatch: true, BatchSize: 32},
-	"E_batch64": {IsBatch: true, BatchSize: 64},
+	"E_batch16":        {IsBatch: true, BatchSize: 16},
+	"E_batch32":        {IsBatch: true, BatchSize: 32},
+	"E_batch64":        {IsBatch: true, BatchSize: 64},
+	"E_ingest_batch8":  {IsBatch: true, BatchSize: 8},
+	"E_ingest_batch16": {IsBatch: true, BatchSize: 16},
+	"E_ingest_batch32": {IsBatch: true, BatchSize: 32},
+	"E_opt8":           {IsBatch: true, BatchSize: 8},
+	"E_opt16":          {IsBatch: true, BatchSize: 16},
+	"E_opt32":          {IsBatch: true, BatchSize: 32},
+	"E_par8":           {IsBatch: true, BatchSize: 8},
+	"E_par16":          {IsBatch: true, BatchSize: 16},
+	"E_par32":          {IsBatch: true, BatchSize: 32},
+	"E_par64":          {IsBatch: true, BatchSize: 64},
 }
 
 func main() {
@@ -319,18 +352,44 @@ func testSingleImage(tracks []Track, images [][]byte, config *BenchmarkConfig) (
 			fmt.Printf("\nTrack %s: %s\n", track.ID, track.Name)
 		}
 
+		// Check if this is a batch track
+		trackConfig, isBatchTrack := trackConfigs[track.ID]
+
 		var latencies []float64
 		var success int64
 		var failed int64
 
 		start := time.Now()
 		for i := 0; i < 10; i++ {
-			latency, ok := sendSingleRequest(client, track.URL, images[0], config)
-			if ok {
-				latencies = append(latencies, latency)
-				success++
+			if isBatchTrack {
+				// Batch mode: send multiple images per request
+				batchSize := trackConfig.BatchSize
+				batchImages := make([][]byte, batchSize)
+				for j := 0; j < batchSize; j++ {
+					batchImages[j] = images[(i*batchSize+j)%len(images)]
+				}
+
+				latency, processedCount, ok := sendBatchRequest(client, track.URL, batchImages)
+				if ok {
+					// Record per-image latency for fair comparison
+					perImageLatency := latency / float64(processedCount)
+					for k := 0; k < processedCount; k++ {
+						latencies = append(latencies, perImageLatency)
+					}
+					success += int64(processedCount)
+					failed += int64(batchSize - processedCount)
+				} else {
+					failed += int64(batchSize)
+				}
 			} else {
-				failed++
+				// Single image mode
+				latency, ok := sendSingleRequest(client, track.URL, images[0], config)
+				if ok {
+					latencies = append(latencies, latency)
+					success++
+				} else {
+					failed++
+				}
 			}
 		}
 		duration := time.Since(start).Seconds()
@@ -339,7 +398,11 @@ func testSingleImage(tracks []Track, images [][]byte, config *BenchmarkConfig) (
 
 		if !config.Quiet {
 			fmt.Printf("  Mean latency: %.2fms\n", results[len(results)-1].MeanLatency)
-			fmt.Printf("  Success: %d/10\n", success)
+			if isBatchTrack {
+				fmt.Printf("  Success: %d/%d (batch size: %d)\n", success, success+failed, trackConfig.BatchSize)
+			} else {
+				fmt.Printf("  Success: %d/10\n", success)
+			}
 		}
 	}
 
@@ -361,22 +424,56 @@ func testImageSet(tracks []Track, images [][]byte, config *BenchmarkConfig) ([]*
 			fmt.Printf("\nTrack %s: %s\n", track.ID, track.Name)
 		}
 
+		// Check if this is a batch track
+		trackConfig, isBatchTrack := trackConfigs[track.ID]
+
 		var latencies []float64
 		var success int64
 		var failed int64
 
 		start := time.Now()
-		for i, img := range images {
-			if !config.Quiet && (i+1)%10 == 0 {
-				fmt.Printf("  Processed %d/%d images...\r", i+1, len(images))
-			}
 
-			latency, ok := sendSingleRequest(client, track.URL, img, config)
-			if ok {
-				latencies = append(latencies, latency)
-				success++
-			} else {
-				failed++
+		if isBatchTrack {
+			// Batch mode: process images in batches
+			batchSize := trackConfig.BatchSize
+			for i := 0; i < len(images); i += batchSize {
+				endIdx := i + batchSize
+				if endIdx > len(images) {
+					endIdx = len(images)
+				}
+
+				batchImages := images[i:endIdx]
+
+				if !config.Quiet && (i+len(batchImages))%100 == 0 {
+					fmt.Printf("  Processed %d/%d images...\r", i+len(batchImages), len(images))
+				}
+
+				latency, processedCount, ok := sendBatchRequest(client, track.URL, batchImages)
+				if ok {
+					perImageLatency := latency / float64(processedCount)
+					for k := 0; k < processedCount; k++ {
+						latencies = append(latencies, perImageLatency)
+					}
+					success += int64(processedCount)
+					failed += int64(len(batchImages) - processedCount)
+				} else {
+					failed += int64(len(batchImages))
+				}
+			}
+		} else {
+			// Single image mode
+			for i, img := range images {
+				if !config.Quiet && (i+1)%10 == 0 {
+					fmt.Printf("  Processed %d/%d images...\r", i+1, len(images))
+				}
+
+				latency, ok := sendSingleRequest(client, track.URL, img, config)
+				if ok {
+					latencies = append(latencies, latency)
+					success++
+				} else {
+					failed++
+				}
 			}
 		}
 		duration := time.Since(start).Seconds()
@@ -897,25 +994,43 @@ func extractLatencies(result *BenchmarkResults) []float64 {
 }
 
 func sendSingleRequest(client *http.Client, url string, imageData []byte, config ...*BenchmarkConfig) (float64, bool) {
+	isIngest := strings.Contains(url, "/ingest") && !strings.Contains(url, "ingest_batch")
+	// YOLO11-face and fast-face endpoints use "file" field
+	isYoloFace := strings.Contains(url, "/faces/yolo11") || strings.Contains(url, "/faces/fast")
+
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	part, err := writer.CreateFormFile("image", "image.jpg")
-	if err != nil {
-		return 0, false
-	}
-
-	if _, writeErr := part.Write(imageData); writeErr != nil {
-		return 0, false
+	if isIngest || isYoloFace {
+		// Ingest and YOLO11-face endpoints use "file" field
+		part, err := writer.CreateFormFile("file", "image.jpg")
+		if err != nil {
+			return 0, false
+		}
+		if _, writeErr := part.Write(imageData); writeErr != nil {
+			return 0, false
+		}
+	} else {
+		// Standard predict uses "image" field
+		part, err := writer.CreateFormFile("image", "image.jpg")
+		if err != nil {
+			return 0, false
+		}
+		if _, writeErr := part.Write(imageData); writeErr != nil {
+			return 0, false
+		}
 	}
 
 	if closeErr := writer.Close(); closeErr != nil {
 		return 0, false
 	}
 
-	// Add query parameters if resize enabled
+	// Build URL with query parameters
 	finalURL := url
-	if len(config) > 0 && config[0].EnableResize {
+	if isIngest {
+		// Disable duplicate checking and OCR for benchmarks
+		finalURL = fmt.Sprintf("%s?skip_duplicates=false&enable_ocr=false", url)
+	} else if len(config) > 0 && config[0].EnableResize {
 		finalURL = fmt.Sprintf("%s?resize=true&max_size=%d", url, config[0].MaxSize)
 	}
 
@@ -935,17 +1050,10 @@ func sendSingleRequest(client *http.Client, url string, imageData []byte, config
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	body, _ := io.ReadAll(resp.Body)
+
 	if resp.StatusCode != 200 {
-		return 0, false
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, false
-	}
-
-	var detResp DetectionResponse
-	if err := json.Unmarshal(body, &detResp); err != nil {
+		fmt.Printf("Request failed: %d - %s\n", resp.StatusCode, string(body[:min(200, len(body))]))
 		return 0, false
 	}
 
@@ -954,25 +1062,52 @@ func sendSingleRequest(client *http.Client, url string, imageData []byte, config
 
 // BatchResponse represents response from batch endpoint
 type BatchResponse struct {
-	Status        string `json:"status"`
-	BatchSize     int    `json:"batch_size"`
+	Status        string  `json:"status"`
+	BatchSize     int     `json:"batch_size"`
+	Processed     int     `json:"processed"`
 	ThroughputIPS float64 `json:"throughput_ips"`
+}
+
+// IngestBatchResponse represents response from ingest_batch endpoint
+type IngestBatchResponse struct {
+	Status      string `json:"status"`
+	TotalImages int    `json:"total_images"`
+	Processed   int    `json:"processed"`
+	Duplicates  int    `json:"duplicates"`
+	Errors      int    `json:"errors"`
 }
 
 // sendBatchRequest sends multiple images in a single request
 // Returns: latency in ms, number of images processed, success
 func sendBatchRequest(client *http.Client, url string, imagesData [][]byte) (float64, int, bool) {
+	// Check for any ingest endpoint (ingest_batch, ingest_batch_optimized, ingest_parallel)
+	isIngest := strings.Contains(url, "ingest_batch") || strings.Contains(url, "ingest_parallel")
+
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	// Add all images to the multipart form
-	for i, imageData := range imagesData {
-		part, err := writer.CreateFormFile("images", fmt.Sprintf("image_%d.jpg", i))
-		if err != nil {
-			return 0, 0, false
+	if isIngest {
+		// Ingest batch uses "files" field
+		for i, imageData := range imagesData {
+			part, err := writer.CreateFormFile("files", fmt.Sprintf("image_%d.jpg", i))
+			if err != nil {
+				return 0, 0, false
+			}
+			if _, writeErr := part.Write(imageData); writeErr != nil {
+				return 0, 0, false
+			}
 		}
-		if _, writeErr := part.Write(imageData); writeErr != nil {
-			return 0, 0, false
+		// No metadata field needed - API auto-generates image_ids
+	} else {
+		// Standard batch uses "images" field
+		for i, imageData := range imagesData {
+			part, err := writer.CreateFormFile("images", fmt.Sprintf("image_%d.jpg", i))
+			if err != nil {
+				return 0, 0, false
+			}
+			if _, writeErr := part.Write(imageData); writeErr != nil {
+				return 0, 0, false
+			}
 		}
 	}
 
@@ -980,7 +1115,13 @@ func sendBatchRequest(client *http.Client, url string, imagesData [][]byte) (flo
 		return 0, 0, false
 	}
 
-	req, err := http.NewRequest("POST", url, &buf)
+	// Build URL with query parameters for ingest
+	finalURL := url
+	if isIngest {
+		finalURL = fmt.Sprintf("%s?skip_duplicates=false&enable_ocr=false", url)
+	}
+
+	req, err := http.NewRequest("POST", finalURL, &buf)
 	if err != nil {
 		return 0, 0, false
 	}
@@ -1007,12 +1148,27 @@ func sendBatchRequest(client *http.Client, url string, imagesData [][]byte) (flo
 		return 0, 0, false
 	}
 
+	if isIngest {
+		var ingestResp IngestBatchResponse
+		if err := json.Unmarshal(body, &ingestResp); err != nil {
+			fmt.Printf("JSON parse error: %v - Body: %s\n", err, string(body[:min(200, len(body))]))
+			return 0, 0, false
+		}
+		// Return total_images as processed count (processed + duplicates = total_images)
+		return latency, ingestResp.TotalImages, true
+	}
+
 	var batchResp BatchResponse
 	if err := json.Unmarshal(body, &batchResp); err != nil {
 		return 0, 0, false
 	}
 
-	return latency, batchResp.BatchSize, true
+	// Use Processed if available, otherwise BatchSize
+	processed := batchResp.Processed
+	if processed == 0 {
+		processed = batchResp.BatchSize
+	}
+	return latency, processed, true
 }
 
 func runWarmup(track Track, images [][]byte, count int, quiet bool, config *BenchmarkConfig) {
@@ -1020,9 +1176,21 @@ func runWarmup(track Track, images [][]byte, count int, quiet bool, config *Benc
 		fmt.Printf("  Warming up (%d requests)...\n", count)
 	}
 
+	// Check if this is a batch track
+	trackConfig, isBatchTrack := trackConfigs[track.ID]
+
 	client := createHTTPClient(1)
 	for i := 0; i < count; i++ {
-		sendSingleRequest(client, track.URL, images[i%len(images)], config)
+		if isBatchTrack {
+			batchSize := trackConfig.BatchSize
+			batchImages := make([][]byte, batchSize)
+			for j := 0; j < batchSize; j++ {
+				batchImages[j] = images[(i*batchSize+j)%len(images)]
+			}
+			sendBatchRequest(client, track.URL, batchImages)
+		} else {
+			sendSingleRequest(client, track.URL, images[i%len(images)], config)
+		}
 	}
 
 	time.Sleep(1 * time.Second)

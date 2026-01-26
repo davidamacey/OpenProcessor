@@ -1449,3 +1449,277 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
         test-api-health test-track-a test-track-b test-track-c test-track-d test-track-e \
         test-track-e-full test-track-e-full-pipeline test-all-tracks compare-tracks info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref
+
+# ==================================================================================
+# Health & Status Checks
+# ==================================================================================
+
+.PHONY: triton-health
+triton-health: ## Check Triton server health
+	@echo "Checking Triton health..."
+	@curl -sf http://localhost:$(TRITON_HTTP_PORT)/v2/health/ready > /dev/null && echo "✓ Triton is ready" || (echo "✗ Triton not ready"; exit 1)
+
+.PHONY: triton-models-ready
+triton-models-ready: ## List all READY models in Triton
+	@echo "=== Triton Models (READY) ==="
+	@curl -s -X POST http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index 2>/dev/null | \
+		python3 -c "import sys,json; models=json.load(sys.stdin); ready=[m['name'] for m in models if m.get('state')=='READY']; print(f'Total: {len(ready)} models'); [print(f'  - {n}') for n in sorted(ready)]" 2>/dev/null || echo "Error: Cannot connect to Triton"
+
+.PHONY: triton-stats
+triton-stats: ## Show Triton model statistics
+	@echo "=== Triton Model Statistics ==="
+	@curl -s http://localhost:$(TRITON_HTTP_PORT)/v2/models/stats 2>/dev/null | \
+		python3 -c "import sys,json; stats=json.load(sys.stdin); ms=stats.get('model_stats',[]); [print(f\"{m['name']}: {m['inference_stats']['success']['count']} inferences\") for m in ms if m['inference_stats']['success']['count']>0]" 2>/dev/null || echo "Error: Cannot fetch stats"
+
+.PHONY: triton-metrics
+triton-metrics: ## Show key Triton metrics (inference counts, latencies)
+	@echo "=== Triton Key Metrics ==="
+	@curl -s http://localhost:$(TRITON_METRICS_PORT)/metrics 2>/dev/null | \
+		grep -E "nv_inference_count|nv_inference_compute_infer_duration" | \
+		grep -v "^#" | head -30
+
+.PHONY: check-all
+check-all: ## Full system health check (API + Triton + OpenSearch)
+	@echo "==================================================================================="
+	@echo "System Health Check"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "--- API Service ---"
+	@curl -sf http://localhost:$(API_PORT)/health > /dev/null && echo "✓ API is healthy" || echo "✗ API not responding"
+	@echo ""
+	@echo "--- Triton Server ---"
+	@curl -sf http://localhost:$(TRITON_HTTP_PORT)/v2/health/ready > /dev/null && echo "✓ Triton is ready" || echo "✗ Triton not ready"
+	@echo ""
+	@echo "--- OpenSearch ---"
+	@curl -sf http://localhost:$(OPENSEARCH_PORT)/_cluster/health > /dev/null && echo "✓ OpenSearch is healthy" || echo "✗ OpenSearch not responding"
+	@echo ""
+	@echo "--- GPU Status ---"
+	@nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null || echo "✗ Cannot query GPU"
+	@echo ""
+	@echo "==================================================================================="
+
+# ==================================================================================
+# Ingest Benchmarks (Individual vs Batch Comparison)
+# ==================================================================================
+
+BENCH_IMAGES_DIR := test_images/benchmark_all
+
+.PHONY: bench-ingest-single
+bench-ingest-single: bench-build ## Benchmark single image ingest with varying concurrency
+	@echo "Benchmarking SINGLE image ingest (individual requests)..."
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_ingest \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 \
+		--matrix-clients "1,4,8,16,32,64" --duration 30 --warmup 5
+
+.PHONY: bench-ingest-batch
+bench-ingest-batch: bench-build ## Benchmark batch ingest with varying batch sizes
+	@echo "Benchmarking BATCH ingest (batch requests)..."
+	@echo ""
+	@echo "--- Batch Size 8 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch8 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 32 --duration 30
+	@echo ""
+	@echo "--- Batch Size 16 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 32 --duration 30
+	@echo ""
+	@echo "--- Batch Size 32 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch32 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 16 --duration 30
+
+.PHONY: bench-ingest-compare
+bench-ingest-compare: bench-build ## Full comparison: individual vs batch ingest
+	@echo "==================================================================================="
+	@echo "Ingest Pipeline Benchmark: Individual vs Batch"
+	@echo "==================================================================================="
+	@echo "Images: $(BENCH_IMAGES_DIR)"
+	@echo ""
+	@echo "=== Phase 1: Individual Requests ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_ingest \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 \
+		--matrix-clients "8,16,32,64" --duration 30 --warmup 5
+	@echo ""
+	@echo "=== Phase 2: Batch Requests ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 32 --duration 30
+	@echo ""
+	@echo "=== Phase 3: Large Batch ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch32 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 16 --duration 30
+	@echo ""
+	@echo "==================================================================================="
+	@echo "Benchmark Complete - Results in $(BENCHMARK_DIR)/results/"
+	@echo "==================================================================================="
+
+.PHONY: bench-ingest-all
+bench-ingest-all: bench-build ## Process ALL images through ingest (no time limit)
+	@echo "Processing ALL images through ingest..."
+	@IMAGES=$$(ls $(BENCH_IMAGES_DIR)/*.jpg 2>/dev/null | wc -l); \
+	echo "Found $$IMAGES images in $(BENCH_IMAGES_DIR)"; \
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode all --track E_ingest_batch16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit $$IMAGES --clients 32
+
+# ==================================================================================
+# Parallel Ingest Benchmarks (AsyncTritonPool + True Async)
+# ==================================================================================
+
+.PHONY: bench-parallel-quick
+bench-parallel-quick: bench-build ## Quick benchmark of parallel ingest (warmup + 30s)
+	@echo "==================================================================================="
+	@echo "PARALLEL Ingest Quick Benchmark (AsyncTritonPool)"
+	@echo "==================================================================================="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_par16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
+
+.PHONY: bench-parallel-full
+bench-parallel-full: bench-build ## Full benchmark of parallel ingest across batch sizes
+	@echo "==================================================================================="
+	@echo "PARALLEL Ingest Full Benchmark (AsyncTritonPool)"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "--- Batch Size 8 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par8 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30
+	@echo ""
+	@echo "--- Batch Size 16 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30
+	@echo ""
+	@echo "--- Batch Size 32 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par32 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 8 --duration 30
+	@echo ""
+	@echo "--- Batch Size 64 ---"
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par64 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 4 --duration 30
+
+.PHONY: bench-parallel-matrix
+bench-parallel-matrix: bench-build ## Matrix benchmark varying batch size and concurrency
+	@echo "==================================================================================="
+	@echo "PARALLEL Ingest Matrix Benchmark"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "Testing E_par16 across different concurrency levels..."
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_par16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 \
+		--matrix-clients "4,8,16,32,64" --duration 30 --warmup 5
+	@echo ""
+	@echo "Testing E_par32 across different concurrency levels..."
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_par32 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 \
+		--matrix-clients "4,8,16,32" --duration 30 --warmup 5
+
+.PHONY: bench-parallel-all
+bench-parallel-all: bench-build ## Process ALL images through parallel ingest
+	@echo "Processing ALL images through parallel ingest..."
+	@IMAGES=$$(ls $(BENCH_IMAGES_DIR)/*.jpg 2>/dev/null | wc -l); \
+	echo "Found $$IMAGES images in $(BENCH_IMAGES_DIR)"; \
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode all --track E_par16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit $$IMAGES --clients 16
+
+.PHONY: bench-ingest-compare-all
+bench-ingest-compare-all: bench-build ## Compare all ingest methods: single, batch, optimized, parallel
+	@echo "==================================================================================="
+	@echo "COMPREHENSIVE Ingest Benchmark: All Methods Compared"
+	@echo "==================================================================================="
+	@echo "Images: $(BENCH_IMAGES_DIR)"
+	@echo ""
+	@echo "=== Phase 1: Single Image Ingest ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 30 --warmup 5
+	@echo ""
+	@echo "=== Phase 2: Batch Ingest (Traditional) ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest_batch16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
+	@echo ""
+	@echo "=== Phase 3: Optimized Ingest ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_opt16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
+	@echo ""
+	@echo "=== Phase 4: PARALLEL Ingest (AsyncTritonPool) ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_par16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
+	@echo ""
+	@echo "==================================================================================="
+	@echo "Benchmark Complete - Compare throughput and latency across methods"
+	@echo "==================================================================================="
+
+# ==================================================================================
+# Track E Comprehensive Benchmarks (Prediction + Ingestion)
+# ==================================================================================
+
+.PHONY: bench-track-e-predict
+bench-track-e-predict: bench-build ## Benchmark Track E prediction endpoints
+	@echo "==================================================================================="
+	@echo "Track E Prediction Benchmarks (No OpenSearch indexing)"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "=== E_detect: YOLO Detection Only ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_detect \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
+	@echo ""
+	@echo "=== E: YOLO + Global CLIP Embedding ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
+	@echo ""
+	@echo "=== E_full: YOLO + CLIP + Per-box Embeddings ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_full \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
+	@echo ""
+	@echo "=== E_faces: Face Detection + ArcFace ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_faces \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
+	@echo ""
+	@echo "=== E_quad: Full Pipeline (YOLO+CLIP+Face+ArcFace) ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_quad \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
+	@echo ""
+	@echo "=== E_batch16: Batch Prediction (16 images) ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_batch16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 20 --warmup 5
+
+.PHONY: bench-track-e-ingest
+bench-track-e-ingest: bench-build ## Benchmark Track E ingest endpoints (includes OpenSearch)
+	@echo "==================================================================================="
+	@echo "Track E Ingest Benchmarks (With OpenSearch indexing)"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "=== Single Image Ingest ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest \
+		--images ../$(BENCH_IMAGES_DIR) --limit 300 --clients 16 --duration 30 --warmup 5
+	@echo ""
+	@echo "=== Batch Ingest (16 images) ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest_batch16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 300 --clients 8 --duration 30 --warmup 5
+	@echo ""
+	@echo "=== Parallel Async Ingest (16 images) ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_par16 \
+		--images ../$(BENCH_IMAGES_DIR) --limit 300 --clients 8 --duration 30 --warmup 5
+
+.PHONY: bench-track-e-all
+bench-track-e-all: bench-build ## Run ALL Track E benchmarks
+	@echo "==================================================================================="
+	@echo "COMPREHENSIVE Track E Benchmark Suite"
+	@echo "==================================================================================="
+	@$(MAKE) bench-track-e-predict
+	@echo ""
+	@$(MAKE) bench-track-e-ingest
+	@echo ""
+	@echo "==================================================================================="
+	@echo "Track E Benchmark Complete"
+	@echo "==================================================================================="
+
+.PHONY: bench-track-e-quick
+bench-track-e-quick: bench-build ## Quick Track E throughput test (30 seconds)
+	@echo "=== Quick Track E Throughput Test ==="
+	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E \
+		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 30 --warmup 5
+
+.PHONY: opensearch-reset-indexes
+opensearch-reset-indexes: ## Reset all OpenSearch indexes (delete and recreate)
+	@echo "Resetting OpenSearch indexes..."
+	@curl -s -X DELETE "http://localhost:$(API_PORT)/track_e/index" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message','deleted'))" 2>/dev/null || true
+	@sleep 1
+	@curl -s -X POST "http://localhost:$(API_PORT)/track_e/index/create" | python3 -c "import sys,json; print('Indexes created:', json.load(sys.stdin).get('status','unknown'))" 2>/dev/null
+	@echo "Done."
+

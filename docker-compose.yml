@@ -12,6 +12,7 @@ services:
       - 4602:8002  # Metrics
     volumes:
       - ./models:/models
+      - ./backends/face_pipeline:/opt/tritonserver/backends/face_pipeline:ro  # Custom C++ backend
     command:
       - tritonserver
       - --model-store=/models
@@ -19,42 +20,31 @@ services:
       - --strict-model-config=false
       - --model-control-mode=explicit
       # ===================================================================
-      # TRACK E ONLY CONFIGURATION (Visual Search + Face Detection)
+      # TRACK E MINIMAL - Core models only for reduced VRAM usage
       # ===================================================================
-      # Optimized for Track E with maximum GPU memory for face models
-      # GPU 0: Track E visual search (YOLO + MobileCLIP)
+      # Achieves: E (YOLO+CLIP) ~150 RPS, E_batch16 ~160 RPS
       # ===================================================================
       #
-      # Track E Core: YOLO Detection + MobileCLIP Embeddings
+      # Core TensorRT Models (required)
       - --load-model=yolov11_small_trt_end2end         # YOLO detection (TRT + GPU NMS)
-      - --load-model=yolo_clip_preprocess_dali         # Fast DALI (YOLO 640 + CLIP 256)
-      - --load-model=dual_preprocess_dali              # Triple-branch DALI (includes HD crop)
       - --load-model=mobileclip2_s2_image_encoder      # Image embeddings (TensorRT)
-      - --load-model=mobileclip2_s2_text_encoder       # Text embeddings (TensorRT)
-      - --load-model=box_embedding_extractor           # Per-box embeddings (Python + BLS)
-      - --load-model=yolo_clip_ensemble                # Track E basic (detection + global embed)
-      - --load-model=yolo_mobileclip_ensemble          # Track E full (+ per-box embeddings)
+      - --load-model=mobileclip2_s2_text_encoder       # Text embeddings for search (TensorRT)
       #
-      # Track E Face Detection & Recognition (SCRFD)
-      - --load-model=quad_preprocess_dali             # Quad-branch DALI (YOLO + CLIP + SCRFD + HD)
-      - --load-model=scrfd_10g_face_detect            # Face detection (TensorRT)
-      - --load-model=arcface_w600k_r50                # Face recognition (TensorRT)
-      - --load-model=face_pipeline                    # Face pipeline (Python backend)
-      - --load-model=yolo_face_clip_ensemble          # Unified ensemble (YOLO + CLIP + SCRFD + ArcFace)
-      - --load-model=unified_embedding_extractor      # Unified extractor (box + face)
-      - --load-model=yolo_unified_ensemble            # Efficient pipeline (face detection on person crops only)
+      # DALI Preprocessing (required for Track E)
+      - --load-model=yolo_clip_preprocess_dali         # Fast DALI for Track E (YOLO + CLIP)
       #
-      # Track E Face Detection & Recognition (YOLO11-Face End2End - full batching)
-      - --load-model=yolo11_face_small_trt_end2end    # YOLO11-face TensorRT + GPU NMS (batching, max=64)
-      - --load-model=yolo11_face_pipeline             # YOLO11-face pipeline (Python backend)
+      # Track E Ensemble (required for /track_e/predict)
+      - --load-model=yolo_clip_ensemble                # YOLO + global embed
       #
-      # Track E OCR: PP-OCRv5 Text Detection & Recognition
-      - --load-model=paddleocr_det_trt                # Text detection (TensorRT, dynamic H/W)
-      - --load-model=paddleocr_rec_trt                # Text recognition (TensorRT, dynamic width 8-2048)
-      - --load-model=ocr_pipeline                     # OCR pipeline (Python BLS orchestrator)
+      # Face Detection/Recognition (optional - comment out if not needed)
+      - --load-model=yolo11_face_small_trt_end2end     # YOLO11-face detection
+      - --load-model=arcface_w600k_r50                 # Face recognition
+      - --load-model=yolo11_face_pipeline              # Face pipeline ensemble (Python BLS)
+      - --load-model=face_pipeline_cpp                # Face pipeline C++ backend (GPU cropping)
       #
-      # Unified Complete Pipeline: All-in-one analysis
-      - --load-model=unified_complete_pipeline        # Complete pipeline (YOLO + CLIP + faces + OCR)
+      # OCR (optional - comment out if not needed)
+      - --load-model=paddleocr_det_trt                 # OCR text detection
+      - --load-model=paddleocr_rec_trt                 # OCR text recognition
       # ===================================================================
       - --log-verbose=1
       - --log-info=true
@@ -113,7 +103,7 @@ services:
       # Production: 64 workers for dual-GPU throughput
       # Benchmark: 4 workers to match TRT instance count for fair comparison
       # ===================================================================
-      - --workers=4  # Match TRT instance count (4) for fair benchmark comparison
+      - --workers=32  # Increased for higher face pipeline throughput
       - --limit-max-requests=10000       # Recycle workers every 10k requests (prevents memory leaks)
       # ===================================================================
       # Event Loop & HTTP Protocol (Already Optimized)

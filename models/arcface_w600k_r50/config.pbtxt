@@ -20,7 +20,7 @@ dynamic_batching {
 }
 
 instance_group [{
-    count: 4
+    count: 8
     kind: KIND_GPU
     gpus: [0]
 }]

@@ -14,7 +14,9 @@ Simplified deployment: One Docker container, all endpoints available.
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 import numpy as np
 import orjson
@@ -23,6 +25,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse, Response
 from ultralytics import YOLO
 
+from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory, app_state
 from src.routers import (
@@ -33,6 +36,55 @@ from src.routers import (
     track_f_router,
     triton_router,
 )
+
+
+# =============================================================================
+# Shared Resources (managed by lifespan)
+# =============================================================================
+# Shared ThreadPoolExecutor for CPU-bound tasks (avoid per-request creation overhead)
+_shared_executor: ThreadPoolExecutor | None = None
+
+# High-throughput async Triton pool with true connection pooling
+_async_triton_pool: AsyncTritonPool | None = None
+
+
+def get_shared_executor() -> ThreadPoolExecutor:
+    """
+    Get the shared ThreadPoolExecutor for CPU-bound tasks.
+
+    Use this for parallel preprocessing (JPEG decode, resize, etc.)
+    instead of creating per-request executors.
+
+    Returns:
+        ThreadPoolExecutor: Shared executor instance
+
+    Raises:
+        RuntimeError: If called before lifespan initialization
+    """
+    if _shared_executor is None:
+        raise RuntimeError('Shared executor not initialized. Call during lifespan.')
+    return _shared_executor
+
+
+def get_async_triton_pool() -> AsyncTritonPool:
+    """
+    Get the high-throughput async Triton connection pool.
+
+    Use this for batch ingestion and high-concurrency operations.
+    Features:
+    - 4 gRPC channels with round-robin selection
+    - Semaphore-based backpressure (max 64 concurrent)
+    - Statistics tracking
+
+    Returns:
+        AsyncTritonPool: Shared pool instance
+
+    Raises:
+        RuntimeError: If called before lifespan initialization
+    """
+    if _async_triton_pool is None:
+        raise RuntimeError('AsyncTritonPool not initialized. Call during lifespan.')
+    return _async_triton_pool
 
 
 logging.basicConfig(level=logging.INFO)
@@ -48,20 +100,45 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
         app: FastAPI application instance (required by API contract, not used in implementation)
 
     Startup:
+    - Create shared ThreadPoolExecutor for CPU-bound tasks
+    - Create AsyncTritonPool for high-throughput inference
     - Load PyTorch models for Track A (if enabled)
     - Shared Triton gRPC client auto-created on first use
 
     Shutdown:
     - Clean up PyTorch models
+    - Close AsyncTritonPool
+    - Shutdown shared ThreadPoolExecutor
     - Close all Triton gRPC connections
     - Close OpenSearch connections
     """
+    global _shared_executor, _async_triton_pool
+
     settings = get_settings()
 
     # =========================================================================
     # STARTUP
     # =========================================================================
-    logger.info('=== STARTUP: Loading Models ===')
+    logger.info('=== STARTUP: Initializing Resources ===')
+
+    # Create shared ThreadPoolExecutor for CPU-bound tasks
+    # (JPEG decode, resize, preprocessing)
+    _shared_executor = ThreadPoolExecutor(
+        max_workers=64,
+        thread_name_prefix='ingest-worker-',
+    )
+    logger.info('Shared ThreadPoolExecutor initialized (64 workers)')
+
+    # Create high-throughput async Triton connection pool
+    # 4 gRPC channels with different user-agents = separate TCP connections
+    _async_triton_pool = AsyncTritonPool(
+        url=settings.triton_url,
+        pool_size=4,
+        max_concurrent=64,
+        verbose=False,
+    )
+    await _async_triton_pool.initialize()
+    logger.info('AsyncTritonPool initialized (4 channels, max_concurrent=64)')
 
     if settings.enable_pytorch:
         logger.info('Loading PyTorch models for Track A...')
@@ -103,6 +180,22 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     # Clean up PyTorch models
     app_state.pytorch_models.clear()
     logger.info('PyTorch models cleaned up')
+
+    # Close AsyncTritonPool
+    if _async_triton_pool is not None:
+        try:
+            await _async_triton_pool.close()
+            logger.info('AsyncTritonPool closed')
+        except Exception as e:
+            logger.warning(f'Error closing AsyncTritonPool: {e}')
+
+    # Shutdown shared executor
+    if _shared_executor is not None:
+        try:
+            _shared_executor.shutdown(wait=True)
+            logger.info('Shared ThreadPoolExecutor shutdown')
+        except Exception as e:
+            logger.warning(f'Error shutting down executor: {e}')
 
     # Close Triton connections
     try:

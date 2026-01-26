@@ -10,6 +10,9 @@
 # Output:
 #   - fetch_name_0: [B, T, 438] FP32, character probabilities
 #        T timesteps (dynamic), 438 character classes (English dict)
+#
+# NOTE: TensorRT engine was exported with max_batch=1.
+# Batching is handled in ocr_pipeline Python model instead.
 
 name: "paddleocr_rec_trt"
 platform: "tensorrt_plan"
@@ -33,11 +36,11 @@ output [
 
 instance_group [
   {
-    count: 2
+    count: 4
     kind: KIND_GPU
     gpus: [0]
   }
 ]
 
-# No dynamic batching - each request has different width
-# Process individually for best accuracy
+# No dynamic batching - engine only supports batch=1
+# Parallel instances provide concurrency instead

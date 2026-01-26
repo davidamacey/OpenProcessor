@@ -148,19 +148,20 @@ class VisualSearchService:
             settings = get_settings()
             client = get_triton_client(settings.triton_url)
 
-            # Run Track E (YOLO + MobileCLIP) and YOLO11-face detection in parallel
+            # Run Track F (CPU preprocessing + direct TRT) and YOLO11-face detection in parallel
+            # NOTE: Using Track F instead of Track E to avoid DALI - CPU preprocessing is more stable
             from concurrent.futures import ThreadPoolExecutor
 
-            def run_track_e():
-                return client.infer_track_e(image_bytes, full_pipeline=True)
+            def run_track_f():
+                return client.infer_track_f(image_bytes)
 
             def run_face_detection():
                 return client.infer_faces_yolo11(image_bytes, confidence=0.5)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
-                track_e_future = executor.submit(run_track_e)
+                track_f_future = executor.submit(run_track_f)
                 face_future = executor.submit(run_face_detection)
-                result = track_e_future.result()
+                result = track_f_future.result()
                 face_result = face_future.result()
 
             global_embedding = np.array(result['image_embedding'])
@@ -525,29 +526,69 @@ class VisualSearchService:
                 'duplicate_details': duplicates,
             }
 
-        # Step 3: Run unified batch inference (YOLO + CLIP + Face in single GPU pass)
+        # Step 3: CPU preprocessing in parallel + Triton inference
+        import time as _time
+
         loop = asyncio.get_running_loop()
         from concurrent.futures import ThreadPoolExecutor
 
-        def run_single_unified(img_bytes: bytes) -> dict:
-            """Run unified pipeline on a single image (YOLO + CLIP + Face)."""
-            try:
-                return client.infer_unified(img_bytes)
-            except Exception as e:
-                logger.debug(f'Unified inference failed: {e}')
-                return {'error': str(e), 'num_dets': 0, 'num_faces': 0}
+        from src.services.cpu_preprocess import PreprocessResult, preprocess_batch
 
-        def run_unified_batch(images_bytes: list[bytes]) -> list[dict]:
-            """Run unified pipeline on batch of images in parallel."""
-            with ThreadPoolExecutor(max_workers=min(max_workers, len(images_bytes))) as executor:
-                return list(executor.map(run_single_unified, images_bytes))
+        # === PROFILING: CPU Preprocessing ===
+        _t_preprocess_start = _time.perf_counter()
 
-        # Single unified inference call - includes YOLO, CLIP, and Face detection
-        inference_results = await loop.run_in_executor(
+        def run_preprocessing(images_bytes: list[bytes]) -> list[PreprocessResult | None]:
+            """Parallel CPU preprocessing for all images."""
+            return preprocess_batch(images_bytes, max_workers=max_workers)
+
+        preprocessed_results = await loop.run_in_executor(
             None,
-            run_unified_batch,
+            run_preprocessing,
             [img[0] for img in to_process],
         )
+
+        _t_preprocess_end = _time.perf_counter()
+        _preprocess_ms = (_t_preprocess_end - _t_preprocess_start) * 1000
+        _preprocess_per_img = _preprocess_ms / len(to_process) if to_process else 0
+        logger.info(f'[PROFILE] CPU Preprocessing: {_preprocess_ms:.1f}ms total, {_preprocess_per_img:.1f}ms/img')
+
+        # === PROFILING: Triton Inference ===
+        _t_inference_start = _time.perf_counter()
+
+        def run_single_from_tensor(prep: PreprocessResult | None) -> dict:
+            """Run unified ensemble from preprocessed tensor (faster than Python backend)."""
+            if prep is None:
+                return {'error': 'Preprocessing failed', 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
+            try:
+                # Use the Triton ensemble for parallel YOLO+CLIP+embedding (no OCR)
+                result = client.infer_unified_direct_ensemble(prep)
+                # Add empty OCR fields (OCR handled separately if needed)
+                result['num_texts'] = 0
+                result['texts'] = []
+                result['text_boxes'] = []
+                result['text_boxes_normalized'] = []
+                result['text_det_scores'] = []
+                result['text_rec_scores'] = []
+                return result
+            except Exception as e:
+                logger.debug(f'Unified ensemble inference failed: {e}')
+                return {'error': str(e), 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
+
+        def run_inference_batch(preps: list[PreprocessResult | None]) -> list[dict]:
+            """Run unified pipeline on batch of preprocessed tensors in parallel."""
+            with ThreadPoolExecutor(max_workers=min(max_workers, len(preps))) as executor:
+                return list(executor.map(run_single_from_tensor, preps))
+
+        inference_results = await loop.run_in_executor(
+            None,
+            run_inference_batch,
+            preprocessed_results,
+        )
+
+        _t_inference_end = _time.perf_counter()
+        _inference_ms = (_t_inference_end - _t_inference_start) * 1000
+        _inference_per_img = _inference_ms / len(to_process) if to_process else 0
+        logger.info(f'[PROFILE] Triton Inference: {_inference_ms:.1f}ms total, {_inference_per_img:.1f}ms/img')
 
         # Extract face results from unified response (already included)
         face_results = [
@@ -686,21 +727,61 @@ class VisualSearchService:
                 except Exception as e:
                     logger.debug(f'Failed to index face {face_doc["face_id"]}: {e}')
 
-        # Step 5c: OCR processing (if enabled)
+        # Step 5c: OCR indexing (results already from unified pipeline)
         indexed['ocr'] = 0
         if enable_ocr:
-            for data_tuple in to_process:
-                img_bytes, image_id, image_path = data_tuple
+            # OCR results are already in inference_results from unified_complete pipeline
+            async def index_ocr_from_unified(
+                result: dict, img_id: str, img_path: str
+            ) -> bool:
+                num_texts = result.get('num_texts', 0)
+                if num_texts == 0:
+                    return False
                 try:
-                    ocr_result = await self._process_ocr(
-                        image_bytes=img_bytes,
-                        image_id=image_id,
-                        image_path=image_path or image_id,
+                    texts = result.get('texts', [])
+                    text_boxes = result.get('text_boxes', [])
+                    text_boxes_norm = result.get('text_boxes_normalized', [])
+                    det_scores = result.get('text_det_scores', [])
+                    rec_scores = result.get('text_rec_scores', [])
+
+                    # Convert numpy arrays to lists if needed
+                    if hasattr(text_boxes, 'tolist'):
+                        text_boxes = text_boxes.tolist()
+                    if hasattr(text_boxes_norm, 'tolist'):
+                        text_boxes_norm = text_boxes_norm.tolist()
+                    if hasattr(det_scores, 'tolist'):
+                        det_scores = det_scores.tolist()
+                    if hasattr(rec_scores, 'tolist'):
+                        rec_scores = rec_scores.tolist()
+
+                    full_text = ' '.join(texts) if texts else ''
+                    await self.opensearch.index_ocr_results(
+                        image_id=img_id,
+                        image_path=img_path,
+                        texts=texts,
+                        boxes=text_boxes,
+                        boxes_normalized=text_boxes_norm,
+                        det_scores=det_scores,
+                        rec_scores=rec_scores,
+                        full_text=full_text,
                     )
-                    if ocr_result:
-                        indexed['ocr'] += 1
+                    logger.info(f'OCR indexed {num_texts} text regions for {img_id}')
+                    return True
                 except Exception as e:
-                    logger.debug(f'OCR failed for {image_id}: {e}')
+                    logger.debug(f'OCR index failed for {img_id}: {e}')
+                    return False
+
+            # Run all OCR indexing in parallel
+            ocr_tasks = [
+                index_ocr_from_unified(
+                    inference_results[i],
+                    to_process[i][1],
+                    to_process[i][2] or to_process[i][1],
+                )
+                for i in range(len(inference_results))
+            ]
+            ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
+            indexed['ocr'] = sum(1 for r in ocr_results if r is True)
 
         # Step 6: Near-duplicate detection (optional, can be heavy)
         near_duplicates = []

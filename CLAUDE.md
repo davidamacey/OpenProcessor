@@ -56,12 +56,20 @@ The system uses Docker Compose to orchestrate services with a **unified API arch
 - `/track_e/search/object` - Object-level search
 - `/track_e/search/ocr` - Search images by text content (OCR)
 
-**Track E Face Detection/Recognition:**
-- `/track_e/faces/detect` - Face detection (YOLO11-face or SCRFD)
-- `/track_e/faces/recognize` - Face detection + ArcFace embeddings
+**Track E Face Detection/Recognition (YOLO11-face + ArcFace, CPU preprocessing):**
+- `/track_e/faces/yolo11/recognize` - **Default**: YOLO11-face + ArcFace (used by ingest)
+- `/track_e/faces/fast/recognize` - Direct gRPC calls (fastest)
+- `/track_e/faces/recognize` - SCRFD + ArcFace (legacy)
+- `/track_e/faces/detect` - Face detection only
 - `/track_e/faces/full` - Full pipeline (YOLO + faces + embeddings)
 - `/track_e/faces/search` - Face similarity search
 - `/track_e/faces/identify` - 1:N face identification
+
+**Ingest Pipeline (CPU preprocessing, no DALI):**
+- Uses Track F (CPU preprocessing) for YOLO + MobileCLIP
+- Uses YOLO11-face + ArcFace for face detection/recognition
+- All preprocessing on CPU, only model inference on GPU
+- Achieves 100% success rate at high concurrency
 
 **Track E OCR (PP-OCRv5):**
 - `/track_e/ocr/predict` - Extract text from image
@@ -206,27 +214,67 @@ make compare-tracks
 make test-patch
 ```
 
+### Health & Status Checks
+
+```bash
+# Full system health check (API + Triton + OpenSearch + GPU)
+make check-all
+
+# Check Triton models are loaded and ready
+make triton-models-ready
+
+# Check Triton server health
+make triton-health
+
+# View Triton inference statistics
+make triton-stats
+
+# View key Triton metrics (counts, latencies)
+make triton-metrics
+```
+
 ### Benchmarking
 
 Single Go tool for comprehensive benchmarking:
 
 ```bash
-cd benchmarks
-
-# Build once
-./build.sh
+# Build benchmark tool
+make bench-build
 
 # Quick test (30 seconds, all tracks)
-./triton_bench --mode quick
+make bench-quick
 
 # Full benchmark (60 seconds, 128 clients)
-./triton_bench --mode full --clients 128
+make bench-full
 
-# Test specific track
-./triton_bench --mode full --track D_batch --clients 256
+# Matrix test across concurrency levels
+make bench-matrix
 
-# Process all images
-./triton_bench --mode all --images /path/to/images
+# Test specific tracks
+make bench-track-e       # Track E visual search
+make bench-track-d       # Track D DALI batch
+```
+
+**Ingest Pipeline Benchmarks (Individual vs Batch):**
+
+```bash
+# Combined test images folder
+test_images/benchmark_all/  # KILLBOY + FACE_TEST_IMAGES combined
+
+# Benchmark single image ingest with varying concurrency
+make bench-ingest-single
+
+# Benchmark batch ingest with varying batch sizes
+make bench-ingest-batch
+
+# Full comparison: individual vs batch ingest
+make bench-ingest-compare
+
+# Process ALL images (no time limit)
+make bench-ingest-all
+
+# Reset OpenSearch indexes before benchmarking
+make opensearch-reset-indexes
 ```
 
 Results are auto-saved to `benchmarks/results/` with timestamps.
