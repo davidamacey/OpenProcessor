@@ -1,172 +1,162 @@
 # Documentation Index
 
-Welcome to the Triton YOLO Inference Server documentation.
+Technical documentation for the Visual AI API.
 
 ---
 
 ## Quick Links
 
-- **[Main README](../README.md)** - Project overview, quick start, benchmarking (START HERE)
-- **[Benchmarks Guide](../benchmarks/README.md)** - How to use the triton_bench tool
+- **[Main README](../README.md)** - Project overview, API endpoints, quick start
+- **[Benchmarks Guide](../benchmarks/README.md)** - Performance testing with triton_bench
+- **[Model Export](../export/README.md)** - TensorRT model export documentation
 - **[Attribution](../ATTRIBUTION.md)** - Third-party code attribution and licensing
 
 ---
 
-## Documentation Structure
+## API Reference
 
-### Getting Started
-- **[MODEL_EXPORT_GUIDE.md](MODEL_EXPORT_GUIDE.md)** - Model building and export for all 5 tracks
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Step-by-step deployment instructions
-- **[TESTING.md](TESTING.md)** - Testing strategy and validation procedures
+The API provides these endpoint groups (all on port 4603):
 
-### Attribution & Analysis
-- **[Attribution/END2END_ANALYSIS.md](Attribution/END2END_ANALYSIS.md)** - End2end ONNX export analysis and fork details
-- **[Attribution/FORK_COMPARISON.md](Attribution/FORK_COMPARISON.md)** - Comparison of levipereira fork vs official ultralytics
-
-### Technical Reference
-- **[Technical/TRITON_BEST_PRACTICES.md](Technical/TRITON_BEST_PRACTICES.md)** - Triton configuration and optimization
-- **[Technical/MODEL_FOLDER_STRUCTURE.md](Technical/MODEL_FOLDER_STRUCTURE.md)** - Model repository structure and config.pbtxt patterns
-- **[Technical/DALI_LETTERBOX_IMPLEMENTATION.md](Technical/DALI_LETTERBOX_IMPLEMENTATION.md)** - DALI GPU preprocessing implementation
-- **[Technical/STREAMING_OPTIMIZATION.md](Technical/STREAMING_OPTIMIZATION.md)** - Streaming inference and async processing
-
-### Performance Tracks
-- **[Tracks/BENCHMARKING_GUIDE.md](Tracks/BENCHMARKING_GUIDE.md)** - Comprehensive benchmarking methodology and results
-- **[Tracks/TRACK_D_COMPLETE.md](Tracks/TRACK_D_COMPLETE.md)** - Complete Track D guide (DALI + TRT + GPU NMS)
-
-### Track E Documentation
-- **[TRACK_E_GUIDE.md](TRACK_E_GUIDE.md)** - Track E (Visual Search) setup and usage guide
-- **[TRACK_E_IMPLEMENTATION_STATUS.md](TRACK_E_IMPLEMENTATION_STATUS.md)** - Track E implementation status
-- **[TRACK_E_SUMMARY.md](TRACK_E_SUMMARY.md)** - Track E architecture summary
-- **[TRACK_E_DEPLOYMENT_CHECKLIST.md](TRACK_E_DEPLOYMENT_CHECKLIST.md)** - Track E deployment checklist
-
-### Implementation Notes
-- **[IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md)** - Design decisions and technical notes
+| Prefix | Description | Endpoints |
+|--------|-------------|-----------|
+| `/detect` | YOLO object detection | Single, batch |
+| `/faces` | Face detection and recognition | detect, recognize, verify, search, identify |
+| `/embed` | CLIP embeddings | image, text, batch, boxes |
+| `/search` | Visual similarity search | image, text, face, ocr, object |
+| `/ingest` | Data ingestion | single, batch, directory |
+| `/ocr` | Text extraction | predict, batch |
+| `/analyze` | Combined analysis | All models in one call |
+| `/clusters` | FAISS clustering | train, stats, albums |
+| `/query` | Data retrieval | image, stats, duplicates |
+| `/health` | Monitoring | Service health, model status |
 
 ---
 
-## Five Performance Tracks
+## Technical Documentation
 
-| Track | Technology | Speedup | Documentation |
-|-------|-----------|---------|---------------|
-| **A** | PyTorch + CPU NMS | 1x (baseline) | See [main README](../README.md) |
-| **B** | TensorRT + CPU NMS | 2x | See [main README](../README.md) |
-| **C** | TensorRT + GPU NMS | 4x | See [Attribution/END2END_ANALYSIS.md](Attribution/END2END_ANALYSIS.md) |
-| **D** | DALI + TRT + GPU NMS | **10-15x** | See [Tracks/TRACK_D_COMPLETE.md](Tracks/TRACK_D_COMPLETE.md) |
-| **E** | MobileCLIP + OpenSearch | Visual Search | See [TRACK_E_GUIDE.md](TRACK_E_GUIDE.md) |
+### Model Documentation
+
+| Document | Description |
+|----------|-------------|
+| [OCR_SETUP_GUIDE.md](OCR_SETUP_GUIDE.md) | PP-OCRv5 deployment guide |
+| [OCR_DEPLOYMENT_CHECKLIST.md](OCR_DEPLOYMENT_CHECKLIST.md) | Step-by-step OCR setup |
+| [OCR_IMPLEMENTATION_PLAN.md](OCR_IMPLEMENTATION_PLAN.md) | OCR architecture details |
+| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | Face detection and ArcFace setup |
+
+### Vector Search
+
+| Document | Description |
+|----------|-------------|
+| [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch schema |
+
+### Performance
+
+| Document | Description |
+|----------|-------------|
+| [GRPC_CONNECTION_SCALING.md](GRPC_CONNECTION_SCALING.md) | gRPC connection pooling |
+| [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) | FastAPI performance tuning |
+| [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md) | Quick optimization reference |
+| [INGEST_BENCHMARK_METHODOLOGY.md](INGEST_BENCHMARK_METHODOLOGY.md) | Ingestion benchmarking |
+
+### Architecture
+
+| Document | Description |
+|----------|-------------|
+| [PRODUCTION_ARCHITECTURE.md](PRODUCTION_ARCHITECTURE.md) | Production deployment patterns |
+| [THREAD_SAFETY_FIX.md](THREAD_SAFETY_FIX.md) | Thread safety troubleshooting |
+
+### Research
+
+| Document | Description |
+|----------|-------------|
+| [PADDING_COMPARISON_GUIDE.md](PADDING_COMPARISON_GUIDE.md) | YOLO preprocessing comparison |
+
+### Planning
+
+| Document | Description |
+|----------|-------------|
+| [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) | Feature status and future plans |
 
 ---
 
-## Project Architecture
+## Project Structure
 
 ```
 triton-api/
-├── README.md                       # Main project documentation
-├── ATTRIBUTION.md                  # Third-party code attribution
-├── CLAUDE.md                       # Project instructions for Claude Code
+├── README.md                 # Main project documentation
+├── CLAUDE.md                 # AI assistant instructions
+├── ATTRIBUTION.md            # Third-party code attribution
+├── Makefile                  # Development commands
+├── docker-compose.yml        # Services orchestration
 │
-├── benchmarks/
-│   ├── README.md                   # Benchmark tool documentation
-│   ├── triton_bench.go             # Master benchmark tool
-│   └── results/                    # Auto-generated results
+├── src/                      # FastAPI service
+│   ├── main.py               # Application entry point
+│   ├── routers/              # API endpoints
+│   │   ├── detect.py         # /detect endpoints
+│   │   ├── faces.py          # /faces endpoints
+│   │   ├── embed.py          # /embed endpoints
+│   │   ├── search.py         # /search endpoints
+│   │   ├── ingest.py         # /ingest endpoints
+│   │   ├── ocr.py            # /ocr endpoints
+│   │   ├── analyze.py        # /analyze endpoints
+│   │   ├── clusters.py       # /clusters endpoints
+│   │   ├── query.py          # /query endpoints
+│   │   └── health.py         # /health endpoints
+│   ├── services/             # Business logic
+│   ├── clients/              # Triton and OpenSearch clients
+│   └── schemas/              # Pydantic models
 │
-├── docs/                           # THIS DIRECTORY
-│   ├── README.md                   # This file (documentation index)
-│   ├── MODEL_EXPORT_GUIDE.md       # Model building and export (all tracks)
-│   ├── DEPLOYMENT_GUIDE.md         # Deployment instructions
-│   ├── TESTING.md                  # Testing procedures
-│   ├── IMPLEMENTATION_NOTES.md     # Design decisions
-│   │
-│   ├── Attribution/                # Fork attribution & analysis
-│   │   ├── END2END_ANALYSIS.md
-│   │   └── FORK_COMPARISON.md
-│   │
-│   ├── Technical/                  # Technical reference docs
-│   │   ├── TRITON_BEST_PRACTICES.md
-│   │   ├── MODEL_FOLDER_STRUCTURE.md
-│   │   ├── DALI_LETTERBOX_IMPLEMENTATION.md
-│   │   └── STREAMING_OPTIMIZATION.md
-│   │
-│   ├── Tracks/                     # Performance track guides
-│   │   ├── BENCHMARKING_GUIDE.md
-│   │   └── TRACK_D_COMPLETE.md
-│   │
-│   └── future_work/                # Track E planning
-│       ├── TRACK_E_PROJECT_PLAN.md
-│       ├── TRACK_E_IMPLEMENTATION_PHASES.md
-│       └── TRACK_E_FINAL_PHASES.md
-│
-├── models/                         # Triton model repository
-│   ├── yolov11_small_trt/          # Track B
-│   ├── yolov11_small_trt_end2end/  # Track C
-│   ├── yolo_preprocess_dali/       # Track D preprocessing
-│   └── yolov11_small_gpu_e2e*/     # Track D variants
-│
-├── monitoring/                     # Prometheus & Grafana configs
-└── src/                            # FastAPI services
+├── export/                   # Model export scripts
+├── models/                   # Triton model repository
+├── benchmarks/               # Performance testing
+├── docs/                     # This directory
+└── monitoring/               # Prometheus and Grafana
 ```
 
 ---
 
 ## Common Tasks
 
-### Export Models
-```bash
-# See MODEL_EXPORT_GUIDE.md for complete instructions
-cat docs/MODEL_EXPORT_GUIDE.md
-```
+### Start Services
 
-### Deploy the System
 ```bash
-# See main README.md Quick Start section
 docker compose up -d
+curl http://localhost:4603/health
 ```
 
 ### Run Benchmarks
+
 ```bash
-# See benchmarks/README.md
 cd benchmarks
 ./build.sh
 ./triton_bench --mode quick
 ```
 
-### Understand Track C (End2End)
+### Export Models
+
 ```bash
-# Read the fork attribution analysis
-cat docs/Attribution/END2END_ANALYSIS.md
+make export-models           # YOLO TensorRT
+make export-mobileclip       # MobileCLIP encoders
+make export-face-models      # YOLO11-face + ArcFace
 ```
 
-### Optimize Track D
-```bash
-# Read the complete Track D guide
-cat docs/Tracks/TRACK_D_COMPLETE.md
-```
+### Check Model Status
 
-### Learn Triton Best Practices
 ```bash
-# Read Triton optimization guide
-cat docs/Technical/TRITON_BEST_PRACTICES.md
+curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 ```
 
 ---
 
 ## External Resources
 
-- **NVIDIA Triton Docs**: https://docs.nvidia.com/deeplearning/triton-inference-server/
-- **Ultralytics Docs**: https://docs.ultralytics.com/
-- **NVIDIA DALI Docs**: https://docs.nvidia.com/deeplearning/dali/
-- **levipereira/ultralytics Fork**: https://github.com/levipereira/ultralytics
-- **TensorRT Plugin Docs**: https://docs.nvidia.com/deeplearning/tensorrt/
+- [NVIDIA Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/)
+- [NVIDIA TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/)
+- [OpenSearch Documentation](https://opensearch.org/docs/latest/)
+- [FAISS](https://github.com/facebookresearch/faiss)
+- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
+- [InsightFace](https://github.com/deepinsight/insightface)
 
 ---
 
-## Contributing
-
-When adding new documentation:
-1. Place in appropriate subfolder (Attribution/, Technical/, Tracks/, future_work/)
-2. Update this index with link and description
-3. Use relative links for cross-references
-4. Keep main [README.md](../README.md) concise - detailed docs go here
-
----
-
-**Last Updated:** December 2025
+**Last Updated:** January 2026

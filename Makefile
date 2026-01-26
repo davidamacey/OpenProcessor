@@ -2,7 +2,7 @@
 # Makefile for Triton Inference Server YOLO Deployment
 # ==================================================================================
 # This Makefile provides convenient shortcuts for common development tasks
-# across five performance tracks (A/B/C/D/E) with unified service management.
+# with unified service management.
 # ==================================================================================
 
 # Default shell
@@ -15,7 +15,6 @@ TRITON_SERVICE := triton-api
 OPENSEARCH_SERVICE := opensearch
 BENCHMARK_DIR := benchmarks
 SCRIPTS_DIR := scripts
-TRACK_E_DIR := scripts/track_e
 
 # Port configurations
 API_PORT := 4603
@@ -116,7 +115,7 @@ logs-api: ## Follow API service logs
 	$(COMPOSE) logs -f $(API_SERVICE)
 
 .PHONY: logs-opensearch
-logs-opensearch: ## Follow OpenSearch logs (Track E)
+logs-opensearch: ## Follow OpenSearch logs
 	$(COMPOSE) logs -f $(OPENSEARCH_SERVICE)
 
 .PHONY: status
@@ -131,201 +130,166 @@ ps: ## Show running containers
 	$(COMPOSE) ps
 
 # ==================================================================================
-# Consolidated Deployment
+# Testing
 # ==================================================================================
-#
-# All tracks (A, B, C, D, E) run on a single unified deployment:
-# - GPU 0: Track A/B/C/E models
-# - GPU 1 (host GPU 2): Track D DALI pipeline models
-# - Single API on port 4603, single Triton on ports 4600-4602
-#
-# ==================================================================================
+
+.PHONY: test-detect
+test-detect: ## Test object detection endpoint
+	curl -X POST http://localhost:$(API_PORT)/detect -F "image=@test_images/sample.jpg" | jq
+
+.PHONY: test-faces
+test-faces: ## Test face detection/recognition
+	curl -X POST http://localhost:$(API_PORT)/faces/recognize -F "image=@test_images/faces/sample.jpg" | jq
+
+.PHONY: test-embed
+test-embed: ## Test embedding endpoints
+	curl -X POST http://localhost:$(API_PORT)/embed/image -F "image=@test_images/sample.jpg" | jq
+
+.PHONY: test-ocr
+test-ocr: ## Test OCR endpoint
+	curl -X POST http://localhost:$(API_PORT)/ocr/predict -F "image=@test_images/ocr_sample.jpg" | jq
+
+.PHONY: test-analyze
+test-analyze: ## Test combined analysis
+	curl -X POST http://localhost:$(API_PORT)/analyze -F "image=@test_images/sample.jpg" | jq
+
+.PHONY: test-search
+test-search: ## Test image search
+	curl -X POST http://localhost:$(API_PORT)/search/image -F "image=@test_images/sample.jpg" | jq
+
+.PHONY: test-ingest
+test-ingest: ## Test image ingestion
+	curl -X POST http://localhost:$(API_PORT)/ingest -F "file=@test_images/sample.jpg" | jq
+
+.PHONY: test-all
+test-all: ## Run all endpoint tests
+	@echo "Testing all endpoints..."
+	$(MAKE) test-detect
+	$(MAKE) test-faces
+	$(MAKE) test-embed
+	$(MAKE) test-ocr
+	$(MAKE) test-analyze
+
+.PHONY: test-api-health
+test-api-health: ## Test API health
+	@echo "Testing API health (port $(API_PORT))..."
+	@curl -sf http://localhost:$(API_PORT)/health && echo " OK" || echo " FAILED"
+
+.PHONY: test-inference
+test-inference: ## Test inference on all tracks (shell script)
+	@echo "Testing inference on all tracks..."
+	@bash tests/test_inference.sh
+
+.PHONY: test-integration
+test-integration: ## Run integration tests
+	@echo "Running integration tests..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/scripts/test_integration.py
+
+.PHONY: test-patch
+test-patch: ## Verify End2End TRT NMS patch is applied
+	@echo "Verifying End2End TensorRT NMS patch..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_end2end_patch.py
+
+.PHONY: test-onnx
+test-onnx: ## Test ONNX End2End model locally (bypasses Triton)
+	@echo "Testing ONNX End2End model locally..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_onnx_end2end.py
+
+.PHONY: test-shared-client
+test-shared-client: ## Test shared vs per-request client performance
+	@echo "Testing shared vs per-request client..."
+	@bash tests/test_shared_vs_per_request.sh
 
 # ==================================================================================
 # Benchmarking
 # ==================================================================================
 
-.PHONY: bench-build
-bench-build: ## Build benchmark tool
-	@echo "Building benchmark tool..."
-	cd $(BENCHMARK_DIR) && go build -o triton_bench triton_bench.go
-	@echo "✓ Benchmark tool built successfully at $(BENCHMARK_DIR)/triton_bench"
+# Benchmark configuration
+BENCH_DURATION := 30s
+BENCH_CLIENTS := 32
+BENCH_REQUESTS := 1000
+TEST_IMAGE := test_images/sample.jpg
+
+.PHONY: bench-detect
+bench-detect: ## Benchmark detection endpoint with wrk
+	@echo "Benchmarking /detect ($(BENCH_DURATION), $(BENCH_CLIENTS) clients)..."
+	@which wrk > /dev/null 2>&1 || (echo "Install wrk: apt install wrk"; exit 1)
+	@echo "POST http://localhost:$(API_PORT)/detect" > /tmp/bench_detect.lua
+	@echo 'wrk.method = "POST"' >> /tmp/bench_detect.lua
+	@echo 'wrk.body = ""' >> /tmp/bench_detect.lua
+	@echo 'wrk.headers["Content-Type"] = "multipart/form-data"' >> /tmp/bench_detect.lua
+	wrk -t4 -c$(BENCH_CLIENTS) -d$(BENCH_DURATION) -s $(BENCHMARK_DIR)/scripts/detect.lua http://localhost:$(API_PORT)/detect
+
+.PHONY: bench-faces
+bench-faces: ## Benchmark face recognition with ab
+	@echo "Benchmarking /faces/recognize ($(BENCH_REQUESTS) requests, $(BENCH_CLIENTS) concurrent)..."
+	@which ab > /dev/null 2>&1 || (echo "Install ab: apt install apache2-utils"; exit 1)
+	ab -n $(BENCH_REQUESTS) -c $(BENCH_CLIENTS) -p $(TEST_IMAGE) -T "image/jpeg" \
+		http://localhost:$(API_PORT)/faces/recognize
+
+.PHONY: bench-embed
+bench-embed: ## Benchmark image embedding with ab
+	@echo "Benchmarking /embed/image ($(BENCH_REQUESTS) requests, $(BENCH_CLIENTS) concurrent)..."
+	ab -n $(BENCH_REQUESTS) -c $(BENCH_CLIENTS) -p $(TEST_IMAGE) -T "image/jpeg" \
+		http://localhost:$(API_PORT)/embed/image
+
+.PHONY: bench-ingest
+bench-ingest: ## Benchmark image ingestion with ab
+	@echo "Benchmarking /ingest ($(BENCH_REQUESTS) requests, $(BENCH_CLIENTS) concurrent)..."
+	ab -n $(BENCH_REQUESTS) -c $(BENCH_CLIENTS) -p $(TEST_IMAGE) -T "image/jpeg" \
+		http://localhost:$(API_PORT)/ingest
+
+.PHONY: bench-search
+bench-search: ## Benchmark image search with ab
+	@echo "Benchmarking /search/image ($(BENCH_REQUESTS) requests, $(BENCH_CLIENTS) concurrent)..."
+	ab -n $(BENCH_REQUESTS) -c $(BENCH_CLIENTS) -p $(TEST_IMAGE) -T "image/jpeg" \
+		http://localhost:$(API_PORT)/search/image
 
 .PHONY: bench-quick
-bench-quick: ## Quick benchmark (30 seconds, 16 clients)
-	@echo "Running quick benchmark (30 seconds, 16 clients)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick
-
-.PHONY: bench-full
-bench-full: ## Full benchmark (60 seconds, 128 clients)
-	@echo "Running full benchmark (60 seconds, 128 clients)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --clients 128 --duration 60
-
-.PHONY: bench-matrix
-bench-matrix: ## Matrix test with multiple concurrency levels (32,64,128,256,512,1024)
-	@echo "Running matrix benchmark across multiple concurrency levels..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --matrix-clients 32,64,128,256,512,1024 --duration 30
-
-.PHONY: bench-track-a
-bench-track-a: ## Benchmark Track A (PyTorch baseline)
-	@echo "Benchmarking Track A (PyTorch)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track A --clients 64 --duration 60
-
-.PHONY: bench-track-b
-bench-track-b: ## Benchmark Track B (TensorRT + CPU NMS)
-	@echo "Benchmarking Track B (TensorRT + CPU NMS)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track B --clients 128 --duration 60
-
-.PHONY: bench-track-c
-bench-track-c: ## Benchmark Track C (TensorRT + GPU NMS)
-	@echo "Benchmarking Track C (TensorRT + GPU NMS)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track C --clients 128 --duration 60
-
-.PHONY: bench-track-d
-bench-track-d: ## Benchmark Track D batch variant (max throughput)
-	@echo "Benchmarking Track D batch (max throughput)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track D_batch --clients 256 --duration 60
-
-.PHONY: bench-track-d-streaming
-bench-track-d-streaming: ## Benchmark Track D streaming variant (low latency)
-	@echo "Benchmarking Track D streaming (low latency)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track D_streaming --clients 128 --duration 60
-
-.PHONY: bench-track-d-balanced
-bench-track-d-balanced: ## Benchmark Track D balanced variant
-	@echo "Benchmarking Track D balanced..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track D_balanced --clients 128 --duration 60
-
-.PHONY: bench-track-d-batch
-bench-track-d-batch: bench-track-d ## Alias for bench-track-d
-
-.PHONY: bench-track-e
-bench-track-e: ## Benchmark Track E (Visual Search - YOLO+CLIP)
-	@echo "Benchmarking Track E (Visual Search)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E --clients 128 --duration 60
-
-.PHONY: bench-track-e-full
-bench-track-e-full: ## Benchmark Track E full variant (with per-box embeddings)
-	@echo "Benchmarking Track E full (per-box embeddings)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_full --clients 128 --duration 60
-
-.PHONY: bench-stress
-bench-stress: ## Stress test with 512 clients (high load)
-	@echo "Running stress test (512 concurrent clients)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --clients 512 --duration 120
+bench-quick: ## Quick benchmark of all endpoints (1000 requests each)
+	@echo "==================================================================================="
+	@echo "Quick Benchmark - All Endpoints"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "--- /detect ---"
+	@curl -s -w "Time: %{time_total}s\n" -o /dev/null -X POST http://localhost:$(API_PORT)/detect -F "image=@$(TEST_IMAGE)"
+	@echo ""
+	@echo "--- /faces/recognize ---"
+	@curl -s -w "Time: %{time_total}s\n" -o /dev/null -X POST http://localhost:$(API_PORT)/faces/recognize -F "image=@$(TEST_IMAGE)"
+	@echo ""
+	@echo "--- /embed/image ---"
+	@curl -s -w "Time: %{time_total}s\n" -o /dev/null -X POST http://localhost:$(API_PORT)/embed/image -F "image=@$(TEST_IMAGE)"
+	@echo ""
+	@echo "--- /ocr/predict ---"
+	@curl -s -w "Time: %{time_total}s\n" -o /dev/null -X POST http://localhost:$(API_PORT)/ocr/predict -F "image=@$(TEST_IMAGE)"
+	@echo ""
+	@echo "Quick benchmark complete."
 
 .PHONY: bench-results
 bench-results: ## Show recent benchmark results
 	@echo "Recent benchmark results:"
-	@ls -lt $(BENCHMARK_DIR)/results/ | head -n 10
+	@ls -lt $(BENCHMARK_DIR)/results/ 2>/dev/null | head -n 10 || echo "No results yet"
 
-.PHONY: lint-go
-lint-go: ## Run golangci-lint on benchmark code
-	@echo "Running golangci-lint on benchmark code..."
-	cd $(BENCHMARK_DIR) && $(HOME)/go/bin/golangci-lint run triton_bench.go
-	@echo "✓ Linting complete"
-
-.PHONY: fmt-go
-fmt-go: ## Format Go code with gofmt
-	@echo "Formatting Go code..."
-	cd $(BENCHMARK_DIR) && gofmt -w -s triton_bench.go
-	@echo "✓ Code formatted"
+.PHONY: bench-python
+bench-python: ## Run Python benchmark script with httpx
+	@echo "Running Python benchmark..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/benchmarks/scripts/benchmark.py
 
 # ==================================================================================
-# Isolated Track Benchmarking (Fair Comparison)
-# ==================================================================================
-#
-# These targets run benchmarks with equalized GPU instances for fair comparison.
-# Each track is tested in isolation to prevent resource contention.
-#
-# Instance counts (equalized for fair comparison):
-#   - DALI preprocessing: 6 instances (I/O-bound, feeds GPU)
-#   - TRT inference: 4 instances (compute-bound)
-#   - Python backend: 4 instances
-#
+# Model Management
 # ==================================================================================
 
-.PHONY: bench-create-configs
-bench-create-configs: ## Create equalized benchmark configurations (6 DALI, 4 TRT)
-	@echo "Creating equalized benchmark configurations..."
-	@python3 $(BENCHMARK_DIR)/create_benchmark_configs.py
-	@echo "✓ Benchmark configs created in $(BENCHMARK_DIR)/configs/"
+.PHONY: models-list
+models-list: ## List loaded Triton models
+	curl -s http://localhost:$(API_PORT)/models | jq
 
-.PHONY: bench-isolated-all
-bench-isolated-all: ## Run isolated benchmarks on ALL tracks (equalized instances)
-	@echo "Running isolated benchmarks on all tracks..."
-	@echo "This will take approximately $$(echo "$(or $(DURATION),60) * 8 / 60" | bc) minutes"
-	@bash $(BENCHMARK_DIR)/isolated_benchmark.sh --all --duration $(or $(DURATION),60) --clients $(or $(CLIENTS),128)
+.PHONY: models-status
+models-status: ## Check model health
+	curl -s http://localhost:$(API_PORT)/health | jq
 
-.PHONY: bench-isolated-track
-bench-isolated-track: ## Run isolated benchmark on single track (TRACK=A|B|C|D_streaming|D_balanced|D_batch|E|E_full)
-	@if [ -z "$(TRACK)" ]; then \
-		echo "Error: TRACK parameter required"; \
-		echo "Usage: make bench-isolated-track TRACK=D_batch"; \
-		echo ""; \
-		echo "Available tracks: A, B, C, D_streaming, D_balanced, D_batch, E, E_full"; \
-		exit 1; \
-	fi
-	@echo "Running isolated benchmark for Track $(TRACK)..."
-	@bash $(BENCHMARK_DIR)/isolated_benchmark.sh --track $(TRACK) --duration $(or $(DURATION),60) --clients $(or $(CLIENTS),128)
-
-.PHONY: bench-isolated-quick
-bench-isolated-quick: ## Quick isolated benchmarks (30s each, 64 clients, all tracks)
-	@echo "Running quick isolated benchmarks..."
-	@bash $(BENCHMARK_DIR)/isolated_benchmark.sh --all --duration 30 --clients 64
-
-.PHONY: bench-isolated-results
-bench-isolated-results: ## Aggregate and display isolated benchmark results
-	@echo "Aggregating isolated benchmark results..."
-	@python3 $(BENCHMARK_DIR)/aggregate_results.py --input $(BENCHMARK_DIR)/isolated
-
-.PHONY: bench-isolated-csv
-bench-isolated-csv: ## Export isolated benchmark results to CSV
-	@echo "Exporting benchmark results to CSV..."
-	@python3 $(BENCHMARK_DIR)/aggregate_results.py \
-		--input $(BENCHMARK_DIR)/isolated \
-		--csv $(BENCHMARK_DIR)/isolated/comparison_$(shell date +%Y%m%d_%H%M%S).csv
-
-.PHONY: bench-restore-production
-bench-restore-production: ## Restore production configurations after isolated benchmarks
-	@echo "Restoring production configurations..."
-	@for backup in models/*/config.pbtxt.production; do \
-		if [ -f "$$backup" ]; then \
-			target=$$(echo "$$backup" | sed 's/.production//'); \
-			cp "$$backup" "$$target"; \
-			rm "$$backup"; \
-			echo "Restored: $$(dirname $$backup | xargs basename)"; \
-		fi \
-	done
-	@echo "Production configurations restored."
-
-.PHONY: bench-isolated-help
-bench-isolated-help: ## Show help for isolated benchmark targets
-	@echo "================================================================================"
-	@echo "Isolated Track Benchmark Targets"
-	@echo "================================================================================"
-	@echo ""
-	@echo "These targets run fair benchmarks with equalized GPU instances:"
-	@echo "  - DALI preprocessing: 6 instances"
-	@echo "  - TRT inference: 4 instances"
-	@echo "  - Python backend: 4 instances"
-	@echo ""
-	@echo "Commands:"
-	@echo "  make bench-create-configs     Create equalized config files"
-	@echo "  make bench-isolated-all       Run all tracks sequentially (recommended)"
-	@echo "  make bench-isolated-track TRACK=X  Run single track in isolation"
-	@echo "  make bench-isolated-quick     Quick test (30s, 64 clients)"
-	@echo "  make bench-isolated-results   Aggregate and compare results"
-	@echo "  make bench-isolated-csv       Export results to CSV"
-	@echo ""
-	@echo "Parameters:"
-	@echo "  TRACK     - Track ID (A, B, C, D_streaming, D_balanced, D_batch, E, E_full)"
-	@echo "  DURATION  - Seconds per benchmark (default: 60)"
-	@echo "  CLIENTS   - Concurrent clients (default: 128)"
-	@echo ""
-	@echo "Example:"
-	@echo "  make bench-isolated-track TRACK=D_batch DURATION=120 CLIENTS=256"
-	@echo ""
+.PHONY: models-reload
+models-reload: ## Reload all models
+	docker compose exec triton-api tritonserver --model-control-mode=explicit --load-model=*
 
 # ==================================================================================
 # Development and Testing
@@ -342,44 +306,6 @@ shell-triton: ## Open shell in Triton container
 .PHONY: shell-opensearch
 shell-opensearch: ## Open shell in OpenSearch container
 	$(COMPOSE) exec $(OPENSEARCH_SERVICE) /bin/bash
-
-.PHONY: test-inference
-test-inference: ## Test inference on all tracks (shell script)
-	@echo "Testing inference on all tracks..."
-	@bash tests/test_inference.sh
-
-.PHONY: test-track-e-suite
-test-track-e-suite: ## Run full Track E test suite with multiple images (inside container)
-	@echo "Running full Track E test suite..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/$(TRACK_E_DIR)/test_track_e_images.py
-
-.PHONY: test-integration
-test-integration: ## Run Track E integration tests
-	@echo "Running Track E integration tests..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/$(TRACK_E_DIR)/test_integration.py
-
-.PHONY: test-patch
-test-patch: ## Verify End2End TRT NMS patch is applied
-	@echo "Verifying End2End TensorRT NMS patch..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_end2end_patch.py
-
-.PHONY: test-onnx
-test-onnx: ## Test ONNX End2End model locally (bypasses Triton)
-	@echo "Testing ONNX End2End model locally..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_onnx_end2end.py
-
-.PHONY: test-validate-models
-test-validate-models: compare-tracks ## Compare detections across tracks (alias for compare-tracks)
-
-.PHONY: test-shared-client
-test-shared-client: ## Test shared vs per-request client performance
-	@echo "Testing shared vs per-request client..."
-	@bash tests/test_shared_vs_per_request.sh
-
-.PHONY: test-compare-padding
-test-compare-padding: ## Compare DALI padding methods (center vs simple)
-	@echo "Comparing DALI padding methods..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/compare_padding_methods.py
 
 .PHONY: profile-api
 profile-api: ## Profile API with py-spy (DURATION=30, OUTPUT=profile.svg)
@@ -420,43 +346,8 @@ test-create-images: ## Generate test images in various sizes (SOURCE required)
 	fi
 	python tests/create_test_images.py --source "$(SOURCE)"
 
-.PHONY: test-all
-test-all: ## Run all tests (comprehensive)
-	@echo "==================================================================================="
-	@echo "Running All Tests"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "--- 1. Verify patch is applied ---"
-	@$(MAKE) test-patch || echo "WARNING: Patch test failed"
-	@echo ""
-	@echo "--- 2. Test all tracks via API ---"
-	@$(MAKE) test-inference
-	@echo ""
-	@echo "--- 3. Test Track E Full pipeline ---"
-	@$(MAKE) test-track-e-full || echo "WARNING: Track E Full test failed"
-	@echo ""
-	@echo "--- 4. Validate models ---"
-	@$(MAKE) test-validate-models || echo "WARNING: Model validation had issues"
-	@echo ""
-	@echo "==================================================================================="
-	@echo "All tests completed!"
-	@echo "==================================================================================="
-
 # ==================================================================================
 # Model Management API (Dynamic Upload & Export)
-# ==================================================================================
-#
-# Upload .pt files via API, auto-export to TRT, and load into Triton dynamically.
-# No restart required! Uses background tasks for long-running exports.
-#
-# Endpoints:
-#   POST /models/upload       Upload .pt file and start export
-#   GET  /models/export/{id}  Check export status
-#   GET  /models              List all models in repository
-#   POST /models/{name}/load  Load model into Triton
-#   POST /models/{name}/unload Unload model from Triton
-#   DELETE /models/{name}     Delete model from repository
-#
 # ==================================================================================
 
 .PHONY: api-upload-model
@@ -543,144 +434,6 @@ api-wait-ready: ## Wait for API to be ready (up to 60 seconds)
 		sleep 5; \
 	done; \
 	echo "ERROR: API not ready after 60 seconds"; \
-	exit 1
-
-.PHONY: api-test-e2e
-api-test-e2e: ## Run full E2E test of Model Management API with YOLO11 nano
-	@echo "==================================================================================="
-	@echo "Model Management API - End-to-End Test (YOLO11 Nano)"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "--- Step 1: Restart API to load new code ---"
-	@$(MAKE) restart-api
-	@sleep 3
-	@$(MAKE) api-wait-ready
-	@echo ""
-	@echo "--- Step 2: Download YOLO11 nano model if needed ---"
-	@$(MAKE) api-download-nano
-	@echo ""
-	@echo "--- Step 3: List current models ---"
-	@$(MAKE) api-models
-	@echo ""
-	@echo "--- Step 4: Upload nano model for export ---"
-	@$(MAKE) api-upload-nano
-	@echo ""
-	@echo "--- Step 5: Monitor export (this may take 3-5 minutes) ---"
-	@$(MAKE) api-wait-export
-	@echo ""
-	@echo "--- Step 6: Verify model in repository ---"
-	@$(MAKE) api-models
-	@echo ""
-	@echo "--- Step 7: Test unload/load cycle ---"
-	@$(MAKE) api-unload-model NAME=test_nano_trt_end2end || true
-	@sleep 2
-	@$(MAKE) api-load-model NAME=test_nano_trt_end2end
-	@echo ""
-	@echo "--- Step 8: Run inference test on uploaded model ---"
-	@$(MAKE) api-test-inference MODEL=test_nano_trt_end2end
-	@echo ""
-	@echo "--- Step 9: Cleanup - delete test model ---"
-	@$(MAKE) api-delete-model NAME=test_nano_trt_end2end || true
-	@$(MAKE) api-delete-model NAME=test_nano_end2end || true
-	@echo ""
-	@echo "==================================================================================="
-	@echo "E2E Test Complete!"
-	@echo "==================================================================================="
-
-.PHONY: api-test-inference
-api-test-inference: ## Run inference test on uploaded model (usage: make api-test-inference MODEL=model_name)
-	@if [ -z "$(MODEL)" ]; then \
-		echo "Error: MODEL parameter required"; \
-		echo "Usage: make api-test-inference MODEL=model_name"; \
-		exit 1; \
-	fi
-	@echo "Running inference test on $(MODEL)..."
-	@echo ""
-	@echo "Test 1: Single image inference"
-	@RESPONSE=$$(curl -s -X POST http://localhost:$(API_PORT)/predict/$(MODEL) \
-		-F "image=@test_images/bus.jpg"); \
-	echo "$$RESPONSE" | jq '.'; \
-	DETECTIONS=$$(echo "$$RESPONSE" | jq '.detections | length'); \
-	if [ "$$DETECTIONS" = "null" ] || [ "$$DETECTIONS" = "0" ]; then \
-		echo ""; \
-		echo "ERROR: No detections returned!"; \
-		echo "Response: $$RESPONSE"; \
-		exit 1; \
-	fi; \
-	echo ""; \
-	echo "SUCCESS: Got $$DETECTIONS detections"; \
-	echo ""
-	@echo "Test 2: Verify detection format (normalized boxes)"
-	@RESPONSE=$$(curl -s -X POST http://localhost:$(API_PORT)/predict/$(MODEL) \
-		-F "image=@test_images/bus.jpg"); \
-	X1=$$(echo "$$RESPONSE" | jq '.detections[0].x1 // 0'); \
-	Y1=$$(echo "$$RESPONSE" | jq '.detections[0].y1 // 0'); \
-	X2=$$(echo "$$RESPONSE" | jq '.detections[0].x2 // 0'); \
-	Y2=$$(echo "$$RESPONSE" | jq '.detections[0].y2 // 0'); \
-	echo "First detection: x1=$$X1, y1=$$Y1, x2=$$X2, y2=$$Y2"; \
-	if echo "$$X1 $$Y1 $$X2 $$Y2" | awk '{exit !($$1 >= 0 && $$1 <= 1 && $$2 >= 0 && $$2 <= 1 && $$3 >= 0 && $$3 <= 1 && $$4 >= 0 && $$4 <= 1)}'; then \
-		echo "SUCCESS: Boxes are normalized [0,1]"; \
-	else \
-		echo "WARNING: Boxes may not be normalized (expected [0,1] range)"; \
-	fi
-	@echo ""
-	@echo "Inference test PASSED for $(MODEL)!"
-
-.PHONY: api-download-nano
-api-download-nano: ## Download YOLO11 nano model for testing
-	@if [ -f "pytorch_models/yolo11n.pt" ]; then \
-		echo "YOLO11 nano model already exists"; \
-	else \
-		echo "Downloading YOLO11 nano model..."; \
-		$(COMPOSE) exec $(API_SERVICE) python -c "from ultralytics import YOLO; m = YOLO('yolo11n.pt'); import shutil; shutil.copy(str(m.ckpt_path), '/app/pytorch_models/yolo11n.pt')"; \
-		echo "Downloaded to pytorch_models/yolo11n.pt"; \
-	fi
-
-.PHONY: api-upload-nano
-api-upload-nano: ## Upload YOLO11 nano model via API (for testing)
-	@echo "Uploading YOLO11 nano model..."
-	@RESPONSE=$$(curl -s -X POST http://localhost:$(API_PORT)/models/upload \
-		-F "file=@pytorch_models/yolo11n.pt" \
-		-F "triton_name=test_nano" \
-		-F "max_batch=16" \
-		-F "formats=trt_end2end"); \
-	echo "$$RESPONSE" | jq '.'; \
-	TASK_ID=$$(echo "$$RESPONSE" | jq -r '.task_id'); \
-	echo "$$TASK_ID" > /tmp/export_task_id.txt; \
-	echo "Task ID saved: $$TASK_ID"
-
-.PHONY: api-wait-export
-api-wait-export: ## Wait for current export task to complete (reads task ID from /tmp/export_task_id.txt)
-	@if [ ! -f /tmp/export_task_id.txt ]; then \
-		echo "Error: No task ID found. Run api-upload-nano first."; \
-		exit 1; \
-	fi; \
-	TASK_ID=$$(cat /tmp/export_task_id.txt); \
-	echo "Monitoring export task: $$TASK_ID"; \
-	echo "This typically takes 3-5 minutes for nano model..."; \
-	for i in $$(seq 1 60); do \
-		RESPONSE=$$(curl -s http://localhost:$(API_PORT)/models/export/$$TASK_ID); \
-		STATUS=$$(echo "$$RESPONSE" | jq -r '.status'); \
-		PROGRESS=$$(echo "$$RESPONSE" | jq -r '.progress'); \
-		STEP=$$(echo "$$RESPONSE" | jq -r '.current_step'); \
-		echo "  [$$i/60] Status: $$STATUS | Progress: $$PROGRESS% | Step: $$STEP"; \
-		if [ "$$STATUS" = "completed" ]; then \
-			echo ""; \
-			echo "Export completed successfully!"; \
-			echo "$$RESPONSE" | jq '.'; \
-			rm -f /tmp/export_task_id.txt; \
-			exit 0; \
-		elif [ "$$STATUS" = "failed" ]; then \
-			echo ""; \
-			echo "Export FAILED!"; \
-			echo "$$RESPONSE" | jq '.'; \
-			rm -f /tmp/export_task_id.txt; \
-			exit 1; \
-		fi; \
-		sleep 10; \
-	done; \
-	echo "ERROR: Export timed out after 10 minutes"; \
-	rm -f /tmp/export_task_id.txt; \
 	exit 1
 
 .PHONY: api-test-quick
@@ -773,47 +526,13 @@ export-config: ## Export models from YAML config file (usage: make export-config
 export-list: ## List available built-in models
 	@$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --list-models
 
-.PHONY: export-end2end
-export-end2end: ## Export ONNX + TRT end2end with normalized boxes (Track E)
-	@echo "Exporting end2end models with normalized boxes for Track E..."
-	@echo "This exports ONNX and TensorRT end2end formats with box normalization."
-	@echo "Required for Track E visual search pipeline (YOLO + CLIP)."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py \
-		--models small \
-		--formats onnx_end2end trt_end2end \
-		--normalize-boxes
-	@echo ""
-	@echo "Export complete! Next steps:"
-	@echo "  1. make rebuild-dali          # Rebuild DALI pipeline"
-	@echo "  2. make restart-triton         # Restart Triton to load new models"
-
-.PHONY: export-end2end-standard
-export-end2end-standard: ## Export ONNX + TRT end2end with normalized boxes (Track D)
-	@echo "Exporting end2end models with normalized boxes for Track D..."
-	@echo "This exports ONNX and TensorRT end2end formats with normalization."
-	@echo "Required for Track D DALI pipeline."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py \
-		--models small \
-		--formats onnx_end2end trt_end2end \
-		--normalize-boxes
-	@echo ""
-	@echo "Export complete! Next steps:"
-	@echo "  1. make create-dali            # Create DALI pipeline"
-	@echo "  2. make restart-triton         # Restart Triton"
-
-.PHONY: download-pytorch
-download-pytorch: ## Download PyTorch models (usage: make download-pytorch MODELS="small medium")
-	@echo "Downloading PyTorch models using Ultralytics..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_pytorch_models.py --models $(or $(MODELS),small)
-
-.PHONY: download-pytorch-all
-download-pytorch-all: ## Download all PyTorch models (nano, small, medium)
-	@echo "Downloading all PyTorch models..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_pytorch_models.py --models all
-
-.PHONY: download-pytorch-list
-download-pytorch-list: ## List available PyTorch models
-	@$(COMPOSE) exec $(API_SERVICE) python /app/export/download_pytorch_models.py --list
+.PHONY: export-mobileclip
+export-mobileclip: ## Export MobileCLIP models
+	@echo "Exporting MobileCLIP image encoder..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_image_encoder.py
+	@echo "Exporting MobileCLIP text encoder..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_text_encoder.py
+	@$(MAKE) restart-triton
 
 .PHONY: export-status
 export-status: ## Show status of all exported models
@@ -847,82 +566,14 @@ validate-exports: ## Validate that Triton can load exported models
 	@curl -s http://localhost:$(TRITON_HTTP_PORT)/v2/models/yolov11_small_trt/config 2>/dev/null | jq '.name, .max_batch_size' || echo "  yolov11_small_trt: Not loaded"
 	@curl -s http://localhost:$(TRITON_HTTP_PORT)/v2/models/yolov11_small_trt_end2end/config 2>/dev/null | jq '.name, .max_batch_size' || echo "  yolov11_small_trt_end2end: Not loaded"
 
-.PHONY: create-dali
-create-dali: ## Create DALI preprocessing pipeline for Track D
-	@echo "Creating DALI preprocessing pipeline (Track D)..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/create_dali_letterbox_pipeline.py
-	@echo "Creating ensemble models..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/create_ensembles.py --models small
-	@echo "Restarting Triton to load new models..."
-	@$(MAKE) restart-triton
-
-.PHONY: create-ensembles
-create-ensembles: ## Create Track D ensemble models only (without rebuilding DALI)
-	@echo "Creating Track D ensemble models..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/create_ensembles.py --models small
-
-.PHONY: rebuild-dali
-rebuild-dali: ## Rebuild Track E DALI pipeline (triple-branch: YOLO + CLIP + HD)
-	@echo "Rebuilding Track E DALI preprocessing pipeline..."
-	@echo "This creates triple-branch pipeline: YOLO + MobileCLIP + HD cropping"
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/create_dual_dali_pipeline.py
-	@echo "DALI pipeline rebuilt. Restarting Triton..."
-	@$(MAKE) restart-triton
-
-.PHONY: create-dali-dual
-create-dali-dual: ## Create Track E triple-branch DALI pipeline (YOLO + CLIP + HD)
-	@echo "Creating Track E triple-branch DALI pipeline..."
-	@echo "Outputs: yolo_images (640x640), clip_images (256x256), original_images (max 1920px)"
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/create_dual_dali_pipeline.py
-	@$(MAKE) restart-triton
-
-.PHONY: create-dali-simple
-create-dali-simple: ## Create Track E simple DALI pipeline (YOLO + CLIP only, faster)
-	@echo "Creating Track E simple dual-branch DALI pipeline..."
-	@echo "Outputs: yolo_images (640x640), clip_images (256x256) - faster, no HD cropping"
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/create_yolo_clip_dali_pipeline.py
-	@$(MAKE) restart-triton
-
-.PHONY: validate-dali
-validate-dali: ## Validate Track D DALI pipeline
-	@echo "Validating Track D DALI pipeline..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/validate_dali_letterbox.py
-
-.PHONY: validate-dali-dual
-validate-dali-dual: ## Validate Track E DALI pipeline against PyTorch reference
-	@echo "Validating Track E dual DALI preprocessing..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/dali/validate_dual_dali_preprocessing.py
-
-.PHONY: export-mobileclip
-export-mobileclip: ## Export MobileCLIP models for Track E
-	@echo "Exporting MobileCLIP image encoder..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_image_encoder.py
-	@echo "Exporting MobileCLIP text encoder..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_text_encoder.py
-	@$(MAKE) restart-triton
-
-.PHONY: setup-track-e
-setup-track-e: ## Complete Track E setup (models + DALI + configs)
-	@echo "Setting up Track E (Visual Search)..."
-	@bash $(TRACK_E_DIR)/setup_mobileclip_env.sh
-	@$(MAKE) export-mobileclip
-	@$(MAKE) create-dali-dual
-	@echo "Track E setup complete!"
-
 # ==================================================================================
-# Face Detection & Recognition (Track E Extension)
+# Face Detection & Recognition
 # ==================================================================================
 
 .PHONY: download-face-models
-download-face-models: ## Download SCRFD and ArcFace face models
-	@echo "Downloading face detection and recognition models..."
+download-face-models: ## Download ArcFace face recognition models
+	@echo "Downloading face recognition models..."
 	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_face_models.py
-
-.PHONY: export-face-detection
-export-face-detection: ## Export SCRFD to TensorRT
-	@echo "Exporting SCRFD face detection to TensorRT..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_face_detection.py
-	@$(MAKE) load-face-models
 
 .PHONY: export-face-recognition
 export-face-recognition: ## Export ArcFace to TensorRT
@@ -933,27 +584,17 @@ export-face-recognition: ## Export ArcFace to TensorRT
 .PHONY: load-face-models
 load-face-models: ## Load face models into Triton
 	@echo "Loading face models into Triton..."
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_face_detect/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo11_face_small_trt_end2end/load" || true
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/arcface_w600k_r50/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_postprocess/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/face_embedding_extractor/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/quad_preprocess_dali/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo_face_clip_ensemble/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo11_face_pipeline/load" || true
 	@echo "Face models loaded."
 
-.PHONY: create-dali-quad
-create-dali-quad: ## Create quad-branch DALI pipeline (YOLO + CLIP + SCRFD + HD)
-	@echo "Creating Track E quad-branch DALI pipeline..."
-	@echo "Outputs: yolo_images (640x640), clip_images (256x256), face_images (640x640), original_images (max 1920px)"
-	$(COMPOSE) exec $(API_SERVICE) bash -c "cd /app && PYTHONPATH=/app python dali/create_quad_dali_pipeline.py"
-	@$(MAKE) load-face-models
-
 .PHONY: setup-face-pipeline
-setup-face-pipeline: download-face-models export-face-detection export-face-recognition create-dali-quad ## Complete face pipeline setup
+setup-face-pipeline: download-face-models export-face-recognition download-yolo11-face export-yolo11-face ## Complete face pipeline setup
 	@echo "Face pipeline setup complete!"
 	@echo ""
 	@echo "Loaded models:"
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index" | grep -E "(scrfd|arcface|face_embedding|quad_preprocess)" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index" | grep -E "(yolo11_face|arcface)" || true
 
 .PHONY: download-face-test-data
 download-face-test-data: ## Download LFW and WIDER Face test datasets
@@ -961,11 +602,6 @@ download-face-test-data: ## Download LFW and WIDER Face test datasets
 	@bash $(SCRIPTS_DIR)/setup_face_test_data.sh --all
 	@echo ""
 	@echo "Datasets downloaded to test_images/faces/"
-
-.PHONY: test-track-e-faces
-test-track-e-faces: ## Test face detection and recognition in Triton
-	@echo "Testing face models in Triton..."
-	@$(COMPOSE) exec $(API_SERVICE) python -c "import numpy as np; import tritonclient.grpc as grpcclient; client = grpcclient.InferenceServerClient('triton-api:8001'); print('Testing SCRFD...'); inputs = [grpcclient.InferInput('input.1', [1, 3, 640, 640], 'FP32')]; inputs[0].set_data_from_numpy(np.random.rand(1, 3, 640, 640).astype(np.float32)); result = client.infer('scrfd_10g_face_detect', inputs); print('  SCRFD outputs:', [o.name for o in result.get_response().outputs]); print('Testing ArcFace...'); inputs = [grpcclient.InferInput('input.1', [1, 3, 112, 112], 'FP32')]; inputs[0].set_data_from_numpy(np.random.rand(1, 3, 112, 112).astype(np.float32)); result = client.infer('arcface_w600k_r50', inputs); print('  ArcFace embedding shape:', result.as_numpy('683').shape); print('Face models working!')"
 
 # ==================================================================================
 # YOLO11-Face (Alternative Face Detection Pipeline)
@@ -994,28 +630,10 @@ setup-yolo11-face: download-yolo11-face export-yolo11-face restart-triton load-y
 	@echo "YOLO11-face setup complete!"
 	@echo ""
 	@echo "Test with:"
-	@echo "  curl -X POST http://localhost:$(API_PORT)/track_e/faces/yolo11/detect -F 'file=@test.jpg'"
-
-.PHONY: test-yolo11-face
-test-yolo11-face: ## Test YOLO11-face face detection
-	@echo "Testing YOLO11-face detection..."
-	@curl -s -X POST http://localhost:$(API_PORT)/track_e/faces/yolo11/detect \
-		-F "file=@test_images/bus.jpg" | jq '.'
-
-.PHONY: test-yolo11-face-recognize
-test-yolo11-face-recognize: ## Test YOLO11-face with ArcFace recognition
-	@echo "Testing YOLO11-face + ArcFace recognition..."
-	@curl -s -X POST http://localhost:$(API_PORT)/track_e/faces/yolo11/recognize \
-		-F "file=@test_images/bus.jpg" | jq '.'
-
-.PHONY: benchmark-face-detectors
-benchmark-face-detectors: ## Benchmark YOLO11-face vs SCRFD
-	@echo "Benchmarking face detectors (YOLO11-face vs SCRFD)..."
-	@curl -s -X POST "http://localhost:$(API_PORT)/track_e/faces/yolo11/benchmark?iterations=20" \
-		-F "file=@test_images/bus.jpg" | jq '.'
+	@echo "  curl -X POST http://localhost:$(API_PORT)/faces/detect -F 'file=@test.jpg'"
 
 # ==================================================================================
-# OCR (PP-OCRv5) - Track E Extension
+# OCR (PP-OCRv5)
 # ==================================================================================
 
 .PHONY: download-paddleocr
@@ -1037,45 +655,15 @@ export-paddleocr-rec: ## Export PaddleOCR recognition model to TensorRT
 export-paddleocr: export-paddleocr-det export-paddleocr-rec ## Export both PaddleOCR models to TensorRT
 	@echo "Both OCR models exported!"
 
-.PHONY: create-dali-penta
-create-dali-penta: ## Create penta-branch DALI pipeline (YOLO + CLIP + SCRFD + HD + OCR)
-	@echo "Creating penta-branch DALI pipeline..."
-	@echo "Outputs: yolo_images, clip_images, face_images, original_images, ocr_images"
-	$(COMPOSE) exec $(API_SERVICE) bash -c "cd /app && PYTHONPATH=/app python dali/create_penta_dali_pipeline.py"
-	@$(MAKE) restart-triton
-
 .PHONY: setup-ocr
-setup-ocr: download-paddleocr export-paddleocr create-dali-penta ## Complete OCR pipeline setup
+setup-ocr: download-paddleocr export-paddleocr restart-triton ## Complete OCR pipeline setup
 	@echo "OCR pipeline setup complete!"
-	@echo ""
-	@echo "Testing OCR..."
-	@$(MAKE) test-ocr
-
-.PHONY: test-ocr
-test-ocr: ## Test OCR pipeline
-	@echo "Testing OCR pipeline..."
-	@curl -s -X POST http://localhost:$(API_PORT)/track_e/ocr/predict \
-		-F "image=@test_images/bus.jpg" | jq '.'
-
-.PHONY: test-ocr-batch
-test-ocr-batch: ## Test OCR batch processing
-	@echo "Testing OCR batch processing..."
-	@curl -s -X POST http://localhost:$(API_PORT)/track_e/ocr/predict_batch \
-		-H "Content-Type: application/json" \
-		-d '{"images": ["'"$$(base64 -w0 test_images/bus.jpg)"'"]}' | jq '.'
-
-.PHONY: test-ocr-search
-test-ocr-search: ## Test OCR text search
-	@echo "Testing OCR text search..."
-	@curl -s -X POST "http://localhost:$(API_PORT)/track_e/search/ocr?query=bus&top_k=5" | jq '.'
 
 .PHONY: load-ocr-models
 load-ocr-models: ## Load OCR models into Triton
 	@echo "Loading OCR models into Triton..."
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/paddleocr_det_trt/load" || true
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/paddleocr_rec_trt/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/ocr_pipeline/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/penta_preprocess_dali/load" || true
 	@echo "OCR models loaded."
 
 # ==================================================================================
@@ -1115,6 +703,30 @@ gpu-watch: ## Watch GPU status (updates every second)
 # Triton Model Management
 # ==================================================================================
 
+.PHONY: triton-health
+triton-health: ## Check Triton server health
+	@echo "Checking Triton health..."
+	@curl -sf http://localhost:$(TRITON_HTTP_PORT)/v2/health/ready > /dev/null && echo "Triton is ready" || (echo "Triton not ready"; exit 1)
+
+.PHONY: triton-models-ready
+triton-models-ready: ## List all READY models in Triton
+	@echo "=== Triton Models (READY) ==="
+	@curl -s -X POST http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index 2>/dev/null | \
+		python3 -c "import sys,json; models=json.load(sys.stdin); ready=[m['name'] for m in models if m.get('state')=='READY']; print(f'Total: {len(ready)} models'); [print(f'  - {n}') for n in sorted(ready)]" 2>/dev/null || echo "Error: Cannot connect to Triton"
+
+.PHONY: triton-stats
+triton-stats: ## Show Triton model statistics
+	@echo "=== Triton Model Statistics ==="
+	@curl -s http://localhost:$(TRITON_HTTP_PORT)/v2/models/stats 2>/dev/null | \
+		python3 -c "import sys,json; stats=json.load(sys.stdin); ms=stats.get('model_stats',[]); [print(f\"{m['name']}: {m['inference_stats']['success']['count']} inferences\") for m in ms if m['inference_stats']['success']['count']>0]" 2>/dev/null || echo "Error: Cannot fetch stats"
+
+.PHONY: triton-metrics
+triton-metrics: ## Show key Triton metrics (inference counts, latencies)
+	@echo "=== Triton Key Metrics ==="
+	@curl -s http://localhost:$(TRITON_METRICS_PORT)/metrics 2>/dev/null | \
+		grep -E "nv_inference_count|nv_inference_compute_infer_duration" | \
+		grep -v "^#" | head -30
+
 .PHONY: triton-unload-all
 triton-unload-all: ## Unload all models from Triton server
 	@echo "Unloading all models from Triton..."
@@ -1151,6 +763,30 @@ triton-unload: ## Unload a model from Triton (usage: make triton-unload MODEL=mo
 	fi
 	@echo "Unloading $(MODEL) from Triton..."
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/$(MODEL)/unload" | jq '.'
+
+# ==================================================================================
+# Health & Status Checks
+# ==================================================================================
+
+.PHONY: check-all
+check-all: ## Full system health check (API + Triton + OpenSearch)
+	@echo "==================================================================================="
+	@echo "System Health Check"
+	@echo "==================================================================================="
+	@echo ""
+	@echo "--- API Service ---"
+	@curl -sf http://localhost:$(API_PORT)/health > /dev/null && echo "API is healthy" || echo "API not responding"
+	@echo ""
+	@echo "--- Triton Server ---"
+	@curl -sf http://localhost:$(TRITON_HTTP_PORT)/v2/health/ready > /dev/null && echo "Triton is ready" || echo "Triton not ready"
+	@echo ""
+	@echo "--- OpenSearch ---"
+	@curl -sf http://localhost:$(OPENSEARCH_PORT)/_cluster/health > /dev/null && echo "OpenSearch is healthy" || echo "OpenSearch not responding"
+	@echo ""
+	@echo "--- GPU Status ---"
+	@nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null || echo "Cannot query GPU"
+	@echo ""
+	@echo "==================================================================================="
 
 # ==================================================================================
 # Cleanup
@@ -1209,7 +845,7 @@ clean-exports: ## Clean old model exports (keeps configs, prepares for re-export
 	@echo "Then run 'make export-models' or 'make export-all' to re-export."
 
 # ==================================================================================
-# OpenSearch / Track E Data Management
+# OpenSearch / Data Management
 # ==================================================================================
 
 .PHONY: opensearch-reset
@@ -1230,108 +866,13 @@ opensearch-indices: ## List OpenSearch indices
 	@echo "OpenSearch Indices:"
 	@curl -s http://localhost:$(OPENSEARCH_PORT)/_cat/indices?v
 
-# ==================================================================================
-# API Testing
-# ==================================================================================
-#
-# All tracks run on the unified API at port 4603:
-# - Track A: /pytorch/predict/small
-# - Track B: /predict/small (TensorRT)
-# - Track C: /predict/small_end2end (TensorRT + GPU NMS)
-# - Track D: /predict/small_gpu_e2e_batch (DALI + GPU pipeline)
-# - Track E: /track_e/detect (Visual Search)
-#
-# ==================================================================================
-
-.PHONY: test-api-health
-test-api-health: ## Test API health
-	@echo "Testing API health (port $(API_PORT))..."
-	@curl -sf http://localhost:$(API_PORT)/health && echo " OK" || echo " FAILED"
-
-.PHONY: test-track-a
-test-track-a: ## Quick test Track A (PyTorch)
-	@echo "Testing Track A (PyTorch) on port $(API_PORT)..."
-	@curl -s -X POST http://localhost:$(API_PORT)/pytorch/predict/small \
-		-F "image=@test_images/bus.jpg" | jq '.' || echo "Test failed - is the API running? (make up)"
-
-.PHONY: test-track-b
-test-track-b: ## Quick test Track B (TensorRT)
-	@echo "Testing Track B (TensorRT) on port $(API_PORT)..."
-	@curl -s -X POST http://localhost:$(API_PORT)/predict/small \
-		-F "image=@test_images/bus.jpg" | jq '.' || echo "Test failed - is the API running? (make up)"
-
-.PHONY: test-track-c
-test-track-c: ## Quick test Track C (TensorRT + GPU NMS)
-	@echo "Testing Track C (TensorRT + GPU NMS) on port $(API_PORT)..."
-	@curl -s -X POST http://localhost:$(API_PORT)/predict/small_end2end \
-		-F "image=@test_images/bus.jpg" | jq '.' || echo "Test failed - is the API running? (make up)"
-
-.PHONY: test-track-d
-test-track-d: ## Quick test Track D (DALI + GPU pipeline)
-	@echo "Testing Track D (DALI + GPU pipeline) on port $(API_PORT)..."
-	@curl -s -X POST http://localhost:$(API_PORT)/predict/small_gpu_e2e_batch \
-		-F "image=@test_images/bus.jpg" | jq '.' || echo "Test failed - is the API running? (make up)"
-
-.PHONY: test-track-e
-test-track-e: ## Quick test Track E (Visual Search - simple detection + embedding)
-	@echo "Testing Track E (Visual Search - YOLO+CLIP ensemble) on port $(API_PORT)..."
-	@curl -s -X POST http://localhost:$(API_PORT)/track_e/predict \
-		-F "image=@test_images/bus.jpg" | jq '.' || echo "Test failed - is the API running? (make up)"
-
-.PHONY: test-track-e-full
-test-track-e-full: ## Quick test Track E Full (Visual Search - detection + per-box embeddings)
-	@echo "Testing Track E Full (Visual Search - per-box embeddings) on port $(API_PORT)..."
-	@curl -s -X POST http://localhost:$(API_PORT)/track_e/predict_full \
-		-F "image=@test_images/bus.jpg" | jq '{status, track, num_detections, box_embeddings: (.box_embeddings | length), normalized_boxes: (.normalized_boxes | length), embedding_norm, total_time_ms, detections}' || echo "Test failed - is the API running? (make up)"
-
-.PHONY: test-track-e-full-pipeline
-test-track-e-full-pipeline: ## Test Track E full pipeline with timing (detections + box embeddings)
-	@echo "==================================================================================="
-	@echo "Track E Full Pipeline Test"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "--- Track E Simple (detection + global embedding) ---"
-	@time curl -s -X POST http://localhost:$(API_PORT)/track_e/predict \
-		-F "image=@test_images/bus.jpg" | jq '{status, track, num_detections, embedding_norm, total_time_ms}'
-	@echo ""
-	@echo "--- Track E Full (detection + global + per-box embeddings) ---"
-	@time curl -s -X POST http://localhost:$(API_PORT)/track_e/predict_full \
-		-F "image=@test_images/bus.jpg" | jq '{status, track, num_detections, box_embeddings: (.box_embeddings | length), normalized_boxes: (.normalized_boxes | length), embedding_norm, total_time_ms, detections}'
-	@echo ""
-	@echo "==================================================================================="
-	@echo "Track E Full Pipeline Test Complete"
-	@echo "==================================================================================="
-
-.PHONY: test-all-tracks
-test-all-tracks: ## Test all tracks (A, B, C, D, E, E_full)
-	@echo "==================================================================================="
-	@echo "Testing All Tracks on Unified API (port $(API_PORT))"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "--- Track A (PyTorch) ---"
-	@$(MAKE) test-track-a
-	@echo ""
-	@echo "--- Track B (TensorRT + CPU NMS) ---"
-	@$(MAKE) test-track-b
-	@echo ""
-	@echo "--- Track C (TensorRT + GPU NMS) ---"
-	@$(MAKE) test-track-c
-	@echo ""
-	@echo "--- Track D (DALI + GPU pipeline) ---"
-	@$(MAKE) test-track-d
-	@echo ""
-	@echo "--- Track E (Visual Search - detection + global embedding) ---"
-	@$(MAKE) test-track-e
-	@echo ""
-	@echo "--- Track E Full (Visual Search - detection + global + per-box embeddings) ---"
-	@$(MAKE) test-track-e-full
-
-.PHONY: compare-tracks
-compare-tracks: ## Compare detection outputs across tracks A, B, C, D, E
-	@echo "==================================================================================="
-	@echo "Comparing Detection Outputs Across All Tracks"
-	@echo "==================================================================================="
-	@. .venv/bin/activate && python tests/compare_tracks.py --host localhost --port $(API_PORT) --tracks A,B,C,D,E --images test_images
+.PHONY: opensearch-reset-indexes
+opensearch-reset-indexes: ## Reset all OpenSearch indexes (delete and recreate)
+	@echo "Resetting OpenSearch indexes..."
+	@curl -s -X DELETE "http://localhost:$(API_PORT)/index" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message','deleted'))" 2>/dev/null || true
+	@sleep 1
+	@curl -s -X POST "http://localhost:$(API_PORT)/index/create" | python3 -c "import sys,json; print('Indexes created:', json.load(sys.stdin).get('status','unknown'))" 2>/dev/null
+	@echo "Done."
 
 # ==================================================================================
 # Documentation
@@ -1343,15 +884,13 @@ info: ## Show service URLs and ports
 	@echo "Triton Inference Server - Unified Deployment"
 	@echo "==================================================================================="
 	@echo ""
-	@echo "All tracks run on a single unified API (port $(API_PORT))."
-	@echo ""
 	@echo "Quick Start:"
 	@echo "  make up                    Start all services"
 	@echo "  make status                Check service health"
-	@echo "  make test-all-tracks       Test all tracks"
+	@echo "  make test-all              Test all endpoints"
 	@echo ""
 	@echo "Services:"
-	@echo "  YOLO API:                  http://localhost:$(API_PORT)"
+	@echo "  API:                       http://localhost:$(API_PORT)"
 	@echo "  Triton HTTP:               http://localhost:$(TRITON_HTTP_PORT)"
 	@echo "  Triton gRPC:               http://localhost:$(TRITON_GRPC_PORT)"
 	@echo "  OpenSearch:                http://localhost:$(OPENSEARCH_PORT)"
@@ -1360,16 +899,16 @@ info: ## Show service URLs and ports
 	@echo "  Grafana:                   http://localhost:$(GRAFANA_PORT) (admin/admin)"
 	@echo "  Prometheus:                http://localhost:$(PROMETHEUS_PORT)"
 	@echo ""
-	@echo "Track Endpoints (all on port $(API_PORT)):"
-	@echo "  Track A (PyTorch):         POST /pytorch/predict/small"
-	@echo "  Track B (TensorRT):        POST /predict/small"
-	@echo "  Track C (TRT + GPU NMS):   POST /predict/small_end2end"
-	@echo "  Track D (DALI + GPU):      POST /predict/small_gpu_e2e_batch"
-	@echo "  Track E (Visual Search):   POST /track_e/detect"
-	@echo ""
-	@echo "GPU Assignment:"
-	@echo "  GPU 0: Tracks A, B, C, E models"
-	@echo "  GPU 1 (host GPU 2): Track D DALI pipeline"
+	@echo "API Endpoints (port $(API_PORT)):"
+	@echo "  Detection:                 POST /detect"
+	@echo "  Face Recognition:          POST /faces/recognize"
+	@echo "  Image Embedding:           POST /embed/image"
+	@echo "  Text Embedding:            POST /embed/text"
+	@echo "  OCR:                       POST /ocr/predict"
+	@echo "  Image Search:              POST /search/image"
+	@echo "  Text Search:               POST /search/text"
+	@echo "  Ingest:                    POST /ingest"
+	@echo "  Analyze:                   POST /analyze"
 	@echo ""
 
 .PHONY: docs
@@ -1377,12 +916,6 @@ docs: info ## Alias for info
 
 # ==================================================================================
 # Reference Repositories (for attribution and development)
-# ==================================================================================
-#
-# These repos are gitignored but provide important reference implementations.
-# Clone them for development, attribution verification, or to understand the
-# source of key features like the End2End NMS export patch.
-#
 # ==================================================================================
 
 .PHONY: clone-refs-essential
@@ -1422,304 +955,24 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 
 .PHONY: help up down restart restart-triton restart-api build rebuild \
         logs logs-triton logs-api logs-opensearch status health ps \
-        bench-build bench-quick bench-full bench-matrix \
-        bench-track-a bench-track-b bench-track-c bench-track-d \
-        bench-track-d-streaming bench-track-d-balanced bench-track-d-batch \
-        bench-track-e bench-track-e-full bench-stress bench-results \
-        lint-go fmt-go \
-        shell-api shell-triton shell-opensearch \
-        test-inference test-track-e-suite test-integration \
-        test-patch test-onnx test-validate-models test-shared-client \
-        test-compare-padding test-create-images test-all \
-        profile-api resize-images \
+        test-detect test-faces test-embed test-ocr test-analyze test-search test-ingest test-all \
+        test-api-health test-inference test-integration test-patch test-onnx test-shared-client \
+        bench-quick bench-detect bench-faces bench-embed bench-ingest bench-search bench-results bench-python \
+        models-list models-status models-reload \
+        shell-api shell-triton shell-opensearch profile-api resize-images test-create-images \
         api-upload-model api-export-status api-exports api-models \
         api-load-model api-unload-model api-delete-model \
-        api-health api-wait-ready api-test-e2e api-download-nano \
-        api-upload-nano api-wait-export api-test-quick api-test-inference \
-        export-models export-all export-small export-onnx export-end2end export-end2end-standard \
-        export-custom export-config export-list \
-        download-pytorch download-pytorch-all download-pytorch-list export-status validate-exports \
-        create-dali create-ensembles rebuild-dali create-dali-dual create-dali-simple \
-        validate-dali validate-dali-dual \
-        export-mobileclip setup-track-e \
+        api-health api-wait-ready api-test-quick \
+        export-models export-all export-small export-onnx export-custom export-config export-list \
+        export-mobileclip export-status validate-exports \
+        download-face-models export-face-recognition load-face-models setup-face-pipeline download-face-test-data \
+        download-yolo11-face export-yolo11-face load-yolo11-face setup-yolo11-face \
+        download-paddleocr export-paddleocr-det export-paddleocr-rec export-paddleocr setup-ocr load-ocr-models \
         open-grafana open-prometheus open-opensearch metrics gpu gpu-watch \
+        triton-health triton-models-ready triton-stats triton-metrics \
         triton-unload-all triton-models triton-load triton-unload \
+        check-all \
         clean clean-all clean-logs clean-bench clean-exports \
-        opensearch-reset opensearch-status opensearch-indices \
-        test-api-health test-track-a test-track-b test-track-c test-track-d test-track-e \
-        test-track-e-full test-track-e-full-pipeline test-all-tracks compare-tracks info docs \
+        opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
+        info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref
-
-# ==================================================================================
-# Health & Status Checks
-# ==================================================================================
-
-.PHONY: triton-health
-triton-health: ## Check Triton server health
-	@echo "Checking Triton health..."
-	@curl -sf http://localhost:$(TRITON_HTTP_PORT)/v2/health/ready > /dev/null && echo "✓ Triton is ready" || (echo "✗ Triton not ready"; exit 1)
-
-.PHONY: triton-models-ready
-triton-models-ready: ## List all READY models in Triton
-	@echo "=== Triton Models (READY) ==="
-	@curl -s -X POST http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index 2>/dev/null | \
-		python3 -c "import sys,json; models=json.load(sys.stdin); ready=[m['name'] for m in models if m.get('state')=='READY']; print(f'Total: {len(ready)} models'); [print(f'  - {n}') for n in sorted(ready)]" 2>/dev/null || echo "Error: Cannot connect to Triton"
-
-.PHONY: triton-stats
-triton-stats: ## Show Triton model statistics
-	@echo "=== Triton Model Statistics ==="
-	@curl -s http://localhost:$(TRITON_HTTP_PORT)/v2/models/stats 2>/dev/null | \
-		python3 -c "import sys,json; stats=json.load(sys.stdin); ms=stats.get('model_stats',[]); [print(f\"{m['name']}: {m['inference_stats']['success']['count']} inferences\") for m in ms if m['inference_stats']['success']['count']>0]" 2>/dev/null || echo "Error: Cannot fetch stats"
-
-.PHONY: triton-metrics
-triton-metrics: ## Show key Triton metrics (inference counts, latencies)
-	@echo "=== Triton Key Metrics ==="
-	@curl -s http://localhost:$(TRITON_METRICS_PORT)/metrics 2>/dev/null | \
-		grep -E "nv_inference_count|nv_inference_compute_infer_duration" | \
-		grep -v "^#" | head -30
-
-.PHONY: check-all
-check-all: ## Full system health check (API + Triton + OpenSearch)
-	@echo "==================================================================================="
-	@echo "System Health Check"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "--- API Service ---"
-	@curl -sf http://localhost:$(API_PORT)/health > /dev/null && echo "✓ API is healthy" || echo "✗ API not responding"
-	@echo ""
-	@echo "--- Triton Server ---"
-	@curl -sf http://localhost:$(TRITON_HTTP_PORT)/v2/health/ready > /dev/null && echo "✓ Triton is ready" || echo "✗ Triton not ready"
-	@echo ""
-	@echo "--- OpenSearch ---"
-	@curl -sf http://localhost:$(OPENSEARCH_PORT)/_cluster/health > /dev/null && echo "✓ OpenSearch is healthy" || echo "✗ OpenSearch not responding"
-	@echo ""
-	@echo "--- GPU Status ---"
-	@nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null || echo "✗ Cannot query GPU"
-	@echo ""
-	@echo "==================================================================================="
-
-# ==================================================================================
-# Ingest Benchmarks (Individual vs Batch Comparison)
-# ==================================================================================
-
-BENCH_IMAGES_DIR := test_images/benchmark_all
-
-.PHONY: bench-ingest-single
-bench-ingest-single: bench-build ## Benchmark single image ingest with varying concurrency
-	@echo "Benchmarking SINGLE image ingest (individual requests)..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_ingest \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 \
-		--matrix-clients "1,4,8,16,32,64" --duration 30 --warmup 5
-
-.PHONY: bench-ingest-batch
-bench-ingest-batch: bench-build ## Benchmark batch ingest with varying batch sizes
-	@echo "Benchmarking BATCH ingest (batch requests)..."
-	@echo ""
-	@echo "--- Batch Size 8 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch8 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 32 --duration 30
-	@echo ""
-	@echo "--- Batch Size 16 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 32 --duration 30
-	@echo ""
-	@echo "--- Batch Size 32 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch32 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 16 --duration 30
-
-.PHONY: bench-ingest-compare
-bench-ingest-compare: bench-build ## Full comparison: individual vs batch ingest
-	@echo "==================================================================================="
-	@echo "Ingest Pipeline Benchmark: Individual vs Batch"
-	@echo "==================================================================================="
-	@echo "Images: $(BENCH_IMAGES_DIR)"
-	@echo ""
-	@echo "=== Phase 1: Individual Requests ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_ingest \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 \
-		--matrix-clients "8,16,32,64" --duration 30 --warmup 5
-	@echo ""
-	@echo "=== Phase 2: Batch Requests ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 32 --duration 30
-	@echo ""
-	@echo "=== Phase 3: Large Batch ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_ingest_batch32 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 1000 --clients 16 --duration 30
-	@echo ""
-	@echo "==================================================================================="
-	@echo "Benchmark Complete - Results in $(BENCHMARK_DIR)/results/"
-	@echo "==================================================================================="
-
-.PHONY: bench-ingest-all
-bench-ingest-all: bench-build ## Process ALL images through ingest (no time limit)
-	@echo "Processing ALL images through ingest..."
-	@IMAGES=$$(ls $(BENCH_IMAGES_DIR)/*.jpg 2>/dev/null | wc -l); \
-	echo "Found $$IMAGES images in $(BENCH_IMAGES_DIR)"; \
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode all --track E_ingest_batch16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit $$IMAGES --clients 32
-
-# ==================================================================================
-# Parallel Ingest Benchmarks (AsyncTritonPool + True Async)
-# ==================================================================================
-
-.PHONY: bench-parallel-quick
-bench-parallel-quick: bench-build ## Quick benchmark of parallel ingest (warmup + 30s)
-	@echo "==================================================================================="
-	@echo "PARALLEL Ingest Quick Benchmark (AsyncTritonPool)"
-	@echo "==================================================================================="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_par16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
-
-.PHONY: bench-parallel-full
-bench-parallel-full: bench-build ## Full benchmark of parallel ingest across batch sizes
-	@echo "==================================================================================="
-	@echo "PARALLEL Ingest Full Benchmark (AsyncTritonPool)"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "--- Batch Size 8 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par8 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30
-	@echo ""
-	@echo "--- Batch Size 16 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30
-	@echo ""
-	@echo "--- Batch Size 32 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par32 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 8 --duration 30
-	@echo ""
-	@echo "--- Batch Size 64 ---"
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode full --track E_par64 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 4 --duration 30
-
-.PHONY: bench-parallel-matrix
-bench-parallel-matrix: bench-build ## Matrix benchmark varying batch size and concurrency
-	@echo "==================================================================================="
-	@echo "PARALLEL Ingest Matrix Benchmark"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "Testing E_par16 across different concurrency levels..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_par16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 \
-		--matrix-clients "4,8,16,32,64" --duration 30 --warmup 5
-	@echo ""
-	@echo "Testing E_par32 across different concurrency levels..."
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode matrix --track E_par32 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 \
-		--matrix-clients "4,8,16,32" --duration 30 --warmup 5
-
-.PHONY: bench-parallel-all
-bench-parallel-all: bench-build ## Process ALL images through parallel ingest
-	@echo "Processing ALL images through parallel ingest..."
-	@IMAGES=$$(ls $(BENCH_IMAGES_DIR)/*.jpg 2>/dev/null | wc -l); \
-	echo "Found $$IMAGES images in $(BENCH_IMAGES_DIR)"; \
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode all --track E_par16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit $$IMAGES --clients 16
-
-.PHONY: bench-ingest-compare-all
-bench-ingest-compare-all: bench-build ## Compare all ingest methods: single, batch, optimized, parallel
-	@echo "==================================================================================="
-	@echo "COMPREHENSIVE Ingest Benchmark: All Methods Compared"
-	@echo "==================================================================================="
-	@echo "Images: $(BENCH_IMAGES_DIR)"
-	@echo ""
-	@echo "=== Phase 1: Single Image Ingest ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 30 --warmup 5
-	@echo ""
-	@echo "=== Phase 2: Batch Ingest (Traditional) ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest_batch16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
-	@echo ""
-	@echo "=== Phase 3: Optimized Ingest ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_opt16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
-	@echo ""
-	@echo "=== Phase 4: PARALLEL Ingest (AsyncTritonPool) ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_par16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 30 --warmup 5
-	@echo ""
-	@echo "==================================================================================="
-	@echo "Benchmark Complete - Compare throughput and latency across methods"
-	@echo "==================================================================================="
-
-# ==================================================================================
-# Track E Comprehensive Benchmarks (Prediction + Ingestion)
-# ==================================================================================
-
-.PHONY: bench-track-e-predict
-bench-track-e-predict: bench-build ## Benchmark Track E prediction endpoints
-	@echo "==================================================================================="
-	@echo "Track E Prediction Benchmarks (No OpenSearch indexing)"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "=== E_detect: YOLO Detection Only ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_detect \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
-	@echo ""
-	@echo "=== E: YOLO + Global CLIP Embedding ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
-	@echo ""
-	@echo "=== E_full: YOLO + CLIP + Per-box Embeddings ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_full \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
-	@echo ""
-	@echo "=== E_faces: Face Detection + ArcFace ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_faces \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
-	@echo ""
-	@echo "=== E_quad: Full Pipeline (YOLO+CLIP+Face+ArcFace) ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_quad \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 20 --warmup 5
-	@echo ""
-	@echo "=== E_batch16: Batch Prediction (16 images) ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_batch16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 16 --duration 20 --warmup 5
-
-.PHONY: bench-track-e-ingest
-bench-track-e-ingest: bench-build ## Benchmark Track E ingest endpoints (includes OpenSearch)
-	@echo "==================================================================================="
-	@echo "Track E Ingest Benchmarks (With OpenSearch indexing)"
-	@echo "==================================================================================="
-	@echo ""
-	@echo "=== Single Image Ingest ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest \
-		--images ../$(BENCH_IMAGES_DIR) --limit 300 --clients 16 --duration 30 --warmup 5
-	@echo ""
-	@echo "=== Batch Ingest (16 images) ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_ingest_batch16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 300 --clients 8 --duration 30 --warmup 5
-	@echo ""
-	@echo "=== Parallel Async Ingest (16 images) ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E_par16 \
-		--images ../$(BENCH_IMAGES_DIR) --limit 300 --clients 8 --duration 30 --warmup 5
-
-.PHONY: bench-track-e-all
-bench-track-e-all: bench-build ## Run ALL Track E benchmarks
-	@echo "==================================================================================="
-	@echo "COMPREHENSIVE Track E Benchmark Suite"
-	@echo "==================================================================================="
-	@$(MAKE) bench-track-e-predict
-	@echo ""
-	@$(MAKE) bench-track-e-ingest
-	@echo ""
-	@echo "==================================================================================="
-	@echo "Track E Benchmark Complete"
-	@echo "==================================================================================="
-
-.PHONY: bench-track-e-quick
-bench-track-e-quick: bench-build ## Quick Track E throughput test (30 seconds)
-	@echo "=== Quick Track E Throughput Test ==="
-	cd $(BENCHMARK_DIR) && ./triton_bench --mode quick --track E \
-		--images ../$(BENCH_IMAGES_DIR) --limit 500 --clients 32 --duration 30 --warmup 5
-
-.PHONY: opensearch-reset-indexes
-opensearch-reset-indexes: ## Reset all OpenSearch indexes (delete and recreate)
-	@echo "Resetting OpenSearch indexes..."
-	@curl -s -X DELETE "http://localhost:$(API_PORT)/track_e/index" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message','deleted'))" 2>/dev/null || true
-	@sleep 1
-	@curl -s -X POST "http://localhost:$(API_PORT)/track_e/index/create" | python3 -c "import sys,json; print('Indexes created:', json.load(sys.stdin).get('status','unknown'))" 2>/dev/null
-	@echo "Done."
-

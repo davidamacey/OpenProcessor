@@ -1,6 +1,8 @@
-# Track E Face Detection & Recognition Implementation
+# Face Detection & Recognition Implementation
 
-> **Status:** Sprint 1 Complete | **Started:** 2026-01-01 | **Target:** Production Ready
+> **Note**: This document is historical. The current production system uses **YOLO11-face** for face detection (not SCRFD). See the main [README](../README.md) for current API documentation.
+>
+> **Status:** Complete | **Started:** 2026-01-01
 
 ## Quick Links
 
@@ -84,12 +86,12 @@ Extend Track E visual search with face detection (SCRFD-10G) and recognition (Ar
   - [ ] Implement `search_faces()`
   - [ ] Test ingestion and search
 - [ ] **3.4** Add API endpoints
-  - [ ] `POST /track_e/faces/detect`
-  - [ ] `POST /track_e/faces/recognize`
-  - [ ] `POST /track_e/faces/ingest`
-  - [ ] `POST /track_e/faces/search`
-  - [ ] `POST /track_e/faces/identify`
-  - [ ] `POST /track_e/faces/verify`
+  - [ ] `POST /faces/detect`
+  - [ ] `POST /faces/recognize`
+  - [ ] `POST /faces/ingest`
+  - [ ] `POST /faces/search`
+  - [ ] `POST /faces/identify`
+  - [ ] `POST /faces/verify`
 - [ ] **3.5** Add Makefile targets
   - [ ] `download-face-models`
   - [ ] `export-face-detection`
@@ -357,21 +359,21 @@ download-face-test-data   # Download LFW test dataset
 ### Face Detection
 
 ```
-POST /track_e/faces/detect
+POST /faces/detect
 ```
 Detect faces in image using SCRFD. Returns face bounding boxes, landmarks, and confidence scores.
 
 ### Face Recognition
 
 ```
-POST /track_e/faces/recognize
+POST /faces/recognize
 ```
 Detect faces and extract ArcFace identity embeddings. Full GPU pipeline.
 
 ### Face Ingestion
 
 ```
-POST /track_e/faces/ingest
+POST /faces/ingest
   ?image_id=<optional>
   &person_name=<optional>
 ```
@@ -380,7 +382,7 @@ Ingest faces from image into identity database.
 ### Face Search
 
 ```
-POST /track_e/faces/search
+POST /faces/search
   ?face_index=0
   &top_k=10
   &min_score=0.6
@@ -390,14 +392,14 @@ Find matching identities for a face in the image.
 ### Face Identification (1:N)
 
 ```
-POST /track_e/faces/identify
+POST /faces/identify
 ```
 Identify all people in image against the face database.
 
 ### Face Verification (1:1)
 
 ```
-POST /track_e/faces/verify
+POST /faces/verify
   ?threshold=0.6
 ```
 Verify if two images contain the same person.

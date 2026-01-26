@@ -1,5 +1,5 @@
 """
-Track E: Visual Search Service.
+Visual Search Service.
 
 Orchestrates inference + OpenSearch operations for visual search.
 Bridges InferenceService (Triton) and OpenSearchClient (multi-index vector search).
@@ -90,7 +90,7 @@ class VisualSearchService:
         Pipeline:
         1. Compute imohash for exact duplicate detection (if skip_duplicates=True)
         2. Check if image already exists by hash
-        3. Run Track E full ensemble (YOLO + MobileCLIP)
+        3. Run YOLO detection + MobileCLIP encoding
         4. Extract global + box embeddings
         5. Route to appropriate indexes:
            - Global embedding -> visual_search_global
@@ -148,20 +148,20 @@ class VisualSearchService:
             settings = get_settings()
             client = get_triton_client(settings.triton_url)
 
-            # Run Track F (CPU preprocessing + direct TRT) and YOLO11-face detection in parallel
-            # NOTE: Using Track F instead of Track E to avoid DALI - CPU preprocessing is more stable
+            # Run YOLO + MobileCLIP and YOLO11-face detection in parallel
+            # Uses CPU preprocessing with direct TRT inference for stability
             from concurrent.futures import ThreadPoolExecutor
 
-            def run_track_f():
-                return client.infer_track_f(image_bytes)
+            def run_yolo_clip():
+                return client.infer_yolo_clip_cpu(image_bytes)
 
             def run_face_detection():
                 return client.infer_faces_yolo11(image_bytes, confidence=0.5)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
-                track_f_future = executor.submit(run_track_f)
+                yolo_clip_future = executor.submit(run_yolo_clip)
                 face_future = executor.submit(run_face_detection)
-                result = track_f_future.result()
+                result = yolo_clip_future.result()
                 face_result = face_future.result()
 
             global_embedding = np.array(result['image_embedding'])
@@ -628,7 +628,7 @@ class VisualSearchService:
                 )
                 continue
 
-            # Handle both unified (global_embedding) and track_e (image_embedding) responses
+            # Handle both unified (global_embedding) and legacy (image_embedding) responses
             global_embedding = np.array(
                 result.get('global_embedding', result.get('image_embedding', []))
             )
@@ -931,7 +931,7 @@ class VisualSearchService:
         Returns:
             List of similar images with scores
         """
-        query_embedding = self.inference.encode_image_sync(image_bytes, use_cache=True)
+        query_embedding = self.inference.encode_image(image_bytes, use_cache=True)
         return await self.opensearch.search_global(
             query_embedding=query_embedding,
             top_k=top_k,
@@ -963,7 +963,7 @@ class VisualSearchService:
         Returns:
             List of matching images with scores
         """
-        query_embedding = self.inference.encode_text_sync(text, use_cache)
+        query_embedding = self.inference.encode_text(text, use_cache)
         return await self.opensearch.search_global(
             query_embedding=query_embedding,
             top_k=top_k,
@@ -984,7 +984,7 @@ class VisualSearchService:
         Like "Find all red cars" or "Show me motorcycles like this one".
 
         Pipeline:
-        1. Run Track E to get vehicle detection embedding
+        1. Run YOLO detection + MobileCLIP encoding to get vehicle embedding
         2. k-NN search on visual_search_vehicles index
 
         Args:
@@ -1002,7 +1002,7 @@ class VisualSearchService:
 
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline=True)
+        result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
@@ -1059,7 +1059,7 @@ class VisualSearchService:
         For identity matching, use search_faces (future - requires ArcFace).
 
         Pipeline:
-        1. Run Track E to get person detection embedding
+        1. Run YOLO detection + MobileCLIP encoding to get person embedding
         2. k-NN search on visual_search_people index
 
         Args:
@@ -1076,7 +1076,7 @@ class VisualSearchService:
 
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline=True)
+        result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
@@ -1146,7 +1146,7 @@ class VisualSearchService:
 
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline=True)
+        result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
