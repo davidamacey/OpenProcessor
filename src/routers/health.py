@@ -13,7 +13,6 @@ from fastapi import APIRouter
 
 from src.clients.triton_pool import get_client_pool_stats
 from src.config import get_settings
-from src.core.dependencies import get_pytorch_models
 
 
 logger = logging.getLogger(__name__)
@@ -31,39 +30,32 @@ def root():
     Returns available endpoints, models, and backend configuration.
     """
     settings = get_settings()
-    models = settings.models
-    pytorch_models = get_pytorch_models()
 
     return {
-        'service': 'YOLO Inference API',
+        'service': 'Visual AI API',
         'status': 'running',
         'endpoints': {
-            'detection': {
-                'pytorch': '/pytorch/predict/{model_name}',
-                'tensorrt': '/predict/{model_name}',
-                'tensorrt_gpu_nms': '/predict/{model_name}_end2end',
-            },
-            'visual_search': {
-                'ingest': '/ingest',
-                'ingest_batch': '/ingest/batch',
-                'search_image': '/search/image',
-                'search_text': '/search/text',
-            },
-            'face_recognition': {
-                'detect': '/faces/detect',
-                'recognize': '/faces/recognize',
-                'search': '/faces/search',
-            },
+            'detection': '/detect',
+            'faces': '/faces',
+            'embed': '/embed',
+            'search': '/search',
+            'ingest': '/ingest',
+            'analyze': '/analyze',
+            'ocr': '/ocr',
+            'clusters': '/clusters',
+            'query': '/query',
         },
         'models': {
-            'pytorch': list(pytorch_models.keys()),
-            'tensorrt': list(models.STANDARD_MODELS.keys()),
-            'tensorrt_end2end': [f'{k}_end2end' for k in models.END2END_MODELS],
-            'ensembles': list(models.ENSEMBLE_MODELS.keys()),
+            'detection': settings.models.YOLO_MODEL,
+            'face_detection': settings.models.FACE_DETECT_MODEL,
+            'face_embedding': settings.models.ARCFACE_MODEL,
+            'clip_image': settings.models.CLIP_IMAGE_MODEL,
+            'clip_text': settings.models.CLIP_TEXT_MODEL,
+            'ocr_detection': settings.models.OCR_DET_MODEL,
+            'ocr_recognition': settings.models.OCR_REC_MODEL,
         },
         'backend': {
             'triton_url': f'grpc://{settings.triton_url}',
-            'pytorch_enabled': settings.enable_pytorch,
             'gpu_available': torch.cuda.is_available(),
         },
     }
@@ -79,10 +71,8 @@ def health():
     - Triton connection status
     - OpenSearch connection status
     - GPU memory usage
-    - Loaded models list
     """
     settings = get_settings()
-    pytorch_models = get_pytorch_models()
 
     # Process metrics
     process = psutil.Process(os.getpid())
@@ -99,10 +89,6 @@ def health():
             'opensearch': {
                 'url': settings.opensearch_url,
                 'status': 'connected',
-            },
-            'pytorch': {
-                'enabled': settings.enable_pytorch,
-                'models_loaded': list(pytorch_models.keys()),
             },
         },
         'resources': {

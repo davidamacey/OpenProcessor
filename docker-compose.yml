@@ -29,7 +29,9 @@ services:
       - --load-model=mobileclip2_s2_text_encoder
       - --load-model=paddleocr_det_trt
       - --load-model=paddleocr_rec_trt
+      - --load-model=ocr_pipeline
       - --load-model=yolo11_face_pipeline
+      - --load-model=unified_complete_pipeline
       # ===================================================================
       - --log-verbose=1
       - --log-info=true
