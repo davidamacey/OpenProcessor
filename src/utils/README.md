@@ -27,7 +27,7 @@ inv_matrix = calculate_inverse_affine(affine_matrix)
 - `calculate_inverse_affine(affine_matrix)` - Calculate inverse affine matrix for coordinate mapping
 - `apply_affine_to_boxes(boxes, inv_matrix)` - Transform detection boxes to original image coordinates
 
-**Used by:** Track D (DALI preprocessing), Track E (visual search)
+**Used by:** Visual search and embedding services
 
 ---
 
@@ -58,7 +58,7 @@ model_cache = ModelCache(max_size=100)
 - Memory-efficient LRU eviction
 - Hit/miss statistics
 
-**Used by:** Track E (embedding caching for search)
+**Used by:** Embedding services and visual search
 
 ---
 
@@ -107,7 +107,7 @@ Fast security validation to prevent resource attacks.
 - Default max: 16K resolution (prevents OOM attacks)
 - Default min: 16 pixels (sanity check)
 
-**Used by:** All tracks (A/B/C/D/E)
+**Used by:** All API endpoints
 
 ---
 
@@ -137,7 +137,7 @@ detections = format_detections(results, normalize=True)
 - Normalized coordinate output
 - Batch inference support
 
-**Used by:** Track A (PyTorch baseline)
+**Used by:** PyTorch inference utilities (if enabled)
 
 ---
 
@@ -245,5 +245,5 @@ Total:          0.5-5ms   (< 10% of inference time)
 ## Related Documentation
 
 - [../README.md](../README.md) - FastAPI service overview
-- [../../dali/README.md](../../dali/README.md) - DALI preprocessing (uses affine.py)
-- [../../CLAUDE.md](../../CLAUDE.md) - Project overview
+- [../../README.md](../../README.md) - Project overview
+- [../../CLAUDE.md](../../CLAUDE.md) - Development instructions
