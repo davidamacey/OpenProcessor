@@ -3,12 +3,12 @@
 # Complete GPU-accelerated pipeline combining all analysis capabilities:
 # - YOLO object detection
 # - MobileCLIP global and per-box embeddings
-# - Face detection (SCRFD on person crops OR YOLO11-face full image)
+# - Face detection (unified ensemble OR YOLO11-face full image)
 # - ArcFace face embeddings
 # - PP-OCRv5 text detection and recognition
 #
 # Face Model Selection:
-# - "scrfd" (default): SCRFD face detection on person crops only (more efficient)
+# - "unified" (default): Unified ensemble (detection + embeddings + faces in one pass)
 # - "yolo11": YOLO11-face detection on full image (may detect more faces)
 #
 # Input: Raw JPEG bytes + affine matrix + optional face_model
