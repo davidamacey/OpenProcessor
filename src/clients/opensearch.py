@@ -877,6 +877,58 @@ class OpenSearchClient:
             logger.warning(f'Duplicate check failed: {e}')
             return None
 
+    async def check_duplicates_by_hash_batch(
+        self, imohashes: list[str]
+    ) -> dict[str, dict[str, Any] | None]:
+        """
+        Batch check for duplicate images using msearch.
+
+        Efficiently checks multiple hashes in a single request using OpenSearch
+        multi-search API. ~10x faster than sequential checks for batch operations.
+
+        Args:
+            imohashes: List of hex strings from imohash.hashbytes()
+
+        Returns:
+            Dict mapping imohash -> existing document (or None if not found)
+        """
+        if not imohashes:
+            return {}
+
+        results: dict[str, dict[str, Any] | None] = dict.fromkeys(imohashes)
+
+        try:
+            # Build msearch request body
+            body = []
+            for imohash in imohashes:
+                # Header line (index)
+                body.append({'index': IndexName.GLOBAL.value})
+                # Query line
+                body.append(
+                    {
+                        'size': 1,
+                        'query': {'term': {'imohash': imohash}},
+                        '_source': ['image_id', 'image_path', 'indexed_at', 'imohash'],
+                    }
+                )
+
+            response = await self.client.msearch(body=body)
+
+            # Parse responses
+            for i, resp in enumerate(response['responses']):
+                if 'error' in resp:
+                    logger.warning(f'msearch error for hash {imohashes[i]}: {resp["error"]}')
+                    continue
+                hits = resp.get('hits', {}).get('hits', [])
+                if hits:
+                    results[imohashes[i]] = hits[0]['_source']
+
+            return results
+
+        except Exception as e:
+            logger.warning(f'Batch duplicate check failed: {e}')
+            return results
+
     async def ingest_faces(
         self,
         image_id: str,
@@ -1047,6 +1099,90 @@ class OpenSearchClient:
             refresh=False,
         )
         return True
+
+    async def bulk_index_faces(
+        self,
+        face_documents: list[dict[str, Any]],
+        refresh: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Bulk index multiple faces in a single OpenSearch request.
+
+        ~10x faster than sequential index_face() calls for batch operations.
+
+        Args:
+            face_documents: List of dicts with keys:
+                - face_id, image_id, image_path, embedding, box
+                - Optional: landmarks, confidence, quality, person_id, person_name
+            refresh: Whether to refresh index after bulk operation
+
+        Returns:
+            Dict with 'indexed' count and 'errors' list
+        """
+        if not face_documents:
+            return {'indexed': 0, 'errors': []}
+
+        timestamp = datetime.now(UTC).isoformat()
+        actions = []
+
+        for face_doc in face_documents:
+            # Convert embedding to list if numpy array
+            embedding = face_doc.get('embedding', [])
+            if hasattr(embedding, 'tolist'):
+                embedding = embedding.tolist()
+
+            # Convert flat landmarks list to named object
+            landmarks = face_doc.get('landmarks', [])
+            landmarks_obj = {}
+            if landmarks and len(landmarks) >= 10:
+                landmarks_obj = {
+                    'left_eye': [float(landmarks[0]), float(landmarks[1])],
+                    'right_eye': [float(landmarks[2]), float(landmarks[3])],
+                    'nose': [float(landmarks[4]), float(landmarks[5])],
+                    'left_mouth': [float(landmarks[6]), float(landmarks[7])],
+                    'right_mouth': [float(landmarks[8]), float(landmarks[9])],
+                }
+
+            doc = {
+                'face_id': face_doc['face_id'],
+                'image_id': face_doc['image_id'],
+                'image_path': face_doc['image_path'],
+                'embedding': embedding,
+                'box': face_doc.get('box', [0, 0, 1, 1]),
+                'landmarks': landmarks_obj,
+                'confidence': face_doc.get('confidence', 0.0),
+                'quality_score': face_doc.get('quality', 0.0),
+                'indexed_at': face_doc.get('indexed_at', timestamp),
+            }
+
+            if face_doc.get('person_id'):
+                doc['person_id'] = face_doc['person_id']
+            if face_doc.get('person_name'):
+                doc['person_name'] = face_doc['person_name']
+
+            actions.append(
+                {
+                    '_index': IndexName.FACES.value,
+                    '_id': face_doc['face_id'],
+                    '_source': doc,
+                }
+            )
+
+        try:
+            success, errors = await async_bulk(
+                self.client, actions, refresh=refresh, raise_on_error=False
+            )
+            error_msgs = []
+            if errors:
+                error_msgs = [str(e) for e in errors[:10]]  # Limit error messages
+                logger.warning(f'Bulk face index had {len(errors)} errors')
+
+            logger.info(f'Bulk indexed {success} faces')
+            return {'indexed': success, 'errors': error_msgs}
+
+        except Exception as e:
+            logger.error(f'Bulk face index failed: {e}')
+            return {'indexed': 0, 'errors': [str(e)]}
 
     async def bulk_ingest(
         self,

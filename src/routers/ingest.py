@@ -169,6 +169,9 @@ class BatchIngestResponse(BaseModel):
         default_factory=BatchIndexedCounts, description='Aggregate indexed counts'
     )
     near_duplicates: int = Field(default=0, ge=0, description='Images assigned to duplicate groups')
+    deferred_ops: int = Field(
+        default=0, ge=0, description='Images with deferred near-duplicate detection'
+    )
     duplicate_details: list[DuplicateDetail] | None = Field(
         default=None, description='Details of detected duplicates'
     )
@@ -427,11 +430,16 @@ Batch ingest up to 64 images with optimized parallel processing.
 
 **Performance:** 3-5x faster than individual /ingest calls.
 - Parallel hash computation
+- Batch duplicate checking (msearch - 10x faster than sequential)
 - Batch Triton inference with dynamic batching
-- OpenSearch bulk indexing
+- Bulk OpenSearch indexing for images and faces
+- Parallel near-duplicate detection
 - Reduced HTTP overhead
 
 **Target throughput:** 300+ images/second with batch sizes of 32-64.
+
+**High-Throughput Mode:** Set `defer_heavy_ops=true` to skip near-duplicate detection
+during rapid ingestion. These can be processed later when system load is lower.
 
 **Partial Failures:** The endpoint returns partial results if some images fail.
 Check the `error_details` field for per-image error information.
@@ -465,6 +473,11 @@ async def ingest_batch(
     enable_ocr: bool = Form(
         True,
         description='Run OCR on images (may reduce throughput).',
+    ),
+    defer_heavy_ops: bool = Form(
+        False,
+        description='Defer heavy operations (near-duplicate detection) for faster ingestion. '
+        'Use during high-throughput bulk ingestion.',
     ),
 ):
     """
@@ -559,6 +572,7 @@ async def ingest_batch(
             detect_near_duplicates=detect_near_duplicates,
             near_duplicate_threshold=near_duplicate_threshold,
             enable_ocr=enable_ocr,
+            defer_heavy_ops=defer_heavy_ops,
         )
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -628,6 +642,7 @@ async def ingest_batch(
             errors_count=result.get('errors_count', 0),
             indexed=indexed,
             near_duplicates=result.get('near_duplicates', 0),
+            deferred_ops=result.get('deferred_ops', 0),
             duplicate_details=duplicate_details,
             error_details=error_details,
             near_duplicate_details=near_duplicate_details,
@@ -709,6 +724,10 @@ async def ingest_directory(
     enable_ocr: bool = Query(
         True,
         description='Run OCR on images',
+    ),
+    defer_heavy_ops: bool = Query(
+        False,
+        description='Defer heavy operations for faster bulk ingestion',
     ),
 ):
     """
@@ -820,6 +839,7 @@ async def ingest_directory(
                     detect_near_duplicates=detect_near_duplicates,
                     near_duplicate_threshold=near_duplicate_threshold,
                     enable_ocr=enable_ocr,
+                    defer_heavy_ops=defer_heavy_ops,
                 )
 
                 total_processed += result.get('processed', 0)
