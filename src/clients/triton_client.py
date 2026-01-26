@@ -1872,7 +1872,7 @@ class TritonClient:
         ]
 
         # Sync inference with retry
-        response = self._infer_with_retry('unified_complete_pipeline_direct', inputs, outputs)
+        response = self._infer_with_retry('unified_complete_pipeline', inputs, outputs)
 
         _t_triton_done = _time.perf_counter()
         _input_prep_ms = (_t_input_prep - _t_start) * 1000

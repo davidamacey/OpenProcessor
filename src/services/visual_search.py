@@ -434,7 +434,7 @@ class VisualSearchService:
         detect_near_duplicates: bool = True,
         near_duplicate_threshold: float = 0.99,
         enable_ocr: bool = True,
-        max_workers: int = 64,
+        _max_workers: int = 32,  # Reserved for future use (currently using adaptive worker count)
     ) -> dict[str, Any]:
         """
         Batch ingest multiple images with optimized parallel processing.
@@ -526,63 +526,53 @@ class VisualSearchService:
                 'duplicate_details': duplicates,
             }
 
-        # Step 3: CPU preprocessing in parallel + Triton inference
+        # Step 3: Triton inference (pass raw JPEG bytes directly to unified pipeline)
         import time as _time
 
         loop = asyncio.get_running_loop()
         from concurrent.futures import ThreadPoolExecutor
 
-        from src.services.cpu_preprocess import PreprocessResult, preprocess_batch
-
-        # === PROFILING: CPU Preprocessing ===
-        _t_preprocess_start = _time.perf_counter()
-
-        def run_preprocessing(images_bytes: list[bytes]) -> list[PreprocessResult | None]:
-            """Parallel CPU preprocessing for all images."""
-            return preprocess_batch(images_bytes, max_workers=max_workers)
-
-        preprocessed_results = await loop.run_in_executor(
-            None,
-            run_preprocessing,
-            [img[0] for img in to_process],
-        )
-
-        _t_preprocess_end = _time.perf_counter()
-        _preprocess_ms = (_t_preprocess_end - _t_preprocess_start) * 1000
-        _preprocess_per_img = _preprocess_ms / len(to_process) if to_process else 0
-        logger.info(
-            f'[PROFILE] CPU Preprocessing: {_preprocess_ms:.1f}ms total, {_preprocess_per_img:.1f}ms/img'
-        )
-
         # === PROFILING: Triton Inference ===
         _t_inference_start = _time.perf_counter()
 
-        def run_single_from_tensor(prep: PreprocessResult | None) -> dict:
-            """Run unified ensemble from preprocessed tensor (faster than Python backend)."""
-            if prep is None:
-                return {
-                    'error': 'Preprocessing failed',
-                    'num_dets': 0,
-                    'num_faces': 0,
-                    'num_texts': 0,
-                }
+        def run_single_unified(img_bytes: bytes) -> dict:
+            """Run YOLO+CLIP+Faces inference on raw JPEG bytes (same as single ingest)."""
             try:
-                # Use the Triton ensemble for parallel YOLO+CLIP+embedding+faces
-                # Note: OCR is handled separately if needed
-                return client.infer_unified_complete_from_tensors(prep, face_model='yolo11')
+                # Run YOLO + MobileCLIP (detection + global embedding + box embeddings)
+                yolo_result = client.infer_yolo_clip_cpu(img_bytes)
+
+                # Run face detection + embedding extraction
+                face_result = client.infer_faces_yolo11(img_bytes, confidence=0.5)
+
+                # Merge results and return
+                return {
+                    **yolo_result,  # num_dets, boxes, scores, classes, image_embedding, box_embeddings
+                    'num_faces': face_result.get('num_faces', 0),
+                    'face_boxes': face_result.get('face_boxes', []),
+                    'face_landmarks': face_result.get('face_landmarks', []),
+                    'face_scores': face_result.get('face_scores', []),
+                    'face_embeddings': face_result.get('face_embeddings', []),
+                    'face_quality': face_result.get('face_quality', []),
+                    # Rename image_embedding to global_embedding for consistency
+                    'global_embedding': yolo_result.get('image_embedding', []),
+                    'num_texts': 0,  # OCR disabled in batch for performance
+                }
             except Exception as e:
-                logger.debug(f'Unified ensemble inference failed: {e}')
+                logger.error(f'Unified pipeline inference failed: {e}', exc_info=True)
                 return {'error': str(e), 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
 
-        def run_inference_batch(preps: list[PreprocessResult | None]) -> list[dict]:
-            """Run unified pipeline on batch of preprocessed tensors in parallel."""
-            with ThreadPoolExecutor(max_workers=min(max_workers, len(preps))) as executor:
-                return list(executor.map(run_single_from_tensor, preps))
+        def run_inference_batch(images_bytes: list[bytes]) -> list[dict]:
+            """Run unified pipeline on batch of images in parallel."""
+            # Limit concurrent Triton inference to prevent gRPC "too_many_pings" errors
+            # Single shared gRPC connection can handle ~8 concurrent streams reliably
+            inference_workers = min(8, len(images_bytes))
+            with ThreadPoolExecutor(max_workers=inference_workers) as executor:
+                return list(executor.map(run_single_unified, images_bytes))
 
         inference_results = await loop.run_in_executor(
             None,
             run_inference_batch,
-            preprocessed_results,
+            [img[0] for img in to_process],
         )
 
         _t_inference_end = _time.perf_counter()
