@@ -15,7 +15,7 @@ import io
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from functools import lru_cache
 
 import numpy as np
 from PIL import Image
@@ -104,7 +104,7 @@ class FaceIdentityService:
         """
         try:
             # 1. Run face detection and embedding extraction
-            face_result = self.inference.infer_faces(image_bytes)
+            face_result = self.inference.detect_faces(image_bytes)
 
             if face_result.get('num_faces', 0) == 0:
                 return {
@@ -139,7 +139,9 @@ class FaceIdentityService:
                 embedding = embeddings[i]
 
                 # Generate face_id
-                current_face_id = face_id if (face_id and i == 0) else f'face_{uuid.uuid4().hex[:12]}'
+                current_face_id = (
+                    face_id if (face_id and i == 0) else f'face_{uuid.uuid4().hex[:12]}'
+                )
                 generated_face_ids.append(current_face_id)
 
                 try:
@@ -186,14 +188,18 @@ class FaceIdentityService:
                         'face_id': current_face_id,
                         'image_id': source_image_id or f'img_{uuid.uuid4().hex[:12]}',
                         'image_path': source_image_id or '',
-                        'embedding': embedding if isinstance(embedding, list) else embedding.tolist(),
+                        'embedding': embedding
+                        if isinstance(embedding, list)
+                        else embedding.tolist(),
                         'box': box,
                         'landmarks': landmarks,
                         'confidence': face.get('score', 0.0),
                         'quality_score': face.get('quality', 0.0),
                         'person_id': effective_person_id,
                         'thumbnail_b64': thumbnail_b64,
-                        'is_reference': (i == 0 and person_id is None),  # First face is reference if new person
+                        'is_reference': (
+                            i == 0 and person_id is None
+                        ),  # First face is reference if new person
                         'indexed_at': timestamp,
                     }
 
@@ -211,7 +217,7 @@ class FaceIdentityService:
 
                 except Exception as e:
                     logger.error(f'Failed to index face {current_face_id}: {e}')
-                    errors.append(f'{current_face_id}: {str(e)}')
+                    errors.append(f'{current_face_id}: {e!s}')
 
             return {
                 'status': 'success' if indexed_count > 0 else 'error',
@@ -241,7 +247,7 @@ class FaceIdentityService:
         image_bytes: bytes,
         top_k: int = 5,
         threshold: float = 0.6,
-        face_detector: str = 'yolo11',
+        _face_detector: str = 'yolo11',
     ) -> dict:
         """
         1:N face identification - find matching persons in database.
@@ -257,7 +263,7 @@ class FaceIdentityService:
             top_k: Number of top matches to return per face
             threshold: Minimum similarity threshold (0.0-1.0).
                       Recommended: 0.5-0.6 for same person verification.
-            face_detector: Face detector to use ('yolo11' or 'scrfd')
+            _face_detector: Face detector to use (reserved for future implementation)
 
         Returns:
             dict with:
@@ -271,10 +277,8 @@ class FaceIdentityService:
         """
         try:
             # 1. Run face detection based on detector choice
-            if face_detector == 'yolo11':
-                face_result = self.inference.infer_faces_yolo11(image_bytes)
-            else:
-                face_result = self.inference.infer_faces(image_bytes)
+            # Both paths now use detect_faces which internally uses YOLO11-face
+            face_result = self.inference.detect_faces(image_bytes)
 
             if face_result.get('num_faces', 0) == 0:
                 return {
@@ -287,7 +291,7 @@ class FaceIdentityService:
             num_faces = face_result['num_faces']
             faces = face_result['faces']
             embeddings = face_result['embeddings']
-            orig_h, orig_w = face_result['orig_shape']
+            _orig_h, _orig_w = face_result['orig_shape']
 
             identifications = []
 
@@ -320,12 +324,14 @@ class FaceIdentityService:
                 if matches and matches[0].get('score', 0) >= threshold:
                     best_match_person_id = matches[0].get('person_id')
 
-                identifications.append({
-                    'query_face': query_face,
-                    'matches': matches,
-                    'best_match_person_id': best_match_person_id,
-                    'is_identified': best_match_person_id is not None,
-                })
+                identifications.append(
+                    {
+                        'query_face': query_face,
+                        'matches': matches,
+                        'best_match_person_id': best_match_person_id,
+                        'is_identified': best_match_person_id is not None,
+                    }
+                )
 
             return {
                 'status': 'success',
@@ -581,7 +587,7 @@ class FaceIdentityService:
                                         '_source': ['face_id', 'thumbnail_b64', 'confidence'],
                                     }
                                 }
-                            }
+                            },
                         }
                     },
                 },
@@ -592,12 +598,14 @@ class FaceIdentityService:
                 ref_hit = bucket['reference_face']['hits']['hits']
                 ref_face = ref_hit[0]['_source'] if ref_hit else {}
 
-                persons.append({
-                    'person_id': bucket['key'],
-                    'face_count': bucket['doc_count'],
-                    'reference_face_id': ref_face.get('face_id'),
-                    'reference_thumbnail': ref_face.get('thumbnail_b64'),
-                })
+                persons.append(
+                    {
+                        'person_id': bucket['key'],
+                        'face_count': bucket['doc_count'],
+                        'reference_face_id': ref_face.get('face_id'),
+                        'reference_thumbnail': ref_face.get('thumbnail_b64'),
+                    }
+                )
 
             return persons
 
@@ -613,17 +621,14 @@ class FaceIdentityService:
 
 
 # Singleton instance
-_face_identity_service: FaceIdentityService | None = None
 
 
+@lru_cache(maxsize=1)
 def get_face_identity_service() -> FaceIdentityService:
     """
-    Get singleton FaceIdentityService instance.
+    Get singleton FaceIdentityService instance (cached).
 
     Returns:
         FaceIdentityService: Service instance
     """
-    global _face_identity_service
-    if _face_identity_service is None:
-        _face_identity_service = FaceIdentityService()
-    return _face_identity_service
+    return FaceIdentityService()

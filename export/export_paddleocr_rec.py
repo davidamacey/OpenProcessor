@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
+
 # Model configuration
 MODEL_NAME = 'en_PP-OCRv5_mobile_rec'
 INPUT_NAME = 'x'
@@ -34,17 +35,17 @@ OUTPUT_NAME = 'fetch_name_0'
 
 # Fixed height, dynamic width
 REC_HEIGHT = 48
-MIN_WIDTH = 48      # Minimum text crop width
-OPT_WIDTH = 320     # Optimal width for TensorRT
-MAX_WIDTH = 2048    # Maximum width for long text
+MIN_WIDTH = 48  # Minimum text crop width
+OPT_WIDTH = 320  # Optimal width for TensorRT
+MAX_WIDTH = 2048  # Maximum width for long text
 
 # Dynamic output
-NUM_CHARS = 438     # 436 English chars + blank + space
+NUM_CHARS = 438  # 436 English chars + blank + space
 
 # Batch sizes (recognition processes many text crops per image)
 MIN_BATCH = 1
-OPT_BATCH = 32    # Higher optimal batch for text crops
-MAX_BATCH = 64    # Match Triton max_batch_size
+OPT_BATCH = 32  # Higher optimal batch for text crops
+MAX_BATCH = 64  # Match Triton max_batch_size
 
 # Paths
 PADDLEX_MODEL_DIR = Path.home() / '.paddlex/official_models' / MODEL_NAME
@@ -61,10 +62,7 @@ def check_paddlex_model() -> bool:
     required_files = ['inference.json', 'inference.pdiparams', 'inference.yml']
     if not PADDLEX_MODEL_DIR.exists():
         return False
-    for f in required_files:
-        if not (PADDLEX_MODEL_DIR / f).exists():
-            return False
-    return True
+    return all((PADDLEX_MODEL_DIR / f).exists() for f in required_files)
 
 
 def export_to_onnx() -> Path | None:
@@ -105,6 +103,7 @@ def export_to_onnx() -> Path | None:
     except Exception as e:
         print(f'ERROR: ONNX export failed: {e}')
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -123,13 +122,17 @@ def verify_onnx_model(onnx_path: Path) -> dict | None:
 
         input_info = model.graph.input[0]
         input_name = input_info.name
-        input_shape = [d.dim_param if d.dim_param else d.dim_value
-                       for d in input_info.type.tensor_type.shape.dim]
+        input_shape = [
+            d.dim_param if d.dim_param else d.dim_value
+            for d in input_info.type.tensor_type.shape.dim
+        ]
 
         output_info = model.graph.output[0]
         output_name = output_info.name
-        output_shape = [d.dim_param if d.dim_param else d.dim_value
-                        for d in output_info.type.tensor_type.shape.dim]
+        output_shape = [
+            d.dim_param if d.dim_param else d.dim_value
+            for d in output_info.type.tensor_type.shape.dim
+        ]
 
         print(f'  Input: {input_name} {input_shape}')
         print(f'  Output: {output_name} {output_shape}')
@@ -167,11 +170,11 @@ def test_onnx_inference(onnx_path: Path) -> bool:
 
         # Test with different widths (dynamic)
         test_shapes = [
-            (1, 3, REC_HEIGHT, MIN_WIDTH),    # Min width
-            (1, 3, REC_HEIGHT, OPT_WIDTH),    # Optimal width
-            (8, 3, REC_HEIGHT, OPT_WIDTH),    # Optimal batch
-            (1, 3, REC_HEIGHT, 640),          # Medium width
-            (4, 3, REC_HEIGHT, 1280),         # Large width
+            (1, 3, REC_HEIGHT, MIN_WIDTH),  # Min width
+            (1, 3, REC_HEIGHT, OPT_WIDTH),  # Optimal width
+            (8, 3, REC_HEIGHT, OPT_WIDTH),  # Optimal batch
+            (1, 3, REC_HEIGHT, 640),  # Medium width
+            (4, 3, REC_HEIGHT, 1280),  # Large width
         ]
 
         for shape in test_shapes:
@@ -193,8 +196,10 @@ def test_onnx_inference(onnx_path: Path) -> bool:
 def check_triton_container() -> bool:
     """Check if Triton container is running."""
     try:
+        # Using docker CLI with fixed arguments - safe from injection
         result = subprocess.run(
             ['docker', 'ps', '--filter', 'name=triton-api', '--format', '{{.Names}}'],
+            check=False,
             capture_output=True,
             text=True,
             timeout=10,
@@ -206,6 +211,12 @@ def check_triton_container() -> bool:
 
 def unload_models_for_memory():
     """Unload Triton models to free GPU memory for TensorRT build."""
+    import logging
+    import time
+
+    import requests
+
+    logger = logging.getLogger(__name__)
     print('\nFreeing GPU memory by unloading models...')
 
     models_to_unload = [
@@ -218,14 +229,13 @@ def unload_models_for_memory():
         'mobileclip_text_trt',
     ]
 
-    import requests
     for model in models_to_unload:
         try:
             requests.post(f'http://localhost:4600/v2/repository/models/{model}/unload', timeout=5)
-        except Exception:
-            pass
+        except Exception as e:
+            # Silently continue if unload fails - model may not be loaded
+            logger.debug('Could not unload %s: %s', model, e)
 
-    import time
     time.sleep(2)
     print('  Models unloaded')
 
@@ -264,7 +274,7 @@ def convert_to_tensorrt_via_trtexec(onnx_path: Path, plan_path: Path) -> Path | 
 
     # Build command - write output to file inside container for reliable capture
     # NOTE: --workspace is deprecated in TRT 10+, use --memPoolSize=workspace:8192MiB instead
-    trtexec_cmd = f'''
+    trtexec_cmd = f"""
 /usr/src/tensorrt/bin/trtexec \\
     --onnx=/models/{onnx_path.name} \\
     --saveEngine=/models/paddleocr_rec_trt/1/model.plan \\
@@ -285,21 +295,21 @@ else
     echo "ERROR: model.plan not created"
 fi
 exit $EXIT_CODE
-'''
+"""
 
     cmd = ['docker', 'exec', 'triton-api', 'bash', '-c', trtexec_cmd]
 
-    print(f'Running trtexec with dynamic shapes:')
+    print('Running trtexec with dynamic shapes:')
     print(f'  Min: {min_shapes}')
     print(f'  Opt: {opt_shapes}')
     print(f'  Max: {max_shapes}')
-    print(f'  Memory Pool: 8192 MiB')
-    print(f'\nThis may take 10-20 minutes for dynamic shapes...')
+    print('  Memory Pool: 8192 MiB')
+    print('\nThis may take 10-20 minutes for dynamic shapes...')
     print('  (Output saved to /tmp/trtexec.log in container)')
     print('')
 
     try:
-        # Run with live output
+        # Run with live output - cmd is constructed with validated paths above
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -321,11 +331,10 @@ exit $EXIT_CODE
             print('\nTensorRT conversion successful!')
             print(f'  Engine size: {plan_path.stat().st_size / 1024 / 1024:.2f} MB')
             return plan_path
-        else:
-            print(f'\nERROR: trtexec failed (exit code {process.returncode})')
-            if plan_path.exists():
-                print(f'  Plan file size: {plan_path.stat().st_size} bytes (0 = failed)')
-            return None
+        print(f'\nERROR: trtexec failed (exit code {process.returncode})')
+        if plan_path.exists():
+            print(f'  Plan file size: {plan_path.stat().st_size} bytes (0 = failed)')
+        return None
 
     except subprocess.TimeoutExpired:
         print('ERROR: TensorRT conversion timed out after 30 minutes')
@@ -334,6 +343,7 @@ exit $EXIT_CODE
     except Exception as e:
         print(f'ERROR: TensorRT conversion failed: {e}')
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -348,7 +358,7 @@ def extract_dictionary() -> Path | None:
         import yaml
 
         config_path = PADDLEX_MODEL_DIR / 'inference.yml'
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             config = yaml.safe_load(f)
 
         char_dict = config.get('PostProcess', {}).get('character_dict', [])
@@ -528,7 +538,9 @@ def main():
         print('  1. Reload Triton models:')
         print('     curl -X POST localhost:4600/v2/repository/models/paddleocr_rec_trt/load')
         print('  2. Update BLS model to use new dictionary')
-        print('  3. Test OCR: curl -X POST http://localhost:4603/track_e/ocr/predict -F "image=@test.png"')
+        print(
+            '  3. Test OCR: curl -X POST http://localhost:4603/track_e/ocr/predict -F "image=@test.png"'
+        )
 
     return 0
 

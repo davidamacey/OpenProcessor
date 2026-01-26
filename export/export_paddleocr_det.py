@@ -45,12 +45,16 @@ def verify_onnx_model(onnx_path: Path) -> dict:
     # Get input info
     input_info = model.graph.input[0]
     input_name = input_info.name
-    input_shape = [d.dim_value if d.dim_value else d.dim_param for d in input_info.type.tensor_type.shape.dim]
+    input_shape = [
+        d.dim_value if d.dim_value else d.dim_param for d in input_info.type.tensor_type.shape.dim
+    ]
 
     # Get output info
     output_info = model.graph.output[0]
     output_name = output_info.name
-    output_shape = [d.dim_value if d.dim_value else d.dim_param for d in output_info.type.tensor_type.shape.dim]
+    output_shape = [
+        d.dim_value if d.dim_value else d.dim_param for d in output_info.type.tensor_type.shape.dim
+    ]
 
     print(f'  Input: {input_name} {input_shape}')
     print(f'  Output: {output_name} {output_shape}')
@@ -77,10 +81,10 @@ def test_onnx_inference(onnx_path: Path, input_name: str) -> bool:
 
     # Test with different resolutions
     test_shapes = [
-        (1, 3, 736, 736),   # Optimal
-        (1, 3, 960, 960),   # Max
-        (1, 3, 640, 480),   # Common aspect ratio
-        (2, 3, 736, 736),   # Batch of 2
+        (1, 3, 736, 736),  # Optimal
+        (1, 3, 960, 960),  # Max
+        (1, 3, 640, 480),  # Common aspect ratio
+        (2, 3, 736, 736),  # Batch of 2
     ]
 
     for shape in test_shapes:
@@ -191,7 +195,9 @@ def convert_to_tensorrt(
         print('      --fp16 \\')
         print(f'      --minShapes={INPUT_NAME}:1x3x{MIN_RESOLUTION}x{MIN_RESOLUTION} \\')
         print(f'      --optShapes={INPUT_NAME}:1x3x{OPTIMAL_RESOLUTION}x{OPTIMAL_RESOLUTION} \\')
-        print(f'      --maxShapes={INPUT_NAME}:{max_batch_size}x3x{MAX_RESOLUTION}x{MAX_RESOLUTION}')
+        print(
+            f'      --maxShapes={INPUT_NAME}:{max_batch_size}x3x{MAX_RESOLUTION}x{MAX_RESOLUTION}'
+        )
         return None
 
     except Exception as e:

@@ -13,7 +13,7 @@ Endpoints:
 """
 
 import logging
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
 from fastapi.responses import ORJSONResponse
@@ -55,28 +55,30 @@ class AllIndexStatsResponse(BaseModel):
     total_documents: int = Field(default=0, description='Total documents across all indexes')
     total_size_bytes: int = Field(default=0, description='Total size in bytes')
     total_size_human: str = Field(default='0 B', description='Human-readable total size')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class ImageMetadata(BaseModel):
     """Stored image metadata."""
 
     image_id: str = Field(..., description='Image identifier')
-    image_path: str | None = Field(None, description='Original file path')
-    width: int | None = Field(None, description='Image width in pixels')
-    height: int | None = Field(None, description='Image height in pixels')
-    indexed_at: str | None = Field(None, description='Indexing timestamp')
-    imohash: str | None = Field(None, description='Content hash for deduplication')
-    file_size_bytes: int | None = Field(None, description='File size in bytes')
+    image_path: str | None = Field(default=None, description='Original file path')
+    width: int | None = Field(default=None, description='Image width in pixels')
+    height: int | None = Field(default=None, description='Image height in pixels')
+    indexed_at: str | None = Field(default=None, description='Indexing timestamp')
+    imohash: str | None = Field(default=None, description='Content hash for deduplication')
+    file_size_bytes: int | None = Field(default=None, description='File size in bytes')
 
     # Duplicate info
-    duplicate_group_id: str | None = Field(None, description='Duplicate group if assigned')
-    is_duplicate_primary: bool | None = Field(None, description='Whether this is the primary')
-    duplicate_score: float | None = Field(None, description='Similarity to primary')
+    duplicate_group_id: str | None = Field(default=None, description='Duplicate group if assigned')
+    is_duplicate_primary: bool | None = Field(
+        default=None, description='Whether this is the primary'
+    )
+    duplicate_score: float | None = Field(default=None, description='Similarity to primary')
 
     # Cluster info
-    cluster_id: int | None = Field(None, description='Assigned cluster ID')
-    cluster_distance: float | None = Field(None, description='Distance to cluster centroid')
+    cluster_id: int | None = Field(default=None, description='Assigned cluster ID')
+    cluster_distance: float | None = Field(default=None, description='Distance to cluster centroid')
 
 
 class ImageQueryResponse(BaseModel):
@@ -86,7 +88,7 @@ class ImageQueryResponse(BaseModel):
     image_id: str = Field(..., description='Queried image ID')
 
     # Metadata
-    metadata: ImageMetadata | None = Field(None, description='Image metadata')
+    metadata: ImageMetadata | None = Field(default=None, description='Image metadata')
 
     # What indexes contain this image
     indexed_in: list[str] = Field(default_factory=list, description='Indexes containing this image')
@@ -100,10 +102,10 @@ class ImageQueryResponse(BaseModel):
 
     # Optional: Include embedding
     global_embedding: list[float] | None = Field(
-        None, description='512-dim CLIP embedding (if include_embedding=True)'
+        default=None, description='512-dim CLIP embedding (if include_embedding=True)'
     )
 
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class DeleteImageResponse(BaseModel):
@@ -113,7 +115,7 @@ class DeleteImageResponse(BaseModel):
     image_id: str = Field(..., description='Deleted image ID')
     deleted_from: list[str] = Field(default_factory=list, description='Indexes deleted from')
     total_deleted: int = Field(default=0, description='Total documents deleted')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class DuplicateGroupSummary(BaseModel):
@@ -121,7 +123,7 @@ class DuplicateGroupSummary(BaseModel):
 
     group_id: str = Field(..., description='Duplicate group ID')
     primary_image_id: str = Field(..., description='Primary image in group')
-    primary_image_path: str | None = Field(None, description='Primary image path')
+    primary_image_path: str | None = Field(default=None, description='Primary image path')
     member_count: int = Field(..., description='Total images in group')
 
 
@@ -136,19 +138,19 @@ class DuplicateGroupsResponse(BaseModel):
     groups: list[DuplicateGroupSummary] = Field(
         default_factory=list, description='Duplicate groups'
     )
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class DuplicateGroupMember(BaseModel):
     """Member of a duplicate group."""
 
     image_id: str = Field(..., description='Image identifier')
-    image_path: str | None = Field(None, description='Image file path')
+    image_path: str | None = Field(default=None, description='Image file path')
     is_primary: bool = Field(default=False, description='Whether this is the primary')
-    duplicate_score: float | None = Field(None, description='Similarity to primary')
-    width: int | None = Field(None, description='Image width')
-    height: int | None = Field(None, description='Image height')
-    indexed_at: str | None = Field(None, description='Indexing timestamp')
+    duplicate_score: float | None = Field(default=None, description='Similarity to primary')
+    width: int | None = Field(default=None, description='Image width')
+    height: int | None = Field(default=None, description='Image height')
+    indexed_at: str | None = Field(default=None, description='Indexing timestamp')
 
 
 class DuplicateGroupDetailResponse(BaseModel):
@@ -157,10 +159,8 @@ class DuplicateGroupDetailResponse(BaseModel):
     status: str = Field(..., description="'success' or 'error'")
     group_id: str = Field(..., description='Duplicate group ID')
     member_count: int = Field(default=0, description='Total members')
-    members: list[DuplicateGroupMember] = Field(
-        default_factory=list, description='Group members'
-    )
-    error: str | None = Field(None, description='Error message if failed')
+    members: list[DuplicateGroupMember] = Field(default_factory=list, description='Group members')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class DuplicateStatsResponse(BaseModel):
@@ -172,7 +172,7 @@ class DuplicateStatsResponse(BaseModel):
     ungrouped_images: int = Field(default=0, description='Images not in any group')
     duplicate_groups: int = Field(default=0, description='Number of duplicate groups')
     average_group_size: float = Field(default=0, description='Average images per group')
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 # =============================================================================
@@ -182,11 +182,12 @@ class DuplicateStatsResponse(BaseModel):
 
 def format_bytes(size_bytes: int) -> str:
     """Convert bytes to human-readable format."""
+    size: float = float(size_bytes)
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if abs(size_bytes) < 1024.0:
-            return f'{size_bytes:.1f} {unit}'
-        size_bytes /= 1024.0
-    return f'{size_bytes:.1f} PB'
+        if abs(size) < 1024.0:
+            return f'{size:.1f} {unit}'
+        size /= 1024.0
+    return f'{size:.1f} PB'
 
 
 # =============================================================================
@@ -258,9 +259,7 @@ async def get_all_stats(
 async def get_image_data(
     search_service: VisualSearchDep,
     image_id: Annotated[str, Path(description='Image identifier')],
-    include_embedding: Annotated[
-        bool, Query(description='Include 512-dim CLIP embedding')
-    ] = False,
+    include_embedding: Annotated[bool, Query(description='Include 512-dim CLIP embedding')] = False,
 ):
     """
     Get stored data and metadata for an image.
@@ -325,8 +324,9 @@ async def get_image_data(
             vehicles_count = vehicles_resp.get('count', 0)
             if vehicles_count > 0:
                 indexed_in.append('vehicles')
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist - continue checking other indexes
+            logger.debug('Could not check vehicles index: %s', e)
 
         # Count people for this image
         people_count = 0
@@ -338,8 +338,9 @@ async def get_image_data(
             people_count = people_resp.get('count', 0)
             if people_count > 0:
                 indexed_in.append('people')
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist - continue checking other indexes
+            logger.debug('Could not check people index: %s', e)
 
         # Count faces for this image
         faces_count = 0
@@ -351,8 +352,9 @@ async def get_image_data(
             faces_count = faces_resp.get('count', 0)
             if faces_count > 0:
                 indexed_in.append('faces')
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist - continue checking other indexes
+            logger.debug('Could not check faces index: %s', e)
 
         # Check OCR
         has_ocr = False
@@ -364,8 +366,9 @@ async def get_image_data(
             has_ocr = ocr_resp.get('count', 0) > 0
             if has_ocr:
                 indexed_in.append('ocr')
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist - continue checking other indexes
+            logger.debug('Could not check OCR index: %s', e)
 
         # Get embedding if requested
         global_embedding = None
@@ -425,8 +428,9 @@ async def delete_image(
             await client.delete(index=IndexName.GLOBAL.value, id=image_id)
             deleted_from.append('global')
             total_deleted += 1
-        except Exception:
-            pass  # Not found is OK
+        except Exception as e:
+            # Not found is OK - document may not exist in this index
+            logger.debug('Could not delete from global index: %s', e)
 
         # Delete from vehicles (by query - multiple docs per image)
         try:
@@ -438,8 +442,9 @@ async def delete_image(
             if count > 0:
                 deleted_from.append('vehicles')
                 total_deleted += count
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist or document may not be in this index - continue with other indexes
+            logger.debug('Could not delete from vehicles index: %s', e)
 
         # Delete from people
         try:
@@ -451,8 +456,9 @@ async def delete_image(
             if count > 0:
                 deleted_from.append('people')
                 total_deleted += count
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist or document may not be in this index - continue with other indexes
+            logger.debug('Could not delete from people index: %s', e)
 
         # Delete from faces
         try:
@@ -464,16 +470,18 @@ async def delete_image(
             if count > 0:
                 deleted_from.append('faces')
                 total_deleted += count
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist or document may not be in this index - continue with other indexes
+            logger.debug('Could not delete from faces index: %s', e)
 
         # Delete from OCR
         try:
             await client.delete(index=IndexName.OCR.value, id=image_id)
             deleted_from.append('ocr')
             total_deleted += 1
-        except Exception:
-            pass
+        except Exception as e:
+            # Index may not exist or document may not be in OCR index - continue
+            logger.debug('Could not delete from OCR index: %s', e)
 
         if total_deleted == 0:
             return DeleteImageResponse(

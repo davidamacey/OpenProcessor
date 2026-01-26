@@ -17,7 +17,7 @@ from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.schemas.detection import ImageMetadata
-from src.services.ocr_service import OcrService, get_ocr_service
+from src.services.ocr_service import OcrService
 
 
 logger = logging.getLogger(__name__)
@@ -38,9 +38,7 @@ class TextRegion(BaseModel):
     """Single detected text region."""
 
     text: str = Field(..., description='Recognized text string')
-    box: list[float] = Field(
-        ..., description='Quad box [x1,y1,x2,y2,x3,y3,x4,y4] in pixels'
-    )
+    box: list[float] = Field(..., description='Quad box [x1,y1,x2,y2,x3,y3,x4,y4] in pixels')
     box_normalized: list[float] = Field(
         ..., description='Axis-aligned box [x1,y1,x2,y2] normalized [0,1]'
     )
@@ -62,13 +60,13 @@ class OcrPredictResponse(BaseModel):
     num_texts: int = Field(default=0, description='Number of text regions detected')
 
     # Image metadata
-    image: ImageMetadata | None = Field(None, description='Original image dimensions')
+    image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
 
     # Timing
-    total_time_ms: float | None = Field(None, description='Processing time in ms')
+    total_time_ms: float | None = Field(default=None, description='Processing time in ms')
 
     # Error info
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class BatchOcrResult(BaseModel):
@@ -77,7 +75,7 @@ class BatchOcrResult(BaseModel):
     filename: str = Field(..., description='Original filename')
     image_index: int = Field(..., description='Index in batch')
     status: str = Field(default='success', description="'success' or 'error'")
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
     # OCR results
     texts: list[str] = Field(default_factory=list, description='Detected text strings')
@@ -85,7 +83,7 @@ class BatchOcrResult(BaseModel):
     num_texts: int = Field(default=0, description='Number of text regions')
 
     # Image metadata
-    image: ImageMetadata | None = Field(None, description='Image dimensions')
+    image: ImageMetadata | None = Field(default=None, description='Image dimensions')
 
 
 class BatchOcrResponse(BaseModel):
@@ -97,13 +95,13 @@ class BatchOcrResponse(BaseModel):
     failed_images: int = Field(..., description='Failed count')
 
     results: list[BatchOcrResult] = Field(default_factory=list, description='Per-image results')
-    failures: list[dict] | None = Field(None, description='Failure details')
+    failures: list[dict] | None = Field(default=None, description='Failure details')
 
     # Aggregated stats
     total_text_regions: int = Field(default=0, description='Sum of text regions')
     images_with_text: int = Field(default=0, description='Images where text was found')
 
-    total_time_ms: float | None = Field(None, description='Total processing time in ms')
+    total_time_ms: float | None = Field(default=None, description='Total processing time in ms')
 
 
 # =============================================================================
@@ -165,23 +163,22 @@ def ocr_predict(
             )
 
         # Build response
-        regions = []
-        for i in range(result.get('num_texts', 0)):
-            regions.append(
-                TextRegion(
-                    text=result['texts'][i] if i < len(result.get('texts', [])) else '',
-                    box=result['boxes'][i] if i < len(result.get('boxes', [])) else [],
-                    box_normalized=result['boxes_normalized'][i]
-                    if i < len(result.get('boxes_normalized', []))
-                    else [],
-                    det_score=result['det_scores'][i]
-                    if i < len(result.get('det_scores', []))
-                    else 0.0,
-                    rec_score=result['rec_scores'][i]
-                    if i < len(result.get('rec_scores', []))
-                    else 0.0,
-                )
+        texts = result.get('texts', [])
+        boxes = result.get('boxes', [])
+        boxes_normalized = result.get('boxes_normalized', [])
+        det_scores = result.get('det_scores', [])
+        rec_scores = result.get('rec_scores', [])
+
+        regions = [
+            TextRegion(
+                text=texts[i] if i < len(texts) else '',
+                box=boxes[i] if i < len(boxes) else [],
+                box_normalized=boxes_normalized[i] if i < len(boxes_normalized) else [],
+                det_score=det_scores[i] if i < len(det_scores) else 0.0,
+                rec_score=rec_scores[i] if i < len(rec_scores) else 0.0,
             )
+            for i in range(result.get('num_texts', 0))
+        ]
 
         image_size = result.get('image_size', [0, 0])
 
@@ -205,18 +202,14 @@ def ocr_predict(
 
 @router.post('/batch', response_model=BatchOcrResponse)
 def ocr_batch(
-    images: Annotated[
-        list[UploadFile], File(description='Image files (JPEG/PNG), max 32')
-    ],
+    images: Annotated[list[UploadFile], File(description='Image files (JPEG/PNG), max 32')],
     min_det_score: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum detection confidence')
     ] = 0.5,
     min_rec_score: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum recognition confidence')
     ] = 0.8,
-    max_workers: Annotated[
-        int, Query(ge=1, le=32, description='Parallel processing threads')
-    ] = 16,
+    max_workers: Annotated[int, Query(ge=1, le=32, description='Parallel processing threads')] = 16,
 ):
     """
     Batch OCR processing for multiple images.
@@ -259,19 +252,23 @@ def ocr_batch(
         try:
             image_bytes = img.file.read()
             if not image_bytes:
-                failures.append({
-                    'filename': filename,
-                    'index': idx,
-                    'error': 'Empty image file',
-                })
+                failures.append(
+                    {
+                        'filename': filename,
+                        'index': idx,
+                        'error': 'Empty image file',
+                    }
+                )
                 continue
             images_data.append((image_bytes, filename, idx))
         except Exception as e:
-            failures.append({
-                'filename': filename,
-                'index': idx,
-                'error': str(e),
-            })
+            failures.append(
+                {
+                    'filename': filename,
+                    'index': idx,
+                    'error': str(e),
+                }
+            )
 
     if not images_data:
         return BatchOcrResponse(
@@ -302,11 +299,13 @@ def ocr_batch(
         _, filename, original_idx = images_data[i]
 
         if ocr_result.get('status') == 'error':
-            failures.append({
-                'filename': filename,
-                'index': original_idx,
-                'error': ocr_result.get('error', 'OCR failed'),
-            })
+            failures.append(
+                {
+                    'filename': filename,
+                    'index': original_idx,
+                    'error': ocr_result.get('error', 'OCR failed'),
+                }
+            )
             continue
 
         num_texts = ocr_result.get('num_texts', 0)
@@ -414,14 +413,16 @@ async def search_by_ocr(
             source = hit['_source']
             highlight = hit.get('highlight', {})
 
-            results.append({
-                'image_id': source.get('image_id', ''),
-                'image_path': source.get('image_path', ''),
-                'score': hit.get('_score', 0),
-                'full_text': source.get('full_text', ''),
-                'num_texts': source.get('num_texts', 0),
-                'highlight': highlight.get('full_text', highlight.get('texts', [])),
-            })
+            results.append(
+                {
+                    'image_id': source.get('image_id', ''),
+                    'image_path': source.get('image_path', ''),
+                    'score': hit.get('_score', 0),
+                    'full_text': source.get('full_text', ''),
+                    'num_texts': source.get('num_texts', 0),
+                    'highlight': highlight.get('full_text', highlight.get('texts', [])),
+                }
+            )
 
         return {
             'status': 'success',

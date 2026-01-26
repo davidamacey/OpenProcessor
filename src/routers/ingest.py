@@ -64,7 +64,9 @@ class NearDuplicateInfo(BaseModel):
         ..., description='Action taken for duplicate grouping'
     )
     group_id: str = Field(..., description='Duplicate group ID')
-    similarity: float = Field(..., ge=0.0, le=1.0, description='Similarity score with matched image')
+    similarity: float = Field(
+        ..., ge=0.0, le=1.0, description='Similarity score with matched image'
+    )
     matched_image: str = Field(..., description='Image ID of the matched duplicate')
 
 
@@ -83,37 +85,39 @@ class IngestResponse(BaseModel):
     Includes status, indexing results, and optional duplicate/OCR information.
     """
 
-    status: Literal['success', 'duplicate', 'error'] = Field(
-        ..., description='Ingestion status'
-    )
+    status: Literal['success', 'duplicate', 'error'] = Field(..., description='Ingestion status')
     image_id: str = Field(..., description='Image identifier')
     num_detections: int = Field(default=0, ge=0, description='Number of YOLO detections')
     num_faces: int = Field(default=0, ge=0, description='Number of faces detected')
     embedding_norm: float = Field(default=0.0, description='L2 norm of global embedding')
-    imohash: str | None = Field(None, description='Image content hash for duplicate detection')
+    imohash: str | None = Field(
+        default=None, description='Image content hash for duplicate detection'
+    )
     indexed: IndexedCounts | None = Field(
-        None, description='Counts of documents indexed per category'
+        default=None, description='Counts of documents indexed per category'
     )
     near_duplicate: NearDuplicateInfo | None = Field(
-        None, description='Near-duplicate grouping result (if detected)'
+        default=None, description='Near-duplicate grouping result (if detected)'
     )
-    ocr: OCRInfo | None = Field(None, description='OCR processing result (if enabled)')
+    ocr: OCRInfo | None = Field(default=None, description='OCR processing result (if enabled)')
     existing_image_id: str | None = Field(
-        None, description='ID of existing image (if duplicate)'
+        default=None, description='ID of existing image (if duplicate)'
     )
     existing_image_path: str | None = Field(
-        None, description='Path of existing image (if duplicate)'
+        default=None, description='Path of existing image (if duplicate)'
     )
-    message: str | None = Field(None, description='Additional status message')
-    error: str | None = Field(None, description='Error message (if status is error)')
-    errors: list[str] | None = Field(None, description='List of non-fatal errors')
-    total_time_ms: float | None = Field(None, description='Processing time in milliseconds')
+    message: str | None = Field(default=None, description='Additional status message')
+    error: str | None = Field(default=None, description='Error message (if status is error)')
+    errors: list[str] | None = Field(default=None, description='List of non-fatal errors')
+    total_time_ms: float | None = Field(default=None, description='Processing time in milliseconds')
 
 
 class BatchIndexedCounts(BaseModel):
     """Aggregate counts for batch ingestion."""
 
-    global_: int = Field(default=0, alias='global', description='Number of global embeddings indexed')
+    global_: int = Field(
+        default=0, alias='global', description='Number of global embeddings indexed'
+    )
     vehicles: int = Field(default=0, description='Number of vehicle detections indexed')
     people: int = Field(default=0, description='Number of person detections indexed')
     faces: int = Field(default=0, description='Number of faces indexed')
@@ -127,7 +131,7 @@ class DuplicateDetail(BaseModel):
     """Details about a detected duplicate."""
 
     image_id: str = Field(..., description='ID of the duplicate image')
-    existing_image_id: str | None = Field(None, description='ID of existing image in index')
+    existing_image_id: str | None = Field(default=None, description='ID of existing image in index')
     imohash: str = Field(..., description='Content hash')
 
 
@@ -156,9 +160,7 @@ class BatchIngestResponse(BaseModel):
     and near-duplicate assignments.
     """
 
-    status: Literal['success', 'partial', 'error'] = Field(
-        ..., description='Overall batch status'
-    )
+    status: Literal['success', 'partial', 'error'] = Field(..., description='Overall batch status')
     total: int = Field(..., ge=0, description='Total images submitted')
     processed: int = Field(default=0, ge=0, description='Successfully processed images')
     duplicates: int = Field(default=0, ge=0, description='Exact duplicates skipped')
@@ -168,15 +170,15 @@ class BatchIngestResponse(BaseModel):
     )
     near_duplicates: int = Field(default=0, ge=0, description='Images assigned to duplicate groups')
     duplicate_details: list[DuplicateDetail] | None = Field(
-        None, description='Details of detected duplicates'
+        default=None, description='Details of detected duplicates'
     )
     error_details: list[ErrorDetail] | None = Field(
-        None, description='Details of failed images'
+        default=None, description='Details of failed images'
     )
     near_duplicate_details: list[NearDuplicateDetail] | None = Field(
-        None, description='Details of near-duplicate assignments'
+        default=None, description='Details of near-duplicate assignments'
     )
-    total_time_ms: float | None = Field(None, description='Total batch processing time')
+    total_time_ms: float | None = Field(default=None, description='Total batch processing time')
 
 
 class DirectoryIngestResponse(BaseModel):
@@ -200,10 +202,10 @@ class DirectoryIngestResponse(BaseModel):
     )
     near_duplicates: int = Field(default=0, ge=0, description='Images assigned to duplicate groups')
     skipped_extensions: list[str] | None = Field(
-        None, description='File extensions that were skipped'
+        default=None, description='File extensions that were skipped'
     )
-    total_time_ms: float | None = Field(None, description='Total processing time')
-    error: str | None = Field(None, description='Error message if status is error')
+    total_time_ms: float | None = Field(default=None, description='Total processing time')
+    error: str | None = Field(default=None, description='Error message if status is error')
 
 
 # =============================================================================
@@ -742,10 +744,7 @@ async def ingest_directory(
         else:
             all_files = list(dir_path.glob('*'))
 
-        image_files = [
-            f for f in all_files
-            if f.is_file() and f.suffix.lower() in image_extensions
-        ]
+        image_files = [f for f in all_files if f.is_file() and f.suffix.lower() in image_extensions]
 
         # Track skipped extensions
         skipped_extensions = set()

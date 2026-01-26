@@ -43,11 +43,13 @@ from src.routers import (
 # =============================================================================
 # Shared Resources (managed by lifespan)
 # =============================================================================
-# Shared ThreadPoolExecutor for CPU-bound tasks (avoid per-request creation overhead)
-_shared_executor: ThreadPoolExecutor | None = None
 
-# High-throughput async Triton pool with true connection pooling
-_async_triton_pool: AsyncTritonPool | None = None
+
+class AppResources:
+    """Container for shared application resources."""
+
+    shared_executor: ThreadPoolExecutor | None = None
+    async_triton_pool: AsyncTritonPool | None = None
 
 
 def get_shared_executor() -> ThreadPoolExecutor:
@@ -63,9 +65,9 @@ def get_shared_executor() -> ThreadPoolExecutor:
     Raises:
         RuntimeError: If called before lifespan initialization
     """
-    if _shared_executor is None:
+    if AppResources.shared_executor is None:
         raise RuntimeError('Shared executor not initialized. Call during lifespan.')
-    return _shared_executor
+    return AppResources.shared_executor
 
 
 def get_async_triton_pool() -> AsyncTritonPool:
@@ -84,9 +86,9 @@ def get_async_triton_pool() -> AsyncTritonPool:
     Raises:
         RuntimeError: If called before lifespan initialization
     """
-    if _async_triton_pool is None:
+    if AppResources.async_triton_pool is None:
         raise RuntimeError('AsyncTritonPool not initialized. Call during lifespan.')
-    return _async_triton_pool
+    return AppResources.async_triton_pool
 
 
 logging.basicConfig(level=logging.INFO)
@@ -112,8 +114,6 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     - Close all Triton gRPC connections
     - Close OpenSearch connections
     """
-    global _shared_executor, _async_triton_pool
-
     settings = get_settings()
 
     # =========================================================================
@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
 
     # Create shared ThreadPoolExecutor for CPU-bound tasks
     # (JPEG decode, resize, preprocessing)
-    _shared_executor = ThreadPoolExecutor(
+    AppResources.shared_executor = ThreadPoolExecutor(
         max_workers=64,
         thread_name_prefix='ingest-worker-',
     )
@@ -131,13 +131,13 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
 
     # Create high-throughput async Triton connection pool
     # 4 gRPC channels with different user-agents = separate TCP connections
-    _async_triton_pool = AsyncTritonPool(
+    AppResources.async_triton_pool = AsyncTritonPool(
         url=settings.triton_url,
         pool_size=4,
         max_concurrent=64,
         verbose=False,
     )
-    await _async_triton_pool.initialize()
+    await AppResources.async_triton_pool.initialize()
     logger.info('AsyncTritonPool initialized (4 channels, max_concurrent=64)')
 
     logger.info('=== SERVICE READY ===')
@@ -152,17 +152,17 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     logger.info('=== SHUTDOWN: Cleaning Up ===')
 
     # Close AsyncTritonPool
-    if _async_triton_pool is not None:
+    if AppResources.async_triton_pool is not None:
         try:
-            await _async_triton_pool.close()
+            await AppResources.async_triton_pool.close()
             logger.info('AsyncTritonPool closed')
         except Exception as e:
             logger.warning(f'Error closing AsyncTritonPool: {e}')
 
     # Shutdown shared executor
-    if _shared_executor is not None:
+    if AppResources.shared_executor is not None:
         try:
-            _shared_executor.shutdown(wait=True)
+            AppResources.shared_executor.shutdown(wait=True)
             logger.info('Shared ThreadPoolExecutor shutdown')
         except Exception as e:
             logger.warning(f'Error shutting down executor: {e}')
@@ -293,17 +293,17 @@ def create_app() -> FastAPI:
         return response
 
     # Include Routers - Clean API structure without track naming
-    application.include_router(health_router)      # /health - Health checks
-    application.include_router(detect_router)      # /detect - Object detection
-    application.include_router(faces_router)       # /faces - Face detection/recognition
-    application.include_router(embed_router)       # /embed - CLIP embeddings
-    application.include_router(search_router)      # /search - Visual similarity search
-    application.include_router(ingest_router)      # /ingest - Data ingestion
-    application.include_router(analyze_router)     # /analyze - Combined analysis
-    application.include_router(clusters_router)    # /clusters - Clustering/albums
-    application.include_router(query_router)       # /query - Data retrieval
-    application.include_router(ocr_router)         # /ocr - Text extraction
-    application.include_router(models_router)      # /models - Model management
+    application.include_router(health_router)  # /health - Health checks
+    application.include_router(detect_router)  # /detect - Object detection
+    application.include_router(faces_router)  # /faces - Face detection/recognition
+    application.include_router(embed_router)  # /embed - CLIP embeddings
+    application.include_router(search_router)  # /search - Visual similarity search
+    application.include_router(ingest_router)  # /ingest - Data ingestion
+    application.include_router(analyze_router)  # /analyze - Combined analysis
+    application.include_router(clusters_router)  # /clusters - Clustering/albums
+    application.include_router(query_router)  # /query - Data retrieval
+    application.include_router(ocr_router)  # /ocr - Text extraction
+    application.include_router(models_router)  # /models - Model management
 
     return application
 
