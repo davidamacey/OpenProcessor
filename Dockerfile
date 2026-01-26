@@ -34,18 +34,18 @@ COPY requirements.txt .
 # =============================================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Runtime dependencies
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
-    curl \
-    jq \
-    git \
+    libgl1=1.7.0-1 \
+    libglib2.0-0=2.82.4-1 \
+    libgomp1=14.2.0-8 \
+    curl=8.12.0-1 \
+    jq=1.7.1-4 \
+    git=1:2.47.1-2 \
     # Build dependencies (temporary, for compiling C extensions)
-    gcc \
-    g++ \
-    cmake \
-    make \
-    && pip install --no-cache-dir --upgrade pip setuptools wheel \
+    gcc=4:14.2.0-1 \
+    g++=4:14.2.0-1 \
+    cmake=3.31.3-1 \
+    make=4.3-4.1 \
+    && pip install --no-cache-dir --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
     && pip install --no-cache-dir \
         --extra-index-url https://pypi.nvidia.com \
         -r requirements.txt \

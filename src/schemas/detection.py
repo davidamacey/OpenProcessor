@@ -63,21 +63,19 @@ class InferenceResult(BaseModel):
     status: str = Field(default='success', description="'success' or 'error'")
 
     # Image metadata
-    image: ImageMetadata | None = Field(None, description='Original image dimensions')
+    image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
 
     # Model metadata
-    model: ModelMetadata | None = Field(None, description='Model and backend information')
+    model: ModelMetadata | None = Field(default=None, description='Model and backend information')
 
     # Pipeline metadata
-    pipeline: str | None = Field(None, description='Inference pipeline used')
-    preprocessing: str | None = Field(
-        None, description='Preprocessing method (cpu, gpu)'
-    )
-    nms_location: str | None = Field(None, description='NMS execution location (cpu, gpu)')
+    pipeline: str | None = Field(default=None, description='Inference pipeline used')
+    preprocessing: str | None = Field(default=None, description='Preprocessing method (cpu, gpu)')
+    nms_location: str | None = Field(default=None, description='NMS execution location (cpu, gpu)')
 
     # Timing (injected by middleware for consistency)
     total_time_ms: float | None = Field(
-        None, description='Total end-to-end request time in milliseconds'
+        default=None, description='Total end-to-end request time in milliseconds'
     )
 
 
@@ -91,9 +89,9 @@ class BatchImageResult(BaseModel):
     )
     num_detections: int = Field(default=0, description='Number of detections')
     status: str = Field(default='success', description="'success' or 'error'")
-    pipeline: str | None = Field(None, description='Inference pipeline used')
-    image: ImageMetadata | None = Field(None, description='Image dimensions')
-    error: str | None = Field(None, description='Error message if failed')
+    pipeline: str | None = Field(default=None, description='Inference pipeline used')
+    image: ImageMetadata | None = Field(default=None, description='Image dimensions')
+    error: str | None = Field(default=None, description='Error message if failed')
 
 
 class BatchInferenceResult(BaseModel):
@@ -107,8 +105,8 @@ class BatchInferenceResult(BaseModel):
     processed_images: int = Field(..., description='Successfully processed images')
     failed_images: int = Field(..., description='Failed images count')
     results: list[BatchImageResult] = Field(default_factory=list, description='Per-image results')
-    failures: list[dict] | None = Field(None, description='Details of failed images')
+    failures: list[dict] | None = Field(default=None, description='Details of failed images')
     status: str = Field(default='success', description='Overall status')
     total_time_ms: float | None = Field(
-        None, description='Total batch processing time in milliseconds'
+        default=None, description='Total batch processing time in milliseconds'
     )

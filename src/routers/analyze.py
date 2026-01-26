@@ -11,7 +11,8 @@ Endpoints:
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Annotated, Any
+from functools import lru_cache
+from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import ORJSONResponse
@@ -42,7 +43,7 @@ class DetectionResult(BaseModel):
     box: list[float] = Field(..., description='Bounding box [x1, y1, x2, y2] normalized [0,1]')
     confidence: float = Field(..., description='Detection confidence score')
     class_id: int = Field(..., description='COCO class ID (0-79)')
-    class_name: str | None = Field(None, description='Human-readable class name')
+    class_name: str | None = Field(default=None, description='Human-readable class name')
 
 
 class FaceResult(BaseModel):
@@ -53,9 +54,9 @@ class FaceResult(BaseModel):
         ..., description='5-point facial landmarks [lx1,ly1,...,lx5,ly5] normalized [0,1]'
     )
     score: float = Field(..., description='Detection confidence score')
-    quality: float | None = Field(None, description='Face quality score')
+    quality: float | None = Field(default=None, description='Face quality score')
     embedding: list[float] | None = Field(
-        None, description='512-dim ArcFace embedding (if include_embeddings=True)'
+        default=None, description='512-dim ArcFace embedding (if include_embeddings=True)'
     )
 
 
@@ -70,7 +71,9 @@ class OcrResult(BaseModel):
         default_factory=list, description='Axis-aligned boxes [x1,y1,x2,y2] normalized'
     )
     det_scores: list[float] = Field(default_factory=list, description='Detection confidence scores')
-    rec_scores: list[float] = Field(default_factory=list, description='Recognition confidence scores')
+    rec_scores: list[float] = Field(
+        default_factory=list, description='Recognition confidence scores'
+    )
     full_text: str = Field(default='', description='All text concatenated')
     num_texts: int = Field(default=0, description='Number of text regions')
 
@@ -79,7 +82,7 @@ class AnalyzeResponse(BaseModel):
     """Response for combined analysis endpoint."""
 
     status: str = Field(default='success', description="'success' or 'error'")
-    image: ImageMetadata | None = Field(None, description='Original image dimensions')
+    image: ImageMetadata | None = Field(default=None, description='Original image dimensions')
 
     # YOLO object detection
     detections: list[DetectionResult] = Field(
@@ -93,19 +96,19 @@ class AnalyzeResponse(BaseModel):
 
     # CLIP embedding
     global_embedding: list[float] | None = Field(
-        None, description='512-dim MobileCLIP embedding (if include_embedding=True)'
+        default=None, description='512-dim MobileCLIP embedding (if include_embedding=True)'
     )
-    embedding_norm: float | None = Field(None, description='L2 norm of embedding')
+    embedding_norm: float | None = Field(default=None, description='L2 norm of embedding')
 
     # OCR
-    ocr: OcrResult | None = Field(None, description='OCR results (if enable_ocr=True)')
+    ocr: OcrResult | None = Field(default=None, description='OCR results (if enable_ocr=True)')
 
     # Timing
-    total_time_ms: float | None = Field(None, description='Total processing time in ms')
+    total_time_ms: float | None = Field(default=None, description='Total processing time in ms')
 
     # Per-component timing
     timing: dict[str, float] | None = Field(
-        None, description='Per-component timing breakdown in ms'
+        default=None, description='Per-component timing breakdown in ms'
     )
 
 
@@ -115,18 +118,18 @@ class BatchAnalyzeResult(BaseModel):
     filename: str = Field(..., description='Original filename')
     image_index: int = Field(..., description='Index in batch')
     status: str = Field(default='success', description="'success' or 'error'")
-    error: str | None = Field(None, description='Error message if failed')
+    error: str | None = Field(default=None, description='Error message if failed')
 
-    image: ImageMetadata | None = Field(None, description='Image dimensions')
+    image: ImageMetadata | None = Field(default=None, description='Image dimensions')
     num_detections: int = Field(default=0, description='Number of objects detected')
     num_faces: int = Field(default=0, description='Number of faces detected')
     has_text: bool = Field(default=False, description='Whether OCR found text')
 
     # Full results only if requested
-    detections: list[DetectionResult] | None = Field(None)
-    faces: list[FaceResult] | None = Field(None)
-    global_embedding: list[float] | None = Field(None)
-    ocr: OcrResult | None = Field(None)
+    detections: list[DetectionResult] | None = Field(default=None)
+    faces: list[FaceResult] | None = Field(default=None)
+    global_embedding: list[float] | None = Field(default=None)
+    ocr: OcrResult | None = Field(default=None)
 
 
 class BatchAnalyzeResponse(BaseModel):
@@ -138,14 +141,16 @@ class BatchAnalyzeResponse(BaseModel):
     failed_images: int = Field(..., description='Failed images count')
 
     results: list[BatchAnalyzeResult] = Field(default_factory=list, description='Per-image results')
-    failures: list[dict] | None = Field(None, description='Details of failed images')
+    failures: list[dict] | None = Field(default=None, description='Details of failed images')
 
     # Aggregated stats
     total_detections: int = Field(default=0, description='Sum of detections across all images')
     total_faces: int = Field(default=0, description='Sum of faces across all images')
     images_with_text: int = Field(default=0, description='Number of images with OCR text')
 
-    total_time_ms: float | None = Field(None, description='Total batch processing time in ms')
+    total_time_ms: float | None = Field(
+        default=None, description='Total batch processing time in ms'
+    )
 
 
 # =============================================================================
@@ -153,22 +158,85 @@ class BatchAnalyzeResponse(BaseModel):
 # =============================================================================
 
 COCO_CLASSES = {
-    0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane',
-    5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light',
-    10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench',
-    14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow',
-    20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack',
-    25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee',
-    30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat',
-    35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket',
-    39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife',
-    44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich',
-    49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza',
-    54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant',
-    59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop',
-    64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave',
-    69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book',
-    74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier',
+    0: 'person',
+    1: 'bicycle',
+    2: 'car',
+    3: 'motorcycle',
+    4: 'airplane',
+    5: 'bus',
+    6: 'train',
+    7: 'truck',
+    8: 'boat',
+    9: 'traffic light',
+    10: 'fire hydrant',
+    11: 'stop sign',
+    12: 'parking meter',
+    13: 'bench',
+    14: 'bird',
+    15: 'cat',
+    16: 'dog',
+    17: 'horse',
+    18: 'sheep',
+    19: 'cow',
+    20: 'elephant',
+    21: 'bear',
+    22: 'zebra',
+    23: 'giraffe',
+    24: 'backpack',
+    25: 'umbrella',
+    26: 'handbag',
+    27: 'tie',
+    28: 'suitcase',
+    29: 'frisbee',
+    30: 'skis',
+    31: 'snowboard',
+    32: 'sports ball',
+    33: 'kite',
+    34: 'baseball bat',
+    35: 'baseball glove',
+    36: 'skateboard',
+    37: 'surfboard',
+    38: 'tennis racket',
+    39: 'bottle',
+    40: 'wine glass',
+    41: 'cup',
+    42: 'fork',
+    43: 'knife',
+    44: 'spoon',
+    45: 'bowl',
+    46: 'banana',
+    47: 'apple',
+    48: 'sandwich',
+    49: 'orange',
+    50: 'broccoli',
+    51: 'carrot',
+    52: 'hot dog',
+    53: 'pizza',
+    54: 'donut',
+    55: 'cake',
+    56: 'chair',
+    57: 'couch',
+    58: 'potted plant',
+    59: 'bed',
+    60: 'dining table',
+    61: 'toilet',
+    62: 'tv',
+    63: 'laptop',
+    64: 'mouse',
+    65: 'remote',
+    66: 'keyboard',
+    67: 'cell phone',
+    68: 'microwave',
+    69: 'oven',
+    70: 'toaster',
+    71: 'sink',
+    72: 'refrigerator',
+    73: 'book',
+    74: 'clock',
+    75: 'vase',
+    76: 'scissors',
+    77: 'teddy bear',
+    78: 'hair drier',
     79: 'toothbrush',
 }
 
@@ -177,15 +245,11 @@ COCO_CLASSES = {
 # Service Instance
 # =============================================================================
 
-_inference_service: InferenceService | None = None
 
-
+@lru_cache(maxsize=1)
 def get_inference_service() -> InferenceService:
-    """Get or create InferenceService singleton."""
-    global _inference_service
-    if _inference_service is None:
-        _inference_service = InferenceService()
-    return _inference_service
+    """Get or create InferenceService singleton (cached)."""
+    return InferenceService()
 
 
 # =============================================================================
@@ -202,9 +266,7 @@ def analyze_image(
     include_face_embeddings: Annotated[
         bool, Query(description='Include face embeddings in response')
     ] = False,
-    enable_ocr: Annotated[
-        bool, Query(description='Run OCR text extraction')
-    ] = True,
+    enable_ocr: Annotated[bool, Query(description='Run OCR text extraction')] = True,
     confidence: Annotated[
         float, Query(ge=0.0, le=1.0, description='Minimum YOLO detection confidence')
     ] = 0.25,
@@ -249,8 +311,6 @@ def analyze_image(
         ocr_service = get_ocr_service()
 
         # Run all pipelines in parallel using ThreadPoolExecutor
-        results: dict[str, Any] = {}
-
         def run_yolo_and_clip():
             t0 = time.perf_counter()
             # YOLO + CLIP with CPU preprocessing in one call
@@ -378,18 +438,14 @@ def analyze_image(
 
 @router.post('/batch', response_model=BatchAnalyzeResponse)
 def analyze_batch(
-    images: Annotated[
-        list[UploadFile], File(description='Image files (JPEG/PNG), max 32')
-    ],
+    images: Annotated[list[UploadFile], File(description='Image files (JPEG/PNG), max 32')],
     include_embedding: Annotated[
         bool, Query(description='Include CLIP embeddings in response')
     ] = False,
     include_face_embeddings: Annotated[
         bool, Query(description='Include face embeddings in response')
     ] = False,
-    enable_ocr: Annotated[
-        bool, Query(description='Run OCR text extraction')
-    ] = False,
+    enable_ocr: Annotated[bool, Query(description='Run OCR text extraction')] = False,
     include_full_results: Annotated[
         bool, Query(description='Include full detection/face lists (can be large)')
     ] = False,
@@ -449,17 +505,20 @@ def analyze_batch(
             image_bytes = img.file.read()
 
             if not image_bytes:
-                failures.append({
-                    'filename': filename,
-                    'index': idx,
-                    'error': 'Empty image file',
-                })
+                failures.append(
+                    {
+                        'filename': filename,
+                        'index': idx,
+                        'error': 'Empty image file',
+                    }
+                )
                 continue
 
             # Run unified pipeline
+            import numpy as np
+
             from src.clients.triton_client import get_triton_client
             from src.config import get_settings
-            import numpy as np
 
             settings = get_settings()
             client = get_triton_client(settings.triton_url)
@@ -478,7 +537,7 @@ def analyze_batch(
             # Parse results
             num_dets = yolo_clip_result.get('num_dets', 0)
             num_faces = faces_result.get('num_faces', 0)
-            has_text = ocr_result and ocr_result.get('num_texts', 0) > 0
+            has_text = bool(ocr_result and ocr_result.get('num_texts', 0) > 0)
 
             total_dets += num_dets
             total_faces += num_faces
@@ -510,7 +569,9 @@ def analyze_batch(
                     for i in range(len(boxes)):
                         if scores[i] >= confidence:
                             class_id = int(classes[i])
-                            box = boxes[i].tolist() if hasattr(boxes[i], 'tolist') else list(boxes[i])
+                            box = (
+                                boxes[i].tolist() if hasattr(boxes[i], 'tolist') else list(boxes[i])
+                            )
                             detections.append(
                                 DetectionResult(
                                     box=box,
@@ -564,11 +625,13 @@ def analyze_batch(
 
         except Exception as e:
             logger.warning(f'Analysis failed for {filename}: {e}')
-            failures.append({
-                'filename': filename,
-                'index': idx,
-                'error': str(e),
-            })
+            failures.append(
+                {
+                    'filename': filename,
+                    'index': idx,
+                    'error': str(e),
+                }
+            )
 
     return BatchAnalyzeResponse(
         status='success' if results else 'all_failed',

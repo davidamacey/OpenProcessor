@@ -83,6 +83,7 @@ download_lfw() {
     # Verify checksum
     log_info "Verifying checksum..."
     if command -v md5sum &> /dev/null; then
+        local ACTUAL_MD5
         ACTUAL_MD5=$(md5sum "$LFW_FILE" | cut -d' ' -f1)
         if [ "$ACTUAL_MD5" != "$EXPECTED_MD5" ]; then
             log_warn "Checksum mismatch (expected: $EXPECTED_MD5, got: $ACTUAL_MD5)"
@@ -105,8 +106,10 @@ download_lfw() {
     rm -f "$LFW_FILE"
 
     # Verify extraction
-    local num_people=$(ls -d "$LFW_DIR"/*/ 2>/dev/null | wc -l)
-    local num_images=$(find "$LFW_DIR" -name "*.jpg" 2>/dev/null | wc -l)
+    local num_people
+    num_people=$(ls -d "$LFW_DIR"/*/ 2>/dev/null | wc -l)
+    local num_images
+    num_images=$(find "$LFW_DIR" -name "*.jpg" 2>/dev/null | wc -l)
 
     log_info "LFW dataset extracted successfully!"
     log_info "  Location: $LFW_DIR"
@@ -144,8 +147,10 @@ create_test_subset() {
             break
         fi
 
-        local person_name=$(basename "$person_dir")
-        local num_images=$(ls "$person_dir"/*.jpg 2>/dev/null | wc -l)
+        local person_name
+        person_name=$(basename "$person_dir")
+        local num_images
+        num_images=$(ls "$person_dir"/*.jpg 2>/dev/null | wc -l)
 
         if [ "$num_images" -ge "$IMAGES_PER_PERSON" ]; then
             # Copy first N images
@@ -163,7 +168,8 @@ create_test_subset() {
         fi
     done
 
-    local total_images=$(find "$SUBSET_DIR" -name "*.jpg" | wc -l)
+    local total_images
+    total_images=$(find "$SUBSET_DIR" -name "*.jpg" | wc -l)
     log_info "Test subset created successfully!"
     log_info "  Location: $SUBSET_DIR"
     log_info "  People: $count"
@@ -201,8 +207,10 @@ create_test_pairs() {
     for person in "${people[@]}"; do
         local images=("$SUBSET_DIR/$person"/*.jpg)
         if [ ${#images[@]} -ge 2 ]; then
-            local img1=$(basename "${images[0]}")
-            local img2=$(basename "${images[1]}")
+            local img1
+            img1=$(basename "${images[0]}")
+            local img2
+            img2=$(basename "${images[1]}")
             echo "$person $img1 $person $img2 1" >> "$PAIRS_FILE"
             ((pair_count++))
         fi
@@ -213,8 +221,10 @@ create_test_pairs() {
     for ((i=0; i<num_people-1; i++)); do
         local person1="${people[$i]}"
         local person2="${people[$((i+1))]}"
-        local img1=$(ls "$SUBSET_DIR/$person1"/*.jpg | head -1 | xargs basename)
-        local img2=$(ls "$SUBSET_DIR/$person2"/*.jpg | head -1 | xargs basename)
+        local img1
+        img1=$(ls "$SUBSET_DIR/$person1"/*.jpg | head -1 | xargs basename)
+        local img2
+        img2=$(ls "$SUBSET_DIR/$person2"/*.jpg | head -1 | xargs basename)
         echo "$person1 $img1 $person2 $img2 0" >> "$PAIRS_FILE"
         ((pair_count++))
     done
@@ -233,8 +243,10 @@ print_summary() {
     log_info "=========================================="
 
     if [ -d "$FACES_DIR/lfw-deepfunneled" ]; then
-        local lfw_people=$(ls -d "$FACES_DIR/lfw-deepfunneled"/*/ 2>/dev/null | wc -l)
-        local lfw_images=$(find "$FACES_DIR/lfw-deepfunneled" -name "*.jpg" 2>/dev/null | wc -l)
+        local lfw_people
+        lfw_people=$(ls -d "$FACES_DIR/lfw-deepfunneled"/*/ 2>/dev/null | wc -l)
+        local lfw_images
+        lfw_images=$(find "$FACES_DIR/lfw-deepfunneled" -name "*.jpg" 2>/dev/null | wc -l)
         log_info "LFW Deep Funneled:"
         log_info "  Path: test_images/faces/lfw-deepfunneled/"
         log_info "  People: $lfw_people"
@@ -244,8 +256,10 @@ print_summary() {
     fi
 
     if [ -d "$FACES_DIR/test_subset" ]; then
-        local subset_people=$(ls -d "$FACES_DIR/test_subset"/*/ 2>/dev/null | wc -l)
-        local subset_images=$(find "$FACES_DIR/test_subset" -name "*.jpg" 2>/dev/null | wc -l)
+        local subset_people
+        subset_people=$(ls -d "$FACES_DIR/test_subset"/*/ 2>/dev/null | wc -l)
+        local subset_images
+        subset_images=$(find "$FACES_DIR/test_subset" -name "*.jpg" 2>/dev/null | wc -l)
         log_info ""
         log_info "Test Subset:"
         log_info "  Path: test_images/faces/test_subset/"
@@ -254,7 +268,8 @@ print_summary() {
     fi
 
     if [ -f "$FACES_DIR/test_pairs.txt" ]; then
-        local pair_count=$(grep -v "^#" "$FACES_DIR/test_pairs.txt" | grep -v "^$" | wc -l)
+        local pair_count
+        pair_count=$(grep -v "^#" "$FACES_DIR/test_pairs.txt" | grep -v "^$" | wc -l)
         log_info ""
         log_info "Test Pairs:"
         log_info "  Path: test_images/faces/test_pairs.txt"

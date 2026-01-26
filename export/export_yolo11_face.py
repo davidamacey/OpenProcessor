@@ -43,10 +43,12 @@ import numpy as np
 import onnx
 import torch
 
+
 sys.path.insert(0, '/app/src')
 
 # Apply end2end patch for GPU NMS support (must be before ultralytics import)
 from ultralytics_patches import apply_end2end_patch, is_patch_applied
+
 
 if not is_patch_applied():
     apply_end2end_patch()
@@ -96,6 +98,7 @@ def get_model_size(model_path: Path) -> str:
     # Extract size letter from yolov11X-face or yolo11X-face pattern
     # Look for pattern after "yolov11" or "yolo11"
     import re
+
     match = re.search(r'yolov?11([nslmx])', stem)
     if match:
         size_char = match.group(1)
@@ -173,7 +176,9 @@ def export_to_onnx(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(export_path, output_path)
 
-        logger.info(f'  ONNX exported: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)')
+        logger.info(
+            f'  ONNX exported: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)'
+        )
 
         # Analyze output
         analyze_onnx_model(output_path)
@@ -188,6 +193,7 @@ def export_to_onnx(
     except Exception as e:
         logger.error(f'ONNX export failed: {e}')
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -203,13 +209,17 @@ def analyze_onnx_model(onnx_path: Path) -> dict:
 
     # Inputs
     for inp in model.graph.input:
-        shape = [d.dim_value if d.dim_value > 0 else d.dim_param for d in inp.type.tensor_type.shape.dim]
+        shape = [
+            d.dim_value if d.dim_value > 0 else d.dim_param for d in inp.type.tensor_type.shape.dim
+        ]
         logger.info(f'  Input: {inp.name} {shape}')
 
     # Outputs
     outputs = {}
     for out in model.graph.output:
-        shape = [d.dim_value if d.dim_value > 0 else d.dim_param for d in out.type.tensor_type.shape.dim]
+        shape = [
+            d.dim_value if d.dim_value > 0 else d.dim_param for d in out.type.tensor_type.shape.dim
+        ]
         logger.info(f'  Output: {out.name} {shape}')
         outputs[out.name] = shape
 
@@ -343,7 +353,9 @@ def export_to_onnx_end2end(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(export_path, output_path)
 
-        logger.info(f'  End2End ONNX exported: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)')
+        logger.info(
+            f'  End2End ONNX exported: {output_path} ({output_path.stat().st_size / 1024 / 1024:.1f} MB)'
+        )
 
         # Cleanup
         del model, exporter
@@ -355,6 +367,7 @@ def export_to_onnx_end2end(
     except Exception as e:
         logger.error(f'End2End ONNX export failed: {e}')
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -406,7 +419,9 @@ def export_to_tensorrt(
                     logger.error(f'  Parse error {i}: {parser.get_error(i)}')
                 raise RuntimeError('Failed to parse ONNX')
 
-        logger.info(f'  Parsed: {network.num_layers} layers, {network.num_inputs} inputs, {network.num_outputs} outputs')
+        logger.info(
+            f'  Parsed: {network.num_layers} layers, {network.num_inputs} inputs, {network.num_outputs} outputs'
+        )
 
         # Configure builder
         config = builder.create_builder_config()
@@ -465,6 +480,7 @@ def export_to_tensorrt(
     except Exception as e:
         logger.error(f'TensorRT conversion failed: {e}')
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -502,7 +518,7 @@ def create_triton_config(
 
     if is_end2end:
         # End2End model with TensorRT EfficientNMS
-        config_content = f'''# YOLO11-face TensorRT End2End model
+        config_content = f"""# YOLO11-face TensorRT End2End model
 # Face detection with built-in GPU NMS (no keypoints in End2End mode)
 # Input: RGB images normalized [0,1]
 # Output: Post-NMS detections (boxes in [0,1] range)
@@ -560,10 +576,10 @@ version_policy {{
     num_versions: 1
   }}
 }}
-'''
+"""
     else:
         # Standard model - raw pose output for Python NMS
-        config_content = f'''# YOLO11-face TensorRT model
+        config_content = f"""# YOLO11-face TensorRT model
 # Face detection with 5-point landmarks
 # Input: RGB images normalized [0,1]
 # Output: Raw pose predictions (requires post-processing)
@@ -606,7 +622,7 @@ version_policy {{
     num_versions: 1
   }}
 }}
-'''
+"""
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(config_content)
@@ -699,24 +715,23 @@ def export_yolo11_face(
         if end2end:
             # End2End export with TensorRT EfficientNMS
             if not export_to_onnx_end2end(
-                model_path, onnx_path,
+                model_path,
+                onnx_path,
                 max_det=max_det,
                 iou_thres=iou_thres,
                 conf_thres=conf_thres,
                 normalize_boxes=True,
             ):
                 return {'success': False, 'error': 'End2End ONNX export failed'}
-        else:
-            # Standard export
-            if not export_to_onnx(model_path, onnx_path):
-                return {'success': False, 'error': 'ONNX export failed'}
+        # Standard export
+        elif not export_to_onnx(model_path, onnx_path):
+            return {'success': False, 'error': 'ONNX export failed'}
 
     results['onnx_path'] = str(onnx_path)
 
     # Step 2: Test ONNX inference (skip for End2End - custom ops)
-    if not end2end:
-        if not test_onnx_inference(onnx_path):
-            logger.warning('ONNX inference test failed, continuing anyway...')
+    if not end2end and not test_onnx_inference(onnx_path):
+        logger.warning('ONNX inference test failed, continuing anyway...')
 
     # Step 3: Convert to TensorRT
     backup_existing_file(plan_path)
@@ -727,8 +742,7 @@ def export_yolo11_face(
 
     # Step 4: Create Triton config
     config_path = create_triton_config(
-        output_name, plan_path, max_batch_size,
-        is_end2end=end2end, max_det=max_det
+        output_name, plan_path, max_batch_size, is_end2end=end2end, max_det=max_det
     )
     results['config_path'] = str(config_path)
 
@@ -743,7 +757,9 @@ def export_yolo11_face(
     logger.info('')
     logger.info('Next steps:')
     logger.info('  1. Restart Triton: make restart-triton')
-    logger.info('  2. Test: curl -X POST http://localhost:4603/track_e/faces/yolo11/detect -F "file=@test.jpg"')
+    logger.info(
+        '  2. Test: curl -X POST http://localhost:4603/track_e/faces/yolo11/detect -F "file=@test.jpg"'
+    )
 
     return results
 
@@ -757,7 +773,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Export YOLO11-face to TensorRT',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''
+        epilog="""
 Examples:
   # Standard export (Python NMS):
   python export_yolo11_face.py
@@ -767,7 +783,7 @@ Examples:
 
   # Custom model with End2End:
   python export_yolo11_face.py --model /path/to/model.pt --end2end --max-det 50
-''',
+""",
     )
     parser.add_argument(
         '--model',

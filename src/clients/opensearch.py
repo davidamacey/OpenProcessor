@@ -1939,6 +1939,30 @@ class OpenSearchClient:
             logger.error(f'Failed to delete OCR for image {image_id}: {e}')
             return 0
 
+    async def search_ocr(
+        self, query_text: str, top_k: int = 10, min_score: float = 0.3
+    ) -> list[dict[str, Any]]:
+        """
+        Search OCR index for images containing specific text.
+
+        Args:
+            query_text: Text to search for
+            top_k: Maximum number of results
+            min_score: Minimum relevance score
+
+        Returns:
+            List of matching documents with OCR text and metadata
+
+        Note:
+            This method is currently not implemented and returns an empty list.
+        """
+        # Suppress unused argument warnings - parameters kept for API consistency
+        _ = (query_text, top_k, min_score)
+
+        # TODO: Implement OCR text search using fuzzy matching
+        logger.warning('OCR search not yet implemented')
+        return []
+
 
 # Convenience function for standalone usage
 async def create_client(**kwargs) -> OpenSearchClient:

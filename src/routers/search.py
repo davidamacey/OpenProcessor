@@ -44,9 +44,9 @@ class SearchResult(BaseModel):
     """Single search result with image metadata and similarity score."""
 
     image_id: str = Field(..., description='Unique image identifier')
-    image_path: str | None = Field(None, description='File path to the image')
+    image_path: str | None = Field(default=None, description='File path to the image')
     score: float = Field(..., ge=0.0, le=1.0, description='Similarity score (cosine similarity)')
-    metadata: dict | None = Field(None, description='Additional image metadata')
+    metadata: dict | None = Field(default=None, description='Additional image metadata')
 
 
 class SearchResponse(BaseModel):
@@ -54,7 +54,9 @@ class SearchResponse(BaseModel):
 
     status: Literal['success', 'error'] = Field(..., description='Request status')
     query_type: str = Field(..., description='Type of search performed')
-    results: list[SearchResult] = Field(default_factory=list, description='Search results ordered by score')
+    results: list[SearchResult] = Field(
+        default_factory=list, description='Search results ordered by score'
+    )
     total_results: int = Field(..., ge=0, description='Number of results returned')
     search_time_ms: float = Field(..., ge=0.0, description='Search execution time in milliseconds')
 
@@ -65,8 +67,8 @@ class FaceSearchResult(SearchResult):
     face_id: str = Field(..., description='Unique face identifier')
     box: list[float] = Field(..., description='Face bounding box [x1, y1, x2, y2] normalized [0,1]')
     confidence: float = Field(..., ge=0.0, le=1.0, description='Original detection confidence')
-    person_id: str | None = Field(None, description='Person cluster ID if assigned')
-    person_name: str | None = Field(None, description='Person name if known')
+    person_id: str | None = Field(default=None, description='Person cluster ID if assigned')
+    person_name: str | None = Field(default=None, description='Person name if known')
 
 
 class FaceSearchResponse(BaseModel):
@@ -74,8 +76,12 @@ class FaceSearchResponse(BaseModel):
 
     status: Literal['success', 'error'] = Field(..., description='Request status')
     query_type: str = Field(default='face', description='Type of search performed')
-    query_face: dict | None = Field(None, description='Query face info (box, landmarks, score)')
-    results: list[FaceSearchResult] = Field(default_factory=list, description='Search results ordered by score')
+    query_face: dict | None = Field(
+        default=None, description='Query face info (box, landmarks, score)'
+    )
+    results: list[FaceSearchResult] = Field(
+        default_factory=list, description='Search results ordered by score'
+    )
     total_results: int = Field(..., ge=0, description='Number of results returned')
     search_time_ms: float = Field(..., ge=0.0, description='Search execution time in milliseconds')
 
@@ -83,7 +89,9 @@ class FaceSearchResponse(BaseModel):
 class ObjectSearchResult(SearchResult):
     """Extended search result for object-level search."""
 
-    box: list[float] = Field(..., description='Object bounding box [x1, y1, x2, y2] normalized [0,1]')
+    box: list[float] = Field(
+        ..., description='Object bounding box [x1, y1, x2, y2] normalized [0,1]'
+    )
     class_id: int = Field(..., ge=0, description='COCO class ID')
     category: str = Field(..., description='Detection category (vehicle, person, other)')
 
@@ -93,8 +101,12 @@ class ObjectSearchResponse(BaseModel):
 
     status: Literal['success', 'error'] = Field(..., description='Request status')
     query_type: str = Field(default='object', description='Type of search performed')
-    query_object: dict | None = Field(None, description='Query object info (box, class_id, category)')
-    results: list[ObjectSearchResult] = Field(default_factory=list, description='Search results ordered by score')
+    query_object: dict | None = Field(
+        default=None, description='Query object info (box, class_id, category)'
+    )
+    results: list[ObjectSearchResult] = Field(
+        default_factory=list, description='Search results ordered by score'
+    )
     total_results: int = Field(..., ge=0, description='Number of results returned')
     search_time_ms: float = Field(..., ge=0.0, description='Search execution time in milliseconds')
 
@@ -103,8 +115,10 @@ class OCRSearchResult(SearchResult):
     """Extended search result for OCR text search."""
 
     matched_text: str = Field(..., description='Text that matched the query')
-    text_box: list[float] | None = Field(None, description='Text bounding box [x1, y1, x2, y2] normalized')
-    full_text: str | None = Field(None, description='Full OCR text from the image')
+    text_box: list[float] | None = Field(
+        default=None, description='Text bounding box [x1, y1, x2, y2] normalized'
+    )
+    full_text: str | None = Field(default=None, description='Full OCR text from the image')
 
 
 class OCRSearchResponse(BaseModel):
@@ -113,7 +127,9 @@ class OCRSearchResponse(BaseModel):
     status: Literal['success', 'error'] = Field(..., description='Request status')
     query_type: str = Field(default='ocr', description='Type of search performed')
     query_text: str = Field(..., description='Search query text')
-    results: list[OCRSearchResult] = Field(default_factory=list, description='Search results ordered by relevance')
+    results: list[OCRSearchResult] = Field(
+        default_factory=list, description='Search results ordered by relevance'
+    )
     total_results: int = Field(..., ge=0, description='Number of results returned')
     search_time_ms: float = Field(..., ge=0.0, description='Search execution time in milliseconds')
 
@@ -129,7 +145,7 @@ class OCRSearchResponse(BaseModel):
     status_code=status.HTTP_200_OK,
     summary='Image-to-image similarity search',
     description='Find visually similar images using MobileCLIP embeddings. '
-                'Encodes the query image and searches the global visual search index.',
+    'Encodes the query image and searches the global visual search index.',
     response_description='List of similar images with similarity scores',
 )
 async def search_by_image(
@@ -227,7 +243,7 @@ async def search_by_image(
     status_code=status.HTTP_200_OK,
     summary='Text-to-image search',
     description='Search for images using natural language queries. '
-                'Encodes the text query using MobileCLIP and searches the global index.',
+    'Encodes the text query using MobileCLIP and searches the global index.',
     response_description='List of matching images with similarity scores',
 )
 async def search_by_text(
@@ -338,7 +354,7 @@ async def search_by_text(
     status_code=status.HTTP_200_OK,
     summary='Face similarity search',
     description='Find similar faces using ArcFace embeddings. '
-                'Detects faces in the query image and searches the face index.',
+    'Detects faces in the query image and searches the face index.',
     response_description='List of similar faces with identity scores',
 )
 async def search_by_face(
@@ -472,7 +488,7 @@ async def search_by_face(
     status_code=status.HTTP_200_OK,
     summary='Search images by text content',
     description='Find images containing specific text using OCR index. '
-                'Searches the full-text OCR index with trigram matching.',
+    'Searches the full-text OCR index with trigram matching.',
     response_description='List of images containing matching text',
 )
 async def search_by_ocr(
@@ -583,7 +599,7 @@ async def search_by_ocr(
     status_code=status.HTTP_200_OK,
     summary='Object-level similarity search',
     description='Find similar objects (vehicles, people) using per-detection embeddings. '
-                'Automatically routes to vehicles or people index based on detection class.',
+    'Automatically routes to vehicles or people index based on detection class.',
     response_description='List of similar objects with similarity scores',
 )
 async def search_by_object(

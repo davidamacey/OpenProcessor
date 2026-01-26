@@ -98,7 +98,7 @@ check_container() {
 
 wait_for_triton() {
     log_info "Waiting for Triton to be ready..."
-    for i in {1..30}; do
+    for _ in {1..30}; do
         if curl -s localhost:4600/v2/health/ready > /dev/null 2>&1; then
             log_success "Triton is ready"
             return 0
@@ -195,7 +195,8 @@ export_detection() {
         2>&1 | tee /tmp/trtexec_det.log
 
     if [ -f "$DET_PLAN" ] && [ -s "$DET_PLAN" ]; then
-        local size=$(du -h "$DET_PLAN" | cut -f1)
+        local size
+        size=$(du -h "$DET_PLAN" | cut -f1)
         log_success "Detection TensorRT engine created: $size"
     else
         log_error "Detection TensorRT conversion failed"
@@ -252,7 +253,8 @@ export_recognition() {
         2>&1 | tee /tmp/trtexec_rec.log
 
     if [ -f "$REC_PLAN" ] && [ -s "$REC_PLAN" ]; then
-        local size=$(du -h "$REC_PLAN" | cut -f1)
+        local size
+        size=$(du -h "$REC_PLAN" | cut -f1)
         log_success "Recognition TensorRT engine created: $size"
     else
         log_error "Recognition TensorRT conversion failed"
@@ -292,7 +294,8 @@ setup_dictionary() {
 
     # Check if dictionary already exists
     if [ -f "$DICT_FILE" ]; then
-        local char_count=$(wc -l < "$DICT_FILE")
+        local char_count
+        char_count=$(wc -l < "$DICT_FILE")
         log_info "Dictionary already exists: $char_count characters"
         return 0
     fi
@@ -326,7 +329,8 @@ else:
 " 2>/dev/null || true
 
     if [ -f "$DICT_FILE" ]; then
-        local char_count=$(wc -l < "$DICT_FILE")
+        local char_count
+        char_count=$(wc -l < "$DICT_FILE")
         log_success "Dictionary created: $char_count characters"
     else
         log_warn "Could not extract dictionary automatically"
@@ -490,21 +494,24 @@ show_status() {
     echo "-----------"
 
     if [ -f "$DET_PLAN" ]; then
-        local det_size=$(du -h "$DET_PLAN" | cut -f1)
+        local det_size
+        det_size=$(du -h "$DET_PLAN" | cut -f1)
         echo -e "  Detection TRT:   ${GREEN}OK${NC} ($det_size)"
     else
         echo -e "  Detection TRT:   ${RED}MISSING${NC}"
     fi
 
     if [ -f "$REC_PLAN" ]; then
-        local rec_size=$(du -h "$REC_PLAN" | cut -f1)
+        local rec_size
+        rec_size=$(du -h "$REC_PLAN" | cut -f1)
         echo -e "  Recognition TRT: ${GREEN}OK${NC} ($rec_size)"
     else
         echo -e "  Recognition TRT: ${RED}MISSING${NC}"
     fi
 
     if [ -f "$DICT_FILE" ]; then
-        local char_count=$(wc -l < "$DICT_FILE")
+        local char_count
+        char_count=$(wc -l < "$DICT_FILE")
         echo -e "  Dictionary:      ${GREEN}OK${NC} ($char_count chars)"
     else
         echo -e "  Dictionary:      ${RED}MISSING${NC}"
@@ -515,7 +522,8 @@ show_status() {
     echo "-------------"
 
     for model in paddleocr_det_trt paddleocr_rec_trt ocr_pipeline; do
-        local status=$(curl -s "localhost:4600/v2/models/$model" 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
+        local status
+        status=$(curl -s "localhost:4600/v2/models/$model" 2>/dev/null | grep -o '"state":"[^"]*"' | cut -d'"' -f4)
         if [ "$status" = "READY" ]; then
             echo -e "  $model: ${GREEN}READY${NC}"
         elif [ -n "$status" ]; then

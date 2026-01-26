@@ -35,6 +35,7 @@ from src.schemas.models import (
     ModelLoadResponse,
 )
 from src.services.model_export import (
+    PYTORCH_MODELS_DIR,
     create_export_task,
     generate_triton_name,
     get_export_task,
@@ -42,7 +43,6 @@ from src.services.model_export import (
     run_export,
     save_uploaded_file,
     validate_pytorch_model,
-    PYTORCH_MODELS_DIR,
 )
 from src.services.triton_control import TritonControlService
 
@@ -74,8 +74,12 @@ class ModelStatusResponse(BaseModel):
     pytorch_model: bool = Field(description='Whether .pt file exists in pytorch_models/')
     triton_trt: bool = Field(description='Whether TRT model exists in Triton')
     triton_trt_end2end: bool = Field(description='Whether TRT End2End model exists in Triton')
-    triton_status: str | None = Field(default=None, description='Triton model status (READY, LOADING, etc)')
-    export_status: ExportStatus | None = Field(default=None, description='Current export status if exporting')
+    triton_status: str | None = Field(
+        default=None, description='Triton model status (READY, LOADING, etc)'
+    )
+    export_status: ExportStatus | None = Field(
+        default=None, description='Current export status if exporting'
+    )
     export_task_id: str | None = Field(default=None, description='Export task ID if exporting')
     num_classes: int | None = Field(default=None, description='Number of classes in model')
     file_size_mb: float | None = Field(default=None, description='PyTorch model file size in MB')
@@ -194,6 +198,9 @@ async def upload_model(
     )
 
     task = get_export_task(task_id)
+    if task is None:
+        msg = f'Failed to retrieve task {task_id} after creation'
+        raise RuntimeError(msg)
     return ExportTaskResponse(
         task_id=task_id,
         model_name=task['model_name'],
@@ -269,6 +276,9 @@ async def export_model(
     )
 
     task = get_export_task(task_id)
+    if task is None:
+        msg = f'Failed to retrieve task {task_id} after creation'
+        raise RuntimeError(msg)
     return ExportTaskResponse(
         task_id=task_id,
         model_name=task['model_name'],
@@ -348,11 +358,13 @@ async def get_model_status(model_name: str):
     export_status = None
     export_task_id = None
     for task in list_export_tasks():
-        if task['triton_name'] == model_name:
-            if task['status'] not in [ExportStatus.COMPLETED, ExportStatus.FAILED]:
-                export_status = task['status']
-                export_task_id = task['task_id']
-                break
+        if task['triton_name'] == model_name and task['status'] not in [
+            ExportStatus.COMPLETED,
+            ExportStatus.FAILED,
+        ]:
+            export_status = task['status']
+            export_task_id = task['task_id']
+            break
 
     exists = has_pytorch or triton_trt or triton_trt_end2end
 
@@ -473,9 +485,11 @@ async def delete_model(model_name: str):
                 unloaded = True
 
             # Collect files for response
-            for f in model_dir.rglob('*'):
-                if f.is_file():
-                    deleted_files.append(str(f.relative_to(TRITON_MODELS_DIR.parent)))
+            deleted_files.extend(
+                str(f.relative_to(TRITON_MODELS_DIR.parent))
+                for f in model_dir.rglob('*')
+                if f.is_file()
+            )
 
             # Delete directory
             shutil.rmtree(model_dir)
@@ -533,7 +547,7 @@ async def list_models():
         if config:
             backend = config.get('backend') or config.get('platform', '').replace('_plan', '')
             max_batch_size = config.get('max_batch_size')
-            if 'input' in config and config['input']:
+            if config.get('input'):
                 input_config = config['input'][0]
                 if 'dims' in input_config:
                     input_shape = input_config['dims']
@@ -567,7 +581,6 @@ async def list_models():
 async def test_model_inference(
     model_name: str,
     file: UploadFile = File(..., description='Test image (JPEG or PNG)'),
-    confidence: float = Form(default=0.25, ge=0.0, le=1.0),
     use_end2end: bool = Form(default=True),
 ):
     """
@@ -641,7 +654,6 @@ async def test_model_inference(
         # Decode and validate image first
         img = decode_image(content, file.filename)
         validate_image(img, file.filename)
-        image_shape = img.shape[:2]  # (height, width)
 
         # Use InferenceService for detection
         inference_service = InferenceService()
@@ -668,5 +680,5 @@ async def test_model_inference(
         logger.exception(f'Test inference failed for {model_name}')
         raise HTTPException(
             status_code=500,
-            detail=f'Inference failed: {str(e)}',
+            detail=f'Inference failed: {e!s}',
         ) from e
