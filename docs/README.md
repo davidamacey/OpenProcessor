@@ -7,9 +7,47 @@ Technical documentation for the Visual AI API.
 ## Quick Links
 
 - **[Main README](../README.md)** - Project overview, API endpoints, quick start
+- **[CLAUDE.md](../CLAUDE.md)** - Project instructions for AI assistants
 - **[Benchmarks Guide](../benchmarks/README.md)** - Performance testing with triton_bench
 - **[Model Export](../export/README.md)** - TensorRT model export documentation
 - **[Attribution](../ATTRIBUTION.md)** - Third-party code attribution and licensing
+
+---
+
+## Core Documentation
+
+### System Architecture
+
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, production patterns, thread safety, scaling strategies |
+
+### Capabilities
+
+| Document | Description |
+|----------|-------------|
+| [OCR.md](OCR.md) | PP-OCRv5 text detection and recognition - setup, deployment, usage |
+| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | YOLO11-face detection and ArcFace embeddings |
+
+### Performance
+
+| Document | Description |
+|----------|-------------|
+| [PERFORMANCE.md](PERFORMANCE.md) | FastAPI optimizations, gRPC connection management, benchmarking, profiling |
+| [INGEST_BENCHMARK_METHODOLOGY.md](INGEST_BENCHMARK_METHODOLOGY.md) | Batch ingestion benchmarking methodology |
+
+### Vector Search
+
+| Document | Description |
+|----------|-------------|
+| [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch index design |
+
+### Research and Planning
+
+| Document | Description |
+|----------|-------------|
+| [PADDING_COMPARISON_GUIDE.md](PADDING_COMPARISON_GUIDE.md) | YOLO preprocessing comparison study |
+| [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) | Feature status and development roadmap |
 
 ---
 
@@ -17,8 +55,8 @@ Technical documentation for the Visual AI API.
 
 The API provides these endpoint groups (all on port 4603):
 
-| Prefix | Description | Endpoints |
-|--------|-------------|-----------|
+| Prefix | Description | Key Endpoints |
+|--------|-------------|---------------|
 | `/detect` | YOLO object detection | Single, batch |
 | `/faces` | Face detection and recognition | detect, recognize, verify, search, identify |
 | `/embed` | CLIP embeddings | image, text, batch, boxes |
@@ -29,53 +67,6 @@ The API provides these endpoint groups (all on port 4603):
 | `/clusters` | FAISS clustering | train, stats, albums |
 | `/query` | Data retrieval | image, stats, duplicates |
 | `/health` | Monitoring | Service health, model status |
-
----
-
-## Technical Documentation
-
-### Model Documentation
-
-| Document | Description |
-|----------|-------------|
-| [OCR_SETUP_GUIDE.md](OCR_SETUP_GUIDE.md) | PP-OCRv5 deployment guide |
-| [OCR_DEPLOYMENT_CHECKLIST.md](OCR_DEPLOYMENT_CHECKLIST.md) | Step-by-step OCR setup |
-| [OCR_IMPLEMENTATION_PLAN.md](OCR_IMPLEMENTATION_PLAN.md) | OCR architecture details |
-| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | Face detection and ArcFace setup |
-
-### Vector Search
-
-| Document | Description |
-|----------|-------------|
-| [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch schema |
-
-### Performance
-
-| Document | Description |
-|----------|-------------|
-| [GRPC_CONNECTION_SCALING.md](GRPC_CONNECTION_SCALING.md) | gRPC connection pooling |
-| [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) | FastAPI performance tuning |
-| [OPTIMIZATION_SUMMARY.md](OPTIMIZATION_SUMMARY.md) | Quick optimization reference |
-| [INGEST_BENCHMARK_METHODOLOGY.md](INGEST_BENCHMARK_METHODOLOGY.md) | Ingestion benchmarking |
-
-### Architecture
-
-| Document | Description |
-|----------|-------------|
-| [PRODUCTION_ARCHITECTURE.md](PRODUCTION_ARCHITECTURE.md) | Production deployment patterns |
-| [THREAD_SAFETY_FIX.md](THREAD_SAFETY_FIX.md) | Thread safety troubleshooting |
-
-### Research
-
-| Document | Description |
-|----------|-------------|
-| [PADDING_COMPARISON_GUIDE.md](PADDING_COMPARISON_GUIDE.md) | YOLO preprocessing comparison |
-
-### Planning
-
-| Document | Description |
-|----------|-------------|
-| [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) | Feature status and future plans |
 
 ---
 
@@ -110,6 +101,8 @@ triton-api/
 ├── models/                   # Triton model repository
 ├── benchmarks/               # Performance testing
 ├── docs/                     # This directory
+│   ├── archive/              # Old documentation versions
+│   └── Technical/            # Additional technical docs
 └── monitoring/               # Prometheus and Grafana
 ```
 
@@ -152,6 +145,7 @@ cd benchmarks
 make export-models           # YOLO TensorRT
 make export-mobileclip       # MobileCLIP encoders
 make export-face-models      # YOLO11-face + ArcFace
+make export-ocr              # PP-OCRv5 models
 ```
 
 ### Check Model Status
@@ -159,6 +153,21 @@ make export-face-models      # YOLO11-face + ArcFace
 ```bash
 curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 ```
+
+---
+
+## Archived Documentation
+
+Older versions of documentation have been moved to [archive/](archive/):
+
+- OCR_SETUP_GUIDE.md (consolidated into OCR.md)
+- OCR_IMPLEMENTATION_PLAN.md (consolidated into OCR.md)
+- OCR_DEPLOYMENT_CHECKLIST.md (consolidated into OCR.md)
+- PERFORMANCE_OPTIMIZATION.md (consolidated into PERFORMANCE.md)
+- OPTIMIZATION_SUMMARY.md (consolidated into PERFORMANCE.md)
+- GRPC_CONNECTION_SCALING.md (consolidated into PERFORMANCE.md)
+- PRODUCTION_ARCHITECTURE.md (consolidated into ARCHITECTURE.md)
+- THREAD_SAFETY_FIX.md (consolidated into ARCHITECTURE.md)
 
 ---
 
@@ -170,7 +179,9 @@ curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 - [FAISS](https://github.com/facebookresearch/faiss)
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
 - [InsightFace](https://github.com/deepinsight/insightface)
+- [Ultralytics YOLO](https://docs.ultralytics.com/)
 
 ---
 
-**Last Updated:** January 2026
+**Last Updated:** 2026-01-26
+**Version:** 2.0 - Consolidated documentation structure
