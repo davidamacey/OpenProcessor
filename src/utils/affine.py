@@ -169,7 +169,7 @@ def inverse_letterbox_coords(
     letterboxed input [0,1]. This function applies inverse letterbox transformation
     to convert them to [0,1] normalized coordinates relative to original image dimensions.
 
-    This matches Track A (PyTorch) which uses Ultralytics boxes.xyxyn for
+    This matches Ultralytics PyTorch which uses boxes.xyxyn for
     original-image-normalized output.
 
     Args:
@@ -221,8 +221,8 @@ def format_detections_from_triton(result: dict, input_size: int = 640) -> list:
     """
     Format Triton EfficientNMS detections with original-image-normalized coordinates.
 
-    Shared utility for Tracks C, D, E that use TensorRT End2End models with EfficientNMS.
-    Applies inverse letterbox transformation to match Track A (PyTorch boxes.xyxyn).
+    Shared utility for TensorRT End2End models with EfficientNMS.
+    Applies inverse letterbox transformation to match Ultralytics boxes.xyxyn format.
 
     Args:
         result: Inference result dict with:

@@ -22,7 +22,7 @@ Usage:
         conf_thres=0.25,
         dynamic=True,
         half=True,
-        normalize_boxes=True  # Output boxes in [0, 1] range (recommended for Track E)
+        normalize_boxes=True  # Output boxes in [0, 1] range
     )
 
 Custom Arguments:

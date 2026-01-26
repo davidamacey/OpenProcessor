@@ -1,5 +1,5 @@
 """
-Track E: Caching Utilities for Performance Optimization
+Caching Utilities for Performance Optimization
 
 Provides in-memory caching for embeddings to reduce Triton inference calls.
 

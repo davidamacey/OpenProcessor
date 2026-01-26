@@ -281,7 +281,7 @@ docker compose exec yolo-api python /app/scripts/create_ocr_test_images.py
 
 ```bash
 # Test OCR endpoint
-curl -X POST http://localhost:4603/track_e/ocr/predict \
+curl -X POST http://localhost:4603/ocr/predict \
     -F "image=@test_images/ocr-synthetic/hello_world.jpg"
 ```
 

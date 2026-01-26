@@ -1,9 +1,8 @@
 """
-Inference service handling all YOLO detection tracks.
+Simplified inference service for YOLO detection, face recognition, and embeddings.
 
-Orchestrates inference across PyTorch and Triton backends.
-Returns industry-standard response format with metadata.
-Timing is handled by FastAPI middleware (total_time_ms injected).
+Provides clean, focused inference methods without track naming or DALI references.
+All methods use CPU preprocessing with direct TRT model calls via Triton gRPC.
 """
 
 import hashlib
@@ -11,18 +10,11 @@ import logging
 from typing import Any
 
 import numpy as np
-from ultralytics import YOLO
 
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
-from src.utils.affine import get_jpeg_dimensions_fast
 from src.utils.cache import get_clip_tokenizer, get_image_cache, get_text_cache
 from src.utils.image_processing import decode_image, validate_image
-from src.utils.pytorch_utils import (
-    format_detections,
-    thread_safe_predict,
-    thread_safe_predict_batch,
-)
 
 
 logger = logging.getLogger(__name__)
@@ -32,28 +24,18 @@ def build_response(
     detections: list,
     image_shape: tuple[int, int],
     model_name: str,
-    track: str,
     backend: str = 'triton',
-    preprocessing: str | None = None,
-    nms_location: str | None = None,
     embedding: np.ndarray | None = None,
-    box_embeddings: list | None = None,
-    normalized_boxes: list | None = None,
 ) -> dict[str, Any]:
     """
-    Build standardized inference response with all metadata.
+    Build standardized inference response.
 
     Args:
         detections: List of detection dicts
         image_shape: Original image (height, width)
         model_name: Model name used
-        track: Performance track (A, B, C, D, E)
-        backend: Inference backend (pytorch, triton)
-        preprocessing: Preprocessing method (cpu, gpu_dali, gpu_dali_auto)
-        nms_location: NMS location (cpu, gpu)
-        embedding: Optional image embedding (Track E)
-        box_embeddings: Optional per-box embeddings (Track E full)
-        normalized_boxes: Optional normalized boxes (Track E full)
+        backend: Inference backend (triton)
+        embedding: Optional image embedding
 
     Returns:
         Standardized response dict
@@ -69,44 +51,34 @@ def build_response(
         'model': {
             'name': model_name,
             'backend': backend,
-            'device': 'gpu',
         },
-        'track': track,
-        'preprocessing': preprocessing,
-        'nms_location': nms_location,
         # total_time_ms injected by middleware
     }
 
-    # Add Track E specific fields if provided
     if embedding is not None:
         response['embedding_norm'] = float(np.linalg.norm(embedding))
-
-    if box_embeddings is not None:
-        response['box_embeddings'] = box_embeddings
-
-    if normalized_boxes is not None:
-        response['normalized_boxes'] = normalized_boxes
 
     return response
 
 
 class InferenceService:
     """
-    Unified inference service for all YOLO tracks.
+    Simplified inference service for object detection, face recognition, and embeddings.
 
-    Handles:
-    - Track A: PyTorch direct inference
-    - Track B: Standard TRT + CPU NMS
-    - Track C: End2End TRT + GPU NMS
-    - Track D: DALI + TRT (Full GPU)
-    - Track E: Visual search ensemble
+    Public methods:
+    - detect(): Object detection using YOLOv11 TRT End2End
+    - detect_batch(): Batch object detection
+    - detect_faces(): YOLO11-face detection with ArcFace embeddings
+    - recognize_faces(): Full pipeline (YOLO + faces + CLIP embedding)
+    - encode_image(): MobileCLIP image encoding
+    - encode_text(): MobileCLIP text encoding
+    - analyze_full(): Combined YOLO + faces + CLIP + OCR
 
     All responses include:
     - detections: List of normalized [0,1] bounding boxes
     - num_detections: Count of detections
     - image: Original image dimensions
     - model: Model name and backend info
-    - track: Performance track identifier
     - total_time_ms: Injected by middleware
     """
 
@@ -115,689 +87,135 @@ class InferenceService:
         self.settings = get_settings()
 
     # =========================================================================
-    # Track A: PyTorch
+    # Object Detection
     # =========================================================================
-    def infer_pytorch(
+
+    def detect(
         self,
         image_bytes: bytes,
-        filename: str,
-        model: Any,
-        model_name: str = 'yolov11_small',
+        model_name: str = 'yolov11_small_trt_end2end',
     ) -> dict[str, Any]:
         """
-        Track A: PyTorch inference.
+        Detect objects in image using YOLOv11 TensorRT End2End model.
+
+        Uses CPU preprocessing with letterbox transform, then TensorRT inference
+        with GPU NMS. Coordinates are normalized to [0, 1] range.
 
         Args:
-            image_bytes: Raw image bytes
-            filename: Original filename for validation
-            model: YOLO model instance
-            model_name: Model name for metadata
+            image_bytes: Raw image bytes (JPEG/PNG)
+            model_name: Triton model name (default: yolov11_small_trt_end2end)
 
         Returns:
-            Standardized response dict
+            Standardized response dict with detections
         """
-
-        img = decode_image(image_bytes, filename)
-        validate_image(img, filename)
+        # Decode and validate image
+        img = decode_image(image_bytes, 'image')
+        validate_image(img, 'image')
         image_shape = img.shape[:2]  # (height, width)
 
-        detections = thread_safe_predict(model, img)
-        results = format_detections(detections)
-
-        return build_response(
-            detections=results,
-            image_shape=image_shape,
-            model_name=model_name,
-            track='A',
-            backend='pytorch',
-            preprocessing='cpu',
-            nms_location='cpu',
-        )
-
-    def infer_pytorch_batch(
-        self,
-        images_data: list[tuple[bytes, str]],
-        model: Any,
-    ) -> dict[str, Any]:
-        """Track A: Batch PyTorch inference."""
-
-        decoded_images = []
-        decoded_filenames = []
-        image_shapes = []
-        failed_images = []
-
-        for idx, (image_bytes, filename) in enumerate(images_data):
-            try:
-                img = decode_image(image_bytes, filename)
-                validate_image(img, filename)
-                decoded_images.append(img)
-                decoded_filenames.append(filename)
-                image_shapes.append(img.shape[:2])
-            except ValueError as e:
-                failed_images.append({'filename': filename, 'index': idx, 'error': str(e)})
-
-        all_results = []
-        if decoded_images:
-            detections_batch = thread_safe_predict_batch(model, decoded_images)
-
-            for idx, (detections, filename, shape) in enumerate(
-                zip(detections_batch, decoded_filenames, image_shapes, strict=False)
-            ):
-                results = format_detections(detections)
-                all_results.append(
-                    {
-                        'filename': filename,
-                        'image_index': idx,
-                        'detections': results,
-                        'num_detections': len(results),
-                        'status': 'success',
-                        'track': 'A',
-                        'image': {'height': shape[0], 'width': shape[1]},
-                    }
-                )
-
-        return {
-            'total_images': len(images_data),
-            'processed_images': len(all_results),
-            'failed_images': len(failed_images),
-            'results': all_results,
-            'failures': failed_images if failed_images else None,
-            'status': 'success',
-        }
-
-    # =========================================================================
-    # Track B/C: Standard and End2End TRT
-    # =========================================================================
-    def infer_track_b(
-        self,
-        image_bytes: bytes,
-        filename: str,
-        model_url: str,
-        model_name: str = 'yolov11_small',
-    ) -> dict[str, Any]:
-        """Track B: Standard TRT + CPU NMS using Ultralytics client."""
-
-        img = decode_image(image_bytes, filename)
-        validate_image(img, filename)
-        image_shape = img.shape[:2]
-
-        model = YOLO(model_url, task='detect')
-        detections = model(img, verbose=False)
-        results = format_detections(detections)
-
-        return build_response(
-            detections=results,
-            image_shape=image_shape,
-            model_name=model_name,
-            track='B',
-            backend='triton',
-            preprocessing='cpu',
-            nms_location='cpu',
-        )
-
-    def infer_track_c(
-        self,
-        image_bytes: bytes,
-        filename: str,
-        model_name: str,
-    ) -> dict[str, Any]:
-        """Track C: End2End TRT + GPU NMS."""
-        img = decode_image(image_bytes, filename)
-        validate_image(img, filename)
-        image_shape = img.shape[:2]
-
+        # Run inference via Triton
         client = get_triton_client(self.settings.triton_url)
-        detections = client.infer_track_c(img, model_name)
-        results = client.format_detections(detections)
-
-        return build_response(
-            detections=results,
-            image_shape=image_shape,
-            model_name=model_name,
-            track='C',
-            backend='triton',
-            preprocessing='cpu',
-            nms_location='gpu',
-        )
-
-    # =========================================================================
-    # Track D: DALI + TRT
-    # =========================================================================
-    def infer_track_d(
-        self,
-        image_bytes: bytes,
-        model_name: str,
-        auto_affine: bool = False,
-    ) -> dict[str, Any]:
-        """Track D: Full GPU pipeline with DALI preprocessing."""
-        # Get original dimensions from JPEG header (no decode needed)
-        orig_w, orig_h = get_jpeg_dimensions_fast(image_bytes)
-        image_shape = (orig_h, orig_w)
-
-        client = get_triton_client(self.settings.triton_url)
-        detections = client.infer_track_d(image_bytes, model_name, auto_affine)
-        results = client.format_detections(detections)
-
-        return build_response(
-            detections=results,
-            image_shape=image_shape,
-            model_name=model_name,
-            track='D',
-            backend='triton',
-            preprocessing='gpu_dali_auto' if auto_affine else 'gpu_dali',
-            nms_location='gpu',
-        )
-
-    async def infer_track_d_async(
-        self,
-        image_bytes: bytes,
-        model_name: str,
-        auto_affine: bool = False,
-    ) -> dict[str, Any]:
-        """Async Track D inference for FastAPI endpoints."""
-        # Use sync client with thread pool (FastAPI handles async)
-        return self.infer_track_d(image_bytes, model_name, auto_affine)
-
-    # =========================================================================
-    # Track E: Visual Search
-    # =========================================================================
-    def infer_track_e(
-        self,
-        image_bytes: bytes,
-        full_pipeline: bool = False,
-    ) -> dict[str, Any]:
-        """
-        Track E: Visual search ensemble inference (sync).
-
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-            full_pipeline: If True, include per-box embeddings
-
-        Returns:
-            Standardized response dict with embeddings
-        """
-        client = get_triton_client(self.settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline)
+        result = client.infer_yolo_end2end(img, model_name)
         detections = client.format_detections(result)
-
-        orig_h, orig_w = result['orig_shape']
-
-        # Prepare Track E specific fields
-        embedding = result['image_embedding']
-        box_embeddings = None
-        normalized_boxes = None
-
-        if full_pipeline and result['num_dets'] > 0:
-            box_embeddings = result.get('box_embeddings', np.array([])).tolist()
-            normalized_boxes = result.get('normalized_boxes', np.array([])).tolist()
 
         return build_response(
             detections=detections,
-            image_shape=(orig_h, orig_w),
-            model_name='yolo_clip_ensemble' if not full_pipeline else 'yolo_mobileclip_ensemble',
-            track='E_full' if full_pipeline else 'E',
+            image_shape=image_shape,
+            model_name=model_name,
             backend='triton',
-            preprocessing='gpu_dali',
-            nms_location='gpu',
-            embedding=embedding,
-            box_embeddings=box_embeddings,
-            normalized_boxes=normalized_boxes,
         )
 
-    async def infer_track_e_async(
+    def detect_batch(
         self,
-        image_bytes: bytes,
-        full_pipeline: bool = False,
-    ) -> dict[str, Any]:
-        """Async wrapper for Track E inference (for FastAPI endpoints)."""
-        return self.infer_track_e(image_bytes, full_pipeline)
-
-    def infer_track_e_batch(
-        self,
-        images_bytes: list[bytes],
-        max_workers: int = 32,
+        images: list[bytes],
+        model_name: str = 'yolov11_small_trt_end2end',
     ) -> list[dict[str, Any]]:
         """
-        Track E batch inference: Process multiple images in parallel.
-
-        For large photo libraries (50K+ images), sending batches of 16-64
-        images per request significantly improves throughput by:
-        - Reducing HTTP round-trip overhead
-        - Ensuring full DALI/TRT batch utilization
-        - Maximizing GPU parallelism
+        Detect objects in multiple images using batched inference.
 
         Args:
-            images_bytes: List of raw JPEG/PNG bytes (up to 64 images)
-            max_workers: Max parallel inference threads
+            images: List of raw image bytes (JPEG/PNG)
+            model_name: Triton model name (default: yolov11_small_trt_end2end)
 
         Returns:
-            List of standardized response dicts with embeddings
+            List of standardized response dicts, one per image
         """
+        # Decode and validate all images
+        decoded_images = []
+        image_shapes = []
+        failed_indices = []
+
+        for idx, image_bytes in enumerate(images):
+            try:
+                img = decode_image(image_bytes, f'image_{idx}')
+                validate_image(img, f'image_{idx}')
+                decoded_images.append(img)
+                image_shapes.append(img.shape[:2])
+            except ValueError as e:
+                logger.warning(f'Failed to decode image {idx}: {e}')
+                failed_indices.append(idx)
+
+        if not decoded_images:
+            return []
+
+        # Run batch inference via Triton
         client = get_triton_client(self.settings.triton_url)
-        raw_results = client.infer_track_e_batch(images_bytes, max_workers)
+        results = client.infer_yolo_end2end_batch(decoded_images, model_name)
 
-        # Format each result
-        formatted_results = []
-        for result in raw_results:
+        # Format responses
+        responses = []
+        for result, shape in zip(results, image_shapes, strict=False):
             detections = client.format_detections(result)
-            orig_h, orig_w = result['orig_shape']
-            embedding = result['image_embedding']
-
-            formatted_results.append(
+            responses.append(
                 build_response(
                     detections=detections,
-                    image_shape=(orig_h, orig_w),
-                    model_name='yolo_clip_ensemble',
-                    track='E_batch',
+                    image_shape=shape,
+                    model_name=model_name,
                     backend='triton',
-                    preprocessing='gpu_dali',
-                    nms_location='gpu',
-                    embedding=embedding,
                 )
             )
 
-        return formatted_results
+        return responses
 
     # =========================================================================
-    # Track F: CPU Preprocessing + Direct TRT Models (No DALI)
+    # Face Detection and Recognition
     # =========================================================================
-    def infer_track_f(self, image_bytes: bytes) -> dict[str, Any]:
+
+    def detect_faces(
+        self,
+        image_bytes: bytes,
+        confidence: float = 0.5,
+    ) -> dict[str, Any]:
         """
-        Track F: CPU preprocessing + direct YOLO TRT + MobileCLIP TRT.
-
-        Unlike Track E (DALI ensemble), Track F uses:
-        - CPU decode (PIL)
-        - CPU letterbox for YOLO (custom, not Ultralytics)
-        - CPU resize/crop for CLIP (custom)
-        - Direct TRT inference (no ensemble scheduler overhead)
-
-        Benefits:
-        - Lower VRAM usage (no DALI instances)
-        - More TRT instances possible
-        - Baseline comparison for CPU vs GPU preprocessing
-
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-
-        Returns:
-            Standardized response dict with embeddings
-        """
-        client = get_triton_client(self.settings.triton_url)
-        result = client.infer_track_f(image_bytes)
-        detections = client.format_detections(result)
-
-        orig_h, orig_w = result['orig_shape']
-        embedding = result['image_embedding']
-
-        return build_response(
-            detections=detections,
-            image_shape=(orig_h, orig_w),
-            model_name='yolov11_small_trt_end2end + mobileclip2_s2',
-            track='F',
-            backend='triton',
-            preprocessing='cpu',
-            nms_location='gpu',
-            embedding=embedding,
-        )
-
-    def encode_text_sync(self, text: str, use_cache: bool = True) -> np.ndarray:
-        """
-        Encode text to embedding using MobileCLIP text encoder.
-
-        Args:
-            text: Query text
-            use_cache: Use text embedding cache
-
-        Returns:
-            512-dim L2-normalized embedding
-        """
-        # Check cache first
-        if use_cache:
-            cache = get_text_cache()
-            cache_key = hashlib.sha256(text.encode()).hexdigest()
-            cached_embedding = cache.get(cache_key)
-            if cached_embedding is not None:
-                return cached_embedding
-
-        # Tokenize (using cached singleton)
-        tokenizer = get_clip_tokenizer()
-        tokens = tokenizer(
-            text, padding='max_length', max_length=77, truncation=True, return_tensors='np'
-        )
-
-        # Get Triton client and encode
-        client = get_triton_client(self.settings.triton_url)
-        embedding = client.encode_text(tokens['input_ids'])
-
-        # Cache the result
-        if use_cache:
-            cache.set(cache_key, embedding)
-
-        return embedding
-
-    def encode_image_sync(self, image_bytes: bytes, use_cache: bool = True) -> np.ndarray:
-        """
-        Encode image to embedding using MobileCLIP image encoder.
-
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-            use_cache: Use image embedding cache
-
-        Returns:
-            512-dim L2-normalized embedding
-        """
-        # Check cache first
-        if use_cache:
-            cache = get_image_cache()
-            cache_key = hashlib.sha256(image_bytes).hexdigest()
-            cached_embedding = cache.get(cache_key)
-            if cached_embedding is not None:
-                return cached_embedding
-
-        # Get Triton client and encode
-        client = get_triton_client(self.settings.triton_url)
-        embedding = client.encode_image(image_bytes)
-
-        # Cache the result
-        if use_cache:
-            cache.set(cache_key, embedding)
-
-        return embedding
-
-    # =========================================================================
-    # Track E Faces: SCRFD + ArcFace Pipeline
-    # =========================================================================
-    def infer_faces(self, image_bytes: bytes) -> dict[str, Any]:
-        """
-        Face detection and recognition pipeline (SCRFD + ArcFace).
-
-        100% GPU pipeline via DALI preprocessing:
-        1. GPU JPEG decode (nvJPEG via DALI)
-        2. Quad-branch preprocessing (SCRFD 640, HD original)
-        3. SCRFD face detection + NMS
-        4. Face alignment + ArcFace embedding extraction
-
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-
-        Returns:
-            Dict with face detections, landmarks, and ArcFace embeddings
-        """
-        client = get_triton_client(self.settings.triton_url)
-        result = client.infer_faces_only(image_bytes)
-
-        orig_h, orig_w = result['orig_shape']
-
-        # Format face detections
-        # Note: face_pipeline already returns boxes normalized to [0,1]
-        # and landmarks in pixel coordinates (need normalization)
-        faces = []
-        for i in range(result['num_faces']):
-            box = result['face_boxes'][i]
-            landmarks = result['face_landmarks'][i]
-            score = float(result['face_scores'][i])
-            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
-
-            # Box is already normalized from face_pipeline
-            norm_box = [float(x) for x in box]
-
-            # Landmarks are in pixel coordinates - normalize to [0,1]
-            norm_landmarks = []
-            for j in range(0, 10, 2):
-                norm_landmarks.append(float(landmarks[j]) / orig_w)
-                norm_landmarks.append(float(landmarks[j + 1]) / orig_h)
-
-            faces.append(
-                {
-                    'box': norm_box,
-                    'landmarks': norm_landmarks,
-                    'score': score,
-                    'quality': quality,
-                }
-            )
-
-        # Format embeddings
-        embeddings = []
-        if result['num_faces'] > 0 and len(result['face_embeddings']) > 0:
-            embeddings = result['face_embeddings'].tolist()
-
-        return {
-            'num_faces': result['num_faces'],
-            'faces': faces,
-            'embeddings': embeddings,
-            'orig_shape': (orig_h, orig_w),
-        }
-
-    def infer_faces_full(self, image_bytes: bytes, confidence: float = 0.5) -> dict[str, Any]:
-        """
-        Full unified pipeline: YOLO + SCRFD + MobileCLIP + ArcFace.
-
-        All processing happens in Triton via quad-branch ensemble:
-        1. GPU JPEG decode (nvJPEG via DALI)
-        2. Quad-branch preprocessing (YOLO 640, CLIP 256, SCRFD 640, HD original)
-        3. YOLO object detection (parallel with 4, 5)
-        4. MobileCLIP global embedding (parallel with 3, 5)
-        5. SCRFD face detection + NMS (parallel with 3, 4)
-        6. ArcFace face embeddings (depends on 5)
-
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-            confidence: Minimum face detection confidence (0.0-1.0)
-
-        Returns:
-            Dict with YOLO detections, faces, and all embeddings
-        """
-        client = get_triton_client(self.settings.triton_url)
-        result = client.infer_faces_full(image_bytes)
-
-        # Format YOLO detections
-        detections = client.format_detections(result)
-
-        orig_h, orig_w = result['orig_shape']
-
-        # Format face detections with confidence filtering
-        # Note: face_pipeline already returns boxes normalized to [0,1]
-        # and landmarks in pixel coordinates (need normalization)
-        faces = []
-        filtered_embedding_indices = []
-        for i in range(result['num_faces']):
-            score = float(result['face_scores'][i])
-
-            # Filter by confidence threshold
-            if score < confidence:
-                continue
-
-            box = result['face_boxes'][i]
-            landmarks = result['face_landmarks'][i]
-            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
-
-            # Box is already normalized from face_pipeline
-            norm_box = [float(x) for x in box]
-
-            # Landmarks are in pixel coordinates - normalize to [0,1]
-            norm_landmarks = []
-            for j in range(0, 10, 2):
-                norm_landmarks.append(float(landmarks[j]) / orig_w)
-                norm_landmarks.append(float(landmarks[j + 1]) / orig_h)
-
-            faces.append(
-                {
-                    'box': norm_box,
-                    'landmarks': norm_landmarks,
-                    'score': score,
-                    'quality': quality,
-                }
-            )
-            filtered_embedding_indices.append(i)
-
-        # Format face embeddings (only for faces passing confidence threshold)
-        face_embeddings = []
-        if len(filtered_embedding_indices) > 0 and len(result['face_embeddings']) > 0:
-            face_embeddings = [
-                result['face_embeddings'][idx].tolist()
-                for idx in filtered_embedding_indices
-                if idx < len(result['face_embeddings'])
-            ]
-
-        return {
-            # YOLO detections
-            'detections': detections,
-            'num_detections': len(detections),
-            # Face detections and embeddings (filtered by confidence)
-            'num_faces': len(faces),
-            'faces': faces,
-            'face_embeddings': face_embeddings,
-            # Global embedding
-            'image_embedding': result['image_embedding'],
-            'embedding_norm': float(np.linalg.norm(result['image_embedding'])),
-            # Image metadata
-            'orig_shape': (orig_h, orig_w),
-        }
-
-    def infer_unified(self, image_bytes: bytes) -> dict[str, Any]:
-        """
-        Unified pipeline: YOLO + MobileCLIP + person-only face detection.
-
-        More efficient than infer_faces_full - runs SCRFD only on person
-        bounding box crops instead of full 640x640 image.
+        Detect faces using YOLO11-face and extract ArcFace embeddings.
 
         Pipeline:
-        1. GPU JPEG decode (nvJPEG via DALI)
-        2. Triple preprocessing (YOLO 640, CLIP 256, HD original)
-        3. YOLO object detection (parallel with 4)
-        4. MobileCLIP global embedding (parallel with 3)
-        5. Unified extraction (after 2, 3):
-           - MobileCLIP per-box embeddings (all boxes)
-           - SCRFD face detection (person boxes only)
-           - ArcFace face embeddings
+        1. Decode and letterbox preprocess (CPU)
+        2. YOLO11-face detection via TensorRT
+        3. Crop faces with MTCNN-style margins from HD original
+        4. ArcFace embedding extraction via TensorRT
+        5. L2 normalize embeddings
 
-        Args:
-            image_bytes: Raw JPEG/PNG bytes
-
-        Returns:
-            Dict with YOLO detections, embeddings, and face data
-        """
-        client = get_triton_client(self.settings.triton_url)
-        return client.infer_unified(image_bytes)
-
-    # =========================================================================
-    # Model Resolution Helpers
-    # =========================================================================
-    def resolve_model_name(self, model_name: str) -> tuple[str, str, bool]:
-        """
-        Resolve model name to track and Triton model name.
-
-        Supports both predefined models (in settings) and dynamically uploaded models.
-
-        Returns:
-            Tuple of (track, triton_model_name, is_auto_affine)
-        """
-        models = self.settings.models
-
-        # Store original name for dynamic model fallback
-        original_name = model_name
-
-        # Normalize naming for predefined model lookup
-        normalized_name = model_name
-        if '_trt_end2end' in normalized_name:
-            normalized_name = normalized_name.replace('_trt_end2end', '_end2end')
-        elif normalized_name.endswith('_trt') and not normalized_name.endswith('_end2end'):
-            normalized_name = normalized_name.replace('_trt', '')
-
-        # Check Track D variants
-        is_gpu_e2e = any(
-            normalized_name.endswith(suffix)
-            for suffix in [
-                '_gpu_e2e_auto_streaming',
-                '_gpu_e2e_auto_batch',
-                '_gpu_e2e_auto',
-                '_gpu_e2e_streaming',
-                '_gpu_e2e_batch',
-                '_gpu_e2e',
-            ]
-        )
-
-        if is_gpu_e2e:
-            is_auto = '_auto' in normalized_name
-            base = (
-                normalized_name.replace('_gpu_e2e_auto_streaming', '')
-                .replace('_gpu_e2e_auto_batch', '')
-                .replace('_gpu_e2e_auto', '')
-                .replace('_gpu_e2e_streaming', '')
-                .replace('_gpu_e2e_batch', '')
-                .replace('_gpu_e2e', '')
-            )
-
-            if '_batch' in normalized_name:
-                triton_name = models.GPU_E2E_BATCH_MODELS.get(base)
-            elif '_streaming' in normalized_name:
-                triton_name = models.GPU_E2E_STREAMING_MODELS.get(base)
-            else:
-                triton_name = models.GPU_E2E_MODELS.get(base)
-
-            if is_auto and triton_name:
-                triton_name = triton_name.replace('_gpu_e2e', '_gpu_e2e_auto')
-
-            return 'D', triton_name, is_auto
-
-        # Check Track C (End2End models)
-        if normalized_name.endswith('_end2end') or '_trt_end2end' in original_name:
-            base = normalized_name.replace('_end2end', '')
-            triton_name = models.END2END_MODELS.get(base)
-
-            # Fallback for dynamically uploaded models not in settings
-            if triton_name is None:
-                # Use original name directly - it's a dynamically uploaded model
-                triton_name = original_name
-                logger.info(f'Dynamic model detected: {original_name} -> Track C')
-
-            return 'C', triton_name, False
-
-        # Track B
-        model_url = models.STANDARD_MODELS.get(normalized_name)
-
-        # Fallback for dynamically uploaded standard models
-        if model_url is None:
-            # Use original name as Triton model name
-            model_url = f'grpc://{self.settings.triton_url}/{original_name}'
-            logger.info(f'Dynamic model detected: {original_name} -> Track B')
-
-        return 'B', model_url, False
-
-    # =========================================================================
-    # YOLO11-Face: Alternative Face Detection Pipeline
-    # =========================================================================
-    def infer_faces_yolo11(self, image_bytes: bytes, confidence: float = 0.5) -> dict[str, Any]:
-        """
-        Face detection and recognition pipeline using YOLO11-face + ArcFace.
-
-        Alternative to SCRFD-based infer_faces(). Uses YOLO11-face which is a
-        pose-based face detector trained on face datasets.
-
-        Pipeline:
-        1. GPU JPEG decode (nvJPEG via DALI)
-        2. YOLO11-face detection with 5-point landmarks
-        3. GPU NMS (torchvision)
-        4. Face alignment from HD original (industry standard)
-        5. ArcFace embedding extraction
-
-        CRITICAL: Face alignment crops from the HD ORIGINAL image, not the
-        640x640 detection input. This preserves full resolution details for
-        maximum face recognition accuracy.
+        Face coordinates are normalized to [0, 1] range relative to original image.
 
         Args:
             image_bytes: Raw JPEG/PNG bytes
             confidence: Minimum detection confidence (default 0.5)
 
         Returns:
-            Dict with face detections, landmarks, and ArcFace embeddings
+            Dict with:
+                - status: 'success' or 'error'
+                - num_faces: Number of faces detected
+                - faces: List of face dicts with box, landmarks, score, quality
+                - embeddings: List of 512-dim L2-normalized ArcFace embeddings
+                - orig_shape: (height, width)
         """
         client = get_triton_client(self.settings.triton_url)
 
         try:
             result = client.infer_faces_yolo11(image_bytes, confidence=confidence)
         except Exception as e:
-            logger.error(f'YOLO11-face inference failed: {e}')
+            logger.error(f'Face detection failed: {e}')
             return {
                 'status': 'error',
                 'error': str(e),
@@ -810,14 +228,16 @@ class InferenceService:
         orig_h, orig_w = result['orig_shape']
 
         # Format face detections
-        # YOLO11-face pipeline returns boxes normalized to [0,1]
-        # and landmarks in pixel coordinates (need normalization)
         faces = []
         for i in range(result['num_faces']):
             box = result['face_boxes'][i]
             landmarks = result['face_landmarks'][i]
             score = float(result['face_scores'][i])
-            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
+            quality = (
+                float(result['face_quality'][i])
+                if len(result['face_quality']) > i
+                else None
+            )
 
             # Box is already normalized from yolo11_face_pipeline
             norm_box = [float(x) for x in box]
@@ -850,33 +270,40 @@ class InferenceService:
             'orig_shape': (orig_h, orig_w),
         }
 
-    def infer_faces_full_yolo11(
-        self, image_bytes: bytes, confidence: float = 0.5
+    def recognize_faces(
+        self,
+        image_bytes: bytes,
+        confidence: float = 0.5,
     ) -> dict[str, Any]:
         """
-        Full unified pipeline using YOLO11-face: YOLO + MobileCLIP + YOLO11-face + ArcFace.
+        Full pipeline: YOLO object detection + YOLO11-face + MobileCLIP embedding.
 
-        Alternative to infer_faces_full() that uses YOLO11-face instead of SCRFD
-        for face detection. YOLO11-face is a pose-based detector that may perform
-        better with occluded or profile faces.
-
-        Pipeline (runs in parallel):
-        1. Track E: YOLO object detection + MobileCLIP global embedding
-        2. YOLO11-face: Face detection with 5-point landmarks + ArcFace embeddings
+        Runs in parallel:
+        1. YOLO object detection + MobileCLIP global embedding
+        2. YOLO11-face detection + ArcFace embeddings
 
         Args:
             image_bytes: Raw JPEG/PNG bytes
             confidence: Minimum face detection confidence (default 0.5)
 
         Returns:
-            Dict with YOLO detections, faces, face_embeddings, and embedding_norm
+            Dict with:
+                - status: 'success' or 'error'
+                - detections: YOLO object detections
+                - num_detections: Number of objects detected
+                - num_faces: Number of faces detected
+                - faces: List of face dicts with box, landmarks, score, quality
+                - face_embeddings: List of 512-dim ArcFace embeddings
+                - image_embedding: 512-dim MobileCLIP embedding
+                - embedding_norm: L2 norm of image embedding
+                - orig_shape: (height, width)
         """
         client = get_triton_client(self.settings.triton_url)
 
         try:
             result = client.infer_faces_full_yolo11(image_bytes, confidence=confidence)
         except Exception as e:
-            logger.error(f'YOLO11-face full inference failed: {e}')
+            logger.error(f'Face recognition failed: {e}')
             return {
                 'status': 'error',
                 'error': str(e),
@@ -896,16 +323,18 @@ class InferenceService:
         orig_h, orig_w = result['orig_shape']
 
         # Format face detections
-        # YOLO11-face pipeline returns boxes normalized to [0,1]
-        # and landmarks in pixel coordinates (need normalization)
         faces = []
         for i in range(result['num_faces']):
             box = result['face_boxes'][i]
             landmarks = result['face_landmarks'][i]
             score = float(result['face_scores'][i])
-            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
+            quality = (
+                float(result['face_quality'][i])
+                if len(result['face_quality']) > i
+                else None
+            )
 
-            # Box is already normalized from yolo11_face_pipeline
+            # Box is already normalized
             norm_box = [float(x) for x in box]
 
             # Landmarks are in pixel coordinates - normalize to [0,1]
@@ -943,3 +372,209 @@ class InferenceService:
             # Image metadata
             'orig_shape': (orig_h, orig_w),
         }
+
+    # =========================================================================
+    # Embedding Encoding
+    # =========================================================================
+
+    def encode_image(
+        self,
+        image_bytes: bytes,
+        use_cache: bool = True,
+    ) -> np.ndarray:
+        """
+        Encode image to 512-dim embedding using MobileCLIP.
+
+        Args:
+            image_bytes: Raw JPEG/PNG bytes
+            use_cache: Use embedding cache (default True)
+
+        Returns:
+            512-dim L2-normalized embedding
+        """
+        # Check cache first
+        if use_cache:
+            cache = get_image_cache()
+            cache_key = hashlib.sha256(image_bytes).hexdigest()
+            cached_embedding = cache.get(cache_key)
+            if cached_embedding is not None:
+                return cached_embedding
+
+        # Get Triton client and encode
+        client = get_triton_client(self.settings.triton_url)
+        embedding = client.encode_image(image_bytes)
+
+        # Cache the result
+        if use_cache:
+            cache.set(cache_key, embedding)
+
+        return embedding
+
+    def encode_text(
+        self,
+        text: str,
+        use_cache: bool = True,
+    ) -> np.ndarray:
+        """
+        Encode text to 512-dim embedding using MobileCLIP text encoder.
+
+        Args:
+            text: Query text
+            use_cache: Use embedding cache (default True)
+
+        Returns:
+            512-dim L2-normalized embedding
+        """
+        # Check cache first
+        if use_cache:
+            cache = get_text_cache()
+            cache_key = hashlib.sha256(text.encode()).hexdigest()
+            cached_embedding = cache.get(cache_key)
+            if cached_embedding is not None:
+                return cached_embedding
+
+        # Tokenize using cached singleton
+        tokenizer = get_clip_tokenizer()
+        tokens = tokenizer(
+            text,
+            padding='max_length',
+            max_length=77,
+            truncation=True,
+            return_tensors='np',
+        )
+
+        # Get Triton client and encode
+        client = get_triton_client(self.settings.triton_url)
+        embedding = client.encode_text(tokens['input_ids'])
+
+        # Cache the result
+        if use_cache:
+            cache.set(cache_key, embedding)
+
+        return embedding
+
+    # =========================================================================
+    # Full Analysis
+    # =========================================================================
+
+    def analyze_full(
+        self,
+        image_bytes: bytes,
+        include_ocr: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Combined analysis: YOLO detection + faces + CLIP embedding + OCR.
+
+        Single request that returns all analysis results:
+        1. YOLO object detection
+        2. MobileCLIP global and per-box embeddings
+        3. YOLO11-face detection + ArcFace embeddings
+        4. PP-OCRv5 text detection and recognition (optional)
+
+        Args:
+            image_bytes: Raw JPEG/PNG bytes
+            include_ocr: Include OCR text extraction (default True)
+
+        Returns:
+            Dict with all analysis results:
+            - Detection: num_detections, detections
+            - Embeddings: image_embedding, box_embeddings
+            - Faces: num_faces, faces, face_embeddings
+            - OCR (if enabled): num_texts, texts, text_boxes
+            - Metadata: orig_shape
+        """
+        client = get_triton_client(self.settings.triton_url)
+
+        # Run face recognition pipeline (YOLO + CLIP + faces)
+        try:
+            face_result = client.infer_faces_full_yolo11(image_bytes, confidence=0.5)
+        except Exception as e:
+            logger.error(f'Full analysis failed: {e}')
+            return {
+                'status': 'error',
+                'error': str(e),
+            }
+
+        # Format YOLO detections
+        detections = client.format_detections(face_result)
+
+        orig_h, orig_w = face_result['orig_shape']
+
+        # Format face detections
+        faces = []
+        for i in range(face_result['num_faces']):
+            box = face_result['face_boxes'][i]
+            landmarks = face_result['face_landmarks'][i]
+            score = float(face_result['face_scores'][i])
+            quality = (
+                float(face_result['face_quality'][i])
+                if len(face_result['face_quality']) > i
+                else None
+            )
+
+            norm_box = [float(x) for x in box]
+            norm_landmarks = []
+            for j in range(0, 10, 2):
+                norm_landmarks.append(float(landmarks[j]) / orig_w)
+                norm_landmarks.append(float(landmarks[j + 1]) / orig_h)
+
+            faces.append(
+                {
+                    'box': norm_box,
+                    'landmarks': norm_landmarks,
+                    'score': score,
+                    'quality': quality,
+                }
+            )
+
+        face_embeddings = []
+        if face_result['num_faces'] > 0 and len(face_result['face_embeddings']) > 0:
+            face_embeddings = face_result['face_embeddings'].tolist()
+
+        result = {
+            'status': 'success',
+            # YOLO detections
+            'detections': detections,
+            'num_detections': len(detections),
+            # Face detections and embeddings
+            'num_faces': face_result['num_faces'],
+            'faces': faces,
+            'face_embeddings': face_embeddings,
+            # Global embedding
+            'image_embedding': face_result['image_embedding'],
+            'embedding_norm': float(np.linalg.norm(face_result['image_embedding'])),
+            # Image metadata
+            'orig_shape': (orig_h, orig_w),
+        }
+
+        # Run OCR if requested
+        if include_ocr:
+            try:
+                ocr_result = client.infer_ocr(image_bytes)
+                result['num_texts'] = ocr_result['num_texts']
+                result['texts'] = ocr_result['texts']
+                result['text_boxes'] = ocr_result['text_boxes'].tolist() if len(ocr_result['text_boxes']) > 0 else []
+                result['text_boxes_normalized'] = ocr_result['text_boxes_normalized'].tolist() if len(ocr_result['text_boxes_normalized']) > 0 else []
+                result['text_scores'] = ocr_result['text_scores'].tolist() if len(ocr_result['text_scores']) > 0 else []
+            except Exception as e:
+                logger.warning(f'OCR failed: {e}')
+                result['num_texts'] = 0
+                result['texts'] = []
+                result['text_boxes'] = []
+                result['text_boxes_normalized'] = []
+                result['text_scores'] = []
+                result['ocr_error'] = str(e)
+
+        return result
+
+
+# Singleton instance
+_inference_service: InferenceService | None = None
+
+
+def get_inference_service() -> InferenceService:
+    """Get singleton inference service instance."""
+    global _inference_service
+    if _inference_service is None:
+        _inference_service = InferenceService()
+    return _inference_service

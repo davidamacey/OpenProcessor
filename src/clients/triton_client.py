@@ -1,5 +1,5 @@
 """
-Unified Triton Client for All Tracks (C, D, E).
+Unified Triton Client for inference pipelines.
 
 Single client class that handles all Triton inference with proper connection pooling
 and shared utilities. Sync-only for backpressure safety (async causes server deadlock
@@ -9,7 +9,7 @@ Architecture:
 - Shared gRPC connection pool via TritonClientManager
 - Shared affine matrix calculation and JPEG parsing from utils/affine.py
 - Shared detection formatting from utils/affine.py
-- Clear method names per track: infer_track_c(), infer_track_d(), infer_track_e()
+- Clear method names: infer_yolo_end2end(), infer_yolo_clip(), infer_yolo_clip_cpu()
 
 Performance:
 - Sync client with thread pool: Proper backpressure, 200+ RPS
@@ -40,15 +40,16 @@ logger = logging.getLogger(__name__)
 
 class TritonClient:
     """
-    Unified Triton client for all inference tracks (C, D, E).
+    Unified Triton client for inference pipelines.
 
     CRITICAL: Uses sync gRPC only (not async) to prevent server deadlock
     at high concurrency (256+ clients). FastAPI handles async via thread pool.
 
-    Tracks:
-    - Track C: End2End TRT + GPU NMS (CPU preprocessing)
-    - Track D: DALI + TRT (100% GPU pipeline)
-    - Track E: YOLO + MobileCLIP ensemble (visual search)
+    Pipelines:
+    - infer_yolo_end2end: End2End TRT + GPU NMS (CPU preprocessing)
+    - infer_yolo_dali: DALI + TRT (100% GPU pipeline) [deprecated]
+    - infer_yolo_clip: YOLO + MobileCLIP ensemble (visual search, DALI)
+    - infer_yolo_clip_cpu: YOLO + MobileCLIP (CPU preprocessing)
     """
 
     def __init__(
@@ -105,11 +106,14 @@ class TritonClient:
         )
 
     # =========================================================================
-    # Track C: End2End TRT (CPU Preprocessing + GPU NMS)
+    # YOLO End2End: CPU Preprocessing + TensorRT + GPU NMS
     # =========================================================================
-    def infer_track_c(self, image_array: np.ndarray, model_name: str) -> dict[str, Any]:
+    def infer_yolo_end2end(self, image_array: np.ndarray, model_name: str) -> dict[str, Any]:
         """
-        Track C inference: CPU preprocessing + TensorRT End2End (GPU NMS).
+        YOLO End2End inference: CPU preprocessing + TensorRT with GPU NMS.
+
+        Uses CPU-based letterbox preprocessing then runs TensorRT End2End model
+        which includes GPU-accelerated NMS.
 
         Args:
             image_array: Preprocessed image (HWC, BGR, 0-255) from cv2.imdecode
@@ -181,9 +185,11 @@ class TritonClient:
             'padding': padding,
         }
 
-    def infer_track_c_batch(self, images: list, model_name: str) -> list:
+    def infer_yolo_end2end_batch(self, images: list, model_name: str) -> list:
         """
-        Track C batch inference: CPU preprocessing + TensorRT End2End (GPU NMS).
+        Batch YOLO End2End inference: CPU preprocessing + TensorRT with GPU NMS.
+
+        Processes multiple images in a single batched request for higher throughput.
 
         Args:
             images: List of images (HWC, BGR, 0-255) from cv2.imdecode
@@ -270,13 +276,17 @@ class TritonClient:
         return results
 
     # =========================================================================
-    # Track D: DALI + TRT (100% GPU Pipeline)
+    # YOLO DALI: Full GPU Pipeline (DEPRECATED - use infer_yolo_clip_cpu instead)
     # =========================================================================
-    def infer_track_d(
+    def infer_yolo_dali(
         self, image_bytes: bytes, model_name: str, auto_affine: bool = False
     ) -> dict[str, Any]:
         """
-        Track D inference: Full GPU pipeline with DALI preprocessing.
+        DEPRECATED: Use infer_yolo_clip_cpu() for stable high-throughput inference.
+
+        Full GPU pipeline with DALI preprocessing. While theoretically faster,
+        DALI ensembles can have stability issues at high concurrency. CPU
+        preprocessing with direct TRT calls provides more reliable throughput.
 
         GPU pipeline:
         1. nvJPEG decode (GPU)
@@ -343,11 +353,14 @@ class TritonClient:
         }
 
     # =========================================================================
-    # Track E: Visual Search Ensemble (YOLO + MobileCLIP)
+    # YOLO + MobileCLIP: Visual Search Ensemble (DALI preprocessing)
     # =========================================================================
-    def infer_track_e(self, image_bytes: bytes, full_pipeline: bool = False) -> dict[str, Any]:
+    def infer_yolo_clip(self, image_bytes: bytes, full_pipeline: bool = False) -> dict[str, Any]:
         """
-        Track E ensemble inference: YOLO + MobileCLIP.
+        YOLO + MobileCLIP ensemble inference for visual search.
+
+        Uses DALI for GPU preprocessing. Combines object detection with
+        image embedding extraction in a single request.
 
         Ensembles:
         - yolo_clip_ensemble: YOLO detections + global image embedding
@@ -426,11 +439,11 @@ class TritonClient:
 
         return result
 
-    def infer_track_e_batch(
+    def infer_yolo_clip_batch(
         self, images_bytes: list[bytes], max_workers: int = 32
     ) -> list[dict[str, Any]]:
         """
-        Track E batch inference: Process multiple images in parallel.
+        Batch YOLO + MobileCLIP inference: Process multiple images in parallel.
 
         Uses ThreadPoolExecutor to send parallel requests to Triton,
         which batches them via dynamic batching for optimal GPU utilization.
@@ -464,7 +477,7 @@ class TritonClient:
 
         def process_single(idx: int, img_bytes: bytes) -> tuple[int, dict]:
             """Process a single image and return (index, result)."""
-            result = self.infer_track_e(img_bytes, full_pipeline=False)
+            result = self.infer_yolo_clip(img_bytes, full_pipeline=False)
             return idx, result
 
         # Process in parallel
@@ -480,13 +493,13 @@ class TritonClient:
 
         return results
 
-    def infer_track_e_batch_full(
+    def infer_yolo_clip_batch_full(
         self,
         images_bytes: list[bytes],
         max_workers: int = 64,
     ) -> list[dict[str, Any]]:
         """
-        Track E batch inference with full pipeline (YOLO + CLIP + per-box embeddings).
+        Batch YOLO + MobileCLIP with full pipeline (detections + per-box embeddings).
 
         Optimized for large photo library ingestion:
         - Submits ALL images to Triton simultaneously
@@ -520,7 +533,7 @@ class TritonClient:
         def process_single(idx: int, img_bytes: bytes) -> tuple[int, dict]:
             """Process a single image with full pipeline."""
             try:
-                result = self.infer_track_e(img_bytes, full_pipeline=True)
+                result = self.infer_yolo_clip(img_bytes, full_pipeline=True)
                 return idx, result
             except Exception as e:
                 logger.error(f'Batch inference failed for image {idx}: {e}')
@@ -540,7 +553,7 @@ class TritonClient:
         return results
 
     # =========================================================================
-    # Individual Model Inference (Track E Components)
+    # Individual Model Inference (MobileCLIP Components)
     # =========================================================================
     def encode_image(self, image_bytes: bytes) -> np.ndarray:
         """
@@ -590,20 +603,23 @@ class TritonClient:
         return response.as_numpy('text_embeddings')[0]
 
     # =========================================================================
-    # Track F: CPU Preprocessing + Direct Model Calls (No DALI)
+    # YOLO + MobileCLIP: CPU Preprocessing (stable, high-throughput)
     # =========================================================================
-    def infer_track_f(self, image_bytes: bytes) -> dict[str, Any]:
+    def infer_yolo_clip_cpu(self, image_bytes: bytes) -> dict[str, Any]:
         """
-        Track F: CPU preprocessing + direct YOLO TRT + MobileCLIP TRT calls.
+        YOLO + MobileCLIP with CPU preprocessing for stable high-throughput inference.
 
-        Unlike Track E which uses DALI ensemble, Track F does:
+        Recommended for production ingestion pipelines. Uses CPU preprocessing
+        with direct TRT model calls:
         1. CPU decode (PIL/cv2)
         2. CPU letterbox for YOLO (640x640)
         3. CPU resize/crop for CLIP (256x256)
         4. Direct TRT inference for YOLO and CLIP
 
-        This allows comparison of CPU vs GPU preprocessing overhead,
-        and enables more TRT instances since DALI doesn't reserve VRAM.
+        Advantages over DALI pipeline:
+        - More stable at high concurrency (100% success rate)
+        - Enables more TRT instances since DALI doesn't reserve VRAM
+        - Simpler debugging and monitoring
 
         Args:
             image_bytes: Raw JPEG/PNG bytes
@@ -789,7 +805,7 @@ class TritonClient:
         return img_array[np.newaxis, ...]  # Add batch dimension
 
     # =========================================================================
-    # Track E Faces: YOLO + Face + CLIP Unified Ensemble
+    # Full Face Pipeline: YOLO + SCRFD + MobileCLIP + ArcFace Unified Ensemble
     # =========================================================================
     def infer_faces_full(self, image_bytes: bytes) -> dict[str, Any]:
         """
@@ -952,7 +968,7 @@ class TritonClient:
     # =========================================================================
     # Formatting Utilities (Shared across all tracks)
     # =========================================================================
-    # Track E Unified: YOLO + MobileCLIP + Person-only Face Detection
+    # Unified Pipeline: YOLO + MobileCLIP + Person-only Face Detection
     # =========================================================================
     def infer_unified(self, image_bytes: bytes) -> dict[str, Any]:
         """
@@ -1669,7 +1685,7 @@ class TritonClient:
         """
         Full pipeline with YOLO11-face: YOLO detection + MobileCLIP + YOLO11-face + ArcFace.
 
-        Combines Track E visual search capabilities with YOLO11-face detection:
+        Combines visual search capabilities with YOLO11-face detection:
         1. YOLO object detection (parallel with 2, 3)
         2. MobileCLIP global embedding (parallel with 1, 3)
         3. YOLO11-face detection + ArcFace embeddings (parallel with 1, 2)
@@ -1698,29 +1714,29 @@ class TritonClient:
         # Get cached affine matrix
         _affine_matrix, scale, padding = calculate_affine_matrix(orig_w, orig_h, self.input_size)
 
-        # Run Track E (YOLO + MobileCLIP) and YOLO11-face in parallel
-        def run_track_e():
-            return self.infer_track_e(image_bytes, full_pipeline=False)
+        # Run YOLO + MobileCLIP and YOLO11-face in parallel
+        def run_yolo_clip():
+            return self.infer_yolo_clip(image_bytes, full_pipeline=False)
 
         def run_yolo11_face():
             return self.infer_faces_yolo11(image_bytes, confidence=confidence)
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            track_e_future = executor.submit(run_track_e)
+            yolo_clip_future = executor.submit(run_yolo_clip)
             face_future = executor.submit(run_yolo11_face)
 
-            track_e_result = track_e_future.result()
+            yolo_clip_result = yolo_clip_future.result()
             face_result = face_future.result()
 
         # Combine results
         return {
-            # YOLO detections from Track E
-            'num_dets': track_e_result['num_dets'],
-            'boxes': track_e_result['boxes'],
-            'scores': track_e_result['scores'],
-            'classes': track_e_result['classes'],
-            # MobileCLIP global embedding from Track E
-            'image_embedding': track_e_result['image_embedding'],
+            # YOLO detections
+            'num_dets': yolo_clip_result['num_dets'],
+            'boxes': yolo_clip_result['boxes'],
+            'scores': yolo_clip_result['scores'],
+            'classes': yolo_clip_result['classes'],
+            # MobileCLIP global embedding
+            'image_embedding': yolo_clip_result['image_embedding'],
             # Face detections from YOLO11-face pipeline
             'num_faces': face_result['num_faces'],
             'face_boxes': face_result['face_boxes'],
@@ -2121,7 +2137,7 @@ class TritonClient:
         Format detections with coordinates normalized to original image dimensions.
 
         Uses shared utility from affine.py to apply inverse letterbox transformation.
-        This matches Track A (PyTorch boxes.xyxyn) coordinate output.
+        This matches PyTorch boxes.xyxyn coordinate output.
 
         Args:
             result: Inference result with boxes, scores, classes,

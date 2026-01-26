@@ -1,5 +1,5 @@
 """
-Track E: OpenSearch Client for Visual Search
+OpenSearch Client for Visual Search
 
 Multi-Index Architecture with FAISS IVF Clustering:
 

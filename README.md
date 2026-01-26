@@ -1,392 +1,219 @@
-# Triton YOLO Inference Server
+# Visual AI API
 
-**Process 100,000+ images with 10-15x speedup using NVIDIA Triton + YOLO11**
+**High-performance visual analysis API with NVIDIA Triton Inference Server.**
 
-High-performance object detection and visual search with GPU-accelerated inference, dynamic batching, DALI preprocessing, and MobileCLIP embeddings.
+Object detection, face recognition, visual search, OCR, and embeddings - all through a unified REST API with TensorRT acceleration.
 
 ---
 
-## Quick Start (5 Minutes)
-
-### 1. Start Services
+## Quick Start
 
 ```bash
+# Clone and start services
 cd /mnt/nvm/repos/triton-api
-
-# Start everything
 docker compose up -d
 
 # Wait for models to load (2-3 minutes first time)
 docker compose logs -f triton-api | grep "successfully loaded"
-# Press Ctrl+C when models show as READY
-```
 
-### 2. Verify
-
-```bash
-# Check services
-docker compose ps
+# Verify services are running
 curl http://localhost:4603/health
-
-# Check GPU
-nvidia-smi
-```
-
-### 3. Benchmark
-
-```bash
-cd benchmarks
-./build.sh                    # Build benchmark tool
-./triton_bench --mode quick   # Run 30-second test
-```
-
-**Done!** Results saved to `benchmarks/results/`
-
----
-
-## Five Performance Tracks
-
-| Track | Technology | Speedup | Best For |
-|-------|-----------|---------|----------|
-| **A** | PyTorch + CPU NMS | 1x (baseline) | Reference/debugging |
-| **B** | TensorRT + CPU NMS | 2x | Standard acceleration |
-| **C** | TensorRT + GPU NMS | 4x | Compiled NMS |
-| **D** | DALI + TRT + GPU NMS | **10-15x** | Maximum throughput |
-| **E** | YOLO + MobileCLIP + OpenSearch | N/A | Visual search |
-
-**Track D has 3 variants**: streaming (low latency), balanced (general), batch (max throughput)
-
-**Track E includes:**
-- Visual search with MobileCLIP embeddings + OpenSearch k-NN
-- Face detection (YOLO11-face or SCRFD) + ArcFace identity embeddings
-- OCR text extraction (PP-OCRv5) with trigram search
-- Batch ingestion endpoint (300+ RPS)
-
----
-
-## Benchmarking
-
-Single tool, 7 test modes:
-
-```bash
-cd benchmarks
-
-# Quick tests
-./triton_bench --mode single   # Test one image
-./triton_bench --mode quick    # 30-second check
-./triton_bench --mode full     # Full benchmark
-
-# Advanced
-./triton_bench --mode all          # Process all images
-./triton_bench --mode sustained    # Find max throughput
-./triton_bench --mode variable     # Variable load patterns
-```
-
-Common commands:
-
-```bash
-# Full test with 128 clients
-./triton_bench --mode full --clients 128 --duration 60
-
-# Test specific track
-./triton_bench --mode full --track D_batch --clients 256
-
-# Process your images
-./triton_bench --mode all --images /path/to/images --clients 128
-```
-
-Results auto-saved with timestamps: `benchmarks/results/quick_concurrency_20250116_153215.json`
-
-**For complete benchmark guide**: [benchmarks/README.md](benchmarks/README.md)
-
----
-
-## Expected Performance
-
-NVIDIA A100 GPU with 128-256 concurrent clients:
-
-| Track | Throughput | P50 Latency | Speedup |
-|-------|-----------|-------------|---------|
-| A (PyTorch) | 150-200 rps | 40-60ms | 1.0x |
-| B (TRT) | 300-400 rps | 20-30ms | 2.0x |
-| C (End2End) | 600-800 rps | 10-15ms | 4.0x |
-| D (Batch) | **1500-2500 rps** | 20-30ms | **12.5x** |
-
-**100,000 images**: PyTorch ~9 min, Track D ~40 seconds 🚀
-
----
-
-## Configuration
-
-### FastAPI Workers (Concurrency)
-
-Worker count configured in `docker-compose.yml`:
-- **Development/Testing**: 2 workers (when ENABLE_PYTORCH=true to avoid GPU memory waste)
-- **Production**: 64 workers × 512 concurrent = 32,768 total capacity
-
-**Change** in `docker-compose.yml` uvicorn command:
-```yaml
-- --workers=64  # Production: 64 workers for max throughput
-```
-
-### Triton Batching
-
-**Change** in `models/*/config.pbtxt`:
-```protobuf
-dynamic_batching {
-  preferred_batch_size: [ 8, 16, 32, 64 ]
-  max_queue_delay_microseconds: 5000
-}
-```
-
-### GPU Selection
-
-**Change** in `docker-compose.yml`:
-```yaml
-device_ids: [ '0', '2' ]  # Change GPU IDs here
 ```
 
 ---
 
-## Monitoring
+## API Endpoints
 
-While running benchmarks:
+All endpoints available on port **4603**.
 
-**Terminal 1: GPU**
-```bash
-nvidia-smi -l 1
-# Should show 80-100% utilization
-```
+### Object Detection
 
-**Terminal 2: Batching**
-```bash
-docker compose logs -f triton-api | grep "batch size"
-# Should show: batch size: 8, 16, 32, etc.
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/detect` | POST | YOLO object detection (single image) |
+| `/detect/batch` | POST | Batch detection (up to 64 images) |
 
-**Terminal 3: Grafana Dashboard**
-```bash
-# Open http://localhost:4605 (admin/admin)
-# Import dashboard: monitoring/triton-dashboard.json
-```
+### Face Recognition
 
----
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/faces/detect` | POST | Face detection with landmarks (YOLO11-face) |
+| `/faces/recognize` | POST | Detection + ArcFace 512-dim embeddings |
+| `/faces/verify` | POST | 1:1 face comparison (two images) |
+| `/faces/search` | POST | Find similar faces in index |
+| `/faces/identify` | POST | 1:N face identification |
 
-## Troubleshooting
+### Embeddings
 
-### No speed gains?
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/embed/image` | POST | MobileCLIP image embedding (512-dim) |
+| `/embed/text` | POST | MobileCLIP text embedding (512-dim) |
+| `/embed/batch` | POST | Batch image embeddings |
+| `/embed/boxes` | POST | Per-box crop embeddings |
 
-```bash
-# Check workers (should be 3 or 65)
-docker compose exec yolo-api ps aux | grep uvicorn | wc -l
+### Visual Search
 
-# Check batching (should show size > 1)
-docker compose logs triton-api | grep "batch size"
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/search/image` | POST | Image-to-image similarity search |
+| `/search/text` | POST | Text-to-image search |
+| `/search/face` | POST | Face similarity search |
+| `/search/ocr` | POST | Search images by text content |
+| `/search/object` | POST | Object-level search (vehicles, people) |
 
-# Try higher concurrency
-./triton_bench --mode full --clients 256
-```
+### Data Ingestion
 
-### Services won't start?
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ingest` | POST | Ingest image (auto-indexes faces, OCR, objects) |
+| `/ingest/batch` | POST | Batch ingest (up to 64 images) |
+| `/ingest/directory` | POST | Bulk ingest from server directory |
 
-```bash
-docker compose logs triton-api | grep -i error
-docker compose restart
-```
+### OCR (Text Extraction)
 
-### High error rate?
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ocr/predict` | POST | Extract text from image (PP-OCRv5) |
+| `/ocr/batch` | POST | Batch OCR processing |
 
-```bash
-docker stats                      # Check resources
-docker compose logs triton-api    # Check errors
-./triton_bench --mode full --clients 32  # Reduce load
-```
+### Combined Analysis
 
----
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/analyze` | POST | All models on single image (YOLO + faces + CLIP + OCR) |
+| `/analyze/batch` | POST | Batch combined analysis |
 
-## System Requirements
+### Clustering & Albums
 
-### Minimum
-- 16 CPU cores, 32GB RAM
-- NVIDIA GPU 8GB+ VRAM (Ampere+)
-- Docker 24.0+, NVIDIA Container Toolkit
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/clusters/train/{index}` | POST | Train FAISS clustering for an index |
+| `/clusters/stats/{index}` | GET | Get cluster statistics |
+| `/clusters/{index}/{id}` | GET | Get cluster members |
+| `/clusters/albums` | GET | List auto-generated albums |
 
-### Recommended
-- 48+ CPU cores, 64GB+ RAM
-- NVIDIA A100/A6000/RTX 4090 (16GB+)
-- 100GB+ NVMe SSD
+### Data Retrieval
 
----
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/query/image/{id}` | GET | Get stored image data/metadata |
+| `/query/stats` | GET | Index statistics for all indexes |
+| `/query/duplicates` | GET | List duplicate groups |
 
-## Project Structure
+### Health & Monitoring
 
-```
-triton-api/
-├── README.md                       # This file
-├── CLAUDE.md                       # AI assistant instructions
-├── ATTRIBUTION.md                  # Third-party code attribution
-├── Makefile                        # Development commands (60+ targets)
-├── docker-compose.yml              # Services orchestration
-├── Dockerfile                      # FastAPI service container
-├── Dockerfile.triton               # Triton server with PyTorch backend
-├── pyproject.toml                  # Python project config & linting
-│
-├── export/                         # Model export (all tracks)
-│   ├── export_models.py            # Main YOLO export tool
-│   ├── export_mobileclip_image_encoder.py  # Track E image encoder
-│   ├── export_mobileclip_text_encoder.py   # Track E text encoder
-│   └── download_pytorch_models.py  # Download .pt files
-│
-├── dali/                           # DALI preprocessing
-│   ├── create_dali_letterbox_pipeline.py   # Track D DALI
-│   ├── create_dual_dali_pipeline.py        # Track E triple-branch DALI
-│   ├── create_ensembles.py                 # Track D ensembles
-│   └── validate_*.py                       # Validation scripts
-│
-├── scripts/                        # Utilities
-│   ├── check_services.sh           # Health check
-│   └── track_e/                    # Track E setup scripts
-│       ├── setup_mobileclip_env.sh # Clone reference repos
-│       └── install_mobileclip_deps.sh
-│
-├── tests/                          # Testing & validation
-│   ├── test_inference.sh           # Integration test (all tracks)
-│   ├── compare_tracks.py           # Cross-track comparison
-│   ├── test_track_e_*.py           # Track E test suite
-│   └── test_*.py                   # Other test scripts
-│
-├── benchmarks/                     # Performance testing
-│   ├── triton_bench.go             # Go benchmark tool
-│   └── results/                    # Auto-generated results
-│
-├── models/                         # Triton model repository
-│   ├── yolov11_small_trt/          # Track B
-│   ├── yolov11_small_trt_end2end/  # Track C
-│   ├── yolo_preprocess_dali_batch/ # Track D DALI preprocessing
-│   ├── yolov11_small_gpu_e2e_batch/# Track D ensemble
-│   ├── mobileclip2_s2_image_encoder/   # Track E image encoder
-│   ├── mobileclip2_s2_text_encoder/    # Track E text encoder
-│   ├── dual_preprocess_dali/           # Track E triple-branch DALI
-│   ├── box_embedding_extractor/        # Track E per-box embeddings
-│   └── yolo_mobileclip_ensemble/       # Track E full ensemble
-│
-├── monitoring/                     # Prometheus & Grafana
-│   ├── prometheus.yml
-│   ├── grafana-datasources.yml
-│   └── dashboards/
-│
-├── docs/                           # Documentation
-│   ├── MODEL_EXPORT_GUIDE.md
-│   ├── TRACK_E_*.md                # Track E guides
-│   └── Tracks/                     # Per-track documentation
-│
-├── src/                            # FastAPI service
-│   ├── main.py                     # Application entry point
-│   ├── routers/                    # API endpoints (health, track_a, triton, track_e)
-│   ├── services/                   # Business logic (inference, visual_search)
-│   ├── clients/                    # Triton & OpenSearch clients
-│   ├── schemas/                    # Pydantic response models
-│   ├── config/                     # Settings & configuration
-│   └── utils/                      # Image processing, caching
-│
-└── reference_repos/                # External repos (cloned on setup)
-    ├── ml-mobileclip/              # Apple MobileCLIP (Track E)
-    └── open_clip/                  # OpenCLIP framework (Track E)
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Service health check |
+| `/health/models` | GET | Triton model status |
 
 ---
 
-## API Usage
+## Usage Examples
 
-**All tracks available on single service at port 4603:**
+### Python
 
 ```python
 import requests
 
-# Track A: PyTorch Baseline
-files = {'image': open('image.jpg', 'rb')}
-response = requests.post('http://localhost:4603/pytorch/predict/small', files=files)
+# Object Detection
+with open('image.jpg', 'rb') as f:
+    resp = requests.post('http://localhost:4603/detect', files={'image': f})
+print(resp.json())
+# {"detections": [{"box": [0.1, 0.2, 0.3, 0.4], "confidence": 0.95, "class_id": 0}], ...}
 
-# Track B: Standard TRT
-response = requests.post('http://localhost:4603/predict/small', files=files)
+# Face Recognition
+with open('photo.jpg', 'rb') as f:
+    resp = requests.post('http://localhost:4603/faces/recognize', files={'image': f})
+print(resp.json())
+# {"num_faces": 2, "faces": [...], "embeddings": [[...512 floats...], ...]}
 
-# Track C: End2End TRT + GPU NMS
-response = requests.post('http://localhost:4603/predict/small_end2end', files=files)
+# Image Embedding
+with open('image.jpg', 'rb') as f:
+    resp = requests.post('http://localhost:4603/embed/image', files={'image': f})
+embedding = resp.json()['embedding']  # 512-dim vector
 
-# Track D: DALI + TRT (Maximum Performance)
-response = requests.post('http://localhost:4603/predict/small_gpu_e2e_batch', files=files)
+# Text-to-Image Search
+resp = requests.post('http://localhost:4603/search/text',
+                    json={'query': 'a red sports car', 'top_k': 10})
+results = resp.json()['results']
 
-# Track E: Visual Search - Detection + Embeddings
-response = requests.post('http://localhost:4603/track_e/detect', files=files)
-response = requests.post('http://localhost:4603/track_e/predict', files=files)
-response = requests.post('http://localhost:4603/track_e/predict_full', files=files)
+# Image Ingestion (auto-indexes everything)
+with open('photo.jpg', 'rb') as f:
+    resp = requests.post('http://localhost:4603/ingest',
+                        files={'image': f},
+                        data={'image_id': 'photo_001'})
+print(resp.json())
+# {"status": "indexed", "image_id": "photo_001", "indexed": {"global": true, "faces": 2, "vehicles": 1}}
 
-# Track E: Embedding Only
-response = requests.post('http://localhost:4603/track_e/embed/image', files=files)
-response = requests.post('http://localhost:4603/track_e/embed/text', json={'text': 'a red car'})
+# OCR
+with open('document.jpg', 'rb') as f:
+    resp = requests.post('http://localhost:4603/ocr/predict', files={'image': f})
+print(resp.json())
+# {"num_texts": 5, "texts": ["Invoice", "Total: $100"], ...}
 
-# Track E: Image Ingestion
-response = requests.post('http://localhost:4603/track_e/ingest',
-                        files=files, data={'image_id': 'img_001'})
-
-# Track E: Image-to-Image Search
-response = requests.post('http://localhost:4603/track_e/search/image', files=files)
-
-# Track E: Text-to-Image Search
-response = requests.post('http://localhost:4603/track_e/search/text',
-                        json={'text': 'a red car', 'top_k': 10})
-
-# Track E: Object-Level Search
-response = requests.post('http://localhost:4603/track_e/search/object',
-                        files=files, data={'box_index': 0, 'top_k': 10})
-
-# Track E: Index Management
-response = requests.get('http://localhost:4603/track_e/index/stats')
-response = requests.post('http://localhost:4603/track_e/index/create')
-response = requests.delete('http://localhost:4603/track_e/index')
-
-# Track E: Batch Ingestion (300+ RPS)
-files = [('files', open(f, 'rb')) for f in image_paths]
-response = requests.post('http://localhost:4603/track_e/ingest_batch', files=files)
-
-# Track E: Face Detection (YOLO11-face or SCRFD)
-response = requests.post('http://localhost:4603/track_e/faces/detect',
-                        files=files, params={'detector': 'yolo11'})
-
-# Track E: Face Recognition (detection + ArcFace embeddings)
-response = requests.post('http://localhost:4603/track_e/faces/recognize', files=files)
-
-# Track E: Face Search
-response = requests.post('http://localhost:4603/track_e/faces/search',
-                        files=files, params={'top_k': 10})
-
-# Track E: OCR Text Extraction
-response = requests.post('http://localhost:4603/track_e/ocr/predict', files=files)
-
-# Track E: Search by OCR Text
-response = requests.post('http://localhost:4603/track_e/search/ocr',
-                        json={'query': 'STOP', 'top_k': 10})
-
-print(response.json())
+# Combined Analysis (everything in one call)
+with open('scene.jpg', 'rb') as f:
+    resp = requests.post('http://localhost:4603/analyze', files={'image': f})
+result = resp.json()
+# {"detections": [...], "faces": [...], "global_embedding": [...], "ocr": {...}}
 ```
 
-Response format (Tracks A-D):
+### cURL
+
+```bash
+# Detection
+curl -X POST http://localhost:4603/detect -F "image=@photo.jpg"
+
+# Face Recognition
+curl -X POST http://localhost:4603/faces/recognize -F "image=@face.jpg"
+
+# Text Search
+curl -X POST http://localhost:4603/search/text \
+    -H "Content-Type: application/json" \
+    -d '{"query": "sunset beach", "top_k": 10}'
+
+# Ingestion
+curl -X POST http://localhost:4603/ingest \
+    -F "image=@photo.jpg" \
+    -F "image_id=my_photo_001"
+```
+
+---
+
+## Response Formats
+
+### Detection Response
+
 ```json
 {
   "detections": [
-    {"x1": 0.245, "y1": 0.123, "x2": 0.456, "y2": 0.389,
-     "confidence": 0.94, "class_id": 0}
+    {"box": [0.1, 0.2, 0.3, 0.4], "confidence": 0.95, "class_id": 0, "class_name": "person"}
   ],
   "image": {"width": 1920, "height": 1080},
-  "model": {"name": "yolov11_small", "backend": "triton"},
-  "track": "D",
   "total_time_ms": 12.5
 }
 ```
 
-Response format (Track E search):
+### Face Recognition Response
+
 ```json
 {
+  "num_faces": 2,
+  "faces": [
+    {"box": [0.1, 0.2, 0.25, 0.35], "landmarks": [...], "score": 0.98}
+  ],
+  "embeddings": [[...512 floats...]],
+  "total_time_ms": 25.3
+}
+```
+
+### Search Response
+
+```json
+{
+  "status": "success",
   "results": [
     {"image_id": "img_001", "score": 0.95, "image_path": "/path/to/image.jpg"}
   ],
@@ -395,104 +222,130 @@ Response format (Track E search):
 }
 ```
 
-Response format (Track E faces/detect):
+### Ingest Response
+
 ```json
 {
-  "num_faces": 2,
-  "faces": [
-    {"box": [0.1, 0.2, 0.3, 0.4], "confidence": 0.98, "landmarks": [...]}
-  ],
-  "detector": "yolo11",
-  "total_time_ms": 25.3
+  "status": "indexed",
+  "image_id": "photo_001",
+  "indexed": {"global": true, "vehicles": 1, "people": 2, "faces": 2},
+  "ocr": {"num_texts": 3, "indexed": true},
+  "total_time_ms": 85.4
 }
 ```
-
-Response format (Track E ocr/predict):
-```json
-{
-  "status": "success",
-  "num_texts": 3,
-  "texts": ["STOP", "ONE WAY", "EXIT"],
-  "boxes_normalized": [[0.1, 0.2, 0.3, 0.25], ...],
-  "det_scores": [0.95, 0.92, 0.89],
-  "rec_scores": [0.98, 0.95, 0.91]
-}
-```
-
----
-
-## Documentation
-
-- **This README**: Overview and quick start (YOU ARE HERE)
-- **[CLAUDE.md](CLAUDE.md)**: AI assistant instructions and architecture overview
-- **[ATTRIBUTION.md](ATTRIBUTION.md)**: Third-party code attribution and licensing
-- **[Makefile](Makefile)**: 60+ development commands (`make help` for list)
-- **[benchmarks/README.md](benchmarks/README.md)**: Benchmark tool documentation
-- **[docs/](docs/)**: Technical reference documents
-  - [docs/MODEL_EXPORT_GUIDE.md](docs/MODEL_EXPORT_GUIDE.md): Complete export guide
-  - [docs/TRACK_E_GUIDE.md](docs/TRACK_E_GUIDE.md): Visual search setup and usage
 
 ---
 
 ## Architecture
 
-**Unified Single-Service Design:**
-- One FastAPI service (`yolo-api`) handles all 5 tracks
-- PyTorch models loaded at startup (Track A, when enabled)
-- Triton models accessed via gRPC per-request (Tracks B/C/D/E)
-- OpenSearch for vector similarity search (Track E)
-- Direct .plan files (no warmup needed)
-
-**Key Improvements:**
-1. **Simplified Deployment**: All services orchestrated via Docker Compose
-2. **Unified Endpoints**: All tracks on port 4603
-3. **Visual Search**: Track E adds MobileCLIP embeddings + OpenSearch k-NN
-4. **Production-Ready**: Direct TensorRT .plan files, instant startup
+```
+Client (Port 4603)
+       |
+       v
+  +----------+
+  | yolo-api |  FastAPI service (all endpoints)
+  +----------+
+       |
+       v
+  +-----------+     +------------+
+  | triton-api|     | opensearch |
+  | (GPU)     |     | (k-NN)     |
+  +-----------+     +------------+
+```
 
 **Services:**
-- `yolo-api`: FastAPI service (port 4603)
-- `triton-api`: Triton Inference Server (ports 4600-4602)
-- `opensearch`: Vector database for Track E (port 4607)
-- `prometheus`/`grafana`: Monitoring (ports 4604/4605)
+- `yolo-api` (port 4603): FastAPI service handling all requests
+- `triton-api` (ports 4600-4602): NVIDIA Triton Inference Server with TensorRT models
+- `opensearch` (port 4607): Vector database for similarity search
+- `prometheus/grafana` (ports 4604/4605): Monitoring stack
 
 ---
 
-## Production Deployment
+## Models
 
-- Change Grafana password (default: admin/admin)
-- Add TLS/SSL with reverse proxy
-- Configure resource limits in docker-compose.yml
-- Set up Prometheus alerts
-- Use multiple GPUs: `device_ids: ['0', '1', '2']`
-- **Track E**: Enable OpenSearch security plugin (`DISABLE_SECURITY_PLUGIN=false`)
-- **Track E**: Configure multi-node OpenSearch cluster for high availability
-- Increase workers: Set `--workers=64` in docker-compose.yml for production
+| Model | Purpose | Backend |
+|-------|---------|---------|
+| YOLO11 | Object detection | TensorRT End2End |
+| YOLO11-face | Face detection | TensorRT |
+| ArcFace | Face embeddings (512-dim) | TensorRT |
+| MobileCLIP | Image/text embeddings (512-dim) | TensorRT |
+| PP-OCRv5 | Text detection + recognition | TensorRT |
+
+All models use FP16 precision with dynamic batching for optimal throughput.
 
 ---
 
-## Resources
+## System Requirements
 
-- **NVIDIA Triton**: https://docs.nvidia.com/deeplearning/triton-inference-server/
-- **Ultralytics**: https://docs.ultralytics.com/
-- **NVIDIA DALI**: https://docs.nvidia.com/deeplearning/dali/
-- **OpenSearch**: https://opensearch.org/docs/latest/
-- **Apple MobileCLIP**: https://github.com/apple/ml-mobileclip
+**Minimum:**
+- NVIDIA GPU with 8GB+ VRAM (Ampere or newer)
+- 16GB RAM, 16 CPU cores
+- Docker with NVIDIA Container Toolkit
+
+**Recommended:**
+- NVIDIA A100/A6000/RTX 4090 (16GB+)
+- 64GB RAM, 48+ CPU cores
+- NVMe SSD for image storage
+
+---
+
+## Configuration
+
+### Worker Count
+
+```yaml
+# docker-compose.yml
+command: --workers=64  # Production
+command: --workers=2   # Development
+```
+
+### GPU Selection
+
+```yaml
+# docker-compose.yml
+device_ids: ['0', '2']  # Use GPUs 0 and 2
+```
+
+---
+
+## Benchmarking
+
+```bash
+cd benchmarks
+./build.sh
+./triton_bench --mode quick    # 30-second test
+./triton_bench --mode full     # Full benchmark
+```
+
+See [benchmarks/README.md](benchmarks/README.md) for detailed benchmarking guide.
+
+---
+
+## Documentation
+
+- **[CLAUDE.md](CLAUDE.md)**: AI assistant instructions and detailed architecture
+- **[docs/](docs/)**: Technical documentation
+  - [docs/OCR_SETUP_GUIDE.md](docs/OCR_SETUP_GUIDE.md): OCR model setup
+  - [docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md): Face recognition details
+  - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): Vector search schema
+- **[export/README.md](export/README.md)**: Model export documentation
+- **[benchmarks/README.md](benchmarks/README.md)**: Benchmark tool guide
 
 ---
 
 ## Attribution
 
-This project uses code from the [levipereira/ultralytics](https://github.com/levipereira/ultralytics) fork for end2end YOLO export with GPU-accelerated NMS. This enables **Track C** (4x speedup) and **Track D** (10-15x speedup) by embedding TensorRT EfficientNMS into the model.
+This project uses:
+- [NVIDIA Triton Inference Server](https://github.com/triton-inference-server/server)
+- [Ultralytics YOLO](https://github.com/ultralytics/ultralytics)
+- [levipereira/ultralytics](https://github.com/levipereira/ultralytics) fork for End2End TensorRT export
+- [Apple MobileCLIP](https://github.com/apple/ml-mobileclip)
+- [InsightFace ArcFace](https://github.com/deepinsight/insightface)
+- [YOLO11-face](https://github.com/akanametov/yolo-face)
+- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
 
-**Track E** uses:
-- [Apple MobileCLIP](https://github.com/apple/ml-mobileclip) for visual embeddings
-- [OpenSearch](https://opensearch.org/) for k-NN vector similarity search
-- [YOLO11-face](https://github.com/akanametov/yolo-face) for face detection (alternative to SCRFD)
-- [ArcFace](https://github.com/deepinsight/insightface) for face identity embeddings
-- [PP-OCRv5](https://github.com/PaddlePaddle/PaddleOCR) for text detection and recognition
-
-See [ATTRIBUTION.md](ATTRIBUTION.md) for complete third-party code attribution and licensing information.
+See [ATTRIBUTION.md](ATTRIBUTION.md) for complete licensing information.
 
 ---
 
-**Built for maximum throughput** 🚀 *100K+ images in minutes, visual search in milliseconds*
+**Built for maximum throughput** - Process 100K+ images in minutes, visual search in milliseconds.

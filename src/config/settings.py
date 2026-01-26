@@ -12,47 +12,25 @@ from pydantic_settings import BaseSettings
 
 
 class TritonModelConfig:
-    """Model configurations for all tracks."""
+    """Model configurations for visual search pipeline."""
 
-    # Track A: PyTorch models (loaded at startup)
-    PYTORCH_MODELS: dict[str, str] = {
-        'small': '/app/pytorch_models/yolo11s.pt',
-    }
+    # Object Detection
+    YOLO_MODEL = 'yolov11_small_trt_end2end'
 
-    # Track B: Standard TRT (CPU NMS)
-    STANDARD_MODELS: dict[str, str] = {
-        'small': 'grpc://triton-api:8001/yolov11_small_trt',
-    }
+    # Face Detection/Recognition
+    FACE_DETECT_MODEL = 'yolo11_face_small_trt_end2end'
+    ARCFACE_MODEL = 'arcface_w600k_r50'
 
-    # Track C: End2End TRT (GPU NMS)
-    END2END_MODELS: dict[str, str] = {
-        'small': 'yolov11_small_trt_end2end',
-    }
+    # CLIP Embeddings
+    CLIP_IMAGE_MODEL = 'mobileclip2_s2_image_encoder'
+    CLIP_TEXT_MODEL = 'mobileclip2_s2_text_encoder'
 
-    # Track D: DALI+TRT (Full GPU) - three variants
-    GPU_E2E_MODELS: dict[str, str] = {
-        'small': 'yolov11_small_gpu_e2e',
-    }
+    # OCR
+    OCR_DET_MODEL = 'paddleocr_det_trt'
+    OCR_REC_MODEL = 'paddleocr_rec_trt'
 
-    GPU_E2E_BATCH_MODELS: dict[str, str] = {
-        'small': 'yolov11_small_gpu_e2e_batch',
-    }
-
-    GPU_E2E_STREAMING_MODELS: dict[str, str] = {
-        'small': 'yolov11_small_gpu_e2e_streaming',
-    }
-
-    # Track E: Visual Search ensembles
-    ENSEMBLE_MODELS: dict[str, str] = {
-        'yolo_clip': 'yolo_clip_ensemble',
-        'yolo_mobileclip': 'yolo_mobileclip_ensemble',
-    }
-
-    # MobileCLIP encoder models
-    CLIP_MODELS: dict[str, str] = {
-        'image_encoder': 'mobileclip2_s2_image_encoder',
-        'text_encoder': 'mobileclip2_s2_text_encoder',
-    }
+    # Face Pipeline (Python backend)
+    FACE_PIPELINE = 'yolo11_face_pipeline'
 
 
 class Settings(BaseSettings):
@@ -60,13 +38,8 @@ class Settings(BaseSettings):
     Application settings with environment variable support.
 
     All settings can be overridden via environment variables.
-    Example: ENABLE_PYTORCH=true TRITON_URL=localhost:8001 python -m src.main
+    Example: TRITON_URL=localhost:8001 python -m src.main
     """
-
-    # ==========================================================================
-    # Feature Flags
-    # ==========================================================================
-    enable_pytorch: bool = Field(default=False, description='Enable Track A PyTorch endpoints')
 
     # ==========================================================================
     # Triton Configuration
@@ -78,7 +51,7 @@ class Settings(BaseSettings):
     triton_grpc_timeout: float = Field(default=30.0, description='gRPC timeout in seconds')
 
     # ==========================================================================
-    # OpenSearch Configuration (Track E)
+    # OpenSearch Configuration
     # ==========================================================================
     opensearch_url: str = Field(
         default='http://opensearch:9200', description='OpenSearch endpoint URL'
@@ -125,15 +98,15 @@ class Settings(BaseSettings):
     # API Configuration
     # ==========================================================================
     api_title: str = Field(
-        default='Unified YOLO Inference API (All Tracks)', description='API title for OpenAPI docs'
+        default='Visual Search API', description='API title for OpenAPI docs'
     )
 
     api_description: str = Field(
-        default='All-in-one YOLO inference service - Tracks A/B/C/D/E',
+        default='Unified visual search with object detection, face recognition, and CLIP embeddings',
         description='API description for OpenAPI docs',
     )
 
-    api_version: str = Field(default='5.0.0', description='API version')
+    api_version: str = Field(default='6.0.0', description='API version')
 
     # ==========================================================================
     # Computed Properties

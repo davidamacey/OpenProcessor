@@ -2,7 +2,7 @@
 Detection-related Pydantic models.
 
 Industry-standard response format for object detection inference.
-All tracks (A, B, C, D, E) use consistent schema with timing and metadata.
+All inference methods use consistent schema with timing and metadata.
 """
 
 from pydantic import BaseModel, Field
@@ -51,7 +51,7 @@ class InferenceResult(BaseModel):
     - Image metadata (dimensions)
     - Model metadata (name, backend)
     - Performance timing (injected by middleware)
-    - Track-specific metadata (preprocessing, NMS location)
+    - Pipeline metadata (preprocessing, NMS location)
     """
 
     # Core detection results
@@ -68,10 +68,10 @@ class InferenceResult(BaseModel):
     # Model metadata
     model: ModelMetadata | None = Field(None, description='Model and backend information')
 
-    # Track metadata
-    track: str | None = Field(None, description='Performance track used (A, B, C, D, E)')
+    # Pipeline metadata
+    pipeline: str | None = Field(None, description='Inference pipeline used')
     preprocessing: str | None = Field(
-        None, description='Preprocessing method (cpu, gpu_dali, gpu_dali_auto)'
+        None, description='Preprocessing method (cpu, gpu)'
     )
     nms_location: str | None = Field(None, description='NMS execution location (cpu, gpu)')
 
@@ -91,7 +91,7 @@ class BatchImageResult(BaseModel):
     )
     num_detections: int = Field(default=0, description='Number of detections')
     status: str = Field(default='success', description="'success' or 'error'")
-    track: str | None = Field(None, description='Performance track used')
+    pipeline: str | None = Field(None, description='Inference pipeline used')
     image: ImageMetadata | None = Field(None, description='Image dimensions')
     error: str | None = Field(None, description='Error message if failed')
 
