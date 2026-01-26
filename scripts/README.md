@@ -15,7 +15,7 @@ bash scripts/check_services.sh
 **Checks:**
 - Docker container status
 - Triton server health (port 4600)
-- Model availability (Tracks B/C/D)
+- Model availability (all Triton models)
 - FastAPI endpoints (port 4603)
 - GPU status and memory
 
@@ -36,21 +36,6 @@ python scripts/resize_images.py /path/to/images --size 1024 --output /path/to/ou
 - 100% JPEG quality (no compression artifacts)
 - Parallel processing via multiprocessing
 - Progress bar with ETA
-
-## Subfolders
-
-### track_e/
-
-Track E setup and configuration scripts (MobileCLIP + OpenSearch).
-
-See [track_e/README.md](track_e/README.md) for complete documentation.
-
-**Scripts:**
-- `create_triton_configs.py` - Generate Triton model configurations
-- `setup_mobileclip_env.sh` - Host-side MobileCLIP environment setup
-- `install_mobileclip_deps.sh` - Container-side dependency installation
-
-**Note:** Ingestion and search operations are now available via FastAPI endpoints (`/track_e/ingest`, `/track_e/search/*`).
 
 ## Makefile Operations
 
@@ -77,7 +62,7 @@ make test          # Run tests
 
 | Service | Port |
 |---------|------|
-| FastAPI (all tracks) | 4603 |
+| FastAPI | 4603 |
 | Triton HTTP | 4600 |
 | Triton gRPC | 4601 |
 | Triton metrics | 4602 |
