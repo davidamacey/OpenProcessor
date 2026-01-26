@@ -124,6 +124,20 @@ docker compose up -d
 curl http://localhost:4603/health
 ```
 
+### Run Tests
+
+```bash
+# Comprehensive test suite (32 tests)
+source .venv/bin/activate
+python tests/test_full_system.py
+
+# Visual validation with bounding boxes
+python tests/validate_visual_results.py
+
+# View annotated test images
+ls test_results/*.jpg
+```
+
 ### Run Benchmarks
 
 ```bash
