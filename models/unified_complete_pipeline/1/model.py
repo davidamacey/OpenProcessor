@@ -6,22 +6,22 @@ Complete GPU-accelerated pipeline combining all analysis capabilities:
 1. YOLO object detection
 2. MobileCLIP global image embedding
 3. MobileCLIP per-box embeddings
-4. Face detection (selectable: SCRFD on person crops OR YOLO11-face full image)
+4. Face detection (selectable: unified ensemble OR YOLO11-face full image)
 5. ArcFace face embeddings
 6. PP-OCRv5 text detection and recognition
 
 Face Model Selection:
-- "scrfd" (default): SCRFD face detection on person crops only (more efficient)
+- "unified" (default): Unified ensemble (detection + embeddings + faces in one pass)
 - "yolo11": YOLO11-face detection on full image (may detect more faces)
 
 Architecture:
     Inputs:
         - encoded_images: Raw JPEG/PNG bytes
         - affine_matrices: YOLO letterbox transformation [2, 3]
-        - face_model: STRING "scrfd" or "yolo11" (default: "scrfd")
+        - face_model: STRING "unified" or "yolo11" (default: "unified")
 
     Processing:
-        For SCRFD mode:
+        For unified mode:
             1. Call yolo_unified_ensemble (detection + embeddings + faces in one pass)
             2. Run OCR
 
@@ -253,7 +253,7 @@ class TritonPythonModel:
             logger.warning(f'OCR dictionary not found: {DICT_PATH}')
 
         logger.info(f'Initialized unified_complete_pipeline (device={self.device})')
-        logger.info('  Face models: SCRFD (person crops) / YOLO11 (full image)')
+        logger.info('  Face models: Unified ensemble / YOLO11-face (full image)')
         logger.info('  Components: YOLO + CLIP + Face + ArcFace + OCR')
 
     def _triton_to_numpy(self, tensor):
@@ -281,7 +281,7 @@ class TritonPythonModel:
         encoded_images = pb_utils.get_input_tensor_by_name(request, 'encoded_images')
         affine_matrices = pb_utils.get_input_tensor_by_name(request, 'affine_matrices')
 
-        # Get optional face_model parameter (default: "scrfd")
+        # Get optional face_model parameter (default: "unified")
         face_model_tensor = pb_utils.get_input_tensor_by_name(request, 'face_model')
         if face_model_tensor is not None:
             # Handle various array shapes from client ([1], [1,1], etc.)
@@ -293,19 +293,19 @@ class TritonPythonModel:
                 else:
                     face_model = str(face_model_bytes).lower().strip()
             else:
-                face_model = 'scrfd'
+                face_model = 'unified'
         else:
-            face_model = 'scrfd'
+            face_model = 'unified'
 
         logger.info(f'Processing with face_model={face_model}')
 
         if face_model == 'yolo11':
             return self._process_with_yolo11_face(encoded_images, affine_matrices)
         else:
-            return self._process_with_scrfd(encoded_images, affine_matrices)
+            return self._process_with_unified_ensemble(encoded_images, affine_matrices)
 
-    def _process_with_scrfd(self, encoded_images, affine_matrices):
-        """Process using SCRFD face detection on person crops (default, more efficient)."""
+    def _process_with_unified_ensemble(self, encoded_images, affine_matrices):
+        """Process using unified ensemble (detection + embeddings + faces in one pass)."""
 
         # =================================================================
         # Step 1: Call yolo_unified_ensemble for detection + embeddings + faces
@@ -334,7 +334,7 @@ class TritonPythonModel:
         image_bytes = encoded_images.as_numpy().flatten().tobytes()
         ocr_result = self._run_ocr(image_bytes)
 
-        return self._create_response(result, ocr_result, face_model='scrfd')
+        return self._create_response(result, ocr_result, face_model='unified')
 
     def _process_with_yolo11_face(self, encoded_images, affine_matrices):
         """Process using YOLO11-face detection on full image."""
