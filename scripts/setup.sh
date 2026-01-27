@@ -19,7 +19,7 @@
 #   7. Run smoke tests
 # =============================================================================
 
-set -e
+set -eo pipefail
 
 # =============================================================================
 # Configuration
@@ -350,6 +350,36 @@ download_models_step() {
 }
 
 # =============================================================================
+# Docker Image Build
+# =============================================================================
+
+build_docker_images() {
+    if [[ "$SKIP_EXPORT" == "true" ]] && [[ "$SKIP_START" == "true" ]]; then
+        log_info "Skipping Docker build (export and start both skipped)"
+        return 0
+    fi
+
+    print_section "Building Docker Images"
+
+    log_info "Building container images (first run pulls base images)."
+    log_info "This is a one-time step; subsequent runs use cached layers."
+    echo ""
+
+    # Build both images. First run pulls:
+    #   - python:3.13-slim-trixie (~50MB) + pip packages for yolo-api
+    #   - nvcr.io/nvidia/tritonserver:25.10-py3 (~15GB) for triton-server
+    log_step "Building yolo-api image..."
+    docker compose build yolo-api
+    log_success "yolo-api image ready"
+
+    log_step "Building triton-server image..."
+    docker compose build triton-server
+    log_success "triton-server image ready"
+
+    log_success "Docker images built"
+}
+
+# =============================================================================
 # TensorRT Export
 # =============================================================================
 
@@ -389,32 +419,10 @@ export_models_step() {
         fi
     fi
 
-    # Start yolo-api container for exports that use Python TRT API
-    # (YOLO, ArcFace, MobileCLIP exports run inside yolo-api container)
-    # Use --no-deps to avoid starting triton-server which would crash without model files
-    log_info "Starting yolo-api container for model exports..."
-    docker compose up -d --no-deps yolo-api
-
-    # Wait for yolo-api container to be running
-    log_info "Waiting for yolo-api container..."
-    local yolo_ready=false
-    for i in {1..30}; do
-        if docker ps --format '{{.Names}}' | grep -q "^yolo-api$"; then
-            yolo_ready=true
-            break
-        fi
-        sleep 2
-    done
-
-    if [[ "$yolo_ready" != "true" ]]; then
-        log_error "yolo-api container failed to start"
-        return 1
-    fi
-    log_success "yolo-api container ready"
-
-    # PaddleOCR TRT export uses 'docker compose run' to create a temporary
-    # triton-server container for trtexec, avoiding the chicken-and-egg problem
-    # where triton-server crashes because model.plan files don't exist yet.
+    # All exports use 'docker compose run --rm --no-deps -T' to create temporary
+    # containers. This avoids the chicken-and-egg problem where triton-server
+    # crashes because model.plan files don't exist yet, and yolo-api crash-loops
+    # because it can't connect to triton-server.
 
     # Export based on profile
     # Use || true to prevent set -e from aborting setup on partial failures.
@@ -472,7 +480,7 @@ start_services_step() {
         fi
     fi
 
-    # Stop any running containers first (including yolo-api from export step)
+    # Stop any running containers first
     log_info "Stopping existing containers..."
     docker compose stop 2>/dev/null || true
     docker compose rm -f 2>/dev/null || true
@@ -488,10 +496,10 @@ start_services_step() {
 wait_for_services() {
     print_section "Waiting for Services"
 
-    # Wait for Triton HTTP endpoint
+    # Wait for Triton HTTP endpoint (up to 5 minutes for first-time model loading)
     log_info "Waiting for Triton HTTP endpoint..."
     local triton_http=false
-    for i in {1..60}; do
+    for i in {1..150}; do
         if curl -s localhost:4600/v2/health/ready > /dev/null 2>&1; then
             triton_http=true
             break
@@ -502,10 +510,13 @@ wait_for_services() {
     echo ""
 
     if [[ "$triton_http" != "true" ]]; then
-        log_error "Triton HTTP endpoint not responding after 120s"
-        return 1
+        log_warn "Triton HTTP endpoint not responding after 300s"
+        log_info "Triton may still be loading models. Check: docker compose logs triton-server"
+        log_info "Continuing setup - smoke tests may fail."
+        # Don't return 1 here; let smoke tests diagnose specific failures
+    else
+        log_success "Triton HTTP endpoint ready"
     fi
-    log_success "Triton HTTP endpoint ready"
 
     # Wait for required models to load
     log_info "Waiting for TensorRT models to load..."
@@ -777,23 +788,37 @@ main() {
     create_directories
 
     # Step 4: Download models
-    download_models_step
+    # Allow partial failures: exports will re-attempt individual downloads as needed
+    local download_rc=0
+    download_models_step || download_rc=$?
+    if [[ $download_rc -ne 0 ]]; then
+        log_warn "Some model downloads failed. Setup will continue."
+        log_info "Missing models can be re-downloaded: ./scripts/openprocessor.sh download all"
+    fi
 
-    # Step 5: Export to TensorRT
+    # Step 5: Build Docker images (first run pulls base images)
+    build_docker_images
+
+    # Step 6: Export to TensorRT
     export_models_step
 
-    # Step 6: Generate configuration
+    # Step 7: Generate configuration
     generate_configs_step
 
-    # Step 7: Start services
-    start_services_step
+    # Step 8: Start services
+    local start_rc=0
+    start_services_step || start_rc=$?
+    if [[ $start_rc -ne 0 ]]; then
+        log_warn "Some services may not be fully ready yet."
+        log_info "Check status: ./scripts/openprocessor.sh status"
+    fi
 
-    # Step 8: Smoke tests
+    # Step 9: Smoke tests
     if [[ "$SKIP_START" != "true" ]]; then
         run_smoke_test
     fi
 
-    # Step 9: Success summary
+    # Step 10: Success summary
     print_success_summary
 }
 

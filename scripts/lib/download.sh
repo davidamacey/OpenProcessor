@@ -264,21 +264,30 @@ download_profile_models() {
 download_paddleocr_models() {
     log_step "Downloading PaddleOCR models..."
 
-    # Check if container is running
-    if ! docker ps --format '{{.Names}}' | grep -q "^yolo-api$"; then
-        log_error "yolo-api container not running"
-        log_info "Start with: docker compose up -d yolo-api"
-        return 1
+    # Try host .venv first (no Docker dependency)
+    local venv_python="$PROJECT_DIR/.venv/bin/python"
+    if [[ -f "$venv_python" ]]; then
+        if "$venv_python" "$PROJECT_DIR/export/download_paddleocr.py"; then
+            log_success "PaddleOCR models downloaded"
+            return 0
+        fi
     fi
 
-    # Run download script in container
-    if docker compose exec yolo-api python /app/export/download_paddleocr.py; then
-        log_success "PaddleOCR models downloaded"
-        return 0
+    # Try running container, fall back to temporary container
+    if docker ps --format '{{.Names}}' | grep -q "^yolo-api$"; then
+        if docker compose exec -T yolo-api python /app/export/download_paddleocr.py; then
+            log_success "PaddleOCR models downloaded"
+            return 0
+        fi
     else
-        log_error "PaddleOCR download failed"
-        return 1
+        if docker compose run --rm --no-deps -T yolo-api python /app/export/download_paddleocr.py; then
+            log_success "PaddleOCR models downloaded"
+            return 0
+        fi
     fi
+
+    log_error "PaddleOCR download failed"
+    return 1
 }
 
 # =============================================================================
