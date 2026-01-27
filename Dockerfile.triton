@@ -17,8 +17,8 @@ LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
 
 # Install PyTorch and TorchVision (CUDA 12.x compatible)
 # Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)
+# Note: torch/torchvision use the PyTorch CUDA 12.4 wheel index
 RUN pip install --no-cache-dir \
-    pip==24.3.1 \
     torch==2.5.1 \
     torchvision==0.20.1 \
     --index-url https://download.pytorch.org/whl/cu124 \
