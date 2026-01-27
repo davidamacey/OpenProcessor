@@ -223,11 +223,11 @@ class TritonPythonModel:
     def _call_arcface(self, faces):
         """Call ArcFace via BLS."""
         try:
-            input_tensor = pb_utils.Tensor("input.1", faces)
+            input_tensor = pb_utils.Tensor("input", faces)
 
             infer_request = pb_utils.InferenceRequest(
                 model_name="arcface_w600k_r50",
-                requested_output_names=["683"],
+                requested_output_names=["output"],
                 inputs=[input_tensor],
                 preferred_memory=pb_utils.PreferredMemory(
                     pb_utils.TRITONSERVER_MEMORY_CPU
@@ -240,7 +240,7 @@ class TritonPythonModel:
                 logger.error(f"ArcFace error: {infer_response.error().message()}")
                 return None
 
-            output = pb_utils.get_output_tensor_by_name(infer_response, "683")
+            output = pb_utils.get_output_tensor_by_name(infer_response, "output")
             return torch.from_numpy(output.as_numpy()).to(self.device)
 
         except Exception as e:

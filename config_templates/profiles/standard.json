@@ -1,0 +1,12 @@
+{
+  "name": "standard",
+  "description": "12-24GB VRAM (RTX 3080, RTX 4090)",
+  "instance_count": 2,
+  "max_batch_size": 32,
+  "preferred_batch_sizes": [8, 16, 32],
+  "shm_size": "6g",
+  "opensearch_heap": "2g",
+  "workers": 16,
+  "models": "all",
+  "notes": "All models with balanced parallelism. Good for most workloads."
+}

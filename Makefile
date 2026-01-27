@@ -120,7 +120,7 @@ logs-opensearch: ## Follow OpenSearch logs
 
 .PHONY: status
 status: ## Check health of all services
-	@bash $(SCRIPTS_DIR)/check_services.sh
+	@bash $(SCRIPTS_DIR)/triton-api.sh status
 
 .PHONY: health
 health: status ## Alias for status
@@ -135,31 +135,31 @@ ps: ## Show running containers
 
 .PHONY: test-detect
 test-detect: ## Test object detection endpoint
-	curl -X POST http://localhost:$(API_PORT)/detect -F "image=@test_images/sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/detect -F "image=@test_images/bus.jpg" | jq
 
 .PHONY: test-faces
 test-faces: ## Test face detection/recognition
-	curl -X POST http://localhost:$(API_PORT)/faces/recognize -F "image=@test_images/faces/sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/faces/recognize -F "image=@test_images/zidane.jpg" | jq
 
 .PHONY: test-embed
 test-embed: ## Test embedding endpoints
-	curl -X POST http://localhost:$(API_PORT)/embed/image -F "image=@test_images/sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/embed/image -F "image=@test_images/bus.jpg" | jq
 
 .PHONY: test-ocr
 test-ocr: ## Test OCR endpoint
-	curl -X POST http://localhost:$(API_PORT)/ocr/predict -F "image=@test_images/ocr_sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/ocr/predict -F "image=@test_images/ocr-synthetic/caution_sign.jpg" | jq
 
 .PHONY: test-analyze
 test-analyze: ## Test combined analysis
-	curl -X POST http://localhost:$(API_PORT)/analyze -F "image=@test_images/sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/analyze -F "image=@test_images/zidane.jpg" | jq
 
 .PHONY: test-search
 test-search: ## Test image search
-	curl -X POST http://localhost:$(API_PORT)/search/image -F "image=@test_images/sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/search/image -F "image=@test_images/bus.jpg" | jq
 
 .PHONY: test-ingest
 test-ingest: ## Test image ingestion
-	curl -X POST http://localhost:$(API_PORT)/ingest -F "file=@test_images/sample.jpg" | jq
+	curl -X POST http://localhost:$(API_PORT)/ingest -F "image=@test_images/bus.jpg" | jq
 
 .PHONY: test-all
 test-all: ## Run all endpoint tests
@@ -208,7 +208,7 @@ test-shared-client: ## Test shared vs per-request client performance
 BENCH_DURATION := 30s
 BENCH_CLIENTS := 32
 BENCH_REQUESTS := 1000
-TEST_IMAGE := test_images/sample.jpg
+TEST_IMAGE := test_images/bus.jpg
 
 .PHONY: bench-detect
 bench-detect: ## Benchmark detection endpoint with wrk

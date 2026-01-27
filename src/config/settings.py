@@ -6,9 +6,19 @@ Use get_settings() to access the singleton settings instance.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+
+def _read_version() -> str:
+    """Read version from VERSION file at project root."""
+    version_file = Path(__file__).resolve().parent.parent.parent / 'VERSION'
+    try:
+        return version_file.read_text().strip()
+    except FileNotFoundError:
+        return '0.0.0'
 
 
 class TritonModelConfig:
@@ -104,7 +114,7 @@ class Settings(BaseSettings):
         description='API description for OpenAPI docs',
     )
 
-    api_version: str = Field(default='6.0.0', description='API version')
+    api_version: str = Field(default_factory=_read_version, description='API version')
 
     # ==========================================================================
     # Logging Configuration

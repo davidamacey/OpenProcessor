@@ -1,0 +1,18 @@
+{
+  "name": "minimal",
+  "description": "6-8GB VRAM (RTX 3060, RTX 4060)",
+  "instance_count": 1,
+  "max_batch_size": 16,
+  "preferred_batch_sizes": [4, 8, 16],
+  "shm_size": "4g",
+  "opensearch_heap": "1g",
+  "workers": 8,
+  "models": [
+    "yolov11_small_trt_end2end",
+    "yolo11_face_small_trt_end2end",
+    "arcface_w600k_r50",
+    "mobileclip2_s2_image_encoder",
+    "mobileclip2_s2_text_encoder"
+  ],
+  "notes": "Core models only - OCR optional. Reduced batch sizes and parallelism."
+}

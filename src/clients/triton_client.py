@@ -1654,13 +1654,13 @@ class TritonClient:
         face_crops = np.stack(crops, axis=0)
 
         # Call ArcFace directly (no BLS)
-        arcface_inputs = [InferInput('input.1', list(face_crops.shape), 'FP32')]
+        arcface_inputs = [InferInput('input', list(face_crops.shape), 'FP32')]
         arcface_inputs[0].set_data_from_numpy(face_crops)
-        arcface_outputs = [InferRequestedOutput('683')]
+        arcface_outputs = [InferRequestedOutput('output')]
         arcface_response = self._infer_with_retry(
             'arcface_w600k_r50', arcface_inputs, arcface_outputs
         )
-        embeddings = arcface_response.as_numpy('683')
+        embeddings = arcface_response.as_numpy('output')
 
         # L2 normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -2320,14 +2320,14 @@ class TritonClient:
             batch = faces[i : i + max_batch_size]
             batch_size = batch.shape[0]
 
-            input_tensor = InferInput('input.1', [batch_size, 3, 112, 112], 'FP32')
+            input_tensor = InferInput('input', [batch_size, 3, 112, 112], 'FP32')
             input_tensor.set_data_from_numpy(batch.astype(np.float32))
 
-            output = InferRequestedOutput('683')
+            output = InferRequestedOutput('output')
 
             response = self._infer_with_retry('arcface_w600k_r50', [input_tensor], [output])
 
-            embeddings = response.as_numpy('683')
+            embeddings = response.as_numpy('output')
             all_embeddings.append(embeddings)
 
         return np.vstack(all_embeddings) if all_embeddings else np.empty((0, 512), dtype=np.float32)

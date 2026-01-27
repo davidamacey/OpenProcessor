@@ -51,7 +51,6 @@ services:
 
   yolo-api:
     container_name: yolo-api
-    pull_policy: always
     restart: always
     build:
       context: .
@@ -63,12 +62,10 @@ services:
       - ./tests:/app/tests
       - ./benchmarks:/app/benchmarks
       - ./models:/app/models
+      - ./pytorch_models:/app/pytorch_models
       - ./test_images:/app/test_images
-      - ./reference_repos:/app/reference_repos  # MobileCLIP repos (persisted)
+      - ./VERSION:/app/VERSION:ro
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
-      - ./outputs:/app/outputs  # Mosaic outputs and clustering results
-      - /mnt/nvm/KILLBOY_SAMPLE_PICTURES:/mnt/nvm/KILLBOY_SAMPLE_PICTURES:ro  # Test data (YOLO)
-      - /mnt/nvm/FACE_TEST_IMAGES:/mnt/nvm/FACE_TEST_IMAGES:ro  # Test data (faces)
     environment:
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
