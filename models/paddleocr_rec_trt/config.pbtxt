@@ -2,14 +2,15 @@
 #
 # SVTR-LCNet architecture for text sequence recognition
 # Supports dynamic width for variable-length text recognition
+# Multilingual model: Chinese + English + symbols (18385 character classes)
 #
 # Input:
 #   - x: [B, 3, 48, W] FP32, preprocessed (x / 127.5 - 1), BGR
 #        Text crops with height=48, width=48-2048
 #
 # Output:
-#   - fetch_name_0: [B, T, 438] FP32, character probabilities
-#        T timesteps (dynamic), 438 character classes (English dict)
+#   - fetch_name_0: [B, T, 18385] FP32, character probabilities
+#        T timesteps (dynamic), 18385 character classes (multilingual dict)
 #
 # TensorRT engine exported with dynamic batch (max=64) and dynamic width.
 
@@ -29,7 +30,7 @@ output [
   {
     name: "fetch_name_0"
     data_type: TYPE_FP32
-    dims: [ -1, 438 ]
+    dims: [ -1, 18385 ]
   }
 ]
 

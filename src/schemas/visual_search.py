@@ -341,7 +341,7 @@ class FaceIdentityIdentifyRequest(BaseModel):
 
     top_k: int = Field(5, ge=1, le=100, description='Number of matches to return per face')
     threshold: float = Field(0.6, ge=0.0, le=1.0, description='Similarity threshold for match')
-    face_detector: str = Field('yolo11', description='Face detector to use')
+    face_detector: str = Field('scrfd', description='Face detector to use')
 
 
 class FaceIdentityIdentifyResponse(BaseModel):

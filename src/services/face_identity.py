@@ -247,7 +247,7 @@ class FaceIdentityService:
         image_bytes: bytes,
         top_k: int = 5,
         threshold: float = 0.6,
-        _face_detector: str = 'yolo11',
+        _face_detector: str = 'scrfd',
     ) -> dict:
         """
         1:N face identification - find matching persons in database.

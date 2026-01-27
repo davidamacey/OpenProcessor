@@ -43,14 +43,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MODELS_DIR="$PROJECT_DIR/models"
 PYTORCH_MODELS_DIR="$PROJECT_DIR/pytorch_models/paddleocr"
-EXPORTS_DIR="$PROJECT_DIR/models/exports/ocr"
 
 # Model paths
 DET_ONNX_NAME="ppocr_det_v5_mobile.onnx"
-REC_ONNX_NAME="en_ppocrv5_mobile_rec.onnx"
+REC_ONNX_NAME="ppocr_rec_v5_mobile.onnx"
 DET_PLAN="$MODELS_DIR/paddleocr_det_trt/1/model.plan"
 REC_PLAN="$MODELS_DIR/paddleocr_rec_trt/1/model.plan"
-DICT_FILE="$MODELS_DIR/paddleocr_rec_trt/en_ppocrv5_dict.txt"
+DICT_FILE="$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt"
 
 # TensorRT configuration
 # CRITICAL: Use --memPoolSize=workspace:8G syntax (not --workspace)
@@ -117,10 +116,11 @@ unload_models_for_memory() {
         "ocr_pipeline"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
-        "yolov11_small_trt"
         "yolov11_small_trt_end2end"
-        "mobileclip_image_trt"
-        "mobileclip_text_trt"
+        "scrfd_10g_bnkps"
+        "arcface_w600k_r50"
+        "mobileclip2_s2_image_encoder"
+        "mobileclip2_s2_text_encoder"
     )
 
     for model in "${models_to_unload[@]}"; do
@@ -136,7 +136,7 @@ unload_models_for_memory() {
 # =============================================================================
 
 download_models() {
-    log_info "Downloading PP-OCRv5 detection ONNX..."
+    log_info "Downloading PP-OCRv5 ONNX models (detection + multilingual recognition)..."
 
     local download_ok=false
 
@@ -161,93 +161,12 @@ download_models() {
     fi
 
     if [ "$download_ok" = true ]; then
-        log_success "Detection ONNX downloaded"
+        log_success "ONNX models downloaded (detection + multilingual recognition)"
     else
-        log_error "Detection model download failed"
+        log_error "Model download failed"
         log_info "Ensure either .venv or yolo-api container is available"
         return 1
     fi
-
-    # For recognition, generate English-only ONNX from PaddleX
-    # (The downloaded model is multilingual with 18385 classes, but we need
-    # the English-only model with 438 classes from PaddleX)
-    export_recognition_onnx
-}
-
-# =============================================================================
-# PaddleOCR Recognition ONNX Export (English-only via PaddleX)
-# =============================================================================
-# IMPORTANT: The recognition ONNX must be generated from PaddleX, NOT downloaded.
-# The multilingual model from GitHub has 18385 output classes, but we need the
-# English-only model with 438 classes (436 chars + blank + space).
-#
-# This requires PaddleX and paddle2onnx installed in the host .venv
-# (NOT available in Docker containers).
-# =============================================================================
-
-export_recognition_onnx() {
-    log_info "Generating English recognition ONNX from PaddleX..."
-
-    # Check if ONNX already exists
-    if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ] && [ -s "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
-        local size
-        size=$(du -h "$EXPORTS_DIR/$REC_ONNX_NAME" | cut -f1)
-        log_info "English recognition ONNX already exists: $size"
-        return 0
-    fi
-
-    mkdir -p "$EXPORTS_DIR"
-
-    # Check for .venv with PaddleX
-    local venv_python="$PROJECT_DIR/.venv/bin/python"
-    if [ ! -f "$venv_python" ]; then
-        log_error "Python virtual environment not found: $PROJECT_DIR/.venv"
-        log_info "Create with: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
-        return 1
-    fi
-
-    # Check PaddleX is installed
-    if ! "$venv_python" -c "import paddlex" 2>/dev/null; then
-        log_error "PaddleX not installed in .venv"
-        log_info "Install with: source .venv/bin/activate && pip install paddlex paddle2onnx"
-        return 1
-    fi
-
-    # Check PaddleX model is downloaded
-    local paddlex_model_dir="$HOME/.paddlex/official_models/en_PP-OCRv5_mobile_rec"
-    if [ ! -d "$paddlex_model_dir" ]; then
-        log_info "Downloading PaddleX English recognition model..."
-        # PaddleOCR auto-downloads on first use
-        "$venv_python" -c "
-import os
-os.environ['DISABLE_MODEL_SOURCE_CHECK'] = 'True'
-from paddleocr import PaddleOCR
-ocr = PaddleOCR(lang='en')
-print('PaddleX model downloaded')
-" 2>/dev/null || {
-            log_error "Failed to download PaddleX model"
-            return 1
-        }
-    fi
-
-    # Run ONNX export using the host Python environment
-    log_info "Exporting English ONNX (438 classes) via PaddleX + paddle2onnx..."
-    log_info "  Source: $paddlex_model_dir"
-    log_info "  Output: $EXPORTS_DIR/$REC_ONNX_NAME"
-
-    cd "$PROJECT_DIR" || return 1
-    if DISABLE_MODEL_SOURCE_CHECK=True "$venv_python" export/export_paddleocr_rec.py --skip-tensorrt 2>&1 | tee /tmp/export_paddleocr_rec_onnx.log; then
-        if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ] && [ -s "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
-            local size
-            size=$(du -h "$EXPORTS_DIR/$REC_ONNX_NAME" | cut -f1)
-            log_success "English recognition ONNX exported: $size"
-            return 0
-        fi
-    fi
-
-    log_error "Recognition ONNX export failed"
-    log_info "Check log: /tmp/export_paddleocr_rec_onnx.log"
-    return 1
 }
 
 # =============================================================================
@@ -309,31 +228,19 @@ export_detection() {
 }
 
 export_recognition() {
-    log_info "Exporting recognition model to TensorRT..."
+    log_info "Exporting multilingual recognition model to TensorRT..."
 
     local onnx_path="/models/$REC_ONNX_NAME"
     local plan_path="/models/paddleocr_rec_trt/1/model.plan"
 
-    # Check ONNX exists (may be in exports dir or pytorch_models)
-    local onnx_source=""
-    if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
-        onnx_source="$EXPORTS_DIR/$REC_ONNX_NAME"
-    elif [ -f "$PYTORCH_MODELS_DIR/$REC_ONNX_NAME" ]; then
-        onnx_source="$PYTORCH_MODELS_DIR/$REC_ONNX_NAME"
-    else
-        # Auto-generate English ONNX from PaddleX if not found
-        log_warn "English recognition ONNX not found, generating from PaddleX..."
-        export_recognition_onnx || return 1
-
-        # Re-check after generation
-        if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
-            onnx_source="$EXPORTS_DIR/$REC_ONNX_NAME"
-        else
-            log_error "Recognition ONNX still not found after generation attempt"
-            log_info "Expected: $EXPORTS_DIR/$REC_ONNX_NAME"
-            return 1
-        fi
+    # Check ONNX exists in pytorch_models/paddleocr (downloaded by download_paddleocr.py)
+    if [ ! -f "$PYTORCH_MODELS_DIR/$REC_ONNX_NAME" ]; then
+        log_error "Recognition ONNX not found: $PYTORCH_MODELS_DIR/$REC_ONNX_NAME"
+        log_info "Run: ./scripts/export_paddleocr.sh download"
+        return 1
     fi
+
+    local onnx_source="$PYTORCH_MODELS_DIR/$REC_ONNX_NAME"
 
     # Copy ONNX to models dir for container access
     cp "$onnx_source" "$MODELS_DIR/$REC_ONNX_NAME"
@@ -386,7 +293,7 @@ export_all_trt() {
     # Export detection
     export_detection || return 1
 
-    # Export recognition (auto-generates ONNX from PaddleX if needed)
+    # Export recognition
     export_recognition || return 1
 
     log_success "All TensorRT exports complete"
@@ -401,7 +308,7 @@ setup_dictionary() {
 
     mkdir -p "$(dirname "$DICT_FILE")"
 
-    # Check if dictionary already exists
+    # Check if dictionary already exists with correct character count
     if [ -f "$DICT_FILE" ]; then
         local char_count
         char_count=$(wc -l < "$DICT_FILE")
@@ -409,41 +316,28 @@ setup_dictionary() {
         return 0
     fi
 
-    # Try to extract from PaddleX model config using host .venv
-    # (PaddleX model is on the host, not in Docker containers)
-    local venv_python="$PROJECT_DIR/.venv/bin/python"
-    local paddlex_config="$HOME/.paddlex/official_models/en_PP-OCRv5_mobile_rec/inference.yml"
-
-    if [ -f "$venv_python" ] && [ -f "$paddlex_config" ]; then
-        log_info "Extracting dictionary from PaddleX config..."
-        "$venv_python" -c "
-import yaml
-from pathlib import Path
-
-config_path = Path('$paddlex_config')
-with open(config_path, 'r') as f:
-    config = yaml.safe_load(f)
-
-char_dict = config.get('PostProcess', {}).get('character_dict', [])
-if char_dict:
-    output_path = Path('$DICT_FILE')
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
-        for char in char_dict:
-            f.write(f'{char}\n')
-    print(f'Wrote {len(char_dict)} characters to dictionary')
-else:
-    print('No character_dict found in config')
-" 2>/dev/null || true
+    # Copy multilingual dictionary from downloaded models
+    # The download_paddleocr.py script downloads ppocr_keys_v1.txt (6623 chars)
+    # but the multilingual PP-OCRv5 model uses ppocrv5_dict.txt (18383 chars).
+    # Check for ppocrv5_dict.txt first, then fall back to ppocr_keys_v1.txt.
+    local dict_source=""
+    if [ -f "$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt" ]; then
+        dict_source="$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt"
+    elif [ -f "$PYTORCH_MODELS_DIR/ppocrv5_dict.txt" ]; then
+        dict_source="$PYTORCH_MODELS_DIR/ppocrv5_dict.txt"
+    elif [ -f "$PYTORCH_MODELS_DIR/ppocr_keys_v1.txt" ]; then
+        dict_source="$PYTORCH_MODELS_DIR/ppocr_keys_v1.txt"
     fi
 
-    if [ -f "$DICT_FILE" ]; then
+    if [ -n "$dict_source" ]; then
+        mkdir -p "$(dirname "$DICT_FILE")"
+        cp "$dict_source" "$DICT_FILE"
         local char_count
         char_count=$(wc -l < "$DICT_FILE")
-        log_success "Dictionary created: $char_count characters"
+        log_success "Dictionary created: $char_count characters (from $dict_source)"
     else
-        log_warn "Could not extract dictionary automatically"
-        log_info "Please ensure en_ppocrv5_dict.txt is placed in $MODELS_DIR/paddleocr_rec_trt/"
+        log_warn "Dictionary not found in downloaded models"
+        log_info "Please place ppocrv5_dict.txt in $MODELS_DIR/paddleocr_rec_trt/"
     fi
 }
 
@@ -509,8 +403,8 @@ EOF
 #        Text crops with height=48, width=48-2048
 #
 # Output:
-#   - fetch_name_0: [B, T, 438] FP32, character probabilities
-#        T timesteps (dynamic), 438 character classes (English dict)
+#   - fetch_name_0: [B, T, 18385] FP32, character probabilities
+#        T timesteps (dynamic), 18385 character classes (multilingual dict)
 #
 # TensorRT engine exported with dynamic batch (max=64) and dynamic width.
 
@@ -530,7 +424,7 @@ output [
   {
     name: "fetch_name_0"
     data_type: TYPE_FP32
-    dims: [ -1, 438 ]
+    dims: [ -1, 18385 ]
   }
 ]
 
@@ -585,7 +479,7 @@ run_test() {
         local test_image="$PROJECT_DIR/test_images/ocr-synthetic/hello_world.jpg"
         if [ -f "$test_image" ]; then
             log_info "Testing with: $test_image"
-            curl -s -X POST http://localhost:4603/track_e/ocr/predict \
+            curl -s -X POST http://localhost:4603/ocr/predict \
                 -F "image=@$test_image" | python -m json.tool
         else
             log_warn "No test image found at: $test_image"
