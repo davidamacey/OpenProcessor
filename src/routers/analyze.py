@@ -45,6 +45,9 @@ class DetectionResult(BaseModel):
     confidence: float = Field(..., description='Detection confidence score')
     class_id: int = Field(..., description='COCO class ID (0-79)')
     class_name: str | None = Field(default=None, description='Human-readable class name')
+    embedding: list[float] | None = Field(
+        default=None, description='512-dim MobileCLIP crop embedding (if include_embedding=True)'
+    )
 
 
 class FaceResult(BaseModel):
@@ -224,9 +227,16 @@ def analyze_image(
         ocr_service = get_ocr_service()
 
         # Run all pipelines in parallel using ThreadPoolExecutor
+        # Architecture: YOLO+CLIP, faces, OCR start in parallel.
+        # As soon as YOLO returns detections, crop embedding tasks are
+        # submitted to the same pool — overlapping with faces/OCR.
+        import io
+
+        import numpy as np
+        from PIL import Image
+
         def run_yolo_and_clip():
             t0 = time.perf_counter()
-            # YOLO + CLIP with CPU preprocessing in one call
             from src.clients.triton_client import get_triton_client
             from src.config import get_settings
 
@@ -250,37 +260,94 @@ def analyze_image(
             timing['ocr_ms'] = (time.perf_counter() - t0) * 1000
             return result
 
-        # Execute in parallel
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        def run_crop_embeddings(
+            det_list: list[DetectionResult],
+            img_w: int,
+            img_h: int,
+        ) -> np.ndarray | None:
+            """Batch-encode all detection crops via single Triton call."""
+            if not det_list or img_w <= 0 or img_h <= 0:
+                return None
+            t0 = time.perf_counter()
+            from src.clients.triton_client import get_triton_client
+            from src.config import get_settings
+            from src.services.cpu_preprocess import center_crop_cpu
+
+            pil_img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            np_img = np.array(pil_img)
+
+            # CPU crop + preprocess all detections into a single [N, 3, 256, 256] batch
+            preprocessed = []
+            for det in det_list:
+                x1, y1, x2, y2 = det.box
+                px1, py1 = int(x1 * img_w), int(y1 * img_h)
+                px2, py2 = int(x2 * img_w), int(y2 * img_h)
+                if px2 > px1 and py2 > py1:
+                    crop_rgb = np_img[py1:py2, px1:px2]
+                    preprocessed.append(center_crop_cpu(crop_rgb, target_size=256))
+                else:
+                    # Placeholder for invalid boxes (zero tensor)
+                    preprocessed.append(np.zeros((3, 256, 256), dtype=np.float32))
+
+            batch_tensor = np.stack(preprocessed)  # [N, 3, 256, 256]
+
+            # Single batched Triton inference call
+            settings = get_settings()
+            client = get_triton_client(settings.triton_url)
+            embeddings = client.infer_mobileclip_batch(batch_tensor)
+            timing['crop_embeddings_ms'] = (time.perf_counter() - t0) * 1000
+            return embeddings  # [N, 512]
+
+        # Phase 1: Submit YOLO+CLIP, faces, OCR in parallel
+        # Phase 2: As soon as YOLO returns boxes, submit batched crop embeddings
+        #          (overlaps with faces/OCR still running)
+        with ThreadPoolExecutor(max_workers=4) as executor:
             yolo_clip_future = executor.submit(run_yolo_and_clip)
             faces_future = executor.submit(run_faces)
             ocr_future = executor.submit(run_ocr)
 
+            # Wait for YOLO+CLIP first (needed for detection boxes)
             yolo_clip_result = yolo_clip_future.result()
+
+            # Parse detections immediately
+            detections: list[DetectionResult] = []
+            if yolo_clip_result.get('num_dets', 0) > 0:
+                formatted = format_detections_from_triton(yolo_clip_result, input_size=640)
+                detections.extend(
+                    DetectionResult(
+                        box=[det['x1'], det['y1'], det['x2'], det['y2']],
+                        confidence=det['confidence'],
+                        class_id=det['class'],
+                        class_name=det.get('class_name'),
+                    )
+                    for det in formatted
+                    if det['confidence'] >= confidence
+                )
+
+            orig_shape = yolo_clip_result.get('orig_shape', (0, 0))
+            img_height = orig_shape[0] if orig_shape else 0
+            img_width = orig_shape[1] if orig_shape else 0
+
+            # Submit batched crop embeddings (runs in parallel with faces/OCR)
+            crop_future = None
+            if include_embedding and detections:
+                crop_future = executor.submit(
+                    run_crop_embeddings, detections, img_width, img_height
+                )
+
+            # Wait for faces and OCR (may already be done)
             faces_result = faces_future.result()
             ocr_result = ocr_future.result()
 
-        # Parse YOLO + CLIP results
-        import numpy as np
-
-        detections: list[DetectionResult] = []
-        if yolo_clip_result.get('num_dets', 0) > 0:
-            formatted = format_detections_from_triton(yolo_clip_result, input_size=640)
-            detections.extend(
-                DetectionResult(
-                    box=[det['x1'], det['y1'], det['x2'], det['y2']],
-                    confidence=det['confidence'],
-                    class_id=det['class'],
-                    class_name=det.get('class_name'),
-                )
-                for det in formatted
-                if det['confidence'] >= confidence
-            )
-
-        # Get image dimensions from orig_shape (height, width)
-        orig_shape = yolo_clip_result.get('orig_shape', (0, 0))
-        img_height = orig_shape[0] if orig_shape else 0
-        img_width = orig_shape[1] if orig_shape else 0
+            # Collect batched crop embeddings
+            if crop_future is not None:
+                try:
+                    crop_embeddings = crop_future.result()
+                    if crop_embeddings is not None:
+                        for i, det in enumerate(detections):
+                            det.embedding = crop_embeddings[i].tolist()
+                except Exception:
+                    logger.warning('Failed to generate batched crop embeddings')
 
         # Parse global embedding
         global_embedding = None
@@ -483,6 +550,37 @@ def analyze_batch(
                         for det in formatted
                         if det['confidence'] >= confidence
                     )
+
+                # Generate CLIP crop embeddings via batched Triton call
+                batch_orig_w = batch_orig_shape[1] if batch_orig_shape else 0
+                batch_orig_h = batch_orig_shape[0] if batch_orig_shape else 0
+                if include_embedding and detections and batch_orig_w > 0 and batch_orig_h > 0:
+                    try:
+                        import io
+
+                        from PIL import Image
+
+                        from src.services.cpu_preprocess import center_crop_cpu
+
+                        np_img = np.array(Image.open(io.BytesIO(image_bytes)).convert('RGB'))
+                        preprocessed = []
+                        for det in detections:
+                            x1, y1, x2, y2 = det.box
+                            px1, py1 = int(x1 * batch_orig_w), int(y1 * batch_orig_h)
+                            px2, py2 = int(x2 * batch_orig_w), int(y2 * batch_orig_h)
+                            if px2 > px1 and py2 > py1:
+                                preprocessed.append(
+                                    center_crop_cpu(np_img[py1:py2, px1:px2], target_size=256)
+                                )
+                            else:
+                                preprocessed.append(np.zeros((3, 256, 256), dtype=np.float32))
+                        batch_tensor = np.stack(preprocessed)
+                        crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
+                        for det_i, det in enumerate(detections):
+                            det.embedding = crop_embeddings[det_i].tolist()
+                    except Exception:
+                        logger.warning(f'Failed to generate crop embeddings for {filename}')
+
                 result.detections = detections
 
                 # Faces

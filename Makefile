@@ -161,14 +161,34 @@ test-search: ## Test image search
 test-ingest: ## Test image ingestion
 	curl -X POST http://localhost:$(API_PORT)/ingest -F "image=@test_images/bus.jpg" | jq
 
+.PHONY: test-verify
+test-verify: ## Test face verification (1:1 comparison)
+	curl -X POST http://localhost:$(API_PORT)/faces/verify -F "image1=@test_images/zidane.jpg" -F "image2=@test_images/zidane.jpg" | jq
+
+.PHONY: test-embed-text
+test-embed-text: ## Test text embedding
+	curl -X POST http://localhost:$(API_PORT)/embed/text -H "Content-Type: application/json" -d '{"text": "a photo of a bus"}' | jq
+
+.PHONY: test-embed-boxes
+test-embed-boxes: ## Test bounding box crop embeddings
+	curl -X POST http://localhost:$(API_PORT)/embed/boxes -F "image=@test_images/zidane.jpg" -F 'boxes=[[0.09,0.27,0.87,0.98],[0.57,0.05,0.89,0.98]]' | jq '{num_boxes: .num_boxes, status: .status, embedding_dims: (.boxes[0].embedding | length), total_time_ms: .total_time_ms}'
+
+.PHONY: test-analyze-full
+test-analyze-full: ## Test combined analysis with all embeddings
+	curl -X POST "http://localhost:$(API_PORT)/analyze?include_embedding=true&include_face_embeddings=true" -F "image=@test_images/zidane.jpg" | jq '{status, image, num_detections, num_faces, global_embedding_dims: (.global_embedding | length), embedding_norm, detection_embeddings: [.detections[] | {class_name, confidence, embedding_dims: (.embedding | length)}], face_embeddings: [.faces[] | {score, embedding_dims: (.embedding | length)}], ocr_texts: .ocr.num_texts, total_time_ms}'
+
 .PHONY: test-all
 test-all: ## Run all endpoint tests
 	@echo "Testing all endpoints..."
 	$(MAKE) test-detect
 	$(MAKE) test-faces
+	$(MAKE) test-verify
 	$(MAKE) test-embed
+	$(MAKE) test-embed-text
 	$(MAKE) test-ocr
 	$(MAKE) test-analyze
+	$(MAKE) test-ingest
+	$(MAKE) test-search
 
 .PHONY: test-api-health
 test-api-health: ## Test API health
@@ -955,7 +975,7 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 
 .PHONY: help up down restart restart-triton restart-api build rebuild \
         logs logs-triton logs-api logs-opensearch status health ps \
-        test-detect test-faces test-embed test-ocr test-analyze test-search test-ingest test-all \
+        test-detect test-faces test-verify test-embed test-embed-text test-embed-boxes test-ocr test-analyze test-analyze-full test-search test-ingest test-all \
         test-api-health test-inference test-integration test-patch test-onnx test-shared-client \
         bench-quick bench-detect bench-faces bench-embed bench-ingest bench-search bench-results bench-python \
         models-list models-status models-reload \

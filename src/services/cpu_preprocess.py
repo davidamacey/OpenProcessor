@@ -7,7 +7,7 @@ benchmarking CPU vs GPU preprocessing overhead.
 
 Preprocessing functions:
 - letterbox_cpu: YOLO letterbox (640x640, matches Ultralytics LetterBox)
-- center_crop_cpu: MobileCLIP resize + center crop (256x256, matches OpenCLIP)
+- center_crop_cpu: MobileCLIP resize + center crop (256x256, BILINEAR per Apple/OpenCLIP)
 - resize_hd_cpu: HD resize for face alignment (max 1920px longest edge)
 
 All tensors are CHW format, FP32, normalized to [0, 1] range.
@@ -176,10 +176,13 @@ def center_crop_cpu(
     target_size: int = 256,
 ) -> np.ndarray:
     """
-    CPU preprocessing for MobileCLIP (matches OpenCLIP preprocessing).
+    CPU preprocessing for MobileCLIP (matches Apple's OpenCLIP MobileCLIP config).
 
-    Resizes shortest edge to target_size, then center crops to
-    target_size x target_size.
+    Uses BILINEAR interpolation (cv2.INTER_LINEAR) per OpenCLIP _mccfg which sets
+    interpolation='bilinear' for all MobileCLIP variants. Normalization is simple
+    /255 (mean=0, std=1) per Apple's MobileCLIP2-S2 config.
+
+    Pipeline: resize shortest edge → center crop → normalize [0,1] → CHW
 
     Args:
         img_rgb: HWC, RGB, uint8 numpy array

@@ -779,6 +779,9 @@ class TritonClient:
         """
         Preprocess image for MobileCLIP inference.
 
+        Uses BILINEAR interpolation to match Apple's MobileCLIP training config
+        (OpenCLIP _mccfg sets interpolation='bilinear').
+
         Args:
             image_bytes: JPEG/PNG bytes
 
@@ -787,12 +790,12 @@ class TritonClient:
         """
         img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
 
-        # Resize shortest edge to 256, then center crop (matches OpenCLIP)
+        # Resize shortest edge to 256, then center crop (matches OpenCLIP MobileCLIP config)
         width, height = img.size
         scale = 256 / min(width, height)
         new_width = int(width * scale)
         new_height = int(height * scale)
-        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        img = img.resize((new_width, new_height), Image.Resampling.BILINEAR)
 
         # Center crop to 256x256
         left = (new_width - 256) // 2
@@ -2192,6 +2195,11 @@ class TritonClient:
         Returns:
             [N, 512] FP32 L2-normalized embeddings
         """
+        if crops.ndim != 4 or crops.shape[1:] != (3, 256, 256):
+            raise ValueError(f'Expected crops shape [N, 3, 256, 256], got {crops.shape}')
+        if crops.dtype != np.float32:
+            crops = crops.astype(np.float32)
+
         if crops.shape[0] == 0:
             return np.empty((0, 512), dtype=np.float32)
 

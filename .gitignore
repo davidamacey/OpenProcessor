@@ -273,6 +273,7 @@ $RECYCLE.BIN/
 *.temp
 *.bak
 *.backup
+*.old
 *.orig
 *.rej
 *.swp
