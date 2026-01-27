@@ -599,10 +599,10 @@ run_smoke_test() {
     # Test 1: Health endpoint
     log_info "Testing /health endpoint..."
     if curl -s localhost:4603/health | grep -q "healthy"; then
-        log_success "[1/6] Health check - PASS"
+        log_success "[1/8] Health check - PASS"
         passed=$((passed + 1))
     else
-        log_error "[1/6] Health check - FAIL"
+        log_error "[1/8] Health check - FAIL"
         failed=$((failed + 1))
     fi
 
@@ -613,10 +613,10 @@ run_smoke_test() {
     if echo "$detect_result" | grep -q "detections"; then
         local det_count
         det_count=$(echo "$detect_result" | grep -o '"class_name"' | wc -l)
-        log_success "[2/6] Object detection - PASS ($det_count objects detected)"
+        log_success "[2/8] Object detection - PASS ($det_count objects detected)"
         passed=$((passed + 1))
     else
-        log_error "[2/6] Object detection - FAIL"
+        log_error "[2/8] Object detection - FAIL"
         echo "  Response: $(echo "$detect_result" | head -c 200)"
         failed=$((failed + 1))
     fi
@@ -629,15 +629,15 @@ run_smoke_test() {
         if echo "$face_result" | grep -q "faces"; then
             local face_count
             face_count=$(echo "$face_result" | grep -o '"box"' | wc -l)
-            log_success "[3/6] Face detection - PASS ($face_count faces detected)"
+            log_success "[3/8] Face detection - PASS ($face_count faces detected)"
             passed=$((passed + 1))
         else
-            log_error "[3/6] Face detection - FAIL"
+            log_error "[3/8] Face detection - FAIL"
             echo "  Response: $(echo "$face_result" | head -c 200)"
             failed=$((failed + 1))
         fi
     else
-        log_info "[3/6] Face detection - SKIPPED (no test image)"
+        log_info "[3/8] Face detection - SKIPPED (no test image)"
     fi
 
     # Test 4: CLIP embedding
@@ -645,10 +645,10 @@ run_smoke_test() {
     local embed_result
     embed_result=$(curl -s -X POST localhost:4603/embed/image -F "image=@$test_image" 2>/dev/null)
     if echo "$embed_result" | grep -q "embedding"; then
-        log_success "[4/6] CLIP embedding - PASS"
+        log_success "[4/8] CLIP embedding - PASS"
         passed=$((passed + 1))
     else
-        log_error "[4/6] CLIP embedding - FAIL"
+        log_error "[4/8] CLIP embedding - FAIL"
         echo "  Response: $(echo "$embed_result" | head -c 200)"
         failed=$((failed + 1))
     fi
@@ -658,10 +658,10 @@ run_smoke_test() {
     local analyze_result
     analyze_result=$(curl -s -X POST localhost:4603/analyze -F "image=@$test_image" 2>/dev/null)
     if echo "$analyze_result" | grep -q "status"; then
-        log_success "[5/6] Full analysis - PASS"
+        log_success "[5/8] Full analysis - PASS"
         passed=$((passed + 1))
     else
-        log_error "[5/6] Full analysis - FAIL"
+        log_error "[5/8] Full analysis - FAIL"
         echo "  Response: $(echo "$analyze_result" | head -c 200)"
         failed=$((failed + 1))
     fi
@@ -671,10 +671,37 @@ run_smoke_test() {
     local model_count
     model_count=$(curl -s -X POST localhost:4600/v2/repository/index 2>/dev/null | grep -o '"name"' | wc -l)
     if [[ "$model_count" -ge 5 ]]; then
-        log_success "[6/6] Triton models - PASS ($model_count models loaded)"
+        log_success "[6/8] Triton models - PASS ($model_count models loaded)"
         passed=$((passed + 1))
     else
-        log_warn "[6/6] Triton models - WARN (only $model_count models)"
+        log_warn "[6/8] Triton models - WARN (only $model_count models)"
+    fi
+
+    # Test 7: Ingest (indexes image into OpenSearch)
+    log_info "Testing image ingestion..."
+    local ingest_result
+    ingest_result=$(curl -s -X POST localhost:4603/ingest -F "image=@$test_image" 2>/dev/null)
+    if echo "$ingest_result" | grep -q '"global": true'; then
+        local face_count
+        face_count=$(echo "$ingest_result" | grep -o '"faces": [0-9]*' | grep -o '[0-9]*')
+        log_success "[7/8] Image ingest - PASS (indexed: global + ${face_count:-0} faces)"
+        passed=$((passed + 1))
+    else
+        log_error "[7/8] Image ingest - FAIL"
+        echo "  Response: $(echo "$ingest_result" | head -c 200)"
+        failed=$((failed + 1))
+    fi
+
+    # Test 8: OpenSearch index verification
+    log_info "Checking OpenSearch indexes..."
+    local index_count
+    index_count=$(curl -s localhost:4607/_cat/indices 2>/dev/null | grep -c "visual_search" || echo "0")
+    if [[ "$index_count" -ge 1 ]]; then
+        log_success "[8/8] OpenSearch indexes - PASS ($index_count visual_search indexes)"
+        passed=$((passed + 1))
+    else
+        log_error "[8/8] OpenSearch indexes - FAIL (no visual_search indexes found)"
+        failed=$((failed + 1))
     fi
 
     # Summary
