@@ -669,7 +669,7 @@ run_smoke_test() {
     # Test 6: Triton model count
     log_info "Checking Triton models..."
     local model_count
-    model_count=$(curl -s localhost:4600/v2/models 2>/dev/null | grep -c '"name"' || echo "0")
+    model_count=$(curl -s -X POST localhost:4600/v2/repository/index 2>/dev/null | grep -o '"name"' | wc -l)
     if [[ "$model_count" -ge 5 ]]; then
         log_success "[6/6] Triton models - PASS ($model_count models loaded)"
         passed=$((passed + 1))
