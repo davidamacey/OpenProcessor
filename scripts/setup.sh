@@ -294,7 +294,6 @@ create_directories() {
     local dirs=(
         "$PROJECT_DIR/pytorch_models"
         "$PROJECT_DIR/pytorch_models/paddleocr"
-        "$PROJECT_DIR/pytorch_models/face_models"
         "$PROJECT_DIR/pytorch_models/mobileclip2_s2"
         "$PROJECT_DIR/cache/huggingface"
         "$PROJECT_DIR/test_results"
@@ -418,10 +417,20 @@ export_models_step() {
     # where triton-server crashes because model.plan files don't exist yet.
 
     # Export based on profile
+    # Use || true to prevent set -e from aborting setup on partial failures.
+    # Individual export functions log failures and export_all_models reports a summary.
+    # Setup should continue to start services with whatever models exported successfully.
+    local export_rc=0
     if [[ "$SELECTED_PROFILE" == "minimal" ]]; then
-        export_essential_models
+        export_essential_models || export_rc=$?
     else
-        export_all_models
+        export_all_models || export_rc=$?
+    fi
+
+    if [[ $export_rc -ne 0 ]]; then
+        log_warn "Some model exports failed (exit code $export_rc)"
+        log_info "Setup will continue with successfully exported models."
+        log_info "Re-run failed exports later: ./scripts/openprocessor.sh export all"
     fi
 }
 

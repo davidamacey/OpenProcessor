@@ -69,25 +69,11 @@ MODELS = {
     },
 }
 
-# Character dictionaries
-DICTIONARIES = {
-    'ppocr_keys_v1': {
-        'urls': [
-            'https://github.com/RapidAI/RapidOCR/raw/main/python/rapidocr/inference_engine/resources/rec/ch/keys.txt',
-            'https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/ppocr_keys_v1.txt',
-        ],
-        'filename': 'ppocr_keys_v1.txt',
-        'description': 'Chinese + English + symbols character dictionary (6623 chars)',
-    },
-    'en_dict': {
-        'urls': [
-            'https://github.com/RapidAI/RapidOCR/raw/main/python/rapidocr/inference_engine/resources/rec/en/keys.txt',
-            'https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/en_dict.txt',
-        ],
-        'filename': 'en_dict.txt',
-        'description': 'English-only character dictionary (95 chars)',
-    },
-}
+# Character dictionary
+# NOTE: The multilingual PP-OCRv5 dictionary (ppocrv5_dict.txt, 18383 chars)
+# is committed to git in models/paddleocr_rec_trt/ppocrv5_dict.txt.
+# No download needed for the dictionary.
+DICTIONARIES: dict = {}
 
 # Output directory
 OUTPUT_DIR = (
@@ -325,12 +311,7 @@ def main():
             print(f'    Size: ~{config["size_mb"]} MB')
             print(f'    Input: {config["input_shape"]}')
             print()
-        print('Character dictionaries:')
-        print()
-        for dict_id, config in DICTIONARIES.items():
-            print(f'  {dict_id}:')
-            print(f'    {config["description"]}')
-            print()
+        print('Note: Multilingual dictionary (ppocrv5_dict.txt) is committed to git.')
         return 0
 
     print('=' * 60)
@@ -340,8 +321,8 @@ def main():
     print()
     print('Models to download:')
     print('  - PP-OCRv5 Detection (text region detection)')
-    print('  - PP-OCRv5 Recognition (text reading)')
-    print('  - Character dictionaries')
+    print('  - PP-OCRv5 Multilingual Recognition (text reading)')
+    print('  (Dictionary is committed to git, no download needed)')
 
     results = download_all(args.force)
     return print_summary(results)

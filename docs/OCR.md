@@ -75,23 +75,24 @@ The OCR pipeline consists of three Triton models working together:
 
 | Property | Value |
 |----------|-------|
-| **Model** | PP-OCRv5 Mobile Recognition (English) |
+| **Model** | PP-OCRv5 Mobile Recognition (Multilingual) |
 | **Architecture** | SVTR-LCNet |
-| **Input Shape** | `[B, 3, 48, W]` where W is 8-2048 (dynamic) |
+| **Input Shape** | `[B, 3, 48, W]` where W is 48-2048 (dynamic) |
 | **Input Format** | FP32, BGR, normalized (x/127.5 - 1) |
-| **Output Shape** | `[B, T, 438]` character probabilities |
+| **Output Shape** | `[B, T, 18385]` character probabilities |
 | **Output Format** | Softmax probabilities for CTC decoding |
-| **Character Set** | 438 characters (436 from dict + blank + space) |
-| **Max Batch Size** | 1 (due to variable width per crop) |
+| **Character Set** | 18385 characters (18383 from dict + blank + space) |
+| **Max Batch Size** | 64 |
 
 ### Dictionary Configuration
 
-The recognition model uses `en_ppocrv5_dict.txt` with 436 characters:
+The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
 
+- Chinese, Japanese, Korean characters
 - English uppercase/lowercase letters
 - Digits 0-9
-- Common punctuation and symbols
-- Special tokens: blank (index 0), space (index 437)
+- Common punctuation and symbols (multilingual)
+- Special tokens: blank (index 0), space (index 18384)
 
 ---
 
@@ -109,8 +110,6 @@ The recognition model uses `en_ppocrv5_dict.txt` with 436 characters:
 - NVIDIA GPU with TensorRT 10.x support
 - Python 3.10+ with the following packages:
   - `onnx`, `onnxruntime-gpu`
-  - `paddle2onnx` (for PaddlePaddle model conversion)
-  - `paddleocr` (optional, for model download)
 
 ---
 
@@ -130,26 +129,8 @@ docker compose exec yolo-api python /app/export/download_paddleocr.py
 
 This downloads:
 - `ppocr_det_v5_mobile.onnx` (~5MB) - Detection model
-- `ppocr_rec_v5_mobile.onnx` (~16MB) - Recognition model
+- `ppocr_rec_v5_mobile.onnx` (~16MB) - Multilingual recognition model
 - Character dictionaries
-
-#### Option B: Export from PaddleOCR
-
-If you need the latest models directly from PaddlePaddle:
-
-```python
-from paddleocr import PaddleOCR
-
-# This downloads the official PP-OCRv5 models
-ocr = PaddleOCR(lang="en", use_gpu=True)
-```
-
-Then export to ONNX:
-
-```bash
-docker compose exec yolo-api python /app/export/export_paddleocr_det.py --skip-tensorrt
-docker compose exec yolo-api python /app/export/export_paddleocr_rec.py --skip-tensorrt
-```
 
 ### Step 2: Export to TensorRT
 
@@ -181,10 +162,10 @@ docker compose exec triton-server /usr/src/tensorrt/bin/trtexec \
 
 ```bash
 docker compose exec triton-server /usr/src/tensorrt/bin/trtexec \
-    --onnx=/models/en_ppocrv5_mobile_rec.onnx \
+    --onnx=/models/ppocr_rec_v5_mobile.onnx \
     --saveEngine=/models/paddleocr_rec_trt/1/model.plan \
     --fp16 \
-    --minShapes=x:1x3x48x8 \
+    --minShapes=x:1x3x48x48 \
     --optShapes=x:32x3x48x320 \
     --maxShapes=x:64x3x48x2048 \
     --memPoolSize=workspace:4G
@@ -210,11 +191,11 @@ This handles:
 The dictionary file must be in the recognition model directory:
 
 ```bash
-# Verify dictionary exists (should have 436 lines, plus blank+space = 438 total)
-wc -l models/paddleocr_rec_trt/en_ppocrv5_dict.txt
+# Verify dictionary exists (should have 18383 lines, plus blank+space = 18385 total)
+wc -l models/paddleocr_rec_trt/ppocrv5_dict.txt
 
-# Expected output: 437 (436 chars + 1 empty line)
-# Total classes: 438 (436 dict + blank token + space token)
+# Expected output: 18383 lines
+# Total classes: 18385 (18383 dict + blank token + space token)
 ```
 
 ### Step 4: Deploy and Test
@@ -305,13 +286,13 @@ File: `models/paddleocr_rec_trt/config.pbtxt`
 ```protobuf
 name: "paddleocr_rec_trt"
 platform: "tensorrt_plan"
-max_batch_size: 1  # Process individually due to variable width
+max_batch_size: 64
 
 input [
   {
     name: "x"
     data_type: TYPE_FP32
-    dims: [ 3, 48, -1 ]  # Dynamic width: 8-2048
+    dims: [ 3, 48, -1 ]  # Dynamic width: 48-2048
   }
 ]
 
@@ -319,7 +300,7 @@ output [
   {
     name: "fetch_name_0"
     data_type: TYPE_FP32
-    dims: [ -1, 438 ]  # Dynamic timesteps, 438 characters
+    dims: [ -1, 18385 ]  # Dynamic timesteps, 18385 characters (multilingual)
   }
 ]
 
@@ -330,6 +311,11 @@ instance_group [
     gpus: [0]
   }
 ]
+
+dynamic_batching {
+  preferred_batch_size: [ 16, 32, 64 ]
+  max_queue_delay_microseconds: 10000
+}
 ```
 
 ### OCR Pipeline Config
@@ -488,9 +474,9 @@ for text, score in zip(result['texts'], result['rec_scores']):
 
 | Parameter | Default | Tuning |
 |-----------|---------|--------|
-| `max_batch_size` | 1 | Keep at 1 (variable width) |
+| `max_batch_size` | 64 | Increase for batch processing |
 | `instance_count` | 2 | Increase for parallel crops |
-| Dynamic width | 8-2048 | Narrow range if text length is known |
+| Dynamic width | 48-2048 | Narrow range if text length is known |
 
 ### Memory Optimization
 
@@ -606,7 +592,7 @@ models/
 ├── paddleocr_rec_trt/
 │   ├── 1/model.plan              # TensorRT recognition engine
 │   ├── config.pbtxt              # Triton config
-│   └── en_ppocrv5_dict.txt       # Character dictionary (436 chars)
+│   └── ppocrv5_dict.txt           # Character dictionary (18383 chars, multilingual)
 └── ocr_pipeline/
     ├── 1/model.py                # Python BLS orchestrator
     └── config.pbtxt              # Triton config
@@ -646,3 +632,4 @@ src/
 | 1.0 | 2025-01-02 | Initial PP-OCRv5 implementation |
 | 1.1 | 2025-01-10 | Added workspace memory fix documentation |
 | 2.0 | 2026-01-26 | Consolidated documentation |
+| 3.0 | 2026-01-27 | Switched to multilingual model (18385 classes), removed PaddleX dependency |

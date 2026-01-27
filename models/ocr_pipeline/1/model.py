@@ -58,7 +58,7 @@ DET_MODEL = 'paddleocr_det_trt'
 REC_MODEL = 'paddleocr_rec_trt'
 REC_HEIGHT = 48
 REC_WIDTH = 320
-DICT_PATH = Path('/models/paddleocr_rec_trt/en_ppocrv5_dict.txt')
+DICT_PATH = Path('/models/paddleocr_rec_trt/ppocrv5_dict.txt')
 
 
 class DBPostProcess:

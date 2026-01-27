@@ -439,7 +439,7 @@ Service Commands:
 Model Commands:
   models              List loaded Triton models
   export <model>      Export model to TensorRT
-                      Options: yolo, face, arcface, clip-image, clip-text, ocr, all, essential, status
+                      Options: yolo, scrfd, arcface, clip-image, clip-text, ocr, all, essential, status
   download <model>    Download model
                       Options: all, essential, ocr, status, <model-name>
 
