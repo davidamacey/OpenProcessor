@@ -192,7 +192,7 @@ Speedup: 64x faster than exhaustive search
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    triton-api Visual Search Pipeline                         │
+│                    OpenProcessor Visual Search Pipeline                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  1. INITIAL SETUP (one-time)                                                │

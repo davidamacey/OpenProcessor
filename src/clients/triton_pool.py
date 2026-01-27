@@ -16,10 +16,10 @@ Features:
 
 Usage:
     # Sync client (for background tasks, legacy code)
-    client = TritonClientManager.get_sync_client("triton-api:8001")
+    client = TritonClientManager.get_sync_client("triton-server:8001")
 
     # Async client (for FastAPI endpoints - RECOMMENDED)
-    client = await TritonClientManager.get_async_client("triton-api:8001")
+    client = await TritonClientManager.get_async_client("triton-server:8001")
 
     # High-throughput async pool (for batch ingestion)
     pool = AsyncTritonPool(url, pool_size=4, max_concurrent=64)
@@ -122,7 +122,7 @@ class AsyncTritonPool:
     - Automatic retry with exponential backoff
 
     Usage:
-        pool = AsyncTritonPool(url='triton-api:8001', pool_size=4)
+        pool = AsyncTritonPool(url='triton-server:8001', pool_size=4)
         await pool.initialize()
 
         # Single inference
@@ -134,7 +134,7 @@ class AsyncTritonPool:
 
     def __init__(
         self,
-        url: str = 'triton-api:8001',
+        url: str = 'triton-server:8001',
         pool_size: int = 4,
         max_concurrent: int = 64,
         verbose: bool = False,
@@ -396,7 +396,7 @@ class TritonClientManager:
     @classmethod
     def get_sync_client(
         cls,
-        triton_url: str = 'triton-api:8001',
+        triton_url: str = 'triton-server:8001',
         verbose: bool = False,
         ssl: bool = False,
         root_certificates: str | None = None,
@@ -471,7 +471,7 @@ class TritonClientManager:
     @classmethod
     async def get_async_client(
         cls,
-        triton_url: str = 'triton-api:8001',
+        triton_url: str = 'triton-server:8001',
         verbose: bool = False,
         ssl: bool = False,
         root_certificates: str | None = None,
@@ -572,7 +572,7 @@ class TritonClientManager:
 # =============================================================================
 # Factory Functions (for backward compatibility)
 # =============================================================================
-def get_triton_client(triton_url: str = 'triton-api:8001', **kwargs):
+def get_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
     Get sync Triton client (backward compatible).
 
@@ -581,7 +581,7 @@ def get_triton_client(triton_url: str = 'triton-api:8001', **kwargs):
     return TritonClientManager.get_sync_client(triton_url, **kwargs)
 
 
-async def get_async_triton_client(triton_url: str = 'triton-api:8001', **kwargs):
+async def get_async_triton_client(triton_url: str = 'triton-server:8001', **kwargs):
     """
     Get async Triton client (backward compatible).
 

@@ -99,14 +99,14 @@ This creates:
 ### 3. Restart Triton to Load New Models
 
 ```bash
-docker compose restart triton-api
+docker compose restart triton-server
 ```
 
 ### 4. Verify Models Are Loaded
 
 ```bash
 # Check Triton server logs
-docker compose logs triton-api | grep "yolov11_small_simple_padding"
+docker compose logs triton-server | grep "yolov11_small_simple_padding"
 
 # Should see:
 # Successfully loaded 'yolov11_small_simple_padding'
@@ -281,12 +281,12 @@ If you get "Model not ready" errors:
 
 2. Check Triton logs:
    ```bash
-   docker compose logs triton-api | tail -100
+   docker compose logs triton-server | tail -100
    ```
 
 3. Restart Triton:
    ```bash
-   docker compose restart triton-api
+   docker compose restart triton-server
    ```
 
 ### Detection Count Mismatches

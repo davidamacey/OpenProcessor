@@ -11,7 +11,7 @@ Object detection, face recognition, visual search, OCR, and embeddings - all thr
 ### Copy & Run (One Line)
 
 ```bash
-git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scripts/setup.sh
+git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 ```
 
 That's it! The setup script automatically:
@@ -24,7 +24,7 @@ That's it! The setup script automatically:
 
 ```bash
 # Clone and setup with defaults (no prompts)
-git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scripts/setup.sh --yes
+git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh --yes
 
 # Or specify a profile explicitly
 ./scripts/setup.sh --profile=standard --gpu=0 --yes
@@ -43,10 +43,10 @@ curl -X POST http://localhost:4603/detect -F "image=@your-image.jpg"
 ### Management Commands
 
 ```bash
-./scripts/triton-api.sh status    # Check service health
-./scripts/triton-api.sh logs -f   # View live logs
-./scripts/triton-api.sh restart   # Restart all services
-./scripts/triton-api.sh help      # See all commands
+./scripts/openprocessor.sh status    # Check service health
+./scripts/openprocessor.sh logs -f   # View live logs
+./scripts/openprocessor.sh restart   # Restart all services
+./scripts/openprocessor.sh help      # See all commands
 ```
 
 See [INSTALLATION.md](INSTALLATION.md) for manual installation, troubleshooting, and advanced options.
@@ -58,7 +58,7 @@ Pre-built images will be available on Docker Hub:
 
 ```bash
 # Pull and run (no build required)
-docker pull your-org/triton-api:latest
+docker pull davidamacey/openprocessor:latest
 docker compose up -d
 ```
 -->
@@ -73,7 +73,7 @@ docker compose up -d
 | standard | 12-24GB | RTX 3080, RTX 4090 | ~15 RPS |
 | full | 48GB+ | A6000, A100 | ~50 RPS |
 
-Switch profiles: `./scripts/triton-api.sh profile <name>`
+Switch profiles: `./scripts/openprocessor.sh profile <name>`
 
 ---
 
@@ -337,15 +337,15 @@ Client (Port 4603)
   +----------+
        |
        v
-  +-----------+     +------------+
-  | triton-api|     | opensearch |
-  | (GPU)     |     | (k-NN)     |
-  +-----------+     +------------+
+  +--------------+     +------------+
+  | triton-server|     | opensearch |
+  | (GPU)        |     | (k-NN)     |
+  +--------------+     +------------+
 ```
 
 **Services:**
 - `yolo-api` (port 4603): FastAPI service handling all requests
-- `triton-api` (ports 4600-4602): NVIDIA Triton Inference Server with TensorRT models
+- `triton-server` (ports 4600-4602): NVIDIA Triton Inference Server with TensorRT models
 - `opensearch` (port 4607): Vector database for similarity search
 - `prometheus/grafana` (ports 4604/4605): Monitoring stack
 

@@ -404,7 +404,7 @@ Settings managed via `config/settings.py` with environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TRITON_URL` | `triton-api:8001` | Triton gRPC address |
+| `TRITON_URL` | `triton-server:8001` | Triton gRPC address |
 | `OPENSEARCH_URL` | `http://opensearch:4607` | OpenSearch REST address |
 | `MAX_FILE_SIZE_MB` | `50` | Maximum upload size |
 | `SLOW_REQUEST_THRESHOLD_MS` | `1000` | Log slow requests |
@@ -430,7 +430,7 @@ docker compose down
 
 ```bash
 # Requires Triton and OpenSearch running
-docker compose up -d triton-api opensearch
+docker compose up -d triton-server opensearch
 
 # Activate virtual environment
 source .venv/bin/activate

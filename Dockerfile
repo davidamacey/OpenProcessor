@@ -1,5 +1,5 @@
 # =============================================================================
-# Triton-API FastAPI Service
+# OpenProcessor FastAPI Service
 # Multi-stage build with non-root user and production defaults
 # =============================================================================
 # Builds the yolo-api FastAPI service for visual AI inference.
@@ -40,13 +40,13 @@ RUN pip install --user --no-cache-dir --upgrade pip \
 # -----------------------------------------------------------------------------
 FROM python:3.13-slim-trixie
 
-LABEL org.opencontainers.image.title="Triton-API FastAPI Service" \
+LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.description="Visual AI API with object detection, face recognition, embeddings, and OCR" \
-      org.opencontainers.image.vendor="Triton-API" \
-      org.opencontainers.image.authors="Triton-API Contributors" \
+      org.opencontainers.image.vendor="OpenProcessor" \
+      org.opencontainers.image.authors="OpenProcessor Contributors" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/your-org/triton-api" \
-      org.opencontainers.image.documentation="https://github.com/your-org/triton-api/blob/main/README.md"
+      org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
+      org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
 # Runtime-only system packages (no build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \

@@ -172,5 +172,5 @@ docker compose exec yolo-api nvidia-smi
 Verify file structure and restart Triton:
 ```bash
 ls -lh models/{model_name}/1/
-docker compose restart triton-api
+docker compose restart triton-server
 ```

@@ -144,6 +144,6 @@ def connection_pool_info():
         'testing': {
             'example_shared': "curl 'http://localhost:9600/predict/small?shared_client=true' -F 'image=@test.jpg'",
             'example_per_request': "curl 'http://localhost:9600/predict/small?shared_client=false' -F 'image=@test.jpg'",
-            'check_batching': "docker compose logs triton-api | grep 'batch size'",
+            'check_batching': "docker compose logs triton-server | grep 'batch size'",
         },
     }

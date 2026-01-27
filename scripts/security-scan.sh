@@ -2,7 +2,7 @@
 set -e
 
 # =============================================================================
-# Security Scanning Script for Triton-API Docker Images
+# Security Scanning Script for OpenProcessor Docker Images
 # Uses free, open-source tools to scan for vulnerabilities and security issues
 # No Docker Hub/Scout subscription required
 # =============================================================================
@@ -19,9 +19,9 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-your-org}"
-REPO_API="${DOCKERHUB_USERNAME}/triton-api"
-REPO_TRITON="${DOCKERHUB_USERNAME}/triton-api-server"
+DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-davidamacey}"
+REPO_API="${DOCKERHUB_USERNAME}/openprocessor"
+REPO_TRITON="${DOCKERHUB_USERNAME}/openprocessor-triton"
 SCAN_TARGET="${1:-all}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/security-reports}"
 SEVERITY_THRESHOLD="${SEVERITY_THRESHOLD:-MEDIUM}"
@@ -448,7 +448,7 @@ show_usage() {
     cat << EOF
 Usage: $0 [OPTION]
 
-Security scanning for Triton-API Docker images using free, open-source tools
+Security scanning for OpenProcessor Docker images using free, open-source tools
 
 Tools used:
   - Hadolint: Dockerfile linter
@@ -468,7 +468,7 @@ Environment Variables:
     OUTPUT_DIR              Report output directory (default: ./security-reports)
     SEVERITY_THRESHOLD      Minimum severity to report (default: MEDIUM)
     FAIL_ON_CRITICAL        Fail if CRITICAL vulnerabilities found (default: true)
-    DOCKERHUB_USERNAME      Docker Hub username (default: your-org)
+    DOCKERHUB_USERNAME      Docker Hub username (default: davidamacey)
 
 Examples:
     $0                      # Scan both images
@@ -516,7 +516,7 @@ install_all_tools() {
 # =============================================================================
 
 main() {
-    print_header "Triton-API Security Scanner"
+    print_header "OpenProcessor Security Scanner"
     print_info "Output directory: ${OUTPUT_DIR}"
     print_info "Severity threshold: ${SEVERITY_THRESHOLD}"
     print_info "Fail on critical: ${FAIL_ON_CRITICAL}"

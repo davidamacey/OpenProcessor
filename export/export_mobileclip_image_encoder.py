@@ -355,7 +355,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
     except ImportError:
         print('\n  ⚠ TensorRT not available in this container')
         print('  To convert to TensorRT, use the Triton container:')
-        print('    docker compose exec triton-api trtexec \\')
+        print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
         print('      --fp16 \\')
@@ -465,7 +465,7 @@ def main():
         print('\n  Next: Create config.pbtxt and restart Triton')
     else:
         print('\nTo convert ONNX to TensorRT plan in Triton container:')
-        print('  docker compose exec triton-api trtexec \\')
+        print('  docker compose exec triton-server trtexec \\')
         print(f'    --onnx=/models/{checkpoint_name}_image_encoder.onnx \\')
         print(f'    --saveEngine=/models/{checkpoint_name}_image_encoder/1/model.plan \\')
         print('    --fp16 \\')

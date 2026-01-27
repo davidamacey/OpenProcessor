@@ -1,14 +1,14 @@
-# Triton API - Python Project Configuration
+# OpenProcessor - Python Project Configuration
 # Configuration for ruff (linter + formatter) and project metadata
 
 [project]
-name = "triton-api"
+name = "openprocessor"
 version = "5.0.0"
-description = "High-performance YOLO inference API with NVIDIA Triton and multiple performance tracks"
+description = "Self-hosted AI-powered visual processing engine with object detection, face recognition, CLIP embeddings, OCR, and vector search"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-    {name = "Triton API Team"}
+    {name = "OpenProcessor Contributors"}
 ]
 license = {text = "MIT"}
 
@@ -21,7 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-keywords = ["yolo", "triton", "tensorrt", "object-detection", "fastapi", "inference"]
+keywords = ["yolo", "triton", "tensorrt", "object-detection", "face-recognition", "clip", "ocr", "visual-search", "fastapi", "inference", "openprocessor"]
 
 dependencies = [
     "fastapi",

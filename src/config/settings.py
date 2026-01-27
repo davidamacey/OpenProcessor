@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # Triton Configuration
     # ==========================================================================
     triton_url: str = Field(
-        default='triton-api:8001', description='Triton Inference Server gRPC endpoint'
+        default='triton-server:8001', description='Triton Inference Server gRPC endpoint'
     )
 
     triton_grpc_timeout: float = Field(default=30.0, description='gRPC timeout in seconds')

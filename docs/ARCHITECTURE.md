@@ -57,7 +57,7 @@ Production-grade architecture for high-performance visual AI inference at scale.
 
 The system uses Docker Compose to orchestrate three core services:
 
-1. **triton-api**: NVIDIA Triton Inference Server
+1. **triton-server**: NVIDIA Triton Inference Server
    - GPU inference backend (device_ids: [`0`, `2`])
    - Ports: 4600 (HTTP), 4601 (gRPC), 4602 (metrics)
    - Serves TensorRT models with dynamic batching
@@ -156,7 +156,7 @@ yolo-api:
 #### Triton Server (docker-compose.yml)
 
 ```yaml
-triton-api:
+triton-server:
   command:
     - tritonserver
     - --model-store=/models
@@ -215,7 +215,7 @@ from src.utils.triton_shared_client import get_triton_client
 async def lifespan(app: FastAPI):
     # Create shared client ONCE
     global triton_client
-    triton_client = get_triton_client("triton-api:8001")
+    triton_client = get_triton_client("triton-server:8001")
 
     # Configure gRPC connection
     # - Keep-alive to prevent connection drops
@@ -309,7 +309,7 @@ Second request: 2ms (create) + 20ms (inference) = 22ms ✅ SAFE!
 
 ### Why Triton Clients Are Lightweight
 
-- `YOLO("grpc://triton-api:8001/...")` doesn't load PyTorch model
+- `YOLO("grpc://triton-server:8001/...")` doesn't load PyTorch model
 - It's just a gRPC client wrapper (~1-2ms creation overhead)
 - No heavy model weights in memory
 - Creation overhead is ~5-10% of total request time
