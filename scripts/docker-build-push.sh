@@ -2,7 +2,7 @@
 set -e
 
 # =============================================================================
-# Docker Build and Push Script for Triton-API
+# Docker Build and Push Script for OpenProcessor
 # Builds and pushes Docker images to Docker Hub with security scanning
 # =============================================================================
 
@@ -18,9 +18,9 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-your-org}"
-REPO_API="${DOCKERHUB_USERNAME}/triton-api"
-REPO_TRITON="${DOCKERHUB_USERNAME}/triton-api-server"
+DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-davidamacey}"
+REPO_API="${DOCKERHUB_USERNAME}/openprocessor"
+REPO_TRITON="${DOCKERHUB_USERNAME}/openprocessor-triton"
 
 # Get commit SHA for tagging
 COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -31,7 +31,7 @@ PLATFORMS="${PLATFORMS:-linux/amd64}"  # ARM64 not typically needed for GPU work
 BUILD_TARGET="${1:-all}"
 
 # Builder configuration
-DEFAULT_BUILDER_NAME="triton-api-builder"
+DEFAULT_BUILDER_NAME="openprocessor-builder"
 
 # =============================================================================
 # Output Functions
@@ -308,7 +308,7 @@ show_usage() {
     cat << EOF
 Usage: $0 [OPTION]
 
-Build and push Docker images to Docker Hub for Triton-API
+Build and push Docker images to Docker Hub for OpenProcessor
 
 Options:
     api         Build and push only API image (yolo-api/FastAPI)
@@ -320,7 +320,7 @@ Options:
 
 Environment Variables:
     VERSION                   Semantic version (e.g., v1.2.3) - overrides VERSION file
-    DOCKERHUB_USERNAME        Docker Hub username (default: your-org)
+    DOCKERHUB_USERNAME        Docker Hub username (default: davidamacey)
     PLATFORMS                 Target platforms (default: linux/amd64)
     NO_CACHE                  Build without cache (default: false)
     SKIP_SECURITY_SCAN        Skip security scanning (default: false)
@@ -392,7 +392,7 @@ main() {
 
     VERSION_FULL="${SEMVER}"
 
-    print_header "Triton-API Docker Build & Push"
+    print_header "OpenProcessor Docker Build & Push"
     print_info "Version: ${VERSION_FULL}"
     print_info "Commit:  ${COMMIT_SHA}"
     print_info "Branch:  ${BRANCH}"

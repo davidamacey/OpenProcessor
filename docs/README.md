@@ -73,7 +73,7 @@ The API provides these endpoint groups (all on port 4603):
 ## Project Structure
 
 ```
-triton-api/
+OpenProcessor/
 ├── README.md                 # Main project documentation
 ├── CLAUDE.md                 # AI assistant instructions
 ├── ATTRIBUTION.md            # Third-party code attribution

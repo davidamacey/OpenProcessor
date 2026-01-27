@@ -28,7 +28,7 @@ curl -s -X POST "http://localhost:4603/query/index/create"
 
 # Run ingestion benchmark
 python scripts/ingest_all_indexes.py \
-    --images-dirs "/mnt/nvm/KILLBOY_SAMPLE_PICTURES,/mnt/nvm/FACE_TEST_IMAGES,/mnt/nvm/repos/triton-api/test_images/ocr-synthetic,/mnt/nvm/repos/triton-api/test_images/ocr-real" \
+    --images-dirs "/mnt/nvm/KILLBOY_SAMPLE_PICTURES,/mnt/nvm/FACE_TEST_IMAGES,/mnt/nvm/repos/OpenProcessor/test_images/ocr-synthetic,/mnt/nvm/repos/OpenProcessor/test_images/ocr-real" \
     --max-images 5000 \
     --batch-size 16 \
     --workers 16 \

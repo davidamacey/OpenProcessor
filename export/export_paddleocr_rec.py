@@ -200,13 +200,13 @@ def check_triton_container() -> bool:
     try:
         # Using docker CLI with fixed arguments - safe from injection
         result = subprocess.run(
-            ['docker', 'ps', '--filter', 'name=triton-api', '--format', '{{.Names}}'],
+            ['docker', 'ps', '--filter', 'name=triton-server', '--format', '{{.Names}}'],
             check=False,
             capture_output=True,
             text=True,
             timeout=10,
         )
-        return 'triton-api' in result.stdout
+        return 'triton-server' in result.stdout
     except Exception:
         return False
 
@@ -250,8 +250,8 @@ def convert_to_tensorrt_via_trtexec(onnx_path: Path, plan_path: Path) -> Path | 
 
     # Check Triton container is running
     if not check_triton_container():
-        print('ERROR: triton-api container is not running')
-        print('  Start it with: docker compose up -d triton-api')
+        print('ERROR: triton-server container is not running')
+        print('  Start it with: docker compose up -d triton-server')
         return None
 
     # Unload models to free GPU memory
@@ -299,7 +299,7 @@ fi
 exit $EXIT_CODE
 """
 
-    cmd = ['docker', 'exec', 'triton-api', 'bash', '-c', trtexec_cmd]
+    cmd = ['docker', 'exec', 'triton-server', 'bash', '-c', trtexec_cmd]
 
     print('Running trtexec with dynamic shapes:')
     print(f'  Min: {min_shapes}')

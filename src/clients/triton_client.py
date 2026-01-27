@@ -58,7 +58,7 @@ class TritonClient:
 
     def __init__(
         self,
-        triton_url: str = 'triton-api:8001',
+        triton_url: str = 'triton-server:8001',
         max_retries: int = 3,
         retry_base_delay: float = 0.1,
         retry_max_delay: float = 5.0,
@@ -2407,7 +2407,7 @@ class TritonClient:
 _client_instance: TritonClient | None = None
 
 
-def get_triton_client(triton_url: str = 'triton-api:8001') -> TritonClient:
+def get_triton_client(triton_url: str = 'triton-server:8001') -> TritonClient:
     """
     Get singleton Triton client instance.
 

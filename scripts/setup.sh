@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# triton-api Setup Script
+# OpenProcessor Setup Script
 # =============================================================================
-# One-command setup for triton-api visual AI system
+# One-command setup for OpenProcessor visual AI system
 #
 # Usage:
 #   ./scripts/setup.sh              # Interactive setup
@@ -90,10 +90,10 @@ parse_args() {
 
 show_help() {
     cat << EOF
-triton-api Setup Script
+OpenProcessor Setup Script
 
 One-Line Setup:
-  git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scripts/setup.sh
+  git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 
 Usage: ./scripts/setup.sh [OPTIONS]
 
@@ -137,7 +137,7 @@ print_banner() {
 EOF
     echo -e "${NC}"
     echo -e "  ${DIM}Visual AI API - Powered by NVIDIA Triton${NC}"
-    echo -e "  ${DIM}https://github.com/your-org/triton-api${NC}"
+    echo -e "  ${DIM}https://github.com/davidamacey/OpenProcessor${NC}"
     echo ""
 }
 
@@ -385,14 +385,14 @@ export_models_step() {
 
     if [[ "$AUTO_YES" != "true" ]]; then
         if ! confirm "Start TensorRT export?" "Y"; then
-            log_info "Skipping export. Run manually with: ./scripts/triton-api.sh export all"
+            log_info "Skipping export. Run manually with: ./scripts/openprocessor.sh export all"
             return 0
         fi
     fi
 
     # Start yolo-api container for exports that use Python TRT API
     # (YOLO, ArcFace, MobileCLIP exports run inside yolo-api container)
-    # Use --no-deps to avoid starting triton-api which would crash without model files
+    # Use --no-deps to avoid starting triton-server which would crash without model files
     log_info "Starting yolo-api container for model exports..."
     docker compose up -d --no-deps yolo-api
 
@@ -414,8 +414,8 @@ export_models_step() {
     log_success "yolo-api container ready"
 
     # PaddleOCR TRT export uses 'docker compose run' to create a temporary
-    # triton-api container for trtexec, avoiding the chicken-and-egg problem
-    # where triton-api crashes because model.plan files don't exist yet.
+    # triton-server container for trtexec, avoiding the chicken-and-egg problem
+    # where triton-server crashes because model.plan files don't exist yet.
 
     # Export based on profile
     if [[ "$SELECTED_PROFILE" == "minimal" ]]; then
@@ -457,7 +457,7 @@ start_services_step() {
     print_section "Starting Services"
 
     if [[ "$AUTO_YES" != "true" ]]; then
-        if ! confirm "Start triton-api services?" "Y"; then
+        if ! confirm "Start OpenProcessor services?" "Y"; then
             log_info "Skipping. Start manually with: docker compose up -d"
             return 0
         fi
@@ -468,7 +468,7 @@ start_services_step() {
     docker compose stop 2>/dev/null || true
     docker compose rm -f 2>/dev/null || true
 
-    # Start all services (now that model.plan files exist, triton-api will load them)
+    # Start all services (now that model.plan files exist, triton-server will load them)
     log_info "Starting all services..."
     docker compose up -d
 
@@ -725,7 +725,7 @@ run_smoke_test() {
 print_success_summary() {
     print_header "Setup Complete!"
 
-    echo -e "${GREEN}triton-api is ready to use!${NC}"
+    echo -e "${GREEN}OpenProcessor is ready to use!${NC}"
     echo ""
     echo "Services running:"
     echo "  API:         http://localhost:4603"
@@ -743,9 +743,9 @@ print_success_summary() {
     echo "  CLAUDE.md        - Full technical reference"
     echo ""
     echo "Management:"
-    echo "  ./scripts/triton-api.sh status   - Check service status"
-    echo "  ./scripts/triton-api.sh logs     - View logs"
-    echo "  ./scripts/triton-api.sh restart  - Restart services"
+    echo "  ./scripts/openprocessor.sh status   - Check service status"
+    echo "  ./scripts/openprocessor.sh logs     - View logs"
+    echo "  ./scripts/openprocessor.sh restart  - Restart services"
     echo ""
 }
 

@@ -189,7 +189,7 @@ def convert_to_tensorrt(
     except ImportError:
         print('\n  TensorRT not available in this container')
         print('  To convert to TensorRT, use the Triton container:')
-        print('    docker compose exec triton-api trtexec \\')
+        print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
         print('      --fp16 \\')
@@ -343,7 +343,7 @@ def main():
     if plan_path:
         print('\nNext steps:')
         print('  1. Export recognition: python export/export_paddleocr_rec.py')
-        print('  2. Restart Triton: docker compose restart triton-api')
+        print('  2. Restart Triton: docker compose restart triton-server')
 
     return 0
 

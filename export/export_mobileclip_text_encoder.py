@@ -325,7 +325,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
     except ImportError:
         print('\n  ⚠ TensorRT not available')
         print('  Use Triton container:')
-        print('    docker compose exec triton-api trtexec \\')
+        print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
         print('      --fp16 \\')

@@ -1,10 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# triton-api Management CLI
+# OpenProcessor Management CLI
 # =============================================================================
-# Unified command-line interface for managing triton-api services
+# Unified command-line interface for managing OpenProcessor services
 #
-# Usage: ./scripts/triton-api.sh <command> [options]
+# Usage: ./scripts/openprocessor.sh <command> [options]
 # =============================================================================
 
 set -e
@@ -39,7 +39,7 @@ load_config_lib() {
 # =============================================================================
 
 cmd_start() {
-    log_step "Starting triton-api services..."
+    log_step "Starting OpenProcessor services..."
     cd "$PROJECT_DIR"
     docker compose up -d
     log_success "Services started"
@@ -48,7 +48,7 @@ cmd_start() {
 }
 
 cmd_stop() {
-    log_step "Stopping triton-api services..."
+    log_step "Stopping OpenProcessor services..."
     cd "$PROJECT_DIR"
     docker compose down
     log_success "Services stopped"
@@ -92,7 +92,7 @@ cmd_logs() {
 }
 
 cmd_status() {
-    print_header "triton-api Status"
+    print_header "OpenProcessor Status"
 
     cd "$PROJECT_DIR"
 
@@ -286,7 +286,7 @@ cmd_profile() {
     generate_compose_override "$profile" "$gpu_id"
 
     log_success "Profile switched to: $profile"
-    log_info "Restart services to apply: ./scripts/triton-api.sh restart"
+    log_info "Restart services to apply: ./scripts/openprocessor.sh restart"
 }
 
 # =============================================================================
@@ -402,7 +402,7 @@ cmd_clean() {
 # =============================================================================
 
 cmd_update() {
-    log_step "Updating triton-api..."
+    log_step "Updating OpenProcessor..."
 
     cd "$PROJECT_DIR"
 
@@ -415,7 +415,7 @@ cmd_update() {
     docker compose build
 
     log_success "Update complete"
-    log_info "Restart to apply: ./scripts/triton-api.sh restart"
+    log_info "Restart to apply: ./scripts/openprocessor.sh restart"
 }
 
 # =============================================================================
@@ -424,9 +424,9 @@ cmd_update() {
 
 show_help() {
     cat << EOF
-triton-api Management CLI
+OpenProcessor Management CLI
 
-Usage: ./scripts/triton-api.sh <command> [options]
+Usage: ./scripts/openprocessor.sh <command> [options]
 
 Service Commands:
   start               Start all services
@@ -462,12 +462,12 @@ Setup:
   setup               Run initial setup wizard
 
 Examples:
-  ./scripts/triton-api.sh status
-  ./scripts/triton-api.sh logs yolo-api -f
-  ./scripts/triton-api.sh export all
-  ./scripts/triton-api.sh profile standard
-  ./scripts/triton-api.sh test full
-  ./scripts/triton-api.sh clean cache
+  ./scripts/openprocessor.sh status
+  ./scripts/openprocessor.sh logs yolo-api -f
+  ./scripts/openprocessor.sh export all
+  ./scripts/openprocessor.sh profile standard
+  ./scripts/openprocessor.sh test full
+  ./scripts/openprocessor.sh clean cache
 
 EOF
 }

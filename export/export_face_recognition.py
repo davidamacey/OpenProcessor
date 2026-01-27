@@ -463,7 +463,7 @@ def main():
     if not args.skip_trt:
         print(f'  TensorRT: {args.plan}')
     print('\nNext steps:')
-    print('  1. Restart Triton: docker compose restart triton-api')
+    print('  1. Restart Triton: docker compose restart triton-server')
     print('  2. Test inference via API')
 
     return 0

@@ -1,13 +1,13 @@
 # Installation Guide
 
-Complete guide for setting up triton-api on your system.
+Complete guide for setting up OpenProcessor on your system.
 
 ---
 
 ## TL;DR - One Line Setup
 
 ```bash
-git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scripts/setup.sh
+git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor && ./scripts/setup.sh
 ```
 
 ---
@@ -17,8 +17,8 @@ git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scrip
 ### Interactive Setup
 
 ```bash
-git clone https://github.com/your-org/triton-api.git
-cd triton-api
+git clone https://github.com/davidamacey/OpenProcessor.git
+cd OpenProcessor
 ./scripts/setup.sh
 ```
 
@@ -53,12 +53,12 @@ Pre-built images with TensorRT models will be available:
 
 ```bash
 # Pull pre-built images (no export required!)
-docker pull your-org/triton-api:latest
-docker pull your-org/triton-api-models:latest
+docker pull davidamacey/openprocessor:latest
+docker pull davidamacey/openprocessor-models:latest
 
 # Clone for configs only
-git clone https://github.com/your-org/triton-api.git
-cd triton-api
+git clone https://github.com/davidamacey/OpenProcessor.git
+cd OpenProcessor
 
 # Start with pre-built images
 docker compose -f docker-compose.hub.yml up -d
@@ -151,8 +151,8 @@ The system automatically selects a profile based on your GPU's VRAM:
 ./scripts/setup.sh --profile=minimal
 
 # After setup
-./scripts/triton-api.sh profile minimal
-./scripts/triton-api.sh restart
+./scripts/openprocessor.sh profile minimal
+./scripts/openprocessor.sh restart
 ```
 
 ---
@@ -164,8 +164,8 @@ If you prefer to run steps individually:
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/triton-api.git
-cd triton-api
+git clone https://github.com/davidamacey/OpenProcessor.git
+cd OpenProcessor
 ```
 
 ### 2. Create Directories
@@ -180,13 +180,13 @@ Models are downloaded from public sources (no authentication required):
 
 ```bash
 # All models (~500MB)
-./scripts/triton-api.sh download all
+./scripts/openprocessor.sh download all
 
 # Or essential only (~250MB)
-./scripts/triton-api.sh download essential
+./scripts/openprocessor.sh download essential
 
 # Check download status
-./scripts/triton-api.sh download status
+./scripts/openprocessor.sh download status
 ```
 
 ### 4. Configure Environment
@@ -201,13 +201,13 @@ cp env.template .env
 Or generate automatically:
 
 ```bash
-./scripts/triton-api.sh profile standard
+./scripts/openprocessor.sh profile standard
 ```
 
 ### 5. Start Containers (for export)
 
 ```bash
-docker compose up -d triton-api yolo-api
+docker compose up -d triton-server yolo-api
 ```
 
 ### 6. Export to TensorRT
@@ -216,13 +216,13 @@ This step converts models to optimized TensorRT format:
 
 ```bash
 # All models (45-60 minutes)
-./scripts/triton-api.sh export all
+./scripts/openprocessor.sh export all
 
 # Or essential only (25-35 minutes)
-./scripts/triton-api.sh export essential
+./scripts/openprocessor.sh export essential
 
 # Check export status
-./scripts/triton-api.sh export status
+./scripts/openprocessor.sh export status
 ```
 
 ### 7. Start All Services
@@ -235,10 +235,10 @@ docker compose up -d
 
 ```bash
 # Check status
-./scripts/triton-api.sh status
+./scripts/openprocessor.sh status
 
 # Run smoke tests
-./scripts/triton-api.sh test quick
+./scripts/openprocessor.sh test quick
 
 # Test API directly
 curl http://localhost:4603/health
@@ -255,8 +255,8 @@ curl http://localhost:4603/health
 **Solutions:**
 1. Switch to a smaller profile:
    ```bash
-   ./scripts/triton-api.sh profile minimal
-   ./scripts/triton-api.sh restart
+   ./scripts/openprocessor.sh profile minimal
+   ./scripts/openprocessor.sh restart
    ```
 
 2. Reduce batch size in `.env`:
@@ -281,15 +281,15 @@ curl http://localhost:4603/health
 
 2. Unload existing models first:
    ```bash
-   docker compose stop triton-api
-   ./scripts/triton-api.sh export all
-   docker compose start triton-api
+   docker compose stop triton-server
+   ./scripts/openprocessor.sh export all
+   docker compose start triton-server
    ```
 
 3. Check CUDA version compatibility:
    ```bash
    nvidia-smi  # Driver version
-   docker compose exec triton-api nvidia-smi  # Container CUDA version
+   docker compose exec triton-server nvidia-smi  # Container CUDA version
    ```
 
 ### Models Not Loading
@@ -299,12 +299,12 @@ curl http://localhost:4603/health
 **Solutions:**
 1. Check if exports exist:
    ```bash
-   ./scripts/triton-api.sh export status
+   ./scripts/openprocessor.sh export status
    ```
 
 2. Check Triton logs:
    ```bash
-   ./scripts/triton-api.sh logs triton-api
+   ./scripts/openprocessor.sh logs triton-server
    ```
 
 3. Verify model configs:
@@ -357,8 +357,8 @@ curl http://localhost:4603/health
 
 ```bash
 git pull
-./scripts/triton-api.sh update
-./scripts/triton-api.sh restart
+./scripts/openprocessor.sh update
+./scripts/openprocessor.sh restart
 ```
 
 ### Rebuilding After Updates
@@ -373,8 +373,8 @@ docker compose up -d
 After major updates, you may need to re-export TensorRT models:
 
 ```bash
-./scripts/triton-api.sh export all
-./scripts/triton-api.sh restart
+./scripts/openprocessor.sh export all
+./scripts/openprocessor.sh restart
 ```
 
 ---
@@ -478,5 +478,5 @@ SKIP_SECURITY_SCAN=true ./scripts/docker-build-push.sh all
 ## Getting Help
 
 - **Documentation:** See [README.md](README.md) and [CLAUDE.md](CLAUDE.md)
-- **Issues:** Report bugs at [GitHub Issues](https://github.com/your-org/triton-api/issues)
-- **Logs:** Check `./scripts/triton-api.sh logs` for debugging
+- **Issues:** Report bugs at [GitHub Issues](https://github.com/davidamacey/OpenProcessor/issues)
+- **Logs:** Check `./scripts/openprocessor.sh logs` for debugging

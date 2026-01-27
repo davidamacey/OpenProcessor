@@ -473,7 +473,7 @@ dynamic_batching {
 
 3. **Restart Triton:**
    ```bash
-   docker compose restart triton-api
+   docker compose restart triton-server
    ```
 
 ### Recommended Configuration

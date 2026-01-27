@@ -169,19 +169,19 @@ grafana:
 
 ```logql
 # All Triton logs
-{container="/triton-api"}
+{container="/triton-server"}
 
 # FastAPI logs
 {container=~"/(yolo-api|pytorch-api)"}
 
 # Error logs only
-{container="/triton-api"} |= "error" or "ERROR"
+{container="/triton-server"} |= "error" or "ERROR"
 
 # Inference logs
-{container="/triton-api"} |= "inference"
+{container="/triton-server"} |= "inference"
 
 # Last 5 minutes of warnings
-{container="/triton-api"} |~ "warn|WARNING" [5m]
+{container="/triton-server"} |~ "warn|WARNING" [5m]
 ```
 
 ### Log Correlation
