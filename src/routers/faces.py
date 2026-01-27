@@ -1,11 +1,11 @@
 """
 Face Detection and Recognition Router.
 
-Provides face-related endpoints using YOLO11-face exclusively.
+Provides face-related endpoints using SCRFD-10G for detection.
 All endpoints use CPU preprocessing for stability at high concurrency.
 
 Endpoints:
-- POST /faces/detect - Face detection only (YOLO11-face)
+- POST /faces/detect - Face detection only (SCRFD)
 - POST /faces/recognize - Detection + ArcFace 512-dim embeddings
 - POST /faces/verify - 1:1 face comparison (two images, return similarity)
 - POST /faces/search - Find similar faces in index (requires OpenSearch)
@@ -154,12 +154,12 @@ def detect_faces(
     ),
 ):
     """
-    Detect faces in image using YOLO11-face.
+    Detect faces in image using SCRFD-10G.
 
     Pipeline:
     1. CPU image decode and preprocessing
-    2. YOLO11-face detection via TensorRT
-    3. GPU NMS (End2End TensorRT)
+    2. SCRFD face detection via TensorRT
+    3. CPU anchor decode + NMS
     4. Returns face boxes, 5-point landmarks, and confidence scores
 
     Args:
@@ -218,8 +218,8 @@ def recognize_faces(
 
     Pipeline:
     1. CPU image decode and preprocessing
-    2. YOLO11-face detection via TensorRT
-    3. Face alignment from HD original (industry standard)
+    2. SCRFD face detection via TensorRT
+    3. Umeyama affine alignment (industry standard)
     4. ArcFace embedding extraction (512-dim L2-normalized)
 
     Args:
@@ -383,7 +383,7 @@ async def search_faces(
     Find similar faces in the indexed database.
 
     Pipeline:
-    1. Detect faces in query image using YOLO11-face
+    1. Detect faces in query image using SCRFD
     2. Extract ArcFace embedding for selected face
     3. Search visual_search_faces index via OpenSearch k-NN
 

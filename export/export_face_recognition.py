@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Track E: Export ArcFace Face Recognition to TensorRT
+Export ArcFace Face Recognition to TensorRT
 
 This script converts the ArcFace face recognition model to TensorRT for Triton deployment.
 

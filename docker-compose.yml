@@ -1,10 +1,10 @@
 services:
-  triton-api:
+  triton-server:
     build:
       context: .
       dockerfile: Dockerfile.triton
     image: triton-api-pytorch:25.10
-    container_name: triton-api
+    container_name: triton-server
     restart: always
     ports:
       - 4600:8000  # HTTP
@@ -22,15 +22,13 @@ services:
       # Visual Search Models
       # ===================================================================
       - --load-model=yolov11_small_trt_end2end
-      - --load-model=yolo11_face_small_trt_end2end
+      - --load-model=scrfd_10g_bnkps
       - --load-model=arcface_w600k_r50
       - --load-model=mobileclip2_s2_image_encoder
       - --load-model=mobileclip2_s2_text_encoder
       - --load-model=paddleocr_det_trt
       - --load-model=paddleocr_rec_trt
       - --load-model=ocr_pipeline
-      - --load-model=yolo11_face_pipeline
-      - --load-model=unified_complete_pipeline
       # ===================================================================
       - --log-verbose=1
       - --log-info=true
@@ -67,6 +65,8 @@ services:
       - ./VERSION:/app/VERSION:ro
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
     environment:
+      # Triton gRPC endpoint (Docker service name)
+      - TRITON_URL=triton-server:8001
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
@@ -116,7 +116,7 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      - triton-api
+      - triton-server
     networks:
       - triton_net
 
@@ -162,7 +162,7 @@ services:
     networks:
       - triton_net
     depends_on:
-      - triton-api
+      - triton-server
       - node-exporter
 
   grafana:

@@ -4,7 +4,6 @@ Object Detection Router - CPU Preprocessing + Triton TRT Inference.
 Provides YOLO object detection:
 - CPU preprocessing (letterbox, normalize)
 - TensorRT End2End model with GPU NMS
-- No DALI dependency
 
 Endpoints:
 - POST /detect - Single image detection

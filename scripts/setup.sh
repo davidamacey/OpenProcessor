@@ -294,7 +294,7 @@ create_directories() {
     local dirs=(
         "$PROJECT_DIR/pytorch_models"
         "$PROJECT_DIR/pytorch_models/paddleocr"
-        "$PROJECT_DIR/pytorch_models/yolo11_face"
+        "$PROJECT_DIR/pytorch_models/face_models"
         "$PROJECT_DIR/pytorch_models/mobileclip2_s2"
         "$PROJECT_DIR/cache/huggingface"
         "$PROJECT_DIR/test_results"
@@ -500,7 +500,7 @@ wait_for_services() {
 
     # Wait for required models to load
     log_info "Waiting for TensorRT models to load..."
-    local required_models=("yolov11_small_trt_end2end" "yolo11_face_small_trt_end2end" "arcface_w600k_r50" "mobileclip2_s2_image_encoder" "mobileclip2_s2_text_encoder" "paddleocr_det_trt" "paddleocr_rec_trt")
+    local required_models=("yolov11_small_trt_end2end" "scrfd_10g_bnkps" "arcface_w600k_r50" "mobileclip2_s2_image_encoder" "mobileclip2_s2_text_encoder" "paddleocr_det_trt" "paddleocr_rec_trt")
     local all_loaded=false
 
     for i in {1..90}; do  # Wait up to 3 minutes for models

@@ -9,7 +9,7 @@
   "workers": 8,
   "models": [
     "yolov11_small_trt_end2end",
-    "yolo11_face_small_trt_end2end",
+    "scrfd_10g_bnkps",
     "arcface_w600k_r50",
     "mobileclip2_s2_image_encoder",
     "mobileclip2_s2_text_encoder"

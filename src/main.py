@@ -3,7 +3,7 @@ Unified Visual AI API Service.
 
 A high-performance FastAPI service providing comprehensive visual AI capabilities:
 - Object detection (YOLO11)
-- Face detection and recognition (YOLO11-face + ArcFace)
+- Face detection and recognition (SCRFD + ArcFace)
 - Image and text embeddings (MobileCLIP)
 - Visual similarity search (OpenSearch k-NN)
 - Data ingestion with duplicate detection

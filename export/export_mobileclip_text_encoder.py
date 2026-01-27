@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Track E: Export MobileCLIP2 Text Encoder to ONNX + TensorRT
+Export MobileCLIP2 Text Encoder to ONNX + TensorRT
 
 This script exports MobileCLIP2 text encoder for deployment on Triton.
 The text encoder is used for text-based visual search queries.
@@ -363,7 +363,7 @@ def main():
     plan_output = f'/app/models/{checkpoint_name}_text_encoder/1/model.plan'
 
     print('=' * 80)
-    print(f'Track E: {model_name} Text Encoder Export')
+    print(f'MobileCLIP: {model_name} Text Encoder Export')
     print('=' * 80)
     print('\nNote: S0, S2, and B variants share the same 63.4M text encoder')
 

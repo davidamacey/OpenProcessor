@@ -2,7 +2,7 @@
 # Triton Inference Server with PyTorch for Python Backend (BLS)
 # =============================================================================
 # Based on NVIDIA Triton 25.10 with PyTorch + TorchVision for Python backend
-# models (yolo11_face_pipeline, unified_complete_pipeline, ocr_pipeline).
+# models (ocr_pipeline).
 # =============================================================================
 
 FROM nvcr.io/nvidia/tritonserver:25.10-py3

@@ -81,7 +81,7 @@ class FaceIdentityService:
         Detect faces in image and store embeddings in OpenSearch.
 
         Pipeline:
-        1. Run face detection (SCRFD or YOLO11-face)
+        1. Run face detection (SCRFD)
         2. Extract ArcFace embeddings for each detected face
         3. Generate face crop thumbnails
         4. Index faces with embeddings to OpenSearch
@@ -277,7 +277,7 @@ class FaceIdentityService:
         """
         try:
             # 1. Run face detection based on detector choice
-            # Both paths now use detect_faces which internally uses YOLO11-face
+            # Both paths now use detect_faces which internally uses SCRFD
             face_result = self.inference.detect_faces(image_bytes)
 
             if face_result.get('num_faces', 0) == 0:

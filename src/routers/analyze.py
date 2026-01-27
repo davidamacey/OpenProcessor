@@ -195,7 +195,7 @@ def analyze_image(
 
     Unified pipeline for comprehensive image analysis:
     1. YOLO object detection (TensorRT End2End)
-    2. YOLO11-face detection + ArcFace embedding extraction
+    2. SCRFD face detection + ArcFace embedding extraction
     3. MobileCLIP global image embedding
     4. PP-OCRv5 text detection and recognition
 

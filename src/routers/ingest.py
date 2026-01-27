@@ -234,7 +234,7 @@ Ingest a single image with automatic indexing to appropriate OpenSearch indexes.
 1. Compute imohash for exact duplicate detection
 2. Check if image already exists (if skip_duplicates=True)
 3. Run YOLO detection + MobileCLIP embedding extraction
-4. Run YOLO11-face detection + ArcFace embedding extraction
+4. Run SCRFD face detection + ArcFace embedding extraction
 5. Index to appropriate indexes:
    - Global embedding -> visual_search_global
    - Person detections -> visual_search_people
