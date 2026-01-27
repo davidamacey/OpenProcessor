@@ -201,7 +201,7 @@ class FaceDetection(BaseModel):
 
 
 class FaceDetectResponse(BaseModel):
-    """Response for face detection only (YOLO11-face)."""
+    """Response for face detection only (SCRFD)."""
 
     num_faces: int = Field(..., description='Number of faces detected')
     faces: list[FaceDetection] = Field(default_factory=list, description='Detected faces')
@@ -215,7 +215,7 @@ class FaceDetectResponse(BaseModel):
 
 
 class FaceRecognizeResponse(BaseModel):
-    """Response for face detection + recognition (YOLO11-face + ArcFace)."""
+    """Response for face detection + recognition (SCRFD + ArcFace)."""
 
     num_faces: int = Field(..., description='Number of faces detected')
     faces: list[FaceDetection] = Field(default_factory=list, description='Detected faces')
@@ -228,7 +228,7 @@ class FaceRecognizeResponse(BaseModel):
     image: ImageMetadata | None = None
 
     # Model info
-    model: str = Field(default='yolo11_face + arcface_w600k_r50')
+    model: str = Field(default='scrfd_10g_bnkps + arcface_w600k_r50')
 
     # Timing
     total_time_ms: float | None = None

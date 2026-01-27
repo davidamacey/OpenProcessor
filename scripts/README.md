@@ -55,7 +55,6 @@ make test          # Run tests
 |--------|---------|
 | [export/](../export/) | Model export scripts (ONNX, TensorRT) |
 | [tests/](../tests/) | Test scripts and utilities |
-| [dali/](../dali/) | DALI pipeline creation and validation |
 | [benchmarks/](../benchmarks/) | Go-based benchmarking tool |
 
 ## Port Reference

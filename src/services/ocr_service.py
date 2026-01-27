@@ -5,7 +5,7 @@ This service provides OCR inference via Triton Server with PP-OCRv5 models.
 It handles preprocessing, inference orchestration, and result formatting.
 
 Pipeline:
-1. Preprocess image with DALI (penta_preprocess_dali)
+1. Preprocess image (CPU letterbox + normalize)
 2. Call OCR pipeline BLS (detection + recognition)
 3. Format results with text, boxes, and confidence scores
 

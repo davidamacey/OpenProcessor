@@ -11,7 +11,7 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 | Script | Purpose | Output |
 |--------|---------|--------|
 | `export_models.py` | YOLO11 object detection with end2end NMS | TensorRT engine |
-| `export_yolo11_face.py` | YOLO11-face detection | TensorRT engine |
+| `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
 | `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
 | `export_mobileclip_text_encoder.py` | MobileCLIP text encoder | TensorRT engine |
@@ -26,7 +26,6 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 ```
 pytorch_models/
 ├── yolo11s.pt                          # YOLO11 PyTorch model
-├── yolo11_face.pt                      # YOLO11-face PyTorch model
 ├── arcface_w600k_r50.onnx              # ArcFace ONNX model
 ├── mobileclip2_s2/                     # MobileCLIP checkpoint
 ├── mobileclip2_s2_image_encoder.onnx   # MobileCLIP image encoder ONNX
@@ -39,7 +38,7 @@ models/
 ├── yolov11_small_trt_end2end/          # YOLO11 TensorRT with GPU NMS
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── yolo11_face_trt/                    # YOLO11-face TensorRT
+├── scrfd_10g_bnkps/                    # SCRFD-10G face detection TensorRT
 │   ├── 1/model.plan
 │   └── config.pbtxt
 ├── arcface_w600k_r50/                  # ArcFace TensorRT
@@ -74,10 +73,10 @@ docker compose exec yolo-api python /app/export/export_models.py \
     --normalize-boxes
 ```
 
-### YOLO11-face Detection
+### SCRFD Face Detection
 
 ```bash
-docker compose exec yolo-api python /app/export/export_yolo11_face.py
+docker compose exec yolo-api python /app/export/export_scrfd.py
 ```
 
 ### Face Recognition (ArcFace)
@@ -119,10 +118,10 @@ docker compose exec yolo-api python /app/export/export_paddleocr_rec.py
 - Output (end2end): `num_dets`, `det_boxes`, `det_scores`, `det_classes`
 - Dynamic batching: 1-64 (configurable)
 
-### YOLO11-face Detection
-- Input: `[B, 3, 640, 640]` FP16, normalized [0, 1]
-- Output: Face boxes with 5-point landmarks
-- Dynamic batching: 1-64
+### SCRFD-10G Face Detection
+- Input: `[B, 3, 640, 640]` FP32, RGB, (x-127.5)/128.0 normalized
+- Output: 9 tensors (3 FPN strides x score/bbox/kps), CPU post-processed
+- Dynamic batching: 1-32
 
 ### ArcFace Embeddings
 - Input: `[B, 3, 112, 112]` FP16, aligned face crops

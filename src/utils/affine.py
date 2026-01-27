@@ -1,9 +1,6 @@
 """
 Affine matrix calculation for YOLO letterbox transformation.
 
-This is the ONLY CPU preprocessing needed for the GPU pipeline.
-Everything else (decode, resize, normalize) happens on GPU via DALI.
-
 Performance optimizations:
 - @lru_cache for affine matrix calculation (same dimensions = same matrix)
 - Fast JPEG header parsing (no full decode)
@@ -33,7 +30,7 @@ def calculate_affine_matrix(
 
     Returns:
         Tuple of:
-        - affine_matrix: np.ndarray [2, 3] for DALI warp_affine
+        - affine_matrix: np.ndarray [2, 3] for warp affine
         - scale: float for inverse transformation
         - padding: tuple (pad_x, pad_y) for inverse transformation
     """
@@ -46,7 +43,7 @@ def calculate_affine_matrix(
     pad_x = (target_size - new_w) / 2.0
     pad_y = (target_size - new_h) / 2.0
 
-    # DALI warp_affine format: [[scale_x, 0, offset_x], [0, scale_y, offset_y]]
+    # Warp affine format: [[scale_x, 0, offset_x], [0, scale_y, offset_y]]
     affine_matrix = np.array([[scale, 0.0, pad_x], [0.0, scale, pad_y]], dtype=np.float32)
 
     return affine_matrix, scale, (pad_x, pad_y)
@@ -105,7 +102,7 @@ def prepare_triton_inputs(image_bytes: bytes, target_size: int = 640) -> dict:
     - Fast JPEG header parse for dimensions (~0.1ms)
     - Cached affine matrix lookup (~0.001ms for cache hit)
 
-    Everything else (decode, resize, normalize) happens on GPU via DALI.
+    Everything else (decode, resize, normalize) is handled by cpu_preprocess.
 
     Args:
         image_bytes: Raw JPEG/PNG file bytes

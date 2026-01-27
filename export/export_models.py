@@ -1248,7 +1248,7 @@ Examples:
         '--normalize-boxes',
         action='store_true',
         default=False,
-        help='Output boxes in [0, 1] normalized range instead of pixel coords (Track E recommended)',
+        help='Output boxes in [0, 1] normalized range instead of pixel coords (recommended)',
     )
 
     parser.add_argument(
@@ -1346,7 +1346,7 @@ Examples:
     if 'onnx_end2end' in args.formats or 'trt_end2end' in args.formats or 'all' in args.formats:
         logger.info(f'NMS IoU threshold: {IOU_THRESHOLD}')
         logger.info(f'Confidence threshold: {CONF_THRESHOLD}')
-        box_mode = '(Track E recommended)' if args.normalize_boxes else '(pixel coords 640x640)'
+        box_mode = '(recommended)' if args.normalize_boxes else '(pixel coords 640x640)'
         logger.info(f'Normalize boxes: {args.normalize_boxes} {box_mode}')
     if args.generate_config:
         logger.info('Auto-generate Triton configs: enabled')

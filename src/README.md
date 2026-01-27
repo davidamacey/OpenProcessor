@@ -11,7 +11,7 @@
 | Capability | Endpoint Prefix | Description |
 |------------|----------------|-------------|
 | **Object Detection** | `/detect` | YOLO11 detection (80 COCO classes) |
-| **Face Recognition** | `/faces` | YOLO11-face + ArcFace embeddings |
+| **Face Recognition** | `/faces` | SCRFD + ArcFace embeddings |
 | **Embeddings** | `/embed` | MobileCLIP image/text embeddings |
 | **Visual Search** | `/search` | OpenSearch k-NN similarity search |
 | **Data Ingestion** | `/ingest` | Batch processing and indexing |
@@ -185,7 +185,7 @@ curl -X POST http://localhost:4603/detect -F "image=@photo.jpg"
 
 ### Face Recognition (`routers/faces.py`)
 
-YOLO11-face detection with ArcFace embeddings (512-dim).
+SCRFD-10G face detection with ArcFace embeddings (512-dim).
 
 **Endpoints:**
 ```

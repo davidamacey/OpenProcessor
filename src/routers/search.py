@@ -382,7 +382,7 @@ async def search_by_face(
     Find similar faces using ArcFace identity embeddings.
 
     Pipeline:
-    1. Detect faces in query image using YOLO11-face
+    1. Detect faces in query image using SCRFD
     2. Extract ArcFace 512-dim embedding for selected face
     3. k-NN search on visual_search_faces index in OpenSearch
     4. Return top-k faces above min_score threshold

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Track E: Export MobileCLIP2 Image Encoder to ONNX + TensorRT
+Export MobileCLIP2 Image Encoder to ONNX + TensorRT
 
 This script exports MobileCLIP2 image encoder for deployment on Triton.
 
@@ -9,7 +9,7 @@ Supported variants (with simple ÷255 normalization):
 - MobileCLIP2-B:  86.3M params, 79.4% ImageNet, 10.4ms (MAXIMUM ACCURACY)
 
 NOT recommended (different normalization):
-- S3, S4, L-14: Use ImageNet normalization, complicates DALI pipeline
+- S3, S4, L-14: Use ImageNet normalization, requires custom preprocessing
 
 Key steps:
 1. Load model with proper configuration (image_mean=0, image_std=1)
@@ -406,7 +406,7 @@ def main():
     plan_output = f'/app/models/{checkpoint_name}_image_encoder/1/model.plan'
 
     print('=' * 80)
-    print(f'Track E: {model_name} Image Encoder Export')
+    print(f'MobileCLIP: {model_name} Image Encoder Export')
     print('=' * 80)
     print(f'\nModel: {model_name}')
     print(f'  Parameters: {config["params"]}')

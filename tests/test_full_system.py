@@ -36,6 +36,27 @@ TEST_IMAGE = Path('test_images/zidane.jpg')
 TEST_IMAGE_2 = Path('test_images/bus.jpg')
 INGEST_DIR = Path('test_images/ingest_test_50')
 
+# Standard Ultralytics test images - auto-download if missing
+TEST_IMAGE_URLS = {
+    TEST_IMAGE: 'https://ultralytics.com/images/zidane.jpg',
+    TEST_IMAGE_2: 'https://ultralytics.com/images/bus.jpg',
+}
+
+
+def download_test_images() -> None:
+    """Download standard test images if not present."""
+    import urllib.request
+
+    for path, url in TEST_IMAGE_URLS.items():
+        if not path.exists():
+            print(f'  Downloading {path.name} from {url}...')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                urllib.request.urlretrieve(url, path)
+            except Exception as e:
+                print(f'  WARNING: Failed to download {path.name}: {e}')
+
+
 # Results tracking
 results: dict[str, Any] = {
     'passed': 0,
@@ -497,7 +518,10 @@ def run_all_tests(skip_ingest: bool = False) -> bool:
     print('TRITON API - COMPREHENSIVE SYSTEM TEST SUITE'.center(80))
     print('=' * 80)
 
-    # Phase 0: Clear OpenSearch data for fresh testing
+    # Phase 0: Ensure test images exist
+    download_test_images()
+
+    # Phase 0b: Clear OpenSearch data for fresh testing
     clear_opensearch_data()
 
     # Phase 1: Health checks (critical)
