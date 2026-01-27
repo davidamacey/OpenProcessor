@@ -237,7 +237,7 @@ ls test_results/*.jpg
 ### Repository Structure
 
 ```
-triton-api/
+OpenProcessor/
 ├── README.md                       # Main documentation ✅ Updated
 ├── PROJECT_STATUS.md               # This file (current status)
 ├── CLAUDE.md                       # AI assistant guide ✅ Updated

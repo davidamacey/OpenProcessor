@@ -52,7 +52,7 @@ High-performance visual AI API built on FastAPI and NVIDIA Triton Inference Serv
 
 The system uses Docker Compose to orchestrate three core services:
 
-1. **triton-api**: NVIDIA Triton Inference Server
+1. **triton-server**: NVIDIA Triton Inference Server
    - GPU inference backend (device_ids: [`0`, `2`])
    - Ports: 4600 (HTTP), 4601 (gRPC), 4602 (metrics)
    - Serves TensorRT models with dynamic batching
@@ -304,7 +304,7 @@ curl http://localhost:4603/health | jq '{version, api_version}'
 docker compose up -d
 
 # View logs
-docker compose logs -f triton-api
+docker compose logs -f triton-server
 docker compose logs -f yolo-api
 
 # Stop services

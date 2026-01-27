@@ -167,7 +167,7 @@ docker compose exec yolo-api python /app/export/export_paddleocr_rec.py --skip-t
 #### Export Detection Model
 
 ```bash
-docker compose exec triton-api /usr/src/tensorrt/bin/trtexec \
+docker compose exec triton-server /usr/src/tensorrt/bin/trtexec \
     --onnx=/models/ppocr_det_v5_mobile.onnx \
     --saveEngine=/models/paddleocr_det_trt/1/model.plan \
     --fp16 \
@@ -180,7 +180,7 @@ docker compose exec triton-api /usr/src/tensorrt/bin/trtexec \
 #### Export Recognition Model
 
 ```bash
-docker compose exec triton-api /usr/src/tensorrt/bin/trtexec \
+docker compose exec triton-server /usr/src/tensorrt/bin/trtexec \
     --onnx=/models/en_ppocrv5_mobile_rec.onnx \
     --saveEngine=/models/paddleocr_rec_trt/1/model.plan \
     --fp16 \
@@ -223,7 +223,7 @@ wc -l models/paddleocr_rec_trt/en_ppocrv5_dict.txt
 
 ```bash
 # Reload all models
-docker compose restart triton-api
+docker compose restart triton-server
 
 # Or load specific models via API
 curl -X POST localhost:4600/v2/repository/models/paddleocr_det_trt/load
@@ -559,7 +559,7 @@ rm models/paddleocr_rec_trt/1/model.plan
    ```
 2. Check Triton logs:
    ```bash
-   docker compose logs triton-api | grep -i error
+   docker compose logs triton-server | grep -i error
    ```
 3. Reload models:
    ```bash

@@ -24,7 +24,7 @@
 #   status     - Check model status
 #
 # Requirements:
-#   - Docker with triton-api and yolo-api containers running
+#   - Docker with triton-server and yolo-api containers running
 #   - NVIDIA GPU with sufficient memory (4GB+ for TRT build)
 #
 # =============================================================================
@@ -282,12 +282,12 @@ export_detection() {
     log_info "  Max shapes: $DET_MAX_SHAPES"
     log_info "  Workspace: $TRT_WORKSPACE"
 
-    # Use 'docker compose run' instead of 'exec' to avoid requiring triton-api
+    # Use 'docker compose run' instead of 'exec' to avoid requiring triton-server
     # to be running with all models loaded (chicken-and-egg on fresh install).
     # --rm: clean up container after exit
     # --no-deps: don't start dependent services
     # -T: disable pseudo-TTY (needed for non-interactive/piped output)
-    docker compose run --rm --no-deps -T triton-api /usr/src/tensorrt/bin/trtexec \
+    docker compose run --rm --no-deps -T triton-server /usr/src/tensorrt/bin/trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$DET_MIN_SHAPES" \
@@ -352,7 +352,7 @@ export_recognition() {
     log_warn "This may take 10-20 minutes for dynamic width optimization..."
 
     # Use 'docker compose run' instead of 'exec' to avoid chicken-and-egg problem.
-    docker compose run --rm --no-deps -T triton-api /usr/src/tensorrt/bin/trtexec \
+    docker compose run --rm --no-deps -T triton-server /usr/src/tensorrt/bin/trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$REC_MIN_SHAPES" \
@@ -377,7 +377,7 @@ export_all_trt() {
     log_info "Converting all models to TensorRT..."
 
     # Try to unload models if Triton is running (frees GPU memory)
-    if check_container "triton-api"; then
+    if check_container "triton-server"; then
         unload_models_for_memory
     else
         log_info "Triton not running - using docker compose run for trtexec"
@@ -557,7 +557,7 @@ EOF
 
 restart_triton() {
     log_info "Restarting Triton server..."
-    docker compose restart triton-api
+    docker compose restart triton-server
     wait_for_triton
 }
 

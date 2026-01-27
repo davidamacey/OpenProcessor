@@ -7,13 +7,13 @@
 
 FROM nvcr.io/nvidia/tritonserver:25.10-py3
 
-LABEL org.opencontainers.image.title="Triton-API Inference Server" \
+LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
       org.opencontainers.image.description="NVIDIA Triton Inference Server with TensorRT models for visual AI" \
-      org.opencontainers.image.vendor="Triton-API" \
-      org.opencontainers.image.authors="Triton-API Contributors" \
+      org.opencontainers.image.vendor="OpenProcessor" \
+      org.opencontainers.image.authors="OpenProcessor Contributors" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/your-org/triton-api" \
-      org.opencontainers.image.documentation="https://github.com/your-org/triton-api/blob/main/README.md"
+      org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
+      org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
 # Install PyTorch and TorchVision (CUDA 12.x compatible)
 # Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)
