@@ -45,12 +45,19 @@ def draw_detection_boxes(image: np.ndarray, detections: list) -> np.ndarray:
 
     for det in detections:
         # Convert normalized coordinates to pixel coordinates
-        x1 = int(det['x1'] * w)
-        y1 = int(det['y1'] * h)
-        x2 = int(det['x2'] * w)
-        y2 = int(det['y2'] * h)
+        # Handle both formats: {x1, y1, x2, y2} from /detect and {box: [x1, y1, x2, y2]} from /analyze
+        if 'box' in det and isinstance(det['box'], list):
+            x1 = int(det['box'][0] * w)
+            y1 = int(det['box'][1] * h)
+            x2 = int(det['box'][2] * w)
+            y2 = int(det['box'][3] * h)
+        else:
+            x1 = int(det['x1'] * w)
+            y1 = int(det['y1'] * h)
+            x2 = int(det['x2'] * w)
+            y2 = int(det['y2'] * h)
 
-        class_name = det.get('class_name', 'unknown')
+        class_name = det.get('class_name', det.get('class', 'unknown'))
         confidence = det.get('confidence', 0.0)
 
         # Draw box

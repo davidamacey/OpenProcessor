@@ -291,7 +291,7 @@ def embed_batch(
 def embed_boxes(
     image: UploadFile = File(..., description='Image file (JPEG/PNG)'),
     boxes: str = Body(..., description='JSON array of boxes [[x1,y1,x2,y2], ...] normalized [0,1]'),
-    use_cache: bool = Query(True, description='Use embedding cache'),
+    use_cache: bool = Query(True, description='Use embedding cache'),  # noqa: ARG001
 ):
     """
     Extract MobileCLIP embeddings for bounding box crops from an image.
@@ -310,8 +310,6 @@ def embed_boxes(
     ```
     """
     import json
-
-    service = get_inference_service()
 
     try:
         # Parse boxes JSON
@@ -336,53 +334,56 @@ def embed_boxes(
 
         pil_image = Image.open(BytesIO(image_bytes)).convert('RGB')
         img_width, img_height = pil_image.size
+        np_img = np.array(pil_image)
 
-        results = []
+        from src.clients.triton_client import get_triton_client
+        from src.config import get_settings
+        from src.services.cpu_preprocess import center_crop_cpu
+
+        # Validate and collect valid boxes + preprocessed crops
+        valid_boxes: list[list[float]] = []
+        preprocessed: list[np.ndarray] = []
         for box_coords in box_list:
             if not isinstance(box_coords, list) or len(box_coords) != 4:
                 logger.warning(f'Invalid box format: {box_coords}')
                 continue
 
-            try:
-                x1, y1, x2, y2 = box_coords
+            x1, y1, x2, y2 = box_coords
 
-                # Validate coordinates are in [0, 1] range
-                if not all(0 <= c <= 1 for c in [x1, y1, x2, y2]):
-                    logger.warning(f'Box coordinates out of range: {box_coords}')
-                    continue
-
-                # Convert to pixel coordinates
-                px1 = int(x1 * img_width)
-                py1 = int(y1 * img_height)
-                px2 = int(x2 * img_width)
-                py2 = int(y2 * img_height)
-
-                # Ensure valid crop dimensions
-                if px2 <= px1 or py2 <= py1:
-                    logger.warning(f'Invalid box dimensions: {box_coords}')
-                    continue
-
-                # Crop the region
-                crop = pil_image.crop((px1, py1, px2, py2))
-
-                # Convert crop to bytes for encoding
-                crop_buffer = BytesIO()
-                crop.save(crop_buffer, format='JPEG', quality=95)
-                crop_bytes = crop_buffer.getvalue()
-
-                # Generate embedding
-                embedding = service.encode_image(crop_bytes, use_cache=use_cache)
-
-                results.append(
-                    BoxEmbedding(
-                        box=[x1, y1, x2, y2],
-                        embedding=embedding.tolist(),
-                    )
-                )
-
-            except Exception as e:
-                logger.warning(f'Failed to process box {box_coords}: {e}')
+            # Validate coordinates are in [0, 1] range
+            if not all(0 <= c <= 1 for c in [x1, y1, x2, y2]):
+                logger.warning(f'Box coordinates out of range: {box_coords}')
                 continue
+
+            # Convert to pixel coordinates
+            px1 = int(x1 * img_width)
+            py1 = int(y1 * img_height)
+            px2 = int(x2 * img_width)
+            py2 = int(y2 * img_height)
+
+            # Ensure valid crop dimensions
+            if px2 <= px1 or py2 <= py1:
+                logger.warning(f'Invalid box dimensions: {box_coords}')
+                continue
+
+            # Lossless numpy crop + LANCZOS resize/center-crop to [3, 256, 256]
+            crop_rgb = np_img[py1:py2, px1:px2]
+            preprocessed.append(center_crop_cpu(crop_rgb, target_size=256))
+            valid_boxes.append([x1, y1, x2, y2])
+
+        if not preprocessed:
+            return BoxEmbeddingsResponse(boxes=[], num_boxes=0, status='success')
+
+        # Single batched Triton inference call for all crops
+        batch_tensor = np.stack(preprocessed)  # [N, 3, 256, 256]
+        settings = get_settings()
+        client = get_triton_client(settings.triton_url)
+        embeddings = client.infer_mobileclip_batch(batch_tensor)  # [N, 512]
+
+        results = [
+            BoxEmbedding(box=box, embedding=embeddings[i].tolist())
+            for i, box in enumerate(valid_boxes)
+        ]
 
         return BoxEmbeddingsResponse(
             boxes=results,
