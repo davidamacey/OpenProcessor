@@ -1,20 +1,32 @@
-# Custom Triton Server with PyTorch for Python Backend
-# Required for box_embedding_extractor (ROI align + per-box embeddings)
-#
-# Based on: nvcr.io/nvidia/tritonserver:25.10-py3
-# Adds: PyTorch + TorchVision for Python backend models
+# =============================================================================
+# Triton Inference Server with PyTorch for Python Backend (BLS)
+# =============================================================================
+# Based on NVIDIA Triton 25.10 with PyTorch + TorchVision for Python backend
+# models (yolo11_face_pipeline, unified_complete_pipeline, ocr_pipeline).
+# =============================================================================
 
 FROM nvcr.io/nvidia/tritonserver:25.10-py3
 
+LABEL org.opencontainers.image.title="Triton-API Inference Server" \
+      org.opencontainers.image.description="NVIDIA Triton Inference Server with TensorRT models for visual AI" \
+      org.opencontainers.image.vendor="Triton-API" \
+      org.opencontainers.image.authors="Triton-API Contributors" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/your-org/triton-api" \
+      org.opencontainers.image.documentation="https://github.com/your-org/triton-api/blob/main/README.md"
+
 # Install PyTorch and TorchVision (CUDA 12.x compatible)
-# Using pip for faster install than conda
+# Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)
 RUN pip install --no-cache-dir \
     pip==24.3.1 \
     torch==2.5.1 \
     torchvision==0.20.1 \
     --index-url https://download.pytorch.org/whl/cu124 \
-    # Install OpenCV for OCR pipeline (text region cropping and perspective transform)
     && pip install --no-cache-dir opencv-python-headless==4.10.0.84 \
-    # Verify installation
     && python3 -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')" \
     && python3 -c "import torchvision; print(f'TorchVision {torchvision.__version__} installed')"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8000/v2/health/ready || exit 1
+
+CMD ["tritonserver", "--model-store=/models"]

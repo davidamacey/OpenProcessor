@@ -116,10 +116,10 @@ class FastFaceClient:
         if len(faces) == 0:
             return np.array([])
 
-        inputs = [InferInput('input.1', list(faces.shape), 'FP32')]
+        inputs = [InferInput('input', list(faces.shape), 'FP32')]
         inputs[0].set_data_from_numpy(faces)
 
-        outputs = [InferRequestedOutput('683')]
+        outputs = [InferRequestedOutput('output')]
 
         response = retry_sync(
             self.client.infer,
@@ -128,7 +128,7 @@ class FastFaceClient:
             outputs=outputs,
         )
 
-        embeddings = response.as_numpy('683')
+        embeddings = response.as_numpy('output')
 
         # L2 normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)

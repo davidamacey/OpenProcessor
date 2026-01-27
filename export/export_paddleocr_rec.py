@@ -47,10 +47,12 @@ MIN_BATCH = 1
 OPT_BATCH = 32  # Higher optimal batch for text crops
 MAX_BATCH = 64  # Match Triton max_batch_size
 
-# Paths
+# Paths (relative to project root, which is one level up from this script's directory)
 PADDLEX_MODEL_DIR = Path.home() / '.paddlex/official_models' / MODEL_NAME
-EXPORT_DIR = Path('/mnt/nvm/repos/triton-api/models/exports/ocr')
-MODELS_DIR = Path('/mnt/nvm/repos/triton-api/models')
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_PROJECT_DIR = _SCRIPT_DIR.parent
+EXPORT_DIR = _PROJECT_DIR / 'models/exports/ocr'
+MODELS_DIR = _PROJECT_DIR / 'models'
 
 ONNX_PATH = EXPORT_DIR / 'en_ppocrv5_mobile_rec.onnx'
 PLAN_OUTPUT = MODELS_DIR / 'paddleocr_rec_trt/1/model.plan'

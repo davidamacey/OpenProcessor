@@ -1,95 +1,105 @@
 # =============================================================================
-# Unified Dockerfile for Triton YOLO Inference System
+# Triton-API FastAPI Service
+# Multi-stage build with non-root user and production defaults
 # =============================================================================
-# This Dockerfile builds the unified yolo-api service that handles ALL tracks:
-#   - Track A: PyTorch baseline (loaded at startup)
-#   - Track B: TensorRT + CPU NMS (via Triton gRPC)
-#   - Track C: TensorRT + GPU NMS (via Triton gRPC)
-#   - Track D: DALI + TensorRT (via Triton gRPC ensembles)
-#   - Track E: MobileCLIP Visual Search (via Triton + OpenSearch)
+# Builds the yolo-api FastAPI service for visual AI inference.
+# docker-compose.yml overrides CMD with environment-specific worker counts.
 #
-# All tracks are accessible on port 8000 via FastAPI
-#
-# VOLUME MOUNTS REQUIRED:
-#   - ./pytorch_models:/app/pytorch_models  (MobileCLIP checkpoints)
-#   - ./reference_repos:/app/reference_repos  (ml-mobileclip, open_clip repos)
+# VOLUME MOUNTS (for development):
+#   - ./src:/app/src              (hot reload)
+#   - ./pytorch_models:/app/pytorch_models
+#   - ./VERSION:/app/VERSION:ro
 # =============================================================================
 
-FROM python:3.12-slim-trixie
+# -----------------------------------------------------------------------------
+# Stage 1: Build - Install Python dependencies with compilation tools
+# -----------------------------------------------------------------------------
+FROM python:3.13-slim-trixie AS builder
 
-# Set environment variables for performance
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /build
 
-# Set working directory
-WORKDIR /app
+# Install build dependencies (isolated to this stage)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    cmake \
+    make \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
 COPY requirements.txt .
 
-# =============================================================================
-# Stage 1: Install system dependencies and Python packages
-# =============================================================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Runtime dependencies
-    libgl1=1.7.0-1 \
-    libglib2.0-0=2.82.4-1 \
-    libgomp1=14.2.0-8 \
-    curl=8.12.0-1 \
-    jq=1.7.1-4 \
-    git=1:2.47.1-2 \
-    # Build dependencies (temporary, for compiling C extensions)
-    gcc=4:14.2.0-1 \
-    g++=4:14.2.0-1 \
-    cmake=3.31.3-1 \
-    make=4.3-4.1 \
-    && pip install --no-cache-dir --upgrade pip==24.3.1 setuptools==75.8.0 wheel==0.45.1 \
-    && pip install --no-cache-dir \
+RUN pip install --user --no-cache-dir --upgrade pip \
+    && pip install --user --no-cache-dir --no-warn-script-location \
         --extra-index-url https://pypi.nvidia.com \
-        -r requirements.txt \
-    && rm -rf /root/.cache/pip/* \
-    # Remove build dependencies to reduce image size
-    && apt-get purge -y --auto-remove gcc g++ cmake make \
+        -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# Stage 2: Runtime - Minimal image with only runtime dependencies
+# -----------------------------------------------------------------------------
+FROM python:3.13-slim-trixie
+
+LABEL org.opencontainers.image.title="Triton-API FastAPI Service" \
+      org.opencontainers.image.description="Visual AI API with object detection, face recognition, embeddings, and OCR" \
+      org.opencontainers.image.vendor="Triton-API" \
+      org.opencontainers.image.authors="Triton-API Contributors" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/your-org/triton-api" \
+      org.opencontainers.image.documentation="https://github.com/your-org/triton-api/blob/main/README.md"
+
+# Runtime-only system packages (no build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    jq \
+    libgl1 \
+    libglib2.0-0t64 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# =============================================================================
-# Stage 2: Copy application code
-# =============================================================================
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-
-# Create non-root user for security best practices
-# Note: reference_repos and pytorch_models are mounted from host
-RUN useradd -m -u 1000 appuser && \
+# Non-root user with video group for GPU access
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -G video -u 1000 -m -s /bin/bash appuser && \
+    mkdir -p /app /app/logs && \
     chown -R appuser:appuser /app && \
-    chmod +x /app/scripts/*.sh 2>/dev/null || true && \
-    chmod +x /app/scripts/**/*.sh 2>/dev/null || true
+    mkdir -p /home/appuser/.cache/huggingface \
+             /home/appuser/.cache/torch && \
+    chown -R appuser:appuser /home/appuser/.cache
+
+WORKDIR /app
+
+# Copy Python packages from builder stage
+COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HOME=/home/appuser/.cache/huggingface \
+    TORCH_HOME=/home/appuser/.cache/torch
+
+# Copy application code
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser scripts/ ./scripts/
+COPY --chown=appuser:appuser VERSION ./VERSION
 
 USER appuser
 
-# =============================================================================
-# Default Configuration
-# =============================================================================
-ENV SERVICE_MODE=all \
-    SERVICE_PORT=8000
+EXPOSE 8000
 
-EXPOSE ${SERVICE_PORT}
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests, os; requests.get(f'http://localhost:{os.getenv(\"SERVICE_PORT\", \"8000\")}/health', timeout=5).raise_for_status()" || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Default CMD - runs unified service with all tracks
+# Production defaults (docker-compose.yml overrides workers, backlog, etc.)
 CMD ["uvicorn", "src.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
-     "--workers", "1", \
+     "--workers", "16", \
      "--loop", "uvloop", \
      "--http", "httptools", \
-     "--backlog", "2048", \
-     "--timeout-keep-alive", "5", \
+     "--backlog", "4096", \
+     "--limit-concurrency", "512", \
+     "--timeout-keep-alive", "75", \
+     "--timeout-graceful-shutdown", "30", \
      "--access-log", \
      "--log-level", "info"]

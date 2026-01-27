@@ -15,10 +15,11 @@ contactPoints:
     name: default-notifications
     receivers:
       # Webhook for custom integrations (Discord, custom scripts, etc.)
+      # To use: set ALERT_WEBHOOK_URL in your .env or docker-compose.override.yml
       - uid: webhook-default
         type: webhook
         settings:
-          url: "${ALERT_WEBHOOK_URL:-http://localhost:9999/alerts}"
+          url: "http://localhost:9999/alerts"
           httpMethod: POST
         disableResolveMessage: false
 
@@ -49,7 +50,7 @@ contactPoints:
       - uid: webhook-critical
         type: webhook
         settings:
-          url: "${ALERT_WEBHOOK_URL:-http://localhost:9999/alerts/critical}"
+          url: "http://localhost:9999/alerts/critical"
           httpMethod: POST
         disableResolveMessage: false
 

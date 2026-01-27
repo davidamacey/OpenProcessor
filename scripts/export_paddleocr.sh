@@ -53,8 +53,8 @@ REC_PLAN="$MODELS_DIR/paddleocr_rec_trt/1/model.plan"
 DICT_FILE="$MODELS_DIR/paddleocr_rec_trt/en_ppocrv5_dict.txt"
 
 # TensorRT configuration
-# CRITICAL: Use --memPoolSize=workspace:4G syntax (not --workspace)
-TRT_WORKSPACE="4G"  # 4GB workspace for TRT optimization
+# CRITICAL: Use --memPoolSize=workspace:8G syntax (not --workspace)
+TRT_WORKSPACE="8G"  # 8GB workspace for TRT optimization (required for dynamic shapes)
 TRT_FP16="--fp16"   # Use FP16 precision
 
 # Detection model shapes (H,W are multiples of 32, max 960)
@@ -62,8 +62,9 @@ DET_MIN_SHAPES="x:1x3x32x32"
 DET_OPT_SHAPES="x:1x3x736x736"
 DET_MAX_SHAPES="x:4x3x960x960"
 
-# Recognition model shapes (height=48, width=8-2048 dynamic)
-REC_MIN_SHAPES="x:1x3x48x8"
+# Recognition model shapes (height=48, width=48-2048 dynamic)
+# NOTE: min width=48 (not 8) matches the export_paddleocr_rec.py working config
+REC_MIN_SHAPES="x:1x3x48x48"
 REC_OPT_SHAPES="x:32x3x48x320"
 REC_MAX_SHAPES="x:64x3x48x2048"
 
@@ -135,21 +136,118 @@ unload_models_for_memory() {
 # =============================================================================
 
 download_models() {
-    log_info "Downloading PP-OCRv5 models..."
+    log_info "Downloading PP-OCRv5 detection ONNX..."
 
-    if ! check_container "yolo-api"; then
-        log_error "yolo-api container not running. Start with: docker compose up -d yolo-api"
-        return 1
+    local download_ok=false
+
+    # Try host .venv first (no Docker dependency)
+    local venv_python="$PROJECT_DIR/.venv/bin/python"
+    if [ -f "$venv_python" ]; then
+        log_info "Using host .venv for download..."
+        cd "$PROJECT_DIR" || return 1
+        if "$venv_python" export/download_paddleocr.py 2>&1; then
+            download_ok=true
+        fi
     fi
 
-    docker compose exec yolo-api python /app/export/download_paddleocr.py
+    # Fall back to Docker container if host .venv didn't work
+    if [ "$download_ok" = false ]; then
+        if check_container "yolo-api"; then
+            log_info "Using yolo-api container for download..."
+            if docker compose exec yolo-api python /app/export/download_paddleocr.py; then
+                download_ok=true
+            fi
+        fi
+    fi
 
-    if [ $? -eq 0 ]; then
-        log_success "Models downloaded successfully"
+    if [ "$download_ok" = true ]; then
+        log_success "Detection ONNX downloaded"
     else
-        log_error "Model download failed"
+        log_error "Detection model download failed"
+        log_info "Ensure either .venv or yolo-api container is available"
         return 1
     fi
+
+    # For recognition, generate English-only ONNX from PaddleX
+    # (The downloaded model is multilingual with 18385 classes, but we need
+    # the English-only model with 438 classes from PaddleX)
+    export_recognition_onnx
+}
+
+# =============================================================================
+# PaddleOCR Recognition ONNX Export (English-only via PaddleX)
+# =============================================================================
+# IMPORTANT: The recognition ONNX must be generated from PaddleX, NOT downloaded.
+# The multilingual model from GitHub has 18385 output classes, but we need the
+# English-only model with 438 classes (436 chars + blank + space).
+#
+# This requires PaddleX and paddle2onnx installed in the host .venv
+# (NOT available in Docker containers).
+# =============================================================================
+
+export_recognition_onnx() {
+    log_info "Generating English recognition ONNX from PaddleX..."
+
+    # Check if ONNX already exists
+    if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ] && [ -s "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
+        local size
+        size=$(du -h "$EXPORTS_DIR/$REC_ONNX_NAME" | cut -f1)
+        log_info "English recognition ONNX already exists: $size"
+        return 0
+    fi
+
+    mkdir -p "$EXPORTS_DIR"
+
+    # Check for .venv with PaddleX
+    local venv_python="$PROJECT_DIR/.venv/bin/python"
+    if [ ! -f "$venv_python" ]; then
+        log_error "Python virtual environment not found: $PROJECT_DIR/.venv"
+        log_info "Create with: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+        return 1
+    fi
+
+    # Check PaddleX is installed
+    if ! "$venv_python" -c "import paddlex" 2>/dev/null; then
+        log_error "PaddleX not installed in .venv"
+        log_info "Install with: source .venv/bin/activate && pip install paddlex paddle2onnx"
+        return 1
+    fi
+
+    # Check PaddleX model is downloaded
+    local paddlex_model_dir="$HOME/.paddlex/official_models/en_PP-OCRv5_mobile_rec"
+    if [ ! -d "$paddlex_model_dir" ]; then
+        log_info "Downloading PaddleX English recognition model..."
+        # PaddleOCR auto-downloads on first use
+        "$venv_python" -c "
+import os
+os.environ['DISABLE_MODEL_SOURCE_CHECK'] = 'True'
+from paddleocr import PaddleOCR
+ocr = PaddleOCR(lang='en')
+print('PaddleX model downloaded')
+" 2>/dev/null || {
+            log_error "Failed to download PaddleX model"
+            return 1
+        }
+    fi
+
+    # Run ONNX export using the host Python environment
+    log_info "Exporting English ONNX (438 classes) via PaddleX + paddle2onnx..."
+    log_info "  Source: $paddlex_model_dir"
+    log_info "  Output: $EXPORTS_DIR/$REC_ONNX_NAME"
+
+    cd "$PROJECT_DIR" || return 1
+    if DISABLE_MODEL_SOURCE_CHECK=True "$venv_python" export/export_paddleocr_rec.py --skip-tensorrt 2>&1 | tee /tmp/export_paddleocr_rec_onnx.log; then
+        if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ] && [ -s "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
+            local size
+            size=$(du -h "$EXPORTS_DIR/$REC_ONNX_NAME" | cut -f1)
+            log_success "English recognition ONNX exported: $size"
+            return 0
+        fi
+    fi
+
+    log_error "Recognition ONNX export failed"
+    log_info "Check log: /tmp/export_paddleocr_rec_onnx.log"
+    return 1
 }
 
 # =============================================================================
@@ -184,7 +282,12 @@ export_detection() {
     log_info "  Max shapes: $DET_MAX_SHAPES"
     log_info "  Workspace: $TRT_WORKSPACE"
 
-    docker compose exec triton-api /usr/src/tensorrt/bin/trtexec \
+    # Use 'docker compose run' instead of 'exec' to avoid requiring triton-api
+    # to be running with all models loaded (chicken-and-egg on fresh install).
+    # --rm: clean up container after exit
+    # --no-deps: don't start dependent services
+    # -T: disable pseudo-TTY (needed for non-interactive/piped output)
+    docker compose run --rm --no-deps -T triton-api /usr/src/tensorrt/bin/trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$DET_MIN_SHAPES" \
@@ -218,12 +321,18 @@ export_recognition() {
     elif [ -f "$PYTORCH_MODELS_DIR/$REC_ONNX_NAME" ]; then
         onnx_source="$PYTORCH_MODELS_DIR/$REC_ONNX_NAME"
     else
-        log_error "Recognition ONNX not found"
-        log_info "Expected locations:"
-        log_info "  - $EXPORTS_DIR/$REC_ONNX_NAME"
-        log_info "  - $PYTORCH_MODELS_DIR/$REC_ONNX_NAME"
-        log_info "Run: docker compose exec yolo-api python /app/export/export_paddleocr_rec.py --skip-tensorrt"
-        return 1
+        # Auto-generate English ONNX from PaddleX if not found
+        log_warn "English recognition ONNX not found, generating from PaddleX..."
+        export_recognition_onnx || return 1
+
+        # Re-check after generation
+        if [ -f "$EXPORTS_DIR/$REC_ONNX_NAME" ]; then
+            onnx_source="$EXPORTS_DIR/$REC_ONNX_NAME"
+        else
+            log_error "Recognition ONNX still not found after generation attempt"
+            log_info "Expected: $EXPORTS_DIR/$REC_ONNX_NAME"
+            return 1
+        fi
     fi
 
     # Copy ONNX to models dir for container access
@@ -242,7 +351,8 @@ export_recognition() {
     log_info "  Workspace: $TRT_WORKSPACE"
     log_warn "This may take 10-20 minutes for dynamic width optimization..."
 
-    docker compose exec triton-api /usr/src/tensorrt/bin/trtexec \
+    # Use 'docker compose run' instead of 'exec' to avoid chicken-and-egg problem.
+    docker compose run --rm --no-deps -T triton-api /usr/src/tensorrt/bin/trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$REC_MIN_SHAPES" \
@@ -266,18 +376,17 @@ export_recognition() {
 export_all_trt() {
     log_info "Converting all models to TensorRT..."
 
-    if ! check_container "triton-api"; then
-        log_error "triton-api container not running. Start with: docker compose up -d triton-api"
-        return 1
+    # Try to unload models if Triton is running (frees GPU memory)
+    if check_container "triton-api"; then
+        unload_models_for_memory
+    else
+        log_info "Triton not running - using docker compose run for trtexec"
     fi
-
-    # Unload models to free GPU memory
-    unload_models_for_memory
 
     # Export detection
     export_detection || return 1
 
-    # Export recognition
+    # Export recognition (auto-generates ONNX from PaddleX if needed)
     export_recognition || return 1
 
     log_success "All TensorRT exports complete"
@@ -300,33 +409,33 @@ setup_dictionary() {
         return 0
     fi
 
-    # Try to extract from PaddleX model config
-    docker compose exec yolo-api python -c "
+    # Try to extract from PaddleX model config using host .venv
+    # (PaddleX model is on the host, not in Docker containers)
+    local venv_python="$PROJECT_DIR/.venv/bin/python"
+    local paddlex_config="$HOME/.paddlex/official_models/en_PP-OCRv5_mobile_rec/inference.yml"
+
+    if [ -f "$venv_python" ] && [ -f "$paddlex_config" ]; then
+        log_info "Extracting dictionary from PaddleX config..."
+        "$venv_python" -c "
 import yaml
 from pathlib import Path
 
-paddlex_dir = Path.home() / '.paddlex/official_models/en_PP-OCRv5_mobile_rec'
-config_path = paddlex_dir / 'inference.yml'
+config_path = Path('$paddlex_config')
+with open(config_path, 'r') as f:
+    config = yaml.safe_load(f)
 
-if config_path.exists():
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-
-    char_dict = config.get('PostProcess', {}).get('character_dict', [])
-    if char_dict:
-        output_path = Path('/models/paddleocr_rec_trt/en_ppocrv5_dict.txt')
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for char in char_dict:
-                f.write(f'{char}\n')
-
-        print(f'Wrote {len(char_dict)} characters to dictionary')
-    else:
-        print('No character_dict found in config')
+char_dict = config.get('PostProcess', {}).get('character_dict', [])
+if char_dict:
+    output_path = Path('$DICT_FILE')
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        for char in char_dict:
+            f.write(f'{char}\n')
+    print(f'Wrote {len(char_dict)} characters to dictionary')
 else:
-    print(f'Config not found: {config_path}')
+    print('No character_dict found in config')
 " 2>/dev/null || true
+    fi
 
     if [ -f "$DICT_FILE" ]; then
         local char_count
@@ -397,15 +506,17 @@ EOF
 #
 # Input:
 #   - x: [B, 3, 48, W] FP32, preprocessed (x / 127.5 - 1), BGR
-#        Text crops with height=48, width=8-2048
+#        Text crops with height=48, width=48-2048
 #
 # Output:
 #   - fetch_name_0: [B, T, 438] FP32, character probabilities
 #        T timesteps (dynamic), 438 character classes (English dict)
+#
+# TensorRT engine exported with dynamic batch (max=64) and dynamic width.
 
 name: "paddleocr_rec_trt"
 platform: "tensorrt_plan"
-max_batch_size: 1
+max_batch_size: 64
 
 input [
   {
@@ -431,8 +542,10 @@ instance_group [
   }
 ]
 
-# No dynamic batching - each request has different width
-# Process individually for best accuracy
+dynamic_batching {
+  preferred_batch_size: [ 16, 32, 64 ]
+  max_queue_delay_microseconds: 10000
+}
 EOF
 
     log_success "Triton configs created"
@@ -561,15 +674,15 @@ run_full_pipeline() {
     echo "=========================================="
     echo ""
 
-    # 1. Download models
-    log_info "Step 1/5: Downloading models..."
+    # 1. Download detection ONNX + generate English recognition ONNX
+    log_info "Step 1/5: Downloading/generating ONNX models..."
     download_models || return 1
 
     # 2. Setup dictionary
     log_info "Step 2/5: Setting up dictionary..."
     setup_dictionary
 
-    # 3. Export to TensorRT
+    # 3. Export to TensorRT (uses docker compose run, no running Triton needed)
     log_info "Step 3/5: Exporting to TensorRT..."
     export_all_trt || return 1
 
@@ -577,9 +690,10 @@ run_full_pipeline() {
     log_info "Step 4/5: Creating Triton configs..."
     create_configs
 
-    # 5. Restart Triton
-    log_info "Step 5/5: Restarting Triton..."
-    restart_triton
+    # 5. Cleanup temporary ONNX files from models dir
+    log_info "Step 5/5: Cleaning up..."
+    rm -f "$MODELS_DIR/$DET_ONNX_NAME"
+    rm -f "$MODELS_DIR/$REC_ONNX_NAME"
 
     echo ""
     log_success "Export pipeline complete!"

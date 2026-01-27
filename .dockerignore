@@ -1,76 +1,110 @@
+# =============================================================================
+# Triton-API Docker Ignore File
+# Excludes files not needed in Docker build context
+# =============================================================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
 # Virtual environments
 .uenv/
 .venv/
 venv/
 env/
+ENV/
 
-# Models (mounted as volumes)
-models/
-*.pt
-*.onnx
-*.pbtxt
-*.plan
-*.engine
-
-# TensorRT cache (mounted as volume)
-trt_cache/
-
-# Documentation (not needed in containers)
-docs/
-*.md
-!requirements.txt
-CLAUDE.md
-
-# Benchmarks (run from host)
-benchmarks/results/
-*.json
-*.csv
-
-# Test data (use external mounts)
-test_images/
-test_videos/
-sample_data/
-
-# Legacy scripts (deprecated)
-scripts/legacy/
-
-# Git files
-.git/
-.gitignore
-.gitattributes
-
-# Docker files
-Dockerfile*
-docker-compose*.yml
-.dockerignore
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs/
+*.egg-info/
+*.egg
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
 
 # IDE and editor files
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
 *.swp
 *.swo
 *~
 
-# OS files
-.DS_Store
-Thumbs.db
+# Docker files (avoid recursive inclusion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
 
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
+# Documentation (not needed in containers)
+docs/
+*.md
+!README.md
+CLAUDE.md
 
-# Logs
+# Test files and data
+tests/
+test_images/
+test_videos/
+test_results/
+sample_data/
+benchmarks/
+
+# Large model files (mounted at runtime)
+pytorch_models/
+models/*/1/*.plan
+models/*/1/*.engine
+*.pt
+*.onnx
+*.safetensors
+*.weights
+*.pth
+
+# Model configs (keep in Docker for Triton)
+# Note: config.pbtxt files ARE included
+
+# Reference repos (mounted at runtime)
+reference_repos/
+
+# TensorRT cache
+trt_cache/
+
+# Cache directories
+cache/
+outputs/
+logs/
+
+# Security reports
+security-reports/
+
+# Environment files
+.env
+.env.*
+env.template
+
+# Build artifacts and logs
 *.log
-
-# Temporary files
 *.tmp
 *.bak
 *.backup
 
+# Benchmark results
+benchmarks/results/
+*.csv
+
 # CI/CD
 .github/
 .gitlab-ci.yml
+
+# OS files
+.DS_Store
+Thumbs.db

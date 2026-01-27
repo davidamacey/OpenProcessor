@@ -6,31 +6,85 @@ Object detection, face recognition, visual search, OCR, and embeddings - all thr
 
 ---
 
-## Recent Updates
+## Quick Start
 
-**✨ Latest (2026-01-26):**
-- ✅ Fixed batch/directory ingest (94% success rate on 50-image batches)
-- ✅ Comprehensive test suite added (32 tests, 100% passing)
-- ✅ Visual validation with bounding box verification
-- ✅ All pre-commit quality checks passing (ruff, mypy, bandit)
-- ✅ gRPC connection optimization for high-throughput batch processing
-- ✅ Test results organized in test_results/ directory
+### Copy & Run (One Line)
+
+```bash
+git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scripts/setup.sh
+```
+
+That's it! The setup script automatically:
+- Detects your GPU and selects the optimal profile
+- Downloads required models (~500MB)
+- Exports models to TensorRT (45-60 min first time)
+- Starts all services
+
+### Non-Interactive Setup
+
+```bash
+# Clone and setup with defaults (no prompts)
+git clone https://github.com/your-org/triton-api.git && cd triton-api && ./scripts/setup.sh --yes
+
+# Or specify a profile explicitly
+./scripts/setup.sh --profile=standard --gpu=0 --yes
+```
+
+### Verify Installation
+
+```bash
+curl http://localhost:4603/health
+# {"status":"healthy","version":"6.0.0",...}
+
+# Quick test with an image
+curl -X POST http://localhost:4603/detect -F "image=@your-image.jpg"
+```
+
+### Management Commands
+
+```bash
+./scripts/triton-api.sh status    # Check service health
+./scripts/triton-api.sh logs -f   # View live logs
+./scripts/triton-api.sh restart   # Restart all services
+./scripts/triton-api.sh help      # See all commands
+```
+
+See [INSTALLATION.md](INSTALLATION.md) for manual installation, troubleshooting, and advanced options.
+
+<!--
+## Docker Hub (Coming Soon)
+
+Pre-built images will be available on Docker Hub:
+
+```bash
+# Pull and run (no build required)
+docker pull your-org/triton-api:latest
+docker compose up -d
+```
+-->
 
 ---
 
-## Quick Start
+## GPU Compatibility
 
-```bash
-# Clone and start services
-cd /mnt/nvm/repos/triton-api
-docker compose up -d
+| Profile | VRAM | GPUs | Throughput |
+|---------|------|------|------------|
+| minimal | 6-8GB | RTX 3060, RTX 4060 | ~5 RPS |
+| standard | 12-24GB | RTX 3080, RTX 4090 | ~15 RPS |
+| full | 48GB+ | A6000, A100 | ~50 RPS |
 
-# Wait for models to load (2-3 minutes first time)
-docker compose logs -f triton-api | grep "successfully loaded"
+Switch profiles: `./scripts/triton-api.sh profile <name>`
 
-# Verify services are running
-curl http://localhost:4603/health
-```
+---
+
+## Recent Updates
+
+**Latest:**
+- One-command setup with automatic GPU detection
+- Multi-GPU profile support (minimal/standard/full)
+- Automated TensorRT export with progress feedback
+- Comprehensive test suite (32 tests, 100% passing)
+- Management CLI for service control
 
 ---
 

@@ -1,0 +1,12 @@
+{
+  "name": "full",
+  "description": "48GB+ VRAM (A6000, A100)",
+  "instance_count": 4,
+  "max_batch_size": 64,
+  "preferred_batch_sizes": [8, 16, 32, 64],
+  "shm_size": "8g",
+  "opensearch_heap": "4g",
+  "workers": 32,
+  "models": "all",
+  "notes": "Maximum parallelism for high-throughput production workloads."
+}
