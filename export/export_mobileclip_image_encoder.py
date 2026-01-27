@@ -27,13 +27,14 @@ import argparse
 import sys
 from pathlib import Path
 
-
-sys.path.insert(0, '/app/reference_repos/ml-mobileclip')
-sys.path.insert(0, '/app/reference_repos/open_clip/src')
-
 import numpy as np
 import torch
 from torch import nn
+
+
+# Import bundled reparameterize function (no external reference repos needed)
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import reparameterize_model
 
 
 # Model configurations
@@ -107,7 +108,6 @@ def load_mobileclip_model(model_name, checkpoint_path):
     print(f'  Checkpoint: {checkpoint_path}')
 
     import open_clip
-    from mobileclip.modules.common.mobileone import reparameterize_model
 
     # CRITICAL: S0, S2, B variants use simple normalization (image_mean=0, image_std=1)
     # This means input is just divided by 255 (same as YOLO!)

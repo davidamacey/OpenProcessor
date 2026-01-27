@@ -18,6 +18,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from pathlib import Path
 
 import orjson
 from fastapi import FastAPI, HTTPException, Request
@@ -206,6 +207,15 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
 # =============================================================================
 # FastAPI Application Factory
 # =============================================================================
+def _read_version() -> str:
+    """Read version from VERSION file, falling back to settings default."""
+    version_file = Path(__file__).resolve().parent.parent / 'VERSION'
+    try:
+        return version_file.read_text().strip()
+    except FileNotFoundError:
+        return '0.0.0'
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
@@ -217,7 +227,7 @@ def create_app() -> FastAPI:
             'face recognition, image embeddings, visual search, and OCR. '
             'All inference runs through NVIDIA Triton Inference Server.'
         ),
-        version='6.0.0',
+        version=_read_version(),
         lifespan=lifespan,
         default_response_class=ORJSONResponse,
     )

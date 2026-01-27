@@ -366,13 +366,13 @@ platform: "tensorrt_plan"
 max_batch_size: {MAX_BATCH_SIZE}
 
 input {{
-    name: "input.1"
+    name: "input"
     data_type: TYPE_FP32
     dims: [3, {INPUT_SIZE}, {INPUT_SIZE}]
 }}
 
 output {{
-    name: "683"
+    name: "output"
     data_type: TYPE_FP32
     dims: [{EMBEDDING_DIM}]
 }}
