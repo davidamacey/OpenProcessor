@@ -38,22 +38,20 @@ declare -gA EXPORT_TIMES=(
 )
 
 # =============================================================================
-# Container Checks
+# Container Helpers
 # =============================================================================
+
+# Run a command in a temporary yolo-api container (no dependencies needed).
+# Uses 'docker compose run --rm --no-deps -T' so the export works without
+# Triton running and without the yolo-api container already up.
+run_in_api_container() {
+    docker compose run --rm --no-deps -T yolo-api "$@"
+}
 
 check_triton_container() {
     if ! docker ps --format '{{.Names}}' | grep -q "^triton-server$"; then
         log_error "triton-server container not running"
         log_info "Start with: docker compose up -d triton-server"
-        return 1
-    fi
-    return 0
-}
-
-check_yolo_container() {
-    if ! docker ps --format '{{.Names}}' | grep -q "^yolo-api$"; then
-        log_error "yolo-api container not running"
-        log_info "Start with: docker compose up -d yolo-api"
         return 1
     fi
     return 0
@@ -110,10 +108,8 @@ export_yolo_detection() {
     # Create output directory
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    check_yolo_container || return 1
-
     # Run export via export_models.py (needs all formats for end2end dependency)
-    if docker compose exec yolo-api python /app/export/export_models.py \
+    if run_in_api_container python /app/export/export_models.py \
         --models small \
         --formats onnx_end2end trt_end2end \
         --normalize-boxes \
@@ -147,10 +143,8 @@ export_scrfd() {
 
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    check_yolo_container || return 1
-
     # export_scrfd.py handles download + ONNX patching + TensorRT conversion
-    if docker compose exec yolo-api python /app/export/export_scrfd.py \
+    if run_in_api_container python /app/export/export_scrfd.py \
         2>&1 | tee /tmp/export_scrfd.log; then
 
         if [[ -f "$plan_path" ]] && [[ -s "$plan_path" ]]; then
@@ -188,11 +182,9 @@ export_arcface() {
     # Copy ONNX to models dir for trtexec access
     cp "$PYTORCH_MODELS_DIR/$source_model" "$MODELS_DIR/$source_model"
 
-    check_yolo_container || return 1
-
     log_info "Running ArcFace export (Python TensorRT API)..."
 
-    if docker compose exec yolo-api python /app/export/export_face_recognition.py \
+    if run_in_api_container python /app/export/export_face_recognition.py \
         --onnx "/app/pytorch_models/$source_model" \
         --plan "/app/models/$model_name/1/model.plan" \
         --max-batch 128 \
@@ -224,9 +216,7 @@ export_mobileclip_image() {
 
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    check_yolo_container || return 1
-
-    if docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.py \
+    if run_in_api_container python /app/export/export_mobileclip_image_encoder.py \
         --model S2 \
         2>&1 | tee /tmp/export_mobileclip_image.log; then
 
@@ -254,9 +244,7 @@ export_mobileclip_text() {
 
     mkdir -p "$MODELS_DIR/$model_name/1"
 
-    check_yolo_container || return 1
-
-    if docker compose exec yolo-api python /app/export/export_mobileclip_text_encoder.py \
+    if run_in_api_container python /app/export/export_mobileclip_text_encoder.py \
         --model S2 \
         2>&1 | tee /tmp/export_mobileclip_text.log; then
 
@@ -275,6 +263,9 @@ export_mobileclip_text() {
 
 # Export PaddleOCR models (uses dedicated script)
 export_paddleocr() {
+    local det_plan="$MODELS_DIR/paddleocr_det_trt/1/model.plan"
+    local rec_plan="$MODELS_DIR/paddleocr_rec_trt/1/model.plan"
+
     log_step "Exporting PaddleOCR models..."
     log_info "  Estimated time: ~25 minutes (detection + recognition)"
 
@@ -295,12 +286,16 @@ export_paddleocr() {
     # 2. Setup dictionary
     # 3. Convert both to TensorRT (via docker compose run)
     # 4. Create Triton configs
-    if "$script" all 2>&1 | tee /tmp/export_paddleocr.log; then
+    "$script" all 2>&1 | tee /tmp/export_paddleocr.log
+
+    # Verify both plan files exist (pipeline exit code can be masked by tee)
+    if [[ -f "$det_plan" ]] && [[ -s "$det_plan" ]] && \
+       [[ -f "$rec_plan" ]] && [[ -s "$rec_plan" ]]; then
         log_success "PaddleOCR models exported"
         return 0
     fi
 
-    log_error "PaddleOCR export failed"
+    log_error "PaddleOCR export failed (missing model.plan files)"
     log_info "Check log: /tmp/export_paddleocr.log"
     return 1
 }

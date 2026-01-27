@@ -29,7 +29,7 @@
 #
 # =============================================================================
 
-set -e  # Exit on error
+set -eo pipefail  # Exit on error; propagate pipe failures
 
 # Colors for output
 RED='\033[0;31m'
@@ -153,8 +153,13 @@ download_models() {
     # Fall back to Docker container if host .venv didn't work
     if [ "$download_ok" = false ]; then
         if check_container "yolo-api"; then
-            log_info "Using yolo-api container for download..."
-            if docker compose exec yolo-api python /app/export/download_paddleocr.py; then
+            log_info "Using running yolo-api container for download..."
+            if docker compose exec -T yolo-api python /app/export/download_paddleocr.py; then
+                download_ok=true
+            fi
+        else
+            log_info "Using temporary yolo-api container for download..."
+            if docker compose run --rm --no-deps -T yolo-api python /app/export/download_paddleocr.py; then
                 download_ok=true
             fi
         fi
@@ -164,7 +169,7 @@ download_models() {
         log_success "ONNX models downloaded (detection + multilingual recognition)"
     else
         log_error "Model download failed"
-        log_info "Ensure either .venv or yolo-api container is available"
+        log_info "Ensure either .venv or yolo-api container image is built"
         return 1
     fi
 }
