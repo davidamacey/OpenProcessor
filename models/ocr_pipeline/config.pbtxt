@@ -1,7 +1,7 @@
 # PP-OCRv5 Text Detection & Recognition Pipeline (Python BLS)
 #
 # Complete OCR pipeline that:
-# 1. Receives preprocessed image from DALI
+# 1. Receives preprocessed image
 # 2. Calls PP-OCRv5 detection TensorRT
 # 3. Post-processes detection (DBPostProcess)
 # 4. Sorts boxes in reading order
@@ -10,7 +10,7 @@
 # 7. Decodes text with CTC
 #
 # Inputs:
-#   - ocr_images: [3, H, W] FP32, normalized [-1, 1] from DALI
+#   - ocr_images: [3, H, W] FP32, normalized [-1, 1]
 #   - original_image: [3, H, W] FP32, normalized [0, 1] for cropping
 #   - orig_shape: [2] INT32, original image [H, W]
 #

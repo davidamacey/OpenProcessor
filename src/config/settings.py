@@ -27,8 +27,8 @@ class TritonModelConfig:
     # Object Detection
     YOLO_MODEL = 'yolov11_small_trt_end2end'
 
-    # Face Detection/Recognition
-    FACE_DETECT_MODEL = 'yolo11_face_small_trt_end2end'
+    # Face Detection/Recognition (SCRFD + Umeyama alignment + ArcFace)
+    FACE_DETECT_MODEL = 'scrfd_10g_bnkps'
     ARCFACE_MODEL = 'arcface_w600k_r50'
 
     # CLIP Embeddings
@@ -38,9 +38,6 @@ class TritonModelConfig:
     # OCR
     OCR_DET_MODEL = 'paddleocr_det_trt'
     OCR_REC_MODEL = 'paddleocr_rec_trt'
-
-    # Face Pipeline (Python backend)
-    FACE_PIPELINE = 'yolo11_face_pipeline'
 
 
 class Settings(BaseSettings):

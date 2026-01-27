@@ -113,7 +113,7 @@ Fast security validation to prevent resource attacks.
 
 ### `pytorch_utils.py` - PyTorch Inference Helpers
 
-Utilities for Track A PyTorch inference including model loading and result formatting.
+Utilities for PyTorch inference including model loading and result formatting.
 
 ```python
 from src.utils.pytorch_utils import load_yolo_model, format_detections

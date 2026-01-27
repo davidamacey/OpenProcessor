@@ -37,15 +37,10 @@ This project uses modified code from the **levipereira/ultralytics** fork to ena
 
 ### What This Enables
 
-**Track C (TensorRT + GPU NMS):**
+**TensorRT + GPU NMS:**
 - Embeds Non-Maximum Suppression directly into TensorRT engine
 - Eliminates CPU post-processing bottleneck
-- Achieves **4x performance improvement** over standard TensorRT (Track B)
-- Achieves **2-5x speedup** by avoiding CPU↔GPU memory transfers
-
-**Performance Impact:**
-- Track B (TensorRT + CPU NMS): 300-400 rps
-- Track C (TensorRT + GPU NMS): 600-800 rps
+- Achieves **2-5x speedup** by avoiding CPU↔GPU memory transfers for NMS
 
 ### Fork Status
 
@@ -57,10 +52,7 @@ As of November 2025:
 ### Usage in This Project
 
 The fork's end2end export functionality is used to generate:
-- `models/yolov11_small_trt_end2end/` - Track C model with GPU NMS
-- `models/yolov11_small_gpu_e2e*/` - Track D DALI+TRT models with GPU NMS
-
-See [docs/Attribution/END2END_ANALYSIS.md](docs/Attribution/END2END_ANALYSIS.md) for detailed technical analysis.
+- `models/yolov11_small_trt_end2end/` - YOLO11 object detection with GPU NMS
 
 ---
 
@@ -82,9 +74,9 @@ The end2end models use NVIDIA's **TensorRT EfficientNMS plugin** for GPU-acceler
 
 ---
 
-## Apple MobileCLIP (Track E)
+## Apple MobileCLIP
 
-Track E visual search uses Apple's MobileCLIP2-S2 model for generating image and text embeddings.
+MobileCLIP2-S2 is used for generating image and text embeddings for visual search.
 
 ### Repository Information
 - **Repository:** https://github.com/apple/ml-mobileclip
@@ -99,13 +91,13 @@ Track E visual search uses Apple's MobileCLIP2-S2 model for generating image and
 - 512-dimensional L2-normalized embeddings for similarity search
 
 ### Integration
-The MobileCLIP models are dynamically cloned during Track E setup via `scripts/track_e/setup_mobileclip_env.sh`. The repository applies patches to OpenCLIP for MobileCLIP2 support.
+The MobileCLIP models are exported to TensorRT via the export scripts. The repository applies patches to OpenCLIP for MobileCLIP2 support.
 
 ---
 
-## OpenSearch (Track E)
+## OpenSearch
 
-Track E uses OpenSearch for k-NN vector similarity search.
+OpenSearch provides k-NN vector similarity search for all embedding types.
 
 ### Information
 - **Provider:** OpenSearch Project (AWS-backed)
@@ -121,6 +113,29 @@ Track E uses OpenSearch for k-NN vector similarity search.
 
 ---
 
+## InsightFace SCRFD (Face Detection with Landmarks)
+
+The SCRFD face detection model and post-processing pipeline are based on InsightFace's official implementation.
+
+### Repository Information
+- **Repository:** https://github.com/deepinsight/insightface
+- **Paper:** "Sample and Computation Redistribution for Efficient Face Detection" (ICLR 2022)
+- **Model:** SCRFD-10G with Batch Normalization and Keypoints (scrfd_10g_bnkps)
+- **License:** MIT License (InsightFace)
+- **Authors:** Jia Guo, Jiankang Deng, Xiang An, Zongguang Yu
+
+### Code Adapted
+- **Post-processing pipeline** (`src/utils/scrfd_decode.py`): Anchor generation, `distance2bbox`, `distance2kps`, and NMS functions adapted from InsightFace's `insightface/model_zoo/scrfd.py` and `detection/scrfd/tools/scrfd.py`
+- **Face alignment** (`src/utils/face_align.py`): Umeyama similarity transform and ArcFace reference template from `insightface/utils/face_align.py`
+- **ArcFace model**: Pre-trained `w600k_r50` from InsightFace's buffalo_l model pack
+
+### What This Enables
+- 5-point facial landmark detection (left eye, right eye, nose, left mouth, right mouth)
+- Umeyama similarity transform alignment for ArcFace (industry standard)
+- 95.2% Easy / 93.9% Medium / 83.1% Hard on WiderFace benchmark
+
+---
+
 ## Reference Architectures
 
 The following repositories were used as **reference only** (no code directly copied):
@@ -130,7 +145,6 @@ The following repositories were used as **reference only** (no code directly cop
 - **Usage:** Reference architecture for deploying end2end YOLO models on Triton Inference Server
 - **What We Learned:**
   - Ensemble model configuration patterns
-  - DALI preprocessing integration with Triton
   - Dynamic batching configuration for YOLO workloads
 - **License:** Not specified in repository
 - **Author:** Levi Pereira (@levipereira)
@@ -149,11 +163,24 @@ The following repositories were used as **reference only** (no code directly cop
 - **Usage:** Official Triton documentation and examples
 - **License:** BSD 3-Clause License
 
-### 4. NVIDIA DALI
-- **URL:** https://github.com/NVIDIA/DALI
-- **Documentation:** https://docs.nvidia.com/deeplearning/dali/
-- **Usage:** GPU-accelerated preprocessing for Track D
-- **License:** Apache License 2.0
+### 4. hiennguyen9874/triton-face-recognition
+- **URL:** https://github.com/hiennguyen9874/triton-face-recognition
+- **Usage:** Reference architecture for deploying face detection + recognition on Triton with dynamic batching
+- **What We Learned:**
+  - Triton config patterns for face detection with landmarks (end2end and raw outputs)
+  - TensorRT export with dynamic batch shapes for face models
+  - Face alignment (norm_crop) integration with Triton client pipelines
+- **License:** Not specified in repository
+- **Author:** Hien Nguyen (@hiennguyen9874)
+
+### 5. SthPhoenix/InsightFace-REST
+- **URL:** https://github.com/SthPhoenix/InsightFace-REST
+- **Usage:** Reference for SCRFD TensorRT deployment with dynamic batching at scale
+- **What We Learned:**
+  - SCRFD model export strategies for TensorRT (handling batch-1 reshape limitation)
+  - Performance benchmarks for SCRFD on various GPU hardware (820 FPS on RTX 4090)
+  - Production face recognition pipeline architecture
+- **License:** MIT License
 
 ---
 
@@ -163,10 +190,12 @@ Special thanks to:
 
 - **Levi Pereira (@levipereira)** - For the ultralytics fork with end2end TensorRT export and the triton-server-yolo reference architecture
 - **Ultralytics Team** - For the YOLO models and official ultralytics library
-- **NVIDIA Corporation** - For Triton Inference Server, TensorRT, and DALI
+- **NVIDIA Corporation** - For Triton Inference Server and TensorRT
 - **Omar Abid (@omarabid59)** - For the yolov8-triton reference implementation
 - **Apple Machine Learning Research** - For MobileCLIP efficient vision-language models
 - **OpenSearch Project** - For the k-NN vector search engine
+- **InsightFace Team (Jia Guo, Jiankang Deng et al.)** - For SCRFD face detection, ArcFace recognition, and face alignment algorithms
+- **Hien Nguyen (@hiennguyen9874)** - For the triton-face-recognition reference implementation
 - **OpenCLIP Contributors** - For the open-source CLIP implementation
 
 ---
@@ -184,8 +213,8 @@ This project's original code is licensed under **MIT License** (see [LICENSE](LI
 | Ultralytics YOLO | AGPL-3.0 | ✓ Yes (inherited) |
 | NVIDIA Triton | BSD 3-Clause | ✓ Yes |
 | NVIDIA TensorRT | NVIDIA DSLA | ✓ Yes |
-| NVIDIA DALI | Apache 2.0 | ✓ Yes |
 | Apple MobileCLIP | Apple Sample Code | ✓ Yes (this file) |
+| InsightFace (SCRFD, ArcFace) | MIT | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
 
@@ -202,4 +231,4 @@ For questions about attribution or licensing:
 
 ---
 
-**Last Updated:** December 2025
+**Last Updated:** January 2026

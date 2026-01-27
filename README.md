@@ -103,7 +103,7 @@ All endpoints available on port **4603**.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/faces/detect` | POST | Face detection with landmarks (YOLO11-face) |
+| `/faces/detect` | POST | Face detection with landmarks (SCRFD) |
 | `/faces/recognize` | POST | Detection + ArcFace 512-dim embeddings |
 | `/faces/verify` | POST | 1:1 face comparison (two images) |
 | `/faces/search` | POST | Find similar faces in index |
@@ -356,7 +356,7 @@ Client (Port 4603)
 | Model | Purpose | Backend |
 |-------|---------|---------|
 | YOLO11 | Object detection | TensorRT End2End |
-| YOLO11-face | Face detection | TensorRT |
+| SCRFD-10G | Face detection + landmarks | TensorRT |
 | ArcFace | Face embeddings (512-dim) | TensorRT |
 | MobileCLIP | Image/text embeddings (512-dim) | TensorRT |
 | PP-OCRv5 | Text detection + recognition | TensorRT |
@@ -475,7 +475,7 @@ This project uses:
 - [levipereira/ultralytics](https://github.com/levipereira/ultralytics) fork for End2End TensorRT export
 - [Apple MobileCLIP](https://github.com/apple/ml-mobileclip)
 - [InsightFace ArcFace](https://github.com/deepinsight/insightface)
-- [YOLO11-face](https://github.com/akanametov/yolo-face)
+- [InsightFace SCRFD](https://github.com/deepinsight/insightface/tree/master/detection/scrfd)
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
 
 See [ATTRIBUTION.md](ATTRIBUTION.md) for complete licensing information.

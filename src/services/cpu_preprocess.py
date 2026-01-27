@@ -1,9 +1,7 @@
 """
 CPU Preprocessing Module.
 
-Provides CPU-based preprocessing using cv2 and numpy as an alternative to DALI
-GPU preprocessing. Useful for deployment on systems without DALI or for
-benchmarking CPU vs GPU preprocessing overhead.
+Provides CPU-based preprocessing using cv2 and numpy for all inference pipelines.
 
 Preprocessing functions:
 - letterbox_cpu: YOLO letterbox (640x640, matches Ultralytics LetterBox)

@@ -1,5 +1,5 @@
 # ==================================================================================
-# Makefile for Triton Inference Server YOLO Deployment
+# Makefile for OpenProcessor - Visual AI Processing Engine
 # ==================================================================================
 # This Makefile provides convenient shortcuts for common development tasks
 # with unified service management.
@@ -11,7 +11,7 @@ SHELL := /bin/bash
 # Variables
 COMPOSE := docker compose
 API_SERVICE := yolo-api
-TRITON_SERVICE := triton-api
+TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
 BENCHMARK_DIR := benchmarks
 SCRIPTS_DIR := scripts
@@ -37,7 +37,7 @@ OPENSEARCH_DASH_PORT := 4608
 .PHONY: help
 help: ## Show this help message
 	@echo "==================================================================================="
-	@echo "Triton Inference Server - YOLO Deployment Makefile"
+	@echo "OpenProcessor - Visual AI Processing Engine"
 	@echo "==================================================================================="
 	@echo ""
 	@echo "Available targets:"
@@ -120,7 +120,7 @@ logs-opensearch: ## Follow OpenSearch logs
 
 .PHONY: status
 status: ## Check health of all services
-	@bash $(SCRIPTS_DIR)/triton-api.sh status
+	@bash $(SCRIPTS_DIR)/openprocessor.sh status
 
 .PHONY: health
 health: status ## Alias for status
@@ -133,13 +133,30 @@ ps: ## Show running containers
 # Testing
 # ==================================================================================
 
+.PHONY: download-test-images
+download-test-images: ## Download standard test images (bus.jpg, zidane.jpg from Ultralytics)
+	@mkdir -p test_images
+	@if [ ! -f test_images/bus.jpg ]; then \
+		echo "Downloading bus.jpg..."; \
+		curl -sL https://ultralytics.com/images/bus.jpg -o test_images/bus.jpg; \
+	else \
+		echo "bus.jpg already exists"; \
+	fi
+	@if [ ! -f test_images/zidane.jpg ]; then \
+		echo "Downloading zidane.jpg..."; \
+		curl -sL https://ultralytics.com/images/zidane.jpg -o test_images/zidane.jpg; \
+	else \
+		echo "zidane.jpg already exists"; \
+	fi
+	@echo "Test images ready in test_images/"
+
 .PHONY: test-detect
 test-detect: ## Test object detection endpoint
 	curl -X POST http://localhost:$(API_PORT)/detect -F "image=@test_images/bus.jpg" | jq
 
-.PHONY: test-faces
-test-faces: ## Test face detection/recognition
-	curl -X POST http://localhost:$(API_PORT)/faces/recognize -F "image=@test_images/zidane.jpg" | jq
+.PHONY: test-faces-quick
+test-faces-quick: ## Quick face recognition test (single image)
+	curl -X POST http://localhost:$(API_PORT)/v1/faces/recognize -F "image=@test_images/zidane.jpg" | jq
 
 .PHONY: test-embed
 test-embed: ## Test embedding endpoints
@@ -309,7 +326,7 @@ models-status: ## Check model health
 
 .PHONY: models-reload
 models-reload: ## Reload all models
-	docker compose exec triton-api tritonserver --model-control-mode=explicit --load-model=*
+	docker compose exec triton-server tritonserver --model-control-mode=explicit --load-model=*
 
 # ==================================================================================
 # Development and Testing
@@ -602,19 +619,18 @@ export-face-recognition: ## Export ArcFace to TensorRT
 	@$(MAKE) load-face-models
 
 .PHONY: load-face-models
-load-face-models: ## Load face models into Triton
+load-face-models: ## Load face models into Triton (SCRFD + ArcFace)
 	@echo "Loading face models into Triton..."
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo11_face_small_trt_end2end/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_bnkps/load" || true
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/arcface_w600k_r50/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo11_face_pipeline/load" || true
 	@echo "Face models loaded."
 
 .PHONY: setup-face-pipeline
-setup-face-pipeline: download-face-models export-face-recognition download-yolo11-face export-yolo11-face ## Complete face pipeline setup
+setup-face-pipeline: download-face-models export-face-recognition export-scrfd ## Complete face pipeline setup (SCRFD + ArcFace)
 	@echo "Face pipeline setup complete!"
 	@echo ""
 	@echo "Loaded models:"
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index" | grep -E "(yolo11_face|arcface)" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/index" | grep -E "(scrfd|arcface)" || true
 
 .PHONY: download-face-test-data
 download-face-test-data: ## Download LFW and WIDER Face test datasets
@@ -624,33 +640,42 @@ download-face-test-data: ## Download LFW and WIDER Face test datasets
 	@echo "Datasets downloaded to test_images/faces/"
 
 # ==================================================================================
-# YOLO11-Face (Alternative Face Detection Pipeline)
+# SCRFD (Face Detection with 5-point Landmarks)
 # ==================================================================================
 
-.PHONY: download-yolo11-face
-download-yolo11-face: ## Download YOLO11-face models from YapaLab/yolo-face
-	@echo "Downloading YOLO11-face models..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/scripts/download_yolo11_face.py --models small
+.PHONY: export-scrfd
+export-scrfd: ## Download + export SCRFD to TensorRT for Triton
+	@echo "Exporting SCRFD face detection to TensorRT..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_scrfd.py
 
-.PHONY: export-yolo11-face
-export-yolo11-face: ## Export YOLO11-face to TensorRT
-	@echo "Exporting YOLO11-face to TensorRT..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_yolo11_face.py \
-		--model /app/pytorch_models/yolo11_face/yolov11s-face.pt
+.PHONY: load-scrfd
+load-scrfd: ## Load SCRFD model into Triton
+	@echo "Loading SCRFD model..."
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_bnkps/load" || true
+	@echo "SCRFD loaded."
 
-.PHONY: load-yolo11-face
-load-yolo11-face: ## Load YOLO11-face models into Triton
-	@echo "Loading YOLO11-face models into Triton..."
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo11_face_small_trt/load" || true
-	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/yolo11_face_pipeline/load" || true
-	@echo "YOLO11-face models loaded."
-
-.PHONY: setup-yolo11-face
-setup-yolo11-face: download-yolo11-face export-yolo11-face restart-triton load-yolo11-face ## Complete YOLO11-face setup
-	@echo "YOLO11-face setup complete!"
+.PHONY: setup-scrfd
+setup-scrfd: export-scrfd restart-triton load-scrfd ## Complete SCRFD setup (download, export, deploy)
+	@echo "SCRFD setup complete!"
 	@echo ""
 	@echo "Test with:"
-	@echo "  curl -X POST http://localhost:$(API_PORT)/faces/detect -F 'file=@test.jpg'"
+	@echo "  curl -X POST http://localhost:$(API_PORT)/faces/recognize -F 'file=@test.jpg' | jq '.faces[0].landmarks'"
+
+# ==================================================================================
+# Integration Tests (uses tests/test_endpoints.sh)
+# ==================================================================================
+
+.PHONY: test-faces
+test-faces: ## Test face detection + recognition (SCRFD + ArcFace)
+	@./tests/test_endpoints.sh faces
+
+.PHONY: test-endpoints
+test-endpoints: download-test-images ## Run ALL endpoint integration tests
+	@./tests/test_endpoints.sh all
+
+.PHONY: test-models
+test-models: ## Verify all Triton models are loaded
+	@./tests/test_endpoints.sh models
 
 # ==================================================================================
 # OCR (PP-OCRv5)
@@ -901,7 +926,7 @@ opensearch-reset-indexes: ## Reset all OpenSearch indexes (delete and recreate)
 .PHONY: info
 info: ## Show service URLs and ports
 	@echo "==================================================================================="
-	@echo "Triton Inference Server - Unified Deployment"
+	@echo "OpenProcessor - Visual AI Processing Engine"
 	@echo "==================================================================================="
 	@echo ""
 	@echo "Quick Start:"
@@ -985,8 +1010,8 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
         api-health api-wait-ready api-test-quick \
         export-models export-all export-small export-onnx export-custom export-config export-list \
         export-mobileclip export-status validate-exports \
-        download-face-models export-face-recognition load-face-models setup-face-pipeline download-face-test-data \
-        download-yolo11-face export-yolo11-face load-yolo11-face setup-yolo11-face \
+        download-face-models export-face-recognition load-face-models setup-face-pipeline download-face-test-data download-test-images \
+        export-scrfd load-scrfd setup-scrfd \
         download-paddleocr export-paddleocr-det export-paddleocr-rec export-paddleocr setup-ocr load-ocr-models \
         open-grafana open-prometheus open-opensearch metrics gpu gpu-watch \
         triton-health triton-models-ready triton-stats triton-metrics \

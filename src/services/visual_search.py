@@ -123,6 +123,7 @@ class VisualSearchService:
 
             import imohash
 
+            from src.clients.fast_face_client import get_fast_face_client
             from src.clients.triton_client import get_triton_client
             from src.config import get_settings
 
@@ -147,16 +148,16 @@ class VisualSearchService:
 
             settings = get_settings()
             client = get_triton_client(settings.triton_url)
+            face_client = get_fast_face_client(settings.triton_url)
 
-            # Run YOLO + MobileCLIP and YOLO11-face detection in parallel
-            # Uses CPU preprocessing with direct TRT inference for stability
+            # Run YOLO + MobileCLIP and face detection (SCRFD + alignment) in parallel
             from concurrent.futures import ThreadPoolExecutor
 
             def run_yolo_clip():
                 return client.infer_yolo_clip_cpu(image_bytes)
 
             def run_face_detection():
-                return client.infer_faces_yolo11(image_bytes, confidence=0.5)
+                return face_client.recognize(image_bytes, confidence=0.5)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
                 yolo_clip_future = executor.submit(run_yolo_clip)
@@ -469,6 +470,7 @@ class VisualSearchService:
 
         import imohash
 
+        from src.clients.fast_face_client import get_fast_face_client
         from src.clients.triton_client import get_triton_client
         from src.config import get_settings
 
@@ -486,6 +488,7 @@ class VisualSearchService:
         total = len(images_data)
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
+        face_client = get_fast_face_client(settings.triton_url)
 
         # Step 1: Compute hashes in parallel
         def compute_hash(img_bytes: bytes) -> str:
@@ -557,8 +560,8 @@ class VisualSearchService:
                 # Run YOLO + MobileCLIP (detection + global embedding + box embeddings)
                 yolo_result = client.infer_yolo_clip_cpu(img_bytes)
 
-                # Run face detection + embedding extraction
-                face_result = client.infer_faces_yolo11(img_bytes, confidence=0.5)
+                # Run face detection + embedding extraction (SCRFD + Umeyama alignment)
+                face_result = face_client.recognize(img_bytes, confidence=0.5)
 
                 # Merge results and return
                 return {
@@ -727,7 +730,7 @@ class VisualSearchService:
         # Step 5c: OCR indexing (results already from unified pipeline)
         indexed['ocr'] = 0
         if enable_ocr:
-            # OCR results are already in inference_results from unified_complete pipeline
+            # OCR results are already in inference_results from the analyze pipeline
             async def index_ocr_from_unified(result: dict, img_id: str, img_path: str) -> bool:
                 num_texts = result.get('num_texts', 0)
                 if num_texts == 0:
@@ -844,16 +847,16 @@ class VisualSearchService:
             dict with status and face count
         """
         try:
-            from src.clients.triton_client import get_triton_client
+            from src.clients.fast_face_client import get_fast_face_client
             from src.config import get_settings
 
             settings = get_settings()
-            client = get_triton_client(settings.triton_url)
+            face_client = get_fast_face_client(settings.triton_url)
 
-            # Run unified pipeline (face detection only on person crops - faster, fewer false positives)
-            result = client.infer_unified(image_bytes)
+            # Run SCRFD face detection + Umeyama alignment + ArcFace embedding
+            result = face_client.recognize(image_bytes, confidence=0.5)
 
-            if result['num_faces'] == 0:
+            if result.get('num_faces', 0) == 0:
                 return {
                     'status': 'success',
                     'image_id': image_id,
@@ -862,21 +865,15 @@ class VisualSearchService:
                     'message': 'No faces detected',
                 }
 
-            # Prepare face data from unified pipeline output
             num_faces = result['num_faces']
             faces = [
                 {
-                    'box': result['face_boxes'][i].tolist()
-                    if hasattr(result['face_boxes'][i], 'tolist')
-                    else result['face_boxes'][i],
-                    'landmarks': result['face_landmarks'][i].tolist()
-                    if hasattr(result['face_landmarks'][i], 'tolist')
-                    else result['face_landmarks'][i],
+                    'box': list(result['face_boxes'][i]),
+                    'landmarks': list(result['face_landmarks'][i])
+                    if result['face_landmarks']
+                    else [0.0] * 10,
                     'score': float(result['face_scores'][i]),
-                    'quality': 0.0,  # unified pipeline doesn't compute quality
-                    'person_idx': int(
-                        result['face_person_idx'][i]
-                    ),  # which person box this face belongs to
+                    'quality': float(result['face_quality'][i]) if result['face_quality'] else 0.0,
                 }
                 for i in range(num_faces)
             ]

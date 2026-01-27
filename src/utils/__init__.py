@@ -11,7 +11,7 @@ Key modules:
 - pytorch_utils: PyTorch model loading and inference
 
 For Triton clients, use src.clients:
-- src.clients.triton_client.TritonClient (unified client for Tracks C/D/E)
+- src.clients.triton_client.TritonClient (unified Triton gRPC client)
 - src.clients.triton_pool.TritonClientManager (connection pool manager)
 """
 
@@ -30,7 +30,7 @@ For Triton clients, use src.clients:
 # InferenceResult moved to schemas
 from src.schemas.detection import InferenceResult
 
-# Affine transformation for DALI preprocessing
+# Affine transformation for letterbox preprocessing
 from .affine import (
     calculate_affine_matrix,
     clear_affine_cache,

@@ -12,6 +12,9 @@ Comprehensive guide for optimizing and deploying models with Triton in productio
 - [YOLO-Specific Recommendations](#yolo-specific-recommendations)
 - [Our Current Configuration](#our-current-configuration)
 
+> **Note:** Examples reference `yolov11_small_trt_end2end` (our active YOLO model).
+> Batch sizes and instance counts vary by model — see `models/*/config.pbtxt` for current values.
+
 ---
 
 ## Batch Size Configuration
@@ -138,21 +141,23 @@ instance_group [
 
 **General Guidelines:**
 - **Start with 2 instances** - most common sweet spot
-- **Larger models (YOLO11-medium)**: 1-2 instances
-- **Smaller models (YOLO11-nano)**: 2-4 instances
+- **Larger models**: 1-2 instances
+- **Smaller models**: 2-4 instances
 - **GPU memory limit**: `instances × model_memory < GPU_memory × 0.8`
 
 **Our RTX A6000 (48GB) Capacity:**
 ```
-YOLO11 nano:   ~200MB  → Can run 100+ instances (practical: 2-4)
-YOLO11 small:  ~400MB  → Can run 50+ instances (practical: 2-4)
-YOLO11 medium: ~1.5GB  → Can run 20+ instances (practical: 2-3)
+YOLO11 small (end2end): ~400MB  → 2 instances (production)
+SCRFD-10G:              ~12MB   → 2 instances (production)
+ArcFace w600k_r50:      ~86MB   → 2 instances (production)
+MobileCLIP encoders:    ~100MB  → 2 instances (production)
+PaddleOCR det+rec:      ~50MB   → 2 instances (production)
 ```
 
 **Testing Strategy:**
 ```bash
 # Use perf_analyzer to find optimal count
-perf_analyzer -m yolov11_nano --concurrency-range 1:64:8
+perf_analyzer -m yolov11_small_trt_end2end --concurrency-range 1:64:8
 # Then adjust instance count based on GPU utilization
 ```
 
@@ -244,18 +249,18 @@ concurrency: 16-64
 **perf_analyzer (included with Triton):**
 ```bash
 # Basic throughput test
-perf_analyzer -m yolov11_nano \
+perf_analyzer -m yolov11_small_trt_end2end \
   --concurrency-range 1:64:8 \
   --measurement-interval 5000
 
 # Latency test
-perf_analyzer -m yolov11_nano \
+perf_analyzer -m yolov11_small_trt_end2end \
   --concurrency-range 1:16:1 \
   --measurement-mode time_windows \
   --latency-threshold 100
 
 # With custom data
-perf_analyzer -m yolov11_nano \
+perf_analyzer -m yolov11_small_trt_end2end \
   --input-data /path/to/images.json \
   --concurrency-range 1:32:4
 ```
@@ -265,7 +270,7 @@ perf_analyzer -m yolov11_nano \
 # Find optimal configuration automatically
 model-analyzer profile \
   --model-repository /models \
-  --profile-models yolov11_nano \
+  --profile-models yolov11_small_trt_end2end \
   --triton-launch-mode docker \
   --output-model-repository-path /optimized_models
 ```
@@ -299,8 +304,8 @@ tritonserver \
   --strict-model-config=true \        # Require explicit configs
   --strict-readiness=true \           # Only ready when all models loaded
   --model-control-mode=explicit \     # No auto-loading
-  --load-model=yolov11_nano \
-  --load-model=yolov11_small \
+  --load-model=yolov11_small_trt_end2end \
+  --load-model=scrfd_10g_bnkps \
   --log-verbose=1
 ```
 
@@ -414,19 +419,13 @@ YOLO11-large:  max_batch: 8-32,   preferred: [4, 8, 16]
 
 ### Expected Performance (RTX A6000)
 
-**Track A (Triton + TensorRT) - PROPERLY CONFIGURED:**
+**Triton + TensorRT (current production):**
 ```
 Single request:   ~10-15ms latency
 Batch 8:          ~30-40ms latency, 200-250 img/sec
 Batch 16:         ~50-60ms latency, 250-300 img/sec
-Batch 50:         ~120-150ms latency, 350-400 img/sec
+Batch 64:         ~100-150ms latency, 350-500 img/sec
 Concurrent (64):  ~300-500 img/sec sustained
-```
-
-**Track B (PyTorch direct):**
-```
-Single request:   ~40-60ms latency
-Concurrent (16):  ~50-100 img/sec (4 workers)
 ```
 
 ---
@@ -435,9 +434,11 @@ Concurrent (16):  ~50-100 img/sec (4 workers)
 
 ### What We Have Now
 
-**models/yolov11_nano/config.pbtxt:**
+All models use native TensorRT FP16 plans on GPU 0. Example from `yolov11_small_trt_end2end`:
+
 ```protobuf
-max_batch_size: 50
+platform: "tensorrt_plan"
+max_batch_size: 128
 
 instance_group [
   {
@@ -448,33 +449,20 @@ instance_group [
 ]
 
 dynamic_batching {
-  preferred_batch_size: [8, 16, 25, 50]
-  max_queue_delay_microseconds: 100
+  preferred_batch_size: [8, 16, 32, 64]
+  max_queue_delay_microseconds: 5000
 }
 ```
 
-**Issues:**
-- ❌ Using ONNX format with TensorRT EP (slow)
-- ❌ Outputs being copied to CPU
-- ❌ GPU utilization 0% during inference
-
-### What We Need To Change
-
-1. **Export models to native TensorRT:**
-   ```bash
-   docker compose exec yolo-api python /app/scripts/export_tensorrt.py
-   ```
-
-2. **Update config.pbtxt:**
-   ```protobuf
-   platform: "tensorrt_plan"  # Change from onnxruntime_onnx
-   # Remove optimization block - not needed for .plan files
-   ```
-
-3. **Restart Triton:**
-   ```bash
-   docker compose restart triton-server
-   ```
+**Active Models (8 total):**
+- `yolov11_small_trt_end2end` — YOLO11 object detection (TRT, end2end NMS)
+- `scrfd_10g_bnkps` — SCRFD face detection (TRT, CPU NMS)
+- `arcface_w600k_r50` — ArcFace face embeddings (TRT)
+- `mobileclip2_s2_image_encoder` — CLIP image embeddings (TRT)
+- `mobileclip2_s2_text_encoder` — CLIP text embeddings (TRT)
+- `paddleocr_det_trt` — PaddleOCR text detection (TRT)
+- `paddleocr_rec_trt` — PaddleOCR text recognition (TRT)
+- `ocr_pipeline` — BLS ensemble (det → rec)
 
 ### Recommended Configuration
 
@@ -510,20 +498,20 @@ max_queue_delay_microseconds: 50  # Quick response
 **1. Baseline (no optimization):**
 ```bash
 # Single instance, no batching
-perf_analyzer -m yolov11_nano --concurrency-range 1:16:1
+perf_analyzer -m yolov11_small_trt_end2end --concurrency-range 1:16:1
 ```
 
 **2. Enable dynamic batching:**
 ```bash
 # Update config, restart Triton
-perf_analyzer -m yolov11_nano --concurrency-range 1:64:8
+perf_analyzer -m yolov11_small_trt_end2end --concurrency-range 1:64:8
 # Expected: 2-4x throughput improvement
 ```
 
 **3. Add 2nd instance:**
 ```bash
 # Update config, restart Triton
-perf_analyzer -m yolov11_nano --concurrency-range 1:128:16
+perf_analyzer -m yolov11_small_trt_end2end --concurrency-range 1:128:16
 # Expected: 1.5-2x additional improvement
 ```
 
@@ -565,5 +553,5 @@ perf_analyzer -m yolov11_nano --concurrency-range 1:128:16
 
 ---
 
-**Last Updated:** 2025-11-13
-**For:** YOLO11 deployment on RTX A6000 with Triton Inference Server
+**Last Updated:** January 2026
+**For:** Multi-model deployment on RTX A6000 with Triton Inference Server

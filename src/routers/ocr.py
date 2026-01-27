@@ -126,7 +126,7 @@ def ocr_predict(
     Extract text from a single image using PP-OCRv5.
 
     Pipeline:
-    1. DALI GPU preprocessing
+    1. Image preprocessing
     2. PP-OCRv5 detection (text localization)
     3. PP-OCRv5 recognition (text decoding)
     4. Results with quad boxes and confidence scores

@@ -27,27 +27,19 @@ Technical documentation for the Visual AI API.
 | Document | Description |
 |----------|-------------|
 | [OCR.md](OCR.md) | PP-OCRv5 text detection and recognition - setup, deployment, usage |
-| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | YOLO11-face detection and ArcFace embeddings |
+| [FACE_RECOGNITION_IMPLEMENTATION.md](FACE_RECOGNITION_IMPLEMENTATION.md) | SCRFD face detection and ArcFace embeddings |
 
 ### Performance
 
 | Document | Description |
 |----------|-------------|
 | [PERFORMANCE.md](PERFORMANCE.md) | FastAPI optimizations, gRPC connection management, benchmarking, profiling |
-| [INGEST_BENCHMARK_METHODOLOGY.md](INGEST_BENCHMARK_METHODOLOGY.md) | Batch ingestion benchmarking methodology |
 
 ### Vector Search
 
 | Document | Description |
 |----------|-------------|
 | [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch index design |
-
-### Research and Planning
-
-| Document | Description |
-|----------|-------------|
-| [PADDING_COMPARISON_GUIDE.md](PADDING_COMPARISON_GUIDE.md) | YOLO preprocessing comparison study |
-| [FEATURE_ROADMAP.md](FEATURE_ROADMAP.md) | Feature status and development roadmap |
 
 ---
 
@@ -115,18 +107,28 @@ docker compose up -d
 curl http://localhost:4603/health
 ```
 
+### Download Test Images
+
+```bash
+# Auto-downloads bus.jpg and zidane.jpg from Ultralytics
+make download-test-images
+```
+
 ### Run Tests
 
 ```bash
-# Comprehensive test suite (32 tests)
+# Endpoint integration tests (auto-downloads test images)
+make test-endpoints
+
+# Comprehensive test suite
 source .venv/bin/activate
 python tests/test_full_system.py
 
-# Visual validation with bounding boxes
-python tests/validate_visual_results.py
-
-# View annotated test images
-ls test_results/*.jpg
+# Individual endpoint tests
+make test-faces           # Face detection + recognition
+make test-detect          # Object detection
+make test-embed           # CLIP embeddings
+make test-ocr             # Text extraction
 ```
 
 ### Run Benchmarks
@@ -142,8 +144,8 @@ cd benchmarks
 ```bash
 make export-models           # YOLO TensorRT
 make export-mobileclip       # MobileCLIP encoders
-make export-face-models      # YOLO11-face + ArcFace
-make export-ocr              # PP-OCRv5 models
+make setup-face-pipeline     # SCRFD + ArcFace
+make setup-ocr               # PP-OCRv5 models
 ```
 
 ### Check Model Status
@@ -166,5 +168,5 @@ curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 
 ---
 
-**Last Updated:** 2026-01-26
-**Version:** 2.0 - Consolidated documentation structure
+**Last Updated:** 2026-01-27
+**Version:** 2.1 - Updated for SCRFD face pipeline and test data setup

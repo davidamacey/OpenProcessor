@@ -1,6 +1,6 @@
 # Triton Monitoring Stack
 
-Complete production-grade monitoring for NVIDIA Triton Inference Server with YOLO models.
+Complete production-grade monitoring for NVIDIA Triton Inference Server.
 
 ## Architecture
 
@@ -57,16 +57,15 @@ docker compose logs -f grafana
 - CPU Cores Count
 
 **Row 3-6: Model Performance Analysis**
-- Model Track Throughput Comparison (timeseries)
-- Model Track Latency Comparison - Avg, P95, P99 (timeseries)
-- Model Track Performance Leaderboard (bar gauge)
-- Average Batch Size by Model Track
-- DALI Preprocessing Batch Size (bottleneck indicator)
+- Model Throughput Comparison (timeseries)
+- Model Latency Comparison - Avg, P95, P99 (timeseries)
+- Model Performance Leaderboard (bar gauge)
+- Average Batch Size by Model
 
 **Row 7-8: Queue & Errors**
 - Queue Time Comparison (timeseries)
-- Pending Requests by Model Track
-- Failed Requests by Model Track
+- Pending Requests by Model
+- Failed Requests by Model
 
 **Row 9-12: GPU Resources**
 - GPU Utilization % (timeseries)
@@ -275,29 +274,37 @@ rate(nv_inference_queue_duration_us[1m])
   / rate(nv_inference_request_success[1m])
 ```
 
-## Model Track Comparison Queries
+## Model Comparison Queries
 
-### Compare throughput across tracks
+### Compare throughput across models
 
 ```promql
-# Show all YOLO model variants
-rate(nv_inference_request_success{model=~"yolov11.*"}[1m])
+# Show all model throughputs
+rate(nv_inference_request_success[1m])
 ```
 
-### Find fastest model
+### Find highest-throughput model
+
+```promql
+# Most inferences per second
+topk(3,
+  rate(nv_inference_request_success[5m]))
+```
+
+### Find lowest-latency model
 
 ```promql
 # Lowest latency wins
 topk(1,
-  rate(nv_inference_compute_infer_duration_us{model=~"yolov11.*"}[5m])
-  / rate(nv_inference_request_success{model=~"yolov11.*"}[5m]))
+  rate(nv_inference_compute_infer_duration_us[5m])
+  / rate(nv_inference_request_success[5m]))
 ```
 
 ### Compare efficiency (throughput per GPU %)
 
 ```promql
 # Requests per second per GPU utilization point
-rate(nv_inference_request_success{model=~"yolov11.*"}[5m])
+rate(nv_inference_request_success[5m])
   / (nv_gpu_utilization / 100)
 ```
 

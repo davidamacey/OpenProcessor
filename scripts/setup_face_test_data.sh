@@ -2,7 +2,7 @@
 # =============================================================================
 # Face Recognition Test Data Setup
 # =============================================================================
-# Downloads and organizes face datasets for testing Track E face recognition.
+# Downloads and organizes face datasets for testing face recognition.
 #
 # Datasets:
 # - LFW Deep Funneled: 13,233 images, 5,749 people (111MB) - Primary

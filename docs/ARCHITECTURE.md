@@ -58,7 +58,7 @@ Production-grade architecture for high-performance visual AI inference at scale.
 The system uses Docker Compose to orchestrate three core services:
 
 1. **triton-server**: NVIDIA Triton Inference Server
-   - GPU inference backend (device_ids: [`0`, `2`])
+   - GPU inference backend (device_ids: [`0`])
    - Ports: 4600 (HTTP), 4601 (gRPC), 4602 (metrics)
    - Serves TensorRT models with dynamic batching
    - Max batch size: 128
@@ -106,7 +106,7 @@ The system uses Docker Compose to orchestrate three core services:
 **Triton Layer:**
 ```
 ✅ Model-specific preprocessing (letterbox, normalize)
-✅ GPU-accelerated (DALI for full GPU pipeline)
+✅ CPU preprocessing (OpenCV letterbox + normalize)
 ✅ Batch processing
 ```
 

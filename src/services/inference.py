@@ -1,7 +1,6 @@
 """
-Simplified inference service for YOLO detection, face recognition, and embeddings.
+Inference service for YOLO detection, face recognition, and embeddings.
 
-Provides clean, focused inference methods without track naming or DALI references.
 All methods use CPU preprocessing with direct TRT model calls via Triton gRPC.
 """
 
@@ -12,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from src.clients.fast_face_client import get_fast_face_client
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
 from src.utils.cache import get_clip_tokenizer, get_image_cache, get_text_cache
@@ -69,7 +69,7 @@ class InferenceService:
     Public methods:
     - detect(): Object detection using YOLOv11 TRT End2End
     - detect_batch(): Batch object detection
-    - detect_faces(): YOLO11-face detection with ArcFace embeddings
+    - detect_faces(): SCRFD face detection with ArcFace embeddings
     - recognize_faces(): Full pipeline (YOLO + faces + CLIP embedding)
     - encode_image(): MobileCLIP image encoding
     - encode_text(): MobileCLIP text encoding
@@ -188,15 +188,15 @@ class InferenceService:
         confidence: float = 0.5,
     ) -> dict[str, Any]:
         """
-        Detect faces using YOLO11-face and extract ArcFace embeddings.
+        Detect faces using SCRFD + Umeyama alignment + ArcFace embeddings.
 
         Pipeline:
-        1. Decode and letterbox preprocess (CPU)
-        2. YOLO11-face detection via TensorRT
-        3. Crop faces with MTCNN-style margins from HD original
-        4. ArcFace embedding extraction via TensorRT
-        5. L2 normalize embeddings
+        1. Decode and preprocess (CPU)
+        2. SCRFD face detection with 5-point landmarks via TensorRT
+        3. Umeyama affine alignment from HD original (industry standard)
+        4. ArcFace embedding extraction via TensorRT (512-dim L2-normalized)
 
+        Uses SCRFD-10G for face detection with native 5-point landmarks.
         Face coordinates are normalized to [0, 1] range relative to original image.
 
         Args:
@@ -211,10 +211,10 @@ class InferenceService:
                 - embeddings: List of 512-dim L2-normalized ArcFace embeddings
                 - orig_shape: (height, width)
         """
-        client = get_triton_client(self.settings.triton_url)
+        face_client = get_fast_face_client(self.settings.triton_url)
 
         try:
-            result = client.infer_faces_yolo11(image_bytes, confidence=confidence)
+            result = face_client.recognize(image_bytes, confidence=confidence)
         except Exception as e:
             logger.error(f'Face detection failed: {e}')
             return {
@@ -226,45 +226,43 @@ class InferenceService:
                 'orig_shape': (0, 0),
             }
 
-        orig_h, orig_w = result['orig_shape']
+        if result.get('status') == 'error':
+            return {
+                'status': 'error',
+                'error': result.get('error', 'Unknown error'),
+                'num_faces': 0,
+                'faces': [],
+                'embeddings': [],
+                'orig_shape': (0, 0),
+            }
 
-        # Format face detections
+        # FastFaceClient returns already-normalized boxes, landmarks, embeddings
         faces = []
         for i in range(result['num_faces']):
             box = result['face_boxes'][i]
-            landmarks = result['face_landmarks'][i]
+            landmarks = result['face_landmarks'][i] if result['face_landmarks'] else []
             score = float(result['face_scores'][i])
-            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
-
-            # Box is already normalized from yolo11_face_pipeline
-            norm_box = [float(x) for x in box]
-
-            # Landmarks are in pixel coordinates - normalize to [0,1]
-            norm_landmarks = []
-            for j in range(0, 10, 2):
-                norm_landmarks.append(float(landmarks[j]) / orig_w)
-                norm_landmarks.append(float(landmarks[j + 1]) / orig_h)
+            quality = float(result['face_quality'][i]) if result['face_quality'] else None
 
             faces.append(
                 {
-                    'box': norm_box,
-                    'landmarks': norm_landmarks,
+                    'box': list(box),
+                    'landmarks': list(landmarks) if landmarks else [0.0] * 10,
                     'score': score,
                     'quality': quality,
                 }
             )
 
-        # Format embeddings
-        embeddings = []
-        if result['num_faces'] > 0 and len(result['face_embeddings']) > 0:
-            embeddings = result['face_embeddings'].tolist()
+        embeddings = result.get('face_embeddings', [])
+        if isinstance(embeddings, np.ndarray):
+            embeddings = embeddings.tolist()
 
         return {
             'status': 'success',
             'num_faces': result['num_faces'],
             'faces': faces,
             'embeddings': embeddings,
-            'orig_shape': (orig_h, orig_w),
+            'orig_shape': result['orig_shape'],
         }
 
     def recognize_faces(
@@ -273,11 +271,11 @@ class InferenceService:
         confidence: float = 0.5,
     ) -> dict[str, Any]:
         """
-        Full pipeline: YOLO object detection + YOLO11-face + MobileCLIP embedding.
+        Full pipeline: YOLO object detection + SCRFD face detection + MobileCLIP embedding.
 
         Runs in parallel:
         1. YOLO object detection + MobileCLIP global embedding
-        2. YOLO11-face detection + ArcFace embeddings
+        2. SCRFD face detection + Umeyama alignment + ArcFace embeddings
 
         Args:
             image_bytes: Raw JPEG/PNG bytes
@@ -295,10 +293,24 @@ class InferenceService:
                 - embedding_norm: L2 norm of image embedding
                 - orig_shape: (height, width)
         """
+        from concurrent.futures import ThreadPoolExecutor
+
         client = get_triton_client(self.settings.triton_url)
+        face_client = get_fast_face_client(self.settings.triton_url)
 
         try:
-            result = client.infer_faces_full_yolo11(image_bytes, confidence=confidence)
+            # Run YOLO+CLIP and face detection in parallel
+            def run_yolo_clip():
+                return client.infer_yolo_clip_cpu(image_bytes)
+
+            def run_face_detection():
+                return face_client.recognize(image_bytes, confidence=confidence)
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                yolo_future = executor.submit(run_yolo_clip)
+                face_future = executor.submit(run_face_detection)
+                yolo_result = yolo_future.result()
+                face_result = face_future.result()
         except Exception as e:
             logger.error(f'Face recognition failed: {e}')
             return {
@@ -315,40 +327,30 @@ class InferenceService:
             }
 
         # Format YOLO detections
-        detections = client.format_detections(result)
+        detections = client.format_detections(yolo_result)
 
-        orig_h, orig_w = result['orig_shape']
+        orig_h, orig_w = face_result.get('orig_shape', (0, 0))
 
-        # Format face detections
+        # Format face detections (FastFaceClient returns already-normalized data)
         faces = []
-        for i in range(result['num_faces']):
-            box = result['face_boxes'][i]
-            landmarks = result['face_landmarks'][i]
-            score = float(result['face_scores'][i])
-            quality = float(result['face_quality'][i]) if len(result['face_quality']) > i else None
-
-            # Box is already normalized
-            norm_box = [float(x) for x in box]
-
-            # Landmarks are in pixel coordinates - normalize to [0,1]
-            norm_landmarks = []
-            for j in range(0, 10, 2):
-                norm_landmarks.append(float(landmarks[j]) / orig_w)
-                norm_landmarks.append(float(landmarks[j + 1]) / orig_h)
+        for i in range(face_result.get('num_faces', 0)):
+            box = face_result['face_boxes'][i]
+            landmarks = face_result['face_landmarks'][i] if face_result['face_landmarks'] else []
+            score = float(face_result['face_scores'][i])
+            quality = float(face_result['face_quality'][i]) if face_result['face_quality'] else None
 
             faces.append(
                 {
-                    'box': norm_box,
-                    'landmarks': norm_landmarks,
+                    'box': list(box),
+                    'landmarks': list(landmarks) if landmarks else [0.0] * 10,
                     'score': score,
                     'quality': quality,
                 }
             )
 
-        # Format face embeddings
-        face_embeddings = []
-        if result['num_faces'] > 0 and len(result['face_embeddings']) > 0:
-            face_embeddings = result['face_embeddings'].tolist()
+        face_embeddings = face_result.get('face_embeddings', [])
+        if isinstance(face_embeddings, np.ndarray):
+            face_embeddings = face_embeddings.tolist()
 
         return {
             'status': 'success',
@@ -356,12 +358,12 @@ class InferenceService:
             'detections': detections,
             'num_detections': len(detections),
             # Face detections and embeddings
-            'num_faces': result['num_faces'],
+            'num_faces': face_result.get('num_faces', 0),
             'faces': faces,
             'face_embeddings': face_embeddings,
             # Global embedding
-            'image_embedding': result['image_embedding'],
-            'embedding_norm': float(np.linalg.norm(result['image_embedding'])),
+            'image_embedding': yolo_result.get('image_embedding'),
+            'embedding_norm': float(np.linalg.norm(yolo_result.get('image_embedding', [0]))),
             # Image metadata
             'orig_shape': (orig_h, orig_w),
         }
@@ -459,10 +461,9 @@ class InferenceService:
         Combined analysis: YOLO detection + faces + CLIP embedding + OCR.
 
         Single request that returns all analysis results:
-        1. YOLO object detection
-        2. MobileCLIP global and per-box embeddings
-        3. YOLO11-face detection + ArcFace embeddings
-        4. PP-OCRv5 text detection and recognition (optional)
+        1. YOLO object detection + MobileCLIP embeddings
+        2. SCRFD face detection + Umeyama alignment + ArcFace embeddings
+        3. PP-OCRv5 text detection and recognition (optional)
 
         Args:
             image_bytes: Raw JPEG/PNG bytes
@@ -476,11 +477,24 @@ class InferenceService:
             - OCR (if enabled): num_texts, texts, text_boxes
             - Metadata: orig_shape
         """
-        client = get_triton_client(self.settings.triton_url)
+        from concurrent.futures import ThreadPoolExecutor
 
-        # Run face recognition pipeline (YOLO + CLIP + faces)
+        client = get_triton_client(self.settings.triton_url)
+        face_client = get_fast_face_client(self.settings.triton_url)
+
         try:
-            face_result = client.infer_faces_full_yolo11(image_bytes, confidence=0.5)
+            # Run YOLO+CLIP and SCRFD face detection in parallel
+            def run_yolo_clip():
+                return client.infer_yolo_clip_cpu(image_bytes)
+
+            def run_face_detection():
+                return face_client.recognize(image_bytes, confidence=0.5)
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                yolo_future = executor.submit(run_yolo_clip)
+                face_future = executor.submit(run_face_detection)
+                yolo_result = yolo_future.result()
+                face_result = face_future.result()
         except Exception as e:
             logger.error(f'Full analysis failed: {e}')
             return {
@@ -489,40 +503,30 @@ class InferenceService:
             }
 
         # Format YOLO detections
-        detections = client.format_detections(face_result)
+        detections = client.format_detections(yolo_result)
 
-        orig_h, orig_w = face_result['orig_shape']
+        orig_h, orig_w = face_result.get('orig_shape', (0, 0))
 
-        # Format face detections
+        # Format face detections (FastFaceClient returns already-normalized data)
         faces = []
-        for i in range(face_result['num_faces']):
+        for i in range(face_result.get('num_faces', 0)):
             box = face_result['face_boxes'][i]
-            landmarks = face_result['face_landmarks'][i]
+            landmarks = face_result['face_landmarks'][i] if face_result['face_landmarks'] else []
             score = float(face_result['face_scores'][i])
-            quality = (
-                float(face_result['face_quality'][i])
-                if len(face_result['face_quality']) > i
-                else None
-            )
-
-            norm_box = [float(x) for x in box]
-            norm_landmarks = []
-            for j in range(0, 10, 2):
-                norm_landmarks.append(float(landmarks[j]) / orig_w)
-                norm_landmarks.append(float(landmarks[j + 1]) / orig_h)
+            quality = float(face_result['face_quality'][i]) if face_result['face_quality'] else None
 
             faces.append(
                 {
-                    'box': norm_box,
-                    'landmarks': norm_landmarks,
+                    'box': list(box),
+                    'landmarks': list(landmarks) if landmarks else [0.0] * 10,
                     'score': score,
                     'quality': quality,
                 }
             )
 
-        face_embeddings = []
-        if face_result['num_faces'] > 0 and len(face_result['face_embeddings']) > 0:
-            face_embeddings = face_result['face_embeddings'].tolist()
+        face_embeddings = face_result.get('face_embeddings', [])
+        if isinstance(face_embeddings, np.ndarray):
+            face_embeddings = face_embeddings.tolist()
 
         result = {
             'status': 'success',
@@ -530,12 +534,12 @@ class InferenceService:
             'detections': detections,
             'num_detections': len(detections),
             # Face detections and embeddings
-            'num_faces': face_result['num_faces'],
+            'num_faces': face_result.get('num_faces', 0),
             'faces': faces,
             'face_embeddings': face_embeddings,
             # Global embedding
-            'image_embedding': face_result['image_embedding'],
-            'embedding_norm': float(np.linalg.norm(face_result['image_embedding'])),
+            'image_embedding': yolo_result.get('image_embedding'),
+            'embedding_norm': float(np.linalg.norm(yolo_result.get('image_embedding', [0]))),
             # Image metadata
             'orig_shape': (orig_h, orig_w),
         }

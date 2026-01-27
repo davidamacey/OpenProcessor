@@ -6,7 +6,7 @@ Routers:
 - models: Model upload, export, and management
 - detect: YOLO object detection
 - embed: MobileCLIP embeddings (image, text, batch, boxes)
-- faces: Face detection and recognition (YOLO11-face + ArcFace)
+- faces: Face detection and recognition (SCRFD + ArcFace)
 - persons: Person management (face clustering, naming, merging)
 - ingest: Data ingestion with duplicate detection and multi-index routing
 - search: Visual similarity search (image, text, face, OCR)

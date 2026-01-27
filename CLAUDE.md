@@ -34,7 +34,7 @@ High-performance visual AI API built on FastAPI and NVIDIA Triton Inference Serv
 
 **Core Capabilities:**
 - **Object Detection**: YOLO11 for 80-class COCO detection
-- **Face Recognition**: YOLO11-face detection + ArcFace embeddings (512-dim)
+- **Face Recognition**: SCRFD-10G detection + ArcFace embeddings (512-dim)
 - **CLIP Embeddings**: MobileCLIP for image/text embeddings (512-dim)
 - **OCR**: PP-OCRv5 for text detection and recognition
 - **Visual Search**: OpenSearch k-NN for similarity search across all embedding types
@@ -74,40 +74,40 @@ The system uses Docker Compose to orchestrate three core services:
 | Model | Purpose | Input | Output |
 |-------|---------|-------|--------|
 | `yolov11_small_trt_end2end` | Object detection | 640x640 RGB | Boxes + classes |
-| `yolo11_face_small_trt_end2end` | Face detection | 640x640 RGB | Face boxes + landmarks |
+| `scrfd_10g_bnkps` | Face detection + landmarks | 640x640 RGB | Boxes + 5-point landmarks |
 | `arcface_w600k_r50` | Face embedding | 112x112 RGB | 512-dim vector |
 | `mobileclip2_s2_image_encoder` | Image embedding | 256x256 RGB | 512-dim vector |
 | `mobileclip2_s2_text_encoder` | Text embedding | Token IDs | 512-dim vector |
 | `paddleocr_det_trt` | Text detection | Variable RGB | Text boxes |
 | `paddleocr_rec_trt` | Text recognition | Text crops | Characters |
-| `yolo11_face_pipeline` | Face ensemble | 640x640 RGB | Faces + embeddings |
+| `ocr_pipeline` | OCR BLS pipeline | Variable RGB | Text + boxes + scores |
 
 ### Model Directory Structure
 
 ```
 models/
-├── yolov11_small_trt_end2end/
+├── yolov11_small_trt_end2end/   # YOLO11 object detection
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── yolo11_face_small_trt_end2end/
+├── scrfd_10g_bnkps/             # SCRFD face detection + landmarks
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── arcface_w600k_r50/
+├── arcface_w600k_r50/           # ArcFace face embedding
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── mobileclip2_s2_image_encoder/
+├── mobileclip2_s2_image_encoder/ # MobileCLIP image encoder
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── mobileclip2_s2_text_encoder/
+├── mobileclip2_s2_text_encoder/  # MobileCLIP text encoder
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── paddleocr_det_trt/
+├── paddleocr_det_trt/           # PP-OCRv5 text detection
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── paddleocr_rec_trt/
+├── paddleocr_rec_trt/           # PP-OCRv5 text recognition
 │   ├── 1/model.plan
 │   └── config.pbtxt
-└── yolo11_face_pipeline/
+└── ocr_pipeline/                # OCR BLS pipeline
     └── config.pbtxt
 ```
 

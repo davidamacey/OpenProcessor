@@ -18,11 +18,7 @@ onnxruntime-gpu
 onnx-graphsurgeon  # Required for End2End TensorRT NMS graph manipulation
 tensorrt-cu12==10.13.3.9  # MUST match Triton 25.10 TensorRT version (10.13.3.9) for engine compatibility
 
-# NVIDIA DALI (GPU-accelerated preprocessing for Track D)
-# Requires NVIDIA PyPI index - see Dockerfile for installation
-nvidia-dali-cuda120
-
-# PyTorch (for Track A baseline)
+# PyTorch
 torch
 torchvision
 
@@ -53,18 +49,18 @@ pyyaml
 # Structured Logging
 structlog>=24.1.0  # Structured logging with context and JSON output
 
-# Track E: OpenSearch for Visual Search
+# OpenSearch for Visual Search
 opensearch-py>=2.3.0  # Async OpenSearch client with k-NN support
 transformers>=4.30.0  # CLIP tokenizer for text-to-image search
 
-# Track E: MobileCLIP dependencies
+# MobileCLIP dependencies
 timm  # pytorch-image-models - required for MobileCLIP architecture
 huggingface_hub  # For downloading MobileCLIP checkpoints
 ftfy  # Text cleaning for CLIP tokenizer (required by open_clip)
 open-clip-torch>=2.24.0  # OpenCLIP with native MobileCLIP2-S2 support
 
-# Track E: FAISS Clustering (GPU-accelerated vector clustering)
+# FAISS Clustering (GPU-accelerated vector clustering)
 faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
 
-# Track E: Duplicate Detection
+# Duplicate Detection
 imohash  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)

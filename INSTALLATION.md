@@ -128,7 +128,7 @@ The system automatically selects a profile based on your GPU's VRAM:
 
 **minimal** (6-8GB GPUs):
 - YOLO object detection
-- YOLO face detection
+- SCRFD face detection
 - ArcFace embeddings
 - MobileCLIP embeddings
 - No OCR (optional add-on)

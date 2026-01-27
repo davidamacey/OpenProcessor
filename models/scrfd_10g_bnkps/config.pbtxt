@@ -1,0 +1,86 @@
+# SCRFD-10G Face Detection with 5-point Landmarks
+# Input: RGB images, normalized (x-127.5)/128.0
+# Output: 9 tensors across 3 FPN strides for CPU post-processing
+# Post-processing: anchor decode + NMS in numpy (src/utils/scrfd_decode.py)
+#
+# ONNX model patched to preserve batch dimension through Transpose+Reshape ops,
+# enabling Triton dynamic batching for maximum throughput.
+
+name: "scrfd_10g_bnkps"
+platform: "tensorrt_plan"
+max_batch_size: 32
+
+input [
+  {
+    name: "input.1"
+    data_type: TYPE_FP32
+    dims: [ 3, 640, 640 ]
+  }
+]
+
+output [
+  {
+    name: "score_8"
+    data_type: TYPE_FP32
+    dims: [ 12800, 1 ]
+  },
+  {
+    name: "score_16"
+    data_type: TYPE_FP32
+    dims: [ 3200, 1 ]
+  },
+  {
+    name: "score_32"
+    data_type: TYPE_FP32
+    dims: [ 800, 1 ]
+  },
+  {
+    name: "bbox_8"
+    data_type: TYPE_FP32
+    dims: [ 12800, 4 ]
+  },
+  {
+    name: "bbox_16"
+    data_type: TYPE_FP32
+    dims: [ 3200, 4 ]
+  },
+  {
+    name: "bbox_32"
+    data_type: TYPE_FP32
+    dims: [ 800, 4 ]
+  },
+  {
+    name: "kps_8"
+    data_type: TYPE_FP32
+    dims: [ 12800, 10 ]
+  },
+  {
+    name: "kps_16"
+    data_type: TYPE_FP32
+    dims: [ 3200, 10 ]
+  },
+  {
+    name: "kps_32"
+    data_type: TYPE_FP32
+    dims: [ 800, 10 ]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16, 32 ]
+  max_queue_delay_microseconds: 5000
+}
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]
+
+version_policy {
+  latest {
+    num_versions: 1
+  }
+}
