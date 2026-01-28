@@ -240,7 +240,8 @@ generate_scrfd_config() {
     local profile="$2"
     local gpu_id="$3"
 
-    # If config exists, just update profile settings (preserves FPN output tensors)
+    # If config exists, update profile settings (batch size, instance count, GPU)
+    # SCRFD uses implicit batching (max_batch_size > 0) with the batch-patched engine
     if [[ -f "$config_file" ]]; then
         update_config_profile_settings "$config_file" "$profile" "$gpu_id"
         return $?
