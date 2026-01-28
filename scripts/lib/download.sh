@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# download.sh - Model download utilities for triton-api
+# download.sh - Model download utilities for OpenProcessor
 # =============================================================================
 # Downloads models from public sources (no authentication required):
 # - GitHub releases (Ultralytics)

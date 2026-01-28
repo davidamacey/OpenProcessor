@@ -8,7 +8,7 @@
 
 name: "scrfd_10g_bnkps"
 platform: "tensorrt_plan"
-max_batch_size: 32
+max_batch_size: 64
 
 input [
   {
@@ -67,7 +67,7 @@ output [
 ]
 
 dynamic_batching {
-  preferred_batch_size: [ 4, 8, 16, 32 ]
+  preferred_batch_size: [ 8, 16, 32 ]
   max_queue_delay_microseconds: 5000
 }
 

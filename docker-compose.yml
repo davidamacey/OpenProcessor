@@ -1,9 +1,11 @@
+name: openprocessor
+
 services:
   triton-server:
     build:
       context: .
       dockerfile: Dockerfile.triton
-    image: triton-api-pytorch:25.10
+    image: openprocessor-triton:25.10
     container_name: triton-server
     restart: always
     ports:
