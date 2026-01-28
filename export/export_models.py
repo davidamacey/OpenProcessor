@@ -1388,6 +1388,7 @@ Examples:
             f,
             indent=2,
         )
+        f.write('\n')
     logger.info(f'Results saved to: {results_file}')
 
     # Show current model structure
