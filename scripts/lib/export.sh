@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# export.sh - TensorRT export utilities for triton-api
+# export.sh - TensorRT export utilities for OpenProcessor
 # =============================================================================
 # Wraps existing Python export scripts with progress feedback and error handling
 # =============================================================================

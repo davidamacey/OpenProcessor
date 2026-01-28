@@ -24,7 +24,7 @@
 #   status     - Check model status
 #
 # Requirements:
-#   - Docker with triton-server and yolo-api containers running
+#   - Docker with triton-server and api containers running
 #   - NVIDIA GPU with sufficient memory (4GB+ for TRT build)
 #
 # =============================================================================
