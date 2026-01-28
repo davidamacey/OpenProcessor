@@ -526,32 +526,39 @@ def convert_to_tensorrt(
 def create_triton_config(plan_path: Path, max_batch_size: int = MAX_BATCH_SIZE) -> Path:
     """Create Triton config.pbtxt for SCRFD model.
 
-    Note: The standard InsightFace SCRFD ONNX has reshape ops that absorb the
-    batch dimension into spatial dims (outputs are 2D: [-1, D]). This means
-    max_batch_size must be 0 (explicit batch mode). Throughput is achieved via
-    multiple GPU instances + high client concurrency, matching InsightFace-REST.
+    The ONNX is batch-patched (make_batch_dynamic) so the TensorRT engine
+    supports dynamic batch. We use Triton's implicit batching (max_batch_size > 0)
+    with dims that exclude the batch dimension. Triton manages the batch dimension.
+
+    Anchor counts per stride:
+      stride 8:  (640/8)^2  * 2 = 12800
+      stride 16: (640/16)^2 * 2 = 3200
+      stride 32: (640/32)^2 * 2 = 800
     """
     config_path = plan_path.parent.parent / 'config.pbtxt'
+
+    # Compute anchor counts for fixed output dims
+    fm_sizes = {s: INPUT_SIZE // s for s in FPN_STRIDES}
+    n_anchors = {s: fm_sizes[s] * fm_sizes[s] * NUM_ANCHORS for s in FPN_STRIDES}
 
     config_content = f"""# SCRFD-10G Face Detection with 5-point Landmarks
 # Input: RGB images, normalized (x-127.5)/128.0
 # Output: 9 tensors across 3 FPN strides for CPU post-processing
 # Post-processing: anchor decode + NMS in numpy (src/utils/scrfd_decode.py)
 #
-# Note: max_batch_size=0 (explicit batch mode) because the SCRFD ONNX model
-# has reshape ops that absorb the batch dimension into spatial dims. Throughput
-# is achieved via multiple GPU instances + high client concurrency, matching
-# the InsightFace-REST architecture (~820 FPS on RTX 4090).
+# The ONNX is batch-patched (export_scrfd.py) so the TensorRT engine supports
+# dynamic batch via Triton's implicit batching (max_batch_size > 0).
+# Anchor counts per stride: {n_anchors[8]} (stride 8), {n_anchors[16]} (stride 16), {n_anchors[32]} (stride 32).
 
 name: "{TRITON_MODEL_NAME}"
 platform: "tensorrt_plan"
-max_batch_size: 0
+max_batch_size: {max_batch_size}
 
 input [
   {{
     name: "input.1"
     data_type: TYPE_FP32
-    dims: [ 1, 3, {INPUT_SIZE}, {INPUT_SIZE} ]
+    dims: [ 3, {INPUT_SIZE}, {INPUT_SIZE} ]
   }}
 ]
 
@@ -559,49 +566,54 @@ output [
   {{
     name: "score_8"
     data_type: TYPE_FP32
-    dims: [ -1, 1 ]
+    dims: [ {n_anchors[8]}, 1 ]
   }},
   {{
     name: "score_16"
     data_type: TYPE_FP32
-    dims: [ -1, 1 ]
+    dims: [ {n_anchors[16]}, 1 ]
   }},
   {{
     name: "score_32"
     data_type: TYPE_FP32
-    dims: [ -1, 1 ]
+    dims: [ {n_anchors[32]}, 1 ]
   }},
   {{
     name: "bbox_8"
     data_type: TYPE_FP32
-    dims: [ -1, 4 ]
+    dims: [ {n_anchors[8]}, 4 ]
   }},
   {{
     name: "bbox_16"
     data_type: TYPE_FP32
-    dims: [ -1, 4 ]
+    dims: [ {n_anchors[16]}, 4 ]
   }},
   {{
     name: "bbox_32"
     data_type: TYPE_FP32
-    dims: [ -1, 4 ]
+    dims: [ {n_anchors[32]}, 4 ]
   }},
   {{
     name: "kps_8"
     data_type: TYPE_FP32
-    dims: [ -1, 10 ]
+    dims: [ {n_anchors[8]}, 10 ]
   }},
   {{
     name: "kps_16"
     data_type: TYPE_FP32
-    dims: [ -1, 10 ]
+    dims: [ {n_anchors[16]}, 10 ]
   }},
   {{
     name: "kps_32"
     data_type: TYPE_FP32
-    dims: [ -1, 10 ]
+    dims: [ {n_anchors[32]}, 10 ]
   }}
 ]
+
+dynamic_batching {{
+  preferred_batch_size: [ 8, 16, 32 ]
+  max_queue_delay_microseconds: 5000
+}}
 
 instance_group [
   {{

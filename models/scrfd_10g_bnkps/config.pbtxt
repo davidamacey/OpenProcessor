@@ -3,8 +3,9 @@
 # Output: 9 tensors across 3 FPN strides for CPU post-processing
 # Post-processing: anchor decode + NMS in numpy (src/utils/scrfd_decode.py)
 #
-# ONNX model patched to preserve batch dimension through Transpose+Reshape ops,
-# enabling Triton dynamic batching for maximum throughput.
+# The ONNX is batch-patched (export_scrfd.py) so the TensorRT engine supports
+# dynamic batch via Triton's implicit batching (max_batch_size > 0).
+# Anchor counts per stride: 12800 (stride 8), 3200 (stride 16), 800 (stride 32).
 
 name: "scrfd_10g_bnkps"
 platform: "tensorrt_plan"
@@ -73,7 +74,7 @@ dynamic_batching {
 
 instance_group [
   {
-    count: 2
+    count: 4
     kind: KIND_GPU
     gpus: [ 0 ]
   }
