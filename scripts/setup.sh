@@ -778,6 +778,8 @@ main() {
 
     print_banner
 
+    local setup_start=$SECONDS
+
     # Step 1: Prerequisites
     check_prerequisites || exit 1
 
@@ -790,28 +792,36 @@ main() {
     # Step 4: Download models
     # Allow partial failures: exports will re-attempt individual downloads as needed
     local download_rc=0
+    local step_start=$SECONDS
     download_models_step || download_rc=$?
     if [[ $download_rc -ne 0 ]]; then
         log_warn "Some model downloads failed. Setup will continue."
         log_info "Missing models can be re-downloaded: ./scripts/openprocessor.sh download all"
     fi
+    log_info "Download step: $(format_elapsed $((SECONDS - step_start)))"
 
     # Step 5: Build Docker images (first run pulls base images)
+    step_start=$SECONDS
     build_docker_images
+    log_info "Docker build step: $(format_elapsed $((SECONDS - step_start)))"
 
     # Step 6: Generate configuration (before export so configs match engines)
     generate_configs_step
 
     # Step 7: Export to TensorRT
+    step_start=$SECONDS
     export_models_step
+    log_info "TensorRT export step: $(format_elapsed $((SECONDS - step_start)))"
 
     # Step 8: Start services
+    step_start=$SECONDS
     local start_rc=0
     start_services_step || start_rc=$?
     if [[ $start_rc -ne 0 ]]; then
         log_warn "Some services may not be fully ready yet."
         log_info "Check status: ./scripts/openprocessor.sh status"
     fi
+    log_info "Service startup step: $(format_elapsed $((SECONDS - step_start)))"
 
     # Step 9: Smoke tests
     if [[ "$SKIP_START" != "true" ]]; then
@@ -819,7 +829,9 @@ main() {
     fi
 
     # Step 10: Success summary
+    local total_elapsed=$((SECONDS - setup_start))
     print_success_summary
+    log_info "Total setup time: $(format_elapsed $total_elapsed)"
 }
 
 main "$@"

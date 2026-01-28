@@ -2,7 +2,6 @@
 #
 # SVTR-LCNet architecture for text sequence recognition
 # Supports dynamic width for variable-length text recognition
-# Multilingual model: Chinese + English + symbols (18385 character classes)
 #
 # Input:
 #   - x: [B, 3, 48, W] FP32, preprocessed (x / 127.5 - 1), BGR

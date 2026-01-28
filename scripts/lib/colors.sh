@@ -138,6 +138,21 @@ print_progress() {
 }
 
 # =============================================================================
+# Timing Utilities
+# =============================================================================
+
+# Format elapsed seconds as "Xm Ys" or "Xs"
+# Usage: format_elapsed $seconds
+format_elapsed() {
+    local seconds="$1"
+    if [[ $seconds -ge 60 ]]; then
+        printf "%dm %ds" $((seconds / 60)) $((seconds % 60))
+    else
+        printf "%ds" "$seconds"
+    fi
+}
+
+# =============================================================================
 # User Prompts
 # =============================================================================
 

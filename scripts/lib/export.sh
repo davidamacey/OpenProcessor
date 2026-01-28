@@ -304,7 +304,7 @@ export_paddleocr() {
 # Batch Export Functions
 # =============================================================================
 
-# Export all models
+# Export all models (with per-step timing)
 export_all_models() {
     print_header "TensorRT Model Export"
 
@@ -318,27 +318,109 @@ export_all_models() {
 
     local failed=0
     local total=6
+    local export_start step_start elapsed
+    export_start=$SECONDS
 
-    # Export each model
+    # Arrays for timing summary
+    local -a model_names=()
+    local -a model_times=()
+    local -a model_status=()
+
+    # Export each model with timing
     log_step "Exporting model 1/$total: YOLO detection"
-    export_yolo_detection || failed=$((failed + 1))
+    step_start=$SECONDS
+    if export_yolo_detection; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("YOLO detection")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
     log_step "Exporting model 2/$total: SCRFD face detection"
-    export_scrfd || failed=$((failed + 1))
+    step_start=$SECONDS
+    if export_scrfd; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("SCRFD face detection")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
     log_step "Exporting model 3/$total: ArcFace"
-    export_arcface || failed=$((failed + 1))
+    step_start=$SECONDS
+    if export_arcface; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("ArcFace embedding")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
     log_step "Exporting model 4/$total: MobileCLIP image"
-    export_mobileclip_image || failed=$((failed + 1))
+    step_start=$SECONDS
+    if export_mobileclip_image; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("MobileCLIP image encoder")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
     log_step "Exporting model 5/$total: MobileCLIP text"
-    export_mobileclip_text || failed=$((failed + 1))
+    step_start=$SECONDS
+    if export_mobileclip_text; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("MobileCLIP text encoder")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
     log_step "Exporting model 6/$total: PaddleOCR"
-    export_paddleocr || failed=$((failed + 1))
+    step_start=$SECONDS
+    if export_paddleocr; then
+        model_status+=("OK")
+    else
+        failed=$((failed + 1))
+        model_status+=("FAIL")
+    fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("PaddleOCR (det + rec)")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
 
+    # Print timing summary table
+    local total_elapsed=$((SECONDS - export_start))
     echo ""
+    print_header "Export Timing Summary"
+    printf "  %-28s  %8s  %s\n" "Model" "Time" "Status"
+    printf "  %-28s  %8s  %s\n" "----------------------------" "--------" "------"
+    for i in "${!model_names[@]}"; do
+        local status_color="$GREEN"
+        [[ "${model_status[$i]}" == "FAIL" ]] && status_color="$RED"
+        printf "  %-28s  %8s  ${status_color}%s${NC}\n" \
+            "${model_names[$i]}" "$(format_elapsed "${model_times[$i]}")" "${model_status[$i]}"
+    done
+    printf "  %-28s  %8s\n" "----------------------------" "--------"
+    printf "  %-28s  %8s\n" "Total" "$(format_elapsed $total_elapsed)"
+    echo ""
+
     if [[ $failed -eq 0 ]]; then
         log_success "All models exported successfully!"
         return 0
@@ -348,7 +430,7 @@ export_all_models() {
     fi
 }
 
-# Export essential models only (for minimal profile)
+# Export essential models only (for minimal profile, with timing)
 export_essential_models() {
     print_header "TensorRT Export (Essential Models)"
 
@@ -359,12 +441,69 @@ export_essential_models() {
     unload_models_for_export
 
     local failed=0
+    local total=5
+    local export_start step_start elapsed
+    export_start=$SECONDS
 
-    export_yolo_detection || failed=$((failed + 1))
-    export_scrfd || failed=$((failed + 1))
-    export_arcface || failed=$((failed + 1))
-    export_mobileclip_image || failed=$((failed + 1))
-    export_mobileclip_text || failed=$((failed + 1))
+    local -a model_names=()
+    local -a model_times=()
+    local -a model_status=()
+
+    log_step "Exporting model 1/$total: YOLO detection"
+    step_start=$SECONDS
+    if export_yolo_detection; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("YOLO detection")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    log_step "Exporting model 2/$total: SCRFD face detection"
+    step_start=$SECONDS
+    if export_scrfd; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("SCRFD face detection")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    log_step "Exporting model 3/$total: ArcFace"
+    step_start=$SECONDS
+    if export_arcface; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("ArcFace embedding")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    log_step "Exporting model 4/$total: MobileCLIP image"
+    step_start=$SECONDS
+    if export_mobileclip_image; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("MobileCLIP image encoder")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    log_step "Exporting model 5/$total: MobileCLIP text"
+    step_start=$SECONDS
+    if export_mobileclip_text; then model_status+=("OK"); else failed=$((failed + 1)); model_status+=("FAIL"); fi
+    elapsed=$((SECONDS - step_start))
+    model_names+=("MobileCLIP text encoder")
+    model_times+=("$elapsed")
+    log_info "  Elapsed: $(format_elapsed $elapsed)"
+
+    # Print timing summary table
+    local total_elapsed=$((SECONDS - export_start))
+    echo ""
+    print_header "Export Timing Summary"
+    printf "  %-28s  %8s  %s\n" "Model" "Time" "Status"
+    printf "  %-28s  %8s  %s\n" "----------------------------" "--------" "------"
+    for i in "${!model_names[@]}"; do
+        local status_color="$GREEN"
+        [[ "${model_status[$i]}" == "FAIL" ]] && status_color="$RED"
+        printf "  %-28s  %8s  ${status_color}%s${NC}\n" \
+            "${model_names[$i]}" "$(format_elapsed "${model_times[$i]}")" "${model_status[$i]}"
+    done
+    printf "  %-28s  %8s\n" "----------------------------" "--------"
+    printf "  %-28s  %8s\n" "Total" "$(format_elapsed $total_elapsed)"
+    echo ""
 
     if [[ $failed -eq 0 ]]; then
         log_success "Essential models exported!"
