@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# colors.sh - Logging utilities and color definitions for triton-api scripts
+# colors.sh - Logging utilities and color definitions for OpenProcessor scripts
 # =============================================================================
 
 # Avoid redefining if already sourced

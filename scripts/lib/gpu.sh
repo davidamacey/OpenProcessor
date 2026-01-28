@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# gpu.sh - GPU detection and profile selection for triton-api
+# gpu.sh - GPU detection and profile selection for OpenProcessor
 # =============================================================================
 
 # Avoid redefining if already sourced

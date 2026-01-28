@@ -128,12 +128,12 @@ print_banner() {
     echo ""
     echo -e "${CYAN}${BOLD}"
     cat << 'EOF'
-  _        _ _                              _
- | |_ _ __(_) |_ ___  _ __         __ _ _ __(_)
- | __| '__| | __/ _ \| '_ \ _____ / _` | '_ \| |
- | |_| |  | | || (_) | | | |_____| (_| | |_) | |
-  \__|_|  |_|\__\___/|_| |_|      \__,_| .__/|_|
-                                       |_|
+   ___                   ____
+  / _ \ _ __   ___ _ __ |  _ \ _ __ ___   ___ ___  ___ ___  ___  _ __
+ | | | | '_ \ / _ \ '_ \| |_) | '__/ _ \ / __/ _ \/ __/ __|/ _ \| '__|
+ | |_| | |_) |  __/ | | |  __/| | | (_) | (_|  __/\__ \__ \ (_) | |
+  \___/| .__/ \___|_| |_|_|   |_|  \___/ \___\___||___/___/\___/|_|
+       |_|
 EOF
     echo -e "${NC}"
     echo -e "  ${DIM}Visual AI API - Powered by NVIDIA Triton${NC}"
@@ -799,11 +799,11 @@ main() {
     # Step 5: Build Docker images (first run pulls base images)
     build_docker_images
 
-    # Step 6: Export to TensorRT
-    export_models_step
-
-    # Step 7: Generate configuration
+    # Step 6: Generate configuration (before export so configs match engines)
     generate_configs_step
+
+    # Step 7: Export to TensorRT
+    export_models_step
 
     # Step 8: Start services
     local start_rc=0
