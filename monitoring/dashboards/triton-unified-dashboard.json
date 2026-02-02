@@ -130,7 +130,7 @@
       "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "sum(rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m]))",
+          "expr": "sum(rate(nv_inference_request_success{model=~\".*\"}[1m]))",
           "refId": "A"
         }
       ],
@@ -189,7 +189,7 @@
       "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "sum(rate(nv_inference_compute_infer_duration_us{model=~\"yolov11.*\"}[1m])) / sum(rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m])) / 1000",
+          "expr": "sum(rate(nv_inference_compute_infer_duration_us{model=~\".*\"}[1m])) / sum(rate(nv_inference_request_success{model=~\".*\"}[1m])) / 1000",
           "refId": "A"
         }
       ],
@@ -248,7 +248,7 @@
       "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "sum(rate(nv_inference_queue_duration_us{model=~\"yolov11.*\"}[1m])) / sum(rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m]))",
+          "expr": "sum(rate(nv_inference_queue_duration_us{model=~\".*\"}[1m])) / sum(rate(nv_inference_request_success{model=~\".*\"}[1m]))",
           "refId": "A"
         }
       ],
@@ -307,7 +307,7 @@
       "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "sum(nv_inference_pending_request_count{model=~\"yolov11.*\"})",
+          "expr": "sum(nv_inference_pending_request_count{model=~\".*\"})",
           "refId": "A"
         }
       ],
@@ -683,7 +683,7 @@
       },
       "targets": [
         {
-          "expr": "rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m])",
+          "expr": "rate(nv_inference_request_success{model=~\".*\"}[1m])",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -776,17 +776,17 @@
       },
       "targets": [
         {
-          "expr": "rate(nv_inference_compute_infer_duration_us{model=~\"yolov11.*\"}[1m]) / rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m]) / 1000",
+          "expr": "rate(nv_inference_compute_infer_duration_us{model=~\".*\"}[1m]) / rate(nv_inference_request_success{model=~\".*\"}[1m]) / 1000",
           "legendFormat": "{{model}} - Avg",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, rate(nv_inference_request_duration_us_bucket{model=~\"yolov11.*\"}[1m])) / 1000",
+          "expr": "histogram_quantile(0.95, rate(nv_inference_request_duration_us_bucket{model=~\".*\"}[1m])) / 1000",
           "legendFormat": "{{model}} - P95",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, rate(nv_inference_request_duration_us_bucket{model=~\"yolov11.*\"}[1m])) / 1000",
+          "expr": "histogram_quantile(0.99, rate(nv_inference_request_duration_us_bucket{model=~\".*\"}[1m])) / 1000",
           "legendFormat": "{{model}} - P99",
           "refId": "C"
         }
@@ -849,7 +849,7 @@
       "pluginVersion": "9.0.0",
       "targets": [
         {
-          "expr": "rate(nv_inference_compute_infer_duration_us{model=~\"yolov11.*\"}[5m]) / rate(nv_inference_request_success{model=~\"yolov11.*\"}[5m]) / 1000",
+          "expr": "rate(nv_inference_compute_infer_duration_us{model=~\".*\"}[5m]) / rate(nv_inference_request_success{model=~\".*\"}[5m]) / 1000",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -926,7 +926,7 @@
       },
       "targets": [
         {
-          "expr": "rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m]) / rate(nv_inference_exec_count{model=~\"yolov11.*\"}[1m])",
+          "expr": "rate(nv_inference_request_success{model=~\".*\"}[1m]) / rate(nv_inference_exec_count{model=~\".*\"}[1m])",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -1012,12 +1012,12 @@
       },
       "targets": [
         {
-          "expr": "rate(nv_inference_request_success{model=~\"yolo_preprocess_dali.*\"}[1m]) / rate(nv_inference_exec_count{model=~\"yolo_preprocess_dali.*\"}[1m])",
+          "expr": "rate(nv_inference_request_success{model=~\".*\"}[1m]) / rate(nv_inference_exec_count{model=~\".*\"}[1m])",
           "legendFormat": "{{model}} (DALI)",
           "refId": "A"
         }
       ],
-      "title": "DALI Preprocessing Batch Size (BOTTLENECK INDICATOR)",
+      "title": "Preprocessing Batch Size",
       "type": "timeseries"
     },
     {
@@ -1089,7 +1089,7 @@
       },
       "targets": [
         {
-          "expr": "rate(nv_inference_queue_duration_us{model=~\"yolov11.*\"}[1m]) / rate(nv_inference_request_success{model=~\"yolov11.*\"}[1m])",
+          "expr": "rate(nv_inference_queue_duration_us{model=~\".*\"}[1m]) / rate(nv_inference_request_success{model=~\".*\"}[1m])",
           "legendFormat": "{{model}} - Queue",
           "refId": "A"
         }
@@ -1166,7 +1166,7 @@
       },
       "targets": [
         {
-          "expr": "nv_inference_pending_request_count{model=~\"yolov11.*\"}",
+          "expr": "nv_inference_pending_request_count{model=~\".*\"}",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -1242,7 +1242,7 @@
       },
       "targets": [
         {
-          "expr": "rate(nv_inference_request_failure{model=~\"yolov11.*\"}[5m])",
+          "expr": "rate(nv_inference_request_failure{model=~\".*\"}[5m])",
           "legendFormat": "{{model}} - {{reason}}",
           "refId": "A"
         }
@@ -1762,7 +1762,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "YOLO Triton Unified Dashboard",
+  "title": "OpenProcessor Triton Dashboard",
   "uid": "yolo-triton-unified",
   "version": 0
 }
