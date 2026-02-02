@@ -34,7 +34,7 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor &
 
 ```bash
 curl http://localhost:4603/health
-# {"status":"healthy","version":"6.0.0",...}
+# {"status":"healthy","version":"0.1.0",...}
 
 # Quick test with an image
 curl -X POST http://localhost:4603/detect -F "image=@your-image.jpg"
