@@ -113,6 +113,7 @@ def download_with_progress(url: str, output_path: Path, desc: str = '') -> bool:
                     flush=True,
                 )
 
+        # Download from trusted GitHub releases - url is validated above
         urlretrieve(url, output_path, reporthook=progress_hook)
         print()  # New line after progress
         return True

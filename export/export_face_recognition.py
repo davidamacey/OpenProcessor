@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Track E: Export ArcFace Face Recognition to TensorRT
+Export ArcFace Face Recognition to TensorRT
 
 This script converts the ArcFace face recognition model to TensorRT for Triton deployment.
 
@@ -366,13 +366,13 @@ platform: "tensorrt_plan"
 max_batch_size: {MAX_BATCH_SIZE}
 
 input {{
-    name: "input.1"
+    name: "input"
     data_type: TYPE_FP32
     dims: [3, {INPUT_SIZE}, {INPUT_SIZE}]
 }}
 
 output {{
-    name: "683"
+    name: "output"
     data_type: TYPE_FP32
     dims: [{EMBEDDING_DIM}]
 }}
@@ -463,7 +463,7 @@ def main():
     if not args.skip_trt:
         print(f'  TensorRT: {args.plan}')
     print('\nNext steps:')
-    print('  1. Restart Triton: docker compose restart triton-api')
+    print('  1. Restart Triton: docker compose restart triton-server')
     print('  2. Test inference via API')
 
     return 0

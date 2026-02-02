@@ -192,14 +192,14 @@ Speedup: 64x faster than exhaustive search
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    triton-api Visual Search Pipeline                         │
+│                    OpenProcessor Visual Search Pipeline                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  1. INITIAL SETUP (one-time)                                                │
 │     ┌────────────────────────────────────────────────────────────────────┐  │
-│     │  POST /track_e/index/create       # Create OpenSearch indexes      │  │
-│     │  POST /track_e/ingest (× 1000)    # Ingest initial images          │  │
-│     │  POST /track_e/clusters/train/global  # Train FAISS clustering     │  │
+│     │  POST /index/create       # Create OpenSearch indexes      │  │
+│     │  POST /ingest (× 1000)    # Ingest initial images          │  │
+│     │  POST /clusters/train/global  # Train FAISS clustering     │  │
 │     │                                                                     │  │
 │     │  Result: 1024 clusters trained, all images assigned cluster_id     │  │
 │     └────────────────────────────────────────────────────────────────────┘  │
@@ -219,7 +219,7 @@ Speedup: 64x faster than exhaustive search
 │  3. SEARCH (user queries)                                                   │
 │     ┌────────────────────────────────────────────────────────────────────┐  │
 │     │  Option A: Standard k-NN (searches all documents)                   │  │
-│     │  POST /track_e/search/image                                         │  │
+│     │  POST /search/image                                         │  │
 │     │                                                                     │  │
 │     │  Option B: Cluster-optimized (searches subset)                      │  │
 │     │  1. Find query's nearest clusters via FAISS                         │  │
@@ -229,21 +229,21 @@ Speedup: 64x faster than exhaustive search
 │                                                                              │
 │  4. ALBUMS (Google Photos-like)                                             │
 │     ┌────────────────────────────────────────────────────────────────────┐  │
-│     │  GET /track_e/albums                                                │  │
+│     │  GET /albums                                                │  │
 │     │  → Returns clusters sorted by size                                  │  │
 │     │  → Each cluster = auto-generated album                              │  │
 │     │                                                                     │  │
-│     │  GET /track_e/clusters/global/42                                    │  │
+│     │  GET /clusters/global/42                                    │  │
 │     │  → Returns all images in cluster 42                                 │  │
 │     │  → Sorted by distance (most representative first)                   │  │
 │     └────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │  5. MAINTENANCE (periodic)                                                  │
 │     ┌────────────────────────────────────────────────────────────────────┐  │
-│     │  GET /track_e/clusters/balance/global                               │  │
+│     │  GET /clusters/balance/global                               │  │
 │     │  → Check if rebalancing needed                                      │  │
 │     │                                                                     │  │
-│     │  POST /track_e/clusters/rebalance/global                            │  │
+│     │  POST /clusters/rebalance/global                            │  │
 │     │  → Re-train from current data if clusters became uneven             │  │
 │     │                                                                     │  │
 │     │  Trigger conditions:                                                │  │
@@ -383,7 +383,7 @@ The table above shows baseline recommendations. **Actual rebalancing frequency d
 
 #### Automatic Rebalancing Logic
 
-The system tracks rebalancing needs via `GET /track_e/clusters/balance/{index}`:
+The system tracks rebalancing needs via `GET /clusters/balance/{index}`:
 
 ```json
 {
@@ -425,16 +425,16 @@ When ingesting large batches (e.g., 10K+ images at once):
 ```bash
 # 1. Ingest all images (clustering happens automatically if trained)
 for image in batch:
-    POST /track_e/ingest
+    POST /ingest
 
 # 2. Check balance after bulk ingestion
-GET /track_e/clusters/balance/global
+GET /clusters/balance/global
 
 # 3. If needs_rebalance=true, trigger rebalance
-POST /track_e/clusters/rebalance/global
+POST /clusters/rebalance/global
 
 # 4. Verify new cluster distribution
-GET /track_e/clusters/stats/global
+GET /clusters/stats/global
 ```
 
 ## Updated Index Schemas (with Clustering)
@@ -892,38 +892,38 @@ async def find_same_vehicle(vehicle_embedding: np.ndarray):
 
 ```
 # Training & Rebalancing
-POST /track_e/clusters/train/{index_name}     # Initial training
-POST /track_e/clusters/rebalance/{index_name} # Force rebalance
-GET  /track_e/clusters/stats/{index_name}     # Cluster statistics
-GET  /track_e/clusters/balance/{index_name}   # Check if rebalance needed
+POST /clusters/train/{index_name}     # Initial training
+POST /clusters/rebalance/{index_name} # Force rebalance
+GET  /clusters/stats/{index_name}     # Cluster statistics
+GET  /clusters/balance/{index_name}   # Check if rebalance needed
 
 # Cluster Operations
-GET  /track_e/clusters/{index_name}/{cluster_id}          # Get cluster members
-GET  /track_e/clusters/{index_name}/{cluster_id}/centroid # Get cluster centroid
-POST /track_e/clusters/{index_name}/merge                 # Merge clusters
-POST /track_e/clusters/{index_name}/split                 # Split cluster
+GET  /clusters/{index_name}/{cluster_id}          # Get cluster members
+GET  /clusters/{index_name}/{cluster_id}/centroid # Get cluster centroid
+POST /clusters/{index_name}/merge                 # Merge clusters
+POST /clusters/{index_name}/split                 # Split cluster
 ```
 
 ### Category-Specific Search
 
 ```
 # Global (whole image)
-POST /track_e/search/image          # Similar images
-POST /track_e/search/text           # Text-to-image
-GET  /track_e/albums                # List auto-generated albums (clusters)
-GET  /track_e/albums/{cluster_id}   # Get album contents
+POST /search/image          # Similar images
+POST /search/text           # Text-to-image
+GET  /albums                # List auto-generated albums (clusters)
+GET  /albums/{cluster_id}   # Get album contents
 
 # Vehicles
-POST /track_e/search/vehicles       # Find similar vehicles
-GET  /track_e/vehicles/clusters     # Vehicle groupings
+POST /search/vehicles       # Find similar vehicles
+GET  /vehicles/clusters     # Vehicle groupings
 
 # People
-POST /track_e/search/people         # Find by appearance
-GET  /track_e/people/clusters       # Appearance groupings
+POST /search/people         # Find by appearance
+GET  /people/clusters       # Appearance groupings
 
 # Faces (Future)
-POST /track_e/search/faces          # Find same person
-GET  /track_e/people/identities     # Unique people in library
+POST /search/faces          # Find same person
+GET  /people/identities     # Unique people in library
 ```
 
 ## Performance Considerations
@@ -961,7 +961,7 @@ GET  /track_e/people/identities     # Unique people in library
 - [x] Update OpenSearch schemas with cluster_id (`src/clients/opensearch.py`)
 - [x] Incremental assignment on ingest (via `clustering_service` parameter)
 - [x] Cluster-filtered search (via `cluster_ids` parameter)
-- [x] Clustering API endpoints (`/track_e/clusters/*`)
+- [x] Clustering API endpoints (`/clusters/*`)
 
 ### Phase 2: Auto-Albums
 - [ ] "Smart albums" from clusters (like Google Photos)

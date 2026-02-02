@@ -57,10 +57,10 @@ class EmbeddingService:
         """
         Preprocess image for MobileCLIP encoder.
 
-        Applies OpenCLIP-style preprocessing:
-        - Resize shortest edge to 256
+        Applies Apple MobileCLIP preprocessing (per OpenCLIP _mccfg config):
+        - Resize shortest edge to 256 (BILINEAR interpolation)
         - Center crop to 256x256
-        - Normalize to [0, 1]
+        - Normalize to [0, 1] (mean=0, std=1)
         - Transpose to CHW format
 
         Args:
@@ -71,12 +71,12 @@ class EmbeddingService:
         """
         img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
 
-        # Resize shortest edge to 256
+        # Resize shortest edge to 256 (BILINEAR per Apple MobileCLIP config)
         width, height = img.size
         scale = 256 / min(width, height)
         new_width = int(width * scale)
         new_height = int(height * scale)
-        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        img = img.resize((new_width, new_height), Image.Resampling.BILINEAR)
 
         # Center crop to 256x256
         left = (new_width - 256) // 2
@@ -125,7 +125,7 @@ class EmbeddingService:
         output = InferRequestedOutput('image_embeddings')
 
         response = await client.infer(
-            model_name=self.settings.models.CLIP_MODELS['image_encoder'],
+            model_name=self.settings.models.CLIP_IMAGE_MODEL,
             inputs=[input_tensor],
             outputs=[output],
         )
@@ -176,7 +176,7 @@ class EmbeddingService:
         output = InferRequestedOutput('text_embeddings')
 
         response = await client.infer(
-            model_name=self.settings.models.CLIP_MODELS['text_encoder'],
+            model_name=self.settings.models.CLIP_TEXT_MODEL,
             inputs=[input_tensor],
             outputs=[output],
         )

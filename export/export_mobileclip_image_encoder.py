@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Track E: Export MobileCLIP2 Image Encoder to ONNX + TensorRT
+Export MobileCLIP2 Image Encoder to ONNX + TensorRT
 
 This script exports MobileCLIP2 image encoder for deployment on Triton.
 
@@ -9,7 +9,7 @@ Supported variants (with simple ÷255 normalization):
 - MobileCLIP2-B:  86.3M params, 79.4% ImageNet, 10.4ms (MAXIMUM ACCURACY)
 
 NOT recommended (different normalization):
-- S3, S4, L-14: Use ImageNet normalization, complicates DALI pipeline
+- S3, S4, L-14: Use ImageNet normalization, requires custom preprocessing
 
 Key steps:
 1. Load model with proper configuration (image_mean=0, image_std=1)
@@ -27,13 +27,14 @@ import argparse
 import sys
 from pathlib import Path
 
-
-sys.path.insert(0, '/app/reference_repos/ml-mobileclip')
-sys.path.insert(0, '/app/reference_repos/open_clip/src')
-
 import numpy as np
 import torch
 from torch import nn
+
+
+# Import bundled reparameterize function (no external reference repos needed)
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import reparameterize_model
 
 
 # Model configurations
@@ -107,7 +108,6 @@ def load_mobileclip_model(model_name, checkpoint_path):
     print(f'  Checkpoint: {checkpoint_path}')
 
     import open_clip
-    from mobileclip.modules.common.mobileone import reparameterize_model
 
     # CRITICAL: S0, S2, B variants use simple normalization (image_mean=0, image_std=1)
     # This means input is just divided by 255 (same as YOLO!)
@@ -355,7 +355,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
     except ImportError:
         print('\n  ⚠ TensorRT not available in this container')
         print('  To convert to TensorRT, use the Triton container:')
-        print('    docker compose exec triton-api trtexec \\')
+        print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
         print('      --fp16 \\')
@@ -406,7 +406,7 @@ def main():
     plan_output = f'/app/models/{checkpoint_name}_image_encoder/1/model.plan'
 
     print('=' * 80)
-    print(f'Track E: {model_name} Image Encoder Export')
+    print(f'MobileCLIP: {model_name} Image Encoder Export')
     print('=' * 80)
     print(f'\nModel: {model_name}')
     print(f'  Parameters: {config["params"]}')
@@ -465,7 +465,7 @@ def main():
         print('\n  Next: Create config.pbtxt and restart Triton')
     else:
         print('\nTo convert ONNX to TensorRT plan in Triton container:')
-        print('  docker compose exec triton-api trtexec \\')
+        print('  docker compose exec triton-server trtexec \\')
         print(f'    --onnx=/models/{checkpoint_name}_image_encoder.onnx \\')
         print(f'    --saveEngine=/models/{checkpoint_name}_image_encoder/1/model.plan \\')
         print('    --fp16 \\')

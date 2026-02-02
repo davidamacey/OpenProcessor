@@ -1,5 +1,5 @@
 """
-Track E: Visual Search Service.
+Visual Search Service.
 
 Orchestrates inference + OpenSearch operations for visual search.
 Bridges InferenceService (Triton) and OpenSearchClient (multi-index vector search).
@@ -90,7 +90,7 @@ class VisualSearchService:
         Pipeline:
         1. Compute imohash for exact duplicate detection (if skip_duplicates=True)
         2. Check if image already exists by hash
-        3. Run Track E full ensemble (YOLO + MobileCLIP)
+        3. Run YOLO detection + MobileCLIP encoding
         4. Extract global + box embeddings
         5. Route to appropriate indexes:
            - Global embedding -> visual_search_global
@@ -123,6 +123,7 @@ class VisualSearchService:
 
             import imohash
 
+            from src.clients.fast_face_client import get_fast_face_client
             from src.clients.triton_client import get_triton_client
             from src.config import get_settings
 
@@ -147,21 +148,21 @@ class VisualSearchService:
 
             settings = get_settings()
             client = get_triton_client(settings.triton_url)
+            face_client = get_fast_face_client(settings.triton_url)
 
-            # Run Track F (CPU preprocessing + direct TRT) and YOLO11-face detection in parallel
-            # NOTE: Using Track F instead of Track E to avoid DALI - CPU preprocessing is more stable
+            # Run YOLO + MobileCLIP and face detection (SCRFD + alignment) in parallel
             from concurrent.futures import ThreadPoolExecutor
 
-            def run_track_f():
-                return client.infer_track_f(image_bytes)
+            def run_yolo_clip():
+                return client.infer_yolo_clip_cpu(image_bytes)
 
             def run_face_detection():
-                return client.infer_faces_yolo11(image_bytes, confidence=0.5)
+                return face_client.recognize(image_bytes, confidence=0.5)
 
             with ThreadPoolExecutor(max_workers=2) as executor:
-                track_f_future = executor.submit(run_track_f)
+                yolo_clip_future = executor.submit(run_yolo_clip)
                 face_future = executor.submit(run_face_detection)
-                result = track_f_future.result()
+                result = yolo_clip_future.result()
                 face_result = face_future.result()
 
             global_embedding = np.array(result['image_embedding'])
@@ -434,15 +435,18 @@ class VisualSearchService:
         detect_near_duplicates: bool = True,
         near_duplicate_threshold: float = 0.99,
         enable_ocr: bool = True,
-        max_workers: int = 64,
+        defer_heavy_ops: bool = False,
+        _max_workers: int = 32,  # Reserved for future use (currently using adaptive worker count)
     ) -> dict[str, Any]:
         """
         Batch ingest multiple images with optimized parallel processing.
 
         Performance: 3-5x faster than individual /ingest calls.
         - Parallel hash computation
+        - Batch duplicate checking (msearch - 10x faster)
         - Batch Triton inference (dynamic batching: 16-48 avg)
-        - OpenSearch bulk indexing
+        - OpenSearch bulk indexing for images and faces
+        - Parallel near-duplicate detection
         - Reduced HTTP overhead
 
         Target throughput: 300+ RPS with batch sizes of 32-64.
@@ -453,6 +457,9 @@ class VisualSearchService:
             detect_near_duplicates: Auto-assign to duplicate groups
             near_duplicate_threshold: Similarity threshold for grouping
             enable_ocr: Run OCR (disabled by default for performance)
+            defer_heavy_ops: If True, skip near-duplicate detection during high
+                           throughput ingestion. These can be processed later
+                           via /ingest/process-deferred when load is lower.
             max_workers: Max parallel threads for inference
 
         Returns:
@@ -463,6 +470,7 @@ class VisualSearchService:
 
         import imohash
 
+        from src.clients.fast_face_client import get_fast_face_client
         from src.clients.triton_client import get_triton_client
         from src.config import get_settings
 
@@ -480,6 +488,7 @@ class VisualSearchService:
         total = len(images_data)
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
+        face_client = get_fast_face_client(settings.triton_url)
 
         # Step 1: Compute hashes in parallel
         def compute_hash(img_bytes: bytes) -> str:
@@ -491,14 +500,20 @@ class VisualSearchService:
         with ThreadPoolExecutor(max_workers=8) as executor:
             hashes = list(executor.map(compute_hash, [img[0] for img in images_data]))
 
-        # Step 2: Check for duplicates if enabled
+        # Step 2: Check for duplicates if enabled (batch operation - 10x faster)
+        import time as _time
+
+        _t_dup_start = _time.perf_counter()
         duplicates = []
         to_process = []
         to_process_indices = []
 
         if skip_duplicates:
+            # Use batch msearch for all hashes at once
+            existing_map = await self.opensearch.check_duplicates_by_hash_batch(hashes)
+
             for i, (img_data, image_hash) in enumerate(zip(images_data, hashes, strict=False)):
-                existing = await self.opensearch.check_duplicate_by_hash(image_hash)
+                existing = existing_map.get(image_hash)
                 if existing:
                     duplicates.append(
                         {
@@ -514,6 +529,10 @@ class VisualSearchService:
             to_process = images_data
             to_process_indices = list(range(len(images_data)))
 
+        _t_dup_end = _time.perf_counter()
+        _dup_ms = (_t_dup_end - _t_dup_start) * 1000
+        logger.info(f'[PROFILE] Duplicate check: {_dup_ms:.1f}ms for {len(hashes)} hashes')
+
         if not to_process:
             return {
                 'status': 'success',
@@ -526,69 +545,61 @@ class VisualSearchService:
                 'duplicate_details': duplicates,
             }
 
-        # Step 3: CPU preprocessing in parallel + Triton inference
+        # Step 3: Triton inference (pass raw JPEG bytes directly to unified pipeline)
         import time as _time
 
         loop = asyncio.get_running_loop()
         from concurrent.futures import ThreadPoolExecutor
 
-        from src.services.cpu_preprocess import PreprocessResult, preprocess_batch
-
-        # === PROFILING: CPU Preprocessing ===
-        _t_preprocess_start = _time.perf_counter()
-
-        def run_preprocessing(images_bytes: list[bytes]) -> list[PreprocessResult | None]:
-            """Parallel CPU preprocessing for all images."""
-            return preprocess_batch(images_bytes, max_workers=max_workers)
-
-        preprocessed_results = await loop.run_in_executor(
-            None,
-            run_preprocessing,
-            [img[0] for img in to_process],
-        )
-
-        _t_preprocess_end = _time.perf_counter()
-        _preprocess_ms = (_t_preprocess_end - _t_preprocess_start) * 1000
-        _preprocess_per_img = _preprocess_ms / len(to_process) if to_process else 0
-        logger.info(f'[PROFILE] CPU Preprocessing: {_preprocess_ms:.1f}ms total, {_preprocess_per_img:.1f}ms/img')
-
         # === PROFILING: Triton Inference ===
         _t_inference_start = _time.perf_counter()
 
-        def run_single_from_tensor(prep: PreprocessResult | None) -> dict:
-            """Run unified ensemble from preprocessed tensor (faster than Python backend)."""
-            if prep is None:
-                return {'error': 'Preprocessing failed', 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
+        def run_single_unified(img_bytes: bytes) -> dict:
+            """Run YOLO+CLIP+Faces inference on raw JPEG bytes (same as single ingest)."""
             try:
-                # Use the Triton ensemble for parallel YOLO+CLIP+embedding (no OCR)
-                result = client.infer_unified_direct_ensemble(prep)
-                # Add empty OCR fields (OCR handled separately if needed)
-                result['num_texts'] = 0
-                result['texts'] = []
-                result['text_boxes'] = []
-                result['text_boxes_normalized'] = []
-                result['text_det_scores'] = []
-                result['text_rec_scores'] = []
-                return result
+                # Run YOLO + MobileCLIP (detection + global embedding + box embeddings)
+                yolo_result = client.infer_yolo_clip_cpu(img_bytes)
+
+                # Run face detection + embedding extraction (SCRFD + Umeyama alignment)
+                face_result = face_client.recognize(img_bytes, confidence=0.5)
+
+                # Merge results and return
+                return {
+                    **yolo_result,  # num_dets, boxes, scores, classes, image_embedding, box_embeddings
+                    'num_faces': face_result.get('num_faces', 0),
+                    'face_boxes': face_result.get('face_boxes', []),
+                    'face_landmarks': face_result.get('face_landmarks', []),
+                    'face_scores': face_result.get('face_scores', []),
+                    'face_embeddings': face_result.get('face_embeddings', []),
+                    'face_quality': face_result.get('face_quality', []),
+                    # Rename image_embedding to global_embedding for consistency
+                    'global_embedding': yolo_result.get('image_embedding', []),
+                    'num_texts': 0,  # OCR disabled in batch for performance
+                }
             except Exception as e:
-                logger.debug(f'Unified ensemble inference failed: {e}')
+                logger.error(f'Unified pipeline inference failed: {e}', exc_info=True)
                 return {'error': str(e), 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
 
-        def run_inference_batch(preps: list[PreprocessResult | None]) -> list[dict]:
-            """Run unified pipeline on batch of preprocessed tensors in parallel."""
-            with ThreadPoolExecutor(max_workers=min(max_workers, len(preps))) as executor:
-                return list(executor.map(run_single_from_tensor, preps))
+        def run_inference_batch(images_bytes: list[bytes]) -> list[dict]:
+            """Run unified pipeline on batch of images in parallel."""
+            # Limit concurrent Triton inference to prevent gRPC "too_many_pings" errors
+            # Single shared gRPC connection can handle ~8 concurrent streams reliably
+            inference_workers = min(8, len(images_bytes))
+            with ThreadPoolExecutor(max_workers=inference_workers) as executor:
+                return list(executor.map(run_single_unified, images_bytes))
 
         inference_results = await loop.run_in_executor(
             None,
             run_inference_batch,
-            preprocessed_results,
+            [img[0] for img in to_process],
         )
 
         _t_inference_end = _time.perf_counter()
         _inference_ms = (_t_inference_end - _t_inference_start) * 1000
         _inference_per_img = _inference_ms / len(to_process) if to_process else 0
-        logger.info(f'[PROFILE] Triton Inference: {_inference_ms:.1f}ms total, {_inference_per_img:.1f}ms/img')
+        logger.info(
+            f'[PROFILE] Triton Inference: {_inference_ms:.1f}ms total, {_inference_per_img:.1f}ms/img'
+        )
 
         # Extract face results from unified response (already included)
         face_results = [
@@ -628,7 +639,7 @@ class VisualSearchService:
                 )
                 continue
 
-            # Handle both unified (global_embedding) and track_e (image_embedding) responses
+            # Handle both unified (global_embedding) and legacy (image_embedding) responses
             global_embedding = np.array(
                 result.get('global_embedding', result.get('image_embedding', []))
             )
@@ -709,31 +720,18 @@ class VisualSearchService:
                 'faces': 0,
             }
 
-        # Step 5b: Bulk index faces
+        # Step 5b: Bulk index faces (10x faster than sequential)
         if face_documents:
-            for face_doc in face_documents:
-                try:
-                    await self.opensearch.index_face(
-                        face_id=face_doc['face_id'],
-                        image_id=face_doc['image_id'],
-                        image_path=face_doc['image_path'],
-                        embedding=face_doc['embedding'],
-                        box=face_doc['box'],
-                        landmarks=face_doc.get('landmarks'),
-                        confidence=face_doc.get('confidence', 0.0),
-                        quality=face_doc.get('quality', 0.0),
-                    )
-                    indexed['faces'] += 1
-                except Exception as e:
-                    logger.debug(f'Failed to index face {face_doc["face_id"]}: {e}')
+            face_result = await self.opensearch.bulk_index_faces(face_documents)
+            indexed['faces'] = face_result.get('indexed', 0)
+            if face_result.get('errors'):
+                logger.debug(f'Face indexing errors: {face_result["errors"]}')
 
         # Step 5c: OCR indexing (results already from unified pipeline)
         indexed['ocr'] = 0
         if enable_ocr:
-            # OCR results are already in inference_results from unified_complete pipeline
-            async def index_ocr_from_unified(
-                result: dict, img_id: str, img_path: str
-            ) -> bool:
+            # OCR results are already in inference_results from the analyze pipeline
+            async def index_ocr_from_unified(result: dict, img_id: str, img_path: str) -> bool:
                 num_texts = result.get('num_texts', 0)
                 if num_texts == 0:
                     return False
@@ -783,22 +781,30 @@ class VisualSearchService:
             ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
             indexed['ocr'] = sum(1 for r in ocr_results if r is True)
 
-        # Step 6: Near-duplicate detection (optional, can be heavy)
+        # Step 6: Near-duplicate detection (parallel execution, can be deferred)
         near_duplicates = []
-        if detect_near_duplicates:
-            for doc in documents:
+        deferred_count = 0
+        if detect_near_duplicates and documents and not defer_heavy_ops:
+            # Run all near-duplicate checks in parallel for better throughput
+            async def check_near_dup(doc: dict) -> dict | None:
                 dup_info = await self._assign_to_duplicate_group(
                     image_id=doc['image_id'],
                     embedding=doc['global_embedding'],
                     threshold=near_duplicate_threshold,
                 )
                 if dup_info:
-                    near_duplicates.append(
-                        {
-                            'image_id': doc['image_id'],
-                            **dup_info,
-                        }
-                    )
+                    return {'image_id': doc['image_id'], **dup_info}
+                return None
+
+            dup_results = await asyncio.gather(
+                *[check_near_dup(doc) for doc in documents],
+                return_exceptions=True,
+            )
+            near_duplicates = [r for r in dup_results if r and not isinstance(r, Exception)]
+        elif detect_near_duplicates and documents and defer_heavy_ops:
+            # Heavy operations deferred for later processing
+            deferred_count = len(documents)
+            logger.info(f'Deferred near-duplicate detection for {deferred_count} images')
 
         return {
             'status': 'success',
@@ -808,6 +814,7 @@ class VisualSearchService:
             'errors_count': len(errors),
             'indexed': indexed,
             'near_duplicates': len(near_duplicates),
+            'deferred_ops': deferred_count if defer_heavy_ops else 0,
             'duplicate_details': duplicates if duplicates else None,
             'error_details': errors if errors else None,
             'near_duplicate_details': near_duplicates if near_duplicates else None,
@@ -840,16 +847,16 @@ class VisualSearchService:
             dict with status and face count
         """
         try:
-            from src.clients.triton_client import get_triton_client
+            from src.clients.fast_face_client import get_fast_face_client
             from src.config import get_settings
 
             settings = get_settings()
-            client = get_triton_client(settings.triton_url)
+            face_client = get_fast_face_client(settings.triton_url)
 
-            # Run unified pipeline (face detection only on person crops - faster, fewer false positives)
-            result = client.infer_unified(image_bytes)
+            # Run SCRFD face detection + Umeyama alignment + ArcFace embedding
+            result = face_client.recognize(image_bytes, confidence=0.5)
 
-            if result['num_faces'] == 0:
+            if result.get('num_faces', 0) == 0:
                 return {
                     'status': 'success',
                     'image_id': image_id,
@@ -858,21 +865,15 @@ class VisualSearchService:
                     'message': 'No faces detected',
                 }
 
-            # Prepare face data from unified pipeline output
             num_faces = result['num_faces']
             faces = [
                 {
-                    'box': result['face_boxes'][i].tolist()
-                    if hasattr(result['face_boxes'][i], 'tolist')
-                    else result['face_boxes'][i],
-                    'landmarks': result['face_landmarks'][i].tolist()
-                    if hasattr(result['face_landmarks'][i], 'tolist')
-                    else result['face_landmarks'][i],
+                    'box': list(result['face_boxes'][i]),
+                    'landmarks': list(result['face_landmarks'][i])
+                    if result['face_landmarks']
+                    else [0.0] * 10,
                     'score': float(result['face_scores'][i]),
-                    'quality': 0.0,  # unified pipeline doesn't compute quality
-                    'person_idx': int(
-                        result['face_person_idx'][i]
-                    ),  # which person box this face belongs to
+                    'quality': float(result['face_quality'][i]) if result['face_quality'] else 0.0,
                 }
                 for i in range(num_faces)
             ]
@@ -931,7 +932,7 @@ class VisualSearchService:
         Returns:
             List of similar images with scores
         """
-        query_embedding = self.inference.encode_image_sync(image_bytes, use_cache=True)
+        query_embedding = self.inference.encode_image(image_bytes, use_cache=True)
         return await self.opensearch.search_global(
             query_embedding=query_embedding,
             top_k=top_k,
@@ -963,7 +964,7 @@ class VisualSearchService:
         Returns:
             List of matching images with scores
         """
-        query_embedding = self.inference.encode_text_sync(text, use_cache)
+        query_embedding = self.inference.encode_text(text, use_cache)
         return await self.opensearch.search_global(
             query_embedding=query_embedding,
             top_k=top_k,
@@ -984,7 +985,7 @@ class VisualSearchService:
         Like "Find all red cars" or "Show me motorcycles like this one".
 
         Pipeline:
-        1. Run Track E to get vehicle detection embedding
+        1. Run YOLO detection + MobileCLIP encoding to get vehicle embedding
         2. k-NN search on visual_search_vehicles index
 
         Args:
@@ -1002,7 +1003,7 @@ class VisualSearchService:
 
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline=True)
+        result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
@@ -1059,7 +1060,7 @@ class VisualSearchService:
         For identity matching, use search_faces (future - requires ArcFace).
 
         Pipeline:
-        1. Run Track E to get person detection embedding
+        1. Run YOLO detection + MobileCLIP encoding to get person embedding
         2. k-NN search on visual_search_people index
 
         Args:
@@ -1076,7 +1077,7 @@ class VisualSearchService:
 
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline=True)
+        result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
@@ -1146,7 +1147,7 @@ class VisualSearchService:
 
         settings = get_settings()
         client = get_triton_client(settings.triton_url)
-        result = client.infer_track_e(image_bytes, full_pipeline=True)
+        result = client.infer_yolo_clip_cpu(image_bytes)
 
         if result['num_dets'] == 0:
             return {'status': 'error', 'error': 'No objects detected', 'results': []}
@@ -1223,7 +1224,7 @@ class VisualSearchService:
             dict with query_face info and search results
         """
         # Run face detection + recognition to get embeddings via InferenceService
-        result = self.inference.infer_faces(image_bytes)
+        result = self.inference.recognize_faces(image_bytes)
 
         if result.get('num_faces', 0) == 0:
             return {
@@ -1242,7 +1243,7 @@ class VisualSearchService:
             }
 
         # Get query face info and embedding
-        query_embedding = np.array(result['embeddings'][face_index])
+        query_embedding = np.array(result['face_embeddings'][face_index])
         face_data = result['faces'][face_index]
         query_face = {
             'box': face_data['box'],

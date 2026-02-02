@@ -81,8 +81,9 @@ class TritonControlService:
                 response = await client.get(f'{self.http_url}/v2/models/{model_name}/config')
                 if response.status_code == 200:
                     return response.json()
-        except Exception:
-            pass
+        except Exception as e:
+            # Model may not exist or Triton may be unavailable
+            logger.debug('Could not get model config for %s: %s', model_name, e)
         return None
 
     async def server_ready(self) -> bool:

@@ -1,7 +1,7 @@
 """
-Core module with shared dependencies and exception handling.
+Core module with shared dependencies, exception handling, and logging.
 
-Provides FastAPI dependency injection and custom exceptions.
+Provides FastAPI dependency injection, custom exceptions, and structured logging.
 """
 
 from src.core.dependencies import (
@@ -21,25 +21,23 @@ from src.core.exceptions import (
     InvalidImageError,
     ModelNotFoundError,
 )
+from src.core.logging import configure_logging, get_logger
 
 
 __all__ = [
-    # Type aliases
     'AsyncTritonDep',
-    # Exceptions
     'ClientConnectionError',
     'InferenceError',
     'InvalidImageError',
     'ModelNotFoundError',
-    # Client factories
     'OpenSearchClientFactory',
     'OpenSearchDep',
     'PyTorchModelsDep',
     'TritonClientFactory',
-    # App state
     'app_state',
-    # FastAPI dependencies
+    'configure_logging',
     'get_async_triton',
+    'get_logger',
     'get_opensearch',
     'get_pytorch_models',
 ]
