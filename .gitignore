@@ -343,3 +343,7 @@ secrets.yml
 # - Test images: Add your own to test_images/ (ignored)
 #
 # ============================================================================
+
+# Go benchmark binaries
+benchmarks/ingest_benchmark
+benchmarks/ingest_benchmark_batch
