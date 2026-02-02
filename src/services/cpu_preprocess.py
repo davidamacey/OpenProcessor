@@ -1,13 +1,11 @@
 """
-CPU Preprocessing Module for Track F.
+CPU Preprocessing Module.
 
-Replaces DALI GPU preprocessing with CPU-based preprocessing using cv2 and numpy.
-This enables deployment on systems without DALI or for benchmarking CPU vs GPU
-preprocessing overhead.
+Provides CPU-based preprocessing using cv2 and numpy for all inference pipelines.
 
 Preprocessing functions:
 - letterbox_cpu: YOLO letterbox (640x640, matches Ultralytics LetterBox)
-- center_crop_cpu: MobileCLIP resize + center crop (256x256, matches OpenCLIP)
+- center_crop_cpu: MobileCLIP resize + center crop (256x256, BILINEAR per Apple/OpenCLIP)
 - resize_hd_cpu: HD resize for face alignment (max 1920px longest edge)
 
 All tensors are CHW format, FP32, normalized to [0, 1] range.
@@ -15,7 +13,6 @@ All tensors are CHW format, FP32, normalized to [0, 1] range.
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -46,12 +43,12 @@ class PreprocessResult:
     @property
     def hd_h(self) -> int:
         """Height of HD tensor."""
-        return self.hd_tensor.shape[1]
+        return int(self.hd_tensor.shape[1])
 
     @property
     def hd_w(self) -> int:
         """Width of HD tensor."""
-        return self.hd_tensor.shape[2]
+        return int(self.hd_tensor.shape[2])
 
     @property
     def orig_h(self) -> int:
@@ -159,8 +156,8 @@ def letterbox_cpu(
 
     # Create affine transformation matrix for inverse transform
     # Maps from letterboxed coords to original image coords
-    # Forward: x_letterbox = x_orig * scale + pad_x
-    # Inverse: x_orig = (x_letterbox - pad_x) / scale
+    # Forward: x_letterbox = x_orig * scale + pad_x  # noqa: ERA001
+    # Inverse: x_orig = (x_letterbox - pad_x) / scale  # noqa: ERA001
     affine_matrix = np.array(
         [
             [scale, 0, left],
@@ -177,10 +174,13 @@ def center_crop_cpu(
     target_size: int = 256,
 ) -> np.ndarray:
     """
-    CPU preprocessing for MobileCLIP (matches OpenCLIP preprocessing).
+    CPU preprocessing for MobileCLIP (matches Apple's OpenCLIP MobileCLIP config).
 
-    Resizes shortest edge to target_size, then center crops to
-    target_size x target_size.
+    Uses BILINEAR interpolation (cv2.INTER_LINEAR) per OpenCLIP _mccfg which sets
+    interpolation='bilinear' for all MobileCLIP variants. Normalization is simple
+    /255 (mean=0, std=1) per Apple's MobileCLIP2-S2 config.
+
+    Pipeline: resize shortest edge → center crop → normalize [0,1] → CHW
 
     Args:
         img_rgb: HWC, RGB, uint8 numpy array
@@ -206,9 +206,7 @@ def center_crop_cpu(
     normalized = cropped.astype(np.float32) / 255.0
 
     # HWC -> CHW
-    tensor = np.transpose(normalized, (2, 0, 1))
-
-    return tensor
+    return np.transpose(normalized, (2, 0, 1))
 
 
 def resize_hd_cpu(
@@ -245,9 +243,7 @@ def resize_hd_cpu(
     normalized = resized.astype(np.float32) / 255.0
 
     # HWC -> CHW
-    tensor = np.transpose(normalized, (2, 0, 1))
-
-    return tensor
+    return np.transpose(normalized, (2, 0, 1))
 
 
 def preprocess_single(
@@ -291,9 +287,7 @@ def preprocess_single(
     orig_h, orig_w = img_rgb.shape[:2]
 
     # Run all preprocessing functions
-    yolo_tensor, affine_matrix, scale, padding = letterbox_cpu(
-        img_rgb, target_size=yolo_size
-    )
+    yolo_tensor, affine_matrix, scale, padding = letterbox_cpu(img_rgb, target_size=yolo_size)
     clip_tensor = center_crop_cpu(img_rgb, target_size=clip_size)
     hd_tensor = resize_hd_cpu(img_rgb, max_size=hd_max_size)
 
@@ -344,11 +338,9 @@ def preprocess_batch(
     if batch_size == 0:
         return []
 
-    results: list[Optional[PreprocessResult]] = [None] * batch_size
+    results: list[PreprocessResult | None] = [None] * batch_size
 
-    def process_single_indexed(
-        idx: int, img_bytes: bytes
-    ) -> tuple[int, Optional[PreprocessResult]]:
+    def process_single_indexed(idx: int, img_bytes: bytes) -> tuple[int, PreprocessResult | None]:
         """Process a single image and return (index, result)."""
         try:
             result = preprocess_single(
@@ -366,8 +358,7 @@ def preprocess_batch(
     workers = min(max_workers, batch_size)
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(process_single_indexed, i, img)
-            for i, img in enumerate(images_bytes)
+            executor.submit(process_single_indexed, i, img) for i, img in enumerate(images_bytes)
         ]
 
         for future in futures:
@@ -383,7 +374,7 @@ def preprocess_for_triton(
     clip_size: int = 256,
 ) -> tuple[np.ndarray, np.ndarray, float, tuple[float, float], tuple[int, int]]:
     """
-    Preprocess image for direct Triton inference (Track F style).
+    Preprocess image for direct Triton inference with CPU preprocessing.
 
     Returns tensors with batch dimension added, ready for Triton InferInput.
 

@@ -11,6 +11,7 @@ Usage:
 import sys
 from pathlib import Path
 
+
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:
@@ -36,10 +37,12 @@ def create_simple_text_image(
     # Try to use a system font, fall back to default
     try:
         font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size)
-    except (OSError, IOError):
+    except OSError:
         try:
-            font = ImageFont.truetype('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', font_size)
-        except (OSError, IOError):
+            font = ImageFont.truetype(
+                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', font_size
+            )
+        except OSError:
             font = ImageFont.load_default()
 
     # Center the text
@@ -70,10 +73,12 @@ def create_multiline_text_image(
 
     try:
         font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', font_size)
-    except (OSError, IOError):
+    except OSError:
         try:
-            font = ImageFont.truetype('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', font_size)
-        except (OSError, IOError):
+            font = ImageFont.truetype(
+                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', font_size
+            )
+        except OSError:
             font = ImageFont.load_default()
 
     # Calculate total height
@@ -132,37 +137,45 @@ def main():
 
     # Simple text images
     print('Creating simple text images...')
-    created.append(create_simple_text_image(
-        'Hello World',
-        'hello_world.jpg',
-    ))
+    created.append(
+        create_simple_text_image(
+            'Hello World',
+            'hello_world.jpg',
+        )
+    )
 
-    created.append(create_simple_text_image(
-        'STOP',
-        'stop_sign.jpg',
-        size=(300, 300),
-        bg_color='red',
-        text_color='white',
-        font_size=72,
-    ))
+    created.append(
+        create_simple_text_image(
+            'STOP',
+            'stop_sign.jpg',
+            size=(300, 300),
+            bg_color='red',
+            text_color='white',
+            font_size=72,
+        )
+    )
 
-    created.append(create_simple_text_image(
-        'EXIT',
-        'exit_sign.jpg',
-        size=(400, 150),
-        bg_color='green',
-        text_color='white',
-        font_size=64,
-    ))
+    created.append(
+        create_simple_text_image(
+            'EXIT',
+            'exit_sign.jpg',
+            size=(400, 150),
+            bg_color='green',
+            text_color='white',
+            font_size=64,
+        )
+    )
 
-    created.append(create_simple_text_image(
-        'CAUTION: WET FLOOR',
-        'caution_sign.jpg',
-        size=(500, 150),
-        bg_color='yellow',
-        text_color='black',
-        font_size=36,
-    ))
+    created.append(
+        create_simple_text_image(
+            'CAUTION: WET FLOOR',
+            'caution_sign.jpg',
+            size=(500, 150),
+            bg_color='yellow',
+            text_color='black',
+            font_size=36,
+        )
+    )
 
     # Sign images
     print('Creating sign images...')
@@ -171,55 +184,73 @@ def main():
 
     # Document images
     print('Creating document images...')
-    created.append(create_document_image([
-        'INVOICE',
-        '',
-        'Item: Widget Pro',
-        'Quantity: 100',
-        'Price: $25.00 each',
-        'Total: $2,500.00',
-    ], 'invoice.jpg'))
+    created.append(
+        create_document_image(
+            [
+                'INVOICE',
+                '',
+                'Item: Widget Pro',
+                'Quantity: 100',
+                'Price: $25.00 each',
+                'Total: $2,500.00',
+            ],
+            'invoice.jpg',
+        )
+    )
 
-    created.append(create_document_image([
-        'MEETING NOTES',
-        '',
-        'Date: January 2, 2026',
-        'Attendees: Alice, Bob, Charlie',
-        'Topics: Q1 Planning, Budget Review',
-        'Next meeting: January 9, 2026',
-    ], 'meeting_notes.jpg'))
+    created.append(
+        create_document_image(
+            [
+                'MEETING NOTES',
+                '',
+                'Date: January 2, 2026',
+                'Attendees: Alice, Bob, Charlie',
+                'Topics: Q1 Planning, Budget Review',
+                'Next meeting: January 9, 2026',
+            ],
+            'meeting_notes.jpg',
+        )
+    )
 
     # Multi-language (if font supports)
     print('Creating multi-language images...')
-    created.append(create_simple_text_image(
-        'Welcome / Bienvenue / Willkommen',
-        'multilang.jpg',
-        size=(800, 150),
-        font_size=36,
-    ))
+    created.append(
+        create_simple_text_image(
+            'Welcome / Bienvenue / Willkommen',
+            'multilang.jpg',
+            size=(800, 150),
+            font_size=36,
+        )
+    )
 
     # Numbers and special characters
-    created.append(create_simple_text_image(
-        'License: ABC-1234',
-        'license_plate.jpg',
-        size=(400, 120),
-        bg_color='#f0f0f0',
-        font_size=48,
-    ))
+    created.append(
+        create_simple_text_image(
+            'License: ABC-1234',
+            'license_plate.jpg',
+            size=(400, 120),
+            bg_color='#f0f0f0',
+            font_size=48,
+        )
+    )
 
-    created.append(create_simple_text_image(
-        'Phone: (555) 123-4567',
-        'phone_number.jpg',
-        size=(500, 100),
-        font_size=36,
-    ))
+    created.append(
+        create_simple_text_image(
+            'Phone: (555) 123-4567',
+            'phone_number.jpg',
+            size=(500, 100),
+            font_size=36,
+        )
+    )
 
-    created.append(create_simple_text_image(
-        'Email: test@example.com',
-        'email.jpg',
-        size=(500, 100),
-        font_size=36,
-    ))
+    created.append(
+        create_simple_text_image(
+            'Email: test@example.com',
+            'email.jpg',
+            size=(500, 100),
+            font_size=36,
+        )
+    )
 
     print()
     print('=' * 60)

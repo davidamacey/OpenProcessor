@@ -1,0 +1,293 @@
+{
+  "_description": "Ground truth expected outputs for validating all model modalities.",
+  "_usage": "Tests compare live API outputs against these values with tolerances.",
+  "_images": {
+    "bus.jpg": "810x1080 Ultralytics standard test image (bus, people, text)",
+    "zidane.jpg": "1280x720 Ultralytics standard test image (2 people, 2 ties)"
+  },
+  "_tolerances": {
+    "box_coords": 0.02,
+    "confidence": 0.05,
+    "embedding_norm": 0.1,
+    "embedding_cosine_sim": 0.99
+  },
+  "detect_bus": {
+    "image": "bus.jpg",
+    "image_size": {
+      "width": 810,
+      "height": 1080
+    },
+    "num_detections": 5,
+    "expected_classes": [
+      "bus",
+      "person"
+    ],
+    "class_counts": {
+      "bus": 1,
+      "person": 4
+    },
+    "detections": [
+      {
+        "class_name": "bus",
+        "class_id": 5,
+        "confidence": 0.937,
+        "box": [
+          0.036,
+          0.21,
+          0.986,
+          0.683
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.898,
+        "box": [
+          0.275,
+          0.375,
+          0.425,
+          0.794
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.897,
+        "box": [
+          0.06,
+          0.372,
+          0.304,
+          0.837
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.882,
+        "box": [
+          0.826,
+          0.361,
+          0.999,
+          0.815
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.717,
+        "box": [
+          0.0,
+          0.505,
+          0.097,
+          0.81
+        ]
+      }
+    ]
+  },
+  "detect_zidane": {
+    "image": "zidane.jpg",
+    "image_size": {
+      "width": 1280,
+      "height": 720
+    },
+    "num_detections": 4,
+    "expected_classes": [
+      "person",
+      "tie"
+    ],
+    "class_counts": {
+      "person": 2,
+      "tie": 2
+    },
+    "detections": [
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.917,
+        "box": [
+          0.095,
+          0.278,
+          0.87,
+          0.989
+        ]
+      },
+      {
+        "class_name": "person",
+        "class_id": 0,
+        "confidence": 0.851,
+        "box": [
+          0.576,
+          0.056,
+          0.891,
+          0.982
+        ]
+      },
+      {
+        "class_name": "tie",
+        "class_id": 27,
+        "confidence": 0.788,
+        "box": [
+          0.34,
+          0.606,
+          0.409,
+          0.995
+        ]
+      },
+      {
+        "class_name": "tie",
+        "class_id": 27,
+        "confidence": 0.296,
+        "box": [
+          0.772,
+          0.433,
+          0.891,
+          0.982
+        ]
+      }
+    ]
+  },
+  "faces_zidane": {
+    "image": "zidane.jpg",
+    "num_faces": 2,
+    "faces": [
+      {
+        "score": 0.8705,
+        "box": [
+          0.7135,
+          0.1343,
+          0.8258,
+          0.3829
+        ],
+        "num_landmarks": 10,
+        "embedding_dim": 512,
+        "embedding_norm": 1.0,
+        "embedding_first_5": [
+          0.03187,
+          0.015901,
+          -0.023659,
+          -0.082694,
+          0.026668
+        ]
+      },
+      {
+        "score": 0.6791,
+        "box": [
+          0.4255,
+          0.3198,
+          0.5191,
+          0.6255
+        ],
+        "num_landmarks": 10,
+        "embedding_dim": 512,
+        "embedding_norm": 1.0,
+        "embedding_first_5": [
+          -0.040241,
+          0.018909,
+          0.1124,
+          0.060748,
+          -0.022008
+        ]
+      }
+    ]
+  },
+  "embed_image_bus": {
+    "image": "bus.jpg",
+    "dimensions": 512,
+    "norm": 1.0,
+    "first_5": [
+      -0.068009,
+      -0.04019,
+      -0.011971,
+      -0.000198,
+      0.003019
+    ],
+    "last_5": [
+      -0.070463,
+      0.056286,
+      -0.003684,
+      0.042436,
+      0.08024
+    ]
+  },
+  "embed_text": {
+    "text": "a bus on the street",
+    "dimensions": 512,
+    "norm": 1.0002,
+    "first_5": [
+      0.062927,
+      -0.012657,
+      0.020172,
+      -0.15625,
+      -0.025146
+    ],
+    "last_5": [
+      0.045593,
+      0.04126,
+      0.041748,
+      -0.037445,
+      -0.001307
+    ]
+  },
+  "ocr_bus": {
+    "image": "bus.jpg",
+    "num_texts": 3,
+    "texts": [
+      "MADRID",
+      "electnicamEM",
+      "emisiones"
+    ],
+    "full_text": "MADRID electnicamEM emisiones",
+    "regions": [
+      {
+        "text": "MADRID",
+        "det_score": 0.9999,
+        "rec_score": 0.8753,
+        "box_normalized": [
+          0.4918,
+          0.3029,
+          0.6141,
+          0.3232
+        ]
+      },
+      {
+        "text": "electnicamEM",
+        "det_score": 1.0,
+        "rec_score": 0.8699,
+        "box_normalized": [
+          0.7568,
+          0.4034,
+          0.8954,
+          0.4206
+        ]
+      },
+      {
+        "text": "emisiones",
+        "det_score": 1.0,
+        "rec_score": 0.9762,
+        "box_normalized": [
+          0.6476,
+          0.5251,
+          0.8481,
+          0.5734
+        ]
+      }
+    ]
+  },
+  "analyze_bus": {
+    "image": "bus.jpg",
+    "status": "success",
+    "num_detections": 5,
+    "detection_classes": [
+      "bus",
+      "person"
+    ],
+    "num_faces": 2,
+    "has_global_embedding": false,
+    "ocr_num_texts": 3,
+    "ocr_texts": [
+      "MADRID",
+      "electnicamEM",
+      "emisiones"
+    ]
+  }
+}

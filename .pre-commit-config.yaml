@@ -3,38 +3,52 @@
 # Run manually: pre-commit run --all-files
 
 repos:
-  # Ruff: Fast Python linter and formatter (replaces black, isort, flake8, pylint)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.0
-    hooks:
-      # Run the linter
-      - id: ruff
-        args: [--fix]
-        types_or: [python, pyi]
-
-      # Run the formatter
-      - id: ruff-format
-        types_or: [python, pyi]
-
-  # Standard pre-commit hooks
+  # Standard pre-commit hooks (basic file checks)
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(.*\.md|.*\.txt)$
+        exclude: ^(.*\.md|.*\.txt|security-reports/)$
       - id: end-of-file-fixer
-        exclude: ^(.*\.md|.*\.txt)$
+        exclude: ^(.*\.md|.*\.txt|security-reports/)$
       - id: check-yaml
-        args: [--unsafe]  # Allow custom YAML tags
+        args: [--unsafe]  # Allow custom YAML tags for docker-compose
       - id: check-json
+        exclude: ^security-reports/
       - id: check-toml
       - id: check-added-large-files
-        args: [--maxkb=10000]  # Allow model files up to 10MB
+        args: [--maxkb=10240]  # Allow model files up to 10MB
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^security-reports/
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
       - id: detect-private-key
+
+  # Ruff: Fast Python linter and formatter (replaces black, isort, flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        args: [--fix, --show-fixes]
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # Python type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+          - types-pyyaml
+          - types-tabulate
+          - types-tqdm
+        args: [--ignore-missing-imports, --check-untyped-defs]
+        exclude: ^(src/ultralytics_patches/|export/|scripts/|reference_repos/)
 
   # Additional Python checks
   - repo: https://github.com/pre-commit/pygrep-hooks
@@ -48,9 +62,56 @@ repos:
         exclude: ^(src/ultralytics_patches/|export/)  # PyTorch model.eval() is safe
       - id: python-use-type-annotations
 
+  # Dockerfile linting with hadolint
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        name: Lint Dockerfiles
+        files: Dockerfile.*
+        entry: hadolint
+        language: system
+
+  # Secret detection with gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        args: [--verbose, --no-banner]
+        exclude: ^security-reports/
+
+  # Python security linting with bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+        exclude: ^(src/ultralytics_patches/|tests/|export/|scripts/)
+
+  # Shell script linting with shellcheck
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # Commit message linting (conventional commits)
+  # Note: Disabled for now - requires separate hook installation with:
+  # pre-commit install --hook-type commit-msg
+  # - repo: https://github.com/compilerla/conventional-pre-commit
+  #   rev: v3.6.0
+  #   hooks:
+  #     - id: conventional-pre-commit
+  #       stages: [commit-msg]
+  #       args: [--force-scope]
+
 # Global configuration
 default_language_version:
   python: python3.12
+
+default_stages: [pre-commit]
+fail_fast: false
 
 # Files to exclude
 exclude: |
@@ -66,5 +127,8 @@ exclude: |
       models/|
       cache/|
       benchmarks/results/|
+      outputs/|
+      test_images/|
+      security-reports/|
       .*\.egg-info/
   )
