@@ -83,6 +83,9 @@ class VisualSearchService:
         detect_near_duplicates: bool = True,
         near_duplicate_threshold: float = 0.99,
         enable_ocr: bool = True,
+        enable_detection: bool = True,
+        enable_faces: bool = True,
+        enable_clip: bool = True,
     ) -> dict[str, Any]:
         """
         Ingest single image with auto-routing to category indexes.
@@ -148,32 +151,56 @@ class VisualSearchService:
 
             settings = get_settings()
             client = get_triton_client(settings.triton_url)
-            face_client = get_fast_face_client(settings.triton_url)
 
-            # Run YOLO + MobileCLIP and face detection (SCRFD + alignment) in parallel
+            # Initialize results
+            result = {'num_dets': 0, 'image_embedding': None}
+            face_result = {'num_faces': 0}
+            global_embedding = None
+
+            # Run enabled pipelines in parallel
             from concurrent.futures import ThreadPoolExecutor
 
-            def run_yolo_clip():
-                return client.infer_yolo_clip_cpu(image_bytes)
+            futures = {}
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                # YOLO detection + CLIP embedding (if either is enabled)
+                if enable_detection or enable_clip:
 
-            def run_face_detection():
-                return face_client.recognize(image_bytes, confidence=0.5)
+                    def run_yolo_clip():
+                        return client.infer_yolo_clip_cpu(image_bytes)
 
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                yolo_clip_future = executor.submit(run_yolo_clip)
-                face_future = executor.submit(run_face_detection)
-                result = yolo_clip_future.result()
-                face_result = face_future.result()
+                    futures['yolo_clip'] = executor.submit(run_yolo_clip)
 
-            global_embedding = np.array(result['image_embedding'])
+                # Face detection + embedding (if enabled)
+                if enable_faces:
+                    from src.clients.fast_face_client import get_fast_face_client
 
-            # Prepare box data
+                    face_client = get_fast_face_client(settings.triton_url)
+
+                    def run_face_detection():
+                        return face_client.recognize(image_bytes, confidence=0.5)
+
+                    futures['face'] = executor.submit(run_face_detection)
+
+                # Collect results
+                if 'yolo_clip' in futures:
+                    result = futures['yolo_clip'].result()
+                if 'face' in futures:
+                    face_result = futures['face'].result()
+
+            # Extract global embedding if CLIP is enabled
+            if enable_clip and result.get('image_embedding') is not None:
+                global_embedding = np.array(result['image_embedding'])
+            else:
+                # Create zero embedding if CLIP disabled (still need for indexing structure)
+                global_embedding = np.zeros(512, dtype=np.float32)
+
+            # Prepare box data (only if detection is enabled)
             box_embeddings = None
             normalized_boxes = None
             det_classes = None
             det_scores = None
 
-            if result['num_dets'] > 0:
+            if enable_detection and result['num_dets'] > 0:
                 box_embeddings = np.array(result.get('box_embeddings', []))
                 normalized_boxes = np.array(result.get('normalized_boxes', []))
                 det_classes = result.get('classes', [])
@@ -195,14 +222,14 @@ class VisualSearchService:
                 file_size_bytes=file_size,
             )
 
-            # Index faces if detected
+            # Index faces if detected and enabled
             num_faces_indexed = 0
-            if face_result.get('num_faces', 0) > 0:
-                face_embeddings = face_result.get('face_embeddings', [])
-                face_boxes = face_result.get('face_boxes', [])
-                face_scores = face_result.get('face_scores', [])
-                face_quality = face_result.get('face_quality', [])
-                face_landmarks = face_result.get('face_landmarks', [])
+            if enable_faces and face_result.get('num_faces', 0) > 0:
+                face_embeddings: list = face_result.get('face_embeddings', [])  # type: ignore[assignment]
+                face_boxes: list = face_result.get('face_boxes', [])  # type: ignore[assignment]
+                face_scores: list = face_result.get('face_scores', [])  # type: ignore[assignment]
+                face_quality: list = face_result.get('face_quality', [])  # type: ignore[assignment]
+                face_landmarks: list = face_result.get('face_landmarks', [])  # type: ignore[assignment]
 
                 for i in range(min(len(face_embeddings), len(face_boxes))):
                     if len(face_embeddings[i]) > 0:
@@ -435,6 +462,9 @@ class VisualSearchService:
         detect_near_duplicates: bool = True,
         near_duplicate_threshold: float = 0.99,
         enable_ocr: bool = True,
+        enable_detection: bool = True,
+        enable_faces: bool = True,
+        enable_clip: bool = True,
         defer_heavy_ops: bool = False,
         _max_workers: int = 32,  # Reserved for future use (currently using adaptive worker count)
     ) -> dict[str, Any]:
@@ -456,7 +486,10 @@ class VisualSearchService:
             skip_duplicates: Skip processing if image hash exists
             detect_near_duplicates: Auto-assign to duplicate groups
             near_duplicate_threshold: Similarity threshold for grouping
-            enable_ocr: Run OCR (disabled by default for performance)
+            enable_ocr: Run OCR text extraction and indexing
+            enable_detection: Run YOLO object detection
+            enable_faces: Run face detection and embedding extraction
+            enable_clip: Run MobileCLIP global image embedding
             defer_heavy_ops: If True, skip near-duplicate detection during high
                            throughput ingestion. These can be processed later
                            via /ingest/process-deferred when load is lower.
@@ -555,27 +588,49 @@ class VisualSearchService:
         _t_inference_start = _time.perf_counter()
 
         def run_single_unified(img_bytes: bytes) -> dict:
-            """Run YOLO+CLIP+Faces inference on raw JPEG bytes (same as single ingest)."""
+            """Run selective inference based on enabled pipelines."""
             try:
-                # Run YOLO + MobileCLIP (detection + global embedding + box embeddings)
-                yolo_result = client.infer_yolo_clip_cpu(img_bytes)
-
-                # Run face detection + embedding extraction (SCRFD + Umeyama alignment)
-                face_result = face_client.recognize(img_bytes, confidence=0.5)
-
-                # Merge results and return
-                return {
-                    **yolo_result,  # num_dets, boxes, scores, classes, image_embedding, box_embeddings
-                    'num_faces': face_result.get('num_faces', 0),
-                    'face_boxes': face_result.get('face_boxes', []),
-                    'face_landmarks': face_result.get('face_landmarks', []),
-                    'face_scores': face_result.get('face_scores', []),
-                    'face_embeddings': face_result.get('face_embeddings', []),
-                    'face_quality': face_result.get('face_quality', []),
-                    # Rename image_embedding to global_embedding for consistency
-                    'global_embedding': yolo_result.get('image_embedding', []),
-                    'num_texts': 0,  # OCR disabled in batch for performance
+                result: dict = {
+                    'num_dets': 0,
+                    'num_faces': 0,
+                    'num_texts': 0,
+                    'global_embedding': [],
                 }
+
+                # Run YOLO + MobileCLIP if detection or CLIP is enabled
+                if enable_detection or enable_clip:
+                    yolo_result = client.infer_yolo_clip_cpu(img_bytes)
+                    if enable_detection:
+                        result.update(
+                            {
+                                'num_dets': yolo_result.get('num_dets', 0),
+                                'boxes': yolo_result.get('boxes', []),
+                                'scores': yolo_result.get('scores', []),
+                                'classes': yolo_result.get('classes', []),
+                                'normalized_boxes': yolo_result.get('normalized_boxes', []),
+                                'box_embeddings': yolo_result.get('box_embeddings', []),
+                            }
+                        )
+                    if enable_clip:
+                        result['global_embedding'] = yolo_result.get('image_embedding', [])
+                    # Always get orig_shape for image dimensions
+                    result['orig_shape'] = yolo_result.get('orig_shape')
+
+                # Run face detection + embedding extraction if faces is enabled
+                if enable_faces:
+                    face_result = face_client.recognize(img_bytes, confidence=0.5)
+                    result.update(
+                        {
+                            'num_faces': face_result.get('num_faces', 0),
+                            'face_boxes': face_result.get('face_boxes', []),
+                            'face_landmarks': face_result.get('face_landmarks', []),
+                            'face_scores': face_result.get('face_scores', []),
+                            'face_embeddings': face_result.get('face_embeddings', []),
+                            'face_quality': face_result.get('face_quality', []),
+                        }
+                    )
+
+                return result
             except Exception as e:
                 logger.error(f'Unified pipeline inference failed: {e}', exc_info=True)
                 return {'error': str(e), 'num_dets': 0, 'num_faces': 0, 'num_texts': 0}
@@ -650,7 +705,7 @@ class VisualSearchService:
                 width, height = orig_shape[1], orig_shape[0]
             else:
                 # Parse from JPEG header if not in response
-                from src.clients.triton_client import get_jpeg_dimensions_fast
+                from src.utils.affine import get_jpeg_dimensions_fast
 
                 try:
                     width, height = get_jpeg_dimensions_fast(img_bytes)

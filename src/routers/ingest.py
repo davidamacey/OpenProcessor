@@ -286,6 +286,18 @@ async def ingest_image(
         True,
         description='Run OCR to extract and index text content from the image.',
     ),
+    enable_detection: bool = Form(
+        True,
+        description='Run YOLO object detection and index vehicle/person detections.',
+    ),
+    enable_faces: bool = Form(
+        True,
+        description='Run face detection (SCRFD) and embedding (ArcFace) extraction.',
+    ),
+    enable_clip: bool = Form(
+        True,
+        description='Run MobileCLIP to generate global image embedding.',
+    ),
 ):
     """
     Ingest a single image with automatic multi-index routing.
@@ -334,6 +346,9 @@ async def ingest_image(
             detect_near_duplicates=detect_near_duplicates,
             near_duplicate_threshold=near_duplicate_threshold,
             enable_ocr=enable_ocr,
+            enable_detection=enable_detection,
+            enable_faces=enable_faces,
+            enable_clip=enable_clip,
         )
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -474,6 +489,18 @@ async def ingest_batch(
         True,
         description='Run OCR on images (may reduce throughput).',
     ),
+    enable_detection: bool = Form(
+        True,
+        description='Run YOLO object detection and index vehicle/person detections.',
+    ),
+    enable_faces: bool = Form(
+        True,
+        description='Run face detection (SCRFD) and embedding (ArcFace) extraction.',
+    ),
+    enable_clip: bool = Form(
+        True,
+        description='Run MobileCLIP to generate global image embedding.',
+    ),
     defer_heavy_ops: bool = Form(
         False,
         description='Defer heavy operations (near-duplicate detection) for faster ingestion. '
@@ -572,6 +599,9 @@ async def ingest_batch(
             detect_near_duplicates=detect_near_duplicates,
             near_duplicate_threshold=near_duplicate_threshold,
             enable_ocr=enable_ocr,
+            enable_detection=enable_detection,
+            enable_faces=enable_faces,
+            enable_clip=enable_clip,
             defer_heavy_ops=defer_heavy_ops,
         )
 
@@ -725,6 +755,18 @@ async def ingest_directory(
         True,
         description='Run OCR on images',
     ),
+    enable_detection: bool = Query(
+        True,
+        description='Run YOLO object detection',
+    ),
+    enable_faces: bool = Query(
+        True,
+        description='Run face detection and embedding extraction',
+    ),
+    enable_clip: bool = Query(
+        True,
+        description='Run MobileCLIP global image embedding',
+    ),
     defer_heavy_ops: bool = Query(
         False,
         description='Defer heavy operations for faster bulk ingestion',
@@ -839,6 +881,9 @@ async def ingest_directory(
                     detect_near_duplicates=detect_near_duplicates,
                     near_duplicate_threshold=near_duplicate_threshold,
                     enable_ocr=enable_ocr,
+                    enable_detection=enable_detection,
+                    enable_faces=enable_faces,
+                    enable_clip=enable_clip,
                     defer_heavy_ops=defer_heavy_ops,
                 )
 
