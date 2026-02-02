@@ -130,7 +130,7 @@ curl http://localhost:4603/ | jq '.api_versions'
 # {"current":"v1","supported":["v1"],"deprecated":[]}
 
 curl http://localhost:4603/health | jq '{version, api_version}'
-# {"version":"6.0.0","api_version":"v1"}
+# {"version":"0.1.0","api_version":"v1"}
 ```
 
 ### /detect - Object Detection
