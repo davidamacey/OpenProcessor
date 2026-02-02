@@ -3,7 +3,7 @@
 
 [project]
 name = "openprocessor"
-version = "5.0.0"
+version = "0.1.0"
 description = "Self-hosted AI-powered visual processing engine with object detection, face recognition, CLIP embeddings, OCR, and vector search"
 readme = "README.md"
 requires-python = ">=3.12"
