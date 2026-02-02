@@ -1,14 +1,14 @@
-# Triton API - Python Project Configuration
+# OpenProcessor - Python Project Configuration
 # Configuration for ruff (linter + formatter) and project metadata
 
 [project]
-name = "triton-api"
-version = "5.0.0"
-description = "High-performance YOLO inference API with NVIDIA Triton and multiple performance tracks"
+name = "openprocessor"
+version = "0.1.0"
+description = "Self-hosted AI-powered visual processing engine with object detection, face recognition, CLIP embeddings, OCR, and vector search"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
-    {name = "Triton API Team"}
+    {name = "OpenProcessor Contributors"}
 ]
 license = {text = "MIT"}
 
@@ -21,7 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-keywords = ["yolo", "triton", "tensorrt", "object-detection", "fastapi", "inference"]
+keywords = ["yolo", "triton", "tensorrt", "object-detection", "face-recognition", "clip", "ocr", "visual-search", "fastapi", "inference", "openprocessor"]
 
 dependencies = [
     "fastapi",
@@ -63,6 +63,8 @@ dependencies = [
 dev = [
     "pre-commit>=4.0.0",
     "ruff>=0.8.4",
+    "mypy>=1.13.0",
+    "bandit[toml]>=1.8.0",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
     "pytest-asyncio>=0.24.0",
@@ -191,6 +193,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # FastAPI routers use dependency injection in default arguments (standard pattern)
 "src/routers/**/*.py" = [
     "B008",    # Function call in default argument (FastAPI File(), Depends(), Query())
+    "PT028",   # Default arguments in endpoint functions (FastAPI pattern, not pytest)
 ]
 
 # Utils package has documentation comments explaining import structure
@@ -307,3 +310,87 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+
+# =============================================================================
+# MyPy Configuration (Type Checking)
+# =============================================================================
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = false  # Disabled for ML code with numpy/FAISS operations
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+warn_no_return = true
+strict_equality = true
+ignore_missing_imports = true
+explicit_package_bases = true
+mypy_path = "."
+namespace_packages = true
+
+# Ignore third-party packages without type stubs
+[[tool.mypy.overrides]]
+module = [
+    "ultralytics.*",
+    "tritonclient.*",
+    "onnx.*",
+    "onnxslim.*",
+    "onnxsim.*",
+    "onnxruntime.*",
+    "tensorrt.*",
+    "nvidia.dali.*",
+    "cv2.*",
+    "opensearchpy.*",
+    "transformers.*",
+    "timm.*",
+]
+ignore_missing_imports = true
+
+# Relax strict checks for ML/scientific code with FAISS and numpy operations
+[[tool.mypy.overrides]]
+module = [
+    "src.services.clustering",
+    "src.services.duplicate_detection",
+    "src.clients.opensearch",
+    "src.clients.triton_client",
+    "src.services.model_export",
+    "src.services.visual_search",
+    "src.utils.retry",
+    "src.utils.face_alignment",
+    "src.utils.image_processing",
+    "src.services.image",
+    "src.services.face_identity",
+    "src.routers.detect",
+]
+disable_error_code = ["attr-defined", "operator", "misc", "assignment", "return-value", "call-overload", "union-attr", "arg-type", "dict-item"]
+
+# Skip type checking on third-party patches
+[[tool.mypy.overrides]]
+module = "src.ultralytics_patches.*"
+ignore_errors = true
+
+# =============================================================================
+# Bandit Configuration (Security Linting)
+# =============================================================================
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "venv",
+    "reference_repos",
+    "pytorch_models",
+    "cache",
+]
+skips = [
+    "B101",  # assert_used - common in test files
+    "B311",  # random - only used for non-cryptographic retry jitter
+    "B601",  # paramiko_calls - not used
+]
+
+[tool.bandit.assert_used]
+skips = ["*_test.py", "test_*.py"]

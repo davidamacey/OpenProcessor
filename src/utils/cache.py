@@ -1,5 +1,5 @@
 """
-Track E: Caching Utilities for Performance Optimization
+Caching Utilities for Performance Optimization
 
 Provides in-memory caching for embeddings to reduce Triton inference calls.
 
@@ -25,6 +25,7 @@ import hashlib
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -119,7 +120,7 @@ class EmbeddingCache:
             }
 
     def get_or_compute(
-        self, data: bytes, compute_fn: callable, use_hash: bool = True
+        self, data: bytes, compute_fn: Callable[[bytes], np.ndarray], use_hash: bool = True
     ) -> tuple[np.ndarray, bool]:
         """
         Get embedding from cache or compute if missing.

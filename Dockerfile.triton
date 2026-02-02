@@ -1,21 +1,32 @@
-# Custom Triton Server with PyTorch for Python Backend
-# Required for box_embedding_extractor (ROI align + per-box embeddings)
-#
-# Based on: nvcr.io/nvidia/tritonserver:25.10-py3
-# Adds: PyTorch + TorchVision for Python backend models
+# =============================================================================
+# Triton Inference Server with PyTorch for Python Backend (BLS)
+# =============================================================================
+# Based on NVIDIA Triton 25.10 with PyTorch + TorchVision for Python backend
+# models (ocr_pipeline).
+# =============================================================================
 
 FROM nvcr.io/nvidia/tritonserver:25.10-py3
 
+LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
+      org.opencontainers.image.description="NVIDIA Triton Inference Server with TensorRT models for visual AI" \
+      org.opencontainers.image.vendor="OpenProcessor" \
+      org.opencontainers.image.authors="OpenProcessor Contributors" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
+      org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
+
 # Install PyTorch and TorchVision (CUDA 12.x compatible)
-# Using pip for faster install than conda
+# Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)
+# Note: torch/torchvision use the PyTorch CUDA 12.4 wheel index
 RUN pip install --no-cache-dir \
     torch==2.5.1 \
     torchvision==0.20.1 \
-    --index-url https://download.pytorch.org/whl/cu124
+    --index-url https://download.pytorch.org/whl/cu124 \
+    && pip install --no-cache-dir opencv-python-headless==4.10.0.84 \
+    && python3 -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')" \
+    && python3 -c "import torchvision; print(f'TorchVision {torchvision.__version__} installed')"
 
-# Install OpenCV for OCR pipeline (text region cropping and perspective transform)
-RUN pip install --no-cache-dir opencv-python-headless
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8000/v2/health/ready || exit 1
 
-# Verify installation
-RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')"
-RUN python3 -c "import torchvision; print(f'TorchVision {torchvision.__version__} installed')"
+CMD ["tritonserver", "--model-store=/models"]

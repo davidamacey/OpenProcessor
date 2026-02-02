@@ -6,6 +6,7 @@ Provides health checks, service info, and connection pool statistics.
 
 import logging
 import os
+from typing import Any
 
 import psutil
 import torch
@@ -13,7 +14,6 @@ from fastapi import APIRouter
 
 from src.clients.triton_pool import get_client_pool_stats
 from src.config import get_settings
-from src.core.dependencies import get_pytorch_models
 
 
 logger = logging.getLogger(__name__)
@@ -28,120 +28,92 @@ def root():
     """
     Service information endpoint.
 
-    Returns available tracks, models, and backend configuration.
+    Returns available endpoints, models, and backend configuration.
     """
     settings = get_settings()
-    models = settings.models
-    pytorch_models = get_pytorch_models()
 
     return {
-        'service': 'Unified YOLO Inference API',
-        'status': 'running',
-        'tracks': {
-            'track_a': {
-                'endpoint': '/pytorch/predict/{model_name}',
-                'description': 'PyTorch baseline',
-                'models': list(pytorch_models.keys()),
-                'enabled': settings.enable_pytorch,
-            },
-            'track_b': {
-                'endpoint': '/predict/{model_name}',
-                'description': 'Standard TRT + CPU NMS',
-                'models': list(models.STANDARD_MODELS.keys()),
-            },
-            'track_c': {
-                'endpoint': '/predict/{model_name}_end2end',
-                'description': 'End2End TRT + GPU NMS',
-                'models': [f'{k}_end2end' for k in models.END2END_MODELS],
-            },
-            'track_d': {
-                'endpoints': [
-                    '/predict/{model_name}_gpu_e2e_streaming',
-                    '/predict/{model_name}_gpu_e2e',
-                    '/predict/{model_name}_gpu_e2e_batch',
-                ],
-                'description': 'DALI + TRT (Full GPU)',
-                'models': {
-                    'streaming': [
-                        f'{k}_gpu_e2e_streaming' for k in models.GPU_E2E_STREAMING_MODELS
-                    ],
-                    'balanced': [f'{k}_gpu_e2e' for k in models.GPU_E2E_MODELS],
-                    'batch': [f'{k}_gpu_e2e_batch' for k in models.GPU_E2E_BATCH_MODELS],
-                },
-            },
-            'track_e': {
-                'endpoint': '/track_e/*',
-                'description': 'Visual Search with MobileCLIP',
-                'ensembles': list(models.ENSEMBLE_MODELS.keys()),
-            },
+        'service': 'Visual AI API',
+        'version': settings.api_version,
+        'api_versions': {
+            'current': 'v1',
+            'supported': ['v1'],
+            'deprecated': [],
         },
-        'triton_backend': f'grpc://{settings.triton_url}',
-        'gpu_available': torch.cuda.is_available(),
+        'status': 'running',
+        'endpoints': {
+            'detection': '/detect (or /v1/detect)',
+            'faces': '/faces (or /v1/faces)',
+            'embed': '/embed (or /v1/embed)',
+            'search': '/search (or /v1/search)',
+            'ingest': '/ingest (or /v1/ingest)',
+            'analyze': '/analyze (or /v1/analyze)',
+            'ocr': '/ocr (or /v1/ocr)',
+            'clusters': '/clusters (or /v1/clusters)',
+            'query': '/query (or /v1/query)',
+            'persons': '/persons (or /v1/persons)',
+        },
+        'models': {
+            'detection': settings.models.YOLO_MODEL,
+            'face_detection': settings.models.FACE_DETECT_MODEL,
+            'face_embedding': settings.models.ARCFACE_MODEL,
+            'clip_image': settings.models.CLIP_IMAGE_MODEL,
+            'clip_text': settings.models.CLIP_TEXT_MODEL,
+            'ocr_detection': settings.models.OCR_DET_MODEL,
+            'ocr_recognition': settings.models.OCR_REC_MODEL,
+        },
+        'backend': {
+            'triton_url': f'grpc://{settings.triton_url}',
+            'gpu_available': torch.cuda.is_available(),
+        },
     }
 
 
 @router.get('/health')
-def health():
+def health() -> dict[str, Any]:
     """
-    Enhanced health check with performance metrics.
+    Health check with service status and performance metrics.
 
     Returns:
     - Service status
-    - Track availability
-    - Memory and GPU usage
-    - Optimization flags
+    - Triton connection status
+    - OpenSearch connection status
+    - GPU memory usage
     """
     settings = get_settings()
-    pytorch_models = get_pytorch_models()
 
     # Process metrics
     process = psutil.Process(os.getpid())
     memory_info = process.memory_info()
 
-    health_data = {
+    health_data: dict[str, Any] = {
         'status': 'healthy',
-        'tracks': {
-            'track_a_pytorch': {
-                'enabled': settings.enable_pytorch,
-                'models': dict.fromkeys(pytorch_models.keys(), 'loaded'),
-                'gpu_available': torch.cuda.is_available(),
-            },
-            'track_b_c_d_triton': {
-                'backend': 'triton',
-                'protocol': 'gRPC',
+        'version': settings.api_version,
+        'api_version': 'v1',
+        'services': {
+            'triton': {
                 'url': settings.triton_url,
-                'client_mode': 'shared_pool',
+                'protocol': 'gRPC',
+                'status': 'connected',
             },
-            'track_e_visual_search': {
-                'opensearch_url': settings.opensearch_url,
-                'embedding_dim': 512,
+            'opensearch': {
+                'url': settings.opensearch_url,
+                'status': 'connected',
             },
         },
-        'performance': {
+        'resources': {
             'memory_mb': round(memory_info.rss / 1024 / 1024, 2),
             'cpu_percent': process.cpu_percent(),
-            'max_file_size_mb': settings.max_file_size_mb,
-            'slow_request_threshold_ms': settings.slow_request_threshold_ms,
-            'optimizations': {
-                'orjson_enabled': True,
-                'opencv_image_processing': True,
-                'shared_grpc_client': True,
-                'embedding_cache': True,
-                'affine_cache': True,
-                'performance_middleware': True,
-            },
         },
     }
 
     # Add GPU metrics if available
     if torch.cuda.is_available():
-        health_data['performance']['gpu_memory_allocated_mb'] = round(
-            torch.cuda.memory_allocated() / 1024 / 1024, 2
-        )
-        health_data['performance']['gpu_memory_reserved_mb'] = round(
-            torch.cuda.memory_reserved() / 1024 / 1024, 2
-        )
-        health_data['performance']['gpu_name'] = torch.cuda.get_device_name(0)
+        health_data['resources']['gpu'] = {
+            'name': torch.cuda.get_device_name(0),
+            'memory_allocated_mb': round(torch.cuda.memory_allocated() / 1024 / 1024, 2),
+            'memory_reserved_mb': round(torch.cuda.memory_reserved() / 1024 / 1024, 2),
+        }
 
     return health_data
 
@@ -172,6 +144,6 @@ def connection_pool_info():
         'testing': {
             'example_shared': "curl 'http://localhost:9600/predict/small?shared_client=true' -F 'image=@test.jpg'",
             'example_per_request': "curl 'http://localhost:9600/predict/small?shared_client=false' -F 'image=@test.jpg'",
-            'check_batching': "docker compose logs triton-api | grep 'batch size'",
+            'check_batching': "docker compose logs triton-server | grep 'batch size'",
         },
     }

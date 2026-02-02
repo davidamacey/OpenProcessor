@@ -1,10 +1,12 @@
+name: openprocessor
+
 services:
-  triton-api:
+  triton-server:
     build:
       context: .
       dockerfile: Dockerfile.triton
-    image: triton-api-pytorch:25.10
-    container_name: triton-api
+    image: openprocessor-triton:25.10
+    container_name: triton-server
     restart: always
     ports:
       - 4600:8000  # HTTP
@@ -12,7 +14,6 @@ services:
       - 4602:8002  # Metrics
     volumes:
       - ./models:/models
-      - ./backends/face_pipeline:/opt/tritonserver/backends/face_pipeline:ro  # Custom C++ backend
     command:
       - tritonserver
       - --model-store=/models
@@ -20,31 +21,16 @@ services:
       - --strict-model-config=false
       - --model-control-mode=explicit
       # ===================================================================
-      # TRACK E MINIMAL - Core models only for reduced VRAM usage
+      # Visual Search Models
       # ===================================================================
-      # Achieves: E (YOLO+CLIP) ~150 RPS, E_batch16 ~160 RPS
-      # ===================================================================
-      #
-      # Core TensorRT Models (required)
-      - --load-model=yolov11_small_trt_end2end         # YOLO detection (TRT + GPU NMS)
-      - --load-model=mobileclip2_s2_image_encoder      # Image embeddings (TensorRT)
-      - --load-model=mobileclip2_s2_text_encoder       # Text embeddings for search (TensorRT)
-      #
-      # DALI Preprocessing (required for Track E)
-      - --load-model=yolo_clip_preprocess_dali         # Fast DALI for Track E (YOLO + CLIP)
-      #
-      # Track E Ensemble (required for /track_e/predict)
-      - --load-model=yolo_clip_ensemble                # YOLO + global embed
-      #
-      # Face Detection/Recognition (optional - comment out if not needed)
-      - --load-model=yolo11_face_small_trt_end2end     # YOLO11-face detection
-      - --load-model=arcface_w600k_r50                 # Face recognition
-      - --load-model=yolo11_face_pipeline              # Face pipeline ensemble (Python BLS)
-      - --load-model=face_pipeline_cpp                # Face pipeline C++ backend (GPU cropping)
-      #
-      # OCR (optional - comment out if not needed)
-      - --load-model=paddleocr_det_trt                 # OCR text detection
-      - --load-model=paddleocr_rec_trt                 # OCR text recognition
+      - --load-model=yolov11_small_trt_end2end
+      - --load-model=scrfd_10g_bnkps
+      - --load-model=arcface_w600k_r50
+      - --load-model=mobileclip2_s2_image_encoder
+      - --load-model=mobileclip2_s2_text_encoder
+      - --load-model=paddleocr_det_trt
+      - --load-model=paddleocr_rec_trt
+      - --load-model=ocr_pipeline
       # ===================================================================
       - --log-verbose=1
       - --log-info=true
@@ -57,7 +43,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ '0' ]  # GPU 0: Track E only (face models to be added)
+              device_ids: [ '0' ]
               capabilities:
                 - gpu
     networks:
@@ -65,7 +51,6 @@ services:
 
   yolo-api:
     container_name: yolo-api
-    pull_policy: always
     restart: always
     build:
       context: .
@@ -73,20 +58,17 @@ services:
     volumes:
       - ./src:/app/src
       - ./export:/app/export
-      - ./dali:/app/dali
       - ./scripts:/app/scripts
       - ./tests:/app/tests
       - ./benchmarks:/app/benchmarks
       - ./models:/app/models
       - ./pytorch_models:/app/pytorch_models
       - ./test_images:/app/test_images
-      - ./reference_repos:/app/reference_repos  # Track E: MobileCLIP repos (persisted)
-      - ./cache/huggingface:/home/appuser/.cache/huggingface  # Track E: HuggingFace tokenizers (appuser)
-      - ./outputs:/app/outputs  # Track E: Mosaic outputs and clustering results
-      - /mnt/nvm/KILLBOY_SAMPLE_PICTURES:/mnt/nvm/KILLBOY_SAMPLE_PICTURES:ro  # Test data (YOLO)
-      - /mnt/nvm/FACE_TEST_IMAGES:/mnt/nvm/FACE_TEST_IMAGES:ro  # Test data (faces)
+      - ./VERSION:/app/VERSION:ro
+      - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
     environment:
-      - ENABLE_PYTORCH=false  # Track A disabled - Track E only mode
+      # Triton gRPC endpoint (Docker service name)
+      - TRITON_URL=triton-server:8001
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
@@ -136,7 +118,7 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      - triton-api
+      - triton-server
     networks:
       - triton_net
 
@@ -182,7 +164,7 @@ services:
     networks:
       - triton_net
     depends_on:
-      - triton-api
+      - triton-server
       - node-exporter
 
   grafana:
@@ -195,11 +177,15 @@ services:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
       - ./monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./monitoring/grafana-alerting.yml:/etc/grafana/provisioning/alerting/alerting.yml
       - ./monitoring/dashboards:/etc/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Enable unified alerting (Grafana 8+)
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=false
     networks:
       - triton_net
     depends_on:
@@ -235,7 +221,7 @@ services:
       - loki
 
   # ===================================================================
-  # Track E: OpenSearch for Visual Search (Vector Database)
+  # OpenSearch for Visual Search (Vector Database)
   # OpenSearch 3.x with k-NN plugin for vector similarity search
   # ===================================================================
   opensearch:

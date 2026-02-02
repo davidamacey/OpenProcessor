@@ -11,7 +11,7 @@ from src.schemas.common import (
     ServiceInfoResponse,
 )
 from src.schemas.detection import BatchImageResult, BatchInferenceResult, Detection, InferenceResult
-from src.schemas.track_e import (
+from src.schemas.visual_search import (
     ImageIngestRequest,
     ImageIngestResponse,
     IndexStatsResponse,
@@ -32,7 +32,7 @@ __all__ = [
     'ConnectionPoolInfo',
     'Detection',
     'HealthResponse',
-    # Track E schemas
+    # Visual search schemas
     'ImageIngestRequest',
     'ImageIngestResponse',
     'IndexStatsResponse',

@@ -21,9 +21,9 @@ declare -A REPOS=(
 
 # Descriptions for each repo
 declare -A DESCRIPTIONS=(
-    ["ultralytics-end2end"]="End2End NMS export patch (REQUIRED for Track C/D attribution)"
+    ["ultralytics-end2end"]="End2End NMS export patch (REQUIRED for attribution)"
     ["ultralytics-official"]="Official Ultralytics repo for comparison"
-    ["ml-mobileclip"]="Apple MobileCLIP for Track E embeddings"
+    ["ml-mobileclip"]="Apple MobileCLIP for CLIP embeddings"
     ["open_clip"]="OpenCLIP reference implementation"
     ["triton-server-yolo"]="Triton YOLO server reference by levipereira"
     ["DeepStream-Yolo"]="DeepStream YOLO implementation reference"
@@ -77,9 +77,9 @@ list_repos() {
             status="CLONED"
         fi
 
-        if [[ " ${ESSENTIAL[*]} " =~ " $repo " ]]; then
+        if [[ " ${ESSENTIAL[*]} " =~ ${repo} ]]; then
             category="essential"
-        elif [[ " ${RECOMMENDED[*]} " =~ " $repo " ]]; then
+        elif [[ " ${RECOMMENDED[*]} " =~ ${repo} ]]; then
             category="recommended"
         fi
 

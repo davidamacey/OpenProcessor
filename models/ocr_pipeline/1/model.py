@@ -3,7 +3,7 @@
 Triton Python Backend: PP-OCRv5 Text Detection & Recognition Pipeline
 
 Complete OCR pipeline that handles text detection and recognition via BLS:
-1. Receives preprocessed OCR image from DALI
+1. Receives preprocessed OCR image
 2. Calls PP-OCRv5 detection TensorRT for text region detection
 3. Post-processes detection output (DBPostProcess)
 4. Sorts text boxes in reading order
@@ -58,7 +58,7 @@ DET_MODEL = 'paddleocr_det_trt'
 REC_MODEL = 'paddleocr_rec_trt'
 REC_HEIGHT = 48
 REC_WIDTH = 320
-DICT_PATH = Path('/models/paddleocr_rec_trt/en_ppocrv5_dict.txt')
+DICT_PATH = Path('/models/paddleocr_rec_trt/ppocrv5_dict.txt')
 
 
 class DBPostProcess:

@@ -114,12 +114,43 @@ class ModelInfo(BaseModel):
     input_shape: list[int] | None = None
 
 
+class ModelUsageInstructions(BaseModel):
+    """Usage instructions for models."""
+
+    detection: str = Field(
+        description='How to use model for object detection',
+        default='curl -X POST http://localhost:4603/detect -F "image=@your_image.jpg" -F "model_name={model_name}"',
+    )
+    analysis: str = Field(
+        description='How to use model for full analysis',
+        default='curl -X POST http://localhost:4603/analyze -F "image=@your_image.jpg" -F "model_name={model_name}"',
+    )
+    batch: str = Field(
+        description='How to use model for batch detection',
+        default='curl -X POST http://localhost:4603/detect/batch -F "images=@image1.jpg" -F "images=@image2.jpg" -F "model_name={model_name}"',
+    )
+
+
 class ModelListResponse(BaseModel):
     """Response for listing models."""
 
     models: list[ModelInfo]
     total: int
     triton_status: str = Field(description='Triton server status')
+    usage_instructions: ModelUsageInstructions = Field(
+        default_factory=lambda: ModelUsageInstructions(),
+        description='Instructions for using models in API requests',
+    )
+    notes: list[str] = Field(
+        default_factory=lambda: [
+            'Model names ending with _trt_end2end use GPU NMS (fastest)',
+            'Model names ending with _trt use CPU NMS',
+            'Use model_name parameter to specify which model to use',
+            'Default model is yolov11_small_trt_end2end if not specified',
+            'Uploaded models appear here after successful export',
+        ],
+        description='Important notes about model usage',
+    )
 
 
 class ModelLoadResponse(BaseModel):

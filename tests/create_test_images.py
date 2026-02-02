@@ -3,7 +3,7 @@
 Generic Test Image Generator
 
 Creates resized versions of an input image in various sizes for testing.
-Useful for DALI letterbox validation and aspect ratio testing.
+Useful for letterbox validation and aspect ratio testing.
 
 Usage:
     # Generate standard test suite

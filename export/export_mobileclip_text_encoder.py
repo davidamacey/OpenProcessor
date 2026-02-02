@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Track E: Export MobileCLIP2 Text Encoder to ONNX + TensorRT
+Export MobileCLIP2 Text Encoder to ONNX + TensorRT
 
 This script exports MobileCLIP2 text encoder for deployment on Triton.
 The text encoder is used for text-based visual search queries.
@@ -24,13 +24,14 @@ import argparse
 import sys
 from pathlib import Path
 
-
-sys.path.insert(0, '/app/reference_repos/ml-mobileclip')
-sys.path.insert(0, '/app/reference_repos/open_clip/src')
-
 import numpy as np
 import torch
 from torch import nn
+
+
+# Import bundled reparameterize function (no external reference repos needed)
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import reparameterize_model
 
 
 # Model configurations (S0, S2, B share the same 63.4M text encoder)
@@ -104,7 +105,6 @@ def load_mobileclip_model(model_name, checkpoint_path):
     print(f'  Checkpoint: {checkpoint_path}')
 
     import open_clip
-    from mobileclip.modules.common.mobileone import reparameterize_model
 
     model, _, _preprocess = open_clip.create_model_and_transforms(
         model_name, pretrained=checkpoint_path, image_mean=(0, 0, 0), image_std=(1, 1, 1)
@@ -325,7 +325,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
     except ImportError:
         print('\n  ⚠ TensorRT not available')
         print('  Use Triton container:')
-        print('    docker compose exec triton-api trtexec \\')
+        print('    docker compose exec triton-server trtexec \\')
         print(f'      --onnx={onnx_path} \\')
         print(f'      --saveEngine={plan_path} \\')
         print('      --fp16 \\')
@@ -363,7 +363,7 @@ def main():
     plan_output = f'/app/models/{checkpoint_name}_text_encoder/1/model.plan'
 
     print('=' * 80)
-    print(f'Track E: {model_name} Text Encoder Export')
+    print(f'MobileCLIP: {model_name} Text Encoder Export')
     print('=' * 80)
     print('\nNote: S0, S2, and B variants share the same 63.4M text encoder')
 

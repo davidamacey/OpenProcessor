@@ -162,7 +162,7 @@ class ClusterMaintenanceService:
             return {
                 'status': 'not_trained',
                 'needs_rebalance': False,
-                'recommendation': 'Train clusters first with POST /track_e/clusters/train/{index}',
+                'recommendation': 'Train clusters first with POST /clusters/train/{index}',
             }
 
         # Get balance status from clustering service

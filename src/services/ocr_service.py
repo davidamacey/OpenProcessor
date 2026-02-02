@@ -5,7 +5,7 @@ This service provides OCR inference via Triton Server with PP-OCRv5 models.
 It handles preprocessing, inference orchestration, and result formatting.
 
 Pipeline:
-1. Preprocess image with DALI (penta_preprocess_dali)
+1. Preprocess image (CPU letterbox + normalize)
 2. Call OCR pipeline BLS (detection + recognition)
 3. Format results with text, boxes, and confidence scores
 
@@ -26,12 +26,9 @@ Usage:
     # }
 """
 
-import io
 import logging
+from functools import lru_cache
 from typing import Any
-
-import numpy as np
-from PIL import Image
 
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
@@ -65,9 +62,7 @@ class OcrService:
         self.min_rec_score = min_rec_score
         self.settings = get_settings()
 
-    def extract_text(
-        self, image_bytes: bytes, filter_by_score: bool = True
-    ) -> dict[str, Any]:
+    def extract_text(self, image_bytes: bytes, filter_by_score: bool = True) -> dict[str, Any]:
         """
         Extract text from an image.
 
@@ -123,13 +118,20 @@ class OcrService:
                 filtered_indices = [
                     i
                     for i in range(len(texts))
-                    if det_scores[i] >= self.min_det_score
-                    and rec_scores[i] >= self.min_rec_score
+                    if det_scores[i] >= self.min_det_score and rec_scores[i] >= self.min_rec_score
                 ]
 
                 texts = [texts[i] for i in filtered_indices]
-                boxes = [boxes[i].tolist() if hasattr(boxes[i], 'tolist') else list(boxes[i]) for i in filtered_indices]
-                boxes_norm = [boxes_norm[i].tolist() if hasattr(boxes_norm[i], 'tolist') else list(boxes_norm[i]) for i in filtered_indices]
+                boxes = [
+                    boxes[i].tolist() if hasattr(boxes[i], 'tolist') else list(boxes[i])
+                    for i in filtered_indices
+                ]
+                boxes_norm = [
+                    boxes_norm[i].tolist()
+                    if hasattr(boxes_norm[i], 'tolist')
+                    else list(boxes_norm[i])
+                    for i in filtered_indices
+                ]
                 det_scores = [float(det_scores[i]) for i in filtered_indices]
                 rec_scores = [float(rec_scores[i]) for i in filtered_indices]
                 num_texts = len(texts)
@@ -154,6 +156,7 @@ class OcrService:
         except Exception as e:
             logger.error(f'OCR extraction failed: {e}')
             import traceback
+
             traceback.print_exc()
             return self._empty_result(error=str(e))
 
@@ -177,8 +180,7 @@ class OcrService:
             return self.extract_text(img_bytes, filter_by_score)
 
         with ThreadPoolExecutor(max_workers=min(max_workers, len(image_bytes_list))) as executor:
-            results = list(executor.map(process_single, image_bytes_list))
-        return results
+            return list(executor.map(process_single, image_bytes_list))
 
     def get_full_text(self, ocr_result: dict[str, Any], separator: str = ' ') -> str:
         """
@@ -214,12 +216,9 @@ class OcrService:
 
 
 # Singleton instance for reuse
-_ocr_service: OcrService | None = None
 
 
+@lru_cache(maxsize=1)
 def get_ocr_service() -> OcrService:
-    """Get or create singleton OCR service instance."""
-    global _ocr_service
-    if _ocr_service is None:
-        _ocr_service = OcrService()
-    return _ocr_service
+    """Get or create singleton OCR service instance (cached)."""
+    return OcrService()
