@@ -1,3 +1,5 @@
+//go:build single
+
 // Ingest Benchmark - High-performance parallel image ingestion benchmark
 //
 // Usage:
@@ -174,13 +176,13 @@ func ingestImage(client *http.Client, url string, imagePath string, config *Conf
 		return 0, err
 	}
 
-	writer.WriteField("image_id", imagePath)
-	writer.WriteField("image_path", imagePath)
-	writer.WriteField("enable_ocr", fmt.Sprintf("%t", config.EnableOCR))
-	writer.WriteField("enable_detection", fmt.Sprintf("%t", config.EnableDetection))
-	writer.WriteField("enable_faces", fmt.Sprintf("%t", config.EnableFaces))
-	writer.WriteField("enable_clip", fmt.Sprintf("%t", config.EnableClip))
-	writer.Close()
+	_ = writer.WriteField("image_id", imagePath)
+	_ = writer.WriteField("image_path", imagePath)
+	_ = writer.WriteField("enable_ocr", fmt.Sprintf("%t", config.EnableOCR))
+	_ = writer.WriteField("enable_detection", fmt.Sprintf("%t", config.EnableDetection))
+	_ = writer.WriteField("enable_faces", fmt.Sprintf("%t", config.EnableFaces))
+	_ = writer.WriteField("enable_clip", fmt.Sprintf("%t", config.EnableClip))
+	_ = writer.Close()
 
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
@@ -199,20 +201,14 @@ func ingestImage(client *http.Client, url string, imagePath string, config *Conf
 
 	if resp.StatusCode != 200 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return latency, fmt.Errorf("status %d: %s", resp.StatusCode, string(bodyBytes[:min(200, len(bodyBytes))]))
+		truncLen := min(200, len(bodyBytes))
+		return latency, fmt.Errorf("status %d: %s", resp.StatusCode, string(bodyBytes[:truncLen]))
 	}
 
 	return latency, nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func clearIndexes(opensearchPort int, apiHost string, apiPort int) error {
+func clearIndexes(opensearchPort int) error {
 	osURL := fmt.Sprintf("http://localhost:%d", opensearchPort)
 	indexes := []string{"visual_search_global", "visual_search_faces", "visual_search_vehicles", "visual_search_people"}
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -338,7 +334,7 @@ func clearIndexes(opensearchPort int, apiHost string, apiPort int) error {
 	return nil
 }
 
-func worker(id int, jobs <-chan string, stats *Stats, config *Config, wg *sync.WaitGroup) {
+func worker(_ int, jobs <-chan string, stats *Stats, config *Config, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	client := &http.Client{
@@ -494,7 +490,7 @@ func runBenchmark(config *Config) (*Result, error) {
 
 	// Clear indexes if requested
 	if config.ClearIndex {
-		clearIndexes(4607, config.APIHost, config.APIPort)
+		_ = clearIndexes(4607)
 	}
 
 	// Initialize stats
@@ -707,8 +703,15 @@ func main() {
 
 	// Save JSON results
 	resultFile := fmt.Sprintf("benchmarks/results/ingest_%s.json", timestamp)
-	jsonBytes, _ := json.MarshalIndent(result, "", "  ")
-	os.WriteFile(resultFile, jsonBytes, 0644)
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		logger.Printf("[ERROR] Failed to marshal results: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(resultFile, jsonBytes, 0644); err != nil {
+		logger.Printf("[ERROR] Failed to write results file: %v\n", err)
+		os.Exit(1)
+	}
 	logger.Printf("\n[SAVED] Results: %s\n", resultFile)
 	logger.Printf("[SAVED] Log: %s\n", config.LogFile)
 }
