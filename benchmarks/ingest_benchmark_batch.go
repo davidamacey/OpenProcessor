@@ -1,3 +1,5 @@
+//go:build batch
+
 // Batch Ingest Benchmark - High-throughput parallel batch ingestion
 //
 // Usage:
@@ -183,7 +185,9 @@ func sendBatch(client *http.Client, url string, batch []ImageData, config *Confi
 		if err != nil {
 			return 0, len(batch), 0, err
 		}
-		part.Write(img.Bytes)
+		if _, err := part.Write(img.Bytes); err != nil {
+			return 0, len(batch), 0, err
+		}
 		imageIDs[i] = img.Path
 		imagePaths[i] = img.Path
 	}
@@ -191,15 +195,15 @@ func sendBatch(client *http.Client, url string, batch []ImageData, config *Confi
 	// Add metadata
 	idsJSON, _ := json.Marshal(imageIDs)
 	pathsJSON, _ := json.Marshal(imagePaths)
-	writer.WriteField("image_ids", string(idsJSON))
-	writer.WriteField("image_paths", string(pathsJSON))
-	writer.WriteField("skip_duplicates", "false")
-	writer.WriteField("detect_near_duplicates", "false")
-	writer.WriteField("enable_ocr", fmt.Sprintf("%t", config.EnableOCR))
-	writer.WriteField("enable_detection", fmt.Sprintf("%t", config.EnableDetection))
-	writer.WriteField("enable_faces", fmt.Sprintf("%t", config.EnableFaces))
-	writer.WriteField("enable_clip", fmt.Sprintf("%t", config.EnableClip))
-	writer.Close()
+	_ = writer.WriteField("image_ids", string(idsJSON))
+	_ = writer.WriteField("image_paths", string(pathsJSON))
+	_ = writer.WriteField("skip_duplicates", "false")
+	_ = writer.WriteField("detect_near_duplicates", "false")
+	_ = writer.WriteField("enable_ocr", fmt.Sprintf("%t", config.EnableOCR))
+	_ = writer.WriteField("enable_detection", fmt.Sprintf("%t", config.EnableDetection))
+	_ = writer.WriteField("enable_faces", fmt.Sprintf("%t", config.EnableFaces))
+	_ = writer.WriteField("enable_clip", fmt.Sprintf("%t", config.EnableClip))
+	_ = writer.Close()
 
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
@@ -218,26 +222,26 @@ func sendBatch(client *http.Client, url string, batch []ImageData, config *Confi
 
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return 0, len(batch), latency, fmt.Errorf("status %d: %s", resp.StatusCode, string(bodyBytes[:min(200, len(bodyBytes))]))
+		truncLen := min(200, len(bodyBytes))
+		return 0, len(batch), latency, fmt.Errorf("status %d: %s", resp.StatusCode, string(bodyBytes[:truncLen]))
 	}
 
 	// Parse response to get success count
 	var result map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, len(batch), latency, fmt.Errorf("failed to decode response: %w", err)
+	}
 
-	processed := int(result["processed"].(float64))
+	processedVal, ok := result["processed"].(float64)
+	if !ok {
+		return 0, len(batch), latency, fmt.Errorf("invalid response: missing processed field")
+	}
+	processed := int(processedVal)
 	return processed, len(batch) - processed, latency, nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // batchWorker sends batches to the API
-func batchWorker(id int, batches <-chan []ImageData, stats *Stats, config *Config, wg *sync.WaitGroup) {
+func batchWorker(_ int, batches <-chan []ImageData, stats *Stats, config *Config, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	client := &http.Client{
@@ -426,7 +430,7 @@ func runBenchmark(config *Config) (*Result, error) {
 	logger.Printf("[SCAN] Found %d images\n", len(images))
 
 	if config.ClearIndex {
-		clearIndexes(4607)
+		_ = clearIndexes(4607)
 	}
 
 	stats := &Stats{
@@ -605,7 +609,14 @@ func main() {
 	printResult(result)
 
 	resultFile := fmt.Sprintf("benchmarks/results/batch_ingest_%s.json", timestamp)
-	jsonBytes, _ := json.MarshalIndent(result, "", "  ")
-	os.WriteFile(resultFile, jsonBytes, 0644)
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		logger.Printf("[ERROR] Failed to marshal results: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(resultFile, jsonBytes, 0644); err != nil {
+		logger.Printf("[ERROR] Failed to write results file: %v\n", err)
+		os.Exit(1)
+	}
 	logger.Printf("\n[SAVED] %s\n", resultFile)
 }

@@ -96,6 +96,24 @@ repos:
       - id: shellcheck
         args: [--severity=warning]
 
+  # Go linting with golangci-lint
+  # Uses local hook since benchmark scripts are standalone with build tags
+  # Requires: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'export PATH="$HOME/go/bin:$PATH" && cd benchmarks && for f in "$@"; do fname=$(basename "$f"); if [[ "$fname" == *"_batch"* ]]; then tag="batch"; else tag="single"; fi; golangci-lint run --build-tags "$tag" --config .golangci.yml "$fname" || exit 1; done' --
+        language: system
+        files: ^benchmarks/.*\.go$
+        types: [go]
+      - id: go-build
+        name: go-build
+        entry: bash -c 'cd benchmarks && for f in "$@"; do fname=$(basename "$f"); if [[ "$fname" == *"_batch"* ]]; then tag="batch"; else tag="single"; fi; go build -tags "$tag" -o /dev/null "$fname" || exit 1; done' --
+        language: system
+        files: ^benchmarks/.*\.go$
+        types: [go]
+
   # Commit message linting (conventional commits)
   # Note: Disabled for now - requires separate hook installation with:
   # pre-commit install --hook-type commit-msg

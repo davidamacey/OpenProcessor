@@ -1,0 +1,32 @@
+# golangci-lint configuration for Go benchmark scripts
+# These are standalone scripts (each with their own main), not a Go module
+
+run:
+  timeout: 5m
+  # Process each file separately since they're standalone scripts
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    - errcheck       # Check for unchecked errors
+    - govet          # Vet examines Go source code and reports suspicious constructs
+    - ineffassign    # Detects ineffectual assignments
+    - staticcheck    # Go static analysis
+    - unused         # Checks for unused constants, variables, functions and types
+    - gosimple       # Simplify code
+    - typecheck      # Parse and type-check Go code
+  disable:
+    - depguard       # Not needed for standalone scripts
+    - goimports      # Not enforcing import order
+
+linters-settings:
+  errcheck:
+    # Don't check for errors on these functions (common patterns)
+    exclude-functions:
+      - (io.Closer).Close
+      - (*os.File).Close
+
+issues:
+  # Don't limit issues per linter
+  max-issues-per-linter: 0
+  max-same-issues: 0
