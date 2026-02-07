@@ -122,6 +122,26 @@ services:
     networks:
       - triton_net
 
+  rust-preprocess:
+    container_name: rust-preprocess
+    restart: always
+    build:
+      context: ./rust-preprocess
+      dockerfile: Dockerfile
+    environment:
+      - TRITON_URL=triton-server:8001
+      - OPENSEARCH_URL=http://opensearch:9200
+      - PORT=8000
+      - GRPC_POOL_SIZE=4
+      - RUST_LOG=rust_preprocess=info,tower_http=debug
+    ports:
+      - 4610:8000  # Rust preprocessing service
+    networks:
+      - triton_net
+    depends_on:
+      - triton-server
+      - opensearch
+
   triton-sdk:
     image: nvcr.io/nvidia/tritonserver:25.10-py3-sdk
     container_name: triton-sdk

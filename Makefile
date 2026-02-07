@@ -995,6 +995,90 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 	@bash $(SCRIPTS_DIR)/clone_reference_repos.sh --repo $(REPO)
 
 # ==================================================================================
+# Rust Preprocessing Service
+# ==================================================================================
+
+.PHONY: rust-build
+rust-build: ## Build Rust preprocessing service
+	@echo "Building rust-preprocess service..."
+	$(COMPOSE) build rust-preprocess
+
+.PHONY: rust-up
+rust-up: ## Start Rust preprocessing service
+	@echo "Starting rust-preprocess..."
+	$(COMPOSE) up -d rust-preprocess
+	@echo "Rust service started on port 4610"
+
+.PHONY: rust-down
+rust-down: ## Stop Rust preprocessing service
+	@echo "Stopping rust-preprocess..."
+	$(COMPOSE) stop rust-preprocess
+
+.PHONY: rust-logs
+rust-logs: ## View Rust service logs
+	$(COMPOSE) logs -f rust-preprocess
+
+.PHONY: rust-restart
+rust-restart: ## Restart Rust service
+	$(COMPOSE) restart rust-preprocess
+
+.PHONY: rust-test
+rust-test: ## Quick smoke test of Rust service
+	@echo "Testing Rust preprocessing service (port 4610)..."
+	@echo ""
+	@echo "--- /health ---"
+	@curl -sf http://localhost:4610/health | jq '.'
+	@echo ""
+	@echo "--- /detect ---"
+	@curl -sf -X POST http://localhost:4610/detect -F "image=@test_images/bus.jpg" | jq '{detections: (.detections | length), inference_time_ms}'
+	@echo ""
+	@echo "--- /embed/image ---"
+	@curl -sf -X POST http://localhost:4610/embed/image -F "image=@test_images/bus.jpg" | jq '{dimensions, inference_time_ms}'
+	@echo ""
+
+.PHONY: rust-bench
+rust-bench: ## Benchmark Rust service with Go benchmark
+	@echo "Benchmarking Rust service (port 4610)..."
+	@if [ ! -f benchmarks/ingest_benchmark_batch ]; then \
+		echo "Building Go benchmark first..."; \
+		cd benchmarks && go build -tags batch -o ingest_benchmark_batch ingest_benchmark_batch.go && cd ..; \
+	fi
+	@./benchmarks/ingest_benchmark_batch \
+		-dir "/mnt/nas/killboy_data/killboy_hdd01/Killboy_Sorted_Photos" \
+		-workers 16 \
+		-batch 64 \
+		-queue 1024 \
+		-report 10 \
+		-faces=false \
+		-ocr=false \
+		-port 4610
+
+.PHONY: bench-compare
+bench-compare: ## Compare Python vs Rust with same benchmark
+	@echo "==================================================================================="
+	@echo "Performance Comparison: Python (4603) vs Rust (4610)"
+	@echo "==================================================================================="
+	@echo ""
+	@if [ ! -f benchmarks/ingest_benchmark_batch ]; then \
+		echo "Building Go benchmark..."; \
+		cd benchmarks && go build -tags batch -o ingest_benchmark_batch ingest_benchmark_batch.go && cd ..; \
+	fi
+	@echo "--- Python yolo-api (port 4603) ---"
+	@./benchmarks/ingest_benchmark_batch \
+		-dir "/mnt/nas/killboy_data/killboy_hdd01/Killboy_Sorted_Photos" \
+		-workers 16 -batch 64 -queue 1024 -report 10 \
+		-faces=false -ocr=false -port 4603 | tee /tmp/bench_python.txt
+	@echo ""
+	@echo "--- Rust rust-preprocess (port 4610) ---"
+	@./benchmarks/ingest_benchmark_batch \
+		-dir "/mnt/nas/killboy_data/killboy_hdd01/Killboy_Sorted_Photos" \
+		-workers 16 -batch 64 -queue 1024 -report 10 \
+		-faces=false -ocr=false -port 4610 | tee /tmp/bench_rust.txt
+	@echo ""
+	@echo "==================================================================================="
+	@echo "Comparison complete. Results saved to /tmp/bench_python.txt and /tmp/bench_rust.txt"
+
+# ==================================================================================
 # Phony targets (targets that don't create files)
 # ==================================================================================
 
@@ -1002,7 +1086,7 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
         logs logs-triton logs-api logs-opensearch status health ps \
         test-detect test-faces test-verify test-embed test-embed-text test-embed-boxes test-ocr test-analyze test-analyze-full test-search test-ingest test-all \
         test-api-health test-inference test-integration test-patch test-onnx test-shared-client \
-        bench-quick bench-detect bench-faces bench-embed bench-ingest bench-search bench-results bench-python \
+        bench-quick bench-detect bench-faces bench-embed bench-ingest bench-search bench-results bench-python bench-compare \
         models-list models-status models-reload \
         shell-api shell-triton shell-opensearch profile-api resize-images test-create-images \
         api-upload-model api-export-status api-exports api-models \
@@ -1019,5 +1103,6 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
         check-all \
         clean clean-all clean-logs clean-bench clean-exports \
         opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
+        rust-build rust-up rust-down rust-logs rust-restart rust-test rust-bench \
         info docs \
         clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref
