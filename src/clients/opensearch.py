@@ -2089,15 +2089,74 @@ class OpenSearchClient:
         Returns:
             List of matching documents with OCR text and metadata
 
-        Note:
-            This method is currently not implemented and returns an empty list.
+        Returns:
+            List of matching documents with OCR text and metadata
         """
-        # Suppress unused argument warnings - parameters kept for API consistency
-        _ = (query_text, top_k, min_score)
+        try:
+            query = {
+                'size': top_k,
+                'min_score': min_score,
+                'query': {
+                    'bool': {
+                        'should': [
+                            {
+                                'match': {
+                                    'text': {
+                                        'query': query_text,
+                                        'boost': 2.0,
+                                    }
+                                }
+                            },
+                            {
+                                'term': {
+                                    'text_raw': {
+                                        'value': query_text,
+                                        'boost': 3.0,
+                                    }
+                                }
+                            },
+                        ],
+                        'minimum_should_match': 1,
+                    }
+                },
+                'collapse': {
+                    'field': 'image_id',
+                },
+                '_source': [
+                    'image_id',
+                    'image_path',
+                    'text',
+                    'text_raw',
+                    'det_score',
+                    'rec_score',
+                    'box_normalized',
+                    'metadata',
+                ],
+            }
 
-        # TODO: Implement OCR text search using fuzzy matching
-        logger.warning('OCR search not yet implemented')
-        return []
+            response = await self.client.search(index=IndexName.OCR.value, body=query)
+
+            results = []
+            for hit in response.get('hits', {}).get('hits', []):
+                source = hit['_source']
+                results.append(
+                    {
+                        'image_id': source.get('image_id', ''),
+                        'image_path': source.get('image_path'),
+                        'score': hit.get('_score', 0.0),
+                        'text': source.get('text', ''),
+                        'box_normalized': source.get('box_normalized'),
+                        'det_score': source.get('det_score'),
+                        'rec_score': source.get('rec_score'),
+                        'metadata': source.get('metadata'),
+                    }
+                )
+
+            return results
+
+        except Exception as e:
+            logger.error(f'OCR search failed: {e}')
+            return []
 
 
 # Convenience function for standalone usage

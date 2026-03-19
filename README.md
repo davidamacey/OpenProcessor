@@ -478,7 +478,7 @@ See [benchmarks/README.md](benchmarks/README.md) for detailed benchmarking guide
 
 - **[CLAUDE.md](CLAUDE.md)**: AI assistant instructions and detailed architecture
 - **[docs/](docs/)**: Technical documentation
-  - [docs/OCR_SETUP_GUIDE.md](docs/OCR_SETUP_GUIDE.md): OCR model setup
+  - [docs/OCR.md](docs/OCR.md): OCR model setup
   - [docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md): Face recognition details
   - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): Vector search schema
 - **[export/README.md](export/README.md)**: Model export documentation
