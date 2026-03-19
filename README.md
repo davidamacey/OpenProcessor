@@ -15,10 +15,13 @@ git clone https://github.com/davidamacey/OpenProcessor.git && cd OpenProcessor &
 ```
 
 That's it! The setup script automatically:
+- Pulls pre-built Docker images from Docker Hub (~15GB)
 - Detects your GPU and selects the optimal profile
-- Downloads required models (~500MB)
-- Exports models to TensorRT (45-60 min first time)
-- Starts all services
+- Downloads required models (~500MB, ~16 seconds)
+- Exports models to TensorRT (~30-60 min first time, one-time only)
+- Starts all services and runs smoke tests
+
+**First-time setup takes ~30-60 minutes** (mostly TensorRT compilation). Subsequent starts take seconds.
 
 ### Non-Interactive Setup
 
@@ -51,17 +54,14 @@ curl -X POST http://localhost:4603/detect -F "image=@your-image.jpg"
 
 See [INSTALLATION.md](INSTALLATION.md) for manual installation, troubleshooting, and advanced options.
 
-<!--
-## Docker Hub (Coming Soon)
+## Docker Hub
 
-Pre-built images will be available on Docker Hub:
+Pre-built images are available on Docker Hub (pulled automatically by setup):
 
 ```bash
-# Pull and run (no build required)
-docker pull davidamacey/openprocessor:latest
-docker compose up -d
+docker pull davidamacey/openprocessor:latest        # FastAPI service (~14GB)
+docker pull davidamacey/openprocessor-triton:latest  # Triton server (~18GB)
 ```
--->
 
 ---
 
@@ -77,14 +77,33 @@ Switch profiles: `./scripts/openprocessor.sh profile <name>`
 
 ---
 
-## Recent Updates
+## Setup Timing (RTX A6000, 48GB)
 
-**Latest:**
-- One-command setup with automatic GPU detection
-- Multi-GPU profile support (minimal/standard/full)
-- Automated TensorRT export with progress feedback
-- Comprehensive test suite (32 tests, 100% passing)
-- Management CLI for service control
+First-time setup is dominated by one-time TensorRT model compilation.
+Subsequent starts take only seconds since compiled engines are cached.
+
+| Step | Time | Notes |
+|------|------|-------|
+| Model downloads | ~16s | 5 models, ~500MB from HuggingFace/GitHub |
+| Docker image pull | ~30s | Pre-built from Docker Hub (~32GB total) |
+| **TensorRT exports** | **~31 min** | **One-time only, cached after first run** |
+| Service startup | ~33s | Triton loads cached TRT engines |
+| **Total first run** | **~32 min** | |
+| **Subsequent starts** | **~30s** | Just `docker compose up -d` |
+
+**TensorRT Export Breakdown:**
+
+| Model | Export Time | Engine Size |
+|-------|-----------|-------------|
+| YOLO11 detection | ~8 min | ~45 MB |
+| SCRFD face detection | ~2 min | ~20 MB |
+| ArcFace embeddings | ~2 min | ~86 MB |
+| MobileCLIP image encoder | ~4 min | ~35 MB |
+| MobileCLIP text encoder | ~1 min | ~125 MB |
+| PaddleOCR (det + rec) | ~15 min | ~15 MB |
+
+Times vary by GPU. Faster GPUs with more CUDA cores export faster.
+Lower VRAM GPUs (8-12GB) may take 45-60 minutes total.
 
 ---
 
