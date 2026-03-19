@@ -40,32 +40,15 @@ cd OpenProcessor
 The setup script will:
 1. Check prerequisites (Docker, NVIDIA drivers)
 2. Detect your GPU and select the optimal profile
-3. Download required models (~500MB)
-4. Export models to TensorRT (45-60 minutes first time)
-5. Generate configuration files
-6. Start all services
-7. Run smoke tests
+3. Pull pre-built Docker images from Docker Hub (~32GB)
+4. Download required models (~500MB, ~16 seconds)
+5. Export models to TensorRT (~30-60 minutes, **one-time only**)
+6. Generate configuration files
+7. Start all services
+8. Run smoke tests
 
-<!--
-## Docker Hub (Coming Soon)
-
-Pre-built images with TensorRT models will be available:
-
-```bash
-# Pull pre-built images (no export required!)
-docker pull davidamacey/openprocessor:latest
-docker pull davidamacey/openprocessor-models:latest
-
-# Clone for configs only
-git clone https://github.com/davidamacey/OpenProcessor.git
-cd OpenProcessor
-
-# Start with pre-built images
-docker compose -f docker-compose.hub.yml up -d
-```
-
-This skips the 45-60 minute TensorRT export step.
--->
+**First-time setup takes ~30-60 minutes** (mostly TensorRT compilation).
+Subsequent starts take ~30 seconds since compiled engines are cached on disk.
 
 ---
 
