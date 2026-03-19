@@ -53,7 +53,7 @@ High-performance visual AI API built on FastAPI and NVIDIA Triton Inference Serv
 The system uses Docker Compose to orchestrate three core services:
 
 1. **triton-server**: NVIDIA Triton Inference Server
-   - GPU inference backend (device_ids: [`0`, `2`])
+   - GPU inference backend (device_ids configurable, default: [`0`])
    - Ports: 4600 (HTTP), 4601 (gRPC), 4602 (metrics)
    - Serves TensorRT models with dynamic batching
    - Max batch size: 128
