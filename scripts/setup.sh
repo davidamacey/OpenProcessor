@@ -359,24 +359,39 @@ build_docker_images() {
         return 0
     fi
 
-    print_section "Building Docker Images"
+    print_section "Pulling/Building Docker Images"
 
-    log_info "Building container images (first run pulls base images)."
-    log_info "This is a one-time step; subsequent runs use cached layers."
-    echo ""
+    # Try pulling pre-built images from Docker Hub first (fast path).
+    # Fall back to building from Dockerfiles if pull fails (e.g., first release,
+    # no internet, or user wants a custom build).
+    log_step "Pulling pre-built images from Docker Hub..."
+    if docker compose pull yolo-api triton-server 2>/dev/null; then
+        log_success "Pre-built images pulled from Docker Hub"
+        return 0
+    else
+        log_warn "Could not pull pre-built images from Docker Hub"
+        log_info "Building from source instead (first run pulls base images ~15GB)..."
+        echo ""
+    fi
 
-    # Build both images. First run pulls:
-    #   - python:3.13-slim-trixie (~50MB) + pip packages for yolo-api
-    #   - nvcr.io/nvidia/tritonserver:25.10-py3 (~15GB) for triton-server
+    # Build from Dockerfiles
     log_step "Building yolo-api image..."
-    docker compose build yolo-api
+    if ! docker compose build yolo-api; then
+        log_error "Failed to build yolo-api image"
+        log_info "Check your internet connection and disk space (need ~5GB free)"
+        return 1
+    fi
     log_success "yolo-api image ready"
 
     log_step "Building triton-server image..."
-    docker compose build triton-server
+    if ! docker compose build triton-server; then
+        log_error "Failed to build triton-server image"
+        log_info "Check your internet connection and disk space (need ~20GB free)"
+        return 1
+    fi
     log_success "triton-server image ready"
 
-    log_success "Docker images built"
+    log_success "Docker images ready"
 }
 
 # =============================================================================
@@ -800,10 +815,18 @@ main() {
     fi
     log_info "Download step: $(format_elapsed $((SECONDS - step_start)))"
 
-    # Step 5: Build Docker images (first run pulls base images)
+    # Step 5: Pull or build Docker images
     step_start=$SECONDS
-    build_docker_images
-    log_info "Docker build step: $(format_elapsed $((SECONDS - step_start)))"
+    if ! build_docker_images; then
+        log_error "Docker image setup failed. Cannot continue without container images."
+        log_info "Troubleshooting:"
+        log_info "  - Check internet connectivity"
+        log_info "  - Check disk space: df -h"
+        log_info "  - Try manually: docker compose pull"
+        log_info "  - Or build locally: docker compose build"
+        exit 1
+    fi
+    log_info "Docker image step: $(format_elapsed $((SECONDS - step_start)))"
 
     # Step 6: Generate configuration (before export so configs match engines)
     generate_configs_step

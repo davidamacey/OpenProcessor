@@ -2,10 +2,10 @@ name: openprocessor
 
 services:
   triton-server:
+    image: davidamacey/openprocessor-triton:latest
     build:
       context: .
       dockerfile: Dockerfile.triton
-    image: openprocessor-triton:25.10
     container_name: triton-server
     restart: always
     ports:
@@ -50,6 +50,7 @@ services:
       - triton_net
 
   yolo-api:
+    image: davidamacey/openprocessor:latest
     container_name: yolo-api
     restart: always
     build:
