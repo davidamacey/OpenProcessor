@@ -5,6 +5,7 @@
   import {
     bulkLabel,
     deleteCropLabel,
+    flagNeedsNewClass,
     getCluster,
     moveCropsToCluster,
     putCropLabel,
@@ -507,6 +508,33 @@
         await advance();
       },
       'Skip selected',
+    );
+    reg(
+      'N',
+      async () => {
+        const ids = [...selected];
+        if (ids.length === 0) {
+          toastStore.info('Select crops first to flag for new class.');
+          return;
+        }
+        const note = window.prompt(
+          `Flag ${ids.length} crop${ids.length === 1 ? '' : 's'} as NEEDS NEW CLASS?\n` +
+            `Optional note (e.g. proposed class name):`,
+          '',
+        );
+        if (note === null) return;
+        try {
+          const res = await flagNeedsNewClass(ids, note);
+          toastStore.success(
+            `${res.flagged} flagged for new-class review${res.errors ? ` (${res.errors} errors)` : ''}`,
+          );
+          selected.clear();
+          selected = new Set();
+        } catch (e) {
+          toastStore.error(`Flag failed: ${(e as Error).message}`);
+        }
+      },
+      'Flag selected as needing new class (curator review)',
     );
     reg(
       'd',

@@ -354,6 +354,23 @@ export function moveCropsToCluster(
   );
 }
 
+// -- needs new class flag ------------------------------------------------
+
+export function flagNeedsNewClass(
+  cropIds: string[],
+  note: string = '',
+  signal?: AbortSignal,
+): Promise<{ flagged: number; errors: number }> {
+  return apiFetch<{ flagged: number; errors: number }>(
+    '/curation/crops/flag_new_class',
+    {
+      method: 'POST',
+      body: JSON.stringify({ crop_ids: cropIds, note }),
+    },
+    signal,
+  );
+}
+
 // -- test holdout --------------------------------------------------------
 
 export function freezeTestHoldout(
