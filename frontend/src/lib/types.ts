@@ -1,0 +1,168 @@
+/**
+ * TypeScript types mirroring the OpenSearch indexes defined in Wave 1d
+ * (op_classes, op_vehicle_crops, op_clusters, etc.) and the openprocessor
+ * `/curation/...` endpoint responses defined in Phase 2D.
+ *
+ * These shapes are forward-tolerant: we accept extra fields silently so a
+ * server-side schema bump won't break the app.
+ */
+
+export type LabelSource =
+  | 'v6_original_label'
+  | 'hdd_user_label'
+  | 'model_suggestion'
+  | 'gemma_suggestion'
+  | 'human_confirmed'
+  | 'cluster_propagation'
+  | 'unknown';
+
+export type ClassSource = 'registry' | 'derived' | 'imported';
+
+export interface OpClass {
+  id: number;
+  name: string;
+  group: string | null;
+  count: number;
+  validated_count: number;
+  added_at: string;
+  /** Hex color hint or null. */
+  color?: string | null;
+}
+
+export interface BBoxNorm {
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+}
+
+export interface OpCrop {
+  id: string;
+  source_image_path: string;
+  source_image_sha256?: string;
+  bbox_norm: BBoxNorm;
+  class_id: number | null;
+  class_name: string | null;
+  label_source: LabelSource;
+  label_validated: boolean;
+  label_confidence: number | null;
+  /** Gemma's most-recent suggestion if any. */
+  gemma_suggested_class_id?: number | null;
+  gemma_suggested_class_name?: string | null;
+  gemma_suggested_confidence?: number | null;
+  /** Cluster + similarity-to-centroid (0..1). */
+  cluster_id: number | null;
+  similarity_to_centroid: number | null;
+  /** AHC sub-cluster id, populated only after refine ran. */
+  sub_cluster_id?: number | null;
+  /** Plate sub-bbox normalized to source image. */
+  plate_bbox_norm?: BBoxNorm | null;
+  hdd_source?: string | null;
+  test_holdout: boolean;
+  outlier_flagged?: boolean;
+  outlier_score?: number | null;
+  updated_at: string;
+}
+
+export interface OpCluster {
+  id: number;
+  size: number;
+  dominant_class_id: number | null;
+  dominant_class_name: string | null;
+  dominant_pct: number;
+  purity: number; // 0..1
+  representative_crop_ids: string[]; // up to 4
+  has_subclusters: boolean;
+  centroid_sha?: string;
+  updated_at: string;
+}
+
+export interface OpStats {
+  total_crops: number;
+  validated_crops: number;
+  test_holdout_crops: number;
+  ingestion: {
+    images_processed: number;
+    images_pending: number;
+    last_run_at: string | null;
+  };
+  per_class: Array<{
+    class_id: number;
+    class_name: string;
+    count: number;
+    validated_count: number;
+  }>;
+}
+
+export interface OpHealth {
+  ok: boolean;
+  components: {
+    triton: 'ok' | 'degraded' | 'down';
+    opensearch: 'ok' | 'degraded' | 'down';
+    gemma_openwebui: 'ok' | 'degraded' | 'down';
+    class_registry_sha: string | null;
+  };
+  timestamp: string;
+}
+
+export type ReviewTab = 'mismatches' | 'gemma_low_conf' | 'outliers' | 'uncertainty';
+
+export interface ReviewItem extends OpCrop {
+  reason: string;
+  proposed_class_id: number | null;
+  proposed_class_name: string | null;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CropFilter {
+  class_id?: number | null;
+  cluster_id?: number | null;
+  label_source?: LabelSource;
+  label_validated?: boolean;
+  hdd_source?: string;
+  conf_min?: number;
+  conf_max?: number;
+  sort?: string;
+  limit?: number;
+  page?: number;
+}
+
+export interface ClusterFilter {
+  class_id?: number | null;
+  min_size?: number;
+  sort?: 'purity_asc' | 'purity_desc' | 'size_desc' | 'size_asc' | 'dominant_class';
+  page?: number;
+  page_size?: number;
+}
+
+export interface BulkLabelResult {
+  affected: number;
+  failed: string[];
+}
+
+export interface ToastMessage {
+  id: string;
+  kind: 'info' | 'success' | 'warn' | 'error';
+  text: string;
+  ttl_ms?: number;
+}
+
+export interface KeyboardShortcut {
+  key: string;
+  scope: string;
+  description: string;
+}
+
+export interface UndoEntry {
+  crop_id: string;
+  prior_class_id: number | null;
+  prior_label_source: LabelSource;
+  prior_validated: boolean;
+  at: number;
+}
