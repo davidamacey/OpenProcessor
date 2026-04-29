@@ -24,7 +24,7 @@ npm run dev    # http://localhost:5173
 
 # 4. Production build
 npm run build
-npm run preview    # serves the static build on http://localhost:5174
+npm run preview    # serves the static build on http://localhost:5181
 ```
 
 The Docker production image is built and run from the parent
@@ -135,7 +135,8 @@ exclusively — no Svelte 4 `writable()`/`readable()`.
 
 The `Dockerfile` produces a static SPA served by `nginx:alpine` on
 port 80. The host port mapping in `docker-compose.legacy.yml` exposes
-it on `5174`. The `__RUNTIME__` placeholder in built JS is replaced
+it on `5181` (note: 5174 is reserved on this host by `example-app-backend`).
+The `__RUNTIME__` placeholder in built JS is replaced
 with the real `PUBLIC_TRITON_API_URL` at container start by
 `docker-entrypoint.sh`, so one image works for any openprocessor URL.
 

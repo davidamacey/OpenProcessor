@@ -68,7 +68,7 @@ npm run build  # SvelteKit → /build (static)
 ```
 
 The production build is consumed by a `nginx:alpine` container declared in
-`openprocessor/docker-compose.legacy.yml` on port 5174 (host).
+`openprocessor/docker-compose.legacy.yml` on port 5181 (host) — 5174 is taken by example-app-backend.
 
 ## Connecting to openprocessor
 
