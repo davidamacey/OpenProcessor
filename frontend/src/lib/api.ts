@@ -14,10 +14,17 @@ import type {
   ClusterFilter,
   CropFilter,
   OpClass,
+  OpClassCreate,
+  OpClassMerge,
+  OpClassUpdate,
   OpCluster,
   OpCrop,
+  OpExportResult,
+  OpExportStatus,
   OpHealth,
   OpStats,
+  OpTestHoldoutFreezeResult,
+  OpTestHoldoutStats,
   PaginatedResponse,
   ReviewItem,
   ReviewTab,
@@ -258,8 +265,124 @@ export function getReviewQueue(
   );
 }
 
-export function exportYolo(signal?: AbortSignal): Promise<{ job_id: string }> {
-  return apiFetch<{ job_id: string }>('/curation/export/yolo', { method: 'POST' }, signal);
+/**
+ * Kick off a YOLO export job. Optional `version_tag` is included in the
+ * manifest (Section L14). Server returns 202 + job id while it runs.
+ */
+export function exportYolo(
+  opts: { version_tag?: string } = {},
+  signal?: AbortSignal,
+): Promise<OpExportResult> {
+  const body: Record<string, unknown> = {};
+  if (opts.version_tag) body.version_tag = opts.version_tag;
+  return apiFetch<OpExportResult>(
+    '/curation/export/yolo',
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Poll current export state. */
+export function exportStatus(signal?: AbortSignal): Promise<OpExportStatus> {
+  return apiFetch<OpExportStatus>('/curation/export/status', {}, signal);
+}
+
+// -- classes mutators ----------------------------------------------------
+
+export function getClass(classId: number, signal?: AbortSignal): Promise<OpClass> {
+  return apiFetch<OpClass>(`/curation/classes/${classId}`, {}, signal);
+}
+
+export function addClass(
+  payload: OpClassCreate,
+  signal?: AbortSignal,
+): Promise<{ class_id: number; class_name: string; group: string }> {
+  return apiFetch<{ class_id: number; class_name: string; group: string }>(
+    '/curation/classes',
+    { method: 'POST', body: JSON.stringify(payload) },
+    signal,
+  );
+}
+
+export function renameClass(
+  classId: number,
+  payload: OpClassUpdate,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `/curation/classes/${classId}`,
+    { method: 'PUT', body: JSON.stringify(payload) },
+    signal,
+  );
+}
+
+export function mergeClasses(
+  payload: OpClassMerge,
+  signal?: AbortSignal,
+): Promise<{ source_id: number; target_id: number; relabeled: number }> {
+  return apiFetch<{ source_id: number; target_id: number; relabeled: number }>(
+    '/curation/classes/merge',
+    { method: 'POST', body: JSON.stringify(payload) },
+    signal,
+  );
+}
+
+export function syncClassesToOpensearch(
+  signal?: AbortSignal,
+): Promise<{ created: number; updated: number }> {
+  return apiFetch<{ created: number; updated: number }>(
+    '/curation/classes/sync_to_opensearch',
+    { method: 'POST' },
+    signal,
+  );
+}
+
+// -- DnD: move crops between clusters ------------------------------------
+
+export function moveCropsToCluster(
+  cropIds: string[],
+  targetClusterId: number,
+  signal?: AbortSignal,
+): Promise<{ moved: number; failed: string[] }> {
+  return apiFetch<{ moved: number; failed: string[] }>(
+    '/curation/crops/move',
+    {
+      method: 'POST',
+      body: JSON.stringify({ crop_ids: cropIds, cluster_id: targetClusterId }),
+    },
+    signal,
+  );
+}
+
+// -- test holdout --------------------------------------------------------
+
+export function freezeTestHoldout(
+  payload: { percent: number; seed: number },
+  signal?: AbortSignal,
+): Promise<OpTestHoldoutFreezeResult> {
+  return apiFetch<OpTestHoldoutFreezeResult>(
+    '/curation/test_holdout/freeze',
+    { method: 'POST', body: JSON.stringify(payload) },
+    signal,
+  );
+}
+
+export function getTestHoldoutStats(signal?: AbortSignal): Promise<OpTestHoldoutStats> {
+  return apiFetch<OpTestHoldoutStats>('/curation/test_holdout/stats', {}, signal);
+}
+
+// -- registry/manifest downloads (used as anchor `download` URLs) --------
+
+export function getClassRegistryUrl(): string {
+  return `${apiBase}/curation/export/registry/class_registry.json`;
+}
+
+export function getDataYamlUrl(): string {
+  return `${apiBase}/curation/export/registry/data_v7.yaml`;
+}
+
+export function getManifestUrl(): string {
+  return `${apiBase}/curation/export/registry/manifest.json`;
 }
 
 // -- image URL helpers (no fetch — used directly in <img src=...>) -------

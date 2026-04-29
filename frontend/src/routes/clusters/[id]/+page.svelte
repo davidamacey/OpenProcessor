@@ -1,9 +1,12 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
+  import { goto } from '$app/navigation';
   import {
     bulkLabel,
     deleteCropLabel,
     getCluster,
+    moveCropsToCluster,
     putCropLabel,
     refineCluster,
     runGemmaOnCluster,
@@ -36,6 +39,19 @@
   // Class dropdown
   let confirmClassId = $state<number | null>(null);
 
+  // ---- Move/DnD state ----------------------------------------------------
+  // Recent target cluster ids the labeler has typed in this session (LRU 8).
+  let recentTargets = $state<number[]>([]);
+  // The dnd-action items array shown in the grid; mirrors filteredCrops but
+  // is what we mutate during a drag so optimistic UI feels native.
+  let gridItems = $state<OpCrop[]>([]);
+  // Tracks the in-flight drag's payload (one or many crops). Set on dragStart.
+  let dragIds = $state<string[]>([]);
+  // Inline cluster-picker (opened by M-key) state.
+  let movePickerOpen = $state<boolean>(false);
+  let movePickerValue = $state<string>('');
+  let movePickerInput = $state<HTMLInputElement | null>(null);
+
   async function load(): Promise<void> {
     if (!Number.isFinite(clusterId)) return;
     loading = true;
@@ -67,6 +83,13 @@
   const filteredCrops = $derived(
     subTab == null ? crops : crops.filter((c) => c.sub_cluster_id === subTab),
   );
+
+  // Mirror filteredCrops into gridItems whenever the underlying list changes.
+  // svelte-dnd-action mutates its `items` prop in place, so we use a separate
+  // array — never feed it `filteredCrops` directly.
+  $effect(() => {
+    gridItems = [...filteredCrops];
+  });
 
   // Cut-line index: crops with similarity > 0.75 come first (already sorted by API).
   const cutLineIndex = $derived.by(() => {
@@ -310,6 +333,132 @@
     }
   }
 
+  // ---------------- move (DnD + hotkey) ----------------
+
+  function rememberTarget(id: number): void {
+    const next = [id, ...recentTargets.filter((x) => x !== id)].slice(0, 8);
+    recentTargets = next;
+  }
+
+  /**
+   * Issue a move from the source cluster to `targetClusterId`. On success
+   * the moved crops disappear from the local grid; on failure the grid is
+   * fully reloaded so we can't strand a stale optimistic state.
+   */
+  async function moveCropIds(ids: string[], targetClusterId: number): Promise<void> {
+    if (!Number.isFinite(targetClusterId) || targetClusterId === clusterId) {
+      toastStore.warn('Pick a different cluster id.');
+      return;
+    }
+    if (ids.length === 0) return;
+    // Snapshot for revert: full crops list before mutation.
+    const snap = crops;
+    crops = crops.filter((c) => !ids.includes(c.id));
+    selected = new Set();
+    rememberTarget(targetClusterId);
+    try {
+      const res = await moveCropsToCluster(ids, targetClusterId);
+      const moved = res.moved ?? ids.length;
+      const failed = res.failed?.length ?? 0;
+      if (failed > 0) {
+        toastStore.warn(
+          `Moved ${moved} of ${ids.length} crop${ids.length === 1 ? '' : 's'} (${failed} failed). Reloading.`,
+        );
+        void load();
+      } else {
+        toastStore.success(
+          `Moved ${moved} crop${moved === 1 ? '' : 's'} → cluster #${targetClusterId}.`,
+        );
+      }
+    } catch (e) {
+      crops = snap;
+      toastStore.error(`Move failed: ${(e as Error).message}`);
+    }
+  }
+
+  function openMovePicker(): void {
+    if (selected.size === 0) {
+      toastStore.warn('Select crops to move first.');
+      return;
+    }
+    movePickerValue = '';
+    movePickerOpen = true;
+    queueMicrotask(() => movePickerInput?.focus());
+  }
+
+  function cancelMovePicker(): void {
+    movePickerOpen = false;
+    movePickerValue = '';
+  }
+
+  async function confirmMovePicker(): Promise<void> {
+    const id = Number(movePickerValue);
+    if (!Number.isFinite(id) || id < 0) {
+      toastStore.error('Cluster id must be a non-negative integer.');
+      return;
+    }
+    movePickerOpen = false;
+    await moveCropIds([...selected], id);
+  }
+
+  function jumpToCluster(id: number): void {
+    void goto(`/clusters/${id}`);
+  }
+
+  /**
+   * dnd-action handlers. We treat the source grid as a draggable-only zone:
+   * removing items is fine (they animate out), adding is rejected. Each
+   * target zone receives the dropped items, fires the move RPC, and then
+   * resets its own items array so the visual placeholder doesn't linger.
+   */
+  function onGridConsider(e: CustomEvent<{ items: OpCrop[]; info: { id: string; trigger: TRIGGERS; source: SOURCES } }>): void {
+    // Track payload for hotkey-based cancel/abort flows.
+    const draggedId = e.detail.info?.id;
+    if (draggedId && !dragIds.includes(draggedId)) {
+      // If the dragged crop is part of the selection, drag the whole group.
+      if (selected.has(draggedId) && selected.size > 1) {
+        dragIds = [...selected];
+      } else {
+        dragIds = [draggedId];
+      }
+    }
+    gridItems = e.detail.items;
+  }
+
+  function onGridFinalize(e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>): void {
+    // The grid is the source-of-truth zone; if a finalize lands here without
+    // a corresponding target drop, revert to filteredCrops to undo any
+    // shadow-item shuffling.
+    gridItems = e.detail.items;
+    if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE || e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
+      // The actual move RPC fires from the target zone's finalize handler.
+      // No-op here.
+    } else {
+      // DROPPED_OUTSIDE_OF_ANY / DRAG_STOPPED → restore.
+      gridItems = [...filteredCrops];
+      dragIds = [];
+    }
+  }
+
+  // Per-target consider: we render an empty `items: []` array; dnd-action
+  // accepts the shadow item but we never persist it.
+  function onTargetConsider(_targetId: number) {
+    return (_e: CustomEvent<{ items: OpCrop[] }>): void => {
+      // We deliberately do nothing — keeping the visual cue but never
+      // mutating any persistent state on hover.
+    };
+  }
+
+  function onTargetFinalize(targetId: number) {
+    return (e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>): void => {
+      const dropped = e.detail.items.filter((it) => it && typeof it.id === 'string');
+      const ids = dropped.length > 0 ? dropped.map((it) => it.id) : dragIds;
+      dragIds = [];
+      if (ids.length === 0) return;
+      void moveCropIds(ids, targetId);
+    };
+  }
+
   // ---------------- shortcuts ----------------
 
   $effect(() => {
@@ -395,12 +544,28 @@
       'Next page',
     );
     reg(
+      'm',
+      openMovePicker,
+      'Move selected to cluster…',
+    );
+    reg(
       'escape',
       () => {
-        // Cancel-drag is handled by svelte-dnd-action consumers; we only deselect.
+        if (movePickerOpen) {
+          cancelMovePicker();
+          return;
+        }
+        if (dragIds.length > 0) {
+          // Synthesize a drag-cancel: dispatch a global Escape that
+          // svelte-dnd-action listens for to abort the active pointer drag.
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+          dragIds = [];
+          gridItems = [...filteredCrops];
+          return;
+        }
         selected = new Set();
       },
-      'Cancel drag / clear selection',
+      'Cancel drag / picker / clear selection',
     );
 
     return () => offs.forEach((off) => off());
@@ -487,32 +652,108 @@
     {/each}
   </div>
 
-  <!-- Grid -->
-  <div class="flex-1 overflow-auto p-4">
-    {#if loading && crops.length === 0}
-      <p class="text-sm text-zinc-500">Loading...</p>
-    {:else if error}
-      <p class="text-sm text-red-300">API unavailable: {error}</p>
-    {:else if filteredCrops.length === 0}
-      <p class="text-sm text-zinc-500">No crops in this cluster yet.</p>
-    {:else}
-      <div
-        class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
-      >
-        {#each filteredCrops as crop, i (crop.id)}
-          {#if i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < filteredCrops.length}
-            <CutLine />
-          {/if}
-          <CropCard
-            {crop}
-            selected={selected.has(crop.id)}
-            onclick={(c, e) => toggleSelect(c.id, e)}
-            onacceptGemma={(c) => void acceptGemmaForCrop(c)}
-            onrejectGemma={(c) => void rejectGemmaForCrop(c)}
-          />
-        {/each}
+  <!-- Grid + move-target rail -->
+  <div class="flex min-h-0 flex-1 overflow-hidden">
+    <div class="min-w-0 flex-1 overflow-auto p-4">
+      {#if loading && crops.length === 0}
+        <p class="text-sm text-zinc-500">Loading...</p>
+      {:else if error}
+        <p class="text-sm text-red-300">API unavailable: {error}</p>
+      {:else if filteredCrops.length === 0}
+        <p class="text-sm text-zinc-500">No crops in this cluster yet.</p>
+      {:else}
+        <div
+          class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
+          use:dndzone={{
+            items: gridItems,
+            type: 'op-crop',
+            flipDurationMs: 150,
+            dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
+            dragDisabled: false,
+          }}
+          onconsider={onGridConsider}
+          onfinalize={onGridFinalize}
+        >
+          {#each gridItems as crop, i (crop.id)}
+            {#if i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < gridItems.length}
+              <CutLine />
+            {/if}
+            <CropCard
+              {crop}
+              selected={selected.has(crop.id)}
+              onclick={(c, e) => toggleSelect(c.id, e)}
+              onacceptGemma={(c) => void acceptGemmaForCrop(c)}
+              onrejectGemma={(c) => void rejectGemmaForCrop(c)}
+            />
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <!-- Move-target rail -->
+    <aside
+      class="flex w-56 shrink-0 flex-col border-l border-zinc-800 bg-zinc-950"
+      aria-label="Move targets"
+    >
+      <div class="border-b border-zinc-800 px-3 py-2">
+        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+          Move to cluster
+        </h2>
+        <p class="mt-1 text-[11px] leading-tight text-zinc-500">
+          Drag crops here, or press <kbd>M</kbd> to type a target id.
+        </p>
       </div>
-    {/if}
+
+      <div class="flex-1 overflow-y-auto px-2 py-2">
+        {#if recentTargets.length === 0}
+          <p class="px-1 py-2 text-xs text-zinc-500">
+            No recent targets yet — type one with <kbd>M</kbd>.
+          </p>
+        {:else}
+          <ul class="space-y-1.5">
+            {#each recentTargets as targetId (targetId)}
+              <li>
+                <div
+                  class="group flex items-center gap-2 rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-2 text-xs transition hover:border-blue-500/60 hover:bg-blue-500/5"
+                  use:dndzone={{
+                    items: [],
+                    type: 'op-crop',
+                    flipDurationMs: 150,
+                    dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.8)' },
+                    dropFromOthersDisabled: false,
+                    dragDisabled: true,
+                  }}
+                  onconsider={onTargetConsider(targetId)}
+                  onfinalize={onTargetFinalize(targetId)}
+                >
+                  <span class="font-mono text-zinc-200">#{targetId}</span>
+                  <span class="grow text-[10px] text-zinc-500">drop here</span>
+                  <button
+                    type="button"
+                    class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-300 opacity-0 transition group-hover:opacity-100 hover:border-zinc-500"
+                    onclick={() => jumpToCluster(targetId)}
+                    aria-label="Open cluster {targetId}"
+                  >
+                    open
+                  </button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </div>
+
+      <div class="border-t border-zinc-800 p-2">
+        <button
+          type="button"
+          class="btn w-full justify-center"
+          onclick={openMovePicker}
+          disabled={selected.size === 0}
+        >
+          Move {selected.size || ''} → ID
+        </button>
+      </div>
+    </aside>
   </div>
 
   <!-- Pagination -->
@@ -543,3 +784,47 @@
     </div>
   </div>
 </div>
+
+{#if movePickerOpen}
+  <div
+    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Move crops to cluster"
+  >
+    <div class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
+      <h3 class="mb-2 text-base font-semibold">Move {selected.size} crop{selected.size === 1 ? '' : 's'}</h3>
+      <p class="mb-3 text-xs text-zinc-400">
+        Move these from cluster #{clusterId} to a target cluster id. The
+        operation is reversible per crop via the cluster page.
+      </p>
+      <label class="mb-3 block text-sm">
+        <span class="mb-1 block text-zinc-400">Target cluster id</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          bind:this={movePickerInput}
+          bind:value={movePickerValue}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void confirmMovePicker();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelMovePicker();
+            }
+          }}
+          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          placeholder="e.g. 42"
+        />
+      </label>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn" onclick={cancelMovePicker}>Cancel</button>
+        <button type="button" class="btn btn-primary" onclick={() => void confirmMovePicker()}>
+          Move
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

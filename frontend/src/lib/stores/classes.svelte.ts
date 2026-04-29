@@ -60,6 +60,17 @@ class ClassesStore {
     }
   }
 
+  /**
+   * Drop the current cache and re-fetch. Used after add/rename/merge so the
+   * UI never displays a stale row briefly. The 30-second poll would catch
+   * up on its own; this just makes mutations visible immediately.
+   */
+  async clearAndRefetch(): Promise<void> {
+    this.classes = [];
+    this.lastUpdated = null;
+    await this.refresh();
+  }
+
   byId(id: number): OpClass | undefined {
     return this.classes.find((c) => c.id === id);
   }

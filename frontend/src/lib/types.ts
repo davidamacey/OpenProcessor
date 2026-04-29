@@ -27,6 +27,64 @@ export interface OpClass {
   added_at: string;
   /** Hex color hint or null. */
   color?: string | null;
+  /** True when the class has been merged into another and should be hidden by default. */
+  deprecated?: boolean;
+}
+
+/** Payload for `POST /curation/classes`. */
+export interface OpClassCreate {
+  name: string;
+  group: string;
+  notes?: string;
+}
+
+/** Payload for `PUT /curation/classes/{id}`. Either field may be supplied. */
+export interface OpClassUpdate {
+  name?: string;
+  group?: string;
+}
+
+/** Payload for `POST /curation/classes/merge`. */
+export interface OpClassMerge {
+  source_id: number;
+  target_id: number;
+}
+
+/** Server response from `GET /curation/export/status`. */
+export interface OpExportStatus {
+  /** 'idle' | 'running' | 'success' | 'failed' | 'unknown'. */
+  status: string;
+  last_run: string | null;
+  /** 0..1 for active jobs. */
+  progress?: number;
+  job_id?: string | null;
+  /** On success: directory the manifest was written to. */
+  export_dir?: string | null;
+  /** On failure: the error message. */
+  error?: string | null;
+  /** Optional human-readable detail. */
+  message?: string | null;
+}
+
+/** Server response from `POST /curation/export/yolo`. */
+export interface OpExportResult {
+  status: string;
+  job_id?: string | null;
+  message?: string | null;
+}
+
+/** Server response from `POST /curation/test_holdout/freeze`. */
+export interface OpTestHoldoutFreezeResult {
+  n_frozen: number;
+  n_classes_covered: number;
+  test_holdout_sha: string;
+  per_class_counts: Record<string, number>;
+}
+
+/** Server response from `GET /curation/test_holdout/stats`. */
+export interface OpTestHoldoutStats {
+  total: number;
+  by_class: Array<{ key: number; doc_count: number }>;
 }
 
 export interface BBoxNorm {

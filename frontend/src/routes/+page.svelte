@@ -64,7 +64,7 @@
   async function runExport(): Promise<void> {
     try {
       const res = await exportYolo();
-      toastStore.success(`Export job started: ${res.job_id}`);
+      toastStore.success(`Export job started: ${res.job_id ?? res.status}`);
     } catch (e) {
       toastStore.error(`Export failed: ${(e as Error).message}`);
     }
