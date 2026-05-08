@@ -144,7 +144,7 @@
                   <span
                     class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
                   >
-                    {pb.text} {(c.purity ?? 0 * 100).toFixed(0)}
+                    {pb.text} {((c.purity ?? 0) * 100).toFixed(0)}
                   </span>
                   {#if c.has_subclusters}
                     <span

@@ -146,45 +146,283 @@ export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
   return apiFetch<OpHealth>('/curation/health', {}, signal);
 }
 
-export function getStats(signal?: AbortSignal): Promise<OpStats> {
-  return apiFetch<OpStats>('/curation/stats/dataset', {}, signal);
+export async function getStats(signal?: AbortSignal): Promise<OpStats> {
+  // The API returns
+  //   /curation/stats/dataset:  {total_crops, validated, test_holdout, by_source}
+  //   /curation/stats/classes:  {classes:[{class_id, class_name, count, validated_count}, ...]}
+  // The labeler dashboard expects OpStats which uses validated_crops /
+  // test_holdout_crops / per_class / ingestion.* — fold the two server
+  // payloads into that shape so the dashboard can render directly.
+  type RawDataset = {
+    total_crops?: number;
+    validated?: number;
+    test_holdout?: number;
+    by_source?: Array<{ key: string; doc_count: number }>;
+  };
+  type RawClasses = {
+    classes?: Array<{
+      class_id: number;
+      class_name: string;
+      count?: number;
+      sample_count?: number;
+      validated_count?: number;
+    }>;
+  };
+  const [ds, cls] = await Promise.all([
+    apiFetch<RawDataset>('/curation/stats/dataset', {}, signal),
+    apiFetch<RawClasses>('/curation/stats/classes', {}, signal).catch(() => ({ classes: [] })),
+  ]);
+  const totalImages = (ds.by_source ?? []).reduce((acc, b) => acc + (b.doc_count || 0), 0);
+  return {
+    total_crops: ds.total_crops ?? 0,
+    validated_crops: ds.validated ?? 0,
+    test_holdout_crops: ds.test_holdout ?? 0,
+    ingestion: {
+      images_processed: totalImages,
+      images_pending: 0,
+      last_run_at: null,
+    },
+    per_class: (cls.classes ?? []).map((c) => ({
+      class_id: c.class_id,
+      class_name: c.class_name,
+      count: c.count ?? c.sample_count ?? 0,
+      validated_count: c.validated_count ?? 0,
+    })),
+  };
 }
 
-export function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
-  return apiFetch<OpClass[]>('/curation/classes', {}, signal);
+export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
+  // The API returns `{classes: [{class_id, class_name, group, sample_count,
+  // validated_count, deprecated}, ...]}`. Map to the labeler's OpClass
+  // shape, which uses `id`/`name`/`count`.
+  type RawClass = {
+    class_id?: number;
+    id?: number;
+    class_name?: string;
+    name?: string;
+    group?: string | null;
+    sample_count?: number;
+    count?: number;
+    validated_count?: number;
+    color?: string | null;
+    deprecated?: boolean;
+    added_at?: string;
+  };
+  const res = await apiFetch<{ classes: RawClass[] } | RawClass[]>('/curation/classes', {}, signal);
+  const raw = Array.isArray(res) ? res : res.classes ?? [];
+  return raw.map((c) => ({
+    id: c.class_id ?? c.id ?? -1,
+    name: c.class_name ?? c.name ?? '',
+    group: c.group ?? null,
+    count: c.sample_count ?? c.count ?? 0,
+    validated_count: c.validated_count ?? 0,
+    added_at: c.added_at ?? '',
+    color: c.color ?? null,
+    deprecated: !!c.deprecated,
+  }));
 }
 
-export function getClusters(
+export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<OpCluster>> {
-  // Plan Phase 2D: clusters are exposed via /clusters/stats/op_vehicles.
-  // The stats endpoint returns the same paginated cluster list our UI needs.
-  return apiFetch<PaginatedResponse<OpCluster>>(
+  // The existing /clusters/stats/{index} response shape is
+  // `{faiss: {...}, opensearch_clusters: [{cluster_id, count}, ...]}`.
+  // Map to the labeler's PaginatedResponse<OpCluster>.
+  type RawStats = {
+    status?: string;
+    faiss?: { n_clusters?: number };
+    opensearch_clusters?: Array<{ cluster_id: number; count: number }>;
+    total_clusters_in_opensearch?: number;
+  };
+  const raw = await apiFetch<RawStats>(
     `/clusters/stats/op_vehicles${qs({ ...filter })}`,
     {},
     signal,
   );
+  const baseItems = (raw.opensearch_clusters ?? []).map((c) => ({
+    id: c.cluster_id,
+    size: c.count,
+    purity: null as number | null,
+    dominant_class_id: null as number | null,
+    dominant_class_name: null as string | null,
+    dominant_pct: null as number | null,
+    sub_clusters: 0,
+    has_subclusters: false,
+    representative_crop_ids: [] as string[],
+    updated_at: null as string | null,
+  }));
+  // Single-call fetch of top-K representatives across all clusters. When
+  // a class filter is active, the server narrows the agg to clusters that
+  // contain at least one crop of that class.
+  const repsQs = qs({
+    per_cluster: 4,
+    class_id: filter.class_id ?? undefined,
+  });
+  let reps: Record<string, Array<{ crop_id: string; class_name?: string | null }>> = {};
+  try {
+    const repsResp = await apiFetch<{
+      clusters: Record<string, Array<{ crop_id: string; class_name?: string | null }>>;
+    }>(`/curation/clusters/representatives${repsQs}`, {}, signal);
+    reps = repsResp.clusters ?? {};
+  } catch {
+    /* representatives are best-effort; cards still show without thumbs */
+  }
+  // When filtering by class, drop any cluster the server didn't return reps for.
+  const visibleIds =
+    filter.class_id != null ? new Set(Object.keys(reps).map((k) => Number(k))) : null;
+  const filteredBase = visibleIds
+    ? baseItems.filter((c) => visibleIds.has(c.id))
+    : baseItems;
+  const items: OpCluster[] = filteredBase.map((c) => {
+    const r = reps[String(c.id)] ?? [];
+    const counts = new Map<string, number>();
+    for (const x of r) {
+      if (x.class_name) counts.set(x.class_name, (counts.get(x.class_name) ?? 0) + 1);
+    }
+    let domName: string | null = null;
+    let domCount = 0;
+    for (const [n, ct] of counts) {
+      if (ct > domCount) {
+        domName = n;
+        domCount = ct;
+      }
+    }
+    return {
+      ...c,
+      representative_crop_ids: r.map((x) => x.crop_id),
+      dominant_class_name: domName,
+      dominant_pct: r.length > 0 ? domCount / r.length : null,
+    };
+  });
+  return {
+    items,
+    total: filter.class_id != null ? items.length : raw.total_clusters_in_opensearch ?? items.length,
+    page: 1,
+    page_size: items.length,
+  };
 }
 
-export function getCluster(
+/** Convert API's [x1, y1, x2, y2] to the labeler's BBoxNorm {cx, cy, w, h}. */
+function xyxyToBBoxNorm(bb: number[]): import('./types').BBoxNorm {
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = bb;
+  return {
+    cx: (x1 + x2) / 2,
+    cy: (y1 + y2) / 2,
+    w: Math.max(0, x2 - x1),
+    h: Math.max(0, y2 - y1),
+  };
+}
+
+/** Raw crop shape from the /curation/crops API. */
+type RawCrop = {
+  crop_id: string;
+  image_id?: string;
+  image_path: string;
+  bbox_norm: number[];
+  class_id?: number | null;
+  class_name?: string | null;
+  class_source?: string;
+  confidence?: number;
+  cluster_id?: number | null;
+  cluster_distance?: number | null;
+  label_validated?: boolean;
+  label_source?: string;
+  plate_bbox_norm?: number[] | null;
+  plate_score?: number | null;
+  test_holdout?: boolean;
+  thumbnail_url?: string;
+  updated_at?: string;
+};
+
+function mapRawCrop(c: RawCrop): OpCrop {
+  const bb = c.bbox_norm ?? [0, 0, 0, 0];
+  return {
+    id: c.crop_id,
+    source_image_path: c.image_path,
+    bbox_norm: xyxyToBBoxNorm(bb),
+    class_id: c.class_id ?? null,
+    class_name: c.class_name ?? null,
+    label_source: ((c.label_source || 'model') as OpCrop['label_source']),
+    label_validated: !!c.label_validated,
+    label_confidence: c.confidence ?? null,
+    cluster_id: c.cluster_id ?? null,
+    similarity_to_centroid:
+      c.cluster_distance != null ? Math.max(0, 1 - c.cluster_distance) : null,
+    plate_bbox_norm:
+      c.plate_bbox_norm && c.plate_bbox_norm.length === 4
+        ? xyxyToBBoxNorm(c.plate_bbox_norm)
+        : null,
+    test_holdout: !!c.test_holdout,
+    // Preserve server-side updated_at — overriding it client-side breaks
+    // ordering and lets the same crop key appear twice in keyed each blocks
+    // (Svelte each_key_duplicate).
+    updated_at:
+      typeof (c as Record<string, unknown>).updated_at === 'string'
+        ? ((c as Record<string, unknown>).updated_at as string)
+        : '',
+  };
+}
+
+export async function getCluster(
   id: number,
   page = 1,
   pageSize = 60,
   signal?: AbortSignal,
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
-  return apiFetch<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }>(
-    `/clusters/op_vehicles/${id}${qs({ page, page_size: pageSize })}`,
+  type CropPage = { total: number; page: number; page_size: number; crops: RawCrop[] };
+  const cropPage = await apiFetch<CropPage>(
+    `/curation/crops${qs({ cluster_id: id, page, page_size: pageSize })}`,
     {},
     signal,
   );
+  const items = cropPage.crops.map(mapRawCrop);
+  const counts = new Map<string, number>();
+  for (const c of items) {
+    if (c.class_name) counts.set(c.class_name, (counts.get(c.class_name) ?? 0) + 1);
+  }
+  let dom_name: string | null = null;
+  let dom_count = 0;
+  for (const [n, ct] of counts) {
+    if (ct > dom_count) {
+      dom_name = n;
+      dom_count = ct;
+    }
+  }
+  const cluster: OpCluster = {
+    id,
+    size: cropPage.total,
+    purity: cropPage.total > 0 ? dom_count / cropPage.total : null,
+    dominant_class_id: null,
+    dominant_class_name: dom_name,
+    dominant_pct: cropPage.total > 0 ? Math.round((dom_count / cropPage.total) * 100) : null,
+    has_subclusters: false,
+    representative_crop_ids: items.slice(0, 4).map((c) => c.id),
+    updated_at: null,
+  };
+  return {
+    cluster,
+    crops: {
+      items,
+      total: cropPage.total,
+      page: cropPage.page,
+      page_size: cropPage.page_size,
+    },
+  };
 }
 
-export function getCrops(
+export async function getCrops(
   filter: CropFilter = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<OpCrop>> {
-  return apiFetch<PaginatedResponse<OpCrop>>(`/curation/crops${qs({ ...filter })}`, {}, signal);
+  type Raw = { total: number; page: number; page_size: number; crops: RawCrop[] };
+  const raw = await apiFetch<Raw>(`/curation/crops${qs({ ...filter })}`, {}, signal);
+  return {
+    items: raw.crops.map(mapRawCrop),
+    total: raw.total,
+    page: raw.page,
+    page_size: raw.page_size,
+  };
 }
 
 export function putCropLabel(
@@ -226,18 +464,39 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
   );
 }
 
-export function runGemmaOnCluster(
+export async function runGemmaOnCluster(
   clusterId: number,
   signal?: AbortSignal,
-): Promise<{ enqueued: number }> {
-  return apiFetch<{ enqueued: number }>(
-    '/curation/gemma/label_batch',
-    {
-      method: 'POST',
-      body: JSON.stringify({ cluster_id: clusterId, only_unvalidated: true }),
-    },
+): Promise<{ predicted: number; updated: number; new_class_proposals?: unknown[] }> {
+  // /curation/gemma/label_batch takes {crop_ids: [...]} (max 64). Fetch the
+  // unvalidated crops in this cluster first, then POST in chunks of 64.
+  type CropPage = { crops: Array<{ crop_id: string }> };
+  const page = await apiFetch<CropPage>(
+    `/curation/crops${qs({ cluster_id: clusterId, label_validated: false, page_size: 200 })}`,
+    {},
     signal,
   );
+  const cropIds = page.crops.map((c) => c.crop_id);
+  if (cropIds.length === 0) return { predicted: 0, updated: 0, new_class_proposals: [] };
+  let predicted = 0;
+  let updated = 0;
+  const proposals: unknown[] = [];
+  for (let i = 0; i < cropIds.length; i += 64) {
+    const chunk = cropIds.slice(i, i + 64);
+    const r = await apiFetch<{
+      predicted: number;
+      updated: number;
+      new_class_proposals?: unknown[];
+    }>(
+      '/curation/gemma/label_batch',
+      { method: 'POST', body: JSON.stringify({ crop_ids: chunk }) },
+      signal,
+    );
+    predicted += r.predicted ?? 0;
+    updated += r.updated ?? 0;
+    if (Array.isArray(r.new_class_proposals)) proposals.push(...r.new_class_proposals);
+  }
+  return { predicted, updated, new_class_proposals: proposals };
 }
 
 export function refineCluster(

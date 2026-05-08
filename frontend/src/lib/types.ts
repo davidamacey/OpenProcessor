@@ -127,12 +127,13 @@ export interface OpCluster {
   size: number;
   dominant_class_id: number | null;
   dominant_class_name: string | null;
-  dominant_pct: number;
-  purity: number; // 0..1
+  dominant_pct: number | null;
+  purity: number | null; // 0..1, null when not yet computed
   representative_crop_ids: string[]; // up to 4
   has_subclusters: boolean;
+  sub_clusters?: number;
   centroid_sha?: string;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 export interface OpStats {

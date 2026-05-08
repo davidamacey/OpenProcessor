@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { exportYolo, getCrops, getStats, getThumbUrl, runGemmaOnCluster } from '$lib/api';
+  import { apiBase, exportYolo, getCrops, getStats, getThumbUrl, runGemmaOnCluster } from '$lib/api';
   import type { OpCrop, OpStats } from '$lib/types';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -52,7 +52,7 @@
     gemmaBusy = true;
     try {
       const res = await runGemmaOnCluster(id);
-      toastStore.success(`Enqueued ${res.enqueued ?? 0} crops for Gemma`);
+      toastStore.success(`Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`);
       gemmaOpen = false;
     } catch (e) {
       toastStore.error(`Gemma run failed: ${(e as Error).message}`);
@@ -108,7 +108,7 @@
       class="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
     >
       <strong>API unavailable.</strong> Check that openprocessor is running on
-      <code class="font-mono">localhost:4603</code>.
+      <code class="font-mono">{apiBase || window.location.host}</code>.
     </div>
   {/if}
 

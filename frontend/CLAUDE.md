@@ -68,13 +68,17 @@ npm run build  # SvelteKit → /build (static)
 ```
 
 The production build is consumed by a `nginx:alpine` container declared in
-`openprocessor/docker-compose.legacy.yml` on port 5181 (host) — 5174 is taken by example-app-backend.
+`openprocessor/docker-compose.legacy.yml` on port 5184 (host). Port conflicts:
+5174=example-app-backend, 5180/5181=example-app-opensearch, 5183=example-app-docs.
 
 ## Connecting to openprocessor
 
-`PUBLIC_TRITON_API_URL` env var (default `http://localhost:4603`). All API
-calls flow through `src/lib/api.ts` with retry + AbortController for in-flight
-cancellation.
+`PUBLIC_TRITON_API_URL` env var (default: empty string in production Docker).
+When empty, the nginx container proxies `/curation/*` and `/clusters/*` to
+`http://op-api:4603` — no CORS, no hardcoded IPs, works on any LAN client.
+Set `PUBLIC_TRITON_API_URL=http://<host>:4603` only when pointing at a remote
+openprocessor on a different machine. All API calls flow through `src/lib/api.ts`
+with retry + AbortController for in-flight cancellation.
 
 ## Deployment
 

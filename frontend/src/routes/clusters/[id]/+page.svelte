@@ -297,7 +297,7 @@
   async function runGemma(): Promise<void> {
     try {
       const res = await runGemmaOnCluster(clusterId);
-      toastStore.success(`Enqueued ${res.enqueued ?? 0} crops for Gemma.`);
+      toastStore.success(`Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`);
     } catch (e) {
       toastStore.error(`Gemma run failed: ${(e as Error).message}`);
     }
