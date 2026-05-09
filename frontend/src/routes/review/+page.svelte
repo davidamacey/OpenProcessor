@@ -26,6 +26,9 @@
     // Phase 5 active-learning loop: validated crops where the newly
     // promoted model disagrees with the human label.
     { id: 'model_disagreements', label: 'Model Disagreements' },
+    // Plate-detection review: crops with an LPR/SAM3+Gemma-verified
+    // plate bbox waiting for human confirmation in PlateEditor.
+    { id: 'plates', label: 'Plates' },
   ];
 
   let tab = $state<ReviewTab>('all');

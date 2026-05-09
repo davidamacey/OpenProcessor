@@ -176,7 +176,8 @@ export type ReviewTab =
   | 'gemma_low_conf'
   | 'outliers'
   | 'uncertainty'
-  | 'model_disagreements';
+  | 'model_disagreements'
+  | 'plates';
 
 export interface ReviewItem extends OpCrop {
   reason: string;
