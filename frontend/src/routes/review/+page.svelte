@@ -8,8 +8,12 @@
     setCropPlate,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import PlateEditor from '$lib/components/PlateEditor.svelte';
-  import { bboxNormToXYXY } from '$lib/plate_geometry';
+  import PlateBboxCanvas from '$lib/components/PlateBboxCanvas.svelte';
+  import {
+    bboxNormToXYXY,
+    cropToSourceFrame,
+    sourceToCropFrame,
+  } from '$lib/plate_geometry';
   import type { BBoxNorm, OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -220,11 +224,34 @@
   }
 
   // -- plate-tab actions ----------------------------------------------
-  // The plates tab shows crops where the LPR / SAM3 / Gemma chain
-  // proposed a plate bbox but it didn't clear the auto-confirm bar.
-  // The operator's job is to either accept the proposal as-is, redraw
-  // the bbox in the editor, or mark "no plate visible".
-  let plateEditorOpen = $state<boolean>(false);
+  // Inline editor — no modal. The canvas is always live; if the user
+  // tweaks the proposed bbox, Confirm saves the edited version. If they
+  // leave it alone, Confirm saves the proposal as-is. The goal is one
+  // keystroke (Enter) per plate when scanning thousands of crops.
+  //
+  // editedPlateLocal lives in the *crop-local* frame (the same space the
+  // PlateBboxCanvas operates in). We seed it from current.plate_bbox_norm
+  // (source-frame) by projecting through the parent vehicle bbox; the
+  // seeding effect re-runs whenever the cursor advances to a new crop.
+  let editedPlateLocal = $state<BBoxNorm | null>(null);
+  let plateCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(
+    null,
+  );
+
+  function _seedPlateFromCurrent(): void {
+    if (!current || !current.plate_bbox_norm || !current.bbox_norm) {
+      editedPlateLocal = null;
+      return;
+    }
+    editedPlateLocal = sourceToCropFrame(current.plate_bbox_norm, current.bbox_norm);
+  }
+
+  // Reseed whenever the cursor changes (advancing to next crop) or the
+  // tab/items reset.
+  $effect(() => {
+    void current?.id;
+    _seedPlateFromCurrent();
+  });
 
   function _advancePastPlate(id: string): void {
     items = items.filter((x) => x.id !== id);
@@ -235,20 +262,20 @@
 
   async function confirmPlate(): Promise<void> {
     if (!current) return;
-    if (!current.plate_bbox_norm) {
-      toastStore.warn('No plate proposal to confirm — open the editor.');
+    if (!editedPlateLocal) {
+      toastStore.warn('No plate bbox to confirm — drag one in or press D to reject.');
+      return;
+    }
+    if (!current.bbox_norm) {
+      toastStore.error('Missing parent vehicle bbox; cannot project to source frame.');
       return;
     }
     const id = current.id;
-    const bbox = bboxNormToXYXY(current.plate_bbox_norm) as [
-      number,
-      number,
-      number,
-      number,
-    ];
+    const sourceBox = cropToSourceFrame(editedPlateLocal, current.bbox_norm);
+    const tuple = bboxNormToXYXY(sourceBox) as [number, number, number, number];
     _advancePastPlate(id);
     try {
-      await setCropPlate(id, bbox);
+      await setCropPlate(id, tuple);
       toastStore.success('Plate confirmed.');
     } catch (e) {
       toastStore.error(`Confirm failed: ${(e as Error).message}`);
@@ -266,18 +293,6 @@
     } catch (e) {
       toastStore.error(`Reject failed: ${(e as Error).message}`);
     }
-  }
-
-  function openPlateEditor(): void {
-    if (!current) return;
-    plateEditorOpen = true;
-  }
-
-  function onPlateEditorSave(_newBbox: BBoxNorm | null): void {
-    plateEditorOpen = false;
-    if (!current) return;
-    // PlateEditor PUTs through setCropPlate itself, so just advance.
-    _advancePastPlate(current.id);
   }
 
   async function undoLast(): Promise<void> {
@@ -306,7 +321,6 @@
 
     if (tab === 'plates') {
       reg('enter', confirmPlate, 'Confirm plate & advance');
-      reg('e', openPlateEditor, 'Edit plate bbox');
       reg('d', rejectPlate, 'Reject (no plate visible)');
     } else {
       reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
@@ -314,25 +328,45 @@
     }
     reg('n', skip, 'Skip');
     reg('z', undoLast, 'Undo last');
-    // Arrow keys navigate within the loaded queue; auto-load next page when
-    // approaching the end so the cursor never starves.
-    reg(
-      'arrowleft',
-      () => {
-        cursor = Math.max(0, cursor - 1);
-      },
-      'Previous item',
-    );
-    reg(
-      'arrowright',
-      () => {
-        cursor = Math.min(items.length - 1, cursor + 1);
-        if (cursor >= items.length - 1 && hasMore) void loadMore();
-      },
-      'Next item',
-    );
 
-    return () => offs.forEach((off) => off());
+    let canvasKey: ((e: KeyboardEvent) => void) | null = null;
+    if (tab === 'plates') {
+      // Forward bbox-fine-tune keys (arrows, [ / ], Backspace) into the
+      // plate canvas. Listening at the window level keeps the canvas
+      // responsive without requiring focus on the canvas itself.
+      // Arrow keys are bbox-nudge here, not queue navigation — the
+      // operator wants to be able to twitch the bbox by a pixel without
+      // accidentally jumping to the previous crop.
+      canvasKey = (e: KeyboardEvent) => {
+        if (!plateCanvas) return;
+        const target = e.target as HTMLElement | null;
+        if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
+        if (plateCanvas.handleKey(e)) e.preventDefault();
+      };
+      window.addEventListener('keydown', canvasKey);
+    } else {
+      // On non-plate tabs arrow keys navigate the queue.
+      reg(
+        'arrowleft',
+        () => {
+          cursor = Math.max(0, cursor - 1);
+        },
+        'Previous item',
+      );
+      reg(
+        'arrowright',
+        () => {
+          cursor = Math.min(items.length - 1, cursor + 1);
+          if (cursor >= items.length - 1 && hasMore) void loadMore();
+        },
+        'Next item',
+      );
+    }
+
+    return () => {
+      offs.forEach((off) => off());
+      if (canvasKey) window.removeEventListener('keydown', canvasKey);
+    };
   });
 </script>
 
@@ -410,8 +444,8 @@
 
     <span class="text-[11px] text-zinc-500">
       {#if tab === 'plates'}
-        <kbd>Enter</kbd> confirm plate · <kbd>E</kbd> edit · <kbd>D</kbd> reject ·
-        <kbd>N</kbd> skip · <kbd>Z</kbd> undo
+        drag to adjust · <kbd>←↑↓→</kbd> nudge · <kbd>[ ]</kbd> right edge ·
+        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>N</kbd> skip
       {:else}
         per-class letter assigns · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip ·
         <kbd>D</kbd> discard · <kbd>Z</kbd> undo
@@ -454,13 +488,24 @@
           <span class="font-mono">{current.id.slice(0, 12)}…</span>
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
-          <img
-            src={getThumbUrl(current.id, 384)}
-            alt="crop"
-            loading="lazy"
-            decoding="async"
-            class="max-h-full max-w-full object-contain"
-          />
+          {#if tab === 'plates'}
+            <!-- Inline editor — drag/resize the proposal directly, then
+                 hit Enter to confirm. No modal, no extra click. -->
+            <PlateBboxCanvas
+              bind:this={plateCanvas}
+              cropId={current.id}
+              bind:bbox={editedPlateLocal}
+              class="aspect-square w-full max-w-full"
+            />
+          {:else}
+            <img
+              src={getThumbUrl(current.id, 384)}
+              alt="crop"
+              loading="lazy"
+              decoding="async"
+              class="max-h-full max-w-full object-contain"
+            />
+          {/if}
         </div>
 
         <dl class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
@@ -485,11 +530,11 @@
         </dl>
 
         {#if tab === 'plates'}
-          <!-- Plate-detection review row. The proposal came from
-               LPR/SAM3 + Gemma but didn't clear the auto-confirm bar.
-               Confirm = accept the proposed bbox as-is, Edit = open the
-               drag-and-resize editor, Reject = mark "no plate visible"
-               so the export doesn't emit a bogus plate label row. -->
+          <!-- Plate-detection inline review. The canvas above is live —
+               drag/resize the proposal in place and hit Enter to confirm.
+               The Reject button (or D) marks no_plate_visible. The whole
+               flow is two keystrokes per crop on average: minor twitch
+               with arrows / handles, then Enter. -->
           <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
             <span class="text-zinc-500">Plate score</span>
             <span class="font-mono text-zinc-200">
@@ -504,7 +549,6 @@
             <button class="btn btn-primary" type="button" onclick={confirmPlate}>
               Confirm Plate
             </button>
-            <button class="btn" type="button" onclick={openPlateEditor}>Edit</button>
             <button class="btn btn-danger" type="button" onclick={rejectPlate}>
               Reject (no plate)
             </button>
@@ -558,16 +602,6 @@
       </div>
     {/if}
   </div>
-
-  {#if plateEditorOpen && current}
-    <PlateEditor
-      crop={current}
-      onsave={onPlateEditorSave}
-      onclose={() => {
-        plateEditorOpen = false;
-      }}
-    />
-  {/if}
 
   <!-- Status bar — review is one-at-a-time so there's no "scroll to load more"
        affordance; the queue auto-fetches the next page in the background as

@@ -566,18 +566,59 @@ export function refineCluster(
   );
 }
 
-export function getReviewQueue(
+export async function getReviewQueue(
   tab: ReviewTab,
   page = 1,
   pageSize = 30,
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<ReviewItem>> {
-  return apiFetch<PaginatedResponse<ReviewItem>>(
+  // The /curation/review API ships bbox_norm + plate_bbox_norm as
+  // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends OpCrop where
+  // bboxes are {cx,cy,w,h} objects. Normalize each item through
+  // mapRawCrop so PlateEditor + getThumbUrl + confirmPlate all see the
+  // same shape regardless of the endpoint that produced the item.
+  type RawReviewItem = RawCrop & {
+    reason?: string;
+    proposed_class_id?: number | null;
+    proposed_class_name?: string | null;
+    probe_pred_class?: string | null;
+    probe_pred_entropy?: number | null;
+    plate_score?: number | null;
+    plate_status?: string | null;
+    plate_verified?: boolean | null;
+  };
+  type RawPage = {
+    total: number;
+    page: number;
+    page_size: number;
+    items: RawReviewItem[];
+  };
+  const raw = await apiFetch<RawPage>(
     `/curation/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
+  const items: ReviewItem[] = (raw.items ?? []).map((it) => {
+    const base = mapRawCrop(it);
+    return {
+      ...base,
+      reason: it.reason ?? '',
+      proposed_class_id: it.proposed_class_id ?? null,
+      proposed_class_name: it.proposed_class_name ?? null,
+      probe_pred_class: it.probe_pred_class ?? null,
+      probe_pred_entropy: it.probe_pred_entropy ?? null,
+      plate_score: it.plate_score ?? null,
+      plate_status: it.plate_status ?? null,
+      plate_verified: it.plate_verified ?? null,
+    };
+  });
+  return {
+    items,
+    total: raw.total ?? items.length,
+    page: raw.page ?? page,
+    page_size: raw.page_size ?? pageSize,
+  };
 }
 
 /**
