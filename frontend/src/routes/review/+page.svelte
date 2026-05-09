@@ -363,15 +363,29 @@
           <button class="btn" type="button" onclick={undoLast}>Undo</button>
         </div>
 
-        <!-- Top-class hotkey legend -->
-        <div class="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+        <!-- Top-class label buttons (click OR press the hotkey) -->
+        <div class="mt-3 flex flex-wrap gap-1.5">
           {#each topClasses as cls, i (cls.id)}
-            <span>
-              <kbd>{i === 9 ? '0' : i + 1}</kbd>
-              <span class="ml-0.5 text-zinc-300">{cls.name}</span>
-            </span>
+            <button
+              type="button"
+              class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
+                     hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
+                     focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              title="Assign {cls.name} (hotkey {i === 9 ? '0' : i + 1})"
+              onclick={() => assign(cls.id)}
+            >
+              <kbd
+                class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-zinc-400"
+              >
+                {i === 9 ? '0' : i + 1}
+              </kbd>
+              {cls.name}
+            </button>
           {/each}
         </div>
+        <p class="mt-1.5 text-[10px] text-zinc-500">
+          Click a class or press its hotkey to assign + advance.
+        </p>
       </div>
     {/if}
   </div>
