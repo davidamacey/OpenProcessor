@@ -6,7 +6,8 @@
     getThumbUrl,
     putCropLabel,
   } from '$lib/api';
-  import type { PaginatedResponse, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
+  import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import type { ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -20,12 +21,15 @@
   ];
 
   let tab = $state<ReviewTab>('mismatches');
-  let pageNum = $state<number>(1);
   const pageSize = 30;
-  let cursor = $state<number>(0); // index within current page
-  let data = $state<PaginatedResponse<ReviewItem> | null>(null);
+  let cursor = $state<number>(0); // index within accumulated items
+  let items = $state<ReviewItem[]>([]);
+  let total = $state<number>(0);
+  let loadedPages = $state<number>(0);
   let loading = $state<boolean>(false);
+  let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
+  const hasMore = $derived(items.length < total);
 
   // Filter bar
   let hddSource = $state<string>('');
@@ -33,22 +37,49 @@
   let confMin = $state<number>(0);
   let confMax = $state<number>(1);
 
-  async function load(): Promise<void> {
+  function _filter(): Record<string, unknown> {
+    const f: Record<string, unknown> = {};
+    if (hddSource) f.hdd_source = hddSource;
+    if (classFilter != null) f.class_id = classFilter;
+    if (confMin > 0) f.conf_min = confMin;
+    if (confMax < 1) f.conf_max = confMax;
+    return f;
+  }
+
+  async function loadFirst(): Promise<void> {
     loading = true;
     error = null;
+    items = [];
+    total = 0;
+    loadedPages = 0;
+    cursor = 0;
     try {
-      const filter: Record<string, unknown> = {};
-      if (hddSource) filter.hdd_source = hddSource;
-      if (classFilter != null) filter.class_id = classFilter;
-      if (confMin > 0) filter.conf_min = confMin;
-      if (confMax < 1) filter.conf_max = confMax;
-      data = await getReviewQueue(tab, pageNum, pageSize, filter);
-      cursor = 0;
+      const data = await getReviewQueue(tab, 1, pageSize, _filter());
+      items = data?.items ?? [];
+      total = data?.total ?? items.length;
+      loadedPages = 1;
     } catch (e) {
       error = (e as Error).message;
-      data = null;
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadMore(): Promise<void> {
+    if (loadingMore || !hasMore) return;
+    loadingMore = true;
+    try {
+      const next = loadedPages + 1;
+      const data = await getReviewQueue(tab, next, pageSize, _filter());
+      const seen = new Set(items.map((i) => i.id));
+      const fresh = (data?.items ?? []).filter((i) => !seen.has(i.id));
+      items = [...items, ...fresh];
+      total = data?.total ?? total;
+      loadedPages = next;
+    } catch (e) {
+      error = (e as Error).message;
+    } finally {
+      loadingMore = false;
     }
   }
 
@@ -58,18 +89,14 @@
 
   $effect(() => {
     void tab;
-    void pageNum;
     void hddSource;
     void classFilter;
     void confMin;
     void confMax;
-    void load();
+    void loadFirst();
   });
 
-  const items = $derived(data?.items ?? []);
   const current = $derived<ReviewItem | null>(items[cursor] ?? null);
-  const total = $derived(data?.total ?? 0);
-  const totalPages = $derived(Math.max(1, Math.ceil(total / pageSize)));
 
   const topClasses = $derived(classesStore.topNForCluster(0, 10));
 
@@ -89,10 +116,10 @@
     const cls = classesStore.byId(classId);
     // Optimistic: drop from list and advance.
     const id = current.id;
-    if (data) {
-      data = { ...data, items: data.items.filter((x) => x.id !== id) };
-    }
-    cursor = Math.min(cursor, Math.max(0, (data?.items.length ?? 1) - 1));
+    items = items.filter((x) => x.id !== id);
+    total = Math.max(0, total - 1);
+    cursor = Math.min(cursor, Math.max(0, items.length - 1));
+    if (cursor >= items.length - 1 && hasMore) void loadMore();
     try {
       await putCropLabel(id, classId);
       toastStore.success(`Labeled "${cls?.name ?? classId}".`);
@@ -113,9 +140,7 @@
 
   function skip(): void {
     cursor = Math.min(items.length - 1, cursor + 1);
-    if (cursor >= items.length - 1 && pageNum < totalPages) {
-      pageNum += 1;
-    }
+    if (cursor >= items.length - 1 && hasMore) void loadMore();
   }
 
   async function discard(): Promise<void> {
@@ -125,7 +150,8 @@
     try {
       await deleteCropLabel(current.id);
       const id = current.id;
-      if (data) data = { ...data, items: data.items.filter((x) => x.id !== id) };
+      items = items.filter((x) => x.id !== id);
+      total = Math.max(0, total - 1);
     } catch (e) {
       toastStore.error(`Discard failed: ${(e as Error).message}`);
     }
@@ -167,19 +193,22 @@
     reg('n', skip, 'Skip');
     reg('d', discard, 'Discard');
     reg('z', undoLast, 'Undo last');
+    // Arrow keys navigate within the loaded queue; auto-load next page when
+    // approaching the end so the cursor never starves.
     reg(
       'arrowleft',
       () => {
-        if (pageNum > 1) pageNum -= 1;
+        cursor = Math.max(0, cursor - 1);
       },
-      'Previous page',
+      'Previous item',
     );
     reg(
       'arrowright',
       () => {
-        if (pageNum < totalPages) pageNum += 1;
+        cursor = Math.min(items.length - 1, cursor + 1);
+        if (cursor >= items.length - 1 && hasMore) void loadMore();
       },
-      'Next page',
+      'Next item',
     );
 
     return () => offs.forEach((off) => off());
@@ -197,7 +226,6 @@
           : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
         onclick={() => {
           tab = t.id;
-          pageNum = 1;
         }}
       >
         {t.label}
@@ -205,7 +233,7 @@
     {/each}
     <span class="grow"></span>
     <span class="font-mono text-xs text-zinc-500">
-      {data ? `${cursor + 1} / ${items.length}` : '—'} on page · {total} total
+      {items.length > 0 ? `${cursor + 1} / ${items.length}` : '—'} loaded · {total} total
     </span>
   </div>
 
@@ -348,26 +376,22 @@
     {/if}
   </div>
 
-  <!-- Pagination -->
+  <!-- Infinite-scroll status bar (no Next/Prev buttons) -->
   <div
-    class="flex items-center justify-end gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
+    class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    <button
-      class="btn"
-      type="button"
-      disabled={pageNum <= 1}
-      onclick={() => (pageNum = Math.max(1, pageNum - 1))}
-    >
-      ← Prev
-    </button>
-    <span class="font-mono text-xs text-zinc-400">page {pageNum} / {totalPages}</span>
-    <button
-      class="btn"
-      type="button"
-      disabled={pageNum >= totalPages}
-      onclick={() => (pageNum = Math.min(totalPages, pageNum + 1))}
-    >
-      Next →
-    </button>
+    <span class="text-xs text-zinc-500">
+      item {Math.min(cursor + 1, items.length)} of {items.length} loaded · {total} total
+    </span>
+    <span class="font-mono text-xs text-zinc-400">
+      {#if loadingMore}loading more…{:else if hasMore}{total - items.length} more available{:else}all loaded{/if}
+    </span>
   </div>
+
+  <!-- Sentinel: when this scrolls into view, load the next page -->
+  <div
+    use:infiniteScroll={{ onload: loadMore, disabled: loadingMore || !hasMore || loading }}
+    class="h-1"
+    aria-hidden="true"
+  ></div>
 </div>

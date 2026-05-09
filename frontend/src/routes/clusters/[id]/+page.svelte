@@ -14,6 +14,7 @@
   } from '$lib/api';
   import CropCard from '$components/CropCard.svelte';
   import CutLine from '$components/CutLine.svelte';
+  import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import type { OpCluster, OpCrop, PaginatedResponse, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -26,10 +27,12 @@
   let cluster = $state<OpCluster | null>(null);
   let crops = $state<OpCrop[]>([]);
   let total = $state<number>(0);
-  let pageNum = $state<number>(1);
+  let loadedPages = $state<number>(0);
   const pageSize = 60;
   let loading = $state<boolean>(false);
+  let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
+  const hasMore = $derived(crops.length < total);
 
   // Selection set (crop_id)
   let selected = $state<Set<string>>(new Set());
@@ -53,16 +56,20 @@
   let movePickerValue = $state<string>('');
   let movePickerInput = $state<HTMLInputElement | null>(null);
 
-  async function load(): Promise<void> {
+  async function loadFirst(): Promise<void> {
     if (!Number.isFinite(clusterId)) return;
     loading = true;
     error = null;
+    crops = [];
+    loadedPages = 0;
+    total = 0;
     try {
-      const res = await getCluster(clusterId, pageNum, pageSize);
+      const res = await getCluster(clusterId, 1, pageSize);
       cluster = res.cluster;
       const list = res.crops as PaginatedResponse<OpCrop>;
       crops = list.items;
       total = list.total ?? list.items.length;
+      loadedPages = 1;
     } catch (e) {
       error = (e as Error).message;
       cluster = null;
@@ -73,11 +80,30 @@
     }
   }
 
+  async function loadMore(): Promise<void> {
+    if (!Number.isFinite(clusterId) || loadingMore || !hasMore) return;
+    loadingMore = true;
+    try {
+      const next = loadedPages + 1;
+      const res = await getCluster(clusterId, next, pageSize);
+      const list = res.crops as PaginatedResponse<OpCrop>;
+      // Dedup by id in case server returns overlapping pages after a relabel.
+      const seen = new Set(crops.map((c) => c.id));
+      const fresh = list.items.filter((c) => !seen.has(c.id));
+      crops = [...crops, ...fresh];
+      total = list.total ?? total;
+      loadedPages = next;
+    } catch (e) {
+      error = (e as Error).message;
+    } finally {
+      loadingMore = false;
+    }
+  }
+
   $effect(() => {
     keyboardStore.setScope('cluster');
     void clusterId;
-    void pageNum;
-    void load();
+    void loadFirst();
   });
 
   // Sub-cluster filtering (in-memory, after load)
@@ -113,7 +139,9 @@
     return [...set].sort((a, b) => a - b);
   });
 
-  const totalPages = $derived(Math.max(1, Math.ceil(total / pageSize)));
+  // totalPages was used by the Next/Prev buttons — gone now that infinite scroll
+  // owns the pagination. Server-side pageSize stays at 60 per request, but the
+  // user just keeps scrolling.
 
   // ---------------- selection ----------------
 
@@ -307,7 +335,7 @@
     try {
       const res = await refineCluster(clusterId);
       toastStore.success(`Refine produced ${res.subclusters ?? 0} sub-clusters.`);
-      void load();
+      void loadFirst();
     } catch (e) {
       toastStore.error(`Refine failed: ${(e as Error).message}`);
     }
@@ -323,12 +351,17 @@
   }
 
   async function advance(): Promise<void> {
-    // Advance: jump to next unvalidated crop on the page; if none, go to next page.
+    // Advance: jump to next unvalidated crop. If we're at the end of what's
+    // loaded but more pages exist, fetch them; otherwise tell the user.
     const next = filteredCrops.find((c) => !c.label_validated && !selected.has(c.id));
     if (next) {
       selected = new Set([next.id]);
-    } else if (pageNum < totalPages) {
-      pageNum += 1;
+    } else if (hasMore) {
+      await loadMore();
+      const nextAfterLoad = filteredCrops.find(
+        (c) => !c.label_validated && !selected.has(c.id),
+      );
+      if (nextAfterLoad) selected = new Set([nextAfterLoad.id]);
     } else {
       toastStore.info('End of cluster.');
     }
@@ -365,7 +398,7 @@
         toastStore.warn(
           `Moved ${moved} of ${ids.length} crop${ids.length === 1 ? '' : 's'} (${failed} failed). Reloading.`,
         );
-        void load();
+        void loadFirst();
       } else {
         toastStore.success(
           `Moved ${moved} crop${moved === 1 ? '' : 's'} → cluster #${targetClusterId}.`,
@@ -557,19 +590,31 @@
     );
     reg('z', undoLast, 'Undo last action');
     reg('a', selectAllPage, 'Select all on page');
+    // Arrow keys navigate within the loaded grid. With infinite scroll the
+    // next-page concept is gone — left/right move selection by one position
+    // in the visible filtered list.
     reg(
       'arrowleft',
       () => {
-        if (pageNum > 1) pageNum -= 1;
+        const ids = filteredCrops.map((c) => c.id);
+        if (ids.length === 0) return;
+        const cur = ids.findIndex((id) => selected.has(id));
+        const prev = cur <= 0 ? ids.length - 1 : cur - 1;
+        selected = new Set([ids[prev]!]);
       },
-      'Previous page',
+      'Previous crop',
     );
     reg(
       'arrowright',
       () => {
-        if (pageNum < totalPages) pageNum += 1;
+        const ids = filteredCrops.map((c) => c.id);
+        if (ids.length === 0) return;
+        const cur = ids.findIndex((id) => selected.has(id));
+        const next = cur < 0 || cur >= ids.length - 1 ? 0 : cur + 1;
+        selected = new Set([ids[next]!]);
+        if (next === ids.length - 1 && hasMore) void loadMore();
       },
-      'Next page',
+      'Next crop',
     );
     reg(
       'm',
@@ -784,33 +829,24 @@
     </aside>
   </div>
 
-  <!-- Pagination -->
+  <!-- Infinite-scroll status bar (no Next/Prev buttons — counts come from server) -->
   <div
     class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="text-xs text-zinc-500">
-      {selected.size} selected · {filteredCrops.length} on page · {total} total
+      {selected.size} selected · {crops.length} loaded · {total} total
     </span>
-    <div class="flex items-center gap-2">
-      <button
-        class="btn"
-        type="button"
-        disabled={pageNum <= 1}
-        onclick={() => (pageNum = Math.max(1, pageNum - 1))}
-      >
-        ← Prev
-      </button>
-      <span class="font-mono text-xs text-zinc-400">page {pageNum} / {totalPages}</span>
-      <button
-        class="btn"
-        type="button"
-        disabled={pageNum >= totalPages}
-        onclick={() => (pageNum = Math.min(totalPages, pageNum + 1))}
-      >
-        Next →
-      </button>
-    </div>
+    <span class="font-mono text-xs text-zinc-400">
+      {#if loadingMore}loading more…{:else if hasMore}{total - crops.length} more available{:else}all loaded{/if}
+    </span>
   </div>
+
+  <!-- Sentinel: when this scrolls into view, load the next page -->
+  <div
+    use:infiniteScroll={{ onload: loadMore, disabled: loadingMore || !hasMore || loading }}
+    class="h-1"
+    aria-hidden="true"
+  ></div>
 </div>
 
 {#if movePickerOpen}
