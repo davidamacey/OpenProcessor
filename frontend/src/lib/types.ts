@@ -26,6 +26,8 @@ export interface OpClass {
   group: string | null;
   count: number;
   validated_count: number;
+  /** Single-character keyboard shortcut, persisted in the registry. */
+  hotkey_letter?: string | null;
   added_at: string;
   /** Hex color hint or null. */
   color?: string | null;
@@ -40,10 +42,12 @@ export interface OpClassCreate {
   notes?: string;
 }
 
-/** Payload for `PUT /curation/classes/{id}`. Either field may be supplied. */
+/** Payload for `PUT /curation/classes/{id}`. Any subset of fields may be supplied. */
 export interface OpClassUpdate {
   name?: string;
   group?: string;
+  /** Pass an empty string to clear the binding, or omit to leave unchanged. */
+  hotkey_letter?: string;
 }
 
 /** Payload for `POST /curation/classes/merge`. */

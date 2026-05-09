@@ -212,6 +212,7 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
     color?: string | null;
     deprecated?: boolean;
     added_at?: string;
+    hotkey_letter?: string | null;
   };
   const res = await apiFetch<{ classes: RawClass[] } | RawClass[]>('/curation/classes', {}, signal);
   const raw = Array.isArray(res) ? res : res.classes ?? [];
@@ -224,6 +225,7 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
     added_at: c.added_at ?? '',
     color: c.color ?? null,
     deprecated: !!c.deprecated,
+    hotkey_letter: c.hotkey_letter ?? null,
   }));
 }
 

@@ -144,6 +144,29 @@
     }
   }
 
+  async function setHotkey(cls: OpClass, raw: string): Promise<void> {
+    const next = raw.trim().toLowerCase();
+    const current = (cls.hotkey_letter ?? '').toLowerCase();
+    if (next === current) return;
+    if (next.length > 1) {
+      toastStore.error('Hotkey must be a single character.');
+      return;
+    }
+    busy = true;
+    try {
+      // PUT /curation/classes/{id} treats '' as "clear binding".
+      await renameClass(cls.id, { hotkey_letter: next });
+      toastStore.success(
+        next ? `${cls.name} → hotkey '${next}'` : `${cls.name} → hotkey cleared`,
+      );
+      await classesStore.clearAndRefetch();
+    } catch (e) {
+      toastStore.error(`Hotkey set failed: ${(e as Error).message}`);
+    } finally {
+      busy = false;
+    }
+  }
+
   function openAdd(): void {
     newName = '';
     newGroup = groups[0] ?? '';
@@ -272,6 +295,7 @@
             <th class="px-3 py-2 font-medium">ID</th>
             <th class="px-3 py-2 font-medium">Name</th>
             <th class="px-3 py-2 font-medium">Group</th>
+            <th class="px-3 py-2 text-center font-medium">Hotkey</th>
             <th class="px-3 py-2 text-right font-medium">Validated</th>
             <th class="px-3 py-2 text-right font-medium">Total</th>
             <th class="px-3 py-2 font-medium">Added</th>
@@ -325,6 +349,19 @@
                     <option value={cls.group}>{cls.group}</option>
                   {/if}
                 </select>
+              </td>
+              <td class="px-3 py-1.5 text-center">
+                <input
+                  type="text"
+                  maxlength="1"
+                  value={cls.hotkey_letter ?? ''}
+                  placeholder="—"
+                  title="Single char keyboard shortcut for this class. Empty to clear."
+                  class="w-10 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-center font-mono text-xs uppercase focus:border-blue-500 focus:outline-none"
+                  onchange={(e) =>
+                    void setHotkey(cls, (e.currentTarget as HTMLInputElement).value)}
+                  disabled={busy}
+                />
               </td>
               <td class="px-3 py-1.5 text-right font-mono">
                 <span
