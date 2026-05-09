@@ -164,7 +164,7 @@ export interface OpHealth {
   timestamp: string;
 }
 
-export type ReviewTab = 'mismatches' | 'gemma_low_conf' | 'outliers' | 'uncertainty';
+export type ReviewTab = 'all' | 'mismatches' | 'gemma_low_conf' | 'outliers' | 'uncertainty';
 
 export interface ReviewItem extends OpCrop {
   reason: string;

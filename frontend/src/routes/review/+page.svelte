@@ -13,14 +13,18 @@
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
 
+  // Unified review by default — one continuous queue of every crop that
+  // needs a human, sorted most-uncertain first. The narrower tabs stay
+  // available for diagnosing where uncertainty came from.
   const TABS: Array<{ id: ReviewTab; label: string }> = [
+    { id: 'all', label: 'All' },
     { id: 'mismatches', label: 'Mismatches' },
     { id: 'gemma_low_conf', label: 'Gemma Low-Conf' },
     { id: 'outliers', label: 'Outliers' },
     { id: 'uncertainty', label: 'Uncertainty' },
   ];
 
-  let tab = $state<ReviewTab>('mismatches');
+  let tab = $state<ReviewTab>('all');
   const pageSize = 30;
   let cursor = $state<number>(0); // index within accumulated items
   let items = $state<ReviewItem[]>([]);

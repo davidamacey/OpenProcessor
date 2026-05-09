@@ -9,8 +9,13 @@
  * pre-fetch earlier — '400px' loads the next page when the bottom is 400px
  * from the viewport, hiding network latency for fast scrollers.
  *
- * Re-runs ``onload`` if the sentinel becomes visible again after disabled
- * was true (e.g. after the new page settles and ``loading`` flips back).
+ * The root is auto-detected: walks up the DOM until it finds an ancestor
+ * with overflow-auto / overflow-scroll / overflow-y-* — that's the actual
+ * scroll container. Falls back to the viewport if no such ancestor exists.
+ * This is critical because most labeler pages have an internal scroll
+ * container (overflow-auto on a flex child); a viewport-rooted observer
+ * never fires inside one of those, so the sentinel sits "below the fold"
+ * but never intersects the viewport.
  */
 
 import type { Action } from 'svelte/action';
@@ -22,6 +27,20 @@ export interface InfiniteScrollOptions {
   disabled?: boolean;
   /** Pre-fetch margin. Default '400px' loads next page slightly before user reaches bottom. */
   rootMargin?: string;
+}
+
+function findScrollRoot(node: HTMLElement): HTMLElement | null {
+  let cur: HTMLElement | null = node.parentElement;
+  while (cur && cur !== document.body) {
+    const style = getComputedStyle(cur);
+    const oy = style.overflowY;
+    const ox = style.overflowX;
+    if (oy === 'auto' || oy === 'scroll' || ox === 'auto' || ox === 'scroll') {
+      return cur;
+    }
+    cur = cur.parentElement;
+  }
+  return null;
 }
 
 export const infiniteScroll: Action<HTMLElement, InfiniteScrollOptions> = (
@@ -45,7 +64,10 @@ export const infiniteScroll: Action<HTMLElement, InfiniteScrollOptions> = (
           firing = false;
         }
       },
-      { rootMargin: opts.rootMargin ?? '400px' },
+      {
+        root: findScrollRoot(node),
+        rootMargin: opts.rootMargin ?? '400px',
+      },
     );
     observer.observe(node);
   }

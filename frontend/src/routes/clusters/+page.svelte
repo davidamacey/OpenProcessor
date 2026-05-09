@@ -2,15 +2,19 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { getClusters, getThumbUrl } from '$lib/api';
-  import type { ClusterFilter, OpCluster, PaginatedResponse } from '$lib/types';
+  import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import type { ClusterFilter, OpCluster } from '$lib/types';
   import { keyboardStore } from '$stores/keyboard.svelte';
 
-  let data = $state<PaginatedResponse<OpCluster> | null>(null);
+  let clusters = $state<OpCluster[]>([]);
+  let total = $state<number>(0);
+  let loadedPages = $state<number>(0);
   let loading = $state<boolean>(false);
+  let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
+  const hasMore = $derived(clusters.length < total);
 
   let sort = $state<NonNullable<ClusterFilter['sort']>>('purity_asc');
-  let pageNum = $state<number>(1);
   const pageSize = 24;
 
   const classFilter = $derived.by(() => {
@@ -18,22 +22,49 @@
     return v == null ? null : Number.isFinite(+v) ? +v : null;
   });
 
-  async function load(): Promise<void> {
+  async function loadFirst(): Promise<void> {
     loading = true;
     error = null;
+    clusters = [];
+    total = 0;
+    loadedPages = 0;
     try {
       const res = await getClusters({
         class_id: classFilter ?? undefined,
         sort,
-        page: pageNum,
+        page: 1,
         page_size: pageSize,
       });
-      data = res;
+      clusters = res?.items ?? [];
+      total = res?.total ?? clusters.length;
+      loadedPages = 1;
     } catch (e) {
-      data = null;
       error = (e as Error).message;
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadMore(): Promise<void> {
+    if (loadingMore || !hasMore) return;
+    loadingMore = true;
+    try {
+      const next = loadedPages + 1;
+      const res = await getClusters({
+        class_id: classFilter ?? undefined,
+        sort,
+        page: next,
+        page_size: pageSize,
+      });
+      const seen = new Set(clusters.map((c) => c.id));
+      const fresh = (res?.items ?? []).filter((c) => !seen.has(c.id));
+      clusters = [...clusters, ...fresh];
+      total = res?.total ?? total;
+      loadedPages = next;
+    } catch (e) {
+      error = (e as Error).message;
+    } finally {
+      loadingMore = false;
     }
   }
 
@@ -41,12 +72,11 @@
     keyboardStore.setScope('clusters');
   });
 
-  // Reactive: re-load on filter / sort / page change
+  // Re-load on filter / sort change
   $effect(() => {
     void classFilter;
     void sort;
-    void pageNum;
-    void load();
+    void loadFirst();
   });
 
   function borderColor(c: OpCluster): string {
@@ -68,9 +98,7 @@
     void goto(`/clusters/${c.id}`);
   }
 
-  const totalPages = $derived(
-    data ? Math.max(1, Math.ceil((data.total ?? 0) / pageSize)) : 1,
-  );
+  // Infinite scroll owns pagination — totalPages no longer needed.
 </script>
 
 <div class="flex h-full flex-col">
@@ -107,15 +135,17 @@
 
   <!-- Grid -->
   <div class="flex-1 overflow-auto p-4">
-    {#if loading && !data}
+    {#if loading && clusters.length === 0}
       <p class="text-sm text-zinc-500">Loading...</p>
     {:else if error}
       <p class="text-sm text-red-300">API unavailable: {error}</p>
-    {:else if !data || data.items.length === 0}
-      <p class="text-sm text-zinc-500">No clusters yet — run /clusters/train/op_vehicles.</p>
+    {:else if clusters.length === 0}
+      <p class="text-sm text-zinc-500">
+        No clusters yet — ingest some images and run the auto-label pipeline.
+      </p>
     {:else}
       <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {#each data.items as c (c.id)}
+        {#each clusters as c (c.id)}
           {@const pb = purityBadge(c)}
           <li>
             <button
@@ -173,28 +203,20 @@
     {/if}
   </div>
 
-  <!-- Pagination -->
-  {#if data && totalPages > 1}
-    <div
-      class="flex items-center justify-end gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
-    >
-      <button
-        class="btn"
-        type="button"
-        disabled={pageNum <= 1}
-        onclick={() => (pageNum = Math.max(1, pageNum - 1))}
-      >
-        ‹ Prev
-      </button>
-      <span class="font-mono text-xs text-zinc-400">page {pageNum} / {totalPages}</span>
-      <button
-        class="btn"
-        type="button"
-        disabled={pageNum >= totalPages}
-        onclick={() => (pageNum = Math.min(totalPages, pageNum + 1))}
-      >
-        Next ›
-      </button>
-    </div>
-  {/if}
+  <!-- Status bar + infinite-scroll sentinel -->
+  <div
+    class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
+  >
+    <span class="text-xs text-zinc-500">
+      {clusters.length} loaded · {total} total clusters
+    </span>
+    <span class="font-mono text-xs text-zinc-400">
+      {#if loadingMore}loading more…{:else if hasMore}{total - clusters.length} more available{:else}all loaded{/if}
+    </span>
+  </div>
+  <div
+    use:infiniteScroll={{ onload: loadMore, disabled: loadingMore || !hasMore || loading }}
+    class="h-1"
+    aria-hidden="true"
+  ></div>
 </div>
