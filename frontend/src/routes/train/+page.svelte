@@ -122,16 +122,25 @@
     }
   }
 
-  // Start / stop polling based on `isActive`.
+  // Always poll. Fast (5s) while a run is active so the epoch counter and
+  // GPU strip stay live; slow (10s) when idle so a job submitted from
+  // somewhere else (curl, another browser tab) shows up automatically.
+  // pullStatus() also kicks refreshRuns() on terminal-state transitions
+  // so the past-runs table picks up newly-finished jobs without a manual
+  // page reload.
   $effect(() => {
     void pullStatus();
-    if (isActive) {
-      if (statusPoll) clearInterval(statusPoll);
-      statusPoll = setInterval(() => void pullStatus(), 5000);
-    } else if (statusPoll) {
-      clearInterval(statusPoll);
-      statusPoll = null;
-    }
+    void refreshRuns();
+    const interval = isActive ? 5000 : 10000;
+    if (statusPoll) clearInterval(statusPoll);
+    statusPoll = setInterval(() => {
+      void pullStatus();
+      if (!isActive) {
+        // Idle path: also refresh the past-runs table on every tick so
+        // jobs created out-of-band appear without a manual reload.
+        void refreshRuns();
+      }
+    }, interval);
     return () => {
       if (statusPoll) clearInterval(statusPoll);
       statusPoll = null;
