@@ -151,7 +151,18 @@
                 onclick={() => onselect(cls)}
                 title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
               >
-                <span class="truncate">{cls.name}</span>
+                <span class="flex grow items-center gap-1.5 truncate">
+                  {#if cls.hotkey_letter}
+                    <kbd
+                      class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase
+                             text-blue-300"
+                      title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
+                    >
+                      {cls.hotkey_letter}
+                    </kbd>
+                  {/if}
+                  <span class="truncate">{cls.name}</span>
+                </span>
                 <span
                   class="rounded-md border px-1.5 py-0.5 font-mono text-xs {badgeColor(
                     cls.validated_count ?? 0,

@@ -26,6 +26,40 @@
     };
   });
 
+  // Global hotkey listener — class.hotkey_letter bindings are honored
+  // across every page by routing through dropOnClassStore. The active
+  // page registers its own dispatch handler (cluster page bulk-labels
+  // selected crops; review page assigns the current crop). Skips when
+  // a modal/input is focused so typing doesn't accidentally trigger an
+  // assignment.
+  $effect(() => {
+    function isTextInputActive(): boolean {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = el.tagName.toLowerCase();
+      return (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        (el as HTMLElement).isContentEditable === true
+      );
+    }
+    function onKeydown(e: KeyboardEvent): void {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTextInputActive()) return;
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const cls = classesStore.classes.find(
+        (c) => (c.hotkey_letter ?? '').toLowerCase() === key,
+      );
+      if (cls) {
+        e.preventDefault();
+        void dropOnClassStore.dispatch(cls);
+      }
+    }
+    window.addEventListener('keydown', onKeydown);
+    return () => window.removeEventListener('keydown', onKeydown);
+  });
+
   const path = $derived(page.url.pathname);
   const showSidebar = $derived(path === '/clusters' || path.startsWith('/clusters/'));
 
