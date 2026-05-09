@@ -299,7 +299,7 @@
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
           <img
-            src={getThumbUrl(current.id)}
+            src={getThumbUrl(current.id, 384)}
             alt="crop"
             class="max-h-full max-w-full object-contain"
           />

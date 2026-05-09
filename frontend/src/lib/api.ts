@@ -668,8 +668,17 @@ export function getManifestUrl(): string {
 
 // -- image URL helpers (no fetch — used directly in <img src=...>) -------
 
-export function getThumbUrl(cropId: string): string {
-  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/thumbnail`;
+/**
+ * URL for a crop thumbnail. Defaults to 160px — small enough to load
+ * fast for fast grid scanning of thousands of crops, large enough that
+ * vehicle details (color, body shape, headlight style) remain readable.
+ * Server-side aspect-correct rendering preserves the bbox proportions.
+ *
+ * Pass a larger ``size`` (256-512) for click-to-inspect / focused review
+ * where rendering quality matters more than transfer speed.
+ */
+export function getThumbUrl(cropId: string, size: number = 160): string {
+  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
 }
 
 export function getSourceImageUrl(cropId: string): string {
