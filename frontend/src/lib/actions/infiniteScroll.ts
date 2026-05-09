@@ -50,19 +50,29 @@ export const infiniteScroll: Action<HTMLElement, InfiniteScrollOptions> = (
   let opts = initial;
   let observer: IntersectionObserver | null = null;
   let firing = false;
+  let lastIntersecting = false;
+
+  async function maybeFire(): Promise<void> {
+    if (!lastIntersecting || opts.disabled || firing) return;
+    firing = true;
+    try {
+      await opts.onload();
+    } finally {
+      firing = false;
+    }
+    // After a load, the sentinel may still be in view (e.g. when the new
+    // page is short). Re-check on the next tick so we keep loading until
+    // either disabled flips or the sentinel scrolls out of view.
+    await Promise.resolve();
+    if (lastIntersecting && !opts.disabled) await maybeFire();
+  }
 
   function setup(): void {
     teardown();
     observer = new IntersectionObserver(
-      async (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
-        if (opts.disabled || firing) return;
-        firing = true;
-        try {
-          await opts.onload();
-        } finally {
-          firing = false;
-        }
+      (entries) => {
+        lastIntersecting = entries.some((e) => e.isIntersecting);
+        void maybeFire();
       },
       {
         root: findScrollRoot(node),
@@ -82,8 +92,18 @@ export const infiniteScroll: Action<HTMLElement, InfiniteScrollOptions> = (
   return {
     update(next: InfiniteScrollOptions): void {
       const marginChanged = (opts.rootMargin ?? '400px') !== (next.rootMargin ?? '400px');
+      const wasDisabled = opts.disabled;
       opts = next;
-      if (marginChanged) setup();
+      if (marginChanged) {
+        setup();
+        return;
+      }
+      // disabled just flipped from true → false AND the sentinel is still
+      // in view (page hasn't scrolled). The IntersectionObserver won't
+      // re-fire on its own, so kick the loader manually.
+      if (wasDisabled && !opts.disabled && lastIntersecting) {
+        void maybeFire();
+      }
     },
     destroy: teardown,
   };

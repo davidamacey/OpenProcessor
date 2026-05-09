@@ -50,6 +50,11 @@
     return f;
   }
 
+  // Threshold below which we eagerly prefetch every page — review is
+  // one-at-a-time, no scroll-to-trigger, so lazy loading feels broken
+  // when the user can see 'X of N total' but more never arrives.
+  const PREFETCH_ALL_BELOW = 200;
+
   async function loadFirst(): Promise<void> {
     loading = true;
     error = null;
@@ -66,6 +71,13 @@
       error = (e as Error).message;
     } finally {
       loading = false;
+    }
+    // Auto-drain remaining pages for small queues so the user sees the
+    // full list without manual scrolling.
+    if (total > 0 && total <= PREFETCH_ALL_BELOW) {
+      while (items.length < total && loadedPages > 0) {
+        await loadMore();
+      }
     }
   }
 
