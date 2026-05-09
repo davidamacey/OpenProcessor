@@ -36,13 +36,19 @@
   });
 
   function selectClass(cls: { id: number } | null): void {
-    const url = new URL(page.url);
-    if (cls) url.searchParams.set('class', String(cls.id));
-    else url.searchParams.delete('class');
-    history.pushState({}, '', url);
-    // SvelteKit listens to popstate but not pushState; force a goto.
     void (async () => {
       const { goto } = await import('$app/navigation');
+      // In the legacy ensemble, cluster_id == class_id, so clicking a
+      // class in the sidebar navigates straight to that class's cluster
+      // instead of filtering the current page. Behaves the same on /classes
+      // since /clusters/{id} is the canonical view.
+      if (cls) {
+        void goto(`/clusters/${cls.id}`, { replaceState: false, keepFocus: true });
+        return;
+      }
+      const url = new URL(page.url);
+      url.searchParams.delete('class');
+      history.pushState({}, '', url);
       void goto(url.pathname + url.search, { replaceState: false, keepFocus: true });
     })();
   }
