@@ -880,3 +880,19 @@ export function promoteTrainJob(
     signal,
   );
 }
+
+/**
+ * Run manifest (design §15.4) — full lineage envelope: dataset SHA,
+ * class remap, code versions, eval results. 404 means the run finished
+ * before the manifest writer was added.
+ */
+export function getTrainManifest(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  return apiFetch<Record<string, unknown>>(
+    `/curation/train/manifest/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
+}
