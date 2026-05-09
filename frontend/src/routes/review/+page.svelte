@@ -233,18 +233,10 @@
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
 
-    for (let i = 0; i < 10; i++) {
-      const key = i === 9 ? '0' : String(i + 1);
-      reg(
-        key,
-        async () => {
-          const cls = topClasses[i];
-          if (!cls) return;
-          await assign(cls.id);
-        },
-        `Assign top-class #${i + 1}`,
-      );
-    }
+    // Per-class letter hotkeys (configured on /classes) are routed
+    // through dropOnClassStore by the layout-level keydown listener.
+    // The legacy 1..0 top-N scheme has been removed — same scheme on
+    // every page, no dual-binding to remember.
     reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
     reg('n', skip, 'Skip');
     reg('d', discard, 'Discard');
@@ -419,28 +411,35 @@
           <button class="btn" type="button" onclick={undoLast}>Undo</button>
         </div>
 
-        <!-- Top-class label buttons (click OR press the hotkey) -->
+        <!-- Most-validated classes — click to label OR press the per-class
+             hotkey configured on /classes. Hotkey badges only show for
+             classes the user has explicitly bound (otherwise the strip is
+             still clickable, just no kbd hint). -->
         <div class="mt-3 flex flex-wrap gap-1.5">
-          {#each topClasses as cls, i (cls.id)}
+          {#each topClasses as cls (cls.id)}
             <button
               type="button"
               class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
                      hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
                      focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              title="Assign {cls.name} (hotkey {i === 9 ? '0' : i + 1})"
+              title={cls.hotkey_letter
+                ? `Assign ${cls.name} (press ${cls.hotkey_letter})`
+                : `Assign ${cls.name}`}
               onclick={() => assign(cls.id)}
             >
-              <kbd
-                class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-zinc-400"
-              >
-                {i === 9 ? '0' : i + 1}
-              </kbd>
+              {#if cls.hotkey_letter}
+                <kbd
+                  class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
+                >
+                  {cls.hotkey_letter}
+                </kbd>
+              {/if}
               {cls.name}
             </button>
           {/each}
         </div>
         <p class="mt-1.5 text-[10px] text-zinc-500">
-          Click a class or press its hotkey to assign + advance.
+          Click a class or press its bound letter (set hotkeys on /classes).
         </p>
       </div>
     {/if}

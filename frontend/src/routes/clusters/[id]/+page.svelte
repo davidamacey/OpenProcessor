@@ -167,9 +167,6 @@
     return i;
   });
 
-  // Top-N classes for hotkeys 1..9, 0
-  const topClasses = $derived(classesStore.topNForCluster(clusterId, 10));
-
   const subClusterIds = $derived.by(() => {
     const set = new Set<number>();
     for (const c of crops) {
@@ -537,22 +534,11 @@
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offs.push(keyboardStore.register(combo, () => void fn(), 'cluster', desc));
 
-    // 1..9 + 0 → top classes
-    for (let i = 0; i < 10; i++) {
-      const key = i === 9 ? '0' : String(i + 1);
-      reg(
-        key,
-        async () => {
-          const cls = topClasses[i];
-          if (!cls) {
-            toastStore.warn(`No class bound to ${key}`);
-            return;
-          }
-          await assignClassToSelected(cls.id);
-        },
-        `Assign top-class #${i + 1}`,
-      );
-    }
+    // Per-class letter hotkeys (configured on /classes) are routed
+    // through dropOnClassStore by the layout-level keydown listener;
+    // see src/routes/+layout.svelte. The legacy 1..0 top-N scheme has
+    // been removed — one binding scheme means no "what does this key
+    // do here?" friction.
 
     reg('enter', confirmSelected, 'Confirm selected & advance');
     reg(
