@@ -255,10 +255,8 @@
       toastStore.error('Unknown class id ' + classId);
       return;
     }
-    if (ids.length > 1) {
-      const ok = window.confirm(`Confirm bulk-label of ${ids.length} crops as "${cls.name}"?`);
-      if (!ok) return;
-    }
+    // No nag-confirm — undo is one keystroke (Z) and the snapshot below
+    // captures the prior state, so any mistake is instantly reversible.
     // Snapshot for undo
     for (const id of ids) {
       const prior = crops.find((c) => c.id === id);
@@ -323,8 +321,8 @@
       toastStore.info('No Gemma suggestions on this page.');
       return;
     }
-    const ok = window.confirm(`Accept ${targets.length} Gemma suggestion${targets.length === 1 ? '' : 's'}?`);
-    if (!ok) return;
+    // Shift+Enter is already a deliberate two-finger gesture; the snapshots
+    // below feed undoStore so Z reverts instantly. No nag-confirm.
     // Group by class id for bulk_label; fall back to per-crop PUT for the long tail.
     const groups = new Map<number, string[]>();
     for (const t of targets) {
@@ -589,18 +587,14 @@
           toastStore.info('Select crops first to flag for new class.');
           return;
         }
-        const note = window.prompt(
-          `Flag ${ids.length} crop${ids.length === 1 ? '' : 's'} as NEEDS NEW CLASS?\n` +
-            `Optional note (e.g. proposed class name):`,
-          '',
-        );
-        if (note === null) return;
+        // Note is optional; skip the blocking prompt and flag immediately.
+        // Curator can add notes later via /review when triaging the flagged
+        // queue, where it doesn't interrupt the labeling cadence.
         try {
-          const res = await flagNeedsNewClass(ids, note);
+          const res = await flagNeedsNewClass(ids, '');
           toastStore.success(
             `${res.flagged} flagged for new-class review${res.errors ? ` (${res.errors} errors)` : ''}`,
           );
-          selected.clear();
           selected = new Set();
         } catch (e) {
           toastStore.error(`Flag failed: ${(e as Error).message}`);
@@ -613,8 +607,11 @@
       async () => {
         const ids = [...selected];
         if (ids.length === 0) return;
-        const ok = window.confirm(`Discard ${ids.length} crop${ids.length === 1 ? '' : 's'}?`);
-        if (!ok) return;
+        // Snapshot before discard so undo (Z) brings them back.
+        for (const id of ids) {
+          const c = crops.find((cc) => cc.id === id);
+          if (c) undoStore.push(snapshot(c));
+        }
         for (const id of ids) {
           try {
             await deleteCropLabel(id);
@@ -624,6 +621,7 @@
         }
         crops = crops.filter((c) => !ids.includes(c.id));
         selected = new Set();
+        toastStore.success(`Discarded ${ids.length}. Press Z to undo.`);
       },
       'Discard selected',
     );
@@ -701,8 +699,12 @@
     <span class="grow"></span>
 
     <div class="flex items-center gap-2">
-      <button class="btn" type="button" onclick={selectAllPage}>Select page</button>
-      <button class="btn" type="button" onclick={deselectAll}>Deselect</button>
+      <button class="btn" type="button" onclick={selectAllPage} title="A">
+        Select page
+      </button>
+      <button class="btn" type="button" onclick={deselectAll} title="Esc">
+        Deselect
+      </button>
       <span class="font-mono text-xs text-zinc-500">{selected.size} selected</span>
 
       <select
@@ -719,9 +721,54 @@
         type="button"
         onclick={confirmSelected}
         disabled={selected.size === 0 || confirmClassId == null}
+        title="Enter — confirm selected to chosen class"
       >
         Confirm Selected
       </button>
+
+      <!-- Selection-aware action chips. Always rendered so the user knows
+           the actions exist; disabled until a selection is non-empty.
+           Each chip shows its hotkey so the keyboard path is discoverable. -->
+      <button
+        class="btn"
+        type="button"
+        onclick={openMovePicker}
+        disabled={selected.size === 0}
+        title="M — move selected to a different cluster"
+      >
+        Move <kbd class="ml-1 font-mono text-[10px] text-zinc-400">M</kbd>
+      </button>
+      <button
+        class="btn"
+        type="button"
+        onclick={async () => {
+          const ids = [...selected];
+          if (ids.length === 0) return;
+          try {
+            const res = await flagNeedsNewClass(ids, '');
+            toastStore.success(
+              `${res.flagged} flagged for new-class review${res.errors ? ` (${res.errors} errors)` : ''}`,
+            );
+            selected = new Set();
+          } catch (e) {
+            toastStore.error(`Flag failed: ${(e as Error).message}`);
+          }
+        }}
+        disabled={selected.size === 0}
+        title="Shift+N — flag selected as needing a new class"
+      >
+        Flag <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧N</kbd>
+      </button>
+      <button
+        class="btn"
+        type="button"
+        onclick={acceptAllGemmaOnPage}
+        title="Shift+Enter — accept all Gemma suggestions on this page"
+      >
+        Accept Gemma <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧↵</kbd>
+      </button>
+
+      <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
       <button class="btn" type="button" onclick={runGemma}>Run Gemma</button>
       <button class="btn" type="button" onclick={refine}>Refine (AHC)</button>
