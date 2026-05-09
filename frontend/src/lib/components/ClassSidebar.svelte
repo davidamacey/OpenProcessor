@@ -18,6 +18,33 @@
 
   let { selectedId = null, onselect, ondrop }: Props = $props();
 
+  // hoveredClassId tracks which class row currently sits under the dragged
+  // crop. svelte-dnd-action fires `consider` events whenever the active
+  // drop zone changes; we use that to highlight ONE row clearly so the
+  // user always knows where the drop will land.
+  let hoveredClassId = $state<number | null>(null);
+  // dragActive — true while any consider event is in flight on any row.
+  // Drives the sticky drop-banner across the whole sidebar.
+  let dragActive = $state<boolean>(false);
+  let dragClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function markDragActive(): void {
+    dragActive = true;
+    if (dragClearTimer) clearTimeout(dragClearTimer);
+  }
+
+  function scheduleDragClear(): void {
+    if (dragClearTimer) clearTimeout(dragClearTimer);
+    // svelte-dnd-action fires consider with items=[] when leaving a zone.
+    // Other zones may still receive the drag; defer the clear so we don't
+    // flicker the banner off between rows.
+    dragClearTimer = setTimeout(() => {
+      dragActive = false;
+      hoveredClassId = null;
+      dragClearTimer = null;
+    }, 80);
+  }
+
   // svelte-dnd-action drop-only zones use empty items + dragDisabled.
   // The onfinalize event fires when a drag is released on this zone;
   // we ignore the items detail and just call ondrop with the target class.
@@ -27,6 +54,12 @@
         items: Array<{ id: string }>;
         info: { source?: string };
       };
+      hoveredClassId = null;
+      dragActive = false;
+      if (dragClearTimer) {
+        clearTimeout(dragClearTimer);
+        dragClearTimer = null;
+      }
       if (!ondrop) return;
       if (info.source !== SOURCES.KEYBOARD && info.source !== SOURCES.POINTER) return;
       if (items.length === 0) return;
@@ -34,8 +67,25 @@
     };
   }
 
+  function makeConsider(cls: OpClass) {
+    return (e: CustomEvent): void => {
+      const { items } = e.detail as { items: Array<{ id: string }> };
+      if (items.length > 0) {
+        hoveredClassId = cls.id;
+        markDragActive();
+      } else if (hoveredClassId === cls.id) {
+        hoveredClassId = null;
+        scheduleDragClear();
+      }
+    };
+  }
+
   let query = $state<string>('');
   let modalOpen = $state<boolean>(false);
+
+  const hoveredClass = $derived(
+    hoveredClassId == null ? null : classesStore.byId(hoveredClassId),
+  );
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
@@ -67,6 +117,16 @@
     />
   </div>
 
+  {#if dragActive && ondrop}
+    <div class="border-b border-blue-500/30 bg-blue-500/10 px-3 py-2 text-center text-[11px] font-medium text-blue-200">
+      {#if hoveredClass}
+        Drop on <span class="font-semibold text-blue-100">{hoveredClass.name}</span>
+      {:else}
+        Drag onto a class row to label
+      {/if}
+    </div>
+  {/if}
+
   <div class="flex-1 overflow-y-auto">
     {#if classesStore.loading && classesStore.classes.length === 0}
       <div class="p-4 text-sm text-zinc-500">Loading classes...</div>
@@ -89,22 +149,26 @@
           </button>
         </li>
         {#each filtered as cls (cls.id)}
+          {@const isHover = hoveredClassId === cls.id}
           <li>
             <div
-              class="flex w-full items-center justify-between gap-2 hover:bg-zinc-900 {selectedId ===
-              cls.id
-                ? 'bg-zinc-800'
-                : ''}"
+              class="flex w-full items-center justify-between gap-2 transition-colors
+                {isHover
+                ? 'bg-blue-500/30 ring-2 ring-inset ring-blue-400'
+                : selectedId === cls.id
+                  ? 'bg-zinc-800'
+                  : 'hover:bg-zinc-900'}"
               use:dndzone={{
                 items: [],
                 type: 'op-crop',
-                flipDurationMs: 150,
-                dropTargetStyle: {
-                  outline: ondrop ? '2px dashed rgb(59 130 246 / 0.8)' : 'none',
-                },
+                flipDurationMs: 0,
+                morphDisabled: true,
+                centreDraggedOnCursor: true,
+                dropTargetStyle: { outline: 'none' },
                 dropFromOthersDisabled: !ondrop,
                 dragDisabled: true,
               }}
+              onconsider={makeConsider(cls)}
               onfinalize={makeFinalize(cls)}
             >
               <button
