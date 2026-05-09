@@ -5,9 +5,12 @@
     getSourceImageWithBbox,
     getThumbUrl,
     putCropLabel,
+    setCropPlate,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import type { OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
+  import PlateEditor from '$lib/components/PlateEditor.svelte';
+  import { bboxNormToXYXY } from '$lib/plate_geometry';
+  import type { BBoxNorm, OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -108,8 +111,11 @@
   // layout-level global keydown listener via dropOnClassStore. Pressing
   // a class's bound letter assigns the current crop and advances —
   // matching the cluster page's bulk-label dispatch shape so the same
-  // hotkey works everywhere it makes sense.
+  // hotkey works everywhere it makes sense. The plates tab is a
+  // different flow (confirming a bbox, not a class) so we no-op there
+  // and leave the letters free for plate actions.
   $effect(() => {
+    if (tab === 'plates') return;
     const off = dropOnClassStore.register(async (cls: OpClass) => {
       if (!current) {
         toastStore.info('No item to label.');
@@ -213,6 +219,67 @@
     }
   }
 
+  // -- plate-tab actions ----------------------------------------------
+  // The plates tab shows crops where the LPR / SAM3 / Gemma chain
+  // proposed a plate bbox but it didn't clear the auto-confirm bar.
+  // The operator's job is to either accept the proposal as-is, redraw
+  // the bbox in the editor, or mark "no plate visible".
+  let plateEditorOpen = $state<boolean>(false);
+
+  function _advancePastPlate(id: string): void {
+    items = items.filter((x) => x.id !== id);
+    total = Math.max(0, total - 1);
+    cursor = Math.min(cursor, Math.max(0, items.length - 1));
+    if (cursor >= items.length - 1 && hasMore) void loadMore();
+  }
+
+  async function confirmPlate(): Promise<void> {
+    if (!current) return;
+    if (!current.plate_bbox_norm) {
+      toastStore.warn('No plate proposal to confirm — open the editor.');
+      return;
+    }
+    const id = current.id;
+    const bbox = bboxNormToXYXY(current.plate_bbox_norm) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    _advancePastPlate(id);
+    try {
+      await setCropPlate(id, bbox);
+      toastStore.success('Plate confirmed.');
+    } catch (e) {
+      toastStore.error(`Confirm failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function rejectPlate(): Promise<void> {
+    if (!current) return;
+    const id = current.id;
+    _advancePastPlate(id);
+    try {
+      // null bbox = "no plate visible" per setCropPlate contract.
+      await setCropPlate(id, null);
+      toastStore.success('Plate rejected (no plate visible).');
+    } catch (e) {
+      toastStore.error(`Reject failed: ${(e as Error).message}`);
+    }
+  }
+
+  function openPlateEditor(): void {
+    if (!current) return;
+    plateEditorOpen = true;
+  }
+
+  function onPlateEditorSave(_newBbox: BBoxNorm | null): void {
+    plateEditorOpen = false;
+    if (!current) return;
+    // PlateEditor PUTs through setCropPlate itself, so just advance.
+    _advancePastPlate(current.id);
+  }
+
   async function undoLast(): Promise<void> {
     const entry = undoStore.pop();
     if (!entry) {
@@ -227,19 +294,25 @@
     }
   }
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts. Per-class letter hotkeys (configured on /classes)
+  // are routed through dropOnClassStore by the layout-level keydown
+  // listener and work on every tab. The shortcuts below are the
+  // tab-action shortcuts; on the plates tab Enter/D get rebound to plate
+  // confirm/reject so the same finger pattern works for both flows.
   $effect(() => {
     const offs: Array<() => void> = [];
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
 
-    // Per-class letter hotkeys (configured on /classes) are routed
-    // through dropOnClassStore by the layout-level keydown listener.
-    // The legacy 1..0 top-N scheme has been removed — same scheme on
-    // every page, no dual-binding to remember.
-    reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
+    if (tab === 'plates') {
+      reg('enter', confirmPlate, 'Confirm plate & advance');
+      reg('e', openPlateEditor, 'Edit plate bbox');
+      reg('d', rejectPlate, 'Reject (no plate visible)');
+    } else {
+      reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
+      reg('d', discard, 'Discard');
+    }
     reg('n', skip, 'Skip');
-    reg('d', discard, 'Discard');
     reg('z', undoLast, 'Undo last');
     // Arrow keys navigate within the loaded queue; auto-load next page when
     // approaching the end so the cursor never starves.
@@ -336,8 +409,13 @@
     <span class="grow"></span>
 
     <span class="text-[11px] text-zinc-500">
-      <kbd>1–9</kbd> assign · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip · <kbd>D</kbd> discard ·
-      <kbd>Z</kbd> undo
+      {#if tab === 'plates'}
+        <kbd>Enter</kbd> confirm plate · <kbd>E</kbd> edit · <kbd>D</kbd> reject ·
+        <kbd>N</kbd> skip · <kbd>Z</kbd> undo
+      {:else}
+        per-class letter assigns · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip ·
+        <kbd>D</kbd> discard · <kbd>Z</kbd> undo
+      {/if}
     </span>
   </div>
 
@@ -406,19 +484,50 @@
           </dd>
         </dl>
 
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button class="btn btn-primary" type="button" onclick={confirmAndAdvance}>
-            Confirm
-          </button>
-          <button class="btn" type="button" onclick={skip}>Skip</button>
-          <button class="btn btn-danger" type="button" onclick={discard}>Discard</button>
-          <button class="btn" type="button" onclick={undoLast}>Undo</button>
-        </div>
+        {#if tab === 'plates'}
+          <!-- Plate-detection review row. The proposal came from
+               LPR/SAM3 + Gemma but didn't clear the auto-confirm bar.
+               Confirm = accept the proposed bbox as-is, Edit = open the
+               drag-and-resize editor, Reject = mark "no plate visible"
+               so the export doesn't emit a bogus plate label row. -->
+          <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
+            <span class="text-zinc-500">Plate score</span>
+            <span class="font-mono text-zinc-200">
+              {current.plate_score != null
+                ? `${(current.plate_score * 100).toFixed(1)}%`
+                : '—'}
+            </span>
+            <span class="text-zinc-500">Plate status</span>
+            <span class="text-zinc-200">{current.plate_status ?? '—'}</span>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="button" onclick={confirmPlate}>
+              Confirm Plate
+            </button>
+            <button class="btn" type="button" onclick={openPlateEditor}>Edit</button>
+            <button class="btn btn-danger" type="button" onclick={rejectPlate}>
+              Reject (no plate)
+            </button>
+            <button class="btn" type="button" onclick={skip}>Skip</button>
+            <button class="btn" type="button" onclick={undoLast}>Undo</button>
+          </div>
+        {:else}
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="button" onclick={confirmAndAdvance}>
+              Confirm
+            </button>
+            <button class="btn" type="button" onclick={skip}>Skip</button>
+            <button class="btn btn-danger" type="button" onclick={discard}>Discard</button>
+            <button class="btn" type="button" onclick={undoLast}>Undo</button>
+          </div>
+        {/if}
 
         <!-- Most-validated classes — click to label OR press the per-class
              hotkey configured on /classes. Hotkey badges only show for
              classes the user has explicitly bound (otherwise the strip is
-             still clickable, just no kbd hint). -->
+             still clickable, just no kbd hint). The class strip is hidden
+             on the plates tab; class assignment isn't relevant there. -->
+        {#if tab !== 'plates'}
         <div class="mt-3 flex flex-wrap gap-1.5">
           {#each topClasses as cls (cls.id)}
             <button
@@ -445,9 +554,20 @@
         <p class="mt-1.5 text-[10px] text-zinc-500">
           Click a class or press its bound letter (set hotkeys on /classes).
         </p>
+        {/if}
       </div>
     {/if}
   </div>
+
+  {#if plateEditorOpen && current}
+    <PlateEditor
+      crop={current}
+      onsave={onPlateEditorSave}
+      onclose={() => {
+        plateEditorOpen = false;
+      }}
+    />
+  {/if}
 
   <!-- Status bar — review is one-at-a-time so there's no "scroll to load more"
        affordance; the queue auto-fetches the next page in the background as

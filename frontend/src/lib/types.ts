@@ -121,6 +121,12 @@ export interface OpCrop {
   sub_cluster_id?: number | null;
   /** Plate sub-bbox normalized to source image. */
   plate_bbox_norm?: BBoxNorm | null;
+  /** Detector confidence for the plate proposal (0..1). */
+  plate_score?: number | null;
+  /** State machine value: 'detected' | 'no_plate_visible' |
+   *  'verify_rejected' | 'no_plate_box' | 'pending_verify' | 'human_confirmed' */
+  plate_status?: string | null;
+  plate_verified?: boolean | null;
   hdd_source?: string | null;
   test_holdout: boolean;
   outlier_flagged?: boolean;
