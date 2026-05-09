@@ -23,6 +23,9 @@
     { id: 'gemma_low_conf', label: 'Gemma Low-Conf' },
     { id: 'outliers', label: 'Outliers' },
     { id: 'uncertainty', label: 'Uncertainty' },
+    // Phase 5 active-learning loop: validated crops where the newly
+    // promoted model disagrees with the human label.
+    { id: 'model_disagreements', label: 'Model Disagreements' },
   ];
 
   let tab = $state<ReviewTab>('all');

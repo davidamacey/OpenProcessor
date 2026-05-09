@@ -170,12 +170,23 @@ export interface OpHealth {
   timestamp: string;
 }
 
-export type ReviewTab = 'all' | 'mismatches' | 'gemma_low_conf' | 'outliers' | 'uncertainty';
+export type ReviewTab =
+  | 'all'
+  | 'mismatches'
+  | 'gemma_low_conf'
+  | 'outliers'
+  | 'uncertainty'
+  | 'model_disagreements';
 
 export interface ReviewItem extends OpCrop {
   reason: string;
   proposed_class_id: number | null;
   proposed_class_name: string | null;
+  // Phase 5 — populated for the model_disagreements tab. The new model's
+  // prediction for this crop, plus how confident it was. Lets the
+  // labeler render "human said X, model said Y" inline.
+  probe_pred_class?: string | null;
+  probe_pred_entropy?: number | null;
 }
 
 export interface PaginatedResponse<T> {
