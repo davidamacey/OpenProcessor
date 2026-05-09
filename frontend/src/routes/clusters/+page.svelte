@@ -118,6 +118,28 @@
 
     <span class="grow"></span>
 
+    <!-- Color legend for the card border. The cluster grid uses border
+         color to encode purity at a glance; without this strip the user
+         has to mouse over each card to figure out what the colors mean. -->
+    <div class="flex items-center gap-2 text-[10px] text-zinc-500" title="Card border color encodes cluster purity">
+      <span class="flex items-center gap-1">
+        <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"></span>
+        ≥80%
+      </span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"></span>
+        ≥60%
+      </span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block h-2 w-3 rounded-sm border-2 border-red-500/60"></span>
+        &lt;60%
+      </span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block h-2 w-3 rounded-sm border-2 border-blue-500/60"></span>
+        sub-clustered
+      </span>
+    </div>
+
     <label class="flex items-center gap-2 text-xs text-zinc-400">
       Sort
       <select

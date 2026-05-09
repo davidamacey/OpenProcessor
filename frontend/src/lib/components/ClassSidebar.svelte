@@ -1,6 +1,7 @@
 <script lang="ts">
   import { dndzone, SOURCES } from 'svelte-dnd-action';
   import AddClassModal from './AddClassModal.svelte';
+  import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { classesStore } from '$stores/classes.svelte';
   import type { OpClass } from '$lib/types';
 
@@ -99,11 +100,9 @@
     return [...list].sort((a, b) => (b.validated_count ?? 0) - (a.validated_count ?? 0));
   });
 
-  const badgeColor = (n: number): string => {
-    if (n >= 500) return 'bg-green-500/20 text-green-300 border-green-500/30';
-    if (n >= 100) return 'bg-orange-500/20 text-orange-200 border-orange-500/30';
-    return 'bg-red-500/20 text-red-200 border-red-500/30';
-  };
+  // Chip color/threshold logic lives in $lib/adequacy so /classes,
+  // /clusters, the dashboard, and this sidebar all paint the same
+  // count the same way.
 </script>
 
 <aside class="flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-950">
@@ -193,9 +192,10 @@
                   <span class="truncate">{cls.name}</span>
                 </span>
                 <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {badgeColor(
+                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
                     cls.validated_count ?? 0,
                   )}"
+                  title={adequacyTooltip(cls.validated_count ?? 0)}
                 >
                   {cls.validated_count ?? 0}
                 </span>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { apiBase, exportYolo, getCrops, getStats, getThumbUrl, runGemmaOnCluster } from '$lib/api';
+  import { adequacyLevel } from '$lib/adequacy';
   import type { OpCrop, OpStats } from '$lib/types';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -84,18 +85,13 @@
       .map((c) => ({
         ...c,
         pct: Math.max(2, Math.round((c.validated_count / max) * 100)),
-        tier:
-          c.validated_count >= 500
-            ? 'green'
-            : c.validated_count >= 100
-              ? 'orange'
-              : 'red',
+        tier: adequacyLevel(c.validated_count),
       }));
   });
 
   function tierBg(t: string): string {
-    if (t === 'green') return 'bg-green-500';
-    if (t === 'orange') return 'bg-orange-500';
+    if (t === 'ok') return 'bg-green-500';
+    if (t === 'low') return 'bg-orange-500';
     return 'bg-red-500';
   }
 </script>

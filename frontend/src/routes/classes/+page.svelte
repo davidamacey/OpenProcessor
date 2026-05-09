@@ -5,6 +5,7 @@
     syncClassesToOpensearch,
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
+  import { adequacyChipClass, adequacyLabel, adequacyTooltip } from '$lib/adequacy';
   import type { OpClass } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -77,18 +78,6 @@
   const activeRows = $derived(filtered.filter((c) => !c.deprecated));
   const deprecatedRows = $derived(filtered.filter((c) => c.deprecated));
 
-  function adequacyClass(validated: number): string {
-    if (validated >= 500) return 'bg-green-500/20 text-green-200 border-green-500/40';
-    if (validated >= 100) return 'bg-orange-500/20 text-orange-200 border-orange-500/40';
-    return 'bg-red-500/20 text-red-200 border-red-500/40';
-  }
-
-  function adequacyLabel(validated: number): string {
-    if (validated >= 500) return 'ok';
-    if (validated >= 100) return 'low';
-    return 'critical';
-  }
-
   // ---- mutations ---------------------------------------------------------
 
   function startEdit(cls: OpClass): void {
@@ -138,12 +127,32 @@
     }
   }
 
+  // Letters reserved by the cluster + review pages for non-class actions.
+  // Binding any of these as a class hotkey would shadow the action and is
+  // confusing in practice — block at the UI before the round-trip.
+  const RESERVED_HOTKEYS = new Set([
+    'n', // skip
+    'd', // discard
+    'z', // undo
+    'g', // accept Gemma
+    'm', // move
+    'a', // select all
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', // top-N (legacy)
+  ]);
+
   async function setHotkey(cls: OpClass, raw: string): Promise<void> {
     const next = raw.trim().toLowerCase();
     const current = (cls.hotkey_letter ?? '').toLowerCase();
     if (next === current) return;
     if (next.length > 1) {
       toastStore.error('Hotkey must be a single character.');
+      return;
+    }
+    if (next && RESERVED_HOTKEYS.has(next)) {
+      toastStore.error(
+        `'${next}' is reserved for a built-in action (skip/discard/undo/move/etc.). ` +
+          `Pick another letter.`,
+      );
       return;
     }
     busy = true;
@@ -331,10 +340,10 @@
               </td>
               <td class="px-3 py-1.5 text-right font-mono">
                 <span
-                  class="rounded-md border px-1.5 py-0.5 text-xs {adequacyClass(
+                  class="rounded-md border px-1.5 py-0.5 text-xs {adequacyChipClass(
                     cls.validated_count ?? 0,
                   )}"
-                  title={adequacyLabel(cls.validated_count ?? 0)}
+                  title={adequacyTooltip(cls.validated_count ?? 0)}
                 >
                   {cls.validated_count ?? 0}
                 </span>

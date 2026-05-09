@@ -145,11 +145,12 @@
 
     <button
       type="button"
-      class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300 hover:bg-zinc-800"
+      class="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white"
       onclick={() => keyboardStore.toggleOverlay()}
       title="Keyboard shortcuts (~)"
     >
-      ?
+      <span class="font-mono">?</span>
+      <span class="hidden sm:inline">shortcuts</span>
     </button>
 
     <span
