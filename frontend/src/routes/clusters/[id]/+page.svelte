@@ -865,11 +865,12 @@
   <div
     class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    <span class="text-xs text-zinc-500">
-      {selected.size} selected · {crops.length} loaded · {total} total
+    <span class="font-mono text-xs text-zinc-500">
+      {crops.length} / {total}
+      {#if selected.size > 0}<span class="ml-2 text-blue-300">· {selected.size} selected</span>{/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}{total - crops.length} more available — scroll to load{:else}all loaded{/if}
+      {#if loadingMore}loading more…{:else if hasMore}scroll for more{:else}all loaded{/if}
     </span>
   </div>
 </div>

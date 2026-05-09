@@ -120,13 +120,31 @@
     return () => off();
   });
 
+  // Tab + class filter fire loadFirst() immediately (single-click changes
+  // are intentional). Text + slider filters debounce by 250ms so typing
+  // hddSource or dragging the confidence sliders doesn't cause a refetch
+  // per keystroke.
   $effect(() => {
     void tab;
-    void hddSource;
     void classFilter;
+    void loadFirst();
+  });
+  let filterDebounce: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    void hddSource;
     void confMin;
     void confMax;
-    void loadFirst();
+    if (filterDebounce) clearTimeout(filterDebounce);
+    filterDebounce = setTimeout(() => {
+      filterDebounce = null;
+      void loadFirst();
+    }, 250);
+    return () => {
+      if (filterDebounce) {
+        clearTimeout(filterDebounce);
+        filterDebounce = null;
+      }
+    };
   });
 
   const current = $derived<ReviewItem | null>(items[cursor] ?? null);
@@ -178,13 +196,18 @@
 
   async function discard(): Promise<void> {
     if (!current) return;
-    const ok = window.confirm('Discard this crop?');
-    if (!ok) return;
+    // Snapshot before discard so undo (Z) brings the crop back into
+    // the queue. No nag-confirm — the user presses D dozens of times
+    // per session.
+    undoStore.push(snap(current));
+    const id = current.id;
+    items = items.filter((x) => x.id !== id);
+    total = Math.max(0, total - 1);
+    cursor = Math.min(cursor, Math.max(0, items.length - 1));
+    if (cursor >= items.length - 1 && hasMore) void loadMore();
     try {
-      await deleteCropLabel(current.id);
-      const id = current.id;
-      items = items.filter((x) => x.id !== id);
-      total = Math.max(0, total - 1);
+      await deleteCropLabel(id);
+      toastStore.success('Discarded. Press Z to undo.');
     } catch (e) {
       toastStore.error(`Discard failed: ${(e as Error).message}`);
     }
@@ -429,15 +452,14 @@
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    <span class="text-xs text-zinc-500">
-      crop {Math.min(cursor + 1, items.length)} of {total}
+    <span class="font-mono text-xs text-zinc-500">
+      {Math.min(cursor + 1, items.length)} / {total}
       {#if items.length < total}
         <span class="ml-1 text-zinc-600">(loaded {items.length})</span>
       {/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}fetching next batch…{:else if !hasMore && items.length > 0}queue
-        complete{/if}
+      {#if loadingMore}loading more…{:else if !hasMore && items.length > 0}all loaded{:else if hasMore}auto-fetching{/if}
     </span>
   </div>
 </div>

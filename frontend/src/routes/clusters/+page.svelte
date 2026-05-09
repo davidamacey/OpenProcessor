@@ -218,11 +218,11 @@
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    <span class="text-xs text-zinc-500">
-      {clusters.length} loaded · {total} total clusters
+    <span class="font-mono text-xs text-zinc-500">
+      {clusters.length} / {total}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}{total - clusters.length} more available — scroll to load{:else}all loaded{/if}
+      {#if loadingMore}loading more…{:else if hasMore}scroll for more{:else}all loaded{/if}
     </span>
   </div>
 </div>
