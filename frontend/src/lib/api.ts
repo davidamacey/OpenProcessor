@@ -458,10 +458,11 @@ export function bulkLabel(
   classId: number,
   signal?: AbortSignal,
 ): Promise<BulkLabelResult> {
+  // Backend route is PUT (matches the single-crop /label PUT shape).
   return apiFetch<BulkLabelResult>(
     '/curation/crops/batch_label',
     {
-      method: 'POST',
+      method: 'PUT',
       body: JSON.stringify({ crop_ids: cropIds, class_id: classId, validated: true }),
     },
     signal,
