@@ -12,11 +12,11 @@
     refineCluster,
     runGemmaOnCluster,
   } from '$lib/api';
-  import ClassFolderSidebar from '$components/ClassFolderSidebar.svelte';
   import CropCard from '$components/CropCard.svelte';
   import CutLine from '$components/CutLine.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import type { OpCluster, OpCrop, PaginatedResponse, UndoEntry } from '$lib/types';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
+  import type { OpClass, OpCluster, OpCrop, PaginatedResponse, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -105,6 +105,44 @@
     keyboardStore.setScope('cluster');
     void clusterId;
     void loadFirst();
+  });
+
+  // Wire the layout-level ClassSidebar's drop targets to bulk-label the
+  // currently-selected crops. Registered on mount, unregistered on
+  // teardown so other pages don't accidentally receive cluster-page
+  // drop dispatches.
+  $effect(() => {
+    const off = dropOnClassStore.register(async (cls: OpClass) => {
+      const ids = [...selected];
+      if (ids.length === 0) {
+        toastStore.warn('Select crops first, then drag onto a class.');
+        return;
+      }
+      for (const id of ids) {
+        const c = crops.find((x) => x.id === id);
+        if (c) {
+          undoStore.push({
+            crop_id: c.id,
+            prior_class_id: c.class_id,
+            prior_label_source: c.label_source,
+            prior_validated: c.label_validated,
+            at: Date.now(),
+          });
+        }
+      }
+      try {
+        const res = await bulkLabel(ids, cls.id);
+        toastStore.success(
+          `Labeled ${res.affected ?? ids.length} → ${cls.name}.`,
+        );
+        crops = crops.filter((c) => !selected.has(c.id));
+        total = Math.max(0, total - ids.length);
+        selected = new Set();
+      } catch (e) {
+        toastStore.error(`Label failed: ${(e as Error).message}`);
+      }
+    });
+    return off;
   });
 
   // Sub-cluster filtering (in-memory, after load)
@@ -647,8 +685,8 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <!-- Toolbar — minimal: title + summary + bulk-action buttons. Class
-       selection moved to the left sidebar (drag-to-folder). -->
+  <!-- Toolbar — title + summary + bulk-action buttons + class assignment.
+       Drag-and-drop onto the left ClassSidebar is the alternative path. -->
   <div
     class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5"
   >
@@ -666,6 +704,25 @@
       <button class="btn" type="button" onclick={selectAllPage}>Select page</button>
       <button class="btn" type="button" onclick={deselectAll}>Deselect</button>
       <span class="font-mono text-xs text-zinc-500">{selected.size} selected</span>
+
+      <select
+        bind:value={confirmClassId}
+        class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
+      >
+        <option value={null}>— class —</option>
+        {#each classesStore.classes as cls (cls.id)}
+          <option value={cls.id}>{cls.name}</option>
+        {/each}
+      </select>
+      <button
+        class="btn btn-primary"
+        type="button"
+        onclick={confirmSelected}
+        disabled={selected.size === 0 || confirmClassId == null}
+      >
+        Confirm Selected
+      </button>
+
       <button class="btn" type="button" onclick={runGemma}>Run Gemma</button>
       <button class="btn" type="button" onclick={refine}>Refine (AHC)</button>
     </div>
@@ -703,42 +760,9 @@
   <!-- Hotkey legend strip removed — class folders + hotkeys live in the
        left sidebar now (the legacy_sorter UX). -->
 
-  <!-- Class-folder sidebar (left) + grid (right) -->
+  <!-- Grid container. The class-list left sidebar is the layout-level
+       ClassSidebar — it auto-receives drops via dropOnClassStore. -->
   <div class="flex min-h-0 flex-1 overflow-hidden">
-    <ClassFolderSidebar
-      classes={classesStore.classes}
-      selectedCount={selected.size}
-      onDrop={async (classId) => {
-        const ids = [...selected];
-        if (ids.length === 0) return;
-        // Snapshot for undo, then bulk-label via the API.
-        for (const id of ids) {
-          const c = crops.find((x) => x.id === id);
-          if (c) {
-            undoStore.push({
-              crop_id: c.id,
-              prior_class_id: c.class_id,
-              prior_label_source: c.label_source,
-              prior_validated: c.label_validated,
-              at: Date.now(),
-            });
-          }
-        }
-        try {
-          const res = await bulkLabel(ids, classId);
-          toastStore.success(
-            `Labeled ${res.affected ?? ids.length} crop${ids.length === 1 ? '' : 's'}.`,
-          );
-          // Drop them from the local list — they no longer belong to this cluster.
-          crops = crops.filter((c) => !selected.has(c.id));
-          total = Math.max(0, total - ids.length);
-          selected = new Set();
-        } catch (e) {
-          toastStore.error(`Label failed: ${(e as Error).message}`);
-        }
-      }}
-    />
-
     <div class="min-w-0 flex-1 overflow-auto p-4">
       {#if loading && crops.length === 0}
         <p class="text-sm text-zinc-500">Loading...</p>

@@ -20,20 +20,37 @@
 
   let expanded = $state<boolean>(false);
 
+  // Badge color + text reflect the ACTUAL source of the validated label.
+  // Previously every validated crop showed a green 'human' chip — but
+  // most crops in the ensemble pipeline are auto-validated by Gemma,
+  // ensemble consensus, or cluster propagation; only true human labels
+  // (label_source='human') get the green chip.
   const labelBadgeClass = (src: LabelSource | null | undefined, validated: boolean): string => {
-    if (validated) return 'bg-green-500/20 text-green-200 border-green-500/40';
+    if (!validated) {
+      if (src === 'gemma_suggestion') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+      return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
+    }
+    if (src === 'human' || src === 'human_confirmed') {
+      return 'bg-green-500/20 text-green-200 border-green-500/40';
+    }
+    if (src === 'ensemble') return 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40';
     if (src === 'gemma_suggestion') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
-    if (src === 'human_confirmed') return 'bg-green-500/20 text-green-200 border-green-500/40';
+    if (src === 'cluster_propagation') return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
     return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
   };
 
   const labelBadgeText = (src: LabelSource | null | undefined, validated: boolean): string => {
-    if (validated) return 'human';
+    if (!validated) {
+      if (src === 'gemma_suggestion') return 'gemma?';
+      return src ?? 'unlabeled';
+    }
+    if (src === 'human' || src === 'human_confirmed') return 'human';
+    if (src === 'ensemble') return 'ensemble';
     if (src === 'gemma_suggestion') return 'gemma';
-    if (src === 'model_suggestion') return 'model';
     if (src === 'cluster_propagation') return 'cluster';
     if (src === 'v6_original_label') return 'v6';
-    return src ?? 'unknown';
+    if (src === 'model_suggestion') return 'model';
+    return src ?? 'auto';
   };
 
   const conf = $derived(

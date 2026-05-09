@@ -12,8 +12,10 @@ export type LabelSource =
   | 'hdd_user_label'
   | 'model_suggestion'
   | 'gemma_suggestion'
+  | 'human'
   | 'human_confirmed'
   | 'cluster_propagation'
+  | 'ensemble'
   | 'unknown';
 
 export type ClassSource = 'registry' | 'derived' | 'imported';

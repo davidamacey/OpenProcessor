@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import ClassSidebar from '$components/ClassSidebar.svelte';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
@@ -125,7 +126,11 @@
   <!-- Content -->
   <div class="flex min-h-0 flex-1">
     {#if showSidebar}
-      <ClassSidebar selectedId={selectedClassId} onselect={selectClass} />
+      <ClassSidebar
+        selectedId={selectedClassId}
+        onselect={selectClass}
+        ondrop={(cls) => void dropOnClassStore.dispatch(cls)}
+      />
     {/if}
     <main class="min-h-0 flex-1 overflow-auto">
       {@render children?.()}

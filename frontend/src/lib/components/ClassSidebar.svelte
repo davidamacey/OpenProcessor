@@ -1,13 +1,37 @@
 <script lang="ts">
+  import { dndzone, SOURCES } from 'svelte-dnd-action';
   import { classesStore } from '$stores/classes.svelte';
   import type { OpClass } from '$lib/types';
 
   interface Props {
     selectedId: number | null;
     onselect: (cls: OpClass | null) => void;
+    /**
+     * Optional drop handler — when crops are dragged from a grid onto a
+     * class row, this fires with the destination class. Caller is
+     * responsible for assigning the currently-selected crops to that class.
+     * When omitted, drop targets are disabled (sidebar is filter-only).
+     */
+    ondrop?: (cls: OpClass) => void | Promise<void>;
   }
 
-  let { selectedId = null, onselect }: Props = $props();
+  let { selectedId = null, onselect, ondrop }: Props = $props();
+
+  // svelte-dnd-action drop-only zones use empty items + dragDisabled.
+  // The onfinalize event fires when a drag is released on this zone;
+  // we ignore the items detail and just call ondrop with the target class.
+  function makeFinalize(cls: OpClass) {
+    return (e: CustomEvent): void => {
+      const { items, info } = e.detail as {
+        items: Array<{ id: string }>;
+        info: { source?: string };
+      };
+      if (!ondrop) return;
+      if (info.source !== SOURCES.KEYBOARD && info.source !== SOURCES.POINTER) return;
+      if (items.length === 0) return;
+      void ondrop(cls);
+    };
+  }
 
   let query = $state<string>('');
   let modalOpen = $state<boolean>(false);
@@ -65,24 +89,42 @@
         </li>
         {#each filtered as cls (cls.id)}
           <li>
-            <button
-              type="button"
-              class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-900 {selectedId ===
+            <div
+              class="flex w-full items-center justify-between gap-2 hover:bg-zinc-900 {selectedId ===
               cls.id
-                ? 'bg-zinc-800 text-white'
-                : 'text-zinc-300'}"
-              onclick={() => onselect(cls)}
-              title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
+                ? 'bg-zinc-800'
+                : ''}"
+              use:dndzone={{
+                items: [],
+                type: 'op-crop',
+                flipDurationMs: 150,
+                dropTargetStyle: {
+                  outline: ondrop ? '2px dashed rgb(59 130 246 / 0.8)' : 'none',
+                },
+                dropFromOthersDisabled: !ondrop,
+                dragDisabled: true,
+              }}
+              onfinalize={makeFinalize(cls)}
             >
-              <span class="truncate">{cls.name}</span>
-              <span
-                class="rounded-md border px-1.5 py-0.5 font-mono text-xs {badgeColor(
-                  cls.validated_count ?? 0,
-                )}"
+              <button
+                type="button"
+                class="flex grow items-center justify-between gap-2 px-3 py-1.5 text-left text-sm {selectedId ===
+                cls.id
+                  ? 'text-white'
+                  : 'text-zinc-300'}"
+                onclick={() => onselect(cls)}
+                title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
               >
-                {cls.validated_count ?? 0}
-              </span>
-            </button>
+                <span class="truncate">{cls.name}</span>
+                <span
+                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {badgeColor(
+                    cls.validated_count ?? 0,
+                  )}"
+                >
+                  {cls.validated_count ?? 0}
+                </span>
+              </button>
+            </div>
           </li>
         {/each}
       </ul>
