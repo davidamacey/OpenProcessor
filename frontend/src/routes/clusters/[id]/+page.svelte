@@ -760,6 +760,16 @@
             />
           {/each}
         </div>
+        <!-- Sentinel inside the scroll container so IntersectionObserver
+             roots on the right element (the overflow-auto parent). -->
+        <div
+          use:infiniteScroll={{
+            onload: loadMore,
+            disabled: loadingMore || !hasMore || loading,
+          }}
+          class="mt-4 h-1"
+          aria-hidden="true"
+        ></div>
       {/if}
     </div>
 
@@ -829,7 +839,7 @@
     </aside>
   </div>
 
-  <!-- Infinite-scroll status bar (no Next/Prev buttons — counts come from server) -->
+  <!-- Status bar (sentinel lives inside the scroll container, see above) -->
   <div
     class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
   >
@@ -837,16 +847,9 @@
       {selected.size} selected · {crops.length} loaded · {total} total
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}{total - crops.length} more available{:else}all loaded{/if}
+      {#if loadingMore}loading more…{:else if hasMore}{total - crops.length} more available — scroll to load{:else}all loaded{/if}
     </span>
   </div>
-
-  <!-- Sentinel: when this scrolls into view, load the next page -->
-  <div
-    use:infiniteScroll={{ onload: loadMore, disabled: loadingMore || !hasMore || loading }}
-    class="h-1"
-    aria-hidden="true"
-  ></div>
 </div>
 
 {#if movePickerOpen}

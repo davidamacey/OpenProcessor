@@ -200,10 +200,21 @@
           </li>
         {/each}
       </ul>
+      <!-- Sentinel MUST live inside the scroll container so the IntersectionObserver
+           can root itself on the right element. Outside the overflow-auto div the
+           observer falls back to viewport and either never fires or fires forever. -->
+      <div
+        use:infiniteScroll={{
+          onload: loadMore,
+          disabled: loadingMore || !hasMore || loading,
+        }}
+        class="mt-4 h-1"
+        aria-hidden="true"
+      ></div>
     {/if}
   </div>
 
-  <!-- Status bar + infinite-scroll sentinel -->
+  <!-- Status bar (no scroll sentinel here — see above) -->
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
@@ -211,12 +222,7 @@
       {clusters.length} loaded · {total} total clusters
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}{total - clusters.length} more available{:else}all loaded{/if}
+      {#if loadingMore}loading more…{:else if hasMore}{total - clusters.length} more available — scroll to load{:else}all loaded{/if}
     </span>
   </div>
-  <div
-    use:infiniteScroll={{ onload: loadMore, disabled: loadingMore || !hasMore || loading }}
-    class="h-1"
-    aria-hidden="true"
-  ></div>
 </div>

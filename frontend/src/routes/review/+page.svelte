@@ -394,22 +394,21 @@
     {/if}
   </div>
 
-  <!-- Infinite-scroll status bar (no Next/Prev buttons) -->
+  <!-- Status bar — review is one-at-a-time so there's no "scroll to load more"
+       affordance; the queue auto-fetches the next page in the background as
+       the cursor advances toward the end of the loaded items. -->
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="text-xs text-zinc-500">
-      item {Math.min(cursor + 1, items.length)} of {items.length} loaded · {total} total
+      crop {Math.min(cursor + 1, items.length)} of {total}
+      {#if items.length < total}
+        <span class="ml-1 text-zinc-600">(loaded {items.length})</span>
+      {/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}{total - items.length} more available{:else}all loaded{/if}
+      {#if loadingMore}fetching next batch…{:else if !hasMore && items.length > 0}queue
+        complete{/if}
     </span>
   </div>
-
-  <!-- Sentinel: when this scrolls into view, load the next page -->
-  <div
-    use:infiniteScroll={{ onload: loadMore, disabled: loadingMore || !hasMore || loading }}
-    class="h-1"
-    aria-hidden="true"
-  ></div>
 </div>
