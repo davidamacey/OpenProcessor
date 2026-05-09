@@ -1,6 +1,8 @@
 <script lang="ts">
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
-  import type { OpCrop, LabelSource } from '$lib/types';
+  import { sourceToCropFrame } from '$lib/plate_geometry';
+  import type { BBoxNorm, OpCrop, LabelSource } from '$lib/types';
+  import PlateEditor from './PlateEditor.svelte';
 
   interface Props {
     crop: OpCrop;
@@ -8,6 +10,12 @@
     onclick?: (crop: OpCrop, e: MouseEvent) => void;
     onacceptGemma?: (crop: OpCrop) => void;
     onrejectGemma?: (crop: OpCrop) => void;
+    /**
+     * Optional callback fired after the plate editor saves a new
+     * source-frame plate box (or null for "no plate visible"). Lets the
+     * page update local state without a full reload.
+     */
+    onplatesaved?: (cropId: string, plateBboxSrc: BBoxNorm | null) => void;
   }
 
   let {
@@ -16,9 +24,40 @@
     onclick,
     onacceptGemma,
     onrejectGemma,
+    onplatesaved,
   }: Props = $props();
 
   let expanded = $state<boolean>(false);
+  let plateEditorOpen = $state<boolean>(false);
+
+  // `plate_status` is a forward-tolerant field on OpCrop — the type
+  // header in types.ts says we accept extra server fields silently —
+  // so we read it via a narrow cast instead of widening the public type
+  // (which is outside this task's allowed-modify list).
+  const plateStatus = $derived<string | null>(
+    ((crop as unknown as { plate_status?: string | null }).plate_status ?? null),
+  );
+
+  const noPlate = $derived(plateStatus === 'no_plate_visible');
+
+  // Convert the source-frame plate bbox to the crop's local frame so we
+  // can overlay it on the thumbnail. Returns null when no plate, when
+  // the human said "no plate", or when the parent vehicle box is
+  // degenerate (sourceToCropFrame guard).
+  const plateInCrop = $derived.by<BBoxNorm | null>(() => {
+    if (noPlate) return null;
+    if (!crop.plate_bbox_norm) return null;
+    if (!crop.bbox_norm) return null;
+    return sourceToCropFrame(crop.plate_bbox_norm, crop.bbox_norm);
+  });
+
+  // Ring color: green when a human has confirmed the plate, yellow for
+  // unverified machine-suggested plates. Mirrors §11.3 of the design doc.
+  const plateRingColorClass = $derived(
+    plateStatus === 'human_confirmed' || plateStatus === 'detected'
+      ? 'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]'
+      : 'border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45)]',
+  );
 
   // Badge color + text reflect the ACTUAL source of the validated label.
   // Previously every validated crop showed a green 'human' chip — but
@@ -85,13 +124,49 @@
       }}
     />
 
-    {#if crop.plate_bbox_norm}
+    {#if noPlate}
+      <span
+        class="absolute top-1 left-1 rounded-sm border border-zinc-500/60 bg-zinc-700/70 px-1 py-0.5 font-mono text-[10px] text-zinc-200"
+        title="Plate marked as not visible by a human reviewer"
+      >
+        no plate
+      </span>
+    {:else if plateInCrop}
+      <!--
+        Plate ring overlaid on the thumbnail. The thumbnail itself is
+        rendered with object-contain inside an aspect-square container, so
+        positioning the ring as a percentage of the container places it
+        exactly on the visible image (the crop is itself the vehicle box,
+        not its source image). Pointer-events are disabled so the ring
+        never swallows clicks intended for the card.
+      -->
+      <div
+        class="pointer-events-none absolute rounded-[2px] border {plateRingColorClass}"
+        style:left="{(plateInCrop.cx - plateInCrop.w / 2) * 100}%"
+        style:top="{(plateInCrop.cy - plateInCrop.h / 2) * 100}%"
+        style:width="{plateInCrop.w * 100}%"
+        style:height="{plateInCrop.h * 100}%"
+        aria-hidden="true"
+      ></div>
       <span
         class="absolute top-1 left-1 rounded-sm border border-blue-400/60 bg-blue-500/30 px-1 py-0.5 font-mono text-[10px] text-white"
       >
         plate
       </span>
     {/if}
+
+    <button
+      type="button"
+      class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+      onclick={(e) => {
+        e.stopPropagation();
+        plateEditorOpen = true;
+      }}
+      aria-label="Edit plate box"
+      title="Edit plate (✎)"
+    >
+      ✎
+    </button>
 
     {#if conf}
       <span
@@ -166,6 +241,17 @@
     </div>
   {/if}
 </div>
+
+{#if plateEditorOpen}
+  <PlateEditor
+    {crop}
+    onclose={() => (plateEditorOpen = false)}
+    onsave={(plateSrc) => {
+      plateEditorOpen = false;
+      onplatesaved?.(crop.id, plateSrc);
+    }}
+  />
+{/if}
 
 {#if expanded}
   <div

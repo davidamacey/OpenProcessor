@@ -478,6 +478,33 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
   );
 }
 
+/**
+ * Update or clear the plate sub-bbox on a crop.
+ *
+ * - Pass an `[x1, y1, x2, y2]` tuple in **source-image normalized**
+ *   coordinates to set/replace the plate box (server records
+ *   `plate_status='human_confirmed'`).
+ * - Pass `null` to clear the plate; the backend interprets this as
+ *   `plate_status='no_plate_visible'`.
+ *
+ * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/plate`,
+ * defined by backend task #32 to match this contract.
+ */
+export function setCropPlate(
+  cropId: string,
+  bbox: [number, number, number, number] | null,
+  signal?: AbortSignal,
+): Promise<OpCrop> {
+  return apiFetch<OpCrop>(
+    `/curation/crops/${encodeURIComponent(cropId)}/plate`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ bbox_norm: bbox }),
+    },
+    signal,
+  );
+}
+
 export async function runGemmaOnCluster(
   clusterId: number,
   signal?: AbortSignal,
