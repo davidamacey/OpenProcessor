@@ -7,8 +7,9 @@
     putCropLabel,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import type { ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
+  import type { OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
@@ -101,6 +102,22 @@
 
   $effect(() => {
     keyboardStore.setScope('review');
+  });
+
+  // Per-class hotkeys defined on /classes are routed here through the
+  // layout-level global keydown listener via dropOnClassStore. Pressing
+  // a class's bound letter assigns the current crop and advances —
+  // matching the cluster page's bulk-label dispatch shape so the same
+  // hotkey works everywhere it makes sense.
+  $effect(() => {
+    const off = dropOnClassStore.register(async (cls: OpClass) => {
+      if (!current) {
+        toastStore.info('No item to label.');
+        return;
+      }
+      await assign(cls.id);
+    });
+    return () => off();
   });
 
   $effect(() => {
