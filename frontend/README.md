@@ -65,7 +65,7 @@ Env vars (`.env` or via Vite `--define`):
 
 | Var | Default | Purpose |
 |---|---|---|
-| `PUBLIC_TRITON_API_URL` | `http://localhost:4603` | Where the labeler hits `/curation/...` |
+| `PUBLIC_TRITON_API_URL` | *(empty)* | Override the openprocessor base URL. Leave empty in Docker — nginx proxies `/curation/*` and `/clusters/*` to `op-api:4603` same-origin, so no CORS and no hostname hardcoding. Set to `http://localhost:4603` for local `npm run dev` only. |
 
 The app is a pure SPA consumer of `openprocessor` — there is **no** local
 database. State is reconstructed from API calls; `localStorage` only
@@ -133,12 +133,20 @@ exclusively — no Svelte 4 `writable()`/`readable()`.
 
 ## Production deployment
 
-The `Dockerfile` produces a static SPA served by `nginx:alpine` on
-port 80. The host port mapping in `docker-compose.legacy.yml` exposes
-it on `5181` (note: 5174 is reserved on this host by `example-app-backend`).
-The `__RUNTIME__` placeholder in built JS is replaced
-with the real `PUBLIC_TRITON_API_URL` at container start by
-`docker-entrypoint.sh`, so one image works for any openprocessor URL.
+The `Dockerfile` produces a static SPA served by `nginx:alpine` on port 80.
+The host port mapping in `docker-compose.legacy.yml` exposes it on **5184**.
+
+**nginx proxy (LAN-transparent API routing)**
+The nginx config inside the container routes `/curation/*` and `/clusters/*` paths
+to `op-api:4603` via `proxy_pass`. This means:
+- The browser always makes same-origin requests (`/curation/...`) — no CORS issues.
+- `PUBLIC_TRITON_API_URL` defaults to `''` so all API paths are relative URLs.
+- The app works identically whether accessed from `localhost` or any LAN IP.
+
+`docker-entrypoint.sh` can still inject a `PUBLIC_TRITON_API_URL` value at
+container start (replacing the `__RUNTIME__` placeholder in built JS) if you
+need to point the frontend at a remote openprocessor instead of the co-located
+one. For the standard Docker Compose stack leave it empty.
 
 ## Limits
 
