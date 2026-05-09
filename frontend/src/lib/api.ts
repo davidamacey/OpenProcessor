@@ -22,6 +22,7 @@ import type {
   OpExportResult,
   OpExportStatus,
   OpHealth,
+  OpModelsStatus,
   OpStats,
   OpTestHoldoutFreezeResult,
   OpTestHoldoutStats,
@@ -144,6 +145,10 @@ function qs(params: Record<string, unknown>): string {
 
 export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
   return apiFetch<OpHealth>('/curation/health', {}, signal);
+}
+
+export function getModelsStatus(signal?: AbortSignal): Promise<OpModelsStatus> {
+  return apiFetch<OpModelsStatus>('/curation/models/status', {}, signal);
 }
 
 export async function getStats(signal?: AbortSignal): Promise<OpStats> {

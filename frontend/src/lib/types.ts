@@ -218,6 +218,29 @@ export interface KeyboardShortcut {
   description: string;
 }
 
+export type OpModelStatus = 'ready' | 'not_ready' | 'unavailable';
+export type OpModelKind = 'triton' | 'external';
+
+export interface OpModel {
+  name: string;
+  friendly_name: string;
+  role: string;
+  kind: OpModelKind;
+  model_type: string;
+  status: OpModelStatus;
+  version: string | null;
+  inference_count: number | null;
+  exec_count: number | null;
+  inference_failed: number | null;
+  avg_latency_ms: number | null;
+  last_error: string | null;
+  endpoint: string | null;
+}
+
+export interface OpModelsStatus {
+  models: OpModel[];
+}
+
 export interface UndoEntry {
   crop_id: string;
   prior_class_id: number | null;

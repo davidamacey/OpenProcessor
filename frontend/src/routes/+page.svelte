@@ -221,7 +221,7 @@
               src={getThumbUrl(crop.id)}
               alt="crop"
               loading="lazy"
-              class="aspect-square w-full rounded-t-md object-cover"
+              class="aspect-square w-full rounded-t-md object-contain"
             />
             <div
               class="truncate px-1.5 py-1 text-[10px] text-zinc-300"

@@ -61,7 +61,7 @@
       src={getThumbUrl(crop.id)}
       alt="crop {crop.id}"
       loading="lazy"
-      class="h-full w-full object-cover"
+      class="h-full w-full object-contain"
       onerror={(e) => {
         const t = e.currentTarget as HTMLImageElement;
         t.style.opacity = '0.2';

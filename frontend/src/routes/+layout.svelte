@@ -99,6 +99,7 @@
       <a href="/review" class="hover:text-white">Review</a>
       <a href="/classes" class="hover:text-white">Classes</a>
       <a href="/export" class="hover:text-white">Export</a>
+      <a href="/models" class="hover:text-white">Models</a>
     </nav>
 
     <button

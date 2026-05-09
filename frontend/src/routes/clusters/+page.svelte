@@ -131,7 +131,7 @@
                     src={getThumbUrl(cropId)}
                     alt="thumb"
                     loading="lazy"
-                    class="aspect-square w-full bg-zinc-950 object-cover"
+                    class="aspect-square w-full bg-zinc-950 object-contain"
                   />
                 {/each}
                 {#each Array(Math.max(0, 4 - (c.representative_crop_ids?.length ?? 0))) as _, i (i)}
