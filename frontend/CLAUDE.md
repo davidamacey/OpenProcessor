@@ -28,9 +28,30 @@ keyboard-first UX matching the legacy_sorter manual-mode speed budget.
 | `/` | Dashboard (class balance, ingestion stats) | yes |
 | `/clusters` | Cluster grid view, sidebar filter | yes |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops | yes |
-| `/review` | Mismatch / Gemma low-conf / Outlier / Uncertainty review queues | yes |
+| `/review` | Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** review queues | yes |
 | `/classes` | Add / rename / merge classes | post-MVP |
 | `/export` | Trigger YOLO export, view balance gap | post-MVP |
+| `/models` | Triton model registry browser | post-MVP |
+| `/train` | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote** + **Reproduce** | post-MVP |
+
+## Training UI — `/train` (Phase 2 of legacy_train_pipeline)
+
+Full cockpit for the training pipeline. The form auto-runs `/curation/train/preflight`
+on a 350ms debounce and renders the report inline. Status polls every 5s,
+log every 2s, both stop on terminal state. Multi-size campaigns get a
+size-chip swap in the submit row (auto-promote-best + `stop_when` threshold).
+
+Past-runs table actions:
+- **Promote ↑** — opens `PromoteModal` (Triton model name, max_batch_size,
+  fp16, overwrite, force-bypass-gate). 422 with the gate report renders
+  inline; `force=true` bypasses for known-good experimental runs.
+- **Reproduce** — fetches `/curation/train/manifest/{job_id}` and submits a
+  fresh job with the same `spec`/`lineage`. Phase 6 polish — design §15.4.
+
+After a successful promote, the user re-runs `/curation/pipeline/auto_label` and
+the **Model Disagreements** tab on `/review` surfaces validated crops
+where the new model and the human label diverge — high-signal candidates
+for the next training cycle.
 
 ## Keyboard shortcuts (every page)
 

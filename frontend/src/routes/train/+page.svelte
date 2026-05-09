@@ -21,6 +21,7 @@
     cancelTrainCampaign,
     cancelTrainJob,
     exportStatus,
+    getTrainManifest,
     getTrainPresets,
     getTrainProfiles,
     getTrainRuns,
@@ -301,6 +302,49 @@
     promoteOpen = true;
   }
 
+  // ---- Reproduce-this-run (Phase 6, design §15.4) ---------------------
+  // Fetches <job_id>.manifest.json, builds a fresh TrainJobSpec from the
+  // saved spec + lineage, and POSTs /curation/train/start. Lets the user repeat
+  // a known-good run without re-typing every knob.
+  let reproducingId = $state<string | null>(null);
+
+  async function reproduceRun(r: TrainJobStatus): Promise<void> {
+    const ok = window.confirm(
+      `Reproduce ${r.job_id}? Submits a new training job with the same spec.`,
+    );
+    if (!ok) return;
+    reproducingId = r.job_id;
+    try {
+      const manifest = (await getTrainManifest(r.job_id)) as {
+        spec?: Record<string, unknown>;
+        lineage?: Record<string, unknown>;
+      };
+      const spec = (manifest.spec ?? {}) as Record<string, unknown>;
+      const lineage = (manifest.lineage ?? {}) as Record<string, unknown>;
+      const body: Partial<TrainJobSpec> = {
+        dataset_export_dir: lineage.export_dir as string,
+        include_classes: (lineage.include_classes as number[] | null) ?? null,
+        single_cls: (lineage.single_cls as boolean | null) ?? false,
+        cuda_visible_devices:
+          (spec.cuda_visible_devices as string | undefined) ?? undefined,
+        model_family: (spec.model_family as TrainJobSpec['model_family']) ?? 'yolo26',
+        model_size: (spec.model_size as TrainJobSpec['model_size']) ?? 'm',
+        profile: (spec.profile as TrainJobSpec['profile']) ?? 'medium',
+        hyperparameters:
+          (spec.hyperparameters as Record<string, unknown> | undefined) ?? {},
+        augmentation:
+          (spec.augmentation as TrainJobSpec['augmentation']) ?? null,
+      };
+      const res = await trainStart(body as TrainJobSpec);
+      toastStore.success(`Reproduced as ${res.job_id}`);
+      await refreshRuns();
+    } catch (e) {
+      toastStore.error(`Reproduce failed: ${(e as Error).message}`);
+    } finally {
+      reproducingId = null;
+    }
+  }
+
   // ---- Lifecycle -------------------------------------------------------
   onMount(async () => {
     await Promise.allSettled([
@@ -514,7 +558,7 @@
                 <td class="px-3 py-2 text-right font-mono text-xs text-zinc-200">
                   {r.best_metric?.map50?.toFixed(3) ?? '—'}
                 </td>
-                <td class="px-3 py-2 text-right">
+                <td class="flex justify-end gap-1.5 px-3 py-2 text-right">
                   {#if r.state === 'finished' || r.state === 'exporting'}
                     <button
                       type="button"
@@ -523,6 +567,17 @@
                       title="Promote to Triton"
                     >
                       Promote ↑
+                    </button>
+                  {/if}
+                  {#if r.state === 'finished' || r.state === 'failed'}
+                    <button
+                      type="button"
+                      class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
+                      onclick={() => reproduceRun(r)}
+                      disabled={reproducingId === r.job_id}
+                      title="Submit a new run with the same spec"
+                    >
+                      {reproducingId === r.job_id ? '…' : 'Reproduce'}
                     </button>
                   {/if}
                 </td>
