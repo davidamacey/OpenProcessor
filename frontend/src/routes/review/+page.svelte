@@ -57,11 +57,12 @@
     return f;
   }
 
-  // Threshold below which we eagerly prefetch every page — review is
-  // one-at-a-time, no scroll-to-trigger, so lazy loading feels broken
-  // when the user can see 'X of N total' but more never arrives.
-  const PREFETCH_ALL_BELOW = 200;
-
+  // Review is one-at-a-time — only `current` is rendered. We fetch one
+  // page on tab/filter change and the cursor-arrow handler pulls the
+  // next page as the user nears the end. The earlier eager prefetch
+  // drained every page upfront, which on the busy 'all' tab fired ~4
+  // chained network calls before first paint and made the page feel
+  // frozen on slow connections. Lazy paging keeps first-paint snappy.
   async function loadFirst(): Promise<void> {
     loading = true;
     error = null;
@@ -78,13 +79,6 @@
       error = (e as Error).message;
     } finally {
       loading = false;
-    }
-    // Auto-drain remaining pages for small queues so the user sees the
-    // full list without manual scrolling.
-    if (total > 0 && total <= PREFETCH_ALL_BELOW) {
-      while (items.length < total && loadedPages > 0) {
-        await loadMore();
-      }
     }
   }
 
@@ -367,6 +361,8 @@
           <img
             src={getSourceImageWithBbox(current.id)}
             alt="source"
+            loading="lazy"
+            decoding="async"
             class="max-h-full max-w-full object-contain"
           />
         </div>
@@ -383,6 +379,8 @@
           <img
             src={getThumbUrl(current.id, 384)}
             alt="crop"
+            loading="lazy"
+            decoding="async"
             class="max-h-full max-w-full object-contain"
           />
         </div>

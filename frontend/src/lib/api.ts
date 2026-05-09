@@ -736,8 +736,20 @@ export function getSourceImageUrl(cropId: string): string {
   return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image`;
 }
 
-export function getSourceImageWithBbox(cropId: string): string {
-  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image?bbox=1`;
+/**
+ * Source image with bbox overlay, downscaled to ~1280px on the longest
+ * side. The review page only needs the bbox to be readable, not pixel-
+ * perfect — full resolution would push 2+ MB per cursor change. Callers
+ * that need a pixel-accurate frame (e.g. PlateEditor) should hit
+ * ``getSourceImageFull`` so the bbox lines up with the editor canvas.
+ */
+export function getSourceImageWithBbox(cropId: string, maxDim: number = 1280): string {
+  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
+}
+
+/** Full-resolution source image; used by PlateEditor where pixel accuracy matters. */
+export function getSourceImageFull(cropId: string): string {
+  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image`;
 }
 
 // -- training endpoints --------------------------------------------------
