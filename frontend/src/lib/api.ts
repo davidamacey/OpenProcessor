@@ -30,6 +30,21 @@ import type {
   ReviewItem,
   ReviewTab,
 } from './types';
+import type {
+  CancelResponse,
+  LogTailResponse,
+  PresetsResponse,
+  PreflightReport,
+  ProfilesResponse,
+  PromoteRequest,
+  PromoteResponse,
+  RunsListResponse,
+  StartCampaignResponse,
+  StartTrainResponse,
+  TrainCampaignSpec,
+  TrainJobSpec,
+  TrainJobStatus,
+} from './types_train';
 
 // Vite exposes only PUBLIC_-prefixed env vars to the client. SvelteKit uses
 // `$env/dynamic/public` but importing that here would force every consumer
@@ -723,4 +738,145 @@ export function getSourceImageUrl(cropId: string): string {
 
 export function getSourceImageWithBbox(cropId: string): string {
   return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image?bbox=1`;
+}
+
+// -- training endpoints --------------------------------------------------
+//
+// Mirror the FastAPI `/curation/train/*` router. The labeler `/train` page is
+// the only consumer; types live in `./types_train.ts` so the existing
+// types.ts stays focused on the labeling data model.
+
+/**
+ * Run the preflight checks for a candidate spec WITHOUT writing
+ * `job.json`. Used for inline form validation.
+ *
+ * The endpoint never throws on blocking issues — it returns
+ * `{blocked, checks, summary}` so the UI can render every row.
+ */
+export function trainPreflight(
+  spec: TrainJobSpec,
+  signal?: AbortSignal,
+): Promise<PreflightReport> {
+  return apiFetch<PreflightReport>(
+    '/curation/train/preflight',
+    { method: 'POST', body: JSON.stringify(spec) },
+    signal,
+  );
+}
+
+/**
+ * Start a single training run. Backend returns 422 with the preflight
+ * report on blocking checks unless `force=true`. We surface those to
+ * the caller as ApiError; the form reads `body.preflight` and renders.
+ */
+export function trainStart(
+  spec: TrainJobSpec,
+  force: boolean = false,
+  signal?: AbortSignal,
+): Promise<StartTrainResponse> {
+  return apiFetch<StartTrainResponse>(
+    `/curation/train/start${qs({ force: force ? true : undefined })}`,
+    { method: 'POST', body: JSON.stringify(spec) },
+    signal,
+  );
+}
+
+/** Submit a multi-size training campaign (queued back-to-back). */
+export function trainStartCampaign(
+  spec: TrainCampaignSpec,
+  force: boolean = false,
+  signal?: AbortSignal,
+): Promise<StartCampaignResponse> {
+  return apiFetch<StartCampaignResponse>(
+    `/curation/train/start_campaign${qs({ force: force ? true : undefined })}`,
+    { method: 'POST', body: JSON.stringify(spec) },
+    signal,
+  );
+}
+
+/**
+ * Most-recent or active job's `status.json`. Returns null when there's
+ * never been a run.
+ *
+ * Pass a `jobId` to fetch a specific run (404 on missing).
+ */
+export async function getTrainStatus(
+  jobId?: string,
+  signal?: AbortSignal,
+): Promise<TrainJobStatus | null> {
+  const path = jobId
+    ? `/curation/train/status/${encodeURIComponent(jobId)}`
+    : '/curation/train/status';
+  try {
+    return await apiFetch<TrainJobStatus | null>(path, {}, signal);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+export function getTrainRuns(
+  limit: number = 50,
+  offset: number = 0,
+  signal?: AbortSignal,
+): Promise<RunsListResponse> {
+  return apiFetch<RunsListResponse>(
+    `/curation/train/runs${qs({ limit, offset })}`,
+    {},
+    signal,
+  );
+}
+
+export function tailTrainLog(
+  jobId: string,
+  lines: number = 200,
+  signal?: AbortSignal,
+): Promise<LogTailResponse> {
+  return apiFetch<LogTailResponse>(
+    `/curation/train/log/tail/${encodeURIComponent(jobId)}${qs({ lines })}`,
+    {},
+    signal,
+  );
+}
+
+export function cancelTrainJob(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<CancelResponse> {
+  return apiFetch<CancelResponse>(
+    `/curation/train/cancel/${encodeURIComponent(jobId)}`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+export function cancelTrainCampaign(
+  campaignId: string,
+  signal?: AbortSignal,
+): Promise<CancelResponse> {
+  return apiFetch<CancelResponse>(
+    `/curation/train/cancel_campaign/${encodeURIComponent(campaignId)}`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+export function getTrainProfiles(signal?: AbortSignal): Promise<ProfilesResponse> {
+  return apiFetch<ProfilesResponse>('/curation/train/profiles', {}, signal);
+}
+
+export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> {
+  return apiFetch<PresetsResponse>('/curation/train/presets', {}, signal);
+}
+
+export function promoteTrainJob(
+  jobId: string,
+  body: PromoteRequest,
+  signal?: AbortSignal,
+): Promise<PromoteResponse> {
+  return apiFetch<PromoteResponse>(
+    `/curation/train/promote/${encodeURIComponent(jobId)}`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
 }

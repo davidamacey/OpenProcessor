@@ -141,6 +141,7 @@
       <a href="/classes" class="hover:text-white">Classes</a>
       <a href="/export" class="hover:text-white">Export</a>
       <a href="/models" class="hover:text-white">Models</a>
+      <a href="/train" class="hover:text-white">Train</a>
     </nav>
 
     <button
