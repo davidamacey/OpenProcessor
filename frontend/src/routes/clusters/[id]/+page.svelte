@@ -12,6 +12,7 @@
     refineCluster,
     runGemmaOnCluster,
   } from '$lib/api';
+  import ClassFolderSidebar from '$components/ClassFolderSidebar.svelte';
   import CropCard from '$components/CropCard.svelte';
   import CutLine from '$components/CutLine.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -646,14 +647,15 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <!-- Toolbar -->
+  <!-- Toolbar — minimal: title + summary + bulk-action buttons. Class
+       selection moved to the left sidebar (drag-to-folder). -->
   <div
     class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5"
   >
     <h1 class="text-lg font-semibold">Cluster #{clusterIdParam}</h1>
     {#if cluster}
       <span class="text-xs text-zinc-400">
-        size {cluster.size} · purity {((cluster.purity ?? 0) * 100).toFixed(0)}% · dominant
+        size {cluster.size} · dominant
         <strong class="text-zinc-200">{cluster.dominant_class_name ?? '—'}</strong>
       </span>
     {/if}
@@ -663,21 +665,7 @@
     <div class="flex items-center gap-2">
       <button class="btn" type="button" onclick={selectAllPage}>Select page</button>
       <button class="btn" type="button" onclick={deselectAll}>Deselect</button>
-
-      <select
-        bind:value={confirmClassId}
-        class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
-      >
-        <option value={null}>— class —</option>
-        {#each classesStore.classes as cls (cls.id)}
-          <option value={cls.id}>{cls.name}</option>
-        {/each}
-      </select>
-
-      <button class="btn btn-primary" type="button" onclick={confirmSelected}>
-        Confirm Selected ({selected.size})
-      </button>
-
+      <span class="font-mono text-xs text-zinc-500">{selected.size} selected</span>
       <button class="btn" type="button" onclick={runGemma}>Run Gemma</button>
       <button class="btn" type="button" onclick={refine}>Refine (AHC)</button>
     </div>
@@ -712,21 +700,45 @@
     </div>
   {/if}
 
-  <!-- Hotkey legend -->
-  <div
-    class="flex items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-1 text-[11px] text-zinc-400"
-  >
-    <span>1–9, 0 → top classes:</span>
-    {#each topClasses as cls, i (cls.id)}
-      <span>
-        <kbd>{i === 9 ? '0' : i + 1}</kbd>
-        <span class="ml-0.5 text-zinc-300">{cls.name}</span>
-      </span>
-    {/each}
-  </div>
+  <!-- Hotkey legend strip removed — class folders + hotkeys live in the
+       left sidebar now (the legacy_sorter UX). -->
 
-  <!-- Grid + move-target rail -->
+  <!-- Class-folder sidebar (left) + grid (right) -->
   <div class="flex min-h-0 flex-1 overflow-hidden">
+    <ClassFolderSidebar
+      classes={classesStore.classes}
+      selectedCount={selected.size}
+      onDrop={async (classId) => {
+        const ids = [...selected];
+        if (ids.length === 0) return;
+        // Snapshot for undo, then bulk-label via the API.
+        for (const id of ids) {
+          const c = crops.find((x) => x.id === id);
+          if (c) {
+            undoStore.push({
+              crop_id: c.id,
+              prior_class_id: c.class_id,
+              prior_label_source: c.label_source,
+              prior_validated: c.label_validated,
+              at: Date.now(),
+            });
+          }
+        }
+        try {
+          const res = await bulkLabel(ids, classId);
+          toastStore.success(
+            `Labeled ${res.affected ?? ids.length} crop${ids.length === 1 ? '' : 's'}.`,
+          );
+          // Drop them from the local list — they no longer belong to this cluster.
+          crops = crops.filter((c) => !selected.has(c.id));
+          total = Math.max(0, total - ids.length);
+          selected = new Set();
+        } catch (e) {
+          toastStore.error(`Label failed: ${(e as Error).message}`);
+        }
+      }}
+    />
+
     <div class="min-w-0 flex-1 overflow-auto p-4">
       {#if loading && crops.length === 0}
         <p class="text-sm text-zinc-500">Loading...</p>
@@ -773,70 +785,9 @@
       {/if}
     </div>
 
-    <!-- Move-target rail -->
-    <aside
-      class="flex w-56 shrink-0 flex-col border-l border-zinc-800 bg-zinc-950"
-      aria-label="Move targets"
-    >
-      <div class="border-b border-zinc-800 px-3 py-2">
-        <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-          Move to cluster
-        </h2>
-        <p class="mt-1 text-[11px] leading-tight text-zinc-500">
-          Drag crops here, or press <kbd>M</kbd> to type a target id.
-        </p>
-      </div>
-
-      <div class="flex-1 overflow-y-auto px-2 py-2">
-        {#if recentTargets.length === 0}
-          <p class="px-1 py-2 text-xs text-zinc-500">
-            No recent targets yet — type one with <kbd>M</kbd>.
-          </p>
-        {:else}
-          <ul class="space-y-1.5">
-            {#each recentTargets as targetId (targetId)}
-              <li>
-                <div
-                  class="group flex items-center gap-2 rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-2 text-xs transition hover:border-blue-500/60 hover:bg-blue-500/5"
-                  use:dndzone={{
-                    items: [],
-                    type: 'op-crop',
-                    flipDurationMs: 150,
-                    dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.8)' },
-                    dropFromOthersDisabled: false,
-                    dragDisabled: true,
-                  }}
-                  onconsider={onTargetConsider(targetId)}
-                  onfinalize={onTargetFinalize(targetId)}
-                >
-                  <span class="font-mono text-zinc-200">#{targetId}</span>
-                  <span class="grow text-[10px] text-zinc-500">drop here</span>
-                  <button
-                    type="button"
-                    class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-300 opacity-0 transition group-hover:opacity-100 hover:border-zinc-500"
-                    onclick={() => jumpToCluster(targetId)}
-                    aria-label="Open cluster {targetId}"
-                  >
-                    open
-                  </button>
-                </div>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-
-      <div class="border-t border-zinc-800 p-2">
-        <button
-          type="button"
-          class="btn w-full justify-center"
-          onclick={openMovePicker}
-          disabled={selected.size === 0}
-        >
-          Move {selected.size || ''} → ID
-        </button>
-      </div>
-    </aside>
+    <!-- Right move-target rail removed — class assignment moved to the
+         left ClassFolderSidebar. The 'Move to cluster #N' affordance is
+         still available via M-key (typing a destination cluster id). -->
   </div>
 
   <!-- Status bar (sentinel lives inside the scroll container, see above) -->

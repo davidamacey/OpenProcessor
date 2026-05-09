@@ -293,11 +293,17 @@ export async function getClusters(
         domCount = ct;
       }
     }
+    const purity = r.length > 0 ? domCount / r.length : null;
     return {
       ...c,
       representative_crop_ids: r.map((x) => x.crop_id),
       dominant_class_name: domName,
-      dominant_pct: r.length > 0 ? domCount / r.length : null,
+      dominant_pct: purity,
+      // Purity is derived from the representative sample; with class-based
+      // clustering (cluster_id == class_id) every cluster should be 100%
+      // pure. Setting it here makes the cluster card's pure/mixed/noisy
+      // badge meaningful instead of always showing "noisy 0".
+      purity,
     };
   });
   return {
