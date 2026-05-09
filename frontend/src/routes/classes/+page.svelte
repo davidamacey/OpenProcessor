@@ -1,10 +1,10 @@
 <script lang="ts">
   import {
-    addClass,
     mergeClasses,
     renameClass,
     syncClassesToOpensearch,
   } from '$lib/api';
+  import AddClassModal from '$components/AddClassModal.svelte';
   import type { OpClass } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -36,12 +36,6 @@
   let addOpen = $state<boolean>(false);
   let mergeOpen = $state<boolean>(false);
   let busy = $state<boolean>(false);
-
-  // Add-class form
-  let newName = $state<string>('');
-  let newGroup = $state<string>('');
-  let createNewGroup = $state<boolean>(false);
-  let newGroupValue = $state<string>('');
 
   // Merge form
   let mergeSourceId = $state<number | null>(null);
@@ -168,35 +162,7 @@
   }
 
   function openAdd(): void {
-    newName = '';
-    newGroup = groups[0] ?? '';
-    newGroupValue = '';
-    createNewGroup = groups.length === 0;
     addOpen = true;
-  }
-
-  async function submitAdd(): Promise<void> {
-    const name = newName.trim();
-    const group = (createNewGroup ? newGroupValue : newGroup).trim();
-    if (!isSlug(name)) {
-      toastStore.error('Class name must be lowercase a-z, 0-9, _ only.');
-      return;
-    }
-    if (!group) {
-      toastStore.error('Group is required.');
-      return;
-    }
-    busy = true;
-    try {
-      await addClass({ name, group });
-      toastStore.success(`Added class ${name}`);
-      addOpen = false;
-      await classesStore.clearAndRefetch();
-    } catch (e) {
-      toastStore.error(`Add failed: ${(e as Error).message}`);
-    } finally {
-      busy = false;
-    }
   }
 
   function openMerge(): void {
@@ -446,73 +412,7 @@
   {/if}
 </div>
 
-<!-- Add Class modal -->
-{#if addOpen}
-  <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Add class"
-  >
-    <div class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
-      <h3 class="mb-3 text-base font-semibold">Add class</h3>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Name (slug)</span>
-        <input
-          type="text"
-          bind:value={newName}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          placeholder="e.g. mustang_s197"
-        />
-        <span class="mt-1 block text-[11px] {newName === '' || isSlug(newName) ? 'text-zinc-500' : 'text-red-300'}">
-          Lowercase a–z, 0–9, _ only. No spaces.
-        </span>
-      </label>
-
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Group</span>
-        {#if createNewGroup}
-          <input
-            type="text"
-            bind:value={newGroupValue}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-            placeholder="e.g. ford"
-          />
-        {:else}
-          <select
-            bind:value={newGroup}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-          >
-            {#each groups as g (g)}
-              <option value={g}>{g}</option>
-            {/each}
-          </select>
-        {/if}
-        <button
-          type="button"
-          class="mt-1 text-[11px] text-blue-400 hover:underline"
-          onclick={() => (createNewGroup = !createNewGroup)}
-        >
-          {createNewGroup ? 'pick existing group' : 'create new group'}
-        </button>
-      </label>
-
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={() => (addOpen = false)} disabled={busy}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={() => void submitAdd()}
-          disabled={busy}
-        >
-          {busy ? 'Adding…' : 'Add'}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
+<AddClassModal open={addOpen} onclose={() => (addOpen = false)} />
 
 <!-- Merge modal -->
 {#if mergeOpen}
