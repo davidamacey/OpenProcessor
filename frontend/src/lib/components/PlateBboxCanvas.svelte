@@ -61,8 +61,45 @@
   let drag = $state<DragState | null>(null);
   const pxStep = $derived(1 / thumbSize);
 
+  // Natural dims of the thumbnail JPEG, captured on <img onload>. The
+  // backend serves non-square JPEGs (aspect-preserved), so the
+  // object-contain'd image inside an aspect-square container is
+  // letterboxed. Pointer math + ring placement must compensate or the
+  // bbox lands in the wrong spot for non-square crops (motorcycles,
+  // wide trucks). dispRect describes the actual image rect inside the
+  // unit-square canvas: {offX, offY, w, h} all in [0, 1].
+  let imgNaturalW = $state<number>(0);
+  let imgNaturalH = $state<number>(0);
+  function onImgLoad(e: Event): void {
+    const img = e.currentTarget as HTMLImageElement;
+    imgNaturalW = img.naturalWidth || 0;
+    imgNaturalH = img.naturalHeight || 0;
+  }
+  const dispRect = $derived.by(() => {
+    if (imgNaturalW <= 0 || imgNaturalH <= 0) {
+      return { offX: 0, offY: 0, w: 1, h: 1 };
+    }
+    const aspect = imgNaturalW / imgNaturalH;
+    if (aspect >= 1) {
+      const h = 1 / aspect;
+      return { offX: 0, offY: (1 - h) / 2, w: 1, h };
+    }
+    const w = aspect;
+    return { offX: (1 - w) / 2, offY: 0, w, h: 1 };
+  });
+
   function clamp01(x: number): number {
     return Math.min(1, Math.max(0, x));
+  }
+
+  /** Convert a container-fraction point to an image-fraction point. */
+  function containerToImage(p: { x: number; y: number }): { x: number; y: number } {
+    const { offX, offY, w, h } = dispRect;
+    if (w <= 0 || h <= 0) return p;
+    return {
+      x: clamp01((p.x - offX) / w),
+      y: clamp01((p.y - offY) / h),
+    };
   }
 
   function normalizeBox(b: BBoxNorm): BBoxNorm {
@@ -83,10 +120,13 @@
     const rect = canvasEl.getBoundingClientRect();
     const w = rect.width || 1;
     const h = rect.height || 1;
-    return {
+    // Pointer position in container-fraction, then mapped onto the
+    // letterboxed image rect so the bbox we store is in image-fraction
+    // (i.e. the same crop-local frame the parent expects).
+    return containerToImage({
       x: clamp01((e.clientX - rect.left) / w),
       y: clamp01((e.clientY - rect.top) / h),
-    };
+    });
   }
 
   function onPointerDownCanvas(e: PointerEvent): void {
@@ -221,10 +261,13 @@
 
   const ringStyle = $derived.by<string>(() => {
     if (!bbox) return 'display:none';
-    const x1 = (bbox.cx - bbox.w / 2) * 100;
-    const y1 = (bbox.cy - bbox.h / 2) * 100;
-    const w = bbox.w * 100;
-    const h = bbox.h * 100;
+    // Place the ring in container-fraction = dispRect.off + bbox * dispRect.size,
+    // matching the inverse transform clientToNorm performs on input.
+    const { offX, offY, w: dW, h: dH } = dispRect;
+    const x1 = (offX + (bbox.cx - bbox.w / 2) * dW) * 100;
+    const y1 = (offY + (bbox.cy - bbox.h / 2) * dH) * 100;
+    const w = bbox.w * dW * 100;
+    const h = bbox.h * dH * 100;
     return `left:${x1}%;top:${y1}%;width:${w}%;height:${h}%`;
   });
 </script>
@@ -243,6 +286,7 @@
     src={getThumbUrl(cropId, thumbSize)}
     alt="crop preview"
     draggable="false"
+    onload={onImgLoad}
     class="pointer-events-none h-full w-full object-contain"
   />
 

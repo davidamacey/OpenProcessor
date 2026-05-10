@@ -30,6 +30,23 @@
   let expanded = $state<boolean>(false);
   let plateEditorOpen = $state<boolean>(false);
 
+  // Track the natural pixel size of the rendered thumbnail so we can
+  // letterbox-compensate the plate-ring overlay. The thumbnail is
+  // served as a *non-square* JPEG (PIL `crop.thumbnail((size, size))`
+  // preserves aspect ratio), but we render it inside an aspect-square
+  // container with `object-contain`. That means a 200x600 motorcycle
+  // crop sits in a vertical band centered in a square cell — and a
+  // ring positioned as a percentage of the *container* lands in the
+  // wrong spot. We measure the natural size on load, then place the
+  // ring relative to the actual rendered image rect.
+  let imgNaturalW = $state<number>(0);
+  let imgNaturalH = $state<number>(0);
+  function onImgLoad(e: Event): void {
+    const img = e.currentTarget as HTMLImageElement;
+    imgNaturalW = img.naturalWidth || 0;
+    imgNaturalH = img.naturalHeight || 0;
+  }
+
   // `plate_status` is a forward-tolerant field on OpCrop — the type
   // header in types.ts says we accept extra server fields silently —
   // so we read it via a narrow cast instead of widening the public type
@@ -49,6 +66,38 @@
     if (!crop.plate_bbox_norm) return null;
     if (!crop.bbox_norm) return null;
     return sourceToCropFrame(crop.plate_bbox_norm, crop.bbox_norm);
+  });
+
+  // Letterbox-compensated ring rectangle (percent of the aspect-square
+  // container). When natural dims aren't known yet (still loading), fall
+  // back to naive container-relative placement so first paint isn't blank.
+  const ringRectPct = $derived.by<{ left: number; top: number; width: number; height: number } | null>(() => {
+    if (!plateInCrop) return null;
+    const x1 = plateInCrop.cx - plateInCrop.w / 2;
+    const y1 = plateInCrop.cy - plateInCrop.h / 2;
+    const w = plateInCrop.w;
+    const h = plateInCrop.h;
+    if (imgNaturalW <= 0 || imgNaturalH <= 0) {
+      return { left: x1 * 100, top: y1 * 100, width: w * 100, height: h * 100 };
+    }
+    const aspect = imgNaturalW / imgNaturalH;
+    let dispW = 1;
+    let dispH = 1;
+    let offX = 0;
+    let offY = 0;
+    if (aspect >= 1) {
+      dispH = 1 / aspect;
+      offY = (1 - dispH) / 2;
+    } else {
+      dispW = aspect;
+      offX = (1 - dispW) / 2;
+    }
+    return {
+      left: (offX + x1 * dispW) * 100,
+      top: (offY + y1 * dispH) * 100,
+      width: w * dispW * 100,
+      height: h * dispH * 100,
+    };
   });
 
   // Ring color: green when a human has confirmed the plate, yellow for
@@ -118,6 +167,7 @@
       alt="crop {crop.id}"
       loading="lazy"
       class="h-full w-full object-contain"
+      onload={onImgLoad}
       onerror={(e) => {
         const t = e.currentTarget as HTMLImageElement;
         t.style.opacity = '0.2';
@@ -131,21 +181,22 @@
       >
         no plate
       </span>
-    {:else if plateInCrop}
+    {:else if ringRectPct}
       <!--
-        Plate ring overlaid on the thumbnail. The thumbnail itself is
-        rendered with object-contain inside an aspect-square container, so
-        positioning the ring as a percentage of the container places it
-        exactly on the visible image (the crop is itself the vehicle box,
-        not its source image). Pointer-events are disabled so the ring
-        never swallows clicks intended for the card.
+        Plate ring overlaid on the thumbnail. The thumbnail is served as
+        a non-square JPEG (aspect-preserved) and rendered with
+        object-contain inside an aspect-square container. We have to
+        letterbox-compensate the ring placement so it lands on the
+        rendered image rect, not the empty letterbox bands. Math runs
+        in CropCard once `<img onload>` has populated naturalWidth/Height.
+        Pointer-events disabled so the ring never swallows card clicks.
       -->
       <div
         class="pointer-events-none absolute rounded-[2px] border {plateRingColorClass}"
-        style:left="{(plateInCrop.cx - plateInCrop.w / 2) * 100}%"
-        style:top="{(plateInCrop.cy - plateInCrop.h / 2) * 100}%"
-        style:width="{plateInCrop.w * 100}%"
-        style:height="{plateInCrop.h * 100}%"
+        style:left="{ringRectPct.left}%"
+        style:top="{ringRectPct.top}%"
+        style:width="{ringRectPct.width}%"
+        style:height="{ringRectPct.height}%"
         aria-hidden="true"
       ></div>
       <span
