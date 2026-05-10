@@ -15,11 +15,13 @@
     sourceToCropFrame,
   } from '$lib/plate_geometry';
   import type { BBoxNorm, OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
+  import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
+  import { onMount } from 'svelte';
 
   // Unified review by default — one continuous queue of every crop that
   // needs a human, sorted most-uncertain first. The narrower tabs stay
@@ -110,6 +112,39 @@
   $effect(() => {
     keyboardStore.setScope('review');
   });
+
+  // -- SSE: live updates as ingest + workers classify new crops -------
+  // We don't fetch each new crop individually (no single-crop endpoint
+  // is exposed); instead we count incoming crop.* events and surface a
+  // "X new crops" pill the user can click to refresh the queue. Auto-
+  // refreshing while the operator is mid-keystroke would be jarring —
+  // they decide when to pull in the new batch.
+  let liveNewCount = $state<number>(0);
+  let liveSub: OpEventSubscription | null = null;
+  onMount(() => {
+    liveSub = subscribeKbEvents({
+      // Both classification + plate-verify changes are interesting on
+      // the review page — the operator may be on any tab.
+      onEvent: (ev) => {
+        if (
+          ev.type === 'crop.classified' ||
+          ev.type === 'crop.created' ||
+          ev.type === 'crop.plate_verified'
+        ) {
+          liveNewCount += 1;
+        }
+      },
+    });
+    return () => {
+      liveSub?.close();
+      liveSub = null;
+    };
+  });
+
+  function refreshFromLive(): void {
+    liveNewCount = 0;
+    void loadFirst();
+  }
 
   // Per-class hotkeys defined on /classes are routed here through the
   // layout-level global keydown listener via dropOnClassStore. Pressing
@@ -238,6 +273,51 @@
     null,
   );
 
+  // Undo stack for plate confirm/reject. Each entry holds the previously
+  // confirmed plate so "Back" can re-insert the crop into the queue and
+  // restore the bbox the user just saved (allowing them to fix a mistake
+  // without re-finding the crop). Bounded to 20 entries — enough for
+  // half a session of confusion, small enough to keep memory tiny.
+  interface PlateUndoEntry {
+    item: ReviewItem;
+    insertAt: number;
+    /**
+     * The plate bbox in source-frame that was sent to the server for
+     * this confirm — null means "rejected" (no plate visible).
+     */
+    saved: [number, number, number, number] | null;
+  }
+  let plateUndoStack = $state<PlateUndoEntry[]>([]);
+  const PLATE_UNDO_MAX = 20;
+  function _pushPlateUndo(entry: PlateUndoEntry): void {
+    plateUndoStack = [...plateUndoStack, entry].slice(-PLATE_UNDO_MAX);
+  }
+
+  async function plateBack(): Promise<void> {
+    const last = plateUndoStack[plateUndoStack.length - 1];
+    if (!last) {
+      toastStore.info('Nothing to go back to.');
+      return;
+    }
+    plateUndoStack = plateUndoStack.slice(0, -1);
+    // Re-insert the crop and rewind the cursor so it's the current item.
+    const insertAt = Math.min(last.insertAt, items.length);
+    const next = [...items];
+    next.splice(insertAt, 0, last.item);
+    items = next;
+    total = total + 1;
+    cursor = insertAt;
+    // Clear the server-side label so the operator gets a clean slate to
+    // re-confirm. Best-effort — if the API call fails the local state
+    // is still rewound so the user can re-edit.
+    try {
+      await setCropPlate(last.item.id, null);
+      toastStore.success('Stepped back. Re-edit and confirm.');
+    } catch (e) {
+      toastStore.warn(`Stepped back locally; server reset failed: ${(e as Error).message}`);
+    }
+  }
+
   function _seedPlateFromCurrent(): void {
     if (!current || !current.plate_bbox_norm || !current.bbox_norm) {
       editedPlateLocal = null;
@@ -273,10 +353,12 @@
     const id = current.id;
     const sourceBox = cropToSourceFrame(editedPlateLocal, current.bbox_norm);
     const tuple = bboxNormToXYXY(sourceBox) as [number, number, number, number];
+    // Snapshot for "Back" before mutating the queue.
+    _pushPlateUndo({ item: current, insertAt: cursor, saved: tuple });
     _advancePastPlate(id);
     try {
       await setCropPlate(id, tuple);
-      toastStore.success('Plate confirmed.');
+      toastStore.success('Plate confirmed. ← to go back.');
     } catch (e) {
       toastStore.error(`Confirm failed: ${(e as Error).message}`);
     }
@@ -285,11 +367,12 @@
   async function rejectPlate(): Promise<void> {
     if (!current) return;
     const id = current.id;
+    _pushPlateUndo({ item: current, insertAt: cursor, saved: null });
     _advancePastPlate(id);
     try {
       // null bbox = "no plate visible" per setCropPlate contract.
       await setCropPlate(id, null);
-      toastStore.success('Plate rejected (no plate visible).');
+      toastStore.success('Plate rejected. ← to go back.');
     } catch (e) {
       toastStore.error(`Reject failed: ${(e as Error).message}`);
     }
@@ -322,6 +405,10 @@
     if (tab === 'plates') {
       reg('enter', confirmPlate, 'Confirm plate & advance');
       reg('d', rejectPlate, 'Reject (no plate visible)');
+      // Back: re-insert the most-recently-confirmed plate so the operator
+      // can correct mistakes without scrolling back through the queue.
+      reg('arrowleft', plateBack, 'Back to last confirmed plate');
+      reg('b', plateBack, 'Back (alias)');
     } else {
       reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
       reg('d', discard, 'Discard');
@@ -341,6 +428,11 @@
         if (!plateCanvas) return;
         const target = e.target as HTMLElement | null;
         if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
+        // ArrowLeft is reserved for "back to previous plate" on this
+        // tab — let the keyboardStore handler take it instead of
+        // nudging the bbox left by 1 px (operators wanted Back > nudge).
+        // Use ArrowUp/Down/Right + [ / ] for fine-tune.
+        if (e.key === 'ArrowLeft') return;
         if (plateCanvas.handleKey(e)) e.preventDefault();
       };
       window.addEventListener('keydown', canvasKey);
@@ -390,6 +482,16 @@
     <span class="font-mono text-xs text-zinc-500">
       {items.length > 0 ? `${cursor + 1} / ${items.length}` : '—'} loaded · {total} total
     </span>
+    {#if liveNewCount > 0}
+      <button
+        type="button"
+        class="ml-2 animate-pulse rounded-full border border-blue-500/60 bg-blue-500/15 px-2.5 py-1 text-[11px] text-blue-200 hover:bg-blue-500/25"
+        onclick={refreshFromLive}
+        title="Reload the queue with the latest crops"
+      >
+        {liveNewCount} new · refresh
+      </button>
+    {/if}
   </div>
 
   <!-- Filter bar -->
@@ -444,8 +546,8 @@
 
     <span class="text-[11px] text-zinc-500">
       {#if tab === 'plates'}
-        drag to adjust · <kbd>←↑↓→</kbd> nudge · <kbd>[ ]</kbd> right edge ·
-        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>N</kbd> skip
+        drag to adjust · <kbd>↑↓→</kbd> nudge · <kbd>[ ]</kbd> right edge ·
+        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>N</kbd> skip · <kbd>←</kbd> back
       {:else}
         per-class letter assigns · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip ·
         <kbd>D</kbd> discard · <kbd>Z</kbd> undo
@@ -546,6 +648,15 @@
             <span class="text-zinc-200">{current.plate_status ?? '—'}</span>
           </div>
           <div class="mt-3 flex flex-wrap gap-2">
+            <button
+              class="btn"
+              type="button"
+              onclick={plateBack}
+              disabled={plateUndoStack.length === 0}
+              title="Re-open the most-recently confirmed plate (←)"
+            >
+              ← Back
+            </button>
             <button class="btn btn-primary" type="button" onclick={confirmPlate}>
               Confirm Plate
             </button>
@@ -553,8 +664,12 @@
               Reject (no plate)
             </button>
             <button class="btn" type="button" onclick={skip}>Skip</button>
-            <button class="btn" type="button" onclick={undoLast}>Undo</button>
           </div>
+          {#if plateUndoStack.length > 0}
+            <p class="mt-1 text-[10px] text-zinc-500">
+              {plateUndoStack.length} confirmed in this session — press ← to step back.
+            </p>
+          {/if}
         {:else}
           <div class="mt-3 flex flex-wrap gap-2">
             <button class="btn btn-primary" type="button" onclick={confirmAndAdvance}>
