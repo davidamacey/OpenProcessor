@@ -21,6 +21,8 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
+  import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
+  import { onMount } from 'svelte';
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
@@ -527,6 +529,58 @@
     };
   }
 
+  // ---------------- SSE: live updates for this cluster's class ----
+  // The legacy convention is `cluster_id == class_id` once a class
+  // has been assigned (see legacy_ingest.py + design doc), so we
+  // subscribe with `class_id=clusterId`. Crop.created without a class
+  // is hidden from per-class pages by event_hub's filter.
+  let liveNewCount = $state<number>(0);
+  let scrolledPastFirst20 = $state<boolean>(false);
+  let liveSub: OpEventSubscription | null = null;
+  let scrollEl = $state<HTMLDivElement | null>(null);
+
+  onMount(() => {
+    if (!Number.isFinite(clusterId)) return () => {};
+    liveSub = subscribeKbEvents({
+      class_id: clusterId,
+      onEvent: (ev) => {
+        if (ev.type === 'crop.classified' || ev.type === 'crop.created') {
+          liveNewCount += 1;
+        }
+      },
+    });
+    return () => {
+      liveSub?.close();
+      liveSub = null;
+    };
+  });
+
+  // Scroll-aware: only show the pill once the user has scrolled past
+  // the first ~20 cards (otherwise just refresh in-place silently).
+  function onScroll(): void {
+    if (!scrollEl) return;
+    scrolledPastFirst20 = scrollEl.scrollTop > 480; // ~3 rows at 8-col grid
+  }
+
+  $effect(() => {
+    // Auto-refresh while user is at the top — they're not actively
+    // labeling far down the list, so prepending new cards is safe.
+    if (liveNewCount > 0 && !scrolledPastFirst20 && !loading && !loadingMore) {
+      const n = liveNewCount;
+      liveNewCount = 0;
+      void loadFirst().then(() => {
+        // Surface a small toast so the user knows something refreshed.
+        toastStore.info(`${n} new crop${n === 1 ? '' : 's'} loaded.`);
+      });
+    }
+  });
+
+  function refreshFromLive(): void {
+    liveNewCount = 0;
+    if (scrollEl) scrollEl.scrollTop = 0;
+    void loadFirst();
+  }
+
   // ---------------- shortcuts ----------------
 
   $effect(() => {
@@ -796,7 +850,21 @@
   <!-- Grid container. The class-list left sidebar is the layout-level
        ClassSidebar — it auto-receives drops via dropOnClassStore. -->
   <div class="flex min-h-0 flex-1 overflow-hidden">
-    <div class="min-w-0 flex-1 overflow-auto p-4">
+    <div
+      bind:this={scrollEl}
+      onscroll={onScroll}
+      class="relative min-w-0 flex-1 overflow-auto p-4"
+    >
+      {#if liveNewCount > 0 && scrolledPastFirst20}
+        <button
+          type="button"
+          class="sticky top-2 z-10 mx-auto block animate-pulse rounded-full border border-blue-500/60 bg-blue-500/20 px-3 py-1 text-xs text-blue-100 shadow-lg backdrop-blur hover:bg-blue-500/30"
+          onclick={refreshFromLive}
+          title="Scroll to top and reload with the latest crops"
+        >
+          {liveNewCount} new crop{liveNewCount === 1 ? '' : 's'} · click to refresh
+        </button>
+      {/if}
       {#if loading && crops.length === 0}
         <p class="text-sm text-zinc-500">Loading...</p>
       {:else if error}
