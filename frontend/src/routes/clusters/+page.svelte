@@ -4,6 +4,7 @@
   import { getClusters, getThumbUrl } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import type { ClusterFilter, OpCluster } from '$lib/types';
+  import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
 
   let clusters = $state<OpCluster[]>([]);
@@ -20,6 +21,19 @@
   const classFilter = $derived.by(() => {
     const v = page.url.searchParams.get('class');
     return v == null ? null : Number.isFinite(+v) ? +v : null;
+  });
+
+  // The legacy ensemble stores plates as a *sub-bbox* on each vehicle
+  // crop (`plate_bbox_norm`), NOT as standalone docs in the cluster
+  // index. So filtering this page by the `license_plate` class always
+  // returns 0 / unlabeled clusters — confusing operators who expect to
+  // see plate clusters here. Detect that case and route the user to the
+  // plates review queue instead, which is the actual home for plate
+  // labeling.
+  const isLicensePlateFilter = $derived.by<boolean>(() => {
+    if (classFilter == null) return false;
+    const cls = classesStore.classes.find((c) => c.id === classFilter);
+    return (cls?.name ?? '').toLowerCase() === 'license_plate';
   });
 
   async function loadFirst(): Promise<void> {
@@ -157,7 +171,36 @@
 
   <!-- Grid -->
   <div class="flex-1 overflow-auto p-4">
-    {#if loading && clusters.length === 0}
+    {#if isLicensePlateFilter}
+      <!-- Plates aren't standalone crops; clustering them here would
+           always show zeros / unlabeled. Route the operator to the
+           plates review queue, which IS the home for plate labeling. -->
+      <div class="mx-auto max-w-2xl rounded-md border border-blue-500/40 bg-blue-500/5 p-6">
+        <h2 class="text-base font-semibold text-blue-200">
+          License plates aren't clustered here
+        </h2>
+        <p class="mt-2 text-sm text-zinc-300">
+          Plates live as a <code class="rounded bg-zinc-800 px-1 py-0.5 text-[12px]">plate_bbox_norm</code>
+          sub-box on each vehicle crop, not as separate documents in the
+          cluster index — so filtering this page by
+          <span class="font-mono text-blue-200">license_plate</span> always shows zeros.
+        </p>
+        <p class="mt-2 text-sm text-zinc-300">
+          Review and confirm plate boxes on the dedicated queue:
+        </p>
+        <div class="mt-4 flex gap-2">
+          <a
+            href="/review?tab=plates"
+            class="btn btn-primary"
+          >
+            Open Plates review queue
+          </a>
+          <button class="btn" type="button" onclick={() => goto('/clusters')}>
+            Clear class filter
+          </button>
+        </div>
+      </div>
+    {:else if loading && clusters.length === 0}
       <p class="text-sm text-zinc-500">Loading...</p>
     {:else if error}
       <p class="text-sm text-red-300">API unavailable: {error}</p>
