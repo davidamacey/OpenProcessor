@@ -615,12 +615,18 @@
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
           {#if tab === 'plates'}
             <!-- Inline editor — drag/resize the proposal directly, then
-                 hit Enter to confirm. No modal, no extra click. -->
+                 hit Enter to confirm. No modal, no extra click. The
+                 canvas is capped at a fraction of viewport height so
+                 the provenance + button rows below it stay visible
+                 even on shorter screens (previously aspect-square
+                 forced the canvas to W=H=full grid-cell width, which
+                 pushed the meta grid + Confirm/Reject buttons below
+                 the fold). max-h keeps it inside the flex-1 parent. -->
             <PlateBboxCanvas
               bind:this={plateCanvas}
               cropId={current.id}
               bind:bbox={editedPlateLocal}
-              class="aspect-square w-full min-w-0"
+              class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else}
             <img
