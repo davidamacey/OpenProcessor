@@ -127,6 +127,36 @@ export interface OpCrop {
    *  'verify_rejected' | 'no_plate_box' | 'pending_verify' | 'human_confirmed' */
   plate_status?: string | null;
   plate_verified?: boolean | null;
+  // -- Plate provenance (Wave 1 of plate-integrity overhaul) -------------
+  /** Which detector produced the stored bbox. */
+  plate_detector?: string | null;
+  plate_detector_version?: string | null;
+  /** Every detector attempted on this crop with a hit/miss tag,
+   *  e.g. ['lpr_nanov11_640:miss', 'sam3:hit', 'gemma:verify_ok']. */
+  plate_detector_chain?: string[] | null;
+  /** Frame the bbox is in. Always 'source' on current writes. */
+  plate_bbox_frame?: string | null;
+  plate_detected_at?: string | null;
+  plate_verifier?: string | null;
+  plate_verifier_version?: string | null;
+  plate_verified_at?: string | null;
+  plate_rejection_reason?: string | null;
+  plate_visible?: boolean | null;
+  // -- Plate OCR (Wave 2b) -----------------------------------------------
+  plate_text?: string | null;
+  plate_text_raw?: string | null;
+  plate_text_source?: string | null;
+  plate_text_confidence?: number | null;
+  plate_text_engine_version?: string | null;
+  // -- Class provenance (Wave 1) -----------------------------------------
+  class_detector?: string | null;
+  class_detector_version?: string | null;
+  class_labeled_at?: string | null;
+  class_labeler?: string | null;
+  // -- Client-side derived flag (set in mapRawCrop) ----------------------
+  /** True when the projected plate-bbox shape fails the same envelope
+   *  the server-side sanity gate uses. Defense in depth. */
+  plate_shape_warning?: boolean;
   hdd_source?: string | null;
   test_holdout: boolean;
   outlier_flagged?: boolean;

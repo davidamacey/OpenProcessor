@@ -8,6 +8,7 @@
     setCropPlate,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import DetectorChip from '$lib/components/DetectorChip.svelte';
   import PlateBboxCanvas from '$lib/components/PlateBboxCanvas.svelte';
   import {
     bboxNormToXYXY,
@@ -463,29 +464,31 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <!-- Tabs -->
+  <!-- Tabs — horizontally scrollable on narrow viewports so all tabs stay reachable
+       without colliding with the loaded-count chip on the right. -->
   <div class="flex items-center gap-1 border-b border-zinc-800 px-4">
-    {#each TABS as t (t.id)}
-      <button
-        type="button"
-        class="px-3 py-2.5 text-sm border-b-2 {tab === t.id
-          ? 'border-blue-500 text-white'
-          : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
-        onclick={() => {
-          tab = t.id;
-        }}
-      >
-        {t.label}
-      </button>
-    {/each}
-    <span class="grow"></span>
-    <span class="font-mono text-xs text-zinc-500">
+    <div class="flex min-w-0 grow items-center gap-1 overflow-x-auto whitespace-nowrap">
+      {#each TABS as t (t.id)}
+        <button
+          type="button"
+          class="shrink-0 px-3 py-2.5 text-sm border-b-2 {tab === t.id
+            ? 'border-blue-500 text-white'
+            : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
+          onclick={() => {
+            tab = t.id;
+          }}
+        >
+          {t.label}
+        </button>
+      {/each}
+    </div>
+    <span class="shrink-0 pl-2 font-mono text-xs text-zinc-500">
       {items.length > 0 ? `${cursor + 1} / ${items.length}` : '—'} loaded · {total} total
     </span>
     {#if liveNewCount > 0}
       <button
         type="button"
-        class="ml-2 animate-pulse rounded-full border border-blue-500/60 bg-blue-500/15 px-2.5 py-1 text-[11px] text-blue-200 hover:bg-blue-500/25"
+        class="ml-2 shrink-0 animate-pulse rounded-full border border-blue-500/60 bg-blue-500/15 px-2.5 py-1 text-[11px] text-blue-200 hover:bg-blue-500/25"
         onclick={refreshFromLive}
         title="Reload the queue with the latest crops"
       >
@@ -494,11 +497,13 @@
     {/if}
   </div>
 
-  <!-- Filter bar -->
+  <!-- Filter bar — flex children keep their width via flex-shrink-0; hotkey hint
+       hides below md so it doesn't collide with controls on narrow viewports
+       (same content is on the ~ overlay). -->
   <div
-    class="flex flex-wrap items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2 text-xs"
+    class="flex min-w-0 flex-wrap items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2 text-xs"
   >
-    <label class="flex items-center gap-1.5">
+    <label class="flex shrink-0 items-center gap-1.5">
       <span class="text-zinc-400">HDD source</span>
       <input
         type="text"
@@ -508,7 +513,7 @@
       />
     </label>
 
-    <label class="flex items-center gap-1.5">
+    <label class="flex shrink-0 items-center gap-1.5">
       <span class="text-zinc-400">Class</span>
       <select
         bind:value={classFilter}
@@ -521,7 +526,7 @@
       </select>
     </label>
 
-    <label class="flex items-center gap-1.5">
+    <label class="flex shrink-0 items-center gap-1.5">
       <span class="text-zinc-400">Conf</span>
       <input
         type="number"
@@ -544,7 +549,7 @@
 
     <span class="grow"></span>
 
-    <span class="text-[11px] text-zinc-500">
+    <span class="hidden text-[11px] text-zinc-500 md:inline">
       {#if tab === 'plates'}
         drag to adjust · <kbd>↑↓→</kbd> nudge · <kbd>[ ]</kbd> right edge ·
         <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>N</kbd> skip · <kbd>←</kbd> back
@@ -597,7 +602,7 @@
               bind:this={plateCanvas}
               cropId={current.id}
               bind:bbox={editedPlateLocal}
-              class="aspect-square w-full max-w-full"
+              class="aspect-square w-full min-w-0"
             />
           {:else}
             <img
@@ -646,6 +651,59 @@
             </span>
             <span class="text-zinc-500">Plate status</span>
             <span class="text-zinc-200">{current.plate_status ?? '—'}</span>
+            <span class="text-zinc-500">Detector</span>
+            <span class="flex flex-wrap items-center gap-1.5">
+              {#if current.plate_detector}
+                <DetectorChip
+                  detector={current.plate_detector}
+                  version={current.plate_detector_version}
+                />
+                {#if current.plate_verifier}
+                  <DetectorChip
+                    detector={current.plate_verifier}
+                    tag="verify"
+                    version={current.plate_verifier_version}
+                    size="sm"
+                  />
+                {/if}
+              {:else}
+                <span class="text-zinc-500">—</span>
+              {/if}
+              {#if current.plate_shape_warning}
+                <span
+                  class="rounded border border-yellow-500/60 bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-200"
+                  title="Bbox shape fails the plate envelope (aspect ∉ [1.2, 8.0] or covers >50% of vehicle width). Likely legacy / corrupted data — flag for re-detection."
+                >
+                  ⚠ shape
+                </span>
+              {/if}
+            </span>
+            {#if current.plate_detector_chain && current.plate_detector_chain.length > 0}
+              <span class="text-zinc-500">Cascade</span>
+              <span class="flex flex-wrap items-center gap-1">
+                {#each current.plate_detector_chain as entry (entry)}
+                  <DetectorChip raw={entry} size="sm" />
+                {/each}
+              </span>
+            {/if}
+            {#if current.plate_text}
+              <span class="text-zinc-500">Plate text</span>
+              <span class="flex items-center gap-1.5">
+                <span class="font-mono text-zinc-100">{current.plate_text}</span>
+                {#if current.plate_text_source}
+                  <DetectorChip detector={current.plate_text_source} size="sm" />
+                {/if}
+                {#if current.plate_text_confidence != null}
+                  <span class="text-[10px] text-zinc-500">
+                    {(current.plate_text_confidence * 100).toFixed(0)}%
+                  </span>
+                {/if}
+              </span>
+            {/if}
+            {#if current.plate_rejection_reason}
+              <span class="text-zinc-500">Rejected</span>
+              <span class="text-amber-200">{current.plate_rejection_reason}</span>
+            {/if}
           </div>
           <div class="mt-3 flex flex-wrap gap-2">
             <button

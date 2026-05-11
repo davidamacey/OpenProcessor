@@ -358,14 +358,74 @@ type RawCrop = {
   label_source?: string;
   plate_bbox_norm?: number[] | null;
   plate_score?: number | null;
+  plate_status?: string | null;
+  plate_verified?: boolean | null;
+  // Provenance fields (Wave 1 — written on every new plate/class write).
+  plate_detector?: string | null;
+  plate_detector_version?: string | null;
+  plate_detector_chain?: string[] | null;
+  plate_bbox_frame?: string | null;
+  plate_detected_at?: string | null;
+  plate_verifier?: string | null;
+  plate_verifier_version?: string | null;
+  plate_verified_at?: string | null;
+  plate_rejection_reason?: string | null;
+  plate_visible?: boolean | null;
+  plate_text?: string | null;
+  plate_text_raw?: string | null;
+  plate_text_source?: string | null;
+  plate_text_confidence?: number | null;
+  plate_text_engine_version?: string | null;
+  class_detector?: string | null;
+  class_detector_version?: string | null;
+  class_labeled_at?: string | null;
+  class_labeler?: string | null;
   test_holdout?: boolean;
   thumbnail_url?: string;
   updated_at?: string;
 };
 
+// Plate-bbox shape envelope — must match the server-side
+// is_plausible_plate_bbox helper in
+// openprocessor:src/services/legacy/plate_detect.py. Defense in depth:
+// flags rows whose stored bbox is implausible *after* projecting into
+// the crop frame, regardless of whether the server-side gate caught it.
+function _platePlausibleEnvelope(plate: import('./types').BBoxNorm): boolean {
+  const w = plate.w;
+  const h = plate.h;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false;
+  const aspect = w / h;
+  if (aspect < 1.2 || aspect > 8.0) return false;
+  // In crop-frame coords, w IS plate_w/vehicle_w because the canvas is
+  // the vehicle crop. So w > 0.5 → plate covers >50% of vehicle width.
+  if (w > 0.5) return false;
+  if (w * h > 0.15) return false;
+  return true;
+}
+
+function _platesShapeWarning(
+  plateSrc: number[] | null | undefined,
+  vehicleSrc: number[],
+): boolean {
+  if (!plateSrc || plateSrc.length !== 4) return false;
+  const v = xyxyToBBoxNorm(vehicleSrc);
+  const vw = v.w;
+  const vh = v.h;
+  if (vw <= 1e-9 || vh <= 1e-9) return false;
+  const [px1 = 0, py1 = 0, px2 = 0, py2 = 0] = plateSrc;
+  // Project to crop frame the same way sourceToCropFrame would.
+  const cropPlate: import('./types').BBoxNorm = {
+    cx: ((px1 + px2) / 2 - (v.cx - vw / 2)) / vw,
+    cy: ((py1 + py2) / 2 - (v.cy - vh / 2)) / vh,
+    w: (px2 - px1) / vw,
+    h: (py2 - py1) / vh,
+  };
+  return !_platePlausibleEnvelope(cropPlate);
+}
+
 function mapRawCrop(c: RawCrop): OpCrop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
-  return {
+  const out: OpCrop = {
     id: c.crop_id,
     source_image_path: c.image_path,
     bbox_norm: xyxyToBBoxNorm(bb),
@@ -381,6 +441,29 @@ function mapRawCrop(c: RawCrop): OpCrop {
       c.plate_bbox_norm && c.plate_bbox_norm.length === 4
         ? xyxyToBBoxNorm(c.plate_bbox_norm)
         : null,
+    plate_score: c.plate_score ?? null,
+    plate_status: c.plate_status ?? null,
+    plate_verified: c.plate_verified ?? null,
+    plate_detector: c.plate_detector ?? null,
+    plate_detector_version: c.plate_detector_version ?? null,
+    plate_detector_chain: c.plate_detector_chain ?? null,
+    plate_bbox_frame: c.plate_bbox_frame ?? null,
+    plate_detected_at: c.plate_detected_at ?? null,
+    plate_verifier: c.plate_verifier ?? null,
+    plate_verifier_version: c.plate_verifier_version ?? null,
+    plate_verified_at: c.plate_verified_at ?? null,
+    plate_rejection_reason: c.plate_rejection_reason ?? null,
+    plate_visible: c.plate_visible ?? null,
+    plate_text: c.plate_text ?? null,
+    plate_text_raw: c.plate_text_raw ?? null,
+    plate_text_source: c.plate_text_source ?? null,
+    plate_text_confidence: c.plate_text_confidence ?? null,
+    plate_text_engine_version: c.plate_text_engine_version ?? null,
+    class_detector: c.class_detector ?? null,
+    class_detector_version: c.class_detector_version ?? null,
+    class_labeled_at: c.class_labeled_at ?? null,
+    class_labeler: c.class_labeler ?? null,
+    plate_shape_warning: _platesShapeWarning(c.plate_bbox_norm ?? null, bb),
     test_holdout: !!c.test_holdout,
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
@@ -390,6 +473,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
         ? ((c as Record<string, unknown>).updated_at as string)
         : '',
   };
+  return out;
 }
 
 export async function getCluster(
