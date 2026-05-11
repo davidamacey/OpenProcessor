@@ -57,6 +57,10 @@
   let classFilter = $state<number | null>(null);
   let confMin = $state<number>(0);
   let confMax = $state<number>(1);
+  // Plate-text search — only meaningful on tab=plates; ignored elsewhere
+  // server-side. Surface in the filter strip when the operator is on
+  // the plates tab.
+  let plateTextQuery = $state<string>('');
 
   function _filter(): Record<string, unknown> {
     const f: Record<string, unknown> = {};
@@ -64,6 +68,7 @@
     if (classFilter != null) f.class_id = classFilter;
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
+    if (tab === 'plates' && plateTextQuery) f.text = plateTextQuery;
     return f;
   }
 
@@ -178,6 +183,7 @@
   let filterDebounce: ReturnType<typeof setTimeout> | null = null;
   $effect(() => {
     void hddSource;
+    void plateTextQuery;
     void confMin;
     void confMax;
     if (filterDebounce) clearTimeout(filterDebounce);
@@ -546,6 +552,18 @@
         class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
       />
     </label>
+
+    {#if tab === 'plates'}
+      <label class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">Plate text</span>
+        <input
+          type="text"
+          bind:value={plateTextQuery}
+          placeholder="e.g. S14"
+          class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+        />
+      </label>
+    {/if}
 
     <span class="grow"></span>
 
