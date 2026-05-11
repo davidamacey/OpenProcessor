@@ -188,6 +188,24 @@
   }
 
   function open(c: OpCluster): void {
+    // Special-case: clicking a cluster whose dominant class is
+    // 'license_plate' should jump to the plate browse view (which
+    // surfaces every crop with a plate_bbox_norm), not the single-
+    // cluster crop grid. Plates live as sub-bboxes on vehicle crops
+    // so the "license_plate" cluster only contains the rare crops
+    // that were labeled with license_plate as their PRIMARY class —
+    // usually 1-2 mis-labels. The operator's intent is "show me all
+    // the plate items", so route them to the plates inventory.
+    const dom = (c.dominant_class_name ?? '').toLowerCase();
+    if (dom === 'license_plate') {
+      const cls = classesStore.classes.find(
+        (k) => (k.name ?? '').toLowerCase() === 'license_plate',
+      );
+      if (cls) {
+        void goto(`/clusters?class=${cls.id}`);
+        return;
+      }
+    }
     void goto(`/clusters/${c.id}`);
   }
 
