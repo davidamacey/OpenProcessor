@@ -12,3 +12,14 @@ dist/
 .idea/
 coverage/
 .cache/
+
+# Diagnostic image dumps from /diagnostics scripts (generated per run,
+# not part of the source tree). Keep the scripts and any READMEs.
+diagnostics/**/audit_out/
+diagnostics/**/post_quarantine/
+diagnostics/**/compare/
+diagnostics/**/single/
+diagnostics/**/*.jpg
+diagnostics/**/*.png
+diagnostics/**/sample_docs.json
+lpr-error-disaply-review.png
