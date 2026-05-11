@@ -1,11 +1,14 @@
 <script lang="ts">
   import {
     deleteCropLabel,
+    getCrop,
     getReviewQueue,
     getSourceImageWithBbox,
     getThumbUrl,
     putCropLabel,
     setCropPlate,
+    updateCropPlateMeta,
+    type PlateMetaPatch,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import DetectorChip from '$lib/components/DetectorChip.svelte';
@@ -17,6 +20,7 @@
   } from '$lib/plate_geometry';
   import type { BBoxNorm, OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
   import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
+  import { untrack } from 'svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -279,6 +283,31 @@
   let plateCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(
     null,
   );
+  // Read-only by default: the canvas only becomes interactive when the
+  // operator presses E (or clicks Edit bbox). Most cascade-detected
+  // plates are already correct — forcing the heavy drag-handle UI on
+  // every crop is what made the tab feel "weird" vs. the other review
+  // tabs. Edit mode resets to false on every cursor advance so the
+  // operator always lands on the next plate in scan-and-confirm mode.
+  let editMode = $state<boolean>(false);
+  let plateSaving = $state<boolean>(false);
+
+  // Inline editors for the plate metadata fields. Seeded from the
+  // current crop on every cursor advance; saved on blur / Enter via
+  // PATCH /curation/crops/{id}/plate_meta. Each field saves independently
+  // with optimistic-UI + revert-on-error, matching the assign() pattern.
+  let editedPlateText = $state<string>('');
+  let editedPlateStatus = $state<string>('');
+  let editedRejectionReason = $state<string>('');
+  // Status values an operator is allowed to write; mirrors
+  // HUMAN_PLATE_STATUS_VALUES in openprocessor legacy.py. Kept inline
+  // since it's a tiny set and adding a $lib/constants file for three
+  // strings is overkill.
+  const PLATE_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: 'detected', label: 'detected (plate visible)' },
+    { value: 'no_plate_visible', label: 'no plate visible' },
+    { value: 'verify_rejected', label: 'rejected (bad detection)' },
+  ];
 
   // Undo stack for plate confirm/reject. Each entry holds the previously
   // confirmed plate so "Back" can re-insert the crop into the queue and
@@ -307,22 +336,31 @@
       return;
     }
     plateUndoStack = plateUndoStack.slice(0, -1);
-    // Re-insert the crop and rewind the cursor so it's the current item.
+    // Refetch the crop so the operator sees what the database actually
+    // holds — the local snapshot can lag (e.g. another worker re-ran
+    // OCR or another curator edited concurrently). This is the
+    // "confidence in changes" guarantee the user asked for.
+    let fresh: ReviewItem;
+    try {
+      const c = await getCrop(last.item.id);
+      // The /curation/crops/{id} endpoint returns a OpCrop, but the review
+      // queue carries extra fields (reason, proposed_*). Keep the
+      // snapshot's queue-only metadata and overlay the authoritative
+      // store fields on top.
+      fresh = { ...last.item, ...c } as ReviewItem;
+    } catch (e) {
+      toastStore.warn(
+        `Re-fetch failed; restoring local snapshot: ${(e as Error).message}`,
+      );
+      fresh = last.item;
+    }
     const insertAt = Math.min(last.insertAt, items.length);
     const next = [...items];
-    next.splice(insertAt, 0, last.item);
+    next.splice(insertAt, 0, fresh);
     items = next;
     total = total + 1;
     cursor = insertAt;
-    // Clear the server-side label so the operator gets a clean slate to
-    // re-confirm. Best-effort — if the API call fails the local state
-    // is still rewound so the user can re-edit.
-    try {
-      await setCropPlate(last.item.id, null);
-      toastStore.success('Stepped back. Re-edit and confirm.');
-    } catch (e) {
-      toastStore.warn(`Stepped back locally; server reset failed: ${(e as Error).message}`);
-    }
+    toastStore.info('Stepped back. Press E to re-edit, Enter to re-confirm.');
   }
 
   function _seedPlateFromCurrent(): void {
@@ -333,12 +371,201 @@
     editedPlateLocal = sourceToCropFrame(current.plate_bbox_norm, current.bbox_norm);
   }
 
+  // Plate-centered viewport for the right-side canvas. **Frozen** —
+  // computed once when the crop loads and held steady during edits.
+  // If we derived it from `editedPlateLocal` instead, every drag tick
+  // would recompute the zoom and the IMG transform would pan/scale
+  // along with the resize handle, making the box feel like it's
+  // rubber-banding the whole image. The canvas applies viewBox as a
+  // pure display transform; saved coordinates remain in crop-local
+  // frame and project to source frame on confirm.
+  const PLATE_VIEW_PADDING = 2.5;
+  let plateViewBox = $state<BBoxNorm | null>(null);
+  function _seedViewBox(): void {
+    if (!editedPlateLocal) {
+      plateViewBox = null;
+      return;
+    }
+    const w0 = editedPlateLocal.w;
+    const h0 = editedPlateLocal.h;
+    if (w0 <= 0 || h0 <= 0) {
+      plateViewBox = null;
+      return;
+    }
+    // Expand by padding, then square the viewport (canvas is aspect-
+    // square; non-square viewBox would re-introduce letterboxing).
+    const side = Math.min(1, Math.max(w0, h0) * PLATE_VIEW_PADDING);
+    const half = side / 2;
+    const cx = Math.min(1 - half, Math.max(half, editedPlateLocal.cx));
+    const cy = Math.min(1 - half, Math.max(half, editedPlateLocal.cy));
+    plateViewBox = { cx, cy, w: side, h: side };
+  }
+
   // Reseed whenever the cursor changes (advancing to next crop) or the
-  // tab/items reset.
+  // tab/items reset. Also exit edit mode so the next plate lands in
+  // read-only scan mode regardless of where we left the previous one.
   $effect(() => {
     void current?.id;
     _seedPlateFromCurrent();
+    // Freeze the zoom viewport on the just-seeded bbox. Wrapped in
+    // untrack() so the read of `editedPlateLocal` inside _seedViewBox
+    // does NOT make this effect re-run on every drag tick — that
+    // would re-fire _seedPlateFromCurrent and overwrite the user's
+    // in-progress resize with the server snapshot ("can't edit the
+    // bbox" bug).
+    untrack(() => _seedViewBox());
+    editedPlateText = current?.plate_text ?? '';
+    editedPlateStatus = current?.plate_status ?? '';
+    editedRejectionReason = current?.plate_rejection_reason ?? '';
+    editMode = false;
   });
+
+  // In-flight plate-meta saves, keyed by crop id so concurrent edits to
+  // the same crop are aborted-then-replaced (the latest blur wins) and
+  // edits to a *different* crop don't interfere with each other.
+  const plateMetaAborts = new Map<string, AbortController>();
+
+  async function savePlateMeta(patch: PlateMetaPatch, snapshot: Partial<ReviewItem>): Promise<void> {
+    if (!current) return;
+    const id = current.id;
+    // Look up by id, not cursor — if the user advances mid-save the
+    // captured idx would point at the next crop and the revert would
+    // corrupt unrelated state.
+    const findIdx = () => items.findIndex((x) => x.id === id);
+    const idx0 = findIdx();
+    const prior: Partial<ReviewItem> = {};
+    if (idx0 >= 0) {
+      for (const k of Object.keys(snapshot) as Array<keyof ReviewItem>) {
+        (prior as Record<string, unknown>)[k] = items[idx0][k];
+      }
+      items[idx0] = { ...items[idx0], ...snapshot } as ReviewItem;
+    }
+    // Abort any in-flight save on this crop so we don't get an ABA-style
+    // response that overwrites a newer edit.
+    plateMetaAborts.get(id)?.abort();
+    const ac = new AbortController();
+    plateMetaAborts.set(id, ac);
+    try {
+      await updateCropPlateMeta(id, patch, ac.signal);
+    } catch (e) {
+      if (ac.signal.aborted) return; // superseded by a newer save
+      const idx1 = findIdx();
+      if (idx1 >= 0) items[idx1] = { ...items[idx1], ...prior } as ReviewItem;
+      // Reseed local inputs only if we're still on the same crop the
+      // user was editing; otherwise leave the inputs alone — they're
+      // already bound to the new crop's state.
+      if (current?.id === id) {
+        editedPlateText = items[idx1]?.plate_text ?? '';
+        editedPlateStatus = items[idx1]?.plate_status ?? '';
+        editedRejectionReason = items[idx1]?.plate_rejection_reason ?? '';
+      }
+      toastStore.error(`Save failed: ${(e as Error).message}`);
+    } finally {
+      if (plateMetaAborts.get(id) === ac) plateMetaAborts.delete(id);
+    }
+  }
+
+  async function commitPlateText(): Promise<void> {
+    if (!current) return;
+    const next = editedPlateText.trim() || null;
+    if ((current.plate_text ?? null) === next) return;
+    await savePlateMeta(
+      { plate_text: next },
+      { plate_text: next, plate_text_source: 'human', plate_text_confidence: next ? 1.0 : null },
+    );
+  }
+
+  async function commitPlateStatus(): Promise<void> {
+    if (!current) return;
+    if (!editedPlateStatus) return;
+    if (editedPlateStatus === current.plate_status) return;
+    // 'no_plate_visible' implies the bbox is gone — call setCropPlate
+    // null to keep the bbox + status in sync (avoids the contradiction
+    // of "no_plate_visible" with a populated plate_bbox_norm).
+    if (editedPlateStatus === 'no_plate_visible') {
+      try {
+        await setCropPlate(current.id, null);
+        const idx = items.findIndex((x) => x.id === current.id);
+        if (idx >= 0) {
+          items[idx] = {
+            ...items[idx],
+            plate_bbox_norm: null,
+            plate_status: 'no_plate_visible',
+          } as ReviewItem;
+        }
+        editedPlateLocal = null;
+      } catch (e) {
+        toastStore.error(`Save failed: ${(e as Error).message}`);
+      }
+      return;
+    }
+    await savePlateMeta(
+      { plate_status: editedPlateStatus as PlateMetaPatch['plate_status'] },
+      { plate_status: editedPlateStatus },
+    );
+  }
+
+  async function commitRejectionReason(): Promise<void> {
+    if (!current) return;
+    const next = editedRejectionReason.trim() || null;
+    if ((current.plate_rejection_reason ?? null) === next) return;
+    await savePlateMeta(
+      { plate_rejection_reason: next },
+      { plate_rejection_reason: next },
+    );
+  }
+
+  function toggleEdit(): void {
+    if (!current) return;
+    if (editMode) {
+      // Cancel-style exit: drop local edits and reseed from server state.
+      _seedPlateFromCurrent();
+      _seedViewBox();
+      editMode = false;
+      return;
+    }
+    // Re-center the zoom on whatever bbox we're about to edit (could
+    // differ from the cursor-advance snapshot if the user already saved
+    // once on this crop and is re-editing).
+    _seedViewBox();
+    editMode = true;
+  }
+
+  async function saveBboxAndExit(): Promise<void> {
+    if (!current) return;
+    if (!editedPlateLocal) {
+      toastStore.warn('No bbox to save — draw one or press Backspace to clear.');
+      return;
+    }
+    if (!current.bbox_norm) {
+      toastStore.error('Missing parent vehicle bbox; cannot project to source frame.');
+      return;
+    }
+    const id = current.id;
+    const sourceBox = cropToSourceFrame(editedPlateLocal, current.bbox_norm);
+    const tuple = bboxNormToXYXY(sourceBox) as [number, number, number, number];
+    plateSaving = true;
+    try {
+      await setCropPlate(id, tuple);
+      // Server flips plate_status to 'detected'/'human_confirmed' on bbox
+      // write; reflect that locally without waiting for a queue refetch.
+      const idx = items.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        items[idx] = {
+          ...items[idx],
+          plate_bbox_norm: sourceBox,
+          plate_status: 'detected',
+          plate_verified: true,
+        };
+      }
+      editMode = false;
+      toastStore.success('Bbox saved.');
+    } catch (e) {
+      toastStore.error(`Save failed: ${(e as Error).message}`);
+    } finally {
+      plateSaving = false;
+    }
+  }
 
   function _advancePastPlate(id: string): void {
     items = items.filter((x) => x.id !== id);
@@ -404,18 +631,39 @@
   // listener and work on every tab. The shortcuts below are the
   // tab-action shortcuts; on the plates tab Enter/D get rebound to plate
   // confirm/reject so the same finger pattern works for both flows.
+  //
+  // On the plates tab, behavior splits between read-only scan mode
+  // (default) and edit mode (operator pressed E or Edit bbox):
+  //   - read-only: arrows page the queue, Enter confirms-and-advances,
+  //     E enters edit mode — matches the other review tabs.
+  //   - edit:      arrows nudge the bbox, Enter saves+exits edit mode,
+  //     Esc cancels edit, the bbox canvas owns the keystroke flow.
   $effect(() => {
     const offs: Array<() => void> = [];
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
 
     if (tab === 'plates') {
-      reg('enter', confirmPlate, 'Confirm plate & advance');
-      reg('d', rejectPlate, 'Reject (no plate visible)');
-      // Back: re-insert the most-recently-confirmed plate so the operator
-      // can correct mistakes without scrolling back through the queue.
-      reg('arrowleft', plateBack, 'Back to last confirmed plate');
-      reg('b', plateBack, 'Back (alias)');
+      if (editMode) {
+        reg('enter', saveBboxAndExit, 'Save bbox & exit edit');
+        reg('escape', toggleEdit, 'Cancel edit');
+      } else {
+        reg('enter', confirmPlate, 'Confirm plate & advance');
+        reg('d', rejectPlate, 'Reject (no plate visible)');
+        reg('e', toggleEdit, 'Edit bbox');
+        // Back: re-insert the most-recently-confirmed plate so the operator
+        // can correct mistakes without scrolling back through the queue.
+        reg('arrowleft', plateBack, 'Back to last confirmed plate');
+        reg('b', plateBack, 'Back (alias)');
+        reg(
+          'arrowright',
+          () => {
+            cursor = Math.min(items.length - 1, cursor + 1);
+            if (cursor >= items.length - 1 && hasMore) void loadMore();
+          },
+          'Next item',
+        );
+      }
     } else {
       reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
       reg('d', discard, 'Discard');
@@ -424,26 +672,18 @@
     reg('z', undoLast, 'Undo last');
 
     let canvasKey: ((e: KeyboardEvent) => void) | null = null;
-    if (tab === 'plates') {
-      // Forward bbox-fine-tune keys (arrows, [ / ], Backspace) into the
-      // plate canvas. Listening at the window level keeps the canvas
-      // responsive without requiring focus on the canvas itself.
-      // Arrow keys are bbox-nudge here, not queue navigation — the
-      // operator wants to be able to twitch the bbox by a pixel without
-      // accidentally jumping to the previous crop.
+    if (tab === 'plates' && editMode) {
+      // Edit mode only: forward bbox-fine-tune keys (arrows, [ / ],
+      // Backspace) into the plate canvas. Outside edit mode arrows page
+      // the queue like every other tab.
       canvasKey = (e: KeyboardEvent) => {
         if (!plateCanvas) return;
         const target = e.target as HTMLElement | null;
         if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
-        // ArrowLeft is reserved for "back to previous plate" on this
-        // tab — let the keyboardStore handler take it instead of
-        // nudging the bbox left by 1 px (operators wanted Back > nudge).
-        // Use ArrowUp/Down/Right + [ / ] for fine-tune.
-        if (e.key === 'ArrowLeft') return;
         if (plateCanvas.handleKey(e)) e.preventDefault();
       };
       window.addEventListener('keydown', canvasKey);
-    } else {
+    } else if (tab !== 'plates') {
       // On non-plate tabs arrow keys navigate the queue.
       reg(
         'arrowleft',
@@ -568,9 +808,12 @@
     <span class="grow"></span>
 
     <span class="hidden text-[11px] text-zinc-500 md:inline">
-      {#if tab === 'plates'}
-        drag to adjust · <kbd>↑↓→</kbd> nudge · <kbd>[ ]</kbd> right edge ·
-        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>N</kbd> skip · <kbd>←</kbd> back
+      {#if tab === 'plates' && editMode}
+        <kbd>↑↓←→</kbd> nudge · <kbd>[ ]</kbd> right edge · <kbd>Enter</kbd> save ·
+        <kbd>Esc</kbd> cancel
+      {:else if tab === 'plates'}
+        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>E</kbd> edit ·
+        <kbd>N</kbd> skip · <kbd>←</kbd> back
       {:else}
         per-class letter assigns · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip ·
         <kbd>D</kbd> discard · <kbd>Z</kbd> undo
@@ -596,7 +839,17 @@
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
           <img
-            src={getSourceImageWithBbox(current.id)}
+            src={getSourceImageWithBbox(
+              current.id,
+              1280,
+              // Cache-bust on plate-bbox edits so the burned-in overlay
+              // refreshes after a save. updated_at would be nicer but
+              // not every code path mutates it locally; bbox tuple is
+              // a stable enough fingerprint.
+              current.plate_bbox_norm
+                ? `${current.plate_bbox_norm.cx.toFixed(4)},${current.plate_bbox_norm.cy.toFixed(4)},${current.plate_bbox_norm.w.toFixed(4)},${current.plate_bbox_norm.h.toFixed(4)}`
+                : 'none',
+            )}
             alt="source"
             loading="lazy"
             decoding="async"
@@ -613,19 +866,29 @@
           <span class="font-mono">{current.id.slice(0, 12)}…</span>
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
-          {#if tab === 'plates'}
-            <!-- Inline editor — drag/resize the proposal directly, then
-                 hit Enter to confirm. No modal, no extra click. The
-                 canvas is capped at a fraction of viewport height so
-                 the provenance + button rows below it stay visible
-                 even on shorter screens (previously aspect-square
-                 forced the canvas to W=H=full grid-cell width, which
-                 pushed the meta grid + Confirm/Reject buttons below
-                 the fold). max-h keeps it inside the flex-1 parent. -->
+          {#if tab === 'plates' && editMode}
+            <!-- Edit mode — drag/resize the proposal directly, then hit
+                 Enter to save. Square aspect keeps the canvas math
+                 stable; the read-only default below shows the crop at
+                 natural aspect to match the other review tabs. -->
             <PlateBboxCanvas
               bind:this={plateCanvas}
               cropId={current.id}
               bind:bbox={editedPlateLocal}
+              viewBox={plateViewBox}
+              busy={plateSaving}
+              class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
+            />
+          {:else if tab === 'plates'}
+            <!-- Read-only default: same <img> layout as every other tab,
+                 with a thin yellow ring overlay on the proposed bbox.
+                 No grabbable handles, no pointer capture — the bbox is
+                 just shown. Press E to edit. -->
+            <PlateBboxCanvas
+              cropId={current.id}
+              bbox={editedPlateLocal}
+              viewBox={plateViewBox}
+              readonly
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else}
@@ -674,7 +937,18 @@
                 : '—'}
             </span>
             <span class="text-zinc-500">Plate status</span>
-            <span class="text-zinc-200">{current.plate_status ?? '—'}</span>
+            <span>
+              <select
+                bind:value={editedPlateStatus}
+                onchange={() => void commitPlateStatus()}
+                class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">—</option>
+                {#each PLATE_STATUS_OPTIONS as opt (opt.value)}
+                  <option value={opt.value}>{opt.label}</option>
+                {/each}
+              </select>
+            </span>
             <span class="text-zinc-500">Detector</span>
             <span class="flex flex-wrap items-center gap-1.5">
               {#if current.plate_detector}
@@ -696,9 +970,17 @@
               {#if current.plate_shape_warning}
                 <span
                   class="rounded border border-yellow-500/60 bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-200"
-                  title="Bbox shape fails the plate envelope (aspect ∉ [1.2, 8.0] or covers >50% of vehicle width). Likely legacy / corrupted data — flag for re-detection."
+                  title="Bbox shape fails the plate envelope (aspect ∉ [1.2, 8.0] or covers >50% of vehicle width). Likely legacy / corrupted data — press E to fix."
                 >
-                  ⚠ shape
+                  ⚠ shape · press E to fix
+                </span>
+              {/if}
+              {#if !editedPlateLocal && !editMode}
+                <span
+                  class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                  title="No plate bbox on this crop — press E to draw one."
+                >
+                  no bbox · press E to draw
                 </span>
               {/if}
             </span>
@@ -710,42 +992,91 @@
                 {/each}
               </span>
             {/if}
-            {#if current.plate_text}
-              <span class="text-zinc-500">Plate text</span>
-              <span class="flex items-center gap-1.5">
-                <span class="font-mono text-zinc-100">{current.plate_text}</span>
-                {#if current.plate_text_source}
-                  <DetectorChip detector={current.plate_text_source} size="sm" />
-                {/if}
-                {#if current.plate_text_confidence != null}
-                  <span class="text-[10px] text-zinc-500">
-                    {(current.plate_text_confidence * 100).toFixed(0)}%
-                  </span>
-                {/if}
+            <span class="text-zinc-500">Plate text</span>
+            <span class="flex items-center gap-1.5">
+              <input
+                type="text"
+                bind:value={editedPlateText}
+                onblur={() => void commitPlateText()}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }
+                }}
+                placeholder="ABC123"
+                spellcheck="false"
+                autocapitalize="characters"
+                class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+              />
+              {#if current.plate_text_source}
+                <DetectorChip detector={current.plate_text_source} size="sm" />
+              {/if}
+              {#if current.plate_text_confidence != null}
+                <span class="text-[10px] text-zinc-500">
+                  {(current.plate_text_confidence * 100).toFixed(0)}%
+                </span>
+              {/if}
+            </span>
+            {#if editedPlateStatus === 'verify_rejected' || editedPlateStatus === 'no_plate_visible'}
+              <span class="text-zinc-500">Rejection reason</span>
+              <span>
+                <input
+                  type="text"
+                  bind:value={editedRejectionReason}
+                  onblur={() => void commitRejectionReason()}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      (e.currentTarget as HTMLInputElement).blur();
+                    }
+                  }}
+                  placeholder="e.g. blurred, occluded, glare"
+                  class="w-44 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                />
               </span>
-            {/if}
-            {#if current.plate_rejection_reason}
-              <span class="text-zinc-500">Rejected</span>
-              <span class="text-amber-200">{current.plate_rejection_reason}</span>
             {/if}
           </div>
           <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              class="btn"
-              type="button"
-              onclick={plateBack}
-              disabled={plateUndoStack.length === 0}
-              title="Re-open the most-recently confirmed plate (←)"
-            >
-              ← Back
-            </button>
-            <button class="btn btn-primary" type="button" onclick={confirmPlate}>
-              Confirm Plate
-            </button>
-            <button class="btn btn-danger" type="button" onclick={rejectPlate}>
-              Reject (no plate)
-            </button>
-            <button class="btn" type="button" onclick={skip}>Skip</button>
+            {#if editMode}
+              <button
+                class="btn btn-primary"
+                type="button"
+                onclick={saveBboxAndExit}
+                disabled={plateSaving}
+              >
+                Save bbox
+              </button>
+              <button class="btn" type="button" onclick={toggleEdit} disabled={plateSaving}>
+                Cancel
+              </button>
+            {:else}
+              <button class="btn btn-primary" type="button" onclick={confirmPlate}>
+                Confirm Plate
+              </button>
+              <button class="btn btn-danger" type="button" onclick={rejectPlate}>
+                Reject (no plate)
+              </button>
+              <button class="btn" type="button" onclick={skip}>Skip</button>
+              <button
+                class="btn"
+                type="button"
+                onclick={toggleEdit}
+                aria-pressed={editMode}
+                title="Toggle bbox edit mode (E)"
+              >
+                Edit bbox
+              </button>
+              <button
+                class="btn"
+                type="button"
+                onclick={plateBack}
+                disabled={plateUndoStack.length === 0}
+                title="Re-open the most-recently confirmed plate (←)"
+              >
+                ← Back
+              </button>
+            {/if}
           </div>
           {#if plateUndoStack.length > 0}
             <p class="mt-1 text-[10px] text-zinc-500">

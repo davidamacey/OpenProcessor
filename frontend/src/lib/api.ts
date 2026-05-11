@@ -666,6 +666,21 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
  * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/plate`,
  * defined by backend task #32 to match this contract.
  */
+/**
+ * Fetch a single crop by id from the authoritative store. Used by the
+ * review-page "Back" path so the operator sees what was actually
+ * persisted rather than a possibly-stale local snapshot. Endpoint:
+ * `GET /curation/crops/{crop_id}`.
+ */
+export async function getCrop(cropId: string, signal?: AbortSignal): Promise<OpCrop> {
+  const raw = await apiFetch<RawCrop>(
+    `/curation/crops/${encodeURIComponent(cropId)}`,
+    {},
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
 export function setCropPlate(
   cropId: string,
   bbox: [number, number, number, number] | null,
@@ -676,6 +691,34 @@ export function setCropPlate(
     {
       method: 'PUT',
       body: JSON.stringify({ bbox_norm: bbox }),
+    },
+    signal,
+  );
+}
+
+/**
+ * Patch plate metadata fields without touching the bbox. Backend
+ * endpoint: `PATCH /curation/crops/{id}/plate_meta`. Only the keys present in
+ * `patch` are sent — pass `plate_text: null` to clear, omit to leave
+ * untouched. `plate_status` must be one of `'detected' |
+ * 'no_plate_visible' | 'verify_rejected'` (the human-writable subset).
+ */
+export interface PlateMetaPatch {
+  plate_text?: string | null;
+  plate_status?: 'detected' | 'no_plate_visible' | 'verify_rejected' | null;
+  plate_rejection_reason?: string | null;
+}
+
+export function updateCropPlateMeta(
+  cropId: string,
+  patch: PlateMetaPatch,
+  signal?: AbortSignal,
+): Promise<{ crop_id: string; updated_fields: string[] }> {
+  return apiFetch(
+    `/curation/crops/${encodeURIComponent(cropId)}/plate_meta`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
     },
     signal,
   );
@@ -945,8 +988,19 @@ export function getSourceImageUrl(cropId: string): string {
  * that need a pixel-accurate frame (e.g. PlateEditor) should hit
  * ``getSourceImageFull`` so the bbox lines up with the editor canvas.
  */
-export function getSourceImageWithBbox(cropId: string, maxDim: number = 1280): string {
-  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
+export function getSourceImageWithBbox(
+  cropId: string,
+  maxDim: number = 1280,
+  cacheKey?: string | null,
+): string {
+  // The server reads plate_bbox_norm from OpenSearch and burns the
+  // overlay into the JPEG. The crop_id alone produces an identical URL
+  // across edits, so the browser cache returns the pre-edit JPEG and
+  // the left-side preview lags the right-side canvas. Pass a key that
+  // changes when the bbox changes (e.g. the bbox tuple) to bust the
+  // cache on edits while still hitting the cache between cursor moves.
+  const base = `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
+  return cacheKey ? `${base}&v=${encodeURIComponent(cacheKey)}` : base;
 }
 
 /** Full-resolution source image; used by PlateEditor where pixel accuracy matters. */

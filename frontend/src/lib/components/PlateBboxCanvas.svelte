@@ -1,6 +1,9 @@
 <script lang="ts">
   /**
-   * Reusable plate-bbox canvas — image + draggable/resizable yellow ring.
+   * Reusable plate-bbox canvas — image + draggable/resizable sky-blue ring.
+   * Color matches the server-rendered overlay on /curation/crops/{id}/image
+   * (RGB 80,200,255) so the left-pane source preview and the right-pane
+   * crop canvas agree visually.
    *
    * Operates in **crop-local frame** ([0, 1]^4 normalized inside the
    * vehicle bbox). Used both by:
@@ -34,6 +37,22 @@
     class?: string;
     /** Disable interaction (during a save). */
     busy?: boolean;
+    /**
+     * Read-only display mode. Hides resize handles, ignores pointer
+     * events, and uses a thinner ring. Used by /review?tab=plates as
+     * its default view so the bbox is shown but the canvas doesn't
+     * sit on top of the crop with grabbable handles.
+     */
+    readonly?: boolean;
+    /**
+     * Optional viewport rectangle in **crop-local frame** (the same
+     * space `bbox` lives in). When provided, the canvas zooms in on
+     * this sub-region of the vehicle crop so a small plate fills the
+     * visible area. `bbox` continues to be stored in crop-local frame
+     * — saves and downstream consumers are unaffected. Pass `null` or
+     * omit to render the full crop.
+     */
+    viewBox?: BBoxNorm | null;
   }
 
   let {
@@ -42,6 +61,8 @@
     thumbSize = 512,
     class: containerClass = 'aspect-square w-full',
     busy = false,
+    readonly = false,
+    viewBox = null,
   }: Props = $props();
 
   type DragMode =
@@ -75,7 +96,9 @@
     imgNaturalW = img.naturalWidth || 0;
     imgNaturalH = img.naturalHeight || 0;
   }
-  const dispRect = $derived.by(() => {
+  // baseDisp: where the IMG content naturally sits inside the unit-
+  // square container with object-contain (image-aspect letterbox).
+  const baseDisp = $derived.by(() => {
     if (imgNaturalW <= 0 || imgNaturalH <= 0) {
       return { offX: 0, offY: 0, w: 1, h: 1 };
     }
@@ -87,6 +110,44 @@
     const w = aspect;
     return { offX: (1 - w) / 2, offY: 0, w, h: 1 };
   });
+
+  // dispRect: where the IMG content visually maps in the container,
+  // after applying the optional viewBox zoom. The combined transform
+  // imgFrac → containerFrac is:
+  //   containerFrac = (baseDisp.offset - viewBox.tl * scale) + imgFrac * scale
+  //                    where scale = baseDisp.size / viewBox.size
+  // When viewBox is null we fall straight through to baseDisp so the
+  // existing non-zoomed callers (PlateEditor modal) are unaffected.
+  const dispRect = $derived.by(() => {
+    if (!viewBox || viewBox.w <= 0 || viewBox.h <= 0) return baseDisp;
+    const vx1 = viewBox.cx - viewBox.w / 2;
+    const vy1 = viewBox.cy - viewBox.h / 2;
+    const sx = baseDisp.w / viewBox.w;
+    const sy = baseDisp.h / viewBox.h;
+    return {
+      offX: baseDisp.offX - vx1 * sx,
+      offY: baseDisp.offY - vy1 * sy,
+      w: sx,
+      h: sy,
+    };
+  });
+
+  // CSS transform string applied to the IMG element so the visible
+  // image region matches `dispRect`. The IMG fills the container with
+  // object-contain, so its natural image-content area sits at
+  // baseDisp. Scaling around baseDisp's top-left and translating by
+  // the offset delta yields dispRect.
+  const imgTransform = $derived.by<string>(() => {
+    if (!viewBox || viewBox.w <= 0 || viewBox.h <= 0) return 'none';
+    const sx = dispRect.w / baseDisp.w;
+    const sy = dispRect.h / baseDisp.h;
+    const dx = (dispRect.offX - baseDisp.offX) * 100;
+    const dy = (dispRect.offY - baseDisp.offY) * 100;
+    return `translate(${dx}%, ${dy}%) scale(${sx}, ${sy})`;
+  });
+  const imgOrigin = $derived.by<string>(
+    () => `${baseDisp.offX * 100}% ${baseDisp.offY * 100}%`,
+  );
 
   function clamp01(x: number): number {
     return Math.min(1, Math.max(0, x));
@@ -130,7 +191,7 @@
   }
 
   function onPointerDownCanvas(e: PointerEvent): void {
-    if (busy) return;
+    if (busy || readonly) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = clientToNorm(e);
@@ -148,7 +209,7 @@
   }
 
   function onPointerDownHandle(e: PointerEvent, mode: DragMode): void {
-    if (busy || bbox == null) return;
+    if (busy || readonly || bbox == null) return;
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -210,7 +271,7 @@
 
   /** Public hotkey dispatcher — parent forwards keydown events here. */
   export function handleKey(e: KeyboardEvent): boolean {
-    if (busy) return false;
+    if (busy || readonly) return false;
     switch (e.key) {
       case 'Backspace':
         bbox = null;
@@ -274,13 +335,15 @@
 
 <div
   bind:this={canvasEl}
-  class="relative overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none touch-none {containerClass}"
+  class="relative overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none {readonly
+    ? 'pointer-events-none'
+    : 'touch-none'} {containerClass}"
   onpointerdown={onPointerDownCanvas}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
-  role="application"
-  aria-label="Plate bbox canvas"
+  role={readonly ? 'img' : 'application'}
+  aria-label={readonly ? 'Plate bounding box (read-only)' : 'Plate bbox canvas'}
 >
   <img
     src={getThumbUrl(cropId, thumbSize)}
@@ -288,57 +351,65 @@
     draggable="false"
     onload={onImgLoad}
     class="pointer-events-none h-full w-full object-contain"
+    style="transform: {imgTransform}; transform-origin: {imgOrigin};"
   />
 
   {#if bbox}
-    <div class="absolute border-2 border-yellow-400 bg-yellow-400/10" style={ringStyle}>
-      <div
-        class="absolute inset-0 cursor-move"
-        onpointerdown={(e) => onPointerDownHandle(e, 'move')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute -top-1.5 -left-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute -top-1.5 -right-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute -bottom-1.5 -left-1.5 h-3 w-3 cursor-nesw-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute -right-1.5 -bottom-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'se')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'n')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 's')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'w')}
-        role="presentation"
-      ></div>
-      <div
-        class="absolute top-1/2 -right-1.5 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-yellow-300 bg-yellow-500"
-        onpointerdown={(e) => onPointerDownHandle(e, 'e')}
-        role="presentation"
-      ></div>
+    <div
+      class="absolute border-2"
+      style="{ringStyle}; border-color: rgb(80, 200, 255); background-color: {readonly
+        ? 'transparent'
+        : 'rgba(80, 200, 255, 0.12)'};"
+    >
+      {#if !readonly}
+        <div
+          class="absolute inset-0 cursor-move"
+          onpointerdown={(e) => onPointerDownHandle(e, 'move')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute -top-1 -left-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute -top-1 -right-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute -bottom-1 -left-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute -right-1 -bottom-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'se')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'n')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 's')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute top-1/2 -left-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'w')}
+          role="presentation"
+        ></div>
+        <div
+          class="absolute top-1/2 -right-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          onpointerdown={(e) => onPointerDownHandle(e, 'e')}
+          role="presentation"
+        ></div>
+      {/if}
     </div>
-  {:else}
+  {:else if !readonly}
     <span
       class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
     >
