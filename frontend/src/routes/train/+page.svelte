@@ -15,12 +15,14 @@
    *
    * Sub-components own their own UI; this page is the data layer.
    */
+  import { goto } from '$app/navigation';
   import { onDestroy, onMount } from 'svelte';
   import {
     ApiError,
     cancelTrainCampaign,
     cancelTrainJob,
     exportStatus,
+    getTrainingCandidates,
     getTrainManifest,
     getTrainPresets,
     getTrainProfiles,
@@ -30,10 +32,13 @@
     trainPreflight,
     trainStart,
     trainStartCampaign,
+    type PlateBrowseItem,
+    type TrainingCohortMode,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
+  import PlateCard from '$components/PlateCard.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
   import TrainForm from '$components/TrainForm.svelte';
   import TrainProgress from '$components/TrainProgress.svelte';
@@ -375,6 +380,7 @@
       })(),
       refreshDataset(),
       refreshRuns(),
+      refreshPlateCohortCounts(),
     ]);
   });
 
@@ -411,6 +417,81 @@
     // The status doc doesn't carry model_family; the trainer guarantees
     // YOLO26 today. Keep the column ready for future families though.
     return 'yolo26';
+  }
+
+  // -- Plate training-cohort picker (Wave 2c E4) -------------------------
+  //
+  // Backed by /curation/plates/training_candidates. Counts for each mode are
+  // fetched in parallel on mount, then again whenever the operator hits
+  // 'Refresh'. Selecting a cohort fetches a 24-card preview so the
+  // operator can sanity-check the cohort before committing to a training
+  // run targeted at it.
+
+  interface PlateCohortInfo {
+    mode: TrainingCohortMode;
+    label: string;
+    description: string;
+  }
+
+  const PLATE_COHORTS: PlateCohortInfo[] = [
+    {
+      mode: 'lpr_blind_spots',
+      label: 'LPR blind spots',
+      description:
+        'SAM3 found the plate, Gemma confirmed, LPR missed — high-signal training examples',
+    },
+    {
+      mode: 'lpr_low_conf_correct',
+      label: 'LPR low confidence',
+      description: 'LPR + Gemma agreed but LPR score < 0.6 — high-loss training rows',
+    },
+    {
+      mode: 'disagreement',
+      label: 'Model disagreements',
+      description: 'LPR + SAM3 both fired; review for IoU disagreement',
+    },
+    {
+      mode: 'human_corrected',
+      label: 'Human corrected',
+      description: 'Human reviewed and corrected a model output — gold standard',
+    },
+  ];
+
+  let plateCohortCounts = $state<Record<string, number | null>>({});
+  let plateCohortMode = $state<TrainingCohortMode | null>(null);
+  let plateCohortPreview = $state<PlateBrowseItem[]>([]);
+  let plateCohortPreviewLoading = $state<boolean>(false);
+  let plateCohortPreviewError = $state<string | null>(null);
+
+  async function refreshPlateCohortCounts(): Promise<void> {
+    const results = await Promise.allSettled(
+      PLATE_COHORTS.map((c) => getTrainingCandidates(c.mode, { page_size: 1 })),
+    );
+    const next: Record<string, number | null> = {};
+    PLATE_COHORTS.forEach((c, i) => {
+      const r = results[i];
+      next[c.mode] = r?.status === 'fulfilled' ? r.value.total : null;
+    });
+    plateCohortCounts = next;
+  }
+
+  async function loadPlateCohortPreview(mode: TrainingCohortMode): Promise<void> {
+    plateCohortMode = mode;
+    plateCohortPreviewLoading = true;
+    plateCohortPreviewError = null;
+    plateCohortPreview = [];
+    try {
+      const res = await getTrainingCandidates(mode, { page_size: 24 });
+      plateCohortPreview = res.items;
+    } catch (e) {
+      plateCohortPreviewError = (e as Error).message;
+    } finally {
+      plateCohortPreviewLoading = false;
+    }
+  }
+
+  function openPlateInReview(p: PlateBrowseItem): void {
+    void goto(`/review?tab=plates&crop_id=${encodeURIComponent(p.crop_id)}`);
   }
 </script>
 
@@ -511,6 +592,70 @@
       disabled={isActive}
     />
   {/if}
+
+  <!-- Plate training cohorts — surfaces the 4 modes from
+       /curation/plates/training_candidates so the next LPR training cycle can
+       be built from "where did LPR miss but SAM3 + Gemma agree" cohorts.
+       Selecting a mode loads a 24-card sanity-preview grid. -->
+  <section class="rounded-md border border-zinc-800 bg-zinc-900">
+    <header class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+      <div class="flex flex-col">
+        <h2 class="text-sm font-semibold text-zinc-100">Plate training cohorts</h2>
+        <p class="text-[11px] text-zinc-500">
+          Provenance-derived slices for the next LPR training cycle. Pick a
+          mode to preview a sanity grid before committing.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="btn"
+        onclick={() => void refreshPlateCohortCounts()}
+        title="Refresh cohort counts"
+      >
+        Refresh
+      </button>
+    </header>
+    <div class="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
+      {#each PLATE_COHORTS as c (c.mode)}
+        {@const count = plateCohortCounts[c.mode]}
+        {@const selected = plateCohortMode === c.mode}
+        <button
+          type="button"
+          class="flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-xs transition-colors
+                 {selected
+            ? 'border-blue-500 bg-blue-500/10 text-blue-100'
+            : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-blue-500/50'}"
+          onclick={() => void loadPlateCohortPreview(c.mode)}
+        >
+          <span class="font-semibold">{c.label}</span>
+          <span class="font-mono text-[11px] {selected ? 'text-blue-200' : 'text-zinc-400'}">
+            {count == null ? '…' : count.toLocaleString()} rows
+          </span>
+          <span class="text-[10px] text-zinc-500">{c.description}</span>
+        </button>
+      {/each}
+    </div>
+    {#if plateCohortMode}
+      <div class="border-t border-zinc-800 px-3 py-3">
+        {#if plateCohortPreviewError}
+          <p class="text-xs text-red-300">Preview failed: {plateCohortPreviewError}</p>
+        {:else if plateCohortPreviewLoading && plateCohortPreview.length === 0}
+          <p class="text-xs text-zinc-500">Loading preview…</p>
+        {:else if plateCohortPreview.length === 0}
+          <p class="text-xs text-zinc-500">
+            No rows match this cohort yet — the re-detection drain may still
+            be populating provenance. Check back as the queue drains.
+          </p>
+        {:else}
+          <div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+            {#each plateCohortPreview as p (p.crop_id)}
+              <PlateCard crop={p} onclick={openPlateInReview} compact />
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </section>
 
   <!-- Past runs -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900">

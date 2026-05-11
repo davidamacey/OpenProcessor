@@ -1,8 +1,9 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { getClusters, getThumbUrl } from '$lib/api';
+  import { getClusters, getPlates, getThumbUrl, type PlateBrowseItem } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import PlateCard from '$lib/components/PlateCard.svelte';
   import type { ClusterFilter, OpCluster } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -17,6 +18,22 @@
 
   let sort = $state<NonNullable<ClusterFilter['sort']>>('purity_asc');
   const pageSize = 24;
+
+  // --- Plate browse (replaces the "License plates aren't clustered" placeholder
+  //     when the operator selects the license_plate class filter).
+  let plates = $state<PlateBrowseItem[]>([]);
+  let platesTotal = $state<number>(0);
+  let platesLoading = $state<boolean>(false);
+  let platesPage = $state<number>(1);
+  let platesError = $state<string | null>(null);
+  const platesHasMore = $derived(plates.length < platesTotal);
+  const PLATES_PAGE_SIZE = 60;
+
+  // Filter sidebar state — only active on the plates view.
+  let plateDetectorFilter = $state<string>('');
+  let plateVerifiedOnly = $state<boolean>(false);
+  let plateMinScore = $state<number>(0);
+  let plateTextQuery = $state<string>('');
 
   const classFilter = $derived.by(() => {
     const v = page.url.searchParams.get('class');
@@ -86,12 +103,74 @@
     keyboardStore.setScope('clusters');
   });
 
-  // Re-load on filter / sort change
+  // Re-load on filter / sort change — but only for the cluster view.
+  // The plate browse view has its own loader keyed on its own params.
   $effect(() => {
     void classFilter;
     void sort;
-    void loadFirst();
+    if (!isLicensePlateFilter) void loadFirst();
   });
+
+  async function loadPlatesFirst(): Promise<void> {
+    platesLoading = true;
+    platesError = null;
+    plates = [];
+    platesTotal = 0;
+    platesPage = 1;
+    try {
+      const res = await getPlates({
+        page: 1,
+        page_size: PLATES_PAGE_SIZE,
+        detector: plateDetectorFilter || undefined,
+        verified: plateVerifiedOnly || undefined,
+        min_score: plateMinScore > 0 ? plateMinScore : undefined,
+        text: plateTextQuery || undefined,
+      });
+      plates = res.items;
+      platesTotal = res.total;
+    } catch (e) {
+      platesError = (e as Error).message;
+    } finally {
+      platesLoading = false;
+    }
+  }
+
+  async function loadPlatesMore(): Promise<void> {
+    if (platesLoading || !platesHasMore) return;
+    platesLoading = true;
+    try {
+      const next = platesPage + 1;
+      const res = await getPlates({
+        page: next,
+        page_size: PLATES_PAGE_SIZE,
+        detector: plateDetectorFilter || undefined,
+        verified: plateVerifiedOnly || undefined,
+        min_score: plateMinScore > 0 ? plateMinScore : undefined,
+        text: plateTextQuery || undefined,
+      });
+      const seen = new Set(plates.map((p) => p.crop_id));
+      plates = [...plates, ...res.items.filter((p) => !seen.has(p.crop_id))];
+      platesTotal = res.total;
+      platesPage = next;
+    } catch (e) {
+      platesError = (e as Error).message;
+    } finally {
+      platesLoading = false;
+    }
+  }
+
+  // Re-load plates whenever the filter sidebar values OR the plates-mode flag change.
+  $effect(() => {
+    void plateDetectorFilter;
+    void plateVerifiedOnly;
+    void plateMinScore;
+    void plateTextQuery;
+    if (isLicensePlateFilter) void loadPlatesFirst();
+  });
+
+  function openPlateInReview(p: PlateBrowseItem): void {
+    void goto(`/review?tab=plates&crop_id=${encodeURIComponent(p.crop_id)}`);
+  }
 
   function borderColor(c: OpCluster): string {
     if (c.has_subclusters) return 'border-blue-500/60';
@@ -172,33 +251,83 @@
   <!-- Grid -->
   <div class="flex-1 overflow-auto p-4">
     {#if isLicensePlateFilter}
-      <!-- Plates aren't standalone crops; clustering them here would
-           always show zeros / unlabeled. Route the operator to the
-           plates review queue, which IS the home for plate labeling. -->
-      <div class="mx-auto max-w-2xl rounded-md border border-blue-500/40 bg-blue-500/5 p-6">
-        <h2 class="text-base font-semibold text-blue-200">
-          License plates aren't clustered here
-        </h2>
-        <p class="mt-2 text-sm text-zinc-300">
-          Plates live as a <code class="rounded bg-zinc-800 px-1 py-0.5 text-[12px]">plate_bbox_norm</code>
-          sub-box on each vehicle crop, not as separate documents in the
-          cluster index — so filtering this page by
-          <span class="font-mono text-blue-200">license_plate</span> always shows zeros.
-        </p>
-        <p class="mt-2 text-sm text-zinc-300">
-          Review and confirm plate boxes on the dedicated queue:
-        </p>
-        <div class="mt-4 flex gap-2">
-          <a
-            href="/review?tab=plates"
-            class="btn btn-primary"
-          >
-            Open Plates review queue
-          </a>
-          <button class="btn" type="button" onclick={() => goto('/clusters')}>
-            Clear class filter
-          </button>
+      <!-- Plates list view — backed by /curation/plates. Plates live as a
+           plate_bbox_norm sub-bbox on each vehicle crop (not as their
+           own cluster docs), so this view surfaces them directly with
+           detector provenance + OCR text chips. -->
+      <div class="flex min-h-0 flex-col gap-3">
+        <!-- Filter strip: detector / verified / score / text-search.
+             Same layout convention as the cluster sidebar so operators
+             flip between modes without re-learning. -->
+        <div
+          class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs"
+        >
+          <label class="flex items-center gap-1.5">
+            <span class="text-zinc-400">Detector</span>
+            <select
+              bind:value={plateDetectorFilter}
+              class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+            >
+              <option value="">any</option>
+              <option value="lpr_nanov11_640">LPR</option>
+              <option value="sam3">SAM3</option>
+              <option value="paddleocr_det_trt">Paddle det</option>
+              <option value="human">Human</option>
+            </select>
+          </label>
+          <label class="flex items-center gap-1.5">
+            <input type="checkbox" bind:checked={plateVerifiedOnly} class="accent-blue-500" />
+            <span class="text-zinc-400">Verified only</span>
+          </label>
+          <label class="flex items-center gap-1.5">
+            <span class="text-zinc-400">Min score</span>
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.05"
+              bind:value={plateMinScore}
+              class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+            />
+          </label>
+          <label class="flex items-center gap-1.5">
+            <span class="text-zinc-400">Text</span>
+            <input
+              type="text"
+              bind:value={plateTextQuery}
+              placeholder="e.g. S14"
+              class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+            />
+          </label>
+          <span class="grow"></span>
+          <span class="font-mono text-[11px] text-zinc-500">
+            {plates.length.toLocaleString()} / {platesTotal.toLocaleString()} plates
+          </span>
         </div>
+
+        {#if platesError}
+          <p class="text-sm text-red-300">API unavailable: {platesError}</p>
+        {:else if platesLoading && plates.length === 0}
+          <p class="text-sm text-zinc-500">Loading plates...</p>
+        {:else if plates.length === 0}
+          <p class="text-sm text-zinc-500">
+            No plates match the current filters. The re-detection drain
+            may still be populating provenance — fresh rows appear here
+            as the worker processes them.
+          </p>
+        {:else}
+          <div
+            class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+            use:infiniteScroll={{ onload: loadPlatesMore, disabled: platesLoading || !platesHasMore }}
+          >
+            {#each plates as p (p.crop_id)}
+              <PlateCard crop={p} onclick={openPlateInReview} />
+            {/each}
+          </div>
+          {#if platesLoading}
+            <p class="py-2 text-center text-xs text-zinc-500">Loading more…</p>
+          {/if}
+        {/if}
       </div>
     {:else if loading && clusters.length === 0}
       <p class="text-sm text-zinc-500">Loading...</p>

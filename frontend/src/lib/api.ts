@@ -162,6 +162,83 @@ export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
   return apiFetch<OpHealth>('/curation/health', {}, signal);
 }
 
+// -- plates browse / training-cohort selection ---------------------------
+
+export interface PlateBrowseItem {
+  crop_id: string;
+  id: string;
+  image_path: string;
+  bbox_norm: number[];
+  plate_bbox_norm: number[] | null;
+  plate_score: number | null;
+  plate_status: string | null;
+  plate_verified: boolean | null;
+  plate_detector: string | null;
+  plate_detector_version: string | null;
+  plate_detector_chain: string[] | null;
+  plate_bbox_frame: string | null;
+  plate_detected_at: string | null;
+  plate_verifier: string | null;
+  plate_verifier_version: string | null;
+  plate_verified_at: string | null;
+  plate_rejection_reason: string | null;
+  plate_visible: boolean | null;
+  plate_text: string | null;
+  plate_text_source: string | null;
+  plate_text_confidence: number | null;
+  class_id: number | null;
+  class_name: string | null;
+  cluster_id: number | null;
+  updated_at: string;
+  thumbnail_url?: string;
+  plate_thumbnail_url?: string;
+  selection_reason?: string;
+}
+
+export interface PlatesPage {
+  total: number;
+  page: number;
+  page_size: number;
+  items: PlateBrowseItem[];
+  mode?: string;
+  selection_reason?: string;
+}
+
+export interface PlatesQuery {
+  page?: number;
+  page_size?: number;
+  class_id?: number;
+  cluster_id?: number;
+  min_score?: number;
+  max_score?: number;
+  verified?: boolean;
+  detector?: string;
+  text?: string;
+  include_test?: boolean;
+}
+
+export function getPlates(params: PlatesQuery = {}, signal?: AbortSignal): Promise<PlatesPage> {
+  return apiFetch<PlatesPage>(`/curation/plates${qs(params as Record<string, unknown>)}`, {}, signal);
+}
+
+export type TrainingCohortMode =
+  | 'lpr_blind_spots'
+  | 'lpr_low_conf_correct'
+  | 'disagreement'
+  | 'human_corrected';
+
+export function getTrainingCandidates(
+  mode: TrainingCohortMode,
+  params: { page?: number; page_size?: number; class_id?: number } = {},
+  signal?: AbortSignal,
+): Promise<PlatesPage> {
+  return apiFetch<PlatesPage>(
+    `/curation/plates/training_candidates${qs({ mode, ...params })}`,
+    {},
+    signal,
+  );
+}
+
 export function getModelsStatus(signal?: AbortSignal): Promise<OpModelsStatus> {
   return apiFetch<OpModelsStatus>('/curation/models/status', {}, signal);
 }
