@@ -26,13 +26,13 @@ keyboard-first UX matching the legacy_sorter manual-mode speed budget.
 | Route | Purpose | MVP? |
 |---|---|---|
 | `/` | Dashboard (class balance, ingestion stats) | yes |
-| `/clusters` | Cluster grid view, sidebar filter | yes |
+| `/clusters` | Cluster grid view, sidebar filter. When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`) | yes |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops | yes |
-| `/review` | Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** review queues | yes |
+| `/review` | Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** / **Plates** review queues. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings | yes |
 | `/classes` | Add / rename / merge classes | post-MVP |
 | `/export` | Trigger YOLO export, view balance gap | post-MVP |
 | `/models` | Triton model registry browser | post-MVP |
-| `/train` | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote** + **Reproduce** | post-MVP |
+| `/train` | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected) | post-MVP |
 
 ## Training UI — `/train` (Phase 2 of legacy_train_pipeline)
 
@@ -78,6 +78,45 @@ for the next training cycle.
 - Bulk ops show a confirmation dialog with affected count.
 - Test-set crops (`test_holdout=true`) are filtered out at the API level —
   the UI never receives them. Don't try to bypass.
+
+## Plate provenance + OCR (Wave 1 + Wave 2b, 2026-05-11)
+
+Every plate-bearing crop now carries detector provenance — which
+model produced the bbox, plus the Gemma-read plate text. These flow
+through `mapRawCrop` (`src/lib/api.ts`) onto the `OpCrop` type and
+render via the shared chip components.
+
+**New fields on `OpCrop` / `ReviewItem`:**
+
+- `plate_detector` (`'lpr_nanov11_640'` / `'sam3'` /
+  `'paddleocr_det_trt'` / `'human'`)
+- `plate_detector_version`, `plate_bbox_frame` (always `'source'`)
+- `plate_detector_chain` — string array, every step of the cascade:
+  `['lpr_nanov11_640:miss', 'sam3:hit', 'sam3:gemma_verify_ok']`
+- `plate_verifier` (`'gemma-4-e4b'` / `'human'`), `plate_verified_at`
+- `plate_text` + `plate_text_source` + `plate_text_confidence` —
+  Gemma reads the plate during verify in the same round-trip
+- `plate_rejection_reason` — set when the server-side sanity gate
+  rejected the candidate
+- `plate_shape_warning` — client-side computed via the same envelope
+  as `is_plausible_plate_bbox` in `plate_detect.py`
+
+**New shared components:**
+
+- `src/lib/components/DetectorChip.svelte` — color-coded chip
+  (LPR=blue, SAM3=purple, Paddle=amber, Human=green, Gemma=teal,
+  v6=rose, YOLO11=sky). Accepts a `raw="lpr_nanov11_640:miss"`
+  chain entry directly. Miss/reject tags get a muted variant.
+- `src/lib/components/PlateCard.svelte` — 128px plate thumbnail
+  (via `/curation/crops/{id}/plate_thumbnail`), parent class chip, score,
+  detector chip strip, plate text inline, ⚠ shape warning.
+
+**New API helpers:**
+
+- `getPlates(params)` — `/curation/plates` paginated browse with
+  detector/verified/score/text filters.
+- `getTrainingCandidates(mode, params)` — `/curation/plates/training_candidates`
+  with 4 cohort modes.
 
 ## Development
 

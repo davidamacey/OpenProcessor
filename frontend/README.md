@@ -36,11 +36,12 @@ that repo's `scripts/legacy/RUNBOOK.md`).
 | Route | Purpose |
 |---|---|
 | `/` | Dashboard — class balance bar chart, ingestion progress, recent activity, quick actions |
-| `/clusters` | Grid of clusters; sort by purity / size / dominant class; click into one |
+| `/clusters` | Grid of clusters; sort by purity / size / dominant class; click into one. Selecting `class=license_plate` replaces the cluster grid with a **plate browse view** — paginated plate thumbnails filtered by detector / verified / score / plate-text |
 | `/clusters/[id]` | Per-cluster paginated crop grid + DnD-to-other-cluster + bulk label/Gemma/AHC + similarity cut-line + sub-cluster tabs |
-| `/review` | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty (active learning) |
+| `/review` | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty / Model Disagreements / **Plates**. Plate rows show detector chips, the cascade chain, Gemma-read plate text, and a ⚠ shape-warning when the bbox envelope fails |
 | `/classes` | Add/rename/regroup/merge classes; sync to OpenSearch; adequacy badges |
 | `/export` | YOLO export status + augmentation gap table + Test Holdout freeze + downloads |
+| `/train` | Training cockpit + **plate training cohort picker** (lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected) |
 
 ## Keyboard shortcuts
 
