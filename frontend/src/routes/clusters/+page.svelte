@@ -69,10 +69,35 @@
       clusters = res?.items ?? [];
       total = res?.total ?? clusters.length;
       loadedPages = 1;
+      await patchLicensePlateClusterSize();
     } catch (e) {
       error = (e as Error).message;
     } finally {
       loading = false;
+    }
+  }
+
+  // Plates live as sub-bboxes on vehicle crops, not as docs in the
+  // cluster index — so the cluster_id-membership count for the
+  // license_plate cluster card under-reports by orders of magnitude
+  // (only counts crops whose PRIMARY class is license_plate, which is
+  // usually 0-1 mis-labels). Replace it with the real plate inventory
+  // total from /curation/plates so the card matches what the operator sees
+  // when they drill in.
+  async function patchLicensePlateClusterSize(): Promise<void> {
+    const lp = classesStore.classes.find(
+      (c) => (c.name ?? '').toLowerCase() === 'license_plate',
+    );
+    if (!lp) return;
+    try {
+      const res = await getPlates({ page: 1, page_size: 1 });
+      clusters = clusters.map((c) =>
+        c.id === lp.id || (c.dominant_class_name ?? '').toLowerCase() === 'license_plate'
+          ? { ...c, size: res.total, dominant_class_name: 'license_plate' }
+          : c,
+      );
+    } catch {
+      /* best effort — leave the card alone if /curation/plates is unreachable */
     }
   }
 
