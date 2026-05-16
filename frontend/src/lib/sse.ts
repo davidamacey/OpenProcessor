@@ -88,7 +88,16 @@ export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscri
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   const url = (() => {
-    const u = new URL(`${apiBase}/curation/events`);
+    // apiBase is empty in the default Docker deployment (nginx proxies
+    // /curation/* on the same origin). `new URL('/curation/events')` throws because
+    // it lacks a base, so we anchor to window.location.origin when
+    // apiBase is relative. The resulting URL is still same-origin and
+    // hits the labeler's nginx proxy.
+    const base =
+      apiBase && /^https?:\/\//i.test(apiBase)
+        ? `${apiBase}/curation/events`
+        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}/curation/events`;
+    const u = new URL(base);
     if (opts.topic) u.searchParams.set('topic', opts.topic);
     if (opts.class_id != null) u.searchParams.set('class_id', String(opts.class_id));
     return u.toString();
