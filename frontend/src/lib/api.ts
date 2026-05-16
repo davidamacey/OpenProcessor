@@ -1,7 +1,8 @@
 /**
  * Typed API client for the openprocessor `/curation/` endpoints.
  *
- * - Single base URL, defaulting to `http://localhost:4603`.
+ * - Single base URL, defaulting to `''` (empty → relative paths, proxied
+ *   by nginx in Docker production).
  * - `apiFetch` retries on 5xx with exponential backoff (3 tries, 250 / 500 / 1000ms).
  * - Caller-supplied AbortSignal is honoured; cancellation never retries.
  * - On 4xx the original ApiError is thrown immediately (no retry).
@@ -51,8 +52,11 @@ import type {
 // onto SSR-only paths; we go through `import.meta.env` so this module remains
 // usable in pure client contexts (and, for production, the value is baked in
 // at build time and overridable via the docker-entrypoint shim).
+// Empty default: in Docker the labeler's nginx proxies /curation/* and /clusters/{train|assign|stats}/*
+// to op-api on the same docker network. Relative URLs work from any LAN IP / VPN client.
+// For local `npm run dev` outside Docker, set PUBLIC_TRITON_API_URL=http://localhost:4603 in .env.
 const RAW_BASE =
-  (import.meta.env?.PUBLIC_TRITON_API_URL as string | undefined) ?? 'http://localhost:4603';
+  (import.meta.env?.PUBLIC_TRITON_API_URL as string | undefined) ?? '';
 
 export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
 
@@ -301,6 +305,7 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
     sample_count?: number;
     count?: number;
     validated_count?: number;
+    cluster_size?: number;
     color?: string | null;
     deprecated?: boolean;
     added_at?: string;
@@ -314,6 +319,7 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
     group: c.group ?? null,
     count: c.sample_count ?? c.count ?? 0,
     validated_count: c.validated_count ?? 0,
+    cluster_size: c.cluster_size ?? 0,
     added_at: c.added_at ?? '',
     color: c.color ?? null,
     deprecated: !!c.deprecated,
@@ -1161,6 +1167,73 @@ export function getTrainManifest(
   return apiFetch<Record<string, unknown>>(
     `/curation/train/manifest/${encodeURIComponent(jobId)}`,
     {},
+    signal,
+  );
+}
+
+// -- Auto-label (recluster) job ------------------------------------------
+// Wraps POST /curation/pipeline/auto_label/{start,status,cancel}. The pipeline
+// re-runs prototype assignment → cluster_id normalize → HDBSCAN → auto-
+// promote → Gemma sweep, fixing prototype drift and stale cluster_id on
+// labeled crops. Hours at HDD scale; the panel polls status while it runs.
+
+export interface AutoLabelStartParams {
+  train_clusters?: boolean;
+  promote_min_purity?: number;
+  promote_min_members?: number;
+  gemma_batch_size?: number;
+  gemma_concurrency?: number;
+  max_gemma_crops?: number;
+  v6_confidence_skip_gemma?: number;
+}
+
+export type AutoLabelStatus =
+  | 'idle'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export interface AutoLabelJobState {
+  job_id: string;
+  status: AutoLabelStatus;
+  stage: string;
+  processed: number;
+  total: number;
+  started_at: number;
+  finished_at: number;
+  error: string | null;
+  result: Record<string, unknown>;
+  args: Record<string, unknown>;
+  eta_seconds: number | null;
+  elapsed_seconds: number;
+}
+
+export function startAutoLabel(
+  params: AutoLabelStartParams = {},
+  signal?: AbortSignal,
+): Promise<AutoLabelJobState> {
+  return apiFetch<AutoLabelJobState>(
+    `/curation/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+export function getAutoLabelStatus(signal?: AbortSignal): Promise<AutoLabelJobState> {
+  return apiFetch<AutoLabelJobState>(
+    '/curation/pipeline/auto_label/status',
+    {},
+    signal,
+  );
+}
+
+export function cancelAutoLabel(
+  signal?: AbortSignal,
+): Promise<AutoLabelJobState & { cancelled: boolean }> {
+  return apiFetch<AutoLabelJobState & { cancelled: boolean }>(
+    '/curation/pipeline/auto_label/cancel',
+    { method: 'POST' },
     signal,
   );
 }
