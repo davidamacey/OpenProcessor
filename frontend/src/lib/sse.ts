@@ -81,6 +81,136 @@ const KNOWN_EVENT_TYPES = [
  * `subscription.close()` on component unmount, otherwise the
  * EventSource will keep reconnecting forever.
  */
+// ---------------------------------------------------------------------------
+// Pipeline events SSE — /curation/pipeline/events
+// ---------------------------------------------------------------------------
+// The auto_label pipeline pushes three event types over this channel:
+//   * `snapshot` — initial frame on connect with `{ state, stats }`.
+//   * `state`    — pipeline state.json was rewritten (stage transition,
+//                  progress advance, terminal status).
+//   * `stats`    — dataset rollup was refreshed (only at stage boundaries
+//                  or terminal status changes, not on every progress tick).
+// Heartbeat `: keepalive` frames are emitted every 15s by the backend so
+// proxies don't reap the connection. The browser EventSource silently
+// drops comment lines, so callers don't see them.
+//
+// This replaces the 10s polling loop in DatasetStats.svelte — the
+// dashboard now updates on push without burning CPU when nothing is
+// happening on the pipeline.
+
+export interface PipelineSnapshotEvent {
+  type: 'snapshot';
+  state: Record<string, unknown>;
+  stats: Record<string, unknown>;
+}
+
+export interface PipelineStateEvent {
+  type: 'state';
+  state: Record<string, unknown>;
+}
+
+export interface PipelineStatsEvent {
+  type: 'stats';
+  stats: Record<string, unknown>;
+}
+
+export type PipelineEvent =
+  | PipelineSnapshotEvent
+  | PipelineStateEvent
+  | PipelineStatsEvent;
+
+export interface PipelineSubscribeOptions {
+  onSnapshot?: (state: Record<string, unknown>, stats: Record<string, unknown>) => void;
+  onState?: (state: Record<string, unknown>) => void;
+  onStats?: (stats: Record<string, unknown>) => void;
+  onError?: (err: Event | Error) => void;
+  onOpen?: () => void;
+}
+
+/**
+ * Open an SSE subscription to /curation/pipeline/events.
+ *
+ * The browser EventSource reconnects automatically (default 3s). On
+ * top of that we add capped exponential backoff because Firefox is
+ * known to give up after a few rapid retries.
+ */
+export function subscribePipelineEvents(
+  opts: PipelineSubscribeOptions,
+): OpEventSubscription {
+  let es: EventSource | null = null;
+  let backoff = RECONNECT_INITIAL_MS;
+  let closed = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const url = (() => {
+    const base =
+      apiBase && /^https?:\/\//i.test(apiBase)
+        ? `${apiBase}/curation/pipeline/events`
+        : `${
+            typeof window !== 'undefined' ? window.location.origin : ''
+          }${apiBase}/curation/pipeline/events`;
+    return new URL(base).toString();
+  })();
+
+  function open(): void {
+    if (closed) return;
+    es = new EventSource(url);
+    es.onopen = () => {
+      backoff = RECONNECT_INITIAL_MS;
+      opts.onOpen?.();
+    };
+    es.addEventListener('snapshot', (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data) as { state: Record<string, unknown>; stats: Record<string, unknown> };
+        opts.onSnapshot?.(payload.state ?? {}, payload.stats ?? {});
+      } catch (err) {
+        console.warn('[sse] failed to parse snapshot', err);
+      }
+    });
+    es.addEventListener('state', (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data) as Record<string, unknown>;
+        opts.onState?.(payload);
+      } catch (err) {
+        console.warn('[sse] failed to parse state', err);
+      }
+    });
+    es.addEventListener('stats', (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data) as Record<string, unknown>;
+        opts.onStats?.(payload);
+      } catch (err) {
+        console.warn('[sse] failed to parse stats', err);
+      }
+    });
+    es.onerror = (err) => {
+      opts.onError?.(err);
+      if (closed) return;
+      es?.close();
+      es = null;
+      reconnectTimer = setTimeout(() => {
+        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
+        open();
+      }, backoff);
+    };
+  }
+
+  open();
+
+  return {
+    close(): void {
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      es?.close();
+      es = null;
+    },
+  };
+}
+
+
 export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscription {
   let es: EventSource | null = null;
   let backoff = RECONNECT_INITIAL_MS;

@@ -2,7 +2,18 @@
   /*
    * Pipeline-stats dashboard panel.
    *
-   * Polls `GET /curation/stats/dataset` every 10s and renders:
+   * Subscribes to `GET /curation/pipeline/events` via Server-Sent Events. The
+   * server pushes:
+   *   * `snapshot` on connect — initial state + dataset stats
+   *   * `stats` whenever the dataset rollup actually changed (stage
+   *     boundary, terminal status). NOT a fixed-rate stream.
+   *   * `state` for pipeline progress (we ignore it here; consumed by
+   *     the pipeline-status panel).
+   * Replaces the 10s-poll loop from 2026-05-21 — the dashboard now
+   * updates on push without burning CPU when nothing is happening on
+   * the pipeline.
+   *
+   * Renders:
    *   - Total crops (large headline)
    *   - Labeled-by-source table with proportion bars
    *   - Unlabeled breakdown (pending_detection / pending_verification /
@@ -10,83 +21,77 @@
    *   - In-progress queue (sam_drain_total_unfinished)
    *   - Last clustering run summary (timestamp, method, cluster_count,
    *     residual_count, noise_count)
-   *
-   * The poll is skipped while a previous fetch is still in flight so a
-   * slow OS query never stacks requests. The component is paused while
-   * `document.visibilityState !== 'visible'` to avoid burning tokens
-   * when the tab is backgrounded.
    */
   import { onDestroy } from "svelte";
-  import { getDatasetStats, type DatasetStats } from "$lib/api";
+  import { type DatasetStats } from "$lib/api";
+  import { subscribePipelineEvents, type OpEventSubscription } from "$lib/sse";
 
+  // Polling interval prop preserved for back-compat with existing
+  // callers; ignored now that we're push-driven.
   interface Props {
-    /** Poll interval in ms. Default 10s — match the spec. */
+    /** @deprecated polling removed 2026-05-21 — kept so callers don't break. */
     pollMs?: number;
   }
-  let { pollMs = 10_000 }: Props = $props();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  let _props: Props = $props();
 
   let stats = $state<DatasetStats | null>(null);
   let error = $state<string | null>(null);
   let lastUpdated = $state<number | null>(null);
-  let inFlight = $state<boolean>(false);
-  let timer: ReturnType<typeof setInterval> | null = null;
+  let connected = $state<boolean>(false);
+  let subscription: OpEventSubscription | null = null;
 
   // Drain-rate samples for ETA. We keep a small ring buffer of
   // (unfinished, t) samples so the displayed rate is averaged over the
-  // last ~minute instead of a single 10s tick — kills the jitter when
+  // last ~minute instead of a single tick — kills the jitter when
   // sam-worker bursts on a chunk of Gemma-visible-filter results.
   type Sample = { unfinished: number; t: number };
   let samples = $state<Sample[]>([]);
   const SAMPLE_WINDOW_MS = 60_000;
 
-  async function refresh(): Promise<void> {
-    if (inFlight) return;
-    inFlight = true;
-    try {
-      stats = await getDatasetStats();
-      error = null;
-      lastUpdated = Date.now();
-      // Record a drain-rate sample and trim anything older than the window.
-      const unfinished = stats?.in_progress?.sam_drain_total_unfinished ?? 0;
-      const now = Date.now();
-      samples = [...samples, { unfinished, t: now }].filter(
-        (s) => now - s.t <= SAMPLE_WINDOW_MS * 2,
-      );
-    } catch (e) {
-      error = (e as Error).message || "failed to load stats";
-    } finally {
-      inFlight = false;
-    }
-  }
-
-  function start(): void {
-    if (timer != null) return;
-    void refresh();
-    timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, pollMs);
-  }
-
-  function stop(): void {
-    if (timer != null) {
-      clearInterval(timer);
-      timer = null;
-    }
+  function applyStats(payload: Record<string, unknown>): void {
+    // The backend's /curation/stats/dataset response is DatasetStats-shaped.
+    // We trust the shape since the same FastAPI handler builds both
+    // the REST payload and this SSE frame.
+    stats = payload as unknown as DatasetStats;
+    error = null;
+    lastUpdated = Date.now();
+    const unfinished = stats?.in_progress?.sam_drain_total_unfinished ?? 0;
+    const now = Date.now();
+    samples = [...samples, { unfinished, t: now }].filter(
+      (s) => now - s.t <= SAMPLE_WINDOW_MS * 2,
+    );
   }
 
   $effect(() => {
-    start();
-    const onVis = (): void => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVis);
+    subscription = subscribePipelineEvents({
+      onSnapshot: (_state, statsPayload) => {
+        connected = true;
+        applyStats(statsPayload);
+      },
+      onStats: (statsPayload) => {
+        connected = true;
+        applyStats(statsPayload);
+      },
+      onError: () => {
+        connected = false;
+        // Don't clear stats — keep last-known values on the screen
+        // while the browser/helper reconnects.
+      },
+      onOpen: () => {
+        connected = true;
+      },
+    });
     return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      stop();
+      subscription?.close();
+      subscription = null;
     };
   });
 
-  onDestroy(stop);
+  onDestroy(() => {
+    subscription?.close();
+    subscription = null;
+  });
 
   const labeledTotal = $derived.by(() => {
     const l = stats?.labeled;
@@ -253,15 +258,18 @@
       <span title={lastUpdated ? new Date(lastUpdated).toLocaleString() : ""}>
         updated {fmtRelative(lastUpdated)}
       </span>
-      <button
-        type="button"
-        class="btn"
-        onclick={() => void refresh()}
-        disabled={inFlight}
-        aria-label="Refresh stats"
+      <span
+        class="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
+        class:bg-emerald-500={connected}
+        class:text-emerald-50={connected}
+        class:bg-zinc-700={!connected}
+        class:text-zinc-300={!connected}
+        title={connected
+          ? "Live via /curation/pipeline/events SSE"
+          : "Reconnecting…"}
       >
-        {inFlight ? "…" : "Refresh"}
-      </button>
+        {connected ? "live" : "…"}
+      </span>
     </div>
   </header>
 
