@@ -25,6 +25,7 @@
   let lpCard = $state<OpCluster | null>(null);
 
   let sort = $state<NonNullable<ClusterFilter['sort']>>('purity_asc');
+  let unlabeledOnly = $state<boolean>(false);
   const pageSize = 24;
 
   // --- Plate browse (replaces the "License plates aren't clustered" placeholder
@@ -137,9 +138,17 @@
   // entry point to the plate inventory. With class filter active we
   // hand the user to the dedicated plate-browse branch already, so
   // skip the prepend there.
-  const gridItems = $derived(
-    classFilter == null && lpCard != null ? [lpCard, ...clusters] : clusters,
-  );
+  // gridItems = (synthetic license_plate card if unfiltered) + clusters,
+  // optionally narrowed to only the "Unlabeled" group when the toggle is on.
+  // A cluster is unlabeled when its dominant_class_name is absent (the
+  // /curation/clusters endpoint returns null for "no class won the cluster majority").
+  const gridItems = $derived.by<OpCluster[]>(() => {
+    const base = classFilter == null && lpCard != null && !unlabeledOnly
+      ? [lpCard, ...clusters]
+      : clusters;
+    return unlabeledOnly ? base.filter((c) => !c.dominant_class_name) : base;
+  });
+  const unlabeledCount = $derived(clusters.filter((c) => !c.dominant_class_name).length);
 
   async function loadMore(): Promise<void> {
     if (loadingMore || !hasMore) return;
@@ -316,6 +325,25 @@
       </span>
     </div>
 
+    <!-- Unlabeled-only filter: AHC clusters that didn't reach class-majority
+         consensus surface as "Unlabeled #N". This toggle narrows the grid
+         to just those, so operators can drain the unlabeled backlog in
+         one pass (drag a cluster's reps into a class on the sidebar). -->
+    <button
+      type="button"
+      onclick={() => {
+        unlabeledOnly = !unlabeledOnly;
+        if (unlabeledOnly) sort = 'size_desc';
+      }}
+      class="rounded border px-2 py-1 text-xs transition-colors {unlabeledOnly
+        ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
+        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
+      title="Show only clusters without a dominant class (need labeling)"
+    >
+      {unlabeledOnly ? '✓ ' : ''}Unlabeled only
+      <span class="ml-1 font-mono text-[10px] text-zinc-500">({unlabeledCount})</span>
+    </button>
+
     <label class="flex items-center gap-2 text-xs text-zinc-400">
       Sort
       <select
@@ -465,12 +493,17 @@
                 </div>
                 <div
                   class="truncate text-sm text-zinc-300"
-                  title={c.dominant_class_name ?? '—'}
+                  title={c.dominant_class_name ?? `Unlabeled cluster #${c.id}`}
                 >
-                  {c.dominant_class_name ?? 'unlabeled'}
-                  <span class="text-zinc-500">
-                    · {((c.dominant_pct ?? 0) * 100).toFixed(0)}%
-                  </span>
+                  {#if c.dominant_class_name}
+                    {c.dominant_class_name}
+                    <span class="text-zinc-500">
+                      · {((c.dominant_pct ?? 0) * 100).toFixed(0)}%
+                    </span>
+                  {:else}
+                    <span class="text-amber-300">Unlabeled #{c.id}</span>
+                    <span class="text-zinc-500">· needs label</span>
+                  {/if}
                 </div>
               </div>
             </button>
