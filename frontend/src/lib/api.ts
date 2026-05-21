@@ -247,6 +247,47 @@ export function getModelsStatus(signal?: AbortSignal): Promise<OpModelsStatus> {
   return apiFetch<OpModelsStatus>('/curation/models/status', {}, signal);
 }
 
+/**
+ * Pipeline-dashboard payload from `GET /curation/stats/dataset`. Contract
+ * defined by `src/routers/legacy/op_stats.py` — every nested key is
+ * always present, numeric counters are always integers >= 0, and
+ * `clusters.last_run_at` / `clusters.method` may be null when no
+ * auto_label run has ever completed.
+ */
+export interface DatasetStats {
+  as_of: string;
+  total_crops: number;
+  validated: number;
+  test_holdout: number;
+  by_source: Array<{ key: string; doc_count: number }>;
+  labeled: {
+    by_human: number;
+    by_gemma: number;
+    by_v6: number;
+    by_lpr: number;
+    other: number;
+  };
+  unlabeled: {
+    pending_detection: number;
+    pending_verification: number;
+    no_label_source: number;
+  };
+  in_progress: {
+    sam_drain_total_unfinished: number;
+  };
+  clusters: {
+    last_run_at: string | null;
+    cluster_count: number;
+    residual_count: number;
+    noise_count: number;
+    method: string | null;
+  };
+}
+
+export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
+  return apiFetch<DatasetStats>('/curation/stats/dataset', {}, signal);
+}
+
 export async function getStats(signal?: AbortSignal): Promise<OpStats> {
   // The API returns
   //   /curation/stats/dataset:  {total_crops, validated, test_holdout, by_source}

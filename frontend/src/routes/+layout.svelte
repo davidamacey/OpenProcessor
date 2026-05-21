@@ -136,6 +136,7 @@
     <span class="grow"></span>
 
     <nav class="flex items-center gap-3 text-sm text-zinc-300">
+      <a href="/dashboard" class="hover:text-white">Dashboard</a>
       <a href="/clusters" class="hover:text-white">Clusters</a>
       <a href="/review" class="hover:text-white">Review</a>
       <a href="/classes" class="hover:text-white">Classes</a>
