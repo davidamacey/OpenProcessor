@@ -14,21 +14,30 @@
 
 import type { OpClass } from '$lib/types';
 
+type DropHandler = (cls: OpClass, droppedIds: string[]) => void | Promise<void>;
+
 class DropOnClassStore {
   /** Active drop handler. ``null`` means the sidebar's drop targets are inert. */
-  handler = $state<((cls: OpClass) => void | Promise<void>) | null>(null);
+  handler = $state<DropHandler | null>(null);
 
   /** Register a page-scoped handler. Returns the unregister function. */
-  register(fn: (cls: OpClass) => void | Promise<void>): () => void {
+  register(fn: DropHandler): () => void {
     this.handler = fn;
     return () => {
       if (this.handler === fn) this.handler = null;
     };
   }
 
-  /** Called by the sidebar when a drop happens on a class row. */
-  async dispatch(cls: OpClass): Promise<void> {
-    if (this.handler) await this.handler(cls);
+  /**
+   * Called by the sidebar when a drop happens on a class row.
+   *
+   * ``droppedIds`` carries the actual crops the user dropped (sourced
+   * from the dnd-action ``items`` array on finalize). The handler is
+   * authoritative on those — it should NOT fall back to page-level
+   * selection state, since the user can drag an un-selected card.
+   */
+  async dispatch(cls: OpClass, droppedIds: string[]): Promise<void> {
+    if (this.handler) await this.handler(cls, droppedIds);
   }
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AutoLabelPanel from '$lib/components/AutoLabelPanel.svelte';
   import { apiBase, exportYolo, getCrops, getStats, getThumbUrl, runGemmaOnCluster } from '$lib/api';
   import { adequacyLevel } from '$lib/adequacy';
   import type { OpCrop, OpStats } from '$lib/types';
@@ -107,6 +108,10 @@
       <code class="font-mono">{apiBase || window.location.host}</code>.
     </div>
   {/if}
+
+  <!-- Recluster control + progress. Lives above quick actions so the
+       operator's eye lands on it when checking on a long-running run. -->
+  <AutoLabelPanel />
 
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">

@@ -26,6 +26,12 @@
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
+  // In the legacy ensemble cluster_id == class_id, so the class entry
+  // for this page is whichever class shares the cluster's numeric id.
+  // Drives the validated / labeled / cluster-total banner in the header.
+  const clsForCluster = $derived(
+    classesStore.classes.find((c) => c.id === clusterId) ?? null,
+  );
 
   let cluster = $state<OpCluster | null>(null);
   let crops = $state<OpCrop[]>([]);
@@ -114,10 +120,23 @@
   // teardown so other pages don't accidentally receive cluster-page
   // drop dispatches.
   $effect(() => {
-    const off = dropOnClassStore.register(async (cls: OpClass) => {
-      const ids = [...selected];
+    const off = dropOnClassStore.register(async (cls: OpClass, droppedIds: string[]) => {
+      // Authoritative source is the crops the user actually dragged.
+      // Fall back to selection only if dnd didn't surface ids (defensive
+      // — should never happen in the pointer-DnD path).
+      let ids = droppedIds.length > 0 ? droppedIds : [...selected];
+      // If the dragged crop is part of a multi-select, move the whole
+      // group — matches the user's mental model of "drag any selected
+      // card to label all of them".
+      if (
+        droppedIds.length === 1 &&
+        selected.size > 1 &&
+        selected.has(droppedIds[0])
+      ) {
+        ids = [...selected];
+      }
       if (ids.length === 0) {
-        toastStore.warn('Select crops first, then drag onto a class.');
+        toastStore.warn('Drag a crop card onto a class to label it.');
         return;
       }
       for (const id of ids) {
@@ -731,8 +750,28 @@
     <h1 class="text-lg font-semibold">Cluster #{clusterIdParam}</h1>
     {#if cluster}
       <span class="text-xs text-zinc-400">
-        size {cluster.size} · dominant
+        size {cluster.size.toLocaleString()} · dominant
         <strong class="text-zinc-200">{cluster.dominant_class_name ?? '—'}</strong>
+      </span>
+    {/if}
+    {#if clsForCluster}
+      <!-- Triage progress: how much of this cluster bucket has been
+           touched and confirmed. Cluster total = FAISS bucket size
+           (what's visible on this page); labeled = crops with class_id
+           set; validated = label_validated=true. The sidebar chip
+           mirrors the "in cluster" number so the operator's eyes match. -->
+      <span
+        class="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[11px] text-zinc-300"
+        title="validated · labeled · cluster total"
+      >
+        <span class="text-emerald-300">{(clsForCluster.validated_count ?? 0).toLocaleString()}</span>
+        <span class="text-zinc-500">validated</span>
+        <span class="mx-1 text-zinc-600">·</span>
+        <span class="text-blue-300">{(clsForCluster.count ?? 0).toLocaleString()}</span>
+        <span class="text-zinc-500">labeled</span>
+        <span class="mx-1 text-zinc-600">·</span>
+        <span class="text-zinc-200">{(clsForCluster.cluster_size ?? 0).toLocaleString()}</span>
+        <span class="text-zinc-500">in cluster</span>
       </span>
     {/if}
 

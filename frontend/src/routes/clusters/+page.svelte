@@ -16,6 +16,14 @@
   let error = $state<string | null>(null);
   const hasMore = $derived(clusters.length < total);
 
+  // Synthetic license_plate gallery card. Plates are sub-bboxes on
+  // vehicle crops, not FAISS docs, so the cluster grid never produces
+  // a card for them. We surface one explicitly using /curation/plates so the
+  // operator can click into the plate inventory the same way they click
+  // into any other class cluster. Card is null until the first /curation/plates
+  // call resolves; the cluster grid hides it during that window.
+  let lpCard = $state<OpCluster | null>(null);
+
   let sort = $state<NonNullable<ClusterFilter['sort']>>('purity_asc');
   const pageSize = 24;
 
@@ -69,7 +77,7 @@
       clusters = res?.items ?? [];
       total = res?.total ?? clusters.length;
       loadedPages = 1;
-      await patchLicensePlateClusterSize();
+      await loadLicensePlateCard();
     } catch (e) {
       error = (e as Error).message;
     } finally {
@@ -77,29 +85,61 @@
     }
   }
 
-  // Plates live as sub-bboxes on vehicle crops, not as docs in the
-  // cluster index — so the cluster_id-membership count for the
-  // license_plate cluster card under-reports by orders of magnitude
-  // (only counts crops whose PRIMARY class is license_plate, which is
-  // usually 0-1 mis-labels). Replace it with the real plate inventory
-  // total from /curation/plates so the card matches what the operator sees
-  // when they drill in.
-  async function patchLicensePlateClusterSize(): Promise<void> {
+  // Build the synthetic license_plate gallery card. Plates live as
+  // sub-bboxes on vehicle crops (not FAISS docs) so the cluster grid
+  // never includes them. We query /curation/plates for the total inventory
+  // and use the first 4 plate-bearing crops as thumbnails. Card is
+  // null until this resolves; the grid renders it as the first item
+  // when the unfiltered view is active.
+  async function loadLicensePlateCard(): Promise<void> {
     const lp = classesStore.classes.find(
       (c) => (c.name ?? '').toLowerCase() === 'license_plate',
     );
-    if (!lp) return;
+    if (!lp) {
+      lpCard = null;
+      return;
+    }
     try {
-      const res = await getPlates({ page: 1, page_size: 1 });
-      clusters = clusters.map((c) =>
-        c.id === lp.id || (c.dominant_class_name ?? '').toLowerCase() === 'license_plate'
-          ? { ...c, size: res.total, dominant_class_name: 'license_plate' }
-          : c,
+      // Pull a slightly larger window than 4 so we can drop items
+      // missing a plate sub-bbox without falling below the tile count.
+      const res = await getPlates({ page: 1, page_size: 12 });
+      const withPlateBox = res.items.filter(
+        (p) => Array.isArray(p.plate_bbox_norm) && p.plate_bbox_norm.length === 4,
       );
+      const reps = withPlateBox.slice(0, 4);
+      lpCard = {
+        id: lp.id,
+        size: res.total,
+        // Purity badge is meaningless for a non-cluster — leave null.
+        purity: null,
+        dominant_class_id: lp.id,
+        dominant_class_name: 'license_plate',
+        dominant_pct: null,
+        sub_clusters: 0,
+        has_subclusters: false,
+        representative_crop_ids: reps.map((p) => p.crop_id),
+        // Show plate close-ups, not vehicle thumbnails — the whole
+        // point of this card is that the operator is browsing plates.
+        // /curation/crops/{id}/plate_thumbnail returns the plate sub-bbox
+        // rendered to a 160px tile.
+        representative_thumb_urls: reps.map(
+          (p) => `/curation/crops/${encodeURIComponent(p.crop_id)}/plate_thumbnail?size=160`,
+        ),
+        updated_at: null,
+      } as OpCluster;
     } catch {
-      /* best effort — leave the card alone if /curation/plates is unreachable */
+      lpCard = null;
     }
   }
+
+  // Items rendered in the unfiltered cluster grid: synthetic LP card
+  // prepended (when present) so the operator always has a visible
+  // entry point to the plate inventory. With class filter active we
+  // hand the user to the dedicated plate-browse branch already, so
+  // skip the prepend there.
+  const gridItems = $derived(
+    classFilter == null && lpCard != null ? [lpCard, ...clusters] : clusters,
+  );
 
   async function loadMore(): Promise<void> {
     if (loadingMore || !hasMore) return;
@@ -372,17 +412,17 @@
           {/if}
         {/if}
       </div>
-    {:else if loading && clusters.length === 0}
+    {:else if loading && gridItems.length === 0}
       <p class="text-sm text-zinc-500">Loading...</p>
     {:else if error}
       <p class="text-sm text-red-300">API unavailable: {error}</p>
-    {:else if clusters.length === 0}
+    {:else if gridItems.length === 0}
       <p class="text-sm text-zinc-500">
         No clusters yet — ingest some images and run the auto-label pipeline.
       </p>
     {:else}
       <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {#each clusters as c (c.id)}
+        {#each gridItems as c (c.id)}
           {@const pb = purityBadge(c)}
           <li>
             <button
@@ -393,9 +433,9 @@
               onclick={() => open(c)}
             >
               <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
-                {#each c.representative_crop_ids?.slice(0, 4) ?? [] as cropId (cropId)}
+                {#each c.representative_crop_ids?.slice(0, 4) ?? [] as cropId, i (cropId)}
                   <img
-                    src={getThumbUrl(cropId)}
+                    src={c.representative_thumb_urls?.[i] ?? getThumbUrl(cropId)}
                     alt="thumb"
                     loading="lazy"
                     class="aspect-square w-full bg-zinc-950 object-contain"
@@ -456,7 +496,7 @@
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {clusters.length} / {total}
+      {gridItems.length} / {total + (classFilter == null && lpCard != null ? 1 : 0)}
     </span>
     <span class="font-mono text-xs text-zinc-400">
       {#if loadingMore}loading more…{:else if hasMore}scroll for more{:else}all loaded{/if}

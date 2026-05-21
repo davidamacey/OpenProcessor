@@ -26,6 +26,14 @@ export interface OpClass {
   group: string | null;
   count: number;
   validated_count: number;
+  /**
+   * Size of the FAISS cluster bucket whose id == this class id. Includes
+   * unlabeled candidates the operator hasn't triaged yet — i.e. matches
+   * what the operator sees when they open /clusters/{id}. The sidebar
+   * chip displays this; the cluster-page banner breaks out validated /
+   * labeled / total side-by-side.
+   */
+  cluster_size: number;
   /** Single-character keyboard shortcut, persisted in the registry. */
   hotkey_letter?: string | null;
   added_at: string;
@@ -172,6 +180,12 @@ export interface OpCluster {
   dominant_pct: number | null;
   purity: number | null; // 0..1, null when not yet computed
   representative_crop_ids: string[]; // up to 4
+  // Optional explicit thumbnail URLs (one per representative_crop_ids
+  // entry, same order). Used by the synthetic license_plate card so its
+  // tiles show plate close-ups (/curation/crops/{id}/plate_thumbnail) rather
+  // than the default vehicle-crop thumbnail. Regular clusters leave
+  // this undefined; the grid then falls back to getThumbUrl().
+  representative_thumb_urls?: string[];
   has_subclusters: boolean;
   sub_clusters?: number;
   centroid_sha?: string;

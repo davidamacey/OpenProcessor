@@ -14,7 +14,7 @@
      * responsible for assigning the currently-selected crops to that class.
      * When omitted, drop targets are disabled (sidebar is filter-only).
      */
-    ondrop?: (cls: OpClass) => void | Promise<void>;
+    ondrop?: (cls: OpClass, droppedIds: string[]) => void | Promise<void>;
   }
 
   let { selectedId = null, onselect, ondrop }: Props = $props();
@@ -48,7 +48,9 @@
 
   // svelte-dnd-action drop-only zones use empty items + dragDisabled.
   // The onfinalize event fires when a drag is released on this zone;
-  // we ignore the items detail and just call ondrop with the target class.
+  // we extract the dropped crop ids and forward them with the target
+  // class so the page-level handler never has to read stale `selected`
+  // state.
   function makeFinalize(cls: OpClass) {
     return (e: CustomEvent): void => {
       const { items, info } = e.detail as {
@@ -63,8 +65,9 @@
       }
       if (!ondrop) return;
       if (info.source !== SOURCES.KEYBOARD && info.source !== SOURCES.POINTER) return;
-      if (items.length === 0) return;
-      void ondrop(cls);
+      const droppedIds = items.map((it) => it.id).filter((id) => typeof id === 'string');
+      if (droppedIds.length === 0) return;
+      void ondrop(cls, droppedIds);
     };
   }
 
@@ -97,7 +100,9 @@
             (c.group ?? '').toLowerCase().includes(q),
         )
       : classesStore.classes;
-    return [...list].sort((a, b) => (b.validated_count ?? 0) - (a.validated_count ?? 0));
+    // Sort by cluster bucket size desc — matches what the chip shows so
+    // operators can scan top-down to find the biggest backlog.
+    return [...list].sort((a, b) => (b.cluster_size ?? 0) - (a.cluster_size ?? 0));
   });
 
   // Chip color/threshold logic lives in $lib/adequacy so /classes,
@@ -162,7 +167,10 @@
                 type: 'op-crop',
                 flipDurationMs: 0,
                 morphDisabled: true,
-                centreDraggedOnCursor: true,
+                // centreDraggedOnCursor placed the shadow on top of the
+                // narrow row, masking the underlying hit target — drops
+                // and hover-highlight became flaky. Letting the shadow
+                // trail the cursor keeps each row fully hittable.
                 dropTargetStyle: { outline: 'none' },
                 dropFromOthersDisabled: !ondrop,
                 dragDisabled: true,
@@ -172,7 +180,7 @@
             >
               <button
                 type="button"
-                class="flex grow items-center justify-between gap-2 px-3 py-1.5 text-left text-sm {selectedId ===
+                class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedId ===
                 cls.id
                   ? 'text-white'
                   : 'text-zinc-300'}"
@@ -195,9 +203,9 @@
                   class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
                     cls.validated_count ?? 0,
                   )}"
-                  title={adequacyTooltip(cls.validated_count ?? 0)}
+                  title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ?? 0} of {cls.count ?? 0} labeled crops are human-validated.&#10;Chip color reflects validated-count adequacy."
                 >
-                  {cls.validated_count ?? 0}
+                  {(cls.cluster_size ?? 0).toLocaleString()}
                 </span>
               </button>
             </div>
