@@ -264,8 +264,14 @@ export interface DatasetStats {
     by_human: number;
     by_gemma: number;
     by_v6: number;
-    by_lpr: number;
+    by_yolo11_proposal: number;
     other: number;
+  };
+  plates: {
+    total_detected: number;
+    by_lpr: number;
+    by_sam3: number;
+    by_human: number;
   };
   unlabeled: {
     pending_detection: number;
