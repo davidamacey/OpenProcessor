@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dndzone, SOURCES } from 'svelte-dnd-action';
+  import { dndzone } from 'svelte-dnd-action';
   import AddClassModal from './AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { classesStore } from '$stores/classes.svelte';
@@ -46,26 +46,36 @@
     }, 80);
   }
 
-  // svelte-dnd-action drop-only zones use empty items + dragDisabled.
-  // The onfinalize event fires when a drag is released on this zone;
-  // we extract the dropped crop ids and forward them with the target
-  // class so the page-level handler never has to read stale `selected`
-  // state.
+  // svelte-dnd-action drop-only zones use ``items: []`` + ``dragDisabled``.
+  // The library's consider events DO carry the dragged crop ids (we see
+  // them while hovering), but its finalize events arrive with an empty
+  // items array because we never persist the shadow item into the
+  // zone's state. So we capture the dragged ids during consider and
+  // use that captured snapshot on finalize.
+  //
+  // Why not just track the source zone's `dragIds` instead?  The source
+  // (the cluster grid) is on a different page; this sidebar lives in
+  // the layout. The consider/finalize pair on each row is the only
+  // signal we have here.
+  let pendingDroppedIds: string[] = $state([]);
+
   function makeFinalize(cls: OpClass) {
     return (e: CustomEvent): void => {
-      const { items, info } = e.detail as {
-        items: Array<{ id: string }>;
-        info: { source?: string };
-      };
+      const { items } = e.detail as { items: Array<{ id: string }> };
       hoveredClassId = null;
       dragActive = false;
       if (dragClearTimer) {
         clearTimeout(dragClearTimer);
         dragClearTimer = null;
       }
+      // Prefer the live items array if the library populated it; fall
+      // back to the snapshot we captured during the consider phase.
+      const liveIds = (items ?? [])
+        .map((it) => it.id)
+        .filter((id) => typeof id === 'string');
+      const droppedIds = liveIds.length > 0 ? liveIds : pendingDroppedIds;
+      pendingDroppedIds = [];
       if (!ondrop) return;
-      if (info.source !== SOURCES.KEYBOARD && info.source !== SOURCES.POINTER) return;
-      const droppedIds = items.map((it) => it.id).filter((id) => typeof id === 'string');
       if (droppedIds.length === 0) return;
       void ondrop(cls, droppedIds);
     };
@@ -76,6 +86,11 @@
       const { items } = e.detail as { items: Array<{ id: string }> };
       if (items.length > 0) {
         hoveredClassId = cls.id;
+        // Snapshot the dragged crop ids — finalize will receive items=[]
+        // because the zone never accepts the shadow item permanently.
+        pendingDroppedIds = items
+          .map((it) => it.id)
+          .filter((id) => typeof id === 'string');
         markDragActive();
       } else if (hoveredClassId === cls.id) {
         hoveredClassId = null;
