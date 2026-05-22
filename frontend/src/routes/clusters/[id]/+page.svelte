@@ -50,8 +50,9 @@
   // Selection set (crop_id)
   let selected = $state<Set<string>>(new Set());
 
-  // Sub-cluster tab (null = all)
-  let subTab = $state<number | null>(null);
+  // Sub-cluster tab (null = all). Backend stores cluster_subid as a
+  // keyword string ("47a", "47b", "47aa", ...).
+  let subTab = $state<string | null>(null);
 
   // Class dropdown
   let confirmClassId = $state<number | null>(null);
@@ -125,20 +126,13 @@
   // drop dispatches.
   $effect(() => {
     const off = dropOnClassStore.register(async (cls: OpClass, droppedIds: string[]) => {
-      // Authoritative source is the crops the user actually dragged.
-      // Fall back to selection only if dnd didn't surface ids (defensive
-      // — should never happen in the pointer-DnD path).
-      let ids = droppedIds.length > 0 ? droppedIds : [...selected];
-      // If the dragged crop is part of a multi-select, move the whole
-      // group — matches the user's mental model of "drag any selected
-      // card to label all of them".
-      if (
-        droppedIds.length === 1 &&
-        selected.size > 1 &&
-        selected.has(droppedIds[0])
-      ) {
-        ids = [...selected];
-      }
+      // onGridConsider captures the full drag set at drag-start time
+      // (Finder pattern — grab any selected card to drag all selected;
+      // grab an unselected card to drag just that one). The
+      // ClassSidebar's own consider/finalize events only see the single
+      // shadow item, so dragIds is the authoritative source. droppedIds
+      // is kept as a defensive fallback.
+      const ids = dragIds.length > 0 ? [...dragIds] : droppedIds;
       if (ids.length === 0) {
         toastStore.warn('Drag a crop card onto a class to label it.');
         return;
@@ -189,9 +183,10 @@
     return off;
   });
 
-  // Sub-cluster filtering (in-memory, after load)
+  // Sub-cluster filtering (in-memory, after load). cluster_subid is
+  // backend-owned (keyword like "47a") — the frontend string-matches.
   const filteredCrops = $derived(
-    subTab == null ? crops : crops.filter((c) => c.sub_cluster_id === subTab),
+    subTab == null ? crops : crops.filter((c) => c.cluster_subid === subTab),
   );
 
   // Mirror filteredCrops into gridItems whenever the underlying list changes.
@@ -212,11 +207,12 @@
   });
 
   const subClusterIds = $derived.by(() => {
-    const set = new Set<number>();
+    const set = new Set<string>();
     for (const c of crops) {
-      if (c.sub_cluster_id != null) set.add(c.sub_cluster_id);
+      if (c.cluster_subid != null) set.add(c.cluster_subid);
     }
-    return [...set].sort((a, b) => a - b);
+    // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
+    return [...set].sort();
   });
 
   // totalPages was used by the Next/Prev buttons — gone now that infinite scroll
@@ -412,7 +408,7 @@
   async function refine(): Promise<void> {
     try {
       const res = await refineCluster(clusterId);
-      toastStore.success(`Refine produced ${res.subclusters ?? 0} sub-clusters.`);
+      toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
       void loadFirst();
     } catch (e) {
       toastStore.error(`Refine failed: ${(e as Error).message}`);
@@ -524,14 +520,19 @@
    * resets its own items array so the visual placeholder doesn't linger.
    */
   function onGridConsider(e: CustomEvent<{ items: OpCrop[]; info: { id: string; trigger: TRIGGERS; source: SOURCES } }>): void {
-    // Track payload for hotkey-based cancel/abort flows.
+    // The `!dragIds.includes` guard makes this block run once per drag
+    // (consider fires repeatedly). Finder pattern: grabbing any selected
+    // card drags the whole selection; grabbing an unselected card
+    // replaces the selection with just that one. This is the only place
+    // the multi-drag set is captured — the ClassSidebar's own dnd events
+    // only see the one shadow item being hovered.
     const draggedId = e.detail.info?.id;
     if (draggedId && !dragIds.includes(draggedId)) {
-      // If the dragged crop is part of the selection, drag the whole group.
       if (selected.has(draggedId) && selected.size > 1) {
         dragIds = [...selected];
       } else {
         dragIds = [draggedId];
+        selected = new Set([draggedId]);
       }
     }
     gridItems = e.detail.items;

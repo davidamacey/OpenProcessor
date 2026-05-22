@@ -387,88 +387,74 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
   }));
 }
 
+/** Raw cluster card from `/curation/clusters`. The backend is the single
+ *  source of truth for every field — the frontend must never recompute
+ *  dominant_class, purity, or is_unlabeled. */
+type RawCluster = {
+  cluster_id: number;
+  cluster_kind: 'class' | 'candidate' | 'unassigned';
+  size: number;
+  validated_count: number;
+  labelled_count: number;
+  dominant_class_id: number | null;
+  dominant_class_name: string | null;
+  dominant_count: number;
+  purity: number | null;
+  is_unlabeled: boolean;
+  n_subclusters: number;
+  updated_at: string | null;
+  representatives: Array<{
+    crop_id: string;
+    cluster_distance: number | null;
+    class_name: string | null;
+    cluster_subid: string | null;
+  }>;
+};
+
+type RawClustersResp = {
+  items: RawCluster[];
+  total: number;
+  total_class_clusters: number;
+  total_candidate_clusters: number;
+  cluster_id_offset: number;
+};
+
+function _rawClusterToKb(c: RawCluster): OpCluster {
+  return {
+    id: c.cluster_id,
+    cluster_kind: c.cluster_kind,
+    size: c.size,
+    validated_count: c.validated_count,
+    dominant_class_id: c.dominant_class_id,
+    dominant_class_name: c.dominant_class_name,
+    dominant_pct: c.purity,
+    purity: c.purity,
+    is_unlabeled: c.is_unlabeled,
+    representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
+    has_subclusters: c.n_subclusters > 0,
+    n_subclusters: c.n_subclusters,
+    sub_clusters: c.n_subclusters,
+    updated_at: c.updated_at,
+  };
+}
+
 export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<OpCluster>> {
-  // The existing /clusters/stats/{index} response shape is
-  // `{faiss: {...}, opensearch_clusters: [{cluster_id, count}, ...]}`.
-  // Map to the labeler's PaginatedResponse<OpCluster>.
-  type RawStats = {
-    status?: string;
-    faiss?: { n_clusters?: number };
-    opensearch_clusters?: Array<{ cluster_id: number; count: number }>;
-    total_clusters_in_opensearch?: number;
-  };
-  const raw = await apiFetch<RawStats>(
-    `/clusters/stats/op_vehicles${qs({ ...filter })}`,
+  // Single round-trip. The backend's /curation/clusters aggregation already
+  // returns dominant class, purity, validated_count, n_subclusters,
+  // cluster_kind, and is_unlabeled. The frontend ONLY shapes the result
+  // into the labeler's OpCluster type — no semantic compute here.
+  const raw = await apiFetch<RawClustersResp>(
+    `/curation/clusters${qs({ per_cluster: 4, class_id: filter.class_id ?? undefined })}`,
     {},
     signal,
   );
-  const baseItems = (raw.opensearch_clusters ?? []).map((c) => ({
-    id: c.cluster_id,
-    size: c.count,
-    purity: null as number | null,
-    dominant_class_id: null as number | null,
-    dominant_class_name: null as string | null,
-    dominant_pct: null as number | null,
-    sub_clusters: 0,
-    has_subclusters: false,
-    representative_crop_ids: [] as string[],
-    updated_at: null as string | null,
-  }));
-  // Single-call fetch of top-K representatives across all clusters. When
-  // a class filter is active, the server narrows the agg to clusters that
-  // contain at least one crop of that class.
-  const repsQs = qs({
-    per_cluster: 4,
-    class_id: filter.class_id ?? undefined,
-  });
-  let reps: Record<string, Array<{ crop_id: string; class_name?: string | null }>> = {};
-  try {
-    const repsResp = await apiFetch<{
-      clusters: Record<string, Array<{ crop_id: string; class_name?: string | null }>>;
-    }>(`/curation/clusters/representatives${repsQs}`, {}, signal);
-    reps = repsResp.clusters ?? {};
-  } catch {
-    /* representatives are best-effort; cards still show without thumbs */
-  }
-  // When filtering by class, drop any cluster the server didn't return reps for.
-  const visibleIds =
-    filter.class_id != null ? new Set(Object.keys(reps).map((k) => Number(k))) : null;
-  const filteredBase = visibleIds
-    ? baseItems.filter((c) => visibleIds.has(c.id))
-    : baseItems;
-  const items: OpCluster[] = filteredBase.map((c) => {
-    const r = reps[String(c.id)] ?? [];
-    const counts = new Map<string, number>();
-    for (const x of r) {
-      if (x.class_name) counts.set(x.class_name, (counts.get(x.class_name) ?? 0) + 1);
-    }
-    let domName: string | null = null;
-    let domCount = 0;
-    for (const [n, ct] of counts) {
-      if (ct > domCount) {
-        domName = n;
-        domCount = ct;
-      }
-    }
-    const purity = r.length > 0 ? domCount / r.length : null;
-    return {
-      ...c,
-      representative_crop_ids: r.map((x) => x.crop_id),
-      dominant_class_name: domName,
-      dominant_pct: purity,
-      // Purity is derived from the representative sample; with class-based
-      // clustering (cluster_id == class_id) every cluster should be 100%
-      // pure. Setting it here makes the cluster card's pure/mixed/noisy
-      // badge meaningful instead of always showing "noisy 0".
-      purity,
-    };
-  });
+  const items = (raw.items ?? []).map(_rawClusterToKb);
   return {
     items,
-    total: filter.class_id != null ? items.length : raw.total_clusters_in_opensearch ?? items.length,
+    total: raw.total ?? items.length,
     page: 1,
     page_size: items.length,
   };
@@ -497,6 +483,7 @@ type RawCrop = {
   confidence?: number;
   cluster_id?: number | null;
   cluster_distance?: number | null;
+  cluster_subid?: string | null;
   label_validated?: boolean;
   label_source?: string;
   plate_bbox_norm?: number[] | null;
@@ -580,6 +567,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
     cluster_id: c.cluster_id ?? null,
     similarity_to_centroid:
       c.cluster_distance != null ? Math.max(0, 1 - c.cluster_distance) : null,
+    cluster_subid: c.cluster_subid ?? null,
     plate_bbox_norm:
       c.plate_bbox_norm && c.plate_bbox_norm.length === 4
         ? xyxyToBBoxNorm(c.plate_bbox_norm)
@@ -625,36 +613,45 @@ export async function getCluster(
   pageSize = 60,
   signal?: AbortSignal,
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
+  // Two parallel calls: paginated crops + the authoritative cluster
+  // card from /curation/clusters (server-computed). The page no longer
+  // derives any of the cluster's identity fields client-side.
   type CropPage = { total: number; page: number; page_size: number; crops: RawCrop[] };
-  const cropPage = await apiFetch<CropPage>(
-    `/curation/crops${qs({ cluster_id: id, page, page_size: pageSize })}`,
-    {},
-    signal,
-  );
+  const [cropPage, clustersResp] = await Promise.all([
+    apiFetch<CropPage>(
+      `/curation/crops${qs({ cluster_id: id, page, page_size: pageSize })}`,
+      {},
+      signal,
+    ),
+    apiFetch<RawClustersResp>(
+      // max_clusters=1 with class_id filter is the cheapest way to ask
+      // for just this cluster's card.
+      `/curation/clusters${qs({ per_cluster: 4, max_clusters: 1, class_id: id })}`,
+      {},
+      signal,
+    ).catch(() => null),
+  ]);
   const items = cropPage.crops.map(mapRawCrop);
-  const counts = new Map<string, number>();
-  for (const c of items) {
-    if (c.class_name) counts.set(c.class_name, (counts.get(c.class_name) ?? 0) + 1);
-  }
-  let dom_name: string | null = null;
-  let dom_count = 0;
-  for (const [n, ct] of counts) {
-    if (ct > dom_count) {
-      dom_name = n;
-      dom_count = ct;
-    }
-  }
-  const cluster: OpCluster = {
-    id,
-    size: cropPage.total,
-    purity: cropPage.total > 0 ? dom_count / cropPage.total : null,
-    dominant_class_id: null,
-    dominant_class_name: dom_name,
-    dominant_pct: cropPage.total > 0 ? Math.round((dom_count / cropPage.total) * 100) : null,
-    has_subclusters: false,
-    representative_crop_ids: items.slice(0, 4).map((c) => c.id),
-    updated_at: null,
-  };
+  const found = clustersResp?.items?.find((c) => c.cluster_id === id) ?? null;
+  const cluster: OpCluster = found
+    ? _rawClusterToKb(found)
+    : {
+        // Fallback only if the cluster card lookup failed — leaves
+        // identity fields null but lets the crop grid render.
+        id,
+        cluster_kind: 'unassigned',
+        size: cropPage.total,
+        validated_count: 0,
+        dominant_class_id: null,
+        dominant_class_name: null,
+        dominant_pct: null,
+        purity: null,
+        is_unlabeled: true,
+        has_subclusters: false,
+        n_subclusters: 0,
+        representative_crop_ids: items.slice(0, 4).map((c) => c.id),
+        updated_at: null,
+      };
   return {
     cluster,
     crops: {
@@ -845,11 +842,25 @@ export async function runGemmaOnCluster(
   return { predicted, updated, new_class_proposals: proposals };
 }
 
+export type RefineClusterResponse = {
+  cluster_id: number;
+  n_members: number;
+  n_subclusters: number;
+  purity: number;
+  subcluster_weighted_purity?: number;
+  n_updated?: number;
+  distance_threshold?: number;
+  linkage?: string;
+  metric?: string;
+  action: 'refined' | 'skipped_too_small' | 'skipped_too_large';
+  reason?: string;
+};
+
 export function refineCluster(
   clusterId: number,
   signal?: AbortSignal,
-): Promise<{ subclusters: number }> {
-  return apiFetch<{ subclusters: number }>(
+): Promise<RefineClusterResponse> {
+  return apiFetch<RefineClusterResponse>(
     `/curation/clusters/refine/${clusterId}`,
     { method: 'POST' },
     signal,
@@ -1268,6 +1279,11 @@ export interface AutoLabelStartParams {
   gemma_concurrency?: number;
   max_gemma_crops?: number;
   v6_confidence_skip_gemma?: number;
+  /** When true, broaden the residual AHC pool to include items already
+   *  in candidate clusters so smaller candidates can merge into bigger
+   *  ones. Default false — only fresh / class-bucketed items are
+   *  re-clustered. */
+  recluster_unvalidated?: boolean;
 }
 
 export type AutoLabelStatus =

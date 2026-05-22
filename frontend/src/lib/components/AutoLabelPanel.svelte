@@ -27,6 +27,11 @@
   let job: AutoLabelJobState | null = $state(null);
   let busy: boolean = $state(false);
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  // Broaden mode: when true the residual AHC stage re-pools items
+  // already sitting in candidate clusters so smaller candidates can fuse
+  // into bigger ones. Off by default — most runs only want to cluster
+  // unassigned + class-bucketed items.
+  let mergeCandidates: boolean = $state(false);
 
   // Human-readable label per stage. Order matters — pipeline stages move
   // forward through this list. The percent indicator only renders for
@@ -88,6 +93,7 @@
         // 0 = process every unvalidated crop. Operators can ramp down
         // later if they want to time-box a run.
         max_gemma_crops: 0,
+        recluster_unvalidated: mergeCandidates,
       });
       toastStore.success('Recluster started.');
       schedule();
@@ -153,7 +159,21 @@
         350k-crop scale. Safe to cancel.
       </p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-3">
+      {#if !isRunning}
+        <label
+          class="flex items-center gap-1.5 text-xs text-zinc-300"
+          title="Re-pool items already in candidate clusters so smaller candidates can merge into bigger ones."
+        >
+          <input
+            type="checkbox"
+            class="h-3.5 w-3.5 accent-blue-500"
+            bind:checked={mergeCandidates}
+            disabled={busy}
+          />
+          Merge candidate clusters
+        </label>
+      {/if}
       {#if isRunning}
         <button
           class="btn btn-danger"

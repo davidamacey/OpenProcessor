@@ -125,8 +125,11 @@ export interface OpCrop {
   /** Cluster + similarity-to-centroid (0..1). */
   cluster_id: number | null;
   similarity_to_centroid: number | null;
-  /** AHC sub-cluster id, populated only after refine ran. */
-  sub_cluster_id?: number | null;
+  /** AHC sub-cluster id (string, e.g. "47a"), populated only after
+   *  refine ran. Cleared by the backend whenever cluster_id changes
+   *  (move / batch_label / class_merge / residual recluster) — the
+   *  subid is meaningful only inside its origin cluster. */
+  cluster_subid: string | null;
   /** Plate sub-bbox normalized to source image. */
   plate_bbox_norm?: BBoxNorm | null;
   /** Detector confidence for the plate proposal (0..1). */
@@ -172,13 +175,24 @@ export interface OpCrop {
   updated_at: string;
 }
 
+/** Class clusters mirror class_id (0..80); candidate clusters land at
+ *  10000+ from the residual AHC pass; unassigned is < 0. The backend
+ *  derives this from cluster_id; the frontend NEVER recomputes it. */
+export type ClusterKind = 'class' | 'candidate' | 'unassigned';
+
 export interface OpCluster {
   id: number;
+  /** Backend-derived: "class" | "candidate" | "unassigned". */
+  cluster_kind: ClusterKind;
   size: number;
+  /** class_validated=true count. */
+  validated_count: number;
   dominant_class_id: number | null;
   dominant_class_name: string | null;
   dominant_pct: number | null;
-  purity: number | null; // 0..1, null when not yet computed
+  purity: number | null; // 0..1, null when no labelled members
+  /** True when no member has a class_name — pure candidate. */
+  is_unlabeled: boolean;
   representative_crop_ids: string[]; // up to 4
   // Optional explicit thumbnail URLs (one per representative_crop_ids
   // entry, same order). Used by the synthetic license_plate card so its
@@ -187,6 +201,9 @@ export interface OpCluster {
   // this undefined; the grid then falls back to getThumbUrl().
   representative_thumb_urls?: string[];
   has_subclusters: boolean;
+  /** Distinct cluster_subid count from the backend. */
+  n_subclusters: number;
+  /** Legacy alias for n_subclusters — kept until callers migrate. */
   sub_clusters?: number;
   centroid_sha?: string;
   updated_at: string | null;
