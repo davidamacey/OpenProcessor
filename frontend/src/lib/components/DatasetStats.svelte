@@ -167,10 +167,20 @@
         tone: "bg-teal-500",
       },
       {
-        key: "by_human",
-        label: "Human-placed",
-        count: p.by_human,
+        key: "by_human_drew",
+        label: "Human-drew bbox",
+        count: p.by_human_drew ?? p.by_human,
         tone: "bg-green-500",
+      },
+      // Plates the operator confirmed (AI proposed the bbox, human
+      // hit Confirm). Distinct from by_human_drew (only when the
+      // operator created the bbox from scratch). validated_by_human is
+      // the union — every plate the operator touched.
+      {
+        key: "validated_by_human",
+        label: "Confirmed by human",
+        count: p.validated_by_human ?? 0,
+        tone: "bg-emerald-500",
       },
     ];
     return rows.map((r) => ({
