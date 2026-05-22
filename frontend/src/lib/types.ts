@@ -268,9 +268,16 @@ export interface ClusterFilter {
   page_size?: number;
 }
 
+export interface BulkLabelConflict {
+  crop_id: string;
+  current_source: string | null;
+}
+
 export interface BulkLabelResult {
-  affected: number;
-  failed: string[];
+  // Matches the FastAPI handler at src/routers/legacy/op_crops.py:
+  //   batch_label_crops -> { updated: int, conflicts: [...] }.
+  updated: number;
+  conflicts: BulkLabelConflict[];
 }
 
 export interface ToastMessage {

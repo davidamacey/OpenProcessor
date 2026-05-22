@@ -16,6 +16,12 @@
      * page update local state without a full reload.
      */
     onplatesaved?: (cropId: string, plateBboxSrc: BBoxNorm | null) => void;
+    /**
+     * Optional "open details" hook — wires the per-card "ⓘ" affordance
+     * to a parent-owned CropDetailModal so the cluster grid can show the
+     * same provenance metadata the review page does.
+     */
+    ondetail?: (crop: OpCrop) => void;
   }
 
   let {
@@ -25,6 +31,7 @@
     onacceptGemma,
     onrejectGemma,
     onplatesaved,
+    ondetail,
   }: Props = $props();
 
   let expanded = $state<boolean>(false);
@@ -218,6 +225,21 @@
     >
       ✎
     </button>
+
+    {#if ondetail}
+      <button
+        type="button"
+        class="absolute top-1 right-14 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+        onclick={(e) => {
+          e.stopPropagation();
+          ondetail?.(crop);
+        }}
+        aria-label="Show crop details"
+        title="Details (provenance + plate metadata)"
+      >
+        ⓘ
+      </button>
+    {/if}
 
     {#if conf}
       <span

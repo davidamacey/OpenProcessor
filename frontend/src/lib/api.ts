@@ -956,8 +956,11 @@ export function moveCropsToCluster(
   cropIds: string[],
   targetClusterId: number,
   signal?: AbortSignal,
-): Promise<{ moved: number; failed: string[] }> {
-  return apiFetch<{ moved: number; failed: string[] }>(
+): Promise<BulkLabelResult> {
+  // Backend returns the same {updated, conflicts: [...]} shape as
+  // /curation/crops/batch_label. Reuse the type so both call sites share the
+  // conflict-handling code path.
+  return apiFetch<BulkLabelResult>(
     '/curation/crops/move',
     {
       method: 'POST',

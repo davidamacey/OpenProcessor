@@ -13,6 +13,7 @@
     runGemmaOnCluster,
   } from '$lib/api';
   import CropCard from '$components/CropCard.svelte';
+  import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -42,6 +43,9 @@
   let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
   const hasMore = $derived(crops.length < total);
+
+  // Crop opened in the read-only details modal (info button on each card).
+  let detailCrop = $state<OpCrop | null>(null);
 
   // Selection set (crop_id)
   let selected = $state<Set<string>>(new Set());
@@ -151,15 +155,34 @@
           });
         }
       }
+      // Optimistic: remove the dropped crops from the visible grid
+      // BEFORE the await, so the labeling feels real-time. The dragged
+      // selection is the source of truth — if the backend reports
+      // conflicts we re-sync, if it errors we restore the snapshot.
+      const snap = crops;
+      const snapTotal = total;
+      const droppedSet = new Set(ids);
+      crops = crops.filter((c) => !droppedSet.has(c.id));
+      total = Math.max(0, total - ids.length);
+      selected = new Set();
       try {
         const res = await bulkLabel(ids, cls.id);
-        toastStore.success(
-          `Labeled ${res.affected ?? ids.length} → ${cls.name}.`,
-        );
-        crops = crops.filter((c) => !selected.has(c.id));
-        total = Math.max(0, total - ids.length);
-        selected = new Set();
+        const conflicts = res.conflicts?.length ?? 0;
+        if (conflicts > 0) {
+          // A concurrent worker (typically op_gemma_worker) beat us on
+          // some crops. The backend kept those crops on their old class;
+          // re-fetch so the grid reflects truth.
+          toastStore.warn(
+            `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker). Reloading.`,
+          );
+          void loadFirst();
+        } else {
+          toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+        }
       } catch (e) {
+        // Revert the optimistic mutation on hard failure.
+        crops = snap;
+        total = snapTotal;
         toastStore.error(`Label failed: ${(e as Error).message}`);
       }
     });
@@ -447,11 +470,11 @@
     rememberTarget(targetClusterId);
     try {
       const res = await moveCropsToCluster(ids, targetClusterId);
-      const moved = res.moved ?? ids.length;
-      const failed = res.failed?.length ?? 0;
-      if (failed > 0) {
+      const moved = res.updated ?? ids.length;
+      const conflicts = res.conflicts?.length ?? 0;
+      if (conflicts > 0) {
         toastStore.warn(
-          `Moved ${moved} of ${ids.length} crop${ids.length === 1 ? '' : 's'} (${failed} failed). Reloading.`,
+          `Moved ${moved} of ${ids.length} crop${ids.length === 1 ? '' : 's'} (${conflicts} blocked by worker). Reloading.`,
         );
         void loadFirst();
       } else {
@@ -933,6 +956,7 @@
               onclick={(c, e) => toggleSelect(c.id, e)}
               onacceptGemma={(c) => void acceptGemmaForCrop(c)}
               onrejectGemma={(c) => void rejectGemmaForCrop(c)}
+              ondetail={(c) => (detailCrop = c)}
             />
           {/each}
         </div>
@@ -1010,4 +1034,8 @@
       </div>
     </div>
   </div>
+{/if}
+
+{#if detailCrop}
+  <CropDetailModal crop={detailCrop} onclose={() => (detailCrop = null)} />
 {/if}
