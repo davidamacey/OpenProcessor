@@ -271,7 +271,20 @@ export interface DatasetStats {
     total_detected: number;
     by_lpr: number;
     by_sam3: number;
+    /** Legacy alias for ``by_human_drew``. */
     by_human: number;
+    /** Crops where the operator drew a fresh plate bbox from scratch. */
+    by_human_drew?: number;
+    /** Crops whose plate was verified by a human (Confirm Plate button). */
+    verified_by_human?: number;
+    /** Crops whose plate was verified by Gemma (auto-verify). */
+    verified_by_gemma?: number;
+    /**
+     * Union: any plate the operator touched — drew the bbox OR
+     * confirmed an AI-proposed one. The dashboard surfaces this as
+     * the honest "you reviewed N plates" number.
+     */
+    validated_by_human?: number;
   };
   unlabeled: {
     pending_detection: number;
@@ -703,6 +716,26 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
   return apiFetch<void>(
     `/curation/crops/${encodeURIComponent(cropId)}/label`,
     { method: 'DELETE' },
+    signal,
+  );
+}
+
+/**
+ * Permanently dismiss a crop from every /review queue.
+ *
+ * Stamps ``review_dismissed_at`` + ``review_dismissed_by='human'`` on
+ * the crop. The server's review_queue handler must_not's any crop with
+ * ``review_dismissed_at``, so dismissed crops never reappear (until a
+ * future un-dismiss endpoint is added). The crop's class / plate state
+ * is left intact — only review visibility changes.
+ */
+export function reviewDismissCrop(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  return apiFetch<void>(
+    `/curation/crops/${encodeURIComponent(cropId)}/review_dismiss`,
+    { method: 'POST' },
     signal,
   );
 }

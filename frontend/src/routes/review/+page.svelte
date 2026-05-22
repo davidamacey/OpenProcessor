@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     deleteCropLabel,
+    reviewDismissCrop,
     getCrop,
     getReviewQueue,
     getSourceImageWithBbox,
@@ -55,6 +56,19 @@
   let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
   const hasMore = $derived(items.length < total);
+
+  // Eagerly prefetch the next page when the cursor is within this many
+  // items of the end of the loaded buffer. Without this, the user sees
+  // 'no more' for one render-frame whenever they confirm the last item
+  // we've loaded — refreshing the page then shows there were more all
+  // along.
+  const PREFETCH_AHEAD = 5;
+  function maybePrefetch(): void {
+    if (loadingMore || !hasMore) return;
+    if (items.length - cursor <= PREFETCH_AHEAD) {
+      void loadMore();
+    }
+  }
 
   // Filter bar
   let hddSource = $state<string>('');
@@ -226,7 +240,7 @@
     items = items.filter((x) => x.id !== id);
     total = Math.max(0, total - 1);
     cursor = Math.min(cursor, Math.max(0, items.length - 1));
-    if (cursor >= items.length - 1 && hasMore) void loadMore();
+    maybePrefetch();
     try {
       await putCropLabel(id, classId);
       toastStore.success(`Labeled "${cls?.name ?? classId}".`);
@@ -247,23 +261,25 @@
 
   function skip(): void {
     cursor = Math.min(items.length - 1, cursor + 1);
-    if (cursor >= items.length - 1 && hasMore) void loadMore();
+    maybePrefetch();
   }
 
   async function discard(): Promise<void> {
     if (!current) return;
-    // Snapshot before discard so undo (Z) brings the crop back into
-    // the queue. No nag-confirm — the user presses D dozens of times
-    // per session.
+    // Discard = "permanently dismiss this crop from every review queue."
+    // Stamps review_dismissed_at on the backend; the review queue's
+    // must_not filter excludes any crop with that field set. The
+    // original class / plate state is preserved (this is NOT an
+    // unlabel — use Z to undo if dismissed by mistake).
     undoStore.push(snap(current));
     const id = current.id;
     items = items.filter((x) => x.id !== id);
     total = Math.max(0, total - 1);
     cursor = Math.min(cursor, Math.max(0, items.length - 1));
-    if (cursor >= items.length - 1 && hasMore) void loadMore();
+    maybePrefetch();
     try {
-      await deleteCropLabel(id);
-      toastStore.success('Discarded. Press Z to undo.');
+      await reviewDismissCrop(id);
+      toastStore.success('Dismissed from review. Press Z to undo.');
     } catch (e) {
       toastStore.error(`Discard failed: ${(e as Error).message}`);
     }
@@ -571,7 +587,7 @@
     items = items.filter((x) => x.id !== id);
     total = Math.max(0, total - 1);
     cursor = Math.min(cursor, Math.max(0, items.length - 1));
-    if (cursor >= items.length - 1 && hasMore) void loadMore();
+    maybePrefetch();
   }
 
   async function confirmPlate(): Promise<void> {
@@ -659,7 +675,7 @@
           'arrowright',
           () => {
             cursor = Math.min(items.length - 1, cursor + 1);
-            if (cursor >= items.length - 1 && hasMore) void loadMore();
+            maybePrefetch();
           },
           'Next item',
         );
@@ -696,7 +712,7 @@
         'arrowright',
         () => {
           cursor = Math.min(items.length - 1, cursor + 1);
-          if (cursor >= items.length - 1 && hasMore) void loadMore();
+          maybePrefetch();
         },
         'Next item',
       );
