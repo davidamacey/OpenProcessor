@@ -1223,7 +1223,7 @@ export function getTrainManifest(
 
 // -- Auto-label (recluster) job ------------------------------------------
 // Wraps POST /curation/pipeline/auto_label/{start,status,cancel}. The pipeline
-// re-runs prototype assignment → cluster_id normalize → HDBSCAN → auto-
+// re-runs prototype assignment → cluster_id normalize → AHC residuals → auto-
 // promote → Gemma sweep, fixing prototype drift and stale cluster_id on
 // labeled crops. Hours at HDD scale; the panel polls status while it runs.
 

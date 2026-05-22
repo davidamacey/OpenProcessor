@@ -7,8 +7,8 @@
    * active (3s). Shows stage name, progress bar, ETA, elapsed time, and the
    * final stage-by-stage summary once the run lands.
    *
-   * The pipeline (cluster_id_normalize → HDBSCAN → auto_promote → gemma
-   * → finalize) is the same one the cluster-refresh daemon runs, so
+   * The pipeline (cluster_id_normalize → AHC residuals → auto_promote
+   * → gemma → finalize) is the same one the cluster-refresh daemon runs, so
    * kicking it off here is functionally identical to the existing cron
    * path — just with operator visibility. The previous CLIP-prototype
    * labeling stage was removed because a single mean centroid couldn't
@@ -34,7 +34,7 @@
   const STAGE_LABEL: Record<string, string> = {
     '': 'preparing…',
     cluster_id_normalize: 'aligning cluster_id with class_id',
-    hdbscan_residuals: 'clustering residual pool (HDBSCAN)',
+    cluster_residuals: 'clustering residual pool (AHC)',
     auto_promote: 'promoting high-purity clusters',
     gemma: 'Gemma sweep over unvalidated crops',
     finalize: 'final normalization and accounting',
@@ -42,7 +42,7 @@
 
   const STAGE_ORDER = [
     'cluster_id_normalize',
-    'hdbscan_residuals',
+    'cluster_residuals',
     'auto_promote',
     'gemma',
     'finalize',
@@ -147,7 +147,7 @@
       <p class="mt-0.5 text-xs text-zinc-400">
         Aligns <code class="text-zinc-300">cluster_id</code> with
         <code class="text-zinc-300">class_id</code>, re-clusters
-        unlabeled residuals (HDBSCAN), promotes high-purity clusters,
+        unlabeled residuals (AHC), promotes high-purity clusters,
         and runs Gemma over remaining unvalidated crops. v6's confident
         labels and human validations are never overwritten. Hours at
         350k-crop scale. Safe to cancel.
@@ -206,7 +206,7 @@
       </div>
 
       {#if isRunning}
-        <!-- Per-stage progress bar. Indeterminate when total=0 (HDBSCAN /
+        <!-- Per-stage progress bar. Indeterminate when total=0 (AHC /
              normalize stages don't expose a counter); determinate for the
              Gemma stage which is the dominant cost. -->
         <div class="h-2 overflow-hidden rounded bg-zinc-800">
