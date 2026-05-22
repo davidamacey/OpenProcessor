@@ -136,6 +136,22 @@
     if (!job || job.total <= 0) return null;
     return Math.min(100, Math.round((job.processed / job.total) * 100));
   });
+
+  // Backend chip — gpu (cuml …) vs cpu (sklearn …). Empty string when
+  // the worker is on an older build that doesn't emit the field, so the
+  // chip renders only when the backend has been detected.
+  const backendName: string = $derived(((job as AutoLabelJobState | null)?.backend ?? '') as string);
+  const backendDetail: string = $derived(
+    ((job as AutoLabelJobState | null)?.backend_detail ?? '') as string,
+  );
+  const peakVramMb: number | null = $derived(
+    ((job as AutoLabelJobState | null)?.peak_vram_mb ?? null) as number | null,
+  );
+  const stageDurations: Array<[string, number]> = $derived.by(() => {
+    const sd = (job as AutoLabelJobState | null)?.stage_durations;
+    if (!sd) return [];
+    return Object.entries(sd) as Array<[string, number]>;
+  });
   const lastFinishedRel: string = $derived.by(() => {
     if (!job || !job.finished_at) return '';
     const seconds = Math.max(0, Date.now() / 1000 - job.finished_at);
@@ -223,6 +239,20 @@
         {:else if job.status !== 'idle' && job.finished_at}
           <span class="text-zinc-400">finished {lastFinishedRel}</span>
         {/if}
+        <!-- Backend chip: only renders once cluster_residuals has detected
+             whether cuML or sklearn ran. Hovering shows the long detail
+             string (cuml version + GPU id + free VRAM). -->
+        {#if backendName}
+          <span
+            class="rounded px-2 py-0.5 font-mono uppercase
+              {backendName === 'gpu'
+              ? 'bg-fuchsia-500/20 text-fuchsia-200'
+              : 'bg-zinc-700/40 text-zinc-300'}"
+            title={backendDetail}
+          >
+            {backendName}
+          </span>
+        {/if}
       </div>
 
       {#if isRunning}
@@ -261,21 +291,47 @@
         <p class="text-xs text-red-300">Error: {job.error}</p>
       {/if}
 
-      {#if job.status === 'completed' && job.result?.stages}
-        <!-- Once-only summary chip strip. Picks the counts most operators
-             care about; the full JSON is available via curl for the rare
-             times you need it. -->
-        <details class="text-xs text-zinc-300">
-          <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
-            Last run summary
-          </summary>
-          <pre
-            class="mt-2 max-h-64 overflow-auto rounded bg-zinc-900 p-2 font-mono text-[10px] text-zinc-300">{JSON.stringify(
-              job.result,
-              null,
-              2,
-            )}</pre>
-        </details>
+      {#if job.status === 'completed'}
+        <!-- Per-stage durations + peak VRAM (GPU runs only). Rendered as
+             a compact table above the raw JSON so operators can answer
+             "where did the wall time go?" without parsing the full result. -->
+        {#if stageDurations.length > 0 || peakVramMb != null || backendDetail}
+          <div class="space-y-1 text-xs text-zinc-300">
+            {#if backendDetail}
+              <p class="font-mono text-[10px] text-zinc-400">{backendDetail}</p>
+            {/if}
+            {#if stageDurations.length > 0}
+              <table class="font-mono text-[10px]">
+                <tbody>
+                  {#each stageDurations as [name, sec] (name)}
+                    <tr>
+                      <td class="pr-4 text-zinc-400">{name}</td>
+                      <td class="text-zinc-200">{formatDuration(sec)}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {/if}
+            {#if peakVramMb != null}
+              <p class="font-mono text-[10px] text-zinc-400">
+                peak VRAM: {peakVramMb.toLocaleString()} MB
+              </p>
+            {/if}
+          </div>
+        {/if}
+        {#if job.result?.stages}
+          <details class="text-xs text-zinc-300">
+            <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
+              Last run summary
+            </summary>
+            <pre
+              class="mt-2 max-h-64 overflow-auto rounded bg-zinc-900 p-2 font-mono text-[10px] text-zinc-300">{JSON.stringify(
+                job.result,
+                null,
+                2,
+              )}</pre>
+          </details>
+        {/if}
       {/if}
     </div>
   {/if}

@@ -1306,6 +1306,16 @@ export interface AutoLabelJobState {
   args: Record<string, unknown>;
   eta_seconds: number | null;
   elapsed_seconds: number;
+  // GPU clustering telemetry (optional — older worker versions omit).
+  // `backend` is 'gpu' when cluster_residuals' UMAP ran on cuML;
+  // 'cpu' for sklearn fallback. `backend_detail` is a human-readable
+  // chip ("gpu (cuml 26.4 · A6000 GPU 0 · 9824/49152 MB free · nn_descent)"
+  // or "cpu (sklearn 1.4 · umap-learn 0.5)").
+  backend?: 'gpu' | 'cpu' | null;
+  backend_detail?: string | null;
+  free_vram_mb?: number | null;
+  peak_vram_mb?: number | null;
+  stage_durations?: Record<string, number>;
 }
 
 export function startAutoLabel(
