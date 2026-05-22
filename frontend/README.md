@@ -37,8 +37,8 @@ that repo's `scripts/legacy/RUNBOOK.md`).
 |---|---|
 | `/` | Dashboard — class balance bar chart, ingestion progress, recent activity, quick actions |
 | `/clusters` | Grid of clusters; sort by purity / size / dominant class; click into one. Selecting `class=license_plate` replaces the cluster grid with a **plate browse view** — paginated plate thumbnails filtered by detector / verified / score / plate-text |
-| `/clusters/[id]` | Per-cluster paginated crop grid + DnD-to-other-cluster + bulk label/Gemma/AHC + similarity cut-line + sub-cluster tabs |
-| `/review` | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty / Model Disagreements / **Plates**. Plate rows show detector chips, the cascade chain, Gemma-read plate text, and a ⚠ shape-warning when the bbox envelope fails |
+| `/clusters/[id]` | Per-cluster paginated crop grid + DnD-to-class-sidebar + bulk label/Gemma/AHC + similarity cut-line + sub-cluster tabs. Hover any crop and click **ⓘ** for a Crop Detail modal (full source image + class / plate provenance, same metadata the review page shows). |
+| `/review` | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty / Model Disagreements / **Plates**. Plate rows show detector chips, the cascade chain, Gemma-read plate text, and a ⚠ shape-warning when the bbox envelope fails. LPR + Gemma agreement is auto-confirmed server-side (no human needed); only SAM3-only / LPR-blind-spot plates surface for review. **D (Discard)** marks the crop as permanently dismissed from every review queue — it stays in OpenSearch with its original label intact, just never shows up in `/review` again. |
 | `/classes` | Add/rename/regroup/merge classes; sync to OpenSearch; adequacy badges |
 | `/export` | YOLO export status + augmentation gap table + Test Holdout freeze + downloads |
 | `/train` | Training cockpit + **plate training cohort picker** (lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected) |
@@ -51,14 +51,18 @@ that repo's `scripts/legacy/RUNBOOK.md`).
 | `Enter` | Confirm selected + advance to next unvalidated |
 | `G` | Accept Gemma suggestion for selected |
 | `N` | Skip (defer to review queue) |
-| `D` | Discard (mark for delete) |
+| `D` | Discard — permanently dismiss the crop from every review queue (writes `review_dismissed_at` server-side; can still undo within the session via `Z`) |
 | `Z` | Undo last action (50-entry ring) |
 | `A` | Select all on page |
 | `Shift+Enter` | Confirm all Gemma suggestions on page |
 | `M` | Open inline cluster picker (move selected to a different cluster) |
 | `←` / `→` | Page navigation |
-| `~` | Toggle keyboard-shortcut overlay |
+| `` ` `` | Toggle keyboard-shortcut overlay — also acts as an **inline hotkey editor**: every class has a 1-char input next to it; Tab between them, type a letter to bind, Enter saves. Duplicates are rejected client-side with a clear message. |
 | `Esc` | Cancel drag / picker / dismiss overlay |
+
+The shortcut overlay (`` ` ``) is the canonical place to manage class
+hotkeys. Reserved letters are no longer blocked — bind any single
+character; the only invariant is "two classes can't share a letter."
 
 ## Configuration
 
@@ -75,13 +79,29 @@ caches transient UI state (sidebar collapse, last-seen cluster ID).
 ## Data integrity
 
 - Every label change is an immediate API call with optimistic UI.
+  Drag-drop into a class is also optimistic — the crop disappears from
+  the grid on release; if the backend reports an OCC conflict the UI
+  re-fetches to show the true state.
+- Backend writes use `refresh=True` so the next queue / cluster fetch
+  sees the change immediately (no ~1 s OpenSearch refresh race).
+- Multi-crop writes (`PUT /curation/crops/batch_label`, `POST /curation/crops/move`)
+  parallelize their per-crop OCC updates via `asyncio.gather` and retry
+  up to 5 times against a `(0.05, 0.15, 0.45)s` backoff, so a worker
+  racing the human almost never produces a conflict the operator can
+  see.
 - Failures roll back via snapshot revert + a toast.
-- The 50-entry undo ring per page calls `DELETE /curation/crops/{id}/label`
-  on `Z` to restore the model-suggested label.
+- The 50-entry undo ring per page restores the prior state on `Z` —
+  for an undo of a class label that means `DELETE /curation/crops/{id}/label`
+  (resets to model-suggested), for an undo of a discard it restores
+  the local list (the backend dismissal flag is left in place; a
+  follow-up `review_undismiss` endpoint will land alongside the
+  re-show workflow).
 - Bulk operations (multi-select label, multi-crop move) always show
   a confirm dialog with the affected count before firing.
 - Test-set crops (`test_holdout=true`) are filtered out of every
   labeling queue at the API level — the UI never receives them.
+- `review_queue` now uses `track_total_hits=true`, so the "X of N" count
+  in the page header is the real total rather than capped at 10,000.
 
 ## Architecture
 
@@ -109,10 +129,16 @@ src/
       undo.svelte.ts      # Per-page 50-entry undo ring
     components/
       Toast.svelte
-      ClassSidebar.svelte
-      CropCard.svelte
+      ClassSidebar.svelte         # left-rail class list + drop-target rows
+      CropCard.svelte             # grid card; ⓘ button opens CropDetailModal
+      CropDetailModal.svelte      # source image + crop + CropMetaPanel
+      CropMetaPanel.svelte        # read-only provenance grid (class, plate chain,
+                                  # detector/verifier chips, Gemma confidence, …)
       CutLine.svelte
-      ShortcutOverlay.svelte
+      DetectorChip.svelte         # provenance chip for lpr / sam3 / gemma / human
+      PlateBboxCanvas.svelte      # in-place plate bbox editor on /review/plates
+      PlateEditor.svelte          # full PlateBboxCanvas modal (M on a cluster crop)
+      ShortcutOverlay.svelte      # ` overlay; also an inline hotkey editor
 ```
 
 All stores use **Svelte 5 runes** (`$state`, `$derived`, `$effect`)
@@ -197,7 +223,9 @@ processing automatically when you `make gpu-legacy`.
 | Empty cluster grid | OpenSearch not running, or `op_vehicle_crops` not yet populated by ingest |
 | Thumbnails 404 | `op_vehicle_crops` doc missing `bbox_norm`; or NAS path not mounted into op-api container |
 | Hotkeys do nothing | A modal is open; or the focused element is an `<input>` (the keyboard store ignores typing) |
-| Drag-drop doesn't trigger | Browser DnD vs. svelte-dnd-action confusion — refresh the page; check console for the `start_drag` event |
+| Drag-drop appears to move but the crop is still there after refresh | Stale `dist/` bundle — `make ml-resume` then hard-reload (⌘⇧R / Ctrl+Shift+R). If `PUT /curation/crops/batch_label` never shows up in DevTools Network on drop, the bundle is stale. |
+| Discard reappears on tab switch | Should not happen anymore (the backend writes `review_dismissed_at` with `refresh=True` and the queue must_not's it). If it does, hard-reload — your bundle predates the fix. |
+| Counters in /review header showing 10,000 when there should be more | Should not happen anymore (`track_total_hits=true` is on by default). If you see it, the deployed `op-api` predates the fix — `docker compose restart op-api`. |
 | Build fails with `Cannot find module 'svelte-dnd-action'` | `npm install` not run, or node_modules stale (`rm -rf node_modules && npm install`) |
 
 ## Repos this depends on
