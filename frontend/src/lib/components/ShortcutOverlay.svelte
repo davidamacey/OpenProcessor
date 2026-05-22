@@ -1,19 +1,66 @@
 <script lang="ts">
+  import { renameClass } from '$lib/api';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
+  import { toastStore } from '$stores/toast.svelte';
+  import type { OpClass } from '$lib/types';
 
   const shortcuts = $derived(keyboardStore.shortcutsForCurrentScope());
 
-  // Per-class hotkeys are routed through the layout-level keydown
-  // listener (not registered with keyboardStore) so the user wouldn't
-  // see them in the page-scope list. Surface them as their own panel.
-  const classHotkeys = $derived(
+  // Show every non-deprecated class — sorted by validated_count desc so
+  // the operator's most-labelled classes float to the top. Lets the
+  // overlay double as a hotkey editor without leaving /review or
+  // /clusters.
+  const editableClasses = $derived(
     classesStore.classes
-      .filter((c) => !!c.hotkey_letter)
-      .sort((a, b) => (a.hotkey_letter ?? '').localeCompare(b.hotkey_letter ?? '')),
+      .filter((c) => !c.deprecated)
+      .slice()
+      .sort((a, b) => {
+        // Bound hotkeys first, then largest classes
+        const aHas = a.hotkey_letter ? 0 : 1;
+        const bHas = b.hotkey_letter ? 0 : 1;
+        if (aHas !== bHas) return aHas - bHas;
+        return (b.validated_count ?? 0) - (a.validated_count ?? 0);
+      }),
   );
 
-  // Friendly label for the page-scope tag in the header.
+  let pending = $state<Record<number, boolean>>({});
+
+  async function setHotkey(cls: OpClass, raw: string): Promise<void> {
+    const next = raw.trim().toLowerCase();
+    const current = (cls.hotkey_letter ?? '').toLowerCase();
+    if (next === current) return;
+    if (next.length > 1) {
+      toastStore.error('Hotkey must be a single character.');
+      return;
+    }
+    // Reject duplicates against other classes' already-bound letters.
+    // Backend enforces this too (PUT /curation/classes/{id} returns 400), but
+    // catching it client-side gives the operator a clearer message
+    // and avoids a round-trip.
+    if (next) {
+      const owner = classesStore.classes.find(
+        (c) => c.id !== cls.id && !c.deprecated && (c.hotkey_letter ?? '').toLowerCase() === next,
+      );
+      if (owner) {
+        toastStore.error(`'${next}' is already assigned to ${owner.name}.`);
+        return;
+      }
+    }
+    pending[cls.id] = true;
+    try {
+      await renameClass(cls.id, { hotkey_letter: next });
+      toastStore.success(
+        next ? `${cls.name} → '${next}'` : `${cls.name} → cleared`,
+      );
+      await classesStore.clearAndRefetch();
+    } catch (e) {
+      toastStore.error(`Hotkey set failed: ${(e as Error).message}`);
+    } finally {
+      pending[cls.id] = false;
+    }
+  }
+
   const scopeLabel = $derived(
     keyboardStore.scope === 'cluster'
       ? 'Cluster'
@@ -40,7 +87,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       role="document"
-      class="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-6 shadow-2xl"
+      class="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-6 shadow-2xl"
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
       tabindex="-1"
@@ -52,7 +99,6 @@
         </span>
       </div>
 
-      <!-- Page-scope shortcuts (registered via keyboardStore) -->
       <section class="mb-5">
         <h3 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
           {scopeLabel} actions
@@ -71,40 +117,55 @@
         {/if}
       </section>
 
-      <!-- Per-class label hotkeys (set on /classes; work on every page
-           that registers a dropOnClass dispatcher — currently /clusters/[id]
-           and /review). -->
       <section class="mb-5">
         <h3 class="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
           Class hotkeys
           <span class="text-[10px] font-normal normal-case text-zinc-600">
-            (configure on /classes)
+            (single letter; tab to next class; Enter to save)
           </span>
         </h3>
-        {#if classHotkeys.length === 0}
-          <p class="text-sm text-zinc-500">
-            No class hotkeys bound. Visit
-            <a href="/classes" class="text-blue-400 hover:underline">/classes</a>
-            and assign a single letter to your most-used classes.
-          </p>
+        {#if editableClasses.length === 0}
+          <p class="text-sm text-zinc-500">No classes defined yet.</p>
         {:else}
-          <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {#each classHotkeys as cls (cls.id)}
+          <ul class="grid grid-cols-1 gap-y-1 sm:grid-cols-2 sm:gap-x-4">
+            {#each editableClasses as cls (cls.id)}
               <li class="flex items-center justify-between gap-3 text-sm">
-                <span class="truncate text-zinc-300">
+                <span class="truncate text-zinc-300" title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}>
                   {cls.name}
-                  {#if cls.group}<span class="text-zinc-500"> · {cls.group}</span>{/if}
+                  {#if cls.validated_count != null}
+                    <span class="ml-1 font-mono text-[10px] text-zinc-500">
+                      {cls.validated_count.toLocaleString()}
+                    </span>
+                  {/if}
                 </span>
-                <kbd class="font-mono text-[11px] uppercase text-blue-300">
-                  {cls.hotkey_letter}
-                </kbd>
+                <input
+                  type="text"
+                  maxlength="1"
+                  value={cls.hotkey_letter ?? ''}
+                  disabled={pending[cls.id]}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      (e.currentTarget as HTMLInputElement).blur();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      (e.currentTarget as HTMLInputElement).value =
+                        cls.hotkey_letter ?? '';
+                      (e.currentTarget as HTMLInputElement).blur();
+                    }
+                  }}
+                  onblur={(e) => {
+                    void setHotkey(cls, (e.currentTarget as HTMLInputElement).value);
+                  }}
+                  class="w-10 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-center font-mono text-xs uppercase text-blue-300 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                  aria-label={`hotkey for ${cls.name}`}
+                />
               </li>
             {/each}
           </ul>
         {/if}
       </section>
 
-      <!-- Always-on shortcuts (built into the keyboardStore dispatcher). -->
       <section>
         <h3 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
           Always

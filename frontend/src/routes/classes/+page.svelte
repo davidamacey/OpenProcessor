@@ -127,19 +127,6 @@
     }
   }
 
-  // Letters reserved by the cluster + review pages for non-class actions.
-  // Binding any of these as a class hotkey would shadow the action and is
-  // confusing in practice — block at the UI before the round-trip.
-  const RESERVED_HOTKEYS = new Set([
-    'n', // skip
-    'd', // discard
-    'z', // undo
-    'g', // accept Gemma
-    'm', // move
-    'a', // select all
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', // top-N (legacy)
-  ]);
-
   async function setHotkey(cls: OpClass, raw: string): Promise<void> {
     const next = raw.trim().toLowerCase();
     const current = (cls.hotkey_letter ?? '').toLowerCase();
@@ -148,12 +135,20 @@
       toastStore.error('Hotkey must be a single character.');
       return;
     }
-    if (next && RESERVED_HOTKEYS.has(next)) {
-      toastStore.error(
-        `'${next}' is reserved for a built-in action (skip/discard/undo/move/etc.). ` +
-          `Pick another letter.`,
+    // Reject duplicates against other classes' already-bound letters.
+    // Backend enforces this too (returns 400); doing it client-side
+    // surfaces a clearer message without a round-trip.
+    if (next) {
+      const owner = classesStore.classes.find(
+        (c) =>
+          c.id !== cls.id &&
+          !c.deprecated &&
+          (c.hotkey_letter ?? '').toLowerCase() === next,
       );
-      return;
+      if (owner) {
+        toastStore.error(`'${next}' is already assigned to ${owner.name}.`);
+        return;
+      }
     }
     busy = true;
     try {
