@@ -149,6 +149,35 @@ container start (replacing the `__RUNTIME__` placeholder in built JS) if you
 need to point the frontend at a remote openprocessor instead of the co-located
 one. For the standard Docker Compose stack leave it empty.
 
+## Sharing the GPUs with another app
+
+legacy training/inference holds GPU 0 (~40 GB SAM3), GPU 1 (~8 GB Triton),
+and GPU 2 (~46 GB vLLM-Gemma). When another GPU-heavy app on the same host
+needs the cards (example-app, model training, etc.), park the legacy ML
+stack and keep human labeling running.
+
+From the **openprocessor repo**:
+
+```bash
+make gpu-free       # stop Triton + SAM3 + vLLM + workers (labeler stays up)
+make gpu-legacy    # bring the ML stack back when you're done
+make gpu-status     # show containers + per-GPU memory usage
+```
+
+What stays up: `opensearch`, `op-api`, `legacy-labeler` — the entire
+human-labeling workflow (`/review`, `/clusters`, `/classes`, drag-and-drop,
+hotkeys) keeps working because none of those endpoints touch the GPU.
+
+What you lose while in `gpu-free` mode:
+
+- Pipeline ingest (no Triton, so no fresh detections).
+- Auto-label / Gemma re-classification (no vLLM).
+- Plate cascade (no SAM3, no LPR Triton model).
+- Training and cluster-refresh background workers.
+
+In-flight crops stay in OpenSearch with `plate_status='pending_*'` and resume
+processing automatically when you `make gpu-legacy`.
+
 ## Limits
 
 - **No offline mode.** openprocessor must be reachable for the labeler to
