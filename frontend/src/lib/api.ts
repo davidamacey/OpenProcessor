@@ -561,6 +561,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
     bbox_norm: xyxyToBBoxNorm(bb),
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
+    class_source: c.class_source ?? null,
     label_source: ((c.label_source || 'model') as OpCrop['label_source']),
     label_validated: !!c.label_validated,
     label_confidence: c.confidence ?? null,
@@ -612,17 +613,25 @@ export async function getCluster(
   page = 1,
   pageSize = 60,
   signal?: AbortSignal,
+  opts: { classSource?: string | null } = {},
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
   // Two parallel calls: paginated crops + the authoritative cluster
   // card from /curation/clusters (server-computed). The page no longer
   // derives any of the cluster's identity fields client-side.
+  //
+  // `classSource` narrows the crop grid to one source bucket
+  // (v6_model / gemma / human / v6_low_conf / ...) without touching
+  // the cluster card stats — the header still shows the whole-cluster
+  // totals so the operator sees the filter against the full size.
   type CropPage = { total: number; page: number; page_size: number; crops: RawCrop[] };
+  const cropQuery: Record<string, unknown> = {
+    cluster_id: id,
+    page,
+    page_size: pageSize,
+  };
+  if (opts.classSource) cropQuery.class_source = opts.classSource;
   const [cropPage, clustersResp] = await Promise.all([
-    apiFetch<CropPage>(
-      `/curation/crops${qs({ cluster_id: id, page, page_size: pageSize })}`,
-      {},
-      signal,
-    ),
+    apiFetch<CropPage>(`/curation/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
       // max_clusters=1 with class_id filter is the cheapest way to ask
       // for just this cluster's card.

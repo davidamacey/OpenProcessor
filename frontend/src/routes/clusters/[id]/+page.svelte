@@ -54,6 +54,23 @@
   // keyword string ("47a", "47b", "47aa", ...).
   let subTab = $state<string | null>(null);
 
+  // class_source filter (null = all). Drives the chip-group in the
+  // header and propagates to /curation/crops?class_source=... so the grid
+  // shows only crops from one source bucket. Cluster card stats in
+  // the header are NOT recomputed by this filter — the operator sees
+  // the filter against the whole-cluster totals on purpose.
+  let classSourceFilter = $state<string | null>(null);
+  const CLASS_SOURCE_OPTIONS: { value: string | null; label: string; hint: string }[] = [
+    { value: null, label: 'All', hint: 'Every source' },
+    { value: 'v6_model', label: 'v6', hint: 'v6 model, ≥0.75 confidence' },
+    { value: 'gemma', label: 'Gemma', hint: 'Gemma matched registry class' },
+    { value: 'human', label: 'Human', hint: 'Human-validated' },
+    { value: 'v6_low_conf', label: 'v6 low', hint: 'v6 below 0.75; demoted' },
+    { value: 'gemma_unmatched', label: 'Gemma ?', hint: 'Gemma class not in registry' },
+    { value: 'coco_yolo11_proposal', label: 'COCO', hint: 'Raw yolo proposal' },
+    { value: 'gemma_new_class_pending', label: 'New cls', hint: 'Gemma proposed new class' },
+  ];
+
   // Class dropdown
   let confirmClassId = $state<number | null>(null);
 
@@ -78,7 +95,9 @@
     loadedPages = 0;
     total = 0;
     try {
-      const res = await getCluster(clusterId, 1, pageSize);
+      const res = await getCluster(clusterId, 1, pageSize, undefined, {
+        classSource: classSourceFilter,
+      });
       cluster = res.cluster;
       const list = res.crops as PaginatedResponse<OpCrop>;
       crops = list.items;
@@ -99,7 +118,9 @@
     loadingMore = true;
     try {
       const next = loadedPages + 1;
-      const res = await getCluster(clusterId, next, pageSize);
+      const res = await getCluster(clusterId, next, pageSize, undefined, {
+        classSource: classSourceFilter,
+      });
       const list = res.crops as PaginatedResponse<OpCrop>;
       // Dedup by id in case server returns overlapping pages after a relabel.
       const seen = new Set(crops.map((c) => c.id));
@@ -116,7 +137,9 @@
 
   $effect(() => {
     keyboardStore.setScope('cluster');
+    // Track both inputs so a filter change triggers a fresh load.
     void clusterId;
+    void classSourceFilter;
     void loadFirst();
   });
 
@@ -876,6 +899,33 @@
       <button class="btn" type="button" onclick={runGemma}>Run Gemma</button>
       <button class="btn" type="button" onclick={refine}>Refine (AHC)</button>
     </div>
+  </div>
+
+  <!-- class_source filter chips. Narrows the grid to one source bucket
+       (v6_model / gemma / human / v6_low_conf / ...) without changing
+       the cluster card stats. Active filter is reflected in the URL-free
+       reactive state so re-mounting the page resets to "all". -->
+  <div
+    class="flex flex-wrap items-center gap-1.5 border-b border-zinc-800 px-4 py-1.5 text-xs"
+  >
+    <span class="text-zinc-500">source:</span>
+    {#each CLASS_SOURCE_OPTIONS as opt (opt.value ?? '__all__')}
+      <button
+        type="button"
+        title={opt.hint}
+        class="rounded px-2 py-0.5 {classSourceFilter === opt.value
+          ? 'bg-blue-600 text-white'
+          : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+        onclick={() => (classSourceFilter = opt.value)}
+      >
+        {opt.label}
+      </button>
+    {/each}
+    {#if classSourceFilter !== null}
+      <span class="ml-auto text-zinc-500">
+        showing {total.toLocaleString()} from {classSourceFilter}
+      </span>
+    {/if}
   </div>
 
   <!-- Sub-cluster tabs -->

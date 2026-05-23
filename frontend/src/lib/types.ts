@@ -115,6 +115,11 @@ export interface OpCrop {
   bbox_norm: BBoxNorm;
   class_id: number | null;
   class_name: string | null;
+  /** Where the class assignment came from: 'v6_model' / 'gemma' /
+   *  'human' / 'v6_low_conf' / 'gemma_unmatched' /
+   *  'coco_yolo11_proposal' / 'gemma_new_class_pending'.
+   *  Drives the per-source filter chip in the cluster view. */
+  class_source: string | null;
   label_source: LabelSource;
   label_validated: boolean;
   label_confidence: number | null;
@@ -268,6 +273,9 @@ export interface CropFilter {
   class_id?: number | null;
   cluster_id?: number | null;
   label_source?: LabelSource;
+  /** Original label source (where the class came from). Matches the
+   *  /curation/crops?class_source= query param. */
+  class_source?: string;
   label_validated?: boolean;
   hdd_source?: string;
   conf_min?: number;
