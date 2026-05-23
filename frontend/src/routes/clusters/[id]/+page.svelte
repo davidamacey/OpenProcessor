@@ -215,14 +215,50 @@
     subTab == null ? crops : crops.filter((c) => c.cluster_subid === subTab),
   );
 
-  // Mirror filteredCrops into gridItems whenever the underlying list changes.
-  // svelte-dnd-action mutates its `items` prop in place, so we use a separate
-  // array — never feed it `filteredCrops` directly.
-  $effect(() => {
-    gridItems = [...filteredCrops];
+  const subClusterIds = $derived.by(() => {
+    const set = new Set<string>();
+    for (const c of crops) {
+      if (c.cluster_subid != null) set.add(c.cluster_subid);
+    }
+    // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
+    return [...set].sort();
   });
 
-  // Cut-line index: crops with similarity > 0.75 come first (already sorted by API).
+  // When refine has produced sub-clusters and we're viewing "all", group
+  // the grid inline by cluster_subid (contiguous groups + a labeled
+  // separator before each) so the operator sees what refine found at a
+  // glance instead of clicking through sub-cluster tabs one at a time.
+  const groupBySubcluster = $derived(subTab == null && subClusterIds.length > 0);
+
+  // Per-subid crop counts for the separator-header labels. '__none__'
+  // buckets the crops refine left ungrouped (or pre-refine crops).
+  const subCounts = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const c of crops) {
+      const k = c.cluster_subid ?? '__none__';
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  });
+
+  // Mirror filteredCrops into gridItems whenever the underlying list changes.
+  // svelte-dnd-action mutates its `items` prop in place, so we use a separate
+  // array — never feed it `filteredCrops` directly. When grouping, sort so
+  // each cluster_subid is contiguous (nulls last) for inline delineation.
+  $effect(() => {
+    const items = [...filteredCrops];
+    if (groupBySubcluster) {
+      items.sort((a, b) => {
+        const sa = a.cluster_subid ?? '￿';
+        const sb = b.cluster_subid ?? '￿';
+        return sa < sb ? -1 : sa > sb ? 1 : 0;
+      });
+    }
+    gridItems = items;
+  });
+
+  // Cut-line index: crops with similarity > 0.75 come first (already sorted
+  // by API). Suppressed while grouping by sub-cluster (subid order wins).
   const cutLineIndex = $derived.by(() => {
     let i = 0;
     for (; i < filteredCrops.length; i++) {
@@ -232,14 +268,19 @@
     return i;
   });
 
-  const subClusterIds = $derived.by(() => {
-    const set = new Set<string>();
-    for (const c of crops) {
-      if (c.cluster_subid != null) set.add(c.cluster_subid);
-    }
-    // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
-    return [...set].sort();
-  });
+  // Header label for the sub-cluster group starting at grid index i, or
+  // null if card i isn't the start of a new group. Drives the inline
+  // full-width separators in the grid.
+  function subHeaderAt(i: number): { label: string; count: number } | null {
+    if (!groupBySubcluster) return null;
+    const cur = gridItems[i]?.cluster_subid ?? '__none__';
+    const prev = i > 0 ? (gridItems[i - 1]?.cluster_subid ?? '__none__') : null;
+    if (i !== 0 && cur === prev) return null;
+    return {
+      label: cur === '__none__' ? 'unrefined' : `sub-cluster ${cur}`,
+      count: subCounts.get(cur) ?? 0,
+    };
+  }
 
   // totalPages was used by the Next/Prev buttons — gone now that infinite scroll
   // owns the pagination. Server-side pageSize stays at 60 per request, but the
@@ -1122,7 +1163,18 @@
           onfinalize={onGridFinalize}
         >
           {#each gridItems as crop, i (crop.id)}
-            {#if i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < gridItems.length}
+            {@const sub = subHeaderAt(i)}
+            {#if sub}
+              <!-- Inline sub-cluster separator: full-width band that
+                   breaks the grid into the groups refine (AHC) found. -->
+              <div
+                class="col-span-full mt-2 flex items-center gap-2 border-t border-zinc-700 pt-2 text-xs font-medium text-zinc-300 first:mt-0 first:border-t-0 first:pt-0"
+              >
+                <span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100">{sub.label}</span>
+                <span class="text-zinc-500">{sub.count} crop{sub.count === 1 ? '' : 's'}</span>
+                <span class="h-px flex-1 bg-zinc-800"></span>
+              </div>
+            {:else if !groupBySubcluster && i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < gridItems.length}
               <CutLine />
             {/if}
             <CropCard
