@@ -247,16 +247,45 @@
 
   // ---------------- selection ----------------
 
-  function toggleSelect(id: string, e?: MouseEvent): void {
-    const next = new Set(selected);
-    if (e?.shiftKey && next.has(id)) {
-      next.delete(id);
-    } else if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
+  // Anchor for shift-range selection: the last item clicked without
+  // shift (plain or ctrl/cmd). Range selects span [anchor .. clicked]
+  // in the visible filteredCrops order.
+  let anchorId = $state<string | null>(null);
+
+  function clickSelect(id: string, e?: MouseEvent): void {
+    const isToggle = !!(e && (e.ctrlKey || e.metaKey));
+    const isRange = !!(e && e.shiftKey);
+
+    if (isRange && anchorId) {
+      // Shift+click: select the contiguous range between the anchor and
+      // the clicked card (inclusive), unioned with the current
+      // selection so shift-after-ctrl extends rather than replaces.
+      const ids = filteredCrops.map((c) => c.id);
+      const a = ids.indexOf(anchorId);
+      const b = ids.indexOf(id);
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a <= b ? [a, b] : [b, a];
+        const next = new Set(selected);
+        for (let i = lo; i <= hi; i++) next.add(ids[i]!);
+        selected = next;
+        return;
+      }
+      // Anchor no longer visible — fall through to single-select.
     }
-    selected = next;
+
+    if (isToggle) {
+      // Ctrl/Cmd+click: add or remove just this card; move the anchor.
+      const next = new Set(selected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      selected = next;
+      anchorId = id;
+      return;
+    }
+
+    // Plain click: select only this card and set it as the new anchor.
+    selected = new Set([id]);
+    anchorId = id;
   }
 
   function selectAllPage(): void {
@@ -265,6 +294,7 @@
 
   function deselectAll(): void {
     selected = new Set();
+    anchorId = null;
   }
 
   // ---------------- mutations ----------------
@@ -798,6 +828,7 @@
         const cur = ids.findIndex((id) => selected.has(id));
         const prev = cur <= 0 ? ids.length - 1 : cur - 1;
         selected = new Set([ids[prev]!]);
+        anchorId = ids[prev]!;
       },
       'Previous crop',
     );
@@ -809,6 +840,7 @@
         const cur = ids.findIndex((id) => selected.has(id));
         const next = cur < 0 || cur >= ids.length - 1 ? 0 : cur + 1;
         selected = new Set([ids[next]!]);
+        anchorId = ids[next]!;
         if (next === ids.length - 1 && hasMore) void loadMore();
       },
       'Next crop',
@@ -1096,7 +1128,7 @@
             <CropCard
               {crop}
               selected={selected.has(crop.id)}
-              onclick={(c, e) => toggleSelect(c.id, e)}
+              onclick={(c, e) => clickSelect(c.id, e)}
               onacceptGemma={(c) => void acceptGemmaForCrop(c)}
               onrejectGemma={(c) => void rejectGemmaForCrop(c)}
               ondetail={(c) => (detailCrop = c)}
