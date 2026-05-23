@@ -1023,6 +1023,46 @@ export function moveCropsToCluster(
   );
 }
 
+// -- exclude / ignore crops ----------------------------------------------
+
+/** Reasons the operator can attach when ignoring crops. 'ignore' is the
+ *  default one-click value; the others record *why* for later analysis. */
+export type ExcludeReason =
+  | 'ignore'
+  | 'blurry'
+  | 'unidentifiable'
+  | 'not_a_vehicle'
+  | 'partial_crop';
+
+export function excludeCrops(
+  cropIds: string[],
+  reason: ExcludeReason = 'ignore',
+  signal?: AbortSignal,
+): Promise<{ excluded: number; errors: number }> {
+  return apiFetch<{ excluded: number; errors: number }>(
+    '/curation/crops/batch_exclude',
+    {
+      method: 'POST',
+      body: JSON.stringify({ crop_ids: cropIds, reason }),
+    },
+    signal,
+  );
+}
+
+export function unexcludeCrops(
+  cropIds: string[],
+  signal?: AbortSignal,
+): Promise<{ unexcluded: number; errors: number }> {
+  return apiFetch<{ unexcluded: number; errors: number }>(
+    '/curation/crops/batch_unexclude',
+    {
+      method: 'POST',
+      body: JSON.stringify({ crop_ids: cropIds }),
+    },
+    signal,
+  );
+}
+
 // -- needs new class flag ------------------------------------------------
 
 export function flagNeedsNewClass(

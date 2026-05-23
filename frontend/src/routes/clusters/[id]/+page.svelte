@@ -5,12 +5,15 @@
   import {
     bulkLabel,
     deleteCropLabel,
+    excludeCrops,
     flagNeedsNewClass,
     getCluster,
     moveCropsToCluster,
     putCropLabel,
     refineCluster,
     runGemmaOnCluster,
+    unexcludeCrops,
+    type ExcludeReason,
   } from '$lib/api';
   import CropCard from '$components/CropCard.svelte';
   import CropDetailModal from '$components/CropDetailModal.svelte';
@@ -428,6 +431,55 @@
     }
   }
 
+  // -- Ignore / exclude --------------------------------------------------
+  // Excluded crops drop out of training + clustering (reversible). The
+  // backend sets class_excluded=true; we remove them from the grid and
+  // keep the last batch so 'U' can undo. Self-contained — does not use
+  // the label-revert undoStore (Z), which only handles class labels.
+  let lastExcludedIds = $state<string[]>([]);
+  let ignoreMenuOpen = $state<boolean>(false);
+  const EXCLUDE_REASONS: { value: ExcludeReason; label: string }[] = [
+    { value: 'ignore', label: 'Ignore (generic)' },
+    { value: 'blurry', label: 'Blurry' },
+    { value: 'unidentifiable', label: 'Unidentifiable' },
+    { value: 'not_a_vehicle', label: 'Not a vehicle' },
+    { value: 'partial_crop', label: 'Partial crop' },
+  ];
+
+  async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
+    const ids = [...selected];
+    if (ids.length === 0) {
+      toastStore.info('Select crops first to ignore.');
+      return;
+    }
+    ignoreMenuOpen = false;
+    try {
+      const res = await excludeCrops(ids, reason);
+      crops = crops.filter((c) => !ids.includes(c.id));
+      selected = new Set();
+      lastExcludedIds = ids;
+      const tag = reason === 'ignore' ? '' : ` (${reason})`;
+      toastStore.success(`Ignored ${res.excluded}${tag}. Press U to undo.`);
+    } catch (e) {
+      toastStore.error(`Ignore failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function undoIgnore(): Promise<void> {
+    if (lastExcludedIds.length === 0) {
+      toastStore.info('Nothing to un-ignore.');
+      return;
+    }
+    const ids = lastExcludedIds;
+    try {
+      const res = await unexcludeCrops(ids);
+      lastExcludedIds = [];
+      toastStore.success(`Restored ${res.unexcluded}. Re-cluster to re-sort them.`);
+    } catch (e) {
+      toastStore.error(`Un-ignore failed: ${(e as Error).message}`);
+    }
+  }
+
   async function refine(): Promise<void> {
     try {
       const res = await refineCluster(clusterId);
@@ -732,6 +784,8 @@
       'Discard selected',
     );
     reg('z', undoLast, 'Undo last action');
+    reg('x', () => void ignoreSelected('ignore'), 'Ignore selected (exclude from training)');
+    reg('u', undoIgnore, 'Undo last ignore');
     reg('a', selectAllPage, 'Select all on page');
     // Arrow keys navigate within the loaded grid. With infinite scroll the
     // next-page concept is gone — left/right move selection by one position
@@ -898,6 +952,44 @@
 
       <button class="btn" type="button" onclick={runGemma}>Run Gemma</button>
       <button class="btn" type="button" onclick={refine}>Refine (AHC)</button>
+
+      <span class="mx-1 h-5 w-px bg-zinc-800"></span>
+
+      <!-- Ignore: one-click default (generic), dropdown for a reason.
+           Excludes from training + clustering; reversible (U). -->
+      <div class="relative inline-flex">
+        <button
+          class="btn rounded-r-none"
+          type="button"
+          title="Ignore selected — exclude from training + clustering (X)"
+          onclick={() => void ignoreSelected('ignore')}
+        >
+          Ignore <kbd class="ml-1 font-mono text-[10px] text-zinc-400">X</kbd>
+        </button>
+        <button
+          class="btn rounded-l-none border-l border-zinc-700 px-1.5"
+          type="button"
+          aria-label="Choose ignore reason"
+          onclick={() => (ignoreMenuOpen = !ignoreMenuOpen)}
+        >
+          ▾
+        </button>
+        {#if ignoreMenuOpen}
+          <div
+            class="absolute right-0 top-full z-20 mt-1 w-44 rounded border border-zinc-700 bg-zinc-900 py-1 shadow-lg"
+          >
+            {#each EXCLUDE_REASONS as r (r.value)}
+              <button
+                type="button"
+                class="block w-full px-3 py-1 text-left text-xs text-zinc-200 hover:bg-zinc-800"
+                onclick={() => void ignoreSelected(r.value)}
+              >
+                {r.label}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 
