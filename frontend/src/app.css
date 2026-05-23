@@ -101,6 +101,13 @@ button {
 .btn:hover {
   background-color: rgb(var(--bg-hover));
 }
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn:disabled:hover {
+  background-color: rgb(var(--bg-elevated));
+}
 .btn-primary {
   background-color: rgb(var(--system-blue));
   border-color: rgb(var(--system-blue));

@@ -493,12 +493,21 @@
     }
   }
 
+  // In-flight guards so the operator gets feedback and can't double-fire
+  // these long-running cluster ops.
+  let refining = $state<boolean>(false);
+  let gemmaRunning = $state<boolean>(false);
+
   async function runGemma(): Promise<void> {
+    if (gemmaRunning) return;
+    gemmaRunning = true;
     try {
       const res = await runGemmaOnCluster(clusterId);
       toastStore.success(`Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`);
     } catch (e) {
       toastStore.error(`Gemma run failed: ${(e as Error).message}`);
+    } finally {
+      gemmaRunning = false;
     }
   }
 
@@ -552,12 +561,16 @@
   }
 
   async function refine(): Promise<void> {
+    if (refining) return;
+    refining = true;
     try {
       const res = await refineCluster(clusterId);
       toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
-      void loadFirst();
+      await loadFirst();
     } catch (e) {
       toastStore.error(`Refine failed: ${(e as Error).message}`);
+    } finally {
+      refining = false;
     }
   }
 
@@ -1023,8 +1036,28 @@
 
       <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
-      <button class="btn" type="button" onclick={runGemma}>Run Gemma</button>
-      <button class="btn" type="button" onclick={refine}>Refine (AHC)</button>
+      <button class="btn" type="button" onclick={runGemma} disabled={gemmaRunning}>
+        {#if gemmaRunning}
+          <span class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"></span>
+          Running…
+        {:else}
+          Run Gemma
+        {/if}
+      </button>
+      <button
+        class="btn"
+        type="button"
+        onclick={refine}
+        disabled={refining}
+        title="Sub-cluster this cluster with AHC"
+      >
+        {#if refining}
+          <span class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"></span>
+          Refining…
+        {:else}
+          Refine (AHC)
+        {/if}
+      </button>
 
       <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
