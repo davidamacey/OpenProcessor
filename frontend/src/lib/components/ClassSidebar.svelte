@@ -125,7 +125,7 @@
   // count the same way.
 </script>
 
-<aside class="flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-950">
+<aside class="relative flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-950">
   <div class="border-b border-zinc-800 p-3">
     <h2 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">Classes</h2>
     <input
@@ -136,10 +136,17 @@
     />
   </div>
 
+  <!-- Drop hint is an ABSOLUTE overlay (pointer-events-none) so it can't
+       reflow the class list mid-drag. Previously it was in flow and its
+       appearance pushed every folder row down, so the drop landed on the
+       wrong row / above the name. Overlaying keeps every row's hit target
+       fixed under the cursor. -->
   {#if dragActive && ondrop}
-    <div class="border-b border-blue-500/30 bg-blue-500/10 px-3 py-2 text-center text-[11px] font-medium text-blue-200">
+    <div
+      class="pointer-events-none absolute inset-x-0 top-[60px] z-20 border-y border-blue-500/40 bg-blue-600/90 px-3 py-1.5 text-center text-[11px] font-medium text-blue-50 shadow-lg backdrop-blur"
+    >
       {#if hoveredClass}
-        Drop on <span class="font-semibold text-blue-100">{hoveredClass.name}</span>
+        Drop on <span class="font-semibold text-white">{hoveredClass.name}</span>
       {:else}
         Drag onto a class row to label
       {/if}
@@ -171,7 +178,7 @@
           {@const isHover = hoveredClassId === cls.id}
           <li>
             <div
-              class="flex w-full items-center justify-between gap-2 transition-colors
+              class="op-drop-row flex w-full items-center justify-between gap-2 transition-colors
                 {isHover
                 ? 'bg-blue-500/30 ring-2 ring-inset ring-blue-400'
                 : selectedId === cls.id
@@ -238,3 +245,26 @@
 </aside>
 
 <AddClassModal open={modalOpen} onclose={() => (modalOpen = false)} />
+
+<style>
+  /* svelte-dnd-action injects a shadow placeholder element into the
+     hovered drop zone. In these narrow flex class-rows it became a
+     flex child and pushed the name + count down, shifting the visible
+     drop target away from the cursor (you had to aim above the name).
+     Take the shadow out of flow: overlay it on the row instead so the
+     row never reflows and the whole row stays a stable hit target. */
+  .op-drop-row {
+    position: relative;
+  }
+  .op-drop-row :global([data-is-dnd-shadow-item-hint]) {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    pointer-events: none;
+    opacity: 0;
+  }
+</style>

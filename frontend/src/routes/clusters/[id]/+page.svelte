@@ -80,9 +80,15 @@
   // ---- Move/DnD state ----------------------------------------------------
   // Recent target cluster ids the labeler has typed in this session (LRU 8).
   let recentTargets = $state<number[]>([]);
-  // The dnd-action items array shown in the grid; mirrors filteredCrops but
-  // is what we mutate during a drag so optimistic UI feels native.
-  let gridItems = $state<OpCrop[]>([]);
+  // The grid is rendered as one dndzone PER sub-cluster group so the
+  // refine (AHC) delineation can show headers between groups without
+  // putting non-item elements inside a dndzone (svelte-dnd-action maps
+  // each zone's direct children 1:1 to its items array — interleaved
+  // separators break that and the drag). When not grouping, there's a
+  // single '__all__' group == the whole cluster. Each group.items is a
+  // separate mutable array the dnd action shuffles during a drag.
+  type GridGroup = { key: string; label: string; items: OpCrop[] };
+  let gridGroups = $state<GridGroup[]>([]);
   // Tracks the in-flight drag's payload (one or many crops). Set on dragStart.
   let dragIds = $state<string[]>([]);
   // Inline cluster-picker (opened by M-key) state.
@@ -241,24 +247,49 @@
     return m;
   });
 
-  // Mirror filteredCrops into gridItems whenever the underlying list changes.
-  // svelte-dnd-action mutates its `items` prop in place, so we use a separate
-  // array — never feed it `filteredCrops` directly. When grouping, sort so
-  // each cluster_subid is contiguous (nulls last) for inline delineation.
-  $effect(() => {
-    const items = [...filteredCrops];
-    if (groupBySubcluster) {
-      items.sort((a, b) => {
-        const sa = a.cluster_subid ?? '￿';
-        const sb = b.cluster_subid ?? '￿';
-        return sa < sb ? -1 : sa > sb ? 1 : 0;
-      });
+  // Build gridGroups from filteredCrops. When grouping, partition into
+  // contiguous sub-cluster groups (sorted by cluster_subid, unrefined
+  // last) each with its own header + dndzone. When not grouping, one
+  // '__all__' group holding the whole filtered list. Never feed
+  // filteredCrops directly to a zone — the dnd action mutates items in
+  // place, so each group gets a fresh array copy.
+  function buildGroups(source: OpCrop[]): GridGroup[] {
+    if (!groupBySubcluster) {
+      return [{ key: '__all__', label: '', items: [...source] }];
     }
-    gridItems = items;
+    const sorted = [...source].sort((a, b) => {
+      const sa = a.cluster_subid ?? '￿';
+      const sb = b.cluster_subid ?? '￿';
+      return sa < sb ? -1 : sa > sb ? 1 : 0;
+    });
+    const groups: GridGroup[] = [];
+    for (const c of sorted) {
+      const sub = c.cluster_subid ?? '__none__';
+      const last = groups[groups.length - 1];
+      if (!last || last.key !== sub) {
+        groups.push({
+          key: sub,
+          label: sub === '__none__' ? 'unrefined' : `sub-cluster ${sub}`,
+          items: [c],
+        });
+      } else {
+        last.items.push(c);
+      }
+    }
+    return groups;
+  }
+
+  // Rebuild groups whenever the underlying list (or grouping mode)
+  // changes. Tracked deps: filteredCrops + groupBySubcluster. Does NOT
+  // read gridGroups, so mid-drag mutations of gridGroups don't retrigger
+  // it (which would clobber the in-flight shuffle).
+  $effect(() => {
+    gridGroups = buildGroups(filteredCrops);
   });
 
-  // Cut-line index: crops with similarity > 0.75 come first (already sorted
-  // by API). Suppressed while grouping by sub-cluster (subid order wins).
+  // Cut-line index: crops with similarity > 0.75 come first (already
+  // sorted by API). Only meaningful in the single '__all__' group;
+  // suppressed while grouping by sub-cluster (subid order wins).
   const cutLineIndex = $derived.by(() => {
     let i = 0;
     for (; i < filteredCrops.length; i++) {
@@ -267,20 +298,6 @@
     }
     return i;
   });
-
-  // Header label for the sub-cluster group starting at grid index i, or
-  // null if card i isn't the start of a new group. Drives the inline
-  // full-width separators in the grid.
-  function subHeaderAt(i: number): { label: string; count: number } | null {
-    if (!groupBySubcluster) return null;
-    const cur = gridItems[i]?.cluster_subid ?? '__none__';
-    const prev = i > 0 ? (gridItems[i - 1]?.cluster_subid ?? '__none__') : null;
-    if (i !== 0 && cur === prev) return null;
-    return {
-      label: cur === '__none__' ? 'unrefined' : `sub-cluster ${cur}`,
-      count: subCounts.get(cur) ?? 0,
-    };
-  }
 
   // totalPages was used by the Next/Prev buttons — gone now that infinite scroll
   // owns the pagination. Server-side pageSize stays at 60 per request, but the
@@ -678,7 +695,15 @@
    * target zone receives the dropped items, fires the move RPC, and then
    * resets its own items array so the visual placeholder doesn't linger.
    */
-  function onGridConsider(e: CustomEvent<{ items: OpCrop[]; info: { id: string; trigger: TRIGGERS; source: SOURCES } }>): void {
+  function _setGroupItems(key: string, items: OpCrop[]): void {
+    const g = gridGroups.find((x) => x.key === key);
+    if (g) g.items = items;
+  }
+
+  function onGroupConsider(
+    key: string,
+    e: CustomEvent<{ items: OpCrop[]; info: { id: string; trigger: TRIGGERS; source: SOURCES } }>,
+  ): void {
     // The `!dragIds.includes` guard makes this block run once per drag
     // (consider fires repeatedly). Finder pattern: grabbing any selected
     // card drags the whole selection; grabbing an unselected card
@@ -694,20 +719,25 @@
         selected = new Set([draggedId]);
       }
     }
-    gridItems = e.detail.items;
+    _setGroupItems(key, e.detail.items);
   }
 
-  function onGridFinalize(e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>): void {
-    // The grid is the source-of-truth zone; if a finalize lands here without
-    // a corresponding target drop, revert to filteredCrops to undo any
-    // shadow-item shuffling.
-    gridItems = e.detail.items;
-    if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE || e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
-      // The actual move RPC fires from the target zone's finalize handler.
-      // No-op here.
+  function onGroupFinalize(
+    key: string,
+    e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>,
+  ): void {
+    _setGroupItems(key, e.detail.items);
+    if (
+      e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE ||
+      e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER
+    ) {
+      // Real label-move RPCs fire from the ClassSidebar's finalize.
+      // Dropping into another grid sub-group has no semantic meaning
+      // (all groups share cluster_id) — rebuild to undo the shuffle.
+      gridGroups = buildGroups(filteredCrops);
     } else {
       // DROPPED_OUTSIDE_OF_ANY / DRAG_STOPPED → restore.
-      gridItems = [...filteredCrops];
+      gridGroups = buildGroups(filteredCrops);
       dragIds = [];
     }
   }
@@ -916,7 +946,7 @@
           // svelte-dnd-action listens for to abort the active pointer drag.
           window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
           dragIds = [];
-          gridItems = [...filteredCrops];
+          gridGroups = buildGroups(filteredCrops);
           return;
         }
         selected = new Set();
@@ -1183,43 +1213,52 @@
       {:else if filteredCrops.length === 0}
         <p class="text-sm text-zinc-500">No crops in this cluster yet.</p>
       {:else}
-        <div
-          class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
-          use:dndzone={{
-            items: gridItems,
-            type: 'op-crop',
-            flipDurationMs: 150,
-            dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
-            dragDisabled: false,
-          }}
-          onconsider={onGridConsider}
-          onfinalize={onGridFinalize}
-        >
-          {#each gridItems as crop, i (crop.id)}
-            {@const sub = subHeaderAt(i)}
-            {#if sub}
-              <!-- Inline sub-cluster separator: full-width band that
-                   breaks the grid into the groups refine (AHC) found. -->
-              <div
-                class="col-span-full mt-2 flex items-center gap-2 border-t border-zinc-700 pt-2 text-xs font-medium text-zinc-300 first:mt-0 first:border-t-0 first:pt-0"
-              >
-                <span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100">{sub.label}</span>
-                <span class="text-zinc-500">{sub.count} crop{sub.count === 1 ? '' : 's'}</span>
-                <span class="h-px flex-1 bg-zinc-800"></span>
-              </div>
-            {:else if !groupBySubcluster && i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < gridItems.length}
-              <CutLine />
-            {/if}
-            <CropCard
-              {crop}
-              selected={selected.has(crop.id)}
-              onclick={(c, e) => clickSelect(c.id, e)}
-              onacceptGemma={(c) => void acceptGemmaForCrop(c)}
-              onrejectGemma={(c) => void rejectGemmaForCrop(c)}
-              ondetail={(c) => (detailCrop = c)}
-            />
-          {/each}
-        </div>
+        <!-- One dndzone per sub-cluster group. Headers sit BETWEEN zones
+             (not inside any) so each zone's children map 1:1 to its
+             items — keeping drag-and-drop intact. All zones share
+             type='op-crop' so a card drags out to the ClassSidebar (or
+             across groups) exactly as before. -->
+        {#each gridGroups as group (group.key)}
+          {#if groupBySubcluster}
+            <div
+              class="mt-3 flex items-center gap-2 pt-1 text-xs font-medium text-zinc-300 first:mt-0"
+            >
+              <span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100">{group.label}</span>
+              <span class="text-zinc-500">
+                {group.items.length} crop{group.items.length === 1 ? '' : 's'}
+              </span>
+              <span class="h-px flex-1 bg-zinc-800"></span>
+            </div>
+          {/if}
+          <div
+            class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 {groupBySubcluster
+              ? 'mt-2'
+              : ''}"
+            use:dndzone={{
+              items: group.items,
+              type: 'op-crop',
+              flipDurationMs: 150,
+              dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
+              dragDisabled: false,
+            }}
+            onconsider={(e) => onGroupConsider(group.key, e)}
+            onfinalize={(e) => onGroupFinalize(group.key, e)}
+          >
+            {#each group.items as crop, i (crop.id)}
+              {#if !groupBySubcluster && i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < group.items.length}
+                <CutLine />
+              {/if}
+              <CropCard
+                {crop}
+                selected={selected.has(crop.id)}
+                onclick={(c, e) => clickSelect(c.id, e)}
+                onacceptGemma={(c) => void acceptGemmaForCrop(c)}
+                onrejectGemma={(c) => void rejectGemmaForCrop(c)}
+                ondetail={(c) => (detailCrop = c)}
+              />
+            {/each}
+          </div>
+        {/each}
         <!-- Sentinel inside the scroll container so IntersectionObserver
              roots on the right element (the overflow-auto parent). -->
         <div
