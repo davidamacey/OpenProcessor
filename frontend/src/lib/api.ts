@@ -268,6 +268,13 @@ export interface DatasetStats {
     other: number;
   };
   plates: {
+    /** Crops with a plate_bbox_norm right now — the honest "crops with a
+     *  plate" count (matches the plate cluster view). */
+    boxed?: number;
+    /** Crops Gemma confirmed are real plates (plate_status='detected'). */
+    confirmed?: number;
+    /** Sum of plate_detector credit — includes rejected/failed attempts,
+     *  so it OVERSTATES real plates. Kept for back-compat; not the headline. */
     total_detected: number;
     by_lpr: number;
     by_sam3: number;

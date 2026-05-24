@@ -395,7 +395,8 @@
         <header class="mb-3 flex items-center justify-between">
           <h3 class="text-sm font-semibold text-zinc-300">Plate detections</h3>
           <span class="text-xs text-zinc-500">
-            {fmt(stats.plates?.total_detected ?? 0)} crops with a plate
+            {fmt(stats.plates?.boxed ?? 0)} with a plate box ·
+            {fmt(stats.plates?.confirmed ?? 0)} confirmed
           </span>
         </header>
         {#if platesRows.length === 0}
@@ -431,14 +432,18 @@
         </h3>
         <div class="flex items-baseline gap-2">
           <span class="font-mono text-2xl text-zinc-100">
-            {(((stats.plates?.total_detected ?? 0) / Math.max(1, stats.total_crops)) * 100).toFixed(1)}%
+            {(((stats.plates?.boxed ?? 0) / Math.max(1, stats.total_crops)) * 100).toFixed(1)}%
           </span>
-          <span class="text-xs text-zinc-500">of crops have a plate</span>
+          <span class="text-xs text-zinc-500">of crops have a plate box</span>
         </div>
         <p class="mt-2 text-xs text-zinc-500">
-          The remaining {fmt(stats.total_crops - (stats.plates?.total_detected ?? 0))} crops
-          either had no visible plate (Gemma pre-filter said no) or the LPR/SAM3
-          detectors haven't reached them yet.
+          {fmt(stats.plates?.boxed ?? 0)} crops carry a plate box
+          ({fmt(stats.plates?.confirmed ?? 0)} Gemma-confirmed). The remaining
+          {fmt(stats.total_crops - (stats.plates?.boxed ?? 0))} either had no
+          visible plate (Gemma pre-filter said no) or the LPR/SAM3 detectors
+          haven't reached them yet. A detector ran on
+          {fmt(stats.plates?.total_detected ?? 0)} crops total (includes
+          rejected/failed attempts).
         </p>
       </div>
     </div>
