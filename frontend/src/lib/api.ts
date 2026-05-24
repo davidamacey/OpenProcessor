@@ -447,7 +447,15 @@ export async function getClusters(
   // cluster_kind, and is_unlabeled. The frontend ONLY shapes the result
   // into the labeler's OpCluster type — no semantic compute here.
   const raw = await apiFetch<RawClustersResp>(
-    `/curation/clusters${qs({ per_cluster: 4, class_id: filter.class_id ?? undefined })}`,
+    `/curation/clusters${qs({
+      per_cluster: 4,
+      class_id: filter.class_id ?? undefined,
+      // Pull enough buckets that the 512 IVF candidate clusters (+ class
+      // clusters) all come back in one call — the endpoint returns them
+      // ordered by size, not paginated, so a low cap would silently drop
+      // the smaller candidate buckets from the "Unlabeled only" view.
+      max_clusters: 2000,
+    })}`,
     {},
     signal,
   );

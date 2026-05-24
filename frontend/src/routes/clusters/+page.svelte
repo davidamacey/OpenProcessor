@@ -168,15 +168,21 @@
   // skip the prepend there.
   // gridItems = (synthetic license_plate card if unfiltered) + clusters,
   // optionally narrowed to only the "Unlabeled" group when the toggle is on.
-  // A cluster is unlabeled when its dominant_class_name is absent (the
-  // /curation/clusters endpoint returns null for "no class won the cluster majority").
+  // "Unlabeled" = cluster_kind !== 'class', i.e. the candidate (IVF/AHC)
+  // and unassigned buckets the operator still needs to sort. Keying on
+  // cluster_kind (not dominant_class_name) is the fix for "only 16
+  // showed": candidate clusters dominated by gemma_unmatched crops DO
+  // carry a dominant_class_name, so the old !dominant_class_name test
+  // wrongly excluded them.
   const gridItems = $derived.by<OpCluster[]>(() => {
     const base = classFilter == null && lpCard != null && !unlabeledOnly
       ? [lpCard, ...clusters]
       : clusters;
-    return unlabeledOnly ? base.filter((c) => !c.dominant_class_name) : base;
+    return unlabeledOnly ? base.filter((c) => c.cluster_kind !== 'class') : base;
   });
-  const unlabeledCount = $derived(clusters.filter((c) => !c.dominant_class_name).length);
+  const unlabeledCount = $derived(
+    clusters.filter((c) => c.cluster_kind !== 'class').length,
+  );
 
   async function loadMore(): Promise<void> {
     if (loadingMore || !hasMore) return;
