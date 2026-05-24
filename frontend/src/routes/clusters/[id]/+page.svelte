@@ -38,6 +38,16 @@
   );
 
   let cluster = $state<OpCluster | null>(null);
+
+  // Human-readable cluster name for the header. Class clusters resolve to
+  // the registry class name (cluster_id == class_id), falling back to the
+  // backend's dominant_class_name. Candidate clusters (>= 10000) have no
+  // name yet — label them so the operator knows it's unlabeled by design,
+  // not a bug.
+  const clusterName = $derived(
+    clsForCluster?.name ?? cluster?.dominant_class_name ?? null,
+  );
+
   let crops = $state<OpCrop[]>([]);
   let total = $state<number>(0);
   let loadedPages = $state<number>(0);
@@ -987,7 +997,17 @@
   <div
     class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5"
   >
-    <h1 class="text-lg font-semibold">Cluster #{clusterIdParam}</h1>
+    <h1 class="flex items-baseline gap-2 text-lg font-semibold">
+      {#if clusterName}
+        <span class="capitalize text-zinc-100">{clusterName}</span>
+        <span class="text-sm font-normal text-zinc-500">#{clusterIdParam}</span>
+      {:else if cluster?.cluster_kind === 'candidate'}
+        <span class="text-zinc-100">Cluster #{clusterIdParam}</span>
+        <span class="text-sm font-normal text-amber-400/80">unlabeled candidate</span>
+      {:else}
+        <span class="text-zinc-100">Cluster #{clusterIdParam}</span>
+      {/if}
+    </h1>
     {#if cluster}
       <span class="text-xs text-zinc-400">
         size {cluster.size.toLocaleString()} · dominant
