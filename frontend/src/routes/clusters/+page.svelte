@@ -3,10 +3,13 @@
   import { page } from '$app/state';
   import {
     batchPlateStatus,
+    clusterPlates,
     getClusters,
     getCrop,
+    getPlateClusters,
     getPlates,
     getThumbUrl,
+    refinePlateCluster,
     setCropPlate,
     type PlateBrowseItem,
   } from '$lib/api';
@@ -95,6 +98,67 @@
   let plateSelected = $state<Set<string>>(new Set());
   let editPlateCrop = $state<OpCrop | null>(null);
   let plateBusy = $state<boolean>(false);
+
+  // Top-N largest-crop gate for plates. The sort is built on the largest
+  // 1-3 crops, so this is the key filter for finding the plates that matter.
+  // null = all ranks.
+  let plateMaxRank = $state<number | null>(null);
+
+  // Plate clustering (AHC-refinable buckets over plate_pe_embedding).
+  // selectedPlateCluster narrows the gallery to one bucket; null shows the
+  // bucket grid (or the flat gallery when no clustering has run).
+  let plateClusters = $state<OpCluster[]>([]);
+  let selectedPlateCluster = $state<number | null>(null);
+  let plateClusterBusy = $state<boolean>(false);
+
+  async function loadPlateClusters(): Promise<void> {
+    try {
+      const res = await getPlateClusters({
+        maxClusters: 500,
+        maxRank: plateMaxRank ?? undefined,
+      });
+      plateClusters = res.clusters;
+    } catch (e) {
+      toastStore.error(`Load plate clusters failed: ${(e as Error).message}`);
+    }
+  }
+
+  async function runClusterPlates(): Promise<void> {
+    if (plateClusterBusy) return;
+    plateClusterBusy = true;
+    try {
+      const res = await clusterPlates(plateMaxRank ?? undefined);
+      toastStore.success(`Clustered ${res.n_plates} plates into ${res.n_clusters} buckets.`);
+      await loadPlateClusters();
+    } catch (e) {
+      toastStore.error(`Cluster plates failed: ${(e as Error).message}`);
+    } finally {
+      plateClusterBusy = false;
+    }
+  }
+
+  async function runRefinePlateCluster(): Promise<void> {
+    if (selectedPlateCluster == null || plateClusterBusy) return;
+    plateClusterBusy = true;
+    try {
+      const res = await refinePlateCluster(selectedPlateCluster);
+      toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
+      await loadPlatesFirst();
+    } catch (e) {
+      toastStore.error(`Refine failed: ${(e as Error).message}`);
+    } finally {
+      plateClusterBusy = false;
+    }
+  }
+
+  function openPlateCluster(id: number): void {
+    selectedPlateCluster = id;
+  }
+
+  function backToPlateClusters(): void {
+    selectedPlateCluster = null;
+    plateSelected = new Set();
+  }
 
   function togglePlateSelect(p: PlateBrowseItem): void {
     const next = new Set(plateSelected);
@@ -345,6 +409,19 @@
     if (!isLicensePlateFilter) void loadFirst();
   });
 
+  function _plateQuery(page: number): import('$lib/api').PlatesQuery {
+    return {
+      page,
+      page_size: PLATES_PAGE_SIZE,
+      detector: plateDetectorFilter || undefined,
+      verified: plateVerifiedOnly || undefined,
+      min_score: plateMinScore > 0 ? plateMinScore : undefined,
+      text: plateTextQuery || undefined,
+      max_rank: plateMaxRank ?? undefined,
+      plate_cluster_id: selectedPlateCluster ?? undefined,
+    };
+  }
+
   async function loadPlatesFirst(): Promise<void> {
     platesLoading = true;
     platesError = null;
@@ -352,14 +429,7 @@
     platesTotal = 0;
     platesPage = 1;
     try {
-      const res = await getPlates({
-        page: 1,
-        page_size: PLATES_PAGE_SIZE,
-        detector: plateDetectorFilter || undefined,
-        verified: plateVerifiedOnly || undefined,
-        min_score: plateMinScore > 0 ? plateMinScore : undefined,
-        text: plateTextQuery || undefined,
-      });
+      const res = await getPlates(_plateQuery(1));
       plates = res.items;
       platesTotal = res.total;
     } catch (e) {
@@ -374,14 +444,7 @@
     platesLoading = true;
     try {
       const next = platesPage + 1;
-      const res = await getPlates({
-        page: next,
-        page_size: PLATES_PAGE_SIZE,
-        detector: plateDetectorFilter || undefined,
-        verified: plateVerifiedOnly || undefined,
-        min_score: plateMinScore > 0 ? plateMinScore : undefined,
-        text: plateTextQuery || undefined,
-      });
+      const res = await getPlates(_plateQuery(next));
       const seen = new Set(plates.map((p) => p.crop_id));
       plates = [...plates, ...res.items.filter((p) => !seen.has(p.crop_id))];
       platesTotal = res.total;
@@ -393,13 +456,20 @@
     }
   }
 
-  // Re-load plates whenever the filter sidebar values OR the plates-mode flag change.
+  // Re-load plates whenever a filter, the top-N rank gate, or the selected
+  // plate cluster changes. When no cluster is selected, also refresh the
+  // cluster-card grid so it reflects the current rank gate.
   $effect(() => {
     void plateDetectorFilter;
     void plateVerifiedOnly;
     void plateMinScore;
     void plateTextQuery;
-    if (isLicensePlateFilter) void loadPlatesFirst();
+    void plateMaxRank;
+    void selectedPlateCluster;
+    if (isLicensePlateFilter) {
+      void loadPlatesFirst();
+      if (selectedPlateCluster == null) void loadPlateClusters();
+    }
   });
 
   async function savePlateBbox(plateBboxSrc: import('$lib/types').BBoxNorm | null): Promise<void> {
@@ -624,6 +694,52 @@
               class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
             />
           </label>
+
+          <!-- Top-N largest-crop gate. The sort runs on the largest 1-3
+               crops, so this is the key filter for the plates that matter. -->
+          <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+            {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
+              <button
+                type="button"
+                class="px-2 py-1 {plateMaxRank === o.v
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
+                onclick={() => (plateMaxRank = o.v as number | null)}
+              >
+                {o.l}
+              </button>
+            {/each}
+          </div>
+
+          {#if selectedPlateCluster == null}
+            <button
+              type="button"
+              disabled={plateClusterBusy}
+              class="rounded border border-purple-500/50 bg-purple-500/20 px-2 py-1 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
+              onclick={runClusterPlates}
+              title="Group plates by visual similarity so outliers/false-positives surface"
+            >
+              {plateClusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
+            </button>
+          {:else}
+            <button
+              type="button"
+              class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
+              onclick={backToPlateClusters}
+            >
+              ← Clusters
+            </button>
+            <span class="font-mono text-[11px] text-zinc-300">bucket #{selectedPlateCluster}</span>
+            <button
+              type="button"
+              disabled={plateClusterBusy}
+              class="rounded border border-blue-500/50 bg-blue-500/20 px-2 py-1 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+              onclick={runRefinePlateCluster}
+              title="AHC-refine this bucket into sub-clusters to isolate outliers"
+            >
+              {plateClusterBusy ? 'Refining…' : 'Refine AHC'}
+            </button>
+          {/if}
           <span class="grow"></span>
           <span class="font-mono text-[11px] text-zinc-500">
             {plates.length.toLocaleString()} / {platesTotal.toLocaleString()} plates
@@ -674,6 +790,43 @@
 
         {#if platesError}
           <p class="text-sm text-red-300">API unavailable: {platesError}</p>
+        {:else if selectedPlateCluster == null && plateClusters.length > 0}
+          <!-- Plate cluster cards. Click one to open its plates (with the
+               bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
+               get a blue border so refined buckets are easy to spot. -->
+          <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {#each plateClusters as c (c.id)}
+              <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
+                <button
+                  type="button"
+                  class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {c.has_subclusters
+                    ? 'border-blue-500/60'
+                    : 'border-zinc-700'}"
+                  onclick={() => openPlateCluster(c.id)}
+                >
+                  <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
+                    {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
+                      <img
+                        src={url}
+                        alt="plate"
+                        loading="lazy"
+                        class="aspect-[2/1] w-full bg-zinc-950 object-contain"
+                      />
+                    {/each}
+                  </div>
+                  <div class="flex items-center justify-between p-2 text-xs">
+                    <span class="font-semibold text-zinc-200">#{c.id}</span>
+                    <span class="text-zinc-400">{c.size.toLocaleString()}</span>
+                    {#if c.n_subclusters > 0}
+                      <span class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
+                        >{c.n_subclusters} sub</span
+                      >
+                    {/if}
+                  </div>
+                </button>
+              </li>
+            {/each}
+          </ul>
         {:else if platesLoading && plates.length === 0}
           <p class="text-sm text-zinc-500">Loading plates...</p>
         {:else if plates.length === 0}

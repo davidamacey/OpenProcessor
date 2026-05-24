@@ -193,6 +193,13 @@ export interface PlateBrowseItem {
   class_id: number | null;
   class_name: string | null;
   cluster_id: number | null;
+  /** Parent-crop rank by size in its image (1 = largest). */
+  crop_rank_in_image?: number | null;
+  crop_area_norm?: number | null;
+  /** Plate clustering assignment (independent of vehicle cluster_id). */
+  plate_cluster_id?: number | null;
+  plate_cluster_subid?: string | null;
+  plate_cluster_distance?: number | null;
   updated_at: string;
   thumbnail_url?: string;
   plate_thumbnail_url?: string;
@@ -213,6 +220,12 @@ export interface PlatesQuery {
   page_size?: number;
   class_id?: number;
   cluster_id?: number;
+  /** Plate clustering bucket (independent of the vehicle cluster_id). */
+  plate_cluster_id?: number;
+  /** AHC plate sub-cluster id (e.g. "17a"). */
+  plate_cluster_subid?: string;
+  /** Only plates on the top-N largest crops (crop_rank_in_image<=N). */
+  max_rank?: number;
   min_score?: number;
   max_score?: number;
   verified?: boolean;
@@ -223,6 +236,47 @@ export interface PlatesQuery {
 
 export function getPlates(params: PlatesQuery = {}, signal?: AbortSignal): Promise<PlatesPage> {
   return apiFetch<PlatesPage>(`/curation/plates${qs(params as Record<string, unknown>)}`, {}, signal);
+}
+
+/** Coarse-partition boxed plates into plate_cluster_id buckets (KMeans over
+ *  plate_pe_embedding). Optionally restrict to the top-N largest crops. */
+export function clusterPlates(
+  maxRank?: number,
+  signal?: AbortSignal,
+): Promise<{ status: string; n_plates: number; n_clusters: number; assigned: number }> {
+  return apiFetch(
+    `/curation/plates/cluster${qs({ max_rank: maxRank })}`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Per-bucket AHC refine over plate_pe_embedding; writes plate_cluster_subid. */
+export function refinePlateCluster(
+  clusterId: number,
+  signal?: AbortSignal,
+): Promise<{ cluster_id: number; n_members: number; n_subclusters: number; action: string }> {
+  return apiFetch(
+    `/curation/plates/clusters/refine/${clusterId}`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Plate cluster cards (mirrors getClusters' OpCluster shape). */
+export function getPlateClusters(
+  opts: { maxClusters?: number; perCluster?: number; maxRank?: number } = {},
+  signal?: AbortSignal,
+): Promise<{ clusters: OpCluster[]; count: number }> {
+  return apiFetch(
+    `/curation/plates/clusters${qs({
+      max_clusters: opts.maxClusters,
+      per_cluster: opts.perCluster,
+      max_rank: opts.maxRank,
+    })}`,
+    {},
+    signal,
+  );
 }
 
 export type TrainingCohortMode =
