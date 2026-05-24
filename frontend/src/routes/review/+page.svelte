@@ -323,6 +323,7 @@
     { value: 'detected', label: 'detected (plate visible)' },
     { value: 'no_plate_visible', label: 'no plate visible' },
     { value: 'verify_rejected', label: 'rejected (bad detection)' },
+    { value: 'false_positive', label: 'false positive (keep box)' },
   ];
 
   // Undo stack for plate confirm/reject. Each entry holds the previously
@@ -628,6 +629,24 @@
     }
   }
 
+  async function markFalsePositive(): Promise<void> {
+    if (!current) return;
+    const id = current.id;
+    // False positive: a detector drew this box but it is NOT a plate.
+    // We KEEP the box + all detection metadata (unlike Reject, which
+    // clears it) — flipping only plate_status. The retained geometry
+    // feeds FP analysis and becomes a hard negative in the dedicated
+    // LPR training export.
+    _pushPlateUndo({ item: current, insertAt: cursor, saved: null });
+    _advancePastPlate(id);
+    try {
+      await updateCropPlateMeta(id, { plate_status: 'false_positive' });
+      toastStore.success('Marked false positive (box kept). ← to go back.');
+    } catch (e) {
+      toastStore.error(`Mark FP failed: ${(e as Error).message}`);
+    }
+  }
+
   async function undoLast(): Promise<void> {
     const entry = undoStore.pop();
     if (!entry) {
@@ -666,6 +685,7 @@
       } else {
         reg('enter', confirmPlate, 'Confirm plate & advance');
         reg('d', rejectPlate, 'Reject (no plate visible)');
+        reg('f', markFalsePositive, 'False positive (keep box)');
         reg('e', toggleEdit, 'Edit bbox');
         // Back: re-insert the most-recently-confirmed plate so the operator
         // can correct mistakes without scrolling back through the queue.
@@ -828,8 +848,8 @@
         <kbd>↑↓←→</kbd> nudge · <kbd>[ ]</kbd> right edge · <kbd>Enter</kbd> save ·
         <kbd>Esc</kbd> cancel
       {:else if tab === 'plates'}
-        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>E</kbd> edit ·
-        <kbd>N</kbd> skip · <kbd>←</kbd> back
+        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>F</kbd> false-pos ·
+        <kbd>E</kbd> edit · <kbd>N</kbd> skip · <kbd>←</kbd> back
       {:else}
         per-class letter assigns · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip ·
         <kbd>D</kbd> discard · <kbd>Z</kbd> undo
@@ -1072,6 +1092,14 @@
               </button>
               <button class="btn btn-danger" type="button" onclick={rejectPlate}>
                 Reject (no plate)
+              </button>
+              <button
+                class="btn"
+                type="button"
+                onclick={markFalsePositive}
+                title="Detector drew a box but it's not a plate — keep the box as a training hard negative (F)"
+              >
+                False positive
               </button>
               <button class="btn" type="button" onclick={skip}>Skip</button>
               <button

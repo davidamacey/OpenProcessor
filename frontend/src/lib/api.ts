@@ -801,11 +801,18 @@ export function setCropPlate(
  * endpoint: `PATCH /curation/crops/{id}/plate_meta`. Only the keys present in
  * `patch` are sent — pass `plate_text: null` to clear, omit to leave
  * untouched. `plate_status` must be one of `'detected' |
- * 'no_plate_visible' | 'verify_rejected'` (the human-writable subset).
+ * 'no_plate_visible' | 'verify_rejected' | 'false_positive'` (the
+ * human-writable subset). `false_positive` keeps the detected box (for
+ * FP analysis + LPR hard-negative training); `no_plate_visible` clears it.
  */
 export interface PlateMetaPatch {
   plate_text?: string | null;
-  plate_status?: 'detected' | 'no_plate_visible' | 'verify_rejected' | null;
+  plate_status?:
+    | 'detected'
+    | 'no_plate_visible'
+    | 'verify_rejected'
+    | 'false_positive'
+    | null;
   plate_rejection_reason?: string | null;
 }
 
