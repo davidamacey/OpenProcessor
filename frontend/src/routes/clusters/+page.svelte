@@ -174,11 +174,51 @@
   // showed": candidate clusters dominated by gemma_unmatched crops DO
   // carry a dominant_class_name, so the old !dominant_class_name test
   // wrongly excluded them.
+  // Sort the loaded clusters client-side. The /curation/clusters endpoint only
+  // returns size-descending (it's a terms agg, not a sortable query), and
+  // every cluster comes back in one call — so sorting here is both
+  // correct and complete. Without this the sort dropdown did nothing.
+  function sortClusters(list: OpCluster[], mode: typeof sort): OpCluster[] {
+    const out = [...list];
+    const purity = (c: OpCluster) => (c.purity == null ? Number.POSITIVE_INFINITY : c.purity);
+    switch (mode) {
+      case 'size_desc':
+        out.sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
+        break;
+      case 'size_asc':
+        out.sort((a, b) => (a.size ?? 0) - (b.size ?? 0));
+        break;
+      case 'purity_desc':
+        // null purity (no labelled members) sorts last on a desc view too.
+        out.sort((a, b) => {
+          const pa = a.purity ?? -1;
+          const pb = b.purity ?? -1;
+          return pb - pa;
+        });
+        break;
+      case 'purity_asc':
+        out.sort((a, b) => purity(a) - purity(b));
+        break;
+      case 'dominant_class':
+        out.sort((a, b) =>
+          (a.dominant_class_name ?? '￿').localeCompare(b.dominant_class_name ?? '￿'),
+        );
+        break;
+    }
+    return out;
+  }
+
   const gridItems = $derived.by<OpCluster[]>(() => {
-    const base = classFilter == null && lpCard != null && !unlabeledOnly
-      ? [lpCard, ...clusters]
+    const filtered = unlabeledOnly
+      ? clusters.filter((c) => c.cluster_kind !== 'class')
       : clusters;
-    return unlabeledOnly ? base.filter((c) => c.cluster_kind !== 'class') : base;
+    const sorted = sortClusters(filtered, sort);
+    // Keep the synthetic license_plate card pinned first (entry point to
+    // the plate inventory), unaffected by sort, only on the unfiltered
+    // labelled view.
+    return classFilter == null && lpCard != null && !unlabeledOnly
+      ? [lpCard, ...sorted]
+      : sorted;
   });
   const unlabeledCount = $derived(
     clusters.filter((c) => c.cluster_kind !== 'class').length,
@@ -211,11 +251,12 @@
     keyboardStore.setScope('clusters');
   });
 
-  // Re-load on filter / sort change — but only for the cluster view.
-  // The plate browse view has its own loader keyed on its own params.
+  // Re-load on class-filter change — but only for the cluster view.
+  // Sort is applied client-side (sortClusters) over the single loaded
+  // batch, so changing it must NOT refetch (the endpoint returns the
+  // same size-ordered data regardless).
   $effect(() => {
     void classFilter;
-    void sort;
     if (!isLicensePlateFilter) void loadFirst();
   });
 
