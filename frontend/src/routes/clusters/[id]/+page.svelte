@@ -1341,6 +1341,16 @@ v1.1.9 sale-quality stops; training tolerance is lower."
               flipDurationMs: 150,
               dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
               dragDisabled: false,
+              // Reject foreign items. After AHC refine the grid is split
+              // into one zone per sub-cluster; without this a sibling
+              // sub-cluster zone steals a drop meant for the ClassSidebar
+              // (it's geometrically larger than the narrow sidebar rows),
+              // so the card snaps back into the AHC grouping instead of
+              // being labeled. Cross-group grid drops have no meaning
+              // anyway (onGroupFinalize rebuilds them), so disabling
+              // foreign drops only removes the drop-stealing — drag-out to
+              // the sidebar is unaffected.
+              dropFromOthersDisabled: true,
             }}
             onconsider={(e) => onGroupConsider(group.key, e)}
             onfinalize={(e) => onGroupFinalize(group.key, e)}
