@@ -24,9 +24,37 @@
   // call resolves; the cluster grid hides it during that window.
   let lpCard = $state<OpCluster | null>(null);
 
-  let sort = $state<NonNullable<ClusterFilter['sort']>>('purity_asc');
-  let unlabeledOnly = $state<boolean>(false);
+  // Persist the cluster-list filter (sort + unlabeled-only) across
+  // navigation so going into a cluster and back keeps the operator's
+  // last view — they shouldn't have to re-click "Unlabeled only" every
+  // time. sessionStorage survives back-nav + refresh within the session
+  // regardless of how the user returns (back button, link, etc.).
+  const FILTER_PERSIST_KEY = 'op_clusters_filter_v1';
+  function loadPersistedFilter(): { sort?: string; unlabeledOnly?: boolean } | null {
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      return JSON.parse(sessionStorage.getItem(FILTER_PERSIST_KEY) ?? 'null');
+    } catch {
+      return null;
+    }
+  }
+  const _persistedFilter = loadPersistedFilter();
+
+  let sort = $state<NonNullable<ClusterFilter['sort']>>(
+    (_persistedFilter?.sort as NonNullable<ClusterFilter['sort']>) ?? 'purity_asc',
+  );
+  let unlabeledOnly = $state<boolean>(_persistedFilter?.unlabeledOnly ?? false);
   const pageSize = 24;
+
+  // Write the filter back whenever it changes. Catches every mutation
+  // site (toggle button, sort dropdown) without per-handler bookkeeping.
+  $effect(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.setItem(
+      FILTER_PERSIST_KEY,
+      JSON.stringify({ sort, unlabeledOnly }),
+    );
+  });
 
   // --- Plate browse (replaces the "License plates aren't clustered" placeholder
   //     when the operator selects the license_plate class filter).
