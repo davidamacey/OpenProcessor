@@ -568,9 +568,11 @@
                 </div>
                 <div
                   class="truncate text-sm text-zinc-300"
-                  title={c.dominant_class_name ?? `Unlabeled cluster #${c.id}`}
+                  title={unlabeledOnly
+                    ? `Unlabeled cluster #${c.id}`
+                    : (c.dominant_class_name ?? `Unlabeled cluster #${c.id}`)}
                 >
-                  {#if c.dominant_class_name}
+                  {#if c.dominant_class_name && !unlabeledOnly}
                     {c.dominant_class_name}
                     <span class="text-zinc-500">
                       · {((c.dominant_pct ?? 0) * 100).toFixed(0)}%
