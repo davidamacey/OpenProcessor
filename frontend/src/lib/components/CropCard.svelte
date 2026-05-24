@@ -151,11 +151,23 @@
   const conf = $derived(
     crop.label_confidence != null ? `${(crop.label_confidence * 100).toFixed(0)}%` : null,
   );
+
+  // Primary-subject rank + blur chip — tells the operator why a crop is in
+  // or out of the size/clarity filters. rank 1 = largest in its photo.
+  const rank = $derived<number | null>(crop.crop_rank_in_image ?? null);
+  const blurRatio = $derived<number | null>(crop.blur_lap_ratio ?? null);
+  const rankBlurLabel = $derived.by<string | null>(() => {
+    const parts: string[] = [];
+    if (rank != null) parts.push(rank === 1 ? '★1' : `#${rank}`);
+    if (blurRatio != null) parts.push(`b${blurRatio.toFixed(2)}`);
+    return parts.length ? parts.join(' ') : null;
+  });
 </script>
 
 <div
   role="button"
   tabindex="0"
+  style="content-visibility:auto;contain-intrinsic-size:auto 260px"
   class="group relative flex flex-col rounded-md border bg-zinc-900 text-left transition focus:outline-none {selected
     ? 'border-blue-500 ring-2 ring-blue-500/40'
     : 'border-zinc-800 hover:border-zinc-600'}"
@@ -246,6 +258,15 @@
         class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white"
       >
         {conf}
+      </span>
+    {/if}
+
+    {#if rankBlurLabel}
+      <span
+        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-200"
+        title="rank in photo (★1 = largest) · blur_lap_ratio (higher = clearer)"
+      >
+        {rankBlurLabel}
       </span>
     {/if}
 

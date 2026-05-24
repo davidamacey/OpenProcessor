@@ -177,6 +177,19 @@ export interface OpCrop {
   test_holdout: boolean;
   outlier_flagged?: boolean;
   outlier_score?: number | null;
+  // -- Primary-subject rank + blur quality -------------------------------
+  /** 1 = largest-area crop in its source photo, 2 = second, … Drives the
+   *  "Largest / Largest + 2nd" subject toggle. */
+  crop_rank_in_image?: number | null;
+  /** Normalized bbox area (w*h in [0,1]). */
+  crop_area_norm?: number | null;
+  /** legacy_sorter v1.1.9 crop/full Laplacian ratio (higher = clearer).
+   *  Drives the clarity slider. */
+  blur_lap_ratio?: number | null;
+  /** Raw v6 detection confidence (recorded even below the 0.75 floor). */
+  v6_raw_confidence?: number | null;
+  /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
+  coco_proposal_name?: string | null;
   updated_at: string;
 }
 
@@ -249,7 +262,9 @@ export type ReviewTab =
   | 'outliers'
   | 'uncertainty'
   | 'model_disagreements'
-  | 'plates';
+  | 'plates'
+  | 'primary_low_conf'
+  | 'coco_blind_spots';
 
 export interface ReviewItem extends OpCrop {
   reason: string;
@@ -283,6 +298,13 @@ export interface CropFilter {
   sort?: string;
   limit?: number;
   page?: number;
+  // -- Primary-subject filters -------------------------------------------
+  /** Keep only crops with crop_rank_in_image <= max_rank (1 or 2). */
+  max_rank?: number | null;
+  /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
+  min_blur_ratio?: number | null;
+  /** Mine the low-confidence pool: v6_raw_confidence < this OR no v6 box. */
+  v6_conf_lt?: number | null;
 }
 
 export interface ClusterFilter {
@@ -291,6 +313,10 @@ export interface ClusterFilter {
   sort?: 'purity_asc' | 'purity_desc' | 'size_desc' | 'size_asc' | 'dominant_class';
   page?: number;
   page_size?: number;
+  // Primary-subject grid filters: card stats reflect only crops that pass.
+  max_rank?: number | null;
+  min_blur_ratio?: number | null;
+  class_source?: string | null;
 }
 
 export interface BulkLabelConflict {

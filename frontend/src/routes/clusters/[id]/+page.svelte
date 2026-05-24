@@ -74,6 +74,23 @@
     { value: 'gemma_new_class_pending', label: 'New cls', hint: 'Gemma proposed new class' },
   ];
 
+  // Primary-subject scope: 0 = all crops, 1 = largest only, 2 = largest + 2nd.
+  // Maps to the /curation/crops?max_rank= filter (the "biggest vehicle in frame" the
+  // business sorts on). null = no rank filter.
+  let subjectScope = $state<0 | 1 | 2>(0);
+  const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
+
+  // Clarity slider. `blurSlider` is the live drag value; `minBlurRatio` only
+  // commits on release (change, not input) so dragging doesn't spam the API.
+  // 0 = show everything (null sent). v1.1.9 sale-quality stops: 1.1/1.3/1.4 —
+  // training tolerance sits lower, so the slider spans well below them.
+  const BLUR_MAX = 2;
+  let blurSlider = $state<number>(0);
+  let minBlurRatio = $state<number | null>(null);
+  function commitBlur(): void {
+    minBlurRatio = blurSlider > 0 ? blurSlider : null;
+  }
+
   // Class dropdown
   let confirmClassId = $state<number | null>(null);
 
@@ -106,6 +123,8 @@
     try {
       const res = await getCluster(clusterId, 1, pageSize, undefined, {
         classSource: classSourceFilter,
+        maxRank,
+        minBlurRatio,
       });
       cluster = res.cluster;
       const list = res.crops as PaginatedResponse<OpCrop>;
@@ -129,6 +148,8 @@
       const next = loadedPages + 1;
       const res = await getCluster(clusterId, next, pageSize, undefined, {
         classSource: classSourceFilter,
+        maxRank,
+        minBlurRatio,
       });
       const list = res.crops as PaginatedResponse<OpCrop>;
       // Dedup by id in case server returns overlapping pages after a relabel.
@@ -146,9 +167,11 @@
 
   $effect(() => {
     keyboardStore.setScope('cluster');
-    // Track both inputs so a filter change triggers a fresh load.
+    // Track every filter input so a change triggers a fresh load.
     void clusterId;
     void classSourceFilter;
+    void maxRank;
+    void minBlurRatio;
     void loadFirst();
   });
 
@@ -1153,6 +1176,64 @@
       <span class="ml-auto text-zinc-500">
         showing {total.toLocaleString()} from {classSourceFilter}
       </span>
+    {/if}
+  </div>
+
+  <!-- Primary-subject controls: focus on the largest vehicle(s) in frame
+       (what the business sorts on) and hide too-blurry crops. View-only —
+       no data is deleted; the slider commits on release to avoid a reload
+       per pixel. -->
+  <div
+    class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-1.5 text-xs"
+  >
+    <span class="text-zinc-500">subject:</span>
+    <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+      {#each [{ v: 0, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: 'Largest + 2nd' }] as opt (opt.v)}
+        <button
+          type="button"
+          class="px-2 py-0.5 {subjectScope === opt.v
+            ? 'bg-blue-600 text-white'
+            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+          onclick={() => (subjectScope = opt.v as 0 | 1 | 2)}
+        >
+          {opt.l}
+        </button>
+      {/each}
+    </div>
+
+    <span class="ml-2 text-zinc-500">clarity ≥</span>
+    <input
+      type="range"
+      min="0"
+      max={BLUR_MAX}
+      step="0.05"
+      list="blur-stops"
+      bind:value={blurSlider}
+      onchange={commitBlur}
+      class="h-1 w-40 cursor-pointer accent-blue-500"
+      title="Hide crops blurrier than this (blur_lap_ratio). 1.1/1.3/1.4 are the
+v1.1.9 sale-quality stops; training tolerance is lower."
+    />
+    <datalist id="blur-stops">
+      <option value="1.1"></option>
+      <option value="1.3"></option>
+      <option value="1.4"></option>
+    </datalist>
+    <span class="w-16 tabular-nums text-zinc-400">
+      {blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}
+    </span>
+    {#if subjectScope !== 0 || minBlurRatio !== null}
+      <button
+        type="button"
+        class="ml-auto rounded bg-zinc-800 px-2 py-0.5 text-zinc-300 hover:bg-zinc-700"
+        onclick={() => {
+          subjectScope = 0;
+          blurSlider = 0;
+          minBlurRatio = null;
+        }}
+      >
+        reset
+      </button>
     {/if}
   </div>
 

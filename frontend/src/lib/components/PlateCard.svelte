@@ -16,12 +16,22 @@
 
   interface Props {
     crop: PlateBrowseItem;
-    onclick?: (crop: PlateBrowseItem) => void;
+    onclick?: (crop: PlateBrowseItem, e: MouseEvent) => void;
+    /** Edit affordance (✎): parent opens PlateEditor for this plate. */
+    onedit?: (crop: PlateBrowseItem) => void;
+    /** Quick false-positive (✗): parent marks this plate false_positive. */
+    onmarkfp?: (crop: PlateBrowseItem) => void;
+    /** Selection state for multi-select bulk actions. */
+    selected?: boolean;
     /** Compact mode hides the chain strip for dense grids. */
     compact?: boolean;
   }
 
-  let { crop, onclick, compact = false }: Props = $props();
+  let { crop, onclick, onedit, onmarkfp, selected = false, compact = false }: Props = $props();
+
+  // false_positive plates stay visible (kept as hard negatives) but are
+  // dimmed + badged so the operator sees the triage state at a glance.
+  const isFalsePositive = $derived(crop.plate_status === 'false_positive');
 
   // Client-side shape envelope check — mirrors the server-side
   // is_plausible_plate_bbox in openprocessor so a row that slips past
@@ -47,24 +57,27 @@
   const warn = $derived(shapeWarning());
   const thumbUrl = $derived(crop.plate_thumbnail_url ?? `/curation/crops/${crop.crop_id}/plate_thumbnail`);
 
-  function handleClick(): void {
-    onclick?.(crop);
+  function handleClick(e: MouseEvent): void {
+    onclick?.(crop, e);
   }
 
   function handleKey(e: KeyboardEvent): void {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onclick?.(crop);
+      onclick?.(crop, e as unknown as MouseEvent);
     }
   }
 </script>
 
 <button
   type="button"
-  class="group flex flex-col items-stretch overflow-hidden rounded-md border border-zinc-800 bg-zinc-950 text-left transition-colors hover:border-blue-500/50"
+  style="content-visibility:auto;contain-intrinsic-size:auto 130px"
+  class="group relative flex flex-col items-stretch overflow-hidden rounded-md border bg-zinc-950 text-left transition-colors {selected
+    ? 'border-blue-500 ring-2 ring-blue-500/40'
+    : 'border-zinc-800 hover:border-blue-500/50'} {isFalsePositive ? 'opacity-50' : ''}"
   onclick={handleClick}
   onkeydown={handleKey}
-  title={`Open ${crop.crop_id} in plates review queue`}
+  title={`${crop.crop_id} — click to select, ✎ to edit`}
 >
   <div class="relative aspect-[2/1] w-full bg-zinc-900">
     <img
@@ -74,9 +87,68 @@
       decoding="async"
       class="h-full w-full object-contain"
     />
+    <!-- Selection checkbox (top-left). -->
+    <span
+      class="absolute top-1 left-1 flex h-4 w-4 items-center justify-center rounded-sm border text-[10px] {selected
+        ? 'border-blue-400 bg-blue-500 text-white'
+        : 'border-zinc-500 bg-black/50 text-transparent group-hover:text-zinc-400'}"
+      aria-hidden="true"
+    >
+      ✓
+    </span>
+    <!-- Edit + quick false-positive (hover). Span (not button) to stay
+         valid inside the outer button; stopPropagation so they don't
+         trigger select. -->
+    {#if onedit}
+      <span
+        role="button"
+        tabindex="0"
+        class="absolute right-1 bottom-1 cursor-pointer rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+        onclick={(e) => {
+          e.stopPropagation();
+          onedit?.(crop);
+        }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') {
+            e.stopPropagation();
+            onedit?.(crop);
+          }
+        }}
+        title="Edit plate bbox / status"
+      >
+        ✎
+      </span>
+    {/if}
+    {#if onmarkfp && !isFalsePositive}
+      <span
+        role="button"
+        tabindex="0"
+        class="absolute top-1 right-1 cursor-pointer rounded-sm border border-red-500/60 bg-red-500/80 px-1 py-0.5 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100"
+        onclick={(e) => {
+          e.stopPropagation();
+          onmarkfp?.(crop);
+        }}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') {
+            e.stopPropagation();
+            onmarkfp?.(crop);
+          }
+        }}
+        title="Mark false positive"
+      >
+        ✗ FP
+      </span>
+    {/if}
+    {#if isFalsePositive}
+      <span
+        class="absolute top-1 right-1 rounded border border-red-500/60 bg-red-600/85 px-1 py-0.5 text-[9px] font-semibold text-white"
+      >
+        false pos
+      </span>
+    {/if}
     {#if warn}
       <span
-        class="absolute top-1 right-1 rounded border border-yellow-500/60 bg-yellow-500/85 px-1 py-0.5 text-[9px] font-semibold text-yellow-950"
+        class="absolute bottom-1 left-1 rounded border border-yellow-500/60 bg-yellow-500/85 px-1 py-0.5 text-[9px] font-semibold text-yellow-950"
         title="Bbox shape fails the plate envelope — flag for re-detection"
       >
         ⚠

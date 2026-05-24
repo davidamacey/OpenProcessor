@@ -1,10 +1,21 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { getClusters, getPlates, getThumbUrl, type PlateBrowseItem } from '$lib/api';
+  import {
+    batchPlateStatus,
+    getClusters,
+    getCrop,
+    getPlates,
+    getThumbUrl,
+    setCropPlate,
+    type PlateBrowseItem,
+  } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import { bboxNormToXYXY } from '$lib/plate_geometry';
   import PlateCard from '$lib/components/PlateCard.svelte';
-  import type { ClusterFilter, OpCluster } from '$lib/types';
+  import PlateEditor from '$lib/components/PlateEditor.svelte';
+  import type { ClusterFilter, OpCluster, OpCrop } from '$lib/types';
+  import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
 
@@ -46,6 +57,20 @@
   let unlabeledOnly = $state<boolean>(_persistedFilter?.unlabeledOnly ?? false);
   const pageSize = 24;
 
+  // Primary-subject grid filters: card stats reflect only crops that pass.
+  // subjectScope 0=all, 1=largest, 2=largest+2nd → max_rank. Clarity slider
+  // commits on release. Lets the operator scope the grid to the largest,
+  // clear crops (incl. the review-tab blind-spot cohorts) for drag-drop +
+  // AHC refine.
+  let subjectScope = $state<0 | 1 | 2>(0);
+  const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
+  const BLUR_MAX = 2;
+  let blurSlider = $state<number>(0);
+  let minBlurRatio = $state<number | null>(null);
+  function commitClusterBlur(): void {
+    minBlurRatio = blurSlider > 0 ? blurSlider : null;
+  }
+
   // Write the filter back whenever it changes. Catches every mutation
   // site (toggle button, sort dropdown) without per-handler bookkeeping.
   $effect(() => {
@@ -65,6 +90,46 @@
   let platesError = $state<string | null>(null);
   const platesHasMore = $derived(plates.length < platesTotal);
   const PLATES_PAGE_SIZE = 60;
+
+  // Plate triage: multi-select for bulk actions + the inline PlateEditor.
+  let plateSelected = $state<Set<string>>(new Set());
+  let editPlateCrop = $state<OpCrop | null>(null);
+  let plateBusy = $state<boolean>(false);
+
+  function togglePlateSelect(p: PlateBrowseItem): void {
+    const next = new Set(plateSelected);
+    if (next.has(p.crop_id)) next.delete(p.crop_id);
+    else next.add(p.crop_id);
+    plateSelected = next;
+  }
+
+  async function openPlateEditor(p: PlateBrowseItem): Promise<void> {
+    try {
+      editPlateCrop = await getCrop(p.crop_id);
+    } catch (err) {
+      toastStore.error(`Could not load plate: ${(err as Error).message}`);
+    }
+  }
+
+  async function applyPlateStatus(
+    cropIds: string[],
+    status: 'false_positive' | 'no_plate_visible' | 'detected',
+  ): Promise<void> {
+    if (cropIds.length === 0 || plateBusy) return;
+    plateBusy = true;
+    try {
+      const res = await batchPlateStatus(cropIds, status, {
+        plateVerified: status === 'detected' ? true : undefined,
+      });
+      toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
+      plateSelected = new Set();
+      await loadPlatesFirst();
+    } catch (err) {
+      toastStore.error(`Bulk update failed: ${(err as Error).message}`);
+    } finally {
+      plateBusy = false;
+    }
+  }
 
   // Filter sidebar state — only active on the plates view.
   let plateDetectorFilter = $state<string>('');
@@ -102,6 +167,8 @@
         sort,
         page: 1,
         page_size: pageSize,
+        max_rank: maxRank,
+        min_blur_ratio: minBlurRatio,
       });
       clusters = res?.items ?? [];
       total = res?.total ?? clusters.length;
@@ -257,6 +324,8 @@
   // same size-ordered data regardless).
   $effect(() => {
     void classFilter;
+    void maxRank;
+    void minBlurRatio;
     if (!isLicensePlateFilter) void loadFirst();
   });
 
@@ -317,8 +386,20 @@
     if (isLicensePlateFilter) void loadPlatesFirst();
   });
 
-  function openPlateInReview(p: PlateBrowseItem): void {
-    void goto(`/review?tab=plates&crop_id=${encodeURIComponent(p.crop_id)}`);
+  async function savePlateBbox(plateBboxSrc: import('$lib/types').BBoxNorm | null): Promise<void> {
+    if (!editPlateCrop) return;
+    const cropId = editPlateCrop.id;
+    // PlateEditor yields a source-frame BBoxNorm {cx,cy,w,h}; the API takes
+    // [x1,y1,x2,y2]. null clears the box (→ no_plate_visible server-side).
+    const arr = plateBboxSrc ? bboxNormToXYXY(plateBboxSrc) : null;
+    try {
+      await setCropPlate(cropId, arr as [number, number, number, number] | null);
+      toastStore.success('Plate saved');
+      editPlateCrop = null;
+      await loadPlatesFirst();
+    } catch (err) {
+      toastStore.error(`Save failed: ${(err as Error).message}`);
+    }
   }
 
   function borderColor(c: OpCluster): string {
@@ -432,6 +513,36 @@
         <option value="dominant_class">dominant class</option>
       </select>
     </label>
+
+    <!-- Primary-subject grid filters: scope cards to the largest / clear
+         crops. Card size + reps reflect only passing crops, so a filtered
+         grid is ready to drag-drop + AHC-refine on the subjects that matter. -->
+    <div class="inline-flex overflow-hidden rounded border border-zinc-700 text-xs">
+      {#each [{ v: 0, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }] as o (o.v)}
+        <button
+          type="button"
+          class="px-2 py-1 {subjectScope === o.v
+            ? 'bg-blue-600 text-white'
+            : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
+          onclick={() => (subjectScope = o.v as 0 | 1 | 2)}
+        >
+          {o.l}
+        </button>
+      {/each}
+    </div>
+    <label class="flex items-center gap-1.5 text-xs text-zinc-400" title="Hide crops blurrier than this (blur_lap_ratio)">
+      clarity ≥
+      <input
+        type="range"
+        min="0"
+        max={BLUR_MAX}
+        step="0.05"
+        bind:value={blurSlider}
+        onchange={commitClusterBlur}
+        class="h-1 w-28 cursor-pointer accent-blue-500"
+      />
+      <span class="w-9 tabular-nums text-zinc-400">{blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}</span>
+    </label>
   </div>
 
   <!-- Grid -->
@@ -491,6 +602,48 @@
           </span>
         </div>
 
+        <!-- Bulk-action toolbar — appears when plates are selected. Triage
+             outliers without leaving the gallery (no /review round-trip). -->
+        {#if plateSelected.size > 0}
+          <div
+            class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
+          >
+            <span class="font-medium text-blue-200">{plateSelected.size} selected</span>
+            <span class="grow"></span>
+            <button
+              type="button"
+              disabled={plateBusy}
+              class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+              onclick={() => applyPlateStatus([...plateSelected], 'false_positive')}
+            >
+              ✗ Mark false positive
+            </button>
+            <button
+              type="button"
+              disabled={plateBusy}
+              class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+              onclick={() => applyPlateStatus([...plateSelected], 'no_plate_visible')}
+            >
+              No plate
+            </button>
+            <button
+              type="button"
+              disabled={plateBusy}
+              class="rounded border border-green-500/50 bg-green-500/20 px-2 py-1 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
+              onclick={() => applyPlateStatus([...plateSelected], 'detected')}
+            >
+              ✓ Verify
+            </button>
+            <button
+              type="button"
+              class="rounded border border-zinc-700 px-2 py-1 text-zinc-400 hover:bg-zinc-800"
+              onclick={() => (plateSelected = new Set())}
+            >
+              Clear
+            </button>
+          </div>
+        {/if}
+
         {#if platesError}
           <p class="text-sm text-red-300">API unavailable: {platesError}</p>
         {:else if platesLoading && plates.length === 0}
@@ -507,7 +660,13 @@
             use:infiniteScroll={{ onload: loadPlatesMore, disabled: platesLoading || !platesHasMore }}
           >
             {#each plates as p (p.crop_id)}
-              <PlateCard crop={p} onclick={openPlateInReview} />
+              <PlateCard
+                crop={p}
+                selected={plateSelected.has(p.crop_id)}
+                onclick={togglePlateSelect}
+                onedit={openPlateEditor}
+                onmarkfp={(c) => applyPlateStatus([c.crop_id], 'false_positive')}
+              />
             {/each}
           </div>
           {#if platesLoading}
@@ -527,7 +686,7 @@
       <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {#each gridItems as c (c.id)}
           {@const pb = purityBadge(c)}
-          <li>
+          <li style="content-visibility:auto;contain-intrinsic-size:auto 280px">
             <button
               type="button"
               class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {borderColor(
@@ -613,3 +772,11 @@
     </span>
   </div>
 </div>
+
+{#if editPlateCrop}
+  <PlateEditor
+    crop={editPlateCrop}
+    onsave={savePlateBbox}
+    onclose={() => (editPlateCrop = null)}
+  />
+{/if}

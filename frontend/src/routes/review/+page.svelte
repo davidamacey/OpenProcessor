@@ -44,7 +44,15 @@
     // Plate-detection review: crops with an LPR/SAM3+Gemma-verified
     // plate bbox waiting for human confirmation in PlateEditor.
     { id: 'plates', label: 'Plates' },
+    // Primary-subject active-learning queues — the highest-value crops to
+    // label for the next v6 pass (largest subjects v6 was unsure on, and
+    // COCO-confirmed vehicles v6 missed entirely).
+    { id: 'primary_low_conf', label: 'Primary · Low-Conf' },
+    { id: 'coco_blind_spots', label: 'COCO Blind Spots' },
   ];
+
+  // Which tabs honor the primary-subject controls (rank toggle + clarity).
+  const PRIMARY_TABS: ReviewTab[] = ['primary_low_conf', 'coco_blind_spots'];
 
   let tab = $state<ReviewTab>('all');
   const pageSize = 30;
@@ -80,6 +88,17 @@
   // the plates tab.
   let plateTextQuery = $state<string>('');
 
+  // Primary-subject controls (primary_low_conf / coco_blind_spots tabs).
+  // subjectScope: 1 = largest only, 2 = largest + 2nd (the tabs default to 2
+  // server-side when unset). Clarity slider commits on release.
+  let subjectScope = $state<0 | 1 | 2>(0);
+  const BLUR_MAX = 2;
+  let blurSlider = $state<number>(0);
+  let minBlurRatio = $state<number | null>(null);
+  function commitBlur(): void {
+    minBlurRatio = blurSlider > 0 ? blurSlider : null;
+  }
+
   function _filter(): Record<string, unknown> {
     const f: Record<string, unknown> = {};
     if (hddSource) f.hdd_source = hddSource;
@@ -87,6 +106,10 @@
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
     if (tab === 'plates' && plateTextQuery) f.text = plateTextQuery;
+    if (PRIMARY_TABS.includes(tab)) {
+      if (subjectScope !== 0) f.max_rank = subjectScope;
+      if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
+    }
     return f;
   }
 
@@ -196,6 +219,8 @@
   $effect(() => {
     void tab;
     void classFilter;
+    void subjectScope;
+    void minBlurRatio;
     void loadFirst();
   });
   let filterDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -841,6 +866,40 @@
       </label>
     {/if}
 
+    {#if PRIMARY_TABS.includes(tab)}
+      <div class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">subject</span>
+        <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+          {#each [{ v: 0, l: 'Top 2' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }] as o (o.v)}
+            <button
+              type="button"
+              class="px-2 py-1 {subjectScope === o.v
+                ? 'bg-blue-600 text-white'
+                : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
+              onclick={() => (subjectScope = o.v as 0 | 1 | 2)}
+            >
+              {o.l}
+            </button>
+          {/each}
+        </div>
+      </div>
+      <label class="flex shrink-0 items-center gap-1.5" title="Hide crops blurrier than this">
+        <span class="text-zinc-400">clarity ≥</span>
+        <input
+          type="range"
+          min="0"
+          max={BLUR_MAX}
+          step="0.05"
+          bind:value={blurSlider}
+          onchange={commitBlur}
+          class="h-1 w-32 cursor-pointer accent-blue-500"
+        />
+        <span class="w-10 tabular-nums text-zinc-400">
+          {blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}
+        </span>
+      </label>
+    {/if}
+
     <span class="grow"></span>
 
     <span class="hidden text-[11px] text-zinc-500 md:inline">
@@ -957,6 +1016,32 @@
               ? `${(current.label_confidence * 100).toFixed(1)}%`
               : '—'}
           </dd>
+
+          {#if current.coco_proposal_name}
+            <dt class="text-zinc-500">COCO hint</dt>
+            <dd>
+              <span
+                class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"
+                title="COCO YOLO11 detected a vehicle here that v6 missed. Coarse class — pick the make below (bicycle/motorcycle/boat may be near one-click)."
+              >
+                {current.coco_proposal_name}
+              </span>
+            </dd>
+          {/if}
+
+          {#if current.crop_rank_in_image != null || current.blur_lap_ratio != null}
+            <dt class="text-zinc-500">Rank · clarity</dt>
+            <dd class="font-mono text-zinc-300">
+              {current.crop_rank_in_image != null
+                ? current.crop_rank_in_image === 1
+                  ? '★1 largest'
+                  : `#${current.crop_rank_in_image}`
+                : '—'}
+              {#if current.blur_lap_ratio != null}
+                · b{current.blur_lap_ratio.toFixed(2)}
+              {/if}
+            </dd>
+          {/if}
         </dl>
 
         {#if tab === 'plates'}

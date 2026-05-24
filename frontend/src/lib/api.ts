@@ -455,6 +455,10 @@ export async function getClusters(
       // ordered by size, not paginated, so a low cap would silently drop
       // the smaller candidate buckets from the "Unlabeled only" view.
       max_clusters: 2000,
+      // Primary-subject grid filters — card stats reflect only passing crops.
+      max_rank: filter.max_rank ?? undefined,
+      min_blur_ratio: filter.min_blur_ratio ?? undefined,
+      class_source: filter.class_source ?? undefined,
     })}`,
     {},
     signal,
@@ -519,6 +523,11 @@ type RawCrop = {
   class_labeled_at?: string | null;
   class_labeler?: string | null;
   test_holdout?: boolean;
+  crop_rank_in_image?: number | null;
+  crop_area_norm?: number | null;
+  blur_lap_ratio?: number | null;
+  v6_raw_confidence?: number | null;
+  coco_proposal_name?: string | null;
   thumbnail_url?: string;
   updated_at?: string;
 };
@@ -605,6 +614,11 @@ function mapRawCrop(c: RawCrop): OpCrop {
     class_labeler: c.class_labeler ?? null,
     plate_shape_warning: _platesShapeWarning(c.plate_bbox_norm ?? null, bb),
     test_holdout: !!c.test_holdout,
+    crop_rank_in_image: c.crop_rank_in_image ?? null,
+    crop_area_norm: c.crop_area_norm ?? null,
+    blur_lap_ratio: c.blur_lap_ratio ?? null,
+    v6_raw_confidence: c.v6_raw_confidence ?? null,
+    coco_proposal_name: c.coco_proposal_name ?? null,
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
     // (Svelte each_key_duplicate).
@@ -621,7 +635,12 @@ export async function getCluster(
   page = 1,
   pageSize = 60,
   signal?: AbortSignal,
-  opts: { classSource?: string | null } = {},
+  opts: {
+    classSource?: string | null;
+    maxRank?: number | null;
+    minBlurRatio?: number | null;
+    v6ConfLt?: number | null;
+  } = {},
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
   // Two parallel calls: paginated crops + the authoritative cluster
   // card from /curation/clusters (server-computed). The page no longer
@@ -638,6 +657,9 @@ export async function getCluster(
     page_size: pageSize,
   };
   if (opts.classSource) cropQuery.class_source = opts.classSource;
+  if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
+  if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
+  if (opts.v6ConfLt != null) cropQuery.v6_conf_lt = opts.v6ConfLt;
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`/curation/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
@@ -826,6 +848,32 @@ export function updateCropPlateMeta(
     {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    },
+    signal,
+  );
+}
+
+/**
+ * Bulk-set plate_status over many crops. Backend: `POST /curation/plates/batch_status`.
+ * The cluster-view triage op: select outlier plates → mark all false_positive,
+ * or bulk-confirm good plates (status='detected' + plateVerified=true).
+ */
+export function batchPlateStatus(
+  cropIds: string[],
+  plateStatus: 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
+  opts: { plateVerified?: boolean; labelSource?: string } = {},
+  signal?: AbortSignal,
+): Promise<{ updated: number; conflicts: { crop_id: string; current_source: string | null }[] }> {
+  return apiFetch(
+    '/curation/plates/batch_status',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        crop_ids: cropIds,
+        plate_status: plateStatus,
+        plate_verified: opts.plateVerified ?? null,
+        label_source: opts.labelSource ?? 'human',
+      }),
     },
     signal,
   );
@@ -1348,6 +1396,15 @@ export interface AutoLabelStartParams {
    *  ones. Default false — only fresh / class-bucketed items are
    *  re-clustered. */
   recluster_unvalidated?: boolean;
+  // -- Cluster scope (primary-subject gate) ------------------------------
+  /** Train + assign only crops with crop_rank_in_image <= this (1 = largest,
+   *  2 = largest + 2nd). Smaller crops are parked. Needs full rank/blur
+   *  backfill; the run blocks otherwise. */
+  gate_max_rank?: number | null;
+  /** Train + assign only crops with blur_lap_ratio >= this. */
+  gate_min_blur_ratio?: number | null;
+  /** IVF fixed centroid count (default 512). Sweep down with the gate on. */
+  n_clusters?: number | null;
 }
 
 export type AutoLabelStatus =

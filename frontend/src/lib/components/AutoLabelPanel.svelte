@@ -33,6 +33,16 @@
   // unassigned + class-bucketed items.
   let mergeCandidates: boolean = $state(false);
 
+  // Cluster scope — train + assign only the largest, clear crops (what the
+  // business sorts on); smaller / blurrier crops are parked until a looser
+  // recluster. OFF by default so the standard run is unchanged. This is a
+  // FULL retrain (not the cheap incremental assign), and it needs the
+  // rank/blur backfill complete — the API blocks otherwise.
+  // scope: 0 = full pool, 1 = largest only, 2 = largest + 2nd.
+  let clusterScope: 0 | 1 | 2 = $state(0);
+  let clusterBlur: number = $state(0);
+  let nClusters: number | null = $state(null);
+
   // Human-readable label per stage. Order matters — pipeline stages move
   // forward through this list. The percent indicator only renders for
   // 'gemma' because that's the only stage with a meaningful total.
@@ -94,6 +104,9 @@
         // later if they want to time-box a run.
         max_gemma_crops: 0,
         recluster_unvalidated: mergeCandidates,
+        gate_max_rank: clusterScope === 0 ? null : clusterScope,
+        gate_min_blur_ratio: clusterBlur > 0 ? clusterBlur : null,
+        n_clusters: nClusters && nClusters >= 2 ? nClusters : null,
       });
       toastStore.success('Recluster started.');
       schedule();
@@ -175,6 +188,56 @@
         350k-crop scale. Safe to cancel.
       </p>
     </div>
+    {#if !isRunning}
+      <!-- Cluster scope: focus the FULL recluster on the largest, clear
+           crops (parks the rest). OFF = current full-pool behavior. Needs
+           the rank/blur backfill complete; the API blocks otherwise. -->
+      <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
+        <span class="text-zinc-500">scope:</span>
+        <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+          {#each [{ v: 0, l: 'Full pool' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }] as o (o.v)}
+            <button
+              type="button"
+              class="px-2 py-0.5 {clusterScope === o.v
+                ? 'bg-blue-600 text-white'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+              onclick={() => (clusterScope = o.v as 0 | 1 | 2)}
+              disabled={busy}
+            >
+              {o.l}
+            </button>
+          {/each}
+        </div>
+        <label class="flex items-center gap-1.5" title="Train/assign only crops at or above this clarity (blur_lap_ratio).">
+          <span class="text-zinc-500">clarity ≥</span>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.05"
+            bind:value={clusterBlur}
+            disabled={busy}
+            class="h-1 w-28 cursor-pointer accent-blue-500"
+          />
+          <span class="w-10 tabular-nums text-zinc-400">{clusterBlur > 0 ? clusterBlur.toFixed(2) : 'off'}</span>
+        </label>
+        <label class="flex items-center gap-1.5" title="IVF centroid count (default 512). Sweep down with the gate on.">
+          <span class="text-zinc-500">clusters</span>
+          <input
+            type="number"
+            min="2"
+            max="4096"
+            placeholder="512"
+            bind:value={nClusters}
+            disabled={busy}
+            class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-zinc-100"
+          />
+        </label>
+        {#if clusterScope !== 0 || clusterBlur > 0}
+          <span class="text-amber-300/80">full retrain · parks smaller/blurry crops</span>
+        {/if}
+      </div>
+    {/if}
     <div class="flex items-center gap-3">
       {#if !isRunning}
         <label
