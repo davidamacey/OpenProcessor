@@ -238,17 +238,24 @@ export function getPlates(params: PlatesQuery = {}, signal?: AbortSignal): Promi
   return apiFetch<PlatesPage>(`/curation/plates${qs(params as Record<string, unknown>)}`, {}, signal);
 }
 
-/** Coarse-partition boxed plates into plate_cluster_id buckets (KMeans over
- *  plate_pe_embedding). Optionally restrict to the top-N largest crops. */
-export function clusterPlates(
-  maxRank?: number,
-  signal?: AbortSignal,
-): Promise<{ status: string; n_plates: number; n_clusters: number; assigned: number }> {
-  return apiFetch(
-    `/curation/plates/cluster${qs({ max_rank: maxRank })}`,
-    { method: 'POST' },
-    signal,
-  );
+/** Plate-clustering background-job snapshot. */
+export interface PlateClusterJob {
+  running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  result: { n_plates: number; n_clusters: number; assigned: number } | null;
+  error: string | null;
+}
+
+/** Launch the KMeans plate partition (background job — 50k+ plates take
+ *  minutes). Returns immediately; poll getPlateClusterStatus for completion. */
+export function clusterPlates(maxRank?: number, signal?: AbortSignal): Promise<PlateClusterJob> {
+  return apiFetch(`/curation/plates/cluster${qs({ max_rank: maxRank })}`, { method: 'POST' }, signal);
+}
+
+/** Poll the background plate-clustering job. */
+export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateClusterJob> {
+  return apiFetch('/curation/plates/cluster/status', {}, signal);
 }
 
 /** Per-bucket AHC refine over plate_pe_embedding; writes plate_cluster_subid. */

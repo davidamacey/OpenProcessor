@@ -7,6 +7,7 @@
     getClusters,
     getCrop,
     getPlateClusters,
+    getPlateClusterStatus,
     getPlates,
     getThumbUrl,
     refinePlateCluster,
@@ -127,9 +128,24 @@
     if (plateClusterBusy) return;
     plateClusterBusy = true;
     try {
-      const res = await clusterPlates(plateMaxRank ?? undefined);
-      toastStore.success(`Clustered ${res.n_plates} plates into ${res.n_clusters} buckets.`);
-      await loadPlateClusters();
+      // Clustering 50k+ plates is a multi-minute background job, so we kick
+      // it off and poll for completion instead of holding one request open.
+      await clusterPlates(plateMaxRank ?? undefined);
+      toastStore.info('Clustering plates… this can take a few minutes for a large set.');
+      while (true) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const job = await getPlateClusterStatus();
+        if (job.running) continue;
+        if (job.error) {
+          toastStore.error(`Cluster plates failed: ${job.error}`);
+        } else if (job.result) {
+          toastStore.success(
+            `Clustered ${job.result.n_plates} plates into ${job.result.n_clusters} buckets.`,
+          );
+          await loadPlateClusters();
+        }
+        break;
+      }
     } catch (e) {
       toastStore.error(`Cluster plates failed: ${(e as Error).message}`);
     } finally {
@@ -160,11 +176,48 @@
     plateSelected = new Set();
   }
 
-  function togglePlateSelect(p: PlateBrowseItem): void {
+  // Anchor for shift-range selection (mirrors the vehicle cluster detail).
+  let plateAnchorId = $state<string | null>(null);
+
+  function togglePlateSelect(p: PlateBrowseItem, e?: MouseEvent): void {
+    const id = p.crop_id;
+    const isToggle = !!(e && (e.ctrlKey || e.metaKey));
+    const isRange = !!(e && e.shiftKey);
+
+    if (isRange && plateAnchorId) {
+      // Shift+click: select the contiguous range (in the current displayed
+      // order) between the anchor and this card, unioned with the selection.
+      const ids = plates.map((x) => x.crop_id);
+      const a = ids.indexOf(plateAnchorId);
+      const b = ids.indexOf(id);
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a <= b ? [a, b] : [b, a];
+        const next = new Set(plateSelected);
+        for (let i = lo; i <= hi; i++) next.add(ids[i]!);
+        plateSelected = next;
+        return;
+      }
+    }
+    if (isToggle) {
+      // Ctrl/Cmd+click: add/remove just this card; move the anchor.
+      const next = new Set(plateSelected);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      plateSelected = next;
+      plateAnchorId = id;
+      return;
+    }
+    // Plain click: toggle this card (accumulating) + set as anchor, so a
+    // following shift-click extends from here.
     const next = new Set(plateSelected);
-    if (next.has(p.crop_id)) next.delete(p.crop_id);
-    else next.add(p.crop_id);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     plateSelected = next;
+    plateAnchorId = id;
+  }
+
+  function selectAllPlates(): void {
+    plateSelected = new Set(plates.map((p) => p.crop_id));
   }
 
   async function openPlateEditor(p: PlateBrowseItem): Promise<void> {
@@ -741,6 +794,16 @@
             </button>
           {/if}
           <span class="grow"></span>
+          {#if plates.length > 0}
+            <button
+              type="button"
+              class="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-300 hover:bg-zinc-700"
+              onclick={selectAllPlates}
+              title="Select all loaded plates (shift-click a card for a range, ctrl/cmd-click to toggle)"
+            >
+              Select all
+            </button>
+          {/if}
           <span class="font-mono text-[11px] text-zinc-500">
             {plates.length.toLocaleString()} / {platesTotal.toLocaleString()} plates
           </span>
