@@ -117,14 +117,30 @@
   ): Promise<void> {
     if (cropIds.length === 0 || plateBusy) return;
     plateBusy = true;
+    // Snapshot for rollback, then update the affected cards IN PLACE. The
+    // grid's #each is keyed by crop_id, so patching the array (rather than
+    // reloading page 1) reuses the existing DOM nodes and preserves scroll
+    // position — critical when the operator is deep in a 15k-item gallery.
+    const snap = plates;
+    const idSet = new Set(cropIds);
+    const verified = status === 'detected' ? true : undefined;
+    plates = plates.map((p) =>
+      idSet.has(p.crop_id)
+        ? {
+            ...p,
+            plate_status: status,
+            plate_verified: verified ?? p.plate_verified,
+          }
+        : p,
+    );
+    plateSelected = new Set();
     try {
       const res = await batchPlateStatus(cropIds, status, {
-        plateVerified: status === 'detected' ? true : undefined,
+        plateVerified: verified,
       });
       toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
-      plateSelected = new Set();
-      await loadPlatesFirst();
     } catch (err) {
+      plates = snap;
       toastStore.error(`Bulk update failed: ${(err as Error).message}`);
     } finally {
       plateBusy = false;
@@ -396,7 +412,19 @@
       await setCropPlate(cropId, arr as [number, number, number, number] | null);
       toastStore.success('Plate saved');
       editPlateCrop = null;
-      await loadPlatesFirst();
+      // Patch just this card in place rather than reloading page 1 (which
+      // would wipe the list and reset scroll). The plate thumbnail is a
+      // server-rendered URL, so bust its cache to pull the re-cropped box;
+      // clearing the box marks the parent no_plate_visible server-side.
+      plates = plates.map((p) =>
+        p.crop_id === cropId
+          ? {
+              ...p,
+              plate_status: arr ? p.plate_status : 'no_plate_visible',
+              plate_thumbnail_url: `/curation/crops/${cropId}/plate_thumbnail?v=${Date.now()}`,
+            }
+          : p,
+      );
     } catch (err) {
       toastStore.error(`Save failed: ${(err as Error).message}`);
     }
