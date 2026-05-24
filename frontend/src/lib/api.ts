@@ -701,6 +701,8 @@ export async function getCluster(
     maxRank?: number | null;
     minBlurRatio?: number | null;
     v6ConfLt?: number | null;
+    /** 'outliers' ranks members farthest-from-centroid first. */
+    order?: 'outliers' | null;
   } = {},
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
   // Two parallel calls: paginated crops + the authoritative cluster
@@ -721,6 +723,7 @@ export async function getCluster(
   if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
   if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
   if (opts.v6ConfLt != null) cropQuery.v6_conf_lt = opts.v6ConfLt;
+  if (opts.order) cropQuery.order = opts.order;
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`/curation/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(

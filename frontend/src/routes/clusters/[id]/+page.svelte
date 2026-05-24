@@ -90,6 +90,11 @@
   let subjectScope = $state<0 | 1 | 2>(0);
   const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
 
+  // Outliers-first: rank members by distance from the cluster centroid (most
+  // atypical first) so mislabels / junk in this cluster float to the top.
+  // Computed on-the-fly + cached server-side. Off = newest-first.
+  let outliersFirst = $state<boolean>(false);
+
   // Clarity slider. `blurSlider` is the live drag value; `minBlurRatio` only
   // commits on release (change, not input) so dragging doesn't spam the API.
   // 0 = show everything (null sent). v1.1.9 sale-quality stops: 1.1/1.3/1.4 —
@@ -135,6 +140,7 @@
         classSource: classSourceFilter,
         maxRank,
         minBlurRatio,
+        order: outliersFirst ? 'outliers' : null,
       });
       cluster = res.cluster;
       const list = res.crops as PaginatedResponse<OpCrop>;
@@ -160,6 +166,7 @@
         classSource: classSourceFilter,
         maxRank,
         minBlurRatio,
+        order: outliersFirst ? 'outliers' : null,
       });
       const list = res.crops as PaginatedResponse<OpCrop>;
       // Dedup by id in case server returns overlapping pages after a relabel.
@@ -182,6 +189,7 @@
     void classSourceFilter;
     void maxRank;
     void minBlurRatio;
+    void outliersFirst;
     void loadFirst();
   });
 
@@ -267,7 +275,12 @@
   // the grid inline by cluster_subid (contiguous groups + a labeled
   // separator before each) so the operator sees what refine found at a
   // glance instead of clicking through sub-cluster tabs one at a time.
-  const groupBySubcluster = $derived(subTab == null && subClusterIds.length > 0);
+  // Outliers-first wins over sub-cluster grouping: when ranking by centroid
+  // distance we want one flat, server-ordered list (most atypical at top),
+  // not a regroup by subid.
+  const groupBySubcluster = $derived(
+    !outliersFirst && subTab == null && subClusterIds.length > 0,
+  );
 
   // Per-subid crop counts for the separator-header labels. '__none__'
   // buckets the crops refine left ungrouped (or pre-refine crops).
@@ -1242,7 +1255,21 @@ v1.1.9 sale-quality stops; training tolerance is lower."
     <span class="w-16 tabular-nums text-zinc-400">
       {blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}
     </span>
-    {#if subjectScope !== 0 || minBlurRatio !== null}
+
+    <!-- Outliers-first: float the members least like the cluster centroid to
+         the top, so wrong/atypical items are easy to cherry-pick out. -->
+    <button
+      type="button"
+      class="rounded border px-2 py-0.5 {outliersFirst
+        ? 'border-amber-500/60 bg-amber-500/20 text-amber-100'
+        : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+      onclick={() => (outliersFirst = !outliersFirst)}
+      title="Sort by distance from the cluster centroid (most atypical first) to spot mislabels/junk"
+    >
+      {outliersFirst ? '◤ Outliers first' : 'Outliers first'}
+    </button>
+
+    {#if subjectScope !== 0 || minBlurRatio !== null || outliersFirst}
       <button
         type="button"
         class="ml-auto rounded bg-zinc-800 px-2 py-0.5 text-zinc-300 hover:bg-zinc-700"
@@ -1250,6 +1277,7 @@ v1.1.9 sale-quality stops; training tolerance is lower."
           subjectScope = 0;
           blurSlider = 0;
           minBlurRatio = null;
+          outliersFirst = false;
         }}
       >
         reset
