@@ -239,23 +239,39 @@
     // reloading page 1) reuses the existing DOM nodes and preserves scroll
     // position — critical when the operator is deep in a 15k-item gallery.
     const snap = plates;
+    const snapById = new Map(snap.map((p) => [p.crop_id, p]));
     const idSet = new Set(cropIds);
     const verified = status === 'detected' ? true : undefined;
-    plates = plates.map((p) =>
-      idSet.has(p.crop_id)
-        ? {
-            ...p,
-            plate_status: status,
-            plate_verified: verified ?? p.plate_verified,
-          }
-        : p,
-    );
+    // Mirror the backend write contract (batch_set_plate_status): a human
+    // status change is terminal, so it also flips plate_validated=true. Keep
+    // the optimistic patch identical to what OpenSearch persists so the card
+    // never diverges from authoritative state.
+    const patch = (p: PlateBrowseItem): PlateBrowseItem => ({
+      ...p,
+      plate_status: status,
+      plate_verified: verified ?? p.plate_verified,
+      plate_validated: true,
+    });
+    plates = plates.map((p) => (idSet.has(p.crop_id) ? patch(p) : p));
     plateSelected = new Set();
     try {
       const res = await batchPlateStatus(cropIds, status, {
         plateVerified: verified,
       });
-      toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
+      // Reconcile with the backend: any crop_id the server reported as a
+      // conflict was NOT written, so revert just those cards to their
+      // pre-edit state rather than leaving a falsely-applied status.
+      const conflictIds = new Set((res.conflicts ?? []).map((c) => c.crop_id));
+      if (conflictIds.size > 0) {
+        plates = plates.map((p) =>
+          conflictIds.has(p.crop_id) ? (snapById.get(p.crop_id) ?? p) : p,
+        );
+        toastStore.error(
+          `${status.replace('_', ' ')}: ${res.updated} updated, ${conflictIds.size} conflicted (reverted)`,
+        );
+      } else {
+        toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
+      }
     } catch (err) {
       plates = snap;
       toastStore.error(`Bulk update failed: ${(err as Error).message}`);
@@ -532,18 +548,20 @@
     // [x1,y1,x2,y2]. null clears the box (→ no_plate_visible server-side).
     const arr = plateBboxSrc ? bboxNormToXYXY(plateBboxSrc) : null;
     try {
-      await setCropPlate(cropId, arr as [number, number, number, number] | null);
+      const res = await setCropPlate(cropId, arr as [number, number, number, number] | null);
       toastStore.success('Plate saved');
       editPlateCrop = null;
       // Patch just this card in place rather than reloading page 1 (which
-      // would wipe the list and reset scroll). The plate thumbnail is a
-      // server-rendered URL, so bust its cache to pull the re-cropped box;
-      // clearing the box marks the parent no_plate_visible server-side.
+      // would wipe the list and reset scroll). Use the authoritative
+      // plate_status the backend returned (clearing the box → no_plate_visible
+      // server-side) instead of guessing. The plate thumbnail is a
+      // server-rendered URL, so bust its cache to pull the re-cropped box.
       plates = plates.map((p) =>
         p.crop_id === cropId
           ? {
               ...p,
-              plate_status: arr ? p.plate_status : 'no_plate_visible',
+              plate_status: res.plate_status ?? p.plate_status,
+              plate_bbox_norm: arr ?? null,
               plate_thumbnail_url: `/curation/crops/${cropId}/plate_thumbnail?v=${Date.now()}`,
             }
           : p,

@@ -177,6 +177,7 @@ export interface PlateBrowseItem {
   plate_score: number | null;
   plate_status: string | null;
   plate_verified: boolean | null;
+  plate_validated: boolean | null;
   plate_detector: string | null;
   plate_detector_version: string | null;
   plate_detector_chain: string[] | null;
