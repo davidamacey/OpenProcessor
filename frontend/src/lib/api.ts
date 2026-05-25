@@ -1616,3 +1616,71 @@ export function cancelAutoLabel(
     signal,
   );
 }
+
+// ===========================================================================
+// LPR bake-off (/curation/bakeoff) — model comparison runs + results.
+// ===========================================================================
+
+export interface BakeoffModelSpec {
+  backend: 'ultralytics' | 'triton' | 'open-image-models' | 'two-stage' | 'lpdnet';
+  name: string;
+  weights?: string;
+  imgsz?: number;
+  device?: string;
+  triton_url?: string;
+  triton_model?: string;
+  lpdnet_variant?: 'usa' | 'ccpd';
+  vehicle_weights?: string;
+  training_data?: string;
+}
+
+export interface BakeoffRunRow {
+  model: string;
+  runtime: string;
+  training_data: string;
+  imgsz: number | string;
+  map_50: number;
+  map_50_95: number;
+  ap_small: number;
+  mean_iou: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  latency_ms: number;
+  fps: number;
+}
+
+export interface BakeoffComparison {
+  models: BakeoffRunRow[];
+  n_models: number;
+}
+
+export interface BakeoffRunSummary {
+  job_id: string;
+  state: string | null;
+  models: string[];
+  started_at?: string;
+  finished_at?: string;
+}
+
+export function bakeoffRun(
+  body: { dataset: string; models: BakeoffModelSpec[]; verify_frozen?: boolean; job_id?: string },
+  signal?: AbortSignal,
+): Promise<{ status: string; job_id: string; out_dir: string }> {
+  return apiFetch('/curation/bakeoff/run', { method: 'POST', body: JSON.stringify(body) }, signal);
+}
+
+export function bakeoffRuns(signal?: AbortSignal): Promise<{ runs: BakeoffRunSummary[] }> {
+  return apiFetch('/curation/bakeoff/runs', {}, signal);
+}
+
+export function bakeoffStatus(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  return apiFetch(`/curation/bakeoff/status/${encodeURIComponent(jobId)}`, {}, signal);
+}
+
+export function bakeoffResults(jobId: string, signal?: AbortSignal): Promise<BakeoffComparison> {
+  return apiFetch(`/curation/bakeoff/results/${encodeURIComponent(jobId)}`, {}, signal);
+}
