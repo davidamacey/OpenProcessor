@@ -194,9 +194,10 @@ export interface OpCrop {
 }
 
 /** Class clusters mirror class_id (0..80); candidate clusters land at
- *  10000+ from the residual AHC pass; unassigned is < 0. The backend
- *  derives this from cluster_id; the frontend NEVER recomputes it. */
-export type ClusterKind = 'class' | 'candidate' | 'unassigned';
+ *  10000+ from the residual AHC pass; unassigned is < 0. The plate view
+ *  also emits "false_positive" for the permanent FP bucket (-100). The
+ *  backend derives this from cluster_id; the frontend NEVER recomputes it. */
+export type ClusterKind = 'class' | 'candidate' | 'unassigned' | 'false_positive';
 
 export interface OpCluster {
   id: number;

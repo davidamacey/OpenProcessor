@@ -287,11 +287,65 @@ export function getPlateClusters(
   );
 }
 
+/** Background FP-centroid build-job snapshot + persisted centroid metadata. */
+export interface PlateFpCentroidJob {
+  running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  result: { status: string; n_members: number; k: number } | null;
+  error: string | null;
+  centroids: { trained_at: string | null; k: number | null; n_members: number | null } | null;
+}
+
+/** (Re)build the FP centroid store — sub-types the FP bucket (background job). */
+export function buildPlateFpCentroids(signal?: AbortSignal): Promise<PlateFpCentroidJob> {
+  return apiFetch('/curation/plates/fp_centroids/build', { method: 'POST' }, signal);
+}
+
+/** Poll the FP-centroid build job + read persisted centroid metadata. */
+export function getPlateFpCentroidStatus(signal?: AbortSignal): Promise<PlateFpCentroidJob> {
+  return apiFetch('/curation/plates/fp_centroids/status', {}, signal);
+}
+
+export interface SuspectedFpItem extends PlateBrowseItem {
+  suspected_fp_distance: number;
+  nearest_fp_subid: string | null;
+}
+
+export interface SuspectedFpPage {
+  items: SuspectedFpItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  threshold?: number;
+  centroids_built: boolean;
+  trained_at?: string | null;
+  message?: string;
+}
+
+/** Non-FP plate crops ranked by similarity to the known FP centroids. */
+export function getSuspectedFalsePositives(
+  opts: { threshold?: number; page?: number; pageSize?: number; includeDetected?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<SuspectedFpPage> {
+  return apiFetch(
+    `/curation/plates/suspected_false_positives${qs({
+      threshold: opts.threshold,
+      page: opts.page,
+      page_size: opts.pageSize,
+      include_detected: opts.includeDetected,
+    })}`,
+    {},
+    signal,
+  );
+}
+
 export type TrainingCohortMode =
   | 'lpr_blind_spots'
   | 'lpr_low_conf_correct'
   | 'disagreement'
-  | 'human_corrected';
+  | 'human_corrected'
+  | 'false_positives';
 
 export function getTrainingCandidates(
   mode: TrainingCohortMode,

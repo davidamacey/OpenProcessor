@@ -3,16 +3,20 @@
   import { page } from '$app/state';
   import {
     batchPlateStatus,
+    buildPlateFpCentroids,
     clusterPlates,
     getClusters,
     getCrop,
     getPlateClusters,
     getPlateClusterStatus,
+    getPlateFpCentroidStatus,
     getPlates,
+    getSuspectedFalsePositives,
     getThumbUrl,
     refinePlateCluster,
     setCropPlate,
     type PlateBrowseItem,
+    type SuspectedFpItem,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { bboxNormToXYXY } from '$lib/plate_geometry';
@@ -111,6 +115,8 @@
   let plateClusters = $state<OpCluster[]>([]);
   let selectedPlateCluster = $state<number | null>(null);
   let plateClusterBusy = $state<boolean>(false);
+  // Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (op_clustering.py).
+  const FP_PLATE_CLUSTER_ID = -100;
 
   async function loadPlateClusters(): Promise<void> {
     try {
@@ -118,9 +124,71 @@
         maxClusters: 500,
         maxRank: plateMaxRank ?? undefined,
       });
-      plateClusters = res.clusters;
+      // Defensive: never render empty buckets (the backend already omits
+      // them, but a stale response shouldn't surface a 0-size card).
+      plateClusters = (res.clusters ?? []).filter((c) => c.size > 0);
     } catch (e) {
       toastStore.error(`Load plate clusters failed: ${(e as Error).message}`);
+    }
+  }
+
+  // Suspected-FP review: crops the FP centroids flag as likely false
+  // positives. Loads into the same `plates` array so the beloved
+  // shift-select + Mark-FP workflow works unchanged; platesTotal is pinned to
+  // the loaded count so the infinite-scroll sentinel never pages in normal
+  // plates over the top.
+  let suspectedFpView = $state<boolean>(false);
+  let suspectedFpThreshold = $state<number>(0.35);
+
+  async function loadSuspectedFp(): Promise<void> {
+    if (plateClusterBusy) return;
+    plateClusterBusy = true;
+    try {
+      const res = await getSuspectedFalsePositives({
+        threshold: suspectedFpThreshold,
+        pageSize: 200,
+      });
+      selectedPlateCluster = null;
+      plateSelected = new Set();
+      plates = res.items as SuspectedFpItem[];
+      platesTotal = res.items.length;
+      suspectedFpView = true;
+      if (!res.centroids_built) {
+        toastStore.info(res.message ?? 'No FP centroids yet — build them first.');
+      } else {
+        toastStore.success(`${res.total} suspected false positive(s) at ≤ ${suspectedFpThreshold}.`);
+      }
+    } catch (e) {
+      toastStore.error(`Load suspected FPs failed: ${(e as Error).message}`);
+    } finally {
+      plateClusterBusy = false;
+    }
+  }
+
+  async function runBuildFpCentroids(): Promise<void> {
+    if (plateClusterBusy) return;
+    plateClusterBusy = true;
+    try {
+      await buildPlateFpCentroids();
+      toastStore.info('Building FP centroids… sub-typing the false-positive bucket.');
+      while (true) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const job = await getPlateFpCentroidStatus();
+        if (job.running) continue;
+        if (job.error) {
+          toastStore.error(`Build FP centroids failed: ${job.error}`);
+        } else if (job.result) {
+          toastStore.success(
+            `FP centroids built: ${job.result.n_members} members → ${job.result.k} sub-types.`,
+          );
+          await loadPlateClusters();
+        }
+        break;
+      }
+    } catch (e) {
+      toastStore.error(`Build FP centroids failed: ${(e as Error).message}`);
+    } finally {
+      plateClusterBusy = false;
     }
   }
 
@@ -168,12 +236,19 @@
   }
 
   function openPlateCluster(id: number): void {
+    suspectedFpView = false;
     selectedPlateCluster = id;
   }
 
   function backToPlateClusters(): void {
     selectedPlateCluster = null;
     plateSelected = new Set();
+    if (suspectedFpView) {
+      // Leaving the suspected-FP view: reload the real plate gallery the
+      // filter effect would otherwise have populated.
+      suspectedFpView = false;
+      void loadPlatesFirst();
+    }
   }
 
   // Anchor for shift-range selection (mirrors the vehicle cluster detail).
@@ -788,7 +863,35 @@
             {/each}
           </div>
 
-          {#if selectedPlateCluster == null}
+          {#if suspectedFpView}
+            <button
+              type="button"
+              class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
+              onclick={backToPlateClusters}
+            >
+              ← Clusters
+            </button>
+            <span class="font-medium text-red-200">Suspected false positives</span>
+            <label class="flex items-center gap-1 text-[11px] text-zinc-400">
+              ≤
+              <input
+                type="number"
+                step="0.05"
+                min="0"
+                max="2"
+                bind:value={suspectedFpThreshold}
+                class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-zinc-200"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={plateClusterBusy}
+              class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+              onclick={loadSuspectedFp}
+            >
+              {plateClusterBusy ? 'Loading…' : 'Reload'}
+            </button>
+          {:else if selectedPlateCluster == null}
             <button
               type="button"
               disabled={plateClusterBusy}
@@ -798,6 +901,24 @@
             >
               {plateClusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
             </button>
+            <button
+              type="button"
+              disabled={plateClusterBusy}
+              class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+              onclick={loadSuspectedFp}
+              title="List plate crops that look like known false positives (needs FP centroids built)"
+            >
+              Suspected FPs
+            </button>
+            <button
+              type="button"
+              disabled={plateClusterBusy}
+              class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+              onclick={runBuildFpCentroids}
+              title="Sub-type the false-positive bucket and (re)build its centroids"
+            >
+              {plateClusterBusy ? 'Building…' : 'Build FP centroids'}
+            </button>
           {:else}
             <button
               type="button"
@@ -806,16 +927,32 @@
             >
               ← Clusters
             </button>
-            <span class="font-mono text-[11px] text-zinc-300">bucket #{selectedPlateCluster}</span>
-            <button
-              type="button"
-              disabled={plateClusterBusy}
-              class="rounded border border-blue-500/50 bg-blue-500/20 px-2 py-1 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-              onclick={runRefinePlateCluster}
-              title="AHC-refine this bucket into sub-clusters to isolate outliers"
-            >
-              {plateClusterBusy ? 'Refining…' : 'Refine AHC'}
-            </button>
+            <span class="font-mono text-[11px] text-zinc-300">
+              {selectedPlateCluster === FP_PLATE_CLUSTER_ID
+                ? 'false positives'
+                : `bucket #${selectedPlateCluster}`}
+            </span>
+            {#if selectedPlateCluster === FP_PLATE_CLUSTER_ID}
+              <button
+                type="button"
+                disabled={plateClusterBusy}
+                class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+                onclick={runBuildFpCentroids}
+                title="Re-sub-type the FP bucket and rebuild centroids"
+              >
+                {plateClusterBusy ? 'Building…' : 'Build FP centroids'}
+              </button>
+            {:else}
+              <button
+                type="button"
+                disabled={plateClusterBusy}
+                class="rounded border border-blue-500/50 bg-blue-500/20 px-2 py-1 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+                onclick={runRefinePlateCluster}
+                title="AHC-refine this bucket into sub-clusters to isolate outliers"
+              >
+                {plateClusterBusy ? 'Refining…' : 'Refine AHC'}
+              </button>
+            {/if}
           {/if}
           <span class="grow"></span>
           {#if plates.length > 0}
@@ -879,18 +1016,22 @@
 
         {#if platesError}
           <p class="text-sm text-red-300">API unavailable: {platesError}</p>
-        {:else if selectedPlateCluster == null && plateClusters.length > 0}
+        {:else if !suspectedFpView && selectedPlateCluster == null && plateClusters.length > 0}
           <!-- Plate cluster cards. Click one to open its plates (with the
                bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
-               get a blue border so refined buckets are easy to spot. -->
+               get a blue border so refined buckets are easy to spot. The
+               permanent false-positive bucket gets a red border + label. -->
           <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {#each plateClusters as c (c.id)}
               <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
                 <button
                   type="button"
-                  class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {c.has_subclusters
-                    ? 'border-blue-500/60'
-                    : 'border-zinc-700'}"
+                  class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {c.cluster_kind ===
+                  'false_positive'
+                    ? 'border-red-500/70'
+                    : c.has_subclusters
+                      ? 'border-blue-500/60'
+                      : 'border-zinc-700'}"
                   onclick={() => openPlateCluster(c.id)}
                 >
                   <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
@@ -904,7 +1045,11 @@
                     {/each}
                   </div>
                   <div class="flex items-center justify-between p-2 text-xs">
-                    <span class="font-semibold text-zinc-200">#{c.id}</span>
+                    {#if c.cluster_kind === 'false_positive'}
+                      <span class="font-semibold text-red-300">false positives</span>
+                    {:else}
+                      <span class="font-semibold text-zinc-200">#{c.id}</span>
+                    {/if}
                     <span class="text-zinc-400">{c.size.toLocaleString()}</span>
                     {#if c.n_subclusters > 0}
                       <span class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
