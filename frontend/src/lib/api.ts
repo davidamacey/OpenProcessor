@@ -239,19 +239,43 @@ export function getPlates(params: PlatesQuery = {}, signal?: AbortSignal): Promi
   return apiFetch<PlatesPage>(`/curation/plates${qs(params as Record<string, unknown>)}`, {}, signal);
 }
 
-/** Plate-clustering background-job snapshot. */
+/** Plate-clustering background-job snapshot. The one-click pipeline result also
+ *  carries the FP-rebuild + auto-assign sub-steps, and may report a re-partition
+ *  that was skipped to protect a fresh manual refine (TTL). */
 export interface PlateClusterJob {
   running: boolean;
   started_at: string | null;
   finished_at: string | null;
-  result: { n_plates: number; n_clusters: number; assigned: number } | null;
+  result:
+    | ({
+        status?: string;
+        n_plates?: number;
+        n_clusters?: number;
+        assigned?: number;
+        fp_centroids?: { status: string; n_members?: number; k?: number };
+        auto_fp?: { status: string; n_moved?: number; threshold?: number };
+      } & Record<string, unknown>)
+    | null;
   error: string | null;
 }
 
-/** Launch the KMeans plate partition (background job — 50k+ plates take
- *  minutes). Returns immediately; poll getPlateClusterStatus for completion. */
-export function clusterPlates(maxRank?: number, signal?: AbortSignal): Promise<PlateClusterJob> {
-  return apiFetch(`/curation/plates/cluster${qs({ max_rank: maxRank })}`, { method: 'POST' }, signal);
+/** Launch the one-click plate-clustering pipeline (background job — 50k+ plates
+ *  take minutes): rebuild FP sub-centroids → auto-pull tight FP matches → re-partition
+ *  the good plates. Returns immediately; poll getPlateClusterStatus for completion. */
+export function clusterPlates(
+  maxRank?: number,
+  opts: { forceRepartition?: boolean; autoFpThreshold?: number } = {},
+  signal?: AbortSignal,
+): Promise<PlateClusterJob> {
+  return apiFetch(
+    `/curation/plates/cluster${qs({
+      max_rank: maxRank,
+      force_repartition: opts.forceRepartition,
+      auto_fp_threshold: opts.autoFpThreshold,
+    })}`,
+    { method: 'POST' },
+    signal,
+  );
 }
 
 /** Poll the background plate-clustering job. */

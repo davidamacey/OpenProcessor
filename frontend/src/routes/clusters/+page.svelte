@@ -196,10 +196,11 @@
     if (plateClusterBusy) return;
     plateClusterBusy = true;
     try {
-      // Clustering 50k+ plates is a multi-minute background job, so we kick
+      // One-click pipeline (rebuild FP centroids → auto-pull tight FPs →
+      // re-partition good plates) is a multi-minute background job, so we kick
       // it off and poll for completion instead of holding one request open.
       await clusterPlates(plateMaxRank ?? undefined);
-      toastStore.info('Clustering plates… this can take a few minutes for a large set.');
+      toastStore.info('Clustering plates… rebuilding FP centroids, pulling FPs, re-bucketing.');
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
         const job = await getPlateClusterStatus();
@@ -207,9 +208,17 @@
         if (job.error) {
           toastStore.error(`Cluster plates failed: ${job.error}`);
         } else if (job.result) {
-          toastStore.success(
-            `Clustered ${job.result.n_plates} plates into ${job.result.n_clusters} buckets.`,
-          );
+          const r = job.result;
+          const moved = r.auto_fp?.n_moved ?? 0;
+          if (r.status === 'skipped_repartition_ttl') {
+            toastStore.success(
+              `Auto-moved ${moved} crop(s) to false positives. Good-plate re-partition skipped to preserve a refine from the last few minutes — re-run shortly to include it.`,
+            );
+          } else {
+            toastStore.success(
+              `Clustered ${r.n_plates ?? 0} plates into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
+            );
+          }
           await loadPlateClusters();
         }
         break;
