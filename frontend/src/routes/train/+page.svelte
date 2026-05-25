@@ -753,7 +753,7 @@
               <th class="w-20 px-3 py-2 text-left">Family</th>
               <th class="w-24 px-3 py-2 text-left">Status</th>
               <th class="w-28 px-3 py-2 text-right">Best mAP50</th>
-              <th class="w-32 px-3 py-2 text-right">Actions</th>
+              <th class="w-48 px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -784,28 +784,30 @@
                 <td class="px-3 py-2 text-right font-mono text-xs text-zinc-200">
                   {r.best_metric?.map50?.toFixed(3) ?? '—'}
                 </td>
-                <td class="flex justify-end gap-1.5 px-3 py-2 text-right">
-                  {#if r.state === 'finished' || r.state === 'exporting'}
-                    <button
-                      type="button"
-                      class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-blue-300 hover:border-blue-500 hover:bg-blue-500/10"
-                      onclick={() => openPromote(r)}
-                      title="Promote to Triton"
-                    >
-                      Promote ↑
-                    </button>
-                  {/if}
-                  {#if r.state === 'finished' || r.state === 'failed'}
-                    <button
-                      type="button"
-                      class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
-                      onclick={() => reproduceRun(r)}
-                      disabled={reproducingId === r.job_id}
-                      title="Submit a new run with the same spec"
-                    >
-                      {reproducingId === r.job_id ? '…' : 'Reproduce'}
-                    </button>
-                  {/if}
+                <td class="px-3 py-2">
+                  <div class="flex flex-wrap justify-end gap-1.5">
+                    {#if r.state === 'finished' || r.state === 'exporting'}
+                      <button
+                        type="button"
+                        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-blue-300 hover:border-blue-500 hover:bg-blue-500/10"
+                        onclick={() => openPromote(r)}
+                        title="Promote to Triton"
+                      >
+                        Promote ↑
+                      </button>
+                    {/if}
+                    {#if r.state === 'finished' || r.state === 'failed'}
+                      <button
+                        type="button"
+                        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
+                        onclick={() => reproduceRun(r)}
+                        disabled={reproducingId === r.job_id}
+                        title="Submit a new run with the same spec"
+                      >
+                        {reproducingId === r.job_id ? '…' : 'Reproduce'}
+                      </button>
+                    {/if}
+                  </div>
                 </td>
               </tr>
             {/each}
