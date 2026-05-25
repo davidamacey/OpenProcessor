@@ -927,7 +927,6 @@
         {:else}
           <div
             class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-            use:infiniteScroll={{ onload: loadPlatesMore, disabled: platesLoading || !platesHasMore }}
           >
             {#each plates as p (p.crop_id)}
               <PlateCard
@@ -939,6 +938,15 @@
               />
             {/each}
           </div>
+          <!-- Sentinel AFTER the grid (not on it): the observer must root on a
+               small element that only intersects once the user scrolls to the
+               bottom. Attaching to the tall grid itself keeps it permanently
+               intersecting and loads every page at once. -->
+          <div
+            use:infiniteScroll={{ onload: loadPlatesMore, disabled: platesLoading || !platesHasMore }}
+            class="mt-4 h-1"
+            aria-hidden="true"
+          ></div>
           {#if platesLoading}
             <p class="py-2 text-center text-xs text-zinc-500">Loading more…</p>
           {/if}
