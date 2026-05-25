@@ -227,6 +227,8 @@ export interface PlatesQuery {
   plate_cluster_id?: number;
   /** AHC plate sub-cluster id (e.g. "17a"). */
   plate_cluster_subid?: string;
+  /** Order a bucket's plates by sub-cluster so AHC groups come back contiguous. */
+  sort_by_subid?: boolean;
   /** Only plates on the top-N largest crops (crop_rank_in_image<=N). */
   max_rank?: number;
   min_score?: number;

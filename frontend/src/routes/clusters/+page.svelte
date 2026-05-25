@@ -118,6 +118,61 @@
   // Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (op_clustering.py).
   const FP_PLATE_CLUSTER_ID = -100;
 
+  // Sub-cluster delineation inside an open plate bucket — mirrors the vehicle
+  // cluster detail. null = "all" (the server returns plates ordered by subid so
+  // AHC groups are contiguous; we render a labeled separator before each).
+  // Selecting a chip filters the gallery to that one sub-cluster.
+  let plateSubTab = $state<string | null>(null);
+  // Last refine outcome, shown inline next to the button so the result is not
+  // just a transient toast (the run is fast and easy to miss).
+  let plateRefineMsg = $state<string | null>(null);
+
+  // Distinct sub-cluster ids present in the loaded plates, sorted lexically so
+  // "9a","9aa","9ab"… land in human-expected order.
+  const plateSubclusterIds = $derived.by(() => {
+    const set = new Set<string>();
+    for (const p of plates) if (p.plate_cluster_subid) set.add(p.plate_cluster_subid);
+    return [...set].sort();
+  });
+
+  // Per-subid counts for the separator-header labels ('__none__' = unrefined).
+  const plateSubCounts = $derived.by(() => {
+    const m = new Map<string, number>();
+    for (const p of plates) {
+      const k = p.plate_cluster_subid ?? '__none__';
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  });
+
+  // Group only when a bucket is open, on the "all" tab, and refine has produced
+  // sub-clusters. Otherwise render one flat group (no separators).
+  const groupPlatesBySubid = $derived(
+    selectedPlateCluster != null && plateSubTab == null && plateSubclusterIds.length > 0,
+  );
+
+  // Partition loaded plates into contiguous sub-cluster groups, each with its
+  // own separator header. The server already returns them in subid order, so
+  // this just walks the list and breaks on subid change.
+  const plateGroups = $derived.by((): { key: string; label: string; items: PlateBrowseItem[] }[] => {
+    if (!groupPlatesBySubid) return [{ key: '__all__', label: '', items: plates }];
+    const groups: { key: string; label: string; items: PlateBrowseItem[] }[] = [];
+    for (const p of plates) {
+      const sub = p.plate_cluster_subid ?? '__none__';
+      const last = groups[groups.length - 1];
+      if (!last || last.key !== sub) {
+        groups.push({
+          key: sub,
+          label: sub === '__none__' ? 'unrefined' : `sub-cluster ${sub}`,
+          items: [p],
+        });
+      } else {
+        last.items.push(p);
+      }
+    }
+    return groups;
+  });
+
   async function loadPlateClusters(): Promise<void> {
     try {
       const res = await getPlateClusters({
@@ -233,11 +288,25 @@
   async function runRefinePlateCluster(): Promise<void> {
     if (selectedPlateCluster == null || plateClusterBusy) return;
     plateClusterBusy = true;
+    plateRefineMsg = `Refining bucket #${selectedPlateCluster}…`;
     try {
       const res = await refinePlateCluster(selectedPlateCluster);
-      toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
+      const n = res.n_subclusters ?? 0;
+      if (n > 0) {
+        plateRefineMsg = `Split into ${n} sub-clusters — grouped below.`;
+        toastStore.success(`Refine produced ${n} sub-clusters.`);
+      } else {
+        // Backend skipped it (too small / too large). Surface why.
+        const reason = (res as { reason?: string }).reason ?? 'no sub-clusters found';
+        plateRefineMsg = `Not refined: ${reason}.`;
+        toastStore.info(`Bucket not refined: ${reason}.`);
+      }
+      // Drop back to the "all" tab so the freshly grouped view shows, then
+      // reload (server returns plates ordered by sub-cluster).
+      plateSubTab = null;
       await loadPlatesFirst();
     } catch (e) {
+      plateRefineMsg = `Refine failed: ${(e as Error).message}`;
       toastStore.error(`Refine failed: ${(e as Error).message}`);
     } finally {
       plateClusterBusy = false;
@@ -246,11 +315,21 @@
 
   function openPlateCluster(id: number): void {
     suspectedFpView = false;
+    plateSubTab = null;
+    plateRefineMsg = null;
     selectedPlateCluster = id;
+  }
+
+  function selectPlateSubTab(sub: string | null): void {
+    if (plateSubTab === sub) return;
+    plateSubTab = sub;
+    void loadPlatesFirst();
   }
 
   function backToPlateClusters(): void {
     selectedPlateCluster = null;
+    plateSubTab = null;
+    plateRefineMsg = null;
     plateSelected = new Set();
     if (suspectedFpView) {
       // Leaving the suspected-FP view: reload the real plate gallery the
@@ -572,6 +651,11 @@
       text: plateTextQuery || undefined,
       max_rank: plateMaxRank ?? undefined,
       plate_cluster_id: selectedPlateCluster ?? undefined,
+      // When a single sub-cluster tab is active, filter to it; otherwise (the
+      // "all" tab) ask the server to order by sub-cluster so AHC groups come
+      // back contiguous across pages and we can render them with separators.
+      plate_cluster_subid: plateSubTab ?? undefined,
+      sort_by_subid: selectedPlateCluster != null && plateSubTab == null ? true : undefined,
     };
   }
 
@@ -963,6 +1047,9 @@
               >
                 {plateClusterBusy ? 'Refining…' : 'Refine AHC'}
               </button>
+              {#if plateRefineMsg}
+                <span class="text-[11px] text-zinc-400">{plateRefineMsg}</span>
+              {/if}
             {/if}
           {/if}
           <span class="grow"></span>
@@ -1086,19 +1173,58 @@
             as the worker processes them.
           </p>
         {:else}
-          <div
-            class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-          >
-            {#each plates as p (p.crop_id)}
-              <PlateCard
-                crop={p}
-                selected={plateSelected.has(p.crop_id)}
-                onclick={togglePlateSelect}
-                onedit={openPlateEditor}
-                onmarkfp={(c) => applyPlateStatus([c.crop_id], 'false_positive')}
-              />
-            {/each}
-          </div>
+          <!-- Sub-cluster tabs: appear once a bucket has been AHC-refined.
+               "All" shows the grouped view (separators per sub-cluster);
+               clicking a chip filters to that one sub-cluster. -->
+          {#if selectedPlateCluster != null && plateSubclusterIds.length > 0}
+            <div class="mb-3 flex flex-wrap items-center gap-1.5">
+              <span class="text-[11px] text-zinc-500">sub-clusters:</span>
+              <button
+                type="button"
+                class="rounded px-2 py-0.5 text-[11px] {plateSubTab === null
+                  ? 'bg-blue-500/30 text-blue-100'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+                onclick={() => selectPlateSubTab(null)}
+              >
+                all
+              </button>
+              {#each plateSubclusterIds as sid (sid)}
+                <button
+                  type="button"
+                  class="rounded px-2 py-0.5 font-mono text-[11px] {plateSubTab === sid
+                    ? 'bg-blue-500/30 text-blue-100'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+                  onclick={() => selectPlateSubTab(sid)}
+                >
+                  {sid}
+                  <span class="text-zinc-500">{plateSubCounts.get(sid) ?? ''}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+
+          {#each plateGroups as g (g.key)}
+            {#if g.label}
+              <div class="mt-3 mb-1.5 flex items-center gap-2">
+                <span class="font-mono text-[11px] text-zinc-300">{g.label}</span>
+                <span class="text-[11px] text-zinc-500">{g.items.length}</span>
+                <span class="h-px grow bg-zinc-800"></span>
+              </div>
+            {/if}
+            <div
+              class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+            >
+              {#each g.items as p (p.crop_id)}
+                <PlateCard
+                  crop={p}
+                  selected={plateSelected.has(p.crop_id)}
+                  onclick={togglePlateSelect}
+                  onedit={openPlateEditor}
+                  onmarkfp={(c) => applyPlateStatus([c.crop_id], 'false_positive')}
+                />
+              {/each}
+            </div>
+          {/each}
           <!-- Sentinel AFTER the grid (not on it): the observer must root on a
                small element that only intersects once the user scrolls to the
                bottom. Attaching to the tall grid itself keeps it permanently
