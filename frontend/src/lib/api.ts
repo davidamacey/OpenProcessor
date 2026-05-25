@@ -349,7 +349,7 @@ export interface SuspectedFpPage {
 
 /** Non-FP plate crops ranked by similarity to the known FP centroids. */
 export function getSuspectedFalsePositives(
-  opts: { threshold?: number; page?: number; pageSize?: number; includeDetected?: boolean } = {},
+  opts: { threshold?: number; page?: number; pageSize?: number } = {},
   signal?: AbortSignal,
 ): Promise<SuspectedFpPage> {
   return apiFetch(
@@ -357,7 +357,6 @@ export function getSuspectedFalsePositives(
       threshold: opts.threshold,
       page: opts.page,
       page_size: opts.pageSize,
-      include_detected: opts.includeDetected,
     })}`,
     {},
     signal,
