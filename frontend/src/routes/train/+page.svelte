@@ -36,6 +36,7 @@
     type TrainingCohortMode,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
   import PlateCard from '$components/PlateCard.svelte';
@@ -508,6 +509,9 @@
         YOLO26 detector training over the frozen export. Submits a job to the
         legacy-trainer container and tails progress until it finishes.
       </p>
+      <div class="mt-2">
+        <MonitoringLinks />
+      </div>
     </div>
     <button
       type="button"

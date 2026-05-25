@@ -18,6 +18,7 @@
     type BakeoffModelSpec,
     type BakeoffRunSummary,
   } from '$lib/api';
+  import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
 
   // Sensible default contenders. Operator edits the dataset path + toggles.
   const DEFAULT_DATASET = '/data/legacy_train_dataset_v7/lpr_exports/current';
@@ -128,6 +129,10 @@
     Every model scored on the same frozen test split with one IoU metric (pycocotools).
     Runs execute in the on-demand <code>legacy-evaluator</code> container and log to MLflow.
   </p>
+
+  <div class="mb-6">
+    <MonitoringLinks />
+  </div>
 
   {#if error}
     <div class="mb-4 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200">{error}</div>
