@@ -151,26 +151,36 @@
     selectedPlateCluster != null && plateSubTab == null && plateSubclusterIds.length > 0,
   );
 
-  // Partition loaded plates into contiguous sub-cluster groups, each with its
-  // own separator header. The server already returns them in subid order, so
-  // this just walks the list and breaks on subid change.
+  // Partition loaded plates into one group PER sub-cluster id. Built with a
+  // Map (not a contiguity walk) so it is robust to a non-contiguous list —
+  // e.g. the transient render right after opening a bucket, when `plates`
+  // still holds the previous mixed-bucket gallery before the bucket's own
+  // (subid-sorted) data arrives. A contiguity walk would emit the same subid
+  // as multiple groups there, producing duplicate {#each} keys and a Svelte
+  // each_key_duplicate crash that froze the detail view from opening.
   const plateGroups = $derived.by((): { key: string; label: string; items: PlateBrowseItem[] }[] => {
     if (!groupPlatesBySubid) return [{ key: '__all__', label: '', items: plates }];
-    const groups: { key: string; label: string; items: PlateBrowseItem[] }[] = [];
+    const byKey = new Map<string, PlateBrowseItem[]>();
     for (const p of plates) {
       const sub = p.plate_cluster_subid ?? '__none__';
-      const last = groups[groups.length - 1];
-      if (!last || last.key !== sub) {
-        groups.push({
-          key: sub,
-          label: sub === '__none__' ? 'unrefined' : `sub-cluster ${sub}`,
-          items: [p],
-        });
-      } else {
-        last.items.push(p);
+      let bucket = byKey.get(sub);
+      if (!bucket) {
+        bucket = [];
+        byKey.set(sub, bucket);
       }
+      bucket.push(p);
     }
-    return groups;
+    // Sort subids lexically; the '__none__' (unrefined) group always last.
+    const keys = [...byKey.keys()].sort((a, b) => {
+      if (a === '__none__') return 1;
+      if (b === '__none__') return -1;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    return keys.map((k) => ({
+      key: k,
+      label: k === '__none__' ? 'unrefined' : `sub-cluster ${k}`,
+      items: byKey.get(k)!,
+    }));
   });
 
   async function loadPlateClusters(): Promise<void> {
@@ -317,6 +327,9 @@
     suspectedFpView = false;
     plateSubTab = null;
     plateRefineMsg = null;
+    // Clear the previous gallery synchronously so the render between selecting
+    // the bucket and its data arriving doesn't group a stale mixed-bucket list.
+    plates = [];
     selectedPlateCluster = id;
   }
 
