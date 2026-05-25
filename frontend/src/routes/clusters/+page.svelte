@@ -927,22 +927,24 @@
             >
               ← Clusters
             </button>
-            <span class="font-mono text-[11px] text-zinc-300">
-              {selectedPlateCluster === FP_PLATE_CLUSTER_ID
-                ? 'false positives'
-                : `bucket #${selectedPlateCluster}`}
-            </span>
             {#if selectedPlateCluster === FP_PLATE_CLUSTER_ID}
+              <span
+                class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
+              >
+                ✗ False-positive cluster
+              </span>
+              <span class="text-[11px] text-zinc-400">not plates — hard negatives for LPR</span>
               <button
                 type="button"
                 disabled={plateClusterBusy}
                 class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
                 onclick={runBuildFpCentroids}
-                title="Re-sub-type the FP bucket and rebuild centroids"
+                title="Refine the FP bucket into sub-types and rebuild its centroids"
               >
-                {plateClusterBusy ? 'Building…' : 'Build FP centroids'}
+                {plateClusterBusy ? 'Refining…' : 'Refine FP (build centroids)'}
               </button>
             {:else}
+              <span class="font-mono text-[11px] text-zinc-300">bucket #{selectedPlateCluster}</span>
               <button
                 type="button"
                 disabled={plateClusterBusy}
@@ -1044,9 +1046,14 @@
                       />
                     {/each}
                   </div>
-                  <div class="flex items-center justify-between p-2 text-xs">
+                  <div class="flex items-center justify-between gap-1 p-2 text-xs">
                     {#if c.cluster_kind === 'false_positive'}
-                      <span class="font-semibold text-red-300">false positives</span>
+                      <span
+                        class="rounded bg-red-500/25 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-red-200 uppercase"
+                        title="Permanent false-positive bucket — these are NOT plates"
+                      >
+                        ✗ False positives
+                      </span>
                     {:else}
                       <span class="font-semibold text-zinc-200">#{c.id}</span>
                     {/if}
