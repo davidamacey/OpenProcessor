@@ -704,9 +704,15 @@
            own cluster docs), so this view surfaces them directly with
            detector provenance + OCR text chips. -->
       <div class="flex min-h-0 flex-col gap-3">
-        <!-- Filter strip: detector / verified / score / text-search.
-             Same layout convention as the cluster sidebar so operators
-             flip between modes without re-learning. -->
+        <!-- Sticky header: the filter strip + bulk-action toolbar stay pinned
+             to the top of the scroll area, so the verify / false-positive /
+             no-plate controls remain reachable while scrolling deep into a
+             bucket or sub-cluster. -mx-4/-mt-4 cancels the scroll container's
+             p-4 so it spans edge-to-edge and pins at the very top. -->
+        <div
+          class="sticky top-0 z-20 -mx-4 -mt-4 flex flex-col gap-3 border-b border-zinc-800 bg-zinc-950 px-4 pt-4 pb-3"
+        >
+        <!-- Filter strip: detector / verified / score / text-search. -->
         <div
           class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs"
         >
@@ -850,6 +856,8 @@
             </button>
           </div>
         {/if}
+        </div>
+        <!-- /sticky header -->
 
         {#if platesError}
           <p class="text-sm text-red-300">API unavailable: {platesError}</p>
