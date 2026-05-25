@@ -23,6 +23,8 @@ import type {
   OpExportResult,
   OpExportStatus,
   OpHealth,
+  OpLprExportResult,
+  OpLprExportStatus,
   OpModelsStatus,
   OpStats,
   OpTestHoldoutFreezeResult,
@@ -1163,6 +1165,36 @@ export function exportYolo(
 /** Poll current export state. */
 export function exportStatus(signal?: AbortSignal): Promise<OpExportStatus> {
   return apiFetch<OpExportStatus>('/curation/export/status', {}, signal);
+}
+
+/**
+ * Build a standalone single-class LPR (license-plate) YOLO dataset.
+ * Synchronous on the server; returns the export dir + counts when done.
+ */
+export function exportLpr(
+  opts: {
+    version_tag?: string;
+    empty_bg_ratio?: number;
+    max_positive_images?: number;
+    skip_test_split?: boolean;
+  } = {},
+  signal?: AbortSignal,
+): Promise<OpLprExportResult> {
+  const body: Record<string, unknown> = {};
+  if (opts.version_tag) body.version_tag = opts.version_tag;
+  if (opts.empty_bg_ratio !== undefined) body.empty_bg_ratio = opts.empty_bg_ratio;
+  if (opts.max_positive_images !== undefined) body.max_positive_images = opts.max_positive_images;
+  if (opts.skip_test_split !== undefined) body.skip_test_split = opts.skip_test_split;
+  return apiFetch<OpLprExportResult>(
+    '/curation/export/lpr',
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** Last LPR-export status (reads the LPR `current` symlink + manifest). */
+export function exportLprStatus(signal?: AbortSignal): Promise<OpLprExportStatus> {
+  return apiFetch<OpLprExportStatus>('/curation/export/lpr/status', {}, signal);
 }
 
 // -- classes mutators ----------------------------------------------------

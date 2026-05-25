@@ -21,6 +21,8 @@
     ApiError,
     cancelTrainCampaign,
     cancelTrainJob,
+    exportLpr,
+    exportLprStatus,
     exportStatus,
     getTrainingCandidates,
     getTrainManifest,
@@ -88,6 +90,43 @@
       datasetMessage = `Export status fetch failed: ${(e as Error).message}`;
     } finally {
       refreshing = false;
+    }
+  }
+
+  // ---- LPR (license-plate) export --------------------------------------
+  // Single-class plate dataset, built on demand. Backend is synchronous,
+  // so we just await it and surface the resulting dir + counts.
+  let lprExporting = $state<boolean>(false);
+  let lprExportDir = $state<string>('');
+  let lprMessage = $state<string | null>(null);
+
+  async function refreshLprStatus(): Promise<void> {
+    try {
+      const s = await exportLprStatus();
+      lprExportDir = s.export_dir ?? '';
+    } catch {
+      // Non-fatal — the LPR export just hasn't run yet.
+    }
+  }
+
+  async function runLprExport(): Promise<void> {
+    lprExporting = true;
+    lprMessage = null;
+    try {
+      const r = await exportLpr({});
+      lprExportDir = r.export_dir;
+      const pos = r.positive_images ?? '?';
+      const fp = r.false_positive_background_images ?? '?';
+      lprMessage = `LPR export done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives). dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      if (r.positives_zero_warning) {
+        lprMessage += ' ⚠ zero positives — check plate labeling.';
+      }
+      toastStore.success('LPR export complete');
+    } catch (e) {
+      lprMessage = `LPR export failed: ${(e as Error).message}`;
+      toastStore.error('LPR export failed');
+    } finally {
+      lprExporting = false;
     }
   }
 
@@ -380,6 +419,7 @@
         }
       })(),
       refreshDataset(),
+      refreshLprStatus(),
       refreshRuns(),
       refreshPlateCohortCounts(),
     ]);
@@ -542,6 +582,34 @@
       </p>
     {:else}
       <p class="mt-1 text-sm text-zinc-300">{datasetMessage ?? 'Loading…'}</p>
+    {/if}
+  </section>
+
+  <!-- LPR (license-plate) export — standalone single-class dataset -->
+  <section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">
+        LPR plate dataset
+      </h2>
+      <button
+        type="button"
+        class="rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+        onclick={runLprExport}
+        disabled={lprExporting}
+      >
+        {lprExporting ? 'Exporting…' : 'Build LPR export'}
+      </button>
+    </div>
+    {#if lprExportDir}
+      <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>
+    {/if}
+    {#if lprMessage}
+      <p class="mt-2 text-xs text-zinc-400">{lprMessage}</p>
+    {:else}
+      <p class="mt-2 text-xs text-zinc-500">
+        Single-class plate dataset (positives + human FP hard-negatives + a
+        sample of plate-free backgrounds). Train it as a YOLO26 LPR detector.
+      </p>
     {/if}
   </section>
 

@@ -87,6 +87,36 @@ export interface OpExportResult {
   message?: string | null;
 }
 
+/** Server response from `POST /curation/export/lpr` (single-class plate dataset). */
+export interface OpLprExportResult {
+  status: string;
+  export_dir: string;
+  manifest_path: string;
+  data_yaml_path: string;
+  dataset_sha: string;
+  split_counts: Record<string, number>;
+  image_count: number;
+  positive_images?: number | null;
+  background_images?: number | null;
+  false_positive_background_images?: number | null;
+  positives_zero_warning?: boolean | null;
+  current_symlink?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+/** Server response from `GET /curation/export/lpr/status`. */
+export interface OpLprExportStatus {
+  status: string;
+  last_run: string | null;
+  export_dir?: string | null;
+  dataset_sha?: string | null;
+  positive_images?: number | null;
+  background_images?: number | null;
+  false_positive_background_images?: number | null;
+  split_counts?: Record<string, number> | null;
+}
+
 /** Server response from `POST /curation/test_holdout/freeze`. */
 export interface OpTestHoldoutFreezeResult {
   n_frozen: number;
