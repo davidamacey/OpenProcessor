@@ -24,7 +24,16 @@
   import type { OpDataset } from '$lib/types';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
 
+  // Weight paths for the public baselines from the paper (all mounted into the
+  // legacy-evaluator container).
   const LPDNET = '/data/datasets/models/lpdnet_pruned_v2.2.1/lpdnet_pruned_v2.2.1/LPDNet_usa_pruned_tao5.onnx';
+  const NANOV11 = '/data/photos_license/lpr-nanov11-640.pt';
+  const MORSETECH = '/data/datasets/models/morsetechlab_yolov11_lpd/license-plate-finetune-v1s.pt';
+  const MLDEBI = '/data/datasets/models/ml-debi_yolov8_lpd/best.onnx';
+
+  // Inference regime applied to every model: full-frame, vehicle-crop, or both
+  // (the paper reports both — the runner expands 'both' into [full] + [crop]).
+  let mode = $state<'full' | 'crop' | 'both'>('both');
 
   interface Contender extends BakeoffModelSpec {
     enabled: boolean;
@@ -45,13 +54,19 @@
 
   // Public / external baselines + an "external model" row for testing a
   // different yolov11/yolo26 by path (no need to re-train it here).
+  // The five public/commercial baselines from the paper (all enabled by
+  // default) + an "external model" slot for testing a different yolov11/yolo26.
   let contenders = $state<Contender[]>([
-    { enabled: true, backend: 'triton', name: 'lpr_nanov11_640', triton_model: 'lpr_nanov11_640',
-      triton_url: 'triton-server:4601', training_data: 'andrewmvd Kaggle' } as Contender,
+    { enabled: true, backend: 'ultralytics', name: 'lpr_nanov11_640', weights: NANOV11,
+      imgsz: 640, device: 'cuda', training_data: 'andrewmvd Kaggle' },
     { enabled: true, backend: 'open-image-models', name: 'open-image-models-yolov9t',
-      device: 'cuda', training_data: 'open plate datasets' },
+      imgsz: 1280, device: 'cuda', training_data: 'open plate datasets' },
+    { enabled: true, backend: 'ultralytics', name: 'ml-debi-yolov8', weights: MLDEBI,
+      imgsz: 640, device: 'cuda', training_data: 'undocumented' },
+    { enabled: true, backend: 'ultralytics', name: 'morsetechlab-yolo11s', weights: MORSETECH,
+      imgsz: 640, device: 'cuda', training_data: 'Roboflow ALPR' },
     { enabled: true, backend: 'lpdnet', name: 'lpdnet-usa', weights: LPDNET, lpdnet_variant: 'usa',
-      device: '0', training_data: 'NVIDIA TAO (US)' },
+      device: 'cuda', training_data: 'NVIDIA TAO (US)' },
     { enabled: false, backend: 'ultralytics', name: 'external-model', weights: '', imgsz: 640,
       device: 'cuda', training_data: 'external (.pt path)' },
   ]);
@@ -131,12 +146,13 @@
         name: t.name,
         weights: t.checkpoint_path,
         imgsz: t.imgsz,
+        mode,
         device: 'cuda',
         training_data: `curated vehicles (ours${t.model_size ? ', ' + t.model_size : ''})`,
       }));
     const baselines = contenders
       .filter((c) => c.enabled)
-      .map(({ enabled: _e, ...spec }) => spec);
+      .map(({ enabled: _e, ...spec }) => ({ ...spec, mode }));
     const models = [...ours, ...baselines];
     if (models.length === 0) {
       error = 'enable at least one model';
@@ -232,6 +248,18 @@
           class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs"
         />
       {/if}
+    </label>
+
+    <label class="mb-3 block text-sm">
+      <span class="text-zinc-400">Inference regime</span>
+      <select
+        bind:value={mode}
+        class="mt-1 w-48 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+      >
+        <option value="both">both (full + crop)</option>
+        <option value="full">full-frame</option>
+        <option value="crop">vehicle-crop</option>
+      </select>
     </label>
 
     <!-- Our trained models — selected straight from the backend (no upload) -->

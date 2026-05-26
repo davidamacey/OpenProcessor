@@ -1678,6 +1678,7 @@ export function cancelAutoLabel(
 export interface BakeoffModelSpec {
   backend: 'ultralytics' | 'triton' | 'open-image-models' | 'two-stage' | 'lpdnet';
   name: string;
+  mode?: 'full' | 'crop' | 'both';
   weights?: string;
   imgsz?: number;
   device?: string;
