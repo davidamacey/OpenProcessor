@@ -55,6 +55,33 @@
   // contain inside it so the crop fills the full square.
   let canvasEl = $state<HTMLDivElement | null>(null);
 
+  // Natural dims of the thumbnail JPEG, captured on <img onload>. The
+  // backend serves aspect-preserved JPEGs, so object-contain inside the
+  // aspect-square canvas letterboxes non-square crops. Pointer math and
+  // the ring must compensate or the box lands in the wrong spot (it
+  // rendered too low for wide vehicle crops). baseDisp is the actual
+  // image rect inside the unit-square canvas: {offX, offY, w, h} ∈ [0,1].
+  // Mirrors PlateBboxCanvas.svelte's baseDisp.
+  let imgNaturalW = $state<number>(0);
+  let imgNaturalH = $state<number>(0);
+  function onImgLoad(e: Event): void {
+    const img = e.currentTarget as HTMLImageElement;
+    imgNaturalW = img.naturalWidth || 0;
+    imgNaturalH = img.naturalHeight || 0;
+  }
+  const baseDisp = $derived.by(() => {
+    if (imgNaturalW <= 0 || imgNaturalH <= 0) {
+      return { offX: 0, offY: 0, w: 1, h: 1 };
+    }
+    const aspect = imgNaturalW / imgNaturalH;
+    if (aspect >= 1) {
+      const h = 1 / aspect;
+      return { offX: 0, offY: (1 - h) / 2, w: 1, h };
+    }
+    const w = aspect;
+    return { offX: (1 - w) / 2, offY: 0, w, h: 1 };
+  });
+
   // Drag state ---------------------------------------------------------
   type DragMode =
     | 'create'      // user dragging from empty canvas — paint a fresh box
@@ -98,9 +125,15 @@
     const rect = canvasEl.getBoundingClientRect();
     const w = rect.width || 1;
     const h = rect.height || 1;
+    // Container-fraction of the pointer, then map onto the letterboxed
+    // image rect so the stored box is in crop-local (image) frame.
+    const cxf = Math.min(1, Math.max(0, (e.clientX - rect.left) / w));
+    const cyf = Math.min(1, Math.max(0, (e.clientY - rect.top) / h));
+    const { offX, offY, w: dW, h: dH } = baseDisp;
+    if (dW <= 0 || dH <= 0) return { x: cxf, y: cyf };
     return {
-      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / w)),
-      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / h)),
+      x: clamp01((cxf - offX) / dW),
+      y: clamp01((cyf - offY) / dH),
     };
   }
 
@@ -318,10 +351,13 @@
   // Derived overlay rectangle in % of the canvas.
   const ringStyle = $derived.by<string>(() => {
     if (!plateLocal) return 'display:none';
-    const x1 = (plateLocal.cx - plateLocal.w / 2) * 100;
-    const y1 = (plateLocal.cy - plateLocal.h / 2) * 100;
-    const w = plateLocal.w * 100;
-    const h = plateLocal.h * 100;
+    // Place the ring inside the letterboxed image rect (inverse of the
+    // map clientToNorm applies on input) so it lines up with the crop.
+    const { offX, offY, w: dW, h: dH } = baseDisp;
+    const x1 = (offX + (plateLocal.cx - plateLocal.w / 2) * dW) * 100;
+    const y1 = (offY + (plateLocal.cy - plateLocal.h / 2) * dH) * 100;
+    const w = plateLocal.w * dW * 100;
+    const h = plateLocal.h * dH * 100;
     return `left:${x1}%;top:${y1}%;width:${w}%;height:${h}%`;
   });
 </script>
@@ -364,6 +400,7 @@
         src={getThumbUrl(crop.id, thumbSize)}
         alt="crop preview"
         draggable="false"
+        onload={onImgLoad}
         class="pointer-events-none h-full w-full object-contain"
       />
 
