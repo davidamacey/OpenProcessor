@@ -20,6 +20,7 @@ import type {
   OpClassUpdate,
   OpCluster,
   OpCrop,
+  OpDatasetList,
   OpExportResult,
   OpExportStatus,
   OpHealth,
@@ -1203,6 +1204,19 @@ export function exportLpr(
 /** Last LPR-export status (reads the LPR `current` symlink + manifest). */
 export function exportLprStatus(signal?: AbortSignal): Promise<OpLprExportStatus> {
   return apiFetch<OpLprExportStatus>('/curation/export/lpr/status', {}, signal);
+}
+
+/**
+ * List every materialized dataset version on disk (newest first) so the
+ * operator can train on any past export — a small sample, a larger subset, or
+ * the full set — for consistent data re-use across model-size upgrades.
+ */
+export function listDatasets(
+  kind?: 'lpr' | 'vehicles',
+  signal?: AbortSignal,
+): Promise<OpDatasetList> {
+  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  return apiFetch<OpDatasetList>(`/curation/export/datasets${qs}`, {}, signal);
 }
 
 // -- classes mutators ----------------------------------------------------

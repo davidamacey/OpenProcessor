@@ -120,6 +120,30 @@ export interface OpLprExportStatus {
   split_counts?: Record<string, number> | null;
 }
 
+/** One materialized dataset version from `GET /curation/export/datasets`. */
+export interface OpDataset {
+  kind: 'lpr' | 'vehicles';
+  export_dir: string;
+  version_tag: string;
+  image_count?: number | null;
+  split_counts?: Record<string, number> | null;
+  dataset_sha?: string | null;
+  exported_at?: string | null;
+  image_mode?: string | null;
+  img_max_side?: number | null;
+  sampling?: string | null;
+  max_positive_images?: number | null;
+  max_images?: number | null;
+  class_count?: number | null;
+  is_current: boolean;
+}
+
+/** Server response from `GET /curation/export/datasets`. */
+export interface OpDatasetList {
+  datasets: OpDataset[];
+  count: number;
+}
+
 /** Server response from `POST /curation/test_holdout/freeze`. */
 export interface OpTestHoldoutFreezeResult {
   n_frozen: number;

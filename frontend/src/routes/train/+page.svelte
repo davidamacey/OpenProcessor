@@ -30,6 +30,7 @@
     getTrainProfiles,
     getTrainRuns,
     getTrainStatus,
+    listDatasets,
     tailTrainLog,
     trainPreflight,
     trainStart,
@@ -48,6 +49,7 @@
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import type { OpDataset } from '$lib/types';
   import type {
     ClassSubsetPreset,
     PreflightReport,
@@ -72,17 +74,38 @@
   // ---- Reference data --------------------------------------------------
   let profiles = $state<Profile[]>([]);
   let presets = $state<ClassSubsetPreset[]>([]);
-  let datasetExportDir = $state<string>('');
+  // Which frozen export the training run targets: the multi-class vehicle
+  // dataset (current) or the single-class LPR dataset (lpr_current).
+  let datasetKind = $state<'vehicles' | 'lpr'>('vehicles');
+  let vehiclesDir = $state<string>('');
+  let lprExportDir = $state<string>('');
+  // All materialized dataset versions on disk (both kinds), newest first.
+  let datasets = $state<OpDataset[]>([]);
+  // Explicit operator pick. Empty => fall back to the `current` symlink for the
+  // selected kind, so the default behaviour (train the latest export) is
+  // unchanged. Picking any past export lets us reuse the exact same data when
+  // upsizing nano -> small, etc.
+  let selectedExportDir = $state<string>('');
+  const kindDatasets = $derived(datasets.filter((d) => d.kind === datasetKind));
+  let datasetExportDir = $derived(
+    selectedExportDir || (datasetKind === 'lpr' ? lprExportDir : vehiclesDir),
+  );
   let datasetMessage = $state<string | null>(null);
   let refreshing = $state<boolean>(false);
+
+  function selectDatasetKind(kind: 'vehicles' | 'lpr'): void {
+    datasetKind = kind;
+    selectedExportDir = ''; // reset to the current export of the new kind
+  }
 
   async function refreshDataset(): Promise<void> {
     refreshing = true;
     datasetMessage = null;
     try {
-      const e = await exportStatus();
-      datasetExportDir = e.export_dir ?? '';
-      if (!datasetExportDir) {
+      const [e, ds] = await Promise.all([exportStatus(), listDatasets()]);
+      vehiclesDir = e.export_dir ?? '';
+      datasets = ds.datasets ?? [];
+      if (!vehiclesDir) {
         datasetMessage =
           'No frozen export available — run /export first to produce a dataset.';
       }
@@ -93,11 +116,21 @@
     }
   }
 
+  // Human-readable label for a dataset option in the picker.
+  function datasetLabel(d: OpDataset): string {
+    const n = d.image_count != null ? d.image_count.toLocaleString() : '?';
+    const tag = d.version_tag ? ` · ${d.version_tag}` : '';
+    const samp = d.sampling === 'stratified_even' ? ' · sampled' : '';
+    const cur = d.is_current ? ' · current' : '';
+    const when = d.exported_at ? d.exported_at.slice(0, 16).replace('T', ' ') : '';
+    const dir = d.export_dir.split('/').pop() ?? d.export_dir;
+    return `${dir} (${n} imgs${samp}${tag}${cur}) ${when}`.trim();
+  }
+
   // ---- LPR (license-plate) export --------------------------------------
   // Single-class plate dataset, built on demand. Backend is synchronous,
   // so we just await it and surface the resulting dir + counts.
   let lprExporting = $state<boolean>(false);
-  let lprExportDir = $state<string>('');
   let lprMessage = $state<string | null>(null);
   // Export options. whole_frame = full source frame (deployment distribution);
   // vehicle_crop = parent vehicle crop with the plate re-projected. 640 for a
@@ -105,6 +138,10 @@
   let lprImageMode = $state<'whole_frame' | 'vehicle_crop'>('whole_frame');
   let lprImgSize = $state<640 | 1280>(1280);
   let lprDedup = $state<boolean>(true);
+  // Optional N: sample at most this many positive (plate-bearing) frames,
+  // spread EVENLY across plate clusters. Blank/0 == every positive. Lets us
+  // build progressively larger dataset versions from the same labeled pool.
+  let lprMaxPositives = $state<number | null>(null);
 
   async function refreshLprStatus(): Promise<void> {
     try {
@@ -123,8 +160,12 @@
         image_mode: lprImageMode,
         img_max_side: lprImgSize,
         dedup_threshold: lprDedup ? 0.98 : null,
+        max_positive_images:
+          lprMaxPositives && lprMaxPositives > 0 ? lprMaxPositives : undefined,
       });
       lprExportDir = r.export_dir;
+      // Refresh the picker so the new version shows up immediately.
+      void refreshDataset();
       const pos = r.positive_images ?? '?';
       const fp = r.false_positive_background_images ?? '?';
       const mode = r.image_mode ?? lprImageMode;
@@ -579,21 +620,72 @@
 
   <!-- Dataset header -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
-    <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">Dataset</h2>
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">Dataset</h2>
+      <div class="flex gap-1 text-xs">
+        <button
+          type="button"
+          class="rounded border px-2 py-0.5 {datasetKind === 'vehicles'
+            ? 'border-blue-500 bg-blue-950 text-blue-200'
+            : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
+          onclick={() => selectDatasetKind('vehicles')}
+        >
+          Multi-class vehicles
+        </button>
+        <button
+          type="button"
+          class="rounded border px-2 py-0.5 {datasetKind === 'lpr'
+            ? 'border-blue-500 bg-blue-950 text-blue-200'
+            : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
+          onclick={() => selectDatasetKind('lpr')}
+        >
+          LPR plates (single-class)
+        </button>
+      </div>
+    </div>
+    {#if kindDatasets.length > 0}
+      <label class="mt-3 block">
+        <span class="mb-1 block text-xs text-zinc-400">
+          dataset version ({kindDatasets.length} available — pick a sample, subset, or the full set)
+        </span>
+        <select
+          bind:value={selectedExportDir}
+          class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">
+            current ({datasetKind === 'lpr' ? 'lpr_current' : 'current'} symlink — latest)
+          </option>
+          {#each kindDatasets as d (d.export_dir)}
+            <option value={d.export_dir}>{datasetLabel(d)}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
     {#if datasetExportDir}
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{datasetExportDir}</p>
-      <p class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
-        <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
-          {classesStore.classes.filter((c) => !c.deprecated).length} classes
-        </span>
-        <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono">
-          {classesStore.classes
-            .reduce((acc, c) => acc + (c.validated_count ?? 0), 0)
-            .toLocaleString()} validated crops
-        </span>
-      </p>
+      {#if datasetKind === 'lpr'}
+        <p class="mt-2 text-xs text-zinc-400">
+          Single-class <span class="font-mono">license_plate</span> dataset
+          (positives + FP hard-negatives + plate-free backgrounds), cluster-stratified.
+        </p>
+      {:else}
+        <p class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+          <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
+            {classesStore.classes.filter((c) => !c.deprecated).length} classes
+          </span>
+          <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono">
+            {classesStore.classes
+              .reduce((acc, c) => acc + (c.validated_count ?? 0), 0)
+              .toLocaleString()} validated crops
+          </span>
+        </p>
+      {/if}
     {:else}
-      <p class="mt-1 text-sm text-zinc-300">{datasetMessage ?? 'Loading…'}</p>
+      <p class="mt-1 text-sm text-zinc-300">
+        {datasetKind === 'lpr'
+          ? 'No LPR export yet — build one below.'
+          : (datasetMessage ?? 'Loading…')}
+      </p>
     {/if}
   </section>
 
@@ -635,11 +727,28 @@
           <option value={1280}>1280 (full)</option>
         </select>
       </label>
+      <label class="block">
+        <span class="mb-1 block text-xs text-zinc-400">sample N positives (blank = all)</span>
+        <input
+          type="number"
+          min="0"
+          step="500"
+          placeholder="all"
+          bind:value={lprMaxPositives}
+          disabled={lprExporting}
+          class="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        />
+      </label>
       <label class="flex items-center gap-2 pb-1.5">
         <input type="checkbox" bind:checked={lprDedup} disabled={lprExporting} />
         <span class="text-xs text-zinc-400">dedup near-dup frames (cos ≥ 0.98)</span>
       </label>
     </div>
+    <p class="mt-2 text-[11px] text-zinc-500">
+      N samples positives spread <em>evenly across plate clusters</em> — build a
+      small set first, then a larger one from the same labeled pool for
+      progressive training.
+    </p>
     {#if lprExportDir}
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>
     {/if}
@@ -702,6 +811,7 @@
       onStart={startSingle}
       onStartCampaign={startCampaign}
       disabled={isActive}
+      lpr={datasetKind === 'lpr'}
     />
   {/if}
 

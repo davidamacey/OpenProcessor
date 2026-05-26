@@ -44,6 +44,8 @@
     ) => void | Promise<void>;
     /** When true, gray out the form (a run is active). */
     disabled?: boolean;
+    /** True when the selected dataset is the single-class LPR export. */
+    lpr?: boolean;
   }
 
   let {
@@ -57,6 +59,7 @@
     onStart,
     onStartCampaign,
     disabled = false,
+    lpr = false,
   }: Props = $props();
 
   // ---- Form state -------------------------------------------------------
@@ -125,6 +128,12 @@
     hpPatience = (def.patience as number | undefined) ?? null;
   }
 
+  // The LPR export is single-class (nc=1, license_plate). Collapse to one
+  // class so the run never depends on the multi-class registry.
+  $effect(() => {
+    if (lpr) singleCls = true;
+  });
+
   // First time profiles arrive, seed the defaults.
   let seededProfiles = $state<boolean>(false);
   $effect(() => {
@@ -163,8 +172,11 @@
       model_size: modelSize,
       profile: profileName,
       cuda_visible_devices: cudaDevices,
-      include_classes: selectedClasses,
-      single_cls: singleCls,
+      // The LPR export is already a single-class (class 0) dataset, so never
+      // filter it by the multi-class registry ids (e.g. license_plate=80) —
+      // that drops every label. Send no class subset for LPR runs.
+      include_classes: lpr ? null : selectedClasses,
+      single_cls: lpr ? true : singleCls,
       hyperparameters: buildHyperparameters(),
       augmentation: augmentation && augmentation.enabled ? augmentation : null,
     };
@@ -185,8 +197,8 @@
         : null;
     return {
       dataset_export_dir: datasetExportDir,
-      include_classes: selectedClasses,
-      single_cls: singleCls,
+      include_classes: lpr ? null : selectedClasses,
+      single_cls: lpr ? true : singleCls,
       cuda_visible_devices: cudaDevices,
       augmentation: augmentation && augmentation.enabled ? augmentation : null,
       runs,
@@ -367,12 +379,24 @@
           />
         </label>
         <label class="block">
-          <span class="mb-1 block text-xs text-zinc-400">batch</span>
+          <span class="mb-1 flex items-center justify-between text-xs text-zinc-400">
+            <span>batch</span>
+            <span class="flex items-center gap-1 text-[10px] text-zinc-500">
+              <input
+                type="checkbox"
+                checked={hpBatch === -1}
+                onchange={(e) => (hpBatch = e.currentTarget.checked ? -1 : 64)}
+              />
+              auto
+            </span>
+          </span>
           <input
             type="number"
-            min="1"
+            min="-1"
             bind:value={hpBatch}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+            disabled={hpBatch === -1}
+            placeholder={hpBatch === -1 ? 'auto (−1)' : ''}
+            class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none disabled:opacity-50"
           />
         </label>
         <label class="block">
