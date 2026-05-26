@@ -1,120 +1,72 @@
 <script lang="ts">
   /**
-   * /bakeoff — LPR model bake-off cockpit.
+   * /bakeoff — LPR model x dataset bake-off cockpit.
    *
-   * Lists comparison runs, renders the ranked results table for the
-   * selected run (the clean leaderboard MLflow can't give cleanly), and
-   * enqueues new runs via POST /curation/bakeoff/run (executed by the on-demand
-   * legacy-evaluator container). Polls status while a run is active.
+   * Scores every selected model on every selected frozen dataset (matrix) in
+   * the on-demand legacy-evaluator container, then renders a model x dataset
+   * matrix with the best cell per dataset bolded. Datasets + baseline models are
+   * discovered from the backend (auto-discovered frozen dirs + an editable
+   * registry) and our trained runs are selectable directly — so adding a model
+   * or dataset never needs a UI change.
    */
   import { onMount, onDestroy } from 'svelte';
   import {
     ApiError,
-    bakeoffResults,
+    bakeoffBaselineModels,
+    bakeoffEvalDatasets,
+    bakeoffMatrix,
     bakeoffRun,
     bakeoffRuns,
     bakeoffStatus,
     bakeoffTrainedModels,
-    listDatasets,
-    type BakeoffComparison,
+    type BakeoffEvalDataset,
+    type BakeoffMatrix,
     type BakeoffModelSpec,
     type BakeoffRunSummary,
     type BakeoffTrainedModel,
   } from '$lib/api';
-  import type { OpDataset } from '$lib/types';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
 
-  // Weight paths for the public baselines from the paper (all mounted into the
-  // legacy-evaluator container).
-  const LPDNET = '/data/datasets/models/lpdnet_pruned_v2.2.1/lpdnet_pruned_v2.2.1/LPDNet_usa_pruned_tao5.onnx';
-  const NANOV11 = '/data/photos_license/lpr-nanov11-640.pt';
-  const MORSETECH = '/data/datasets/models/morsetechlab_yolov11_lpd/license-plate-finetune-v1s.pt';
-  const MLDEBI = '/data/datasets/models/ml-debi_yolov8_lpd/best.onnx';
-
   // Inference regime applied to every model: full-frame, vehicle-crop, or both
-  // (the paper reports both — the runner expands 'both' into [full] + [crop]).
+  // (the runner expands 'both' into [full] + [crop]).
   let mode = $state<'full' | 'crop' | 'both'>('both');
 
-  interface Contender extends BakeoffModelSpec {
+  interface DatasetChoice extends BakeoffEvalDataset {
     enabled: boolean;
   }
-
-  // One of our finished training runs, toggled + with an editable eval imgsz.
+  interface BaselineChoice extends BakeoffModelSpec {
+    enabled: boolean;
+  }
   interface TrainedChoice extends BakeoffTrainedModel {
     enabled: boolean;
     imgsz: number;
   }
 
-  // ---- dataset selection (LPR exports from /curation/export/datasets) ----------
-  let datasets = $state<OpDataset[]>([]);
-  let dataset = $state<string>('');
-
-  // ---- our trained YOLO models (selectable from the backend) -------------
+  let evalDatasets = $state<DatasetChoice[]>([]);
+  let baselines = $state<BaselineChoice[]>([]);
   let trainedModels = $state<TrainedChoice[]>([]);
-
-  // Public / external baselines + an "external model" row for testing a
-  // different yolov11/yolo26 by path (no need to re-train it here).
-  // The five public/commercial baselines from the paper (all enabled by
-  // default) + an "external model" slot for testing a different yolov11/yolo26.
-  let contenders = $state<Contender[]>([
-    { enabled: true, backend: 'ultralytics', name: 'lpr_nanov11_640', weights: NANOV11,
-      imgsz: 640, device: 'cuda', training_data: 'andrewmvd Kaggle' },
-    { enabled: true, backend: 'open-image-models', name: 'open-image-models-yolov9t',
-      imgsz: 1280, device: 'cuda', training_data: 'open plate datasets' },
-    { enabled: true, backend: 'ultralytics', name: 'ml-debi-yolov8', weights: MLDEBI,
-      imgsz: 640, device: 'cuda', training_data: 'undocumented' },
-    { enabled: true, backend: 'ultralytics', name: 'morsetechlab-yolo11s', weights: MORSETECH,
-      imgsz: 640, device: 'cuda', training_data: 'Roboflow ALPR' },
-    { enabled: true, backend: 'lpdnet', name: 'lpdnet-usa', weights: LPDNET, lpdnet_variant: 'usa',
-      device: 'cuda', training_data: 'NVIDIA TAO (US)' },
-    { enabled: false, backend: 'ultralytics', name: 'external-model', weights: '', imgsz: 640,
-      device: 'cuda', training_data: 'external (.pt path)' },
-  ]);
-
-  async function refreshDatasets() {
-    try {
-      const r = await listDatasets('lpr');
-      datasets = r.datasets ?? [];
-      // Default to the current export, else the newest.
-      const cur = datasets.find((d) => d.is_current) ?? datasets[0];
-      if (cur && !dataset) dataset = cur.export_dir;
-    } catch (e) {
-      error = e instanceof ApiError ? e.message : String(e);
-    }
-  }
-
-  async function refreshTrainedModels() {
-    try {
-      const r = await bakeoffTrainedModels();
-      trainedModels = (r.models ?? []).map((m) => ({
-        ...m,
-        // First (newest) ours model on by default; eval at 640 (LPR train size).
-        enabled: false,
-        imgsz: 640,
-      }));
-      if (trainedModels.length > 0) trainedModels[0].enabled = true;
-    } catch (e) {
-      error = e instanceof ApiError ? e.message : String(e);
-    }
-  }
-
-  function datasetLabel(d: OpDataset): string {
-    const n = d.image_count != null ? d.image_count.toLocaleString() : '?';
-    const samp = d.sampling === 'stratified_even' ? ' · sampled' : '';
-    const cur = d.is_current ? ' · current' : '';
-    const dir = d.export_dir.split('/').pop() ?? d.export_dir;
-    return `${dir} (${n} imgs${samp}${cur})`;
-  }
 
   let runs = $state<BakeoffRunSummary[]>([]);
   let selected = $state<string | null>(null);
-  let comparison = $state<BakeoffComparison | null>(null);
+  let matrix = $state<BakeoffMatrix | null>(null);
+  let metric = $state<string>('map_50');
   let activeJob = $state<string | null>(null);
   let activeState = $state<string | null>(null);
+  let activeProgress = $state<{ done: number; total: number } | null>(null);
   let error = $state<string | null>(null);
   let busy = $state(false);
-
   let poll: ReturnType<typeof setInterval> | undefined;
+
+  const METRIC_LABELS: Record<string, string> = {
+    map_50: 'mAP@.5',
+    map_50_95: 'mAP@.5:.95',
+    mean_iou: 'meanIoU',
+    ap_small: 'AP small',
+    precision: 'Precision',
+    recall: 'Recall',
+    f1: 'F1',
+    latency_ms: 'Latency (ms)',
+  };
 
   async function refreshRuns() {
     try {
@@ -124,21 +76,51 @@
     }
   }
 
-  async function loadResults(jobId: string) {
-    selected = jobId;
-    comparison = null;
+  async function refreshDatasets() {
     try {
-      comparison = await bakeoffResults(jobId);
+      const r = await bakeoffEvalDatasets();
+      // Default: curated + public on; balanced samples off (opt-in).
+      evalDatasets = (r.datasets ?? []).map((d) => ({ ...d, enabled: d.kind !== 'sample' }));
     } catch (e) {
-      comparison = null; // not done yet / no comparison
+      error = e instanceof ApiError ? e.message : String(e);
+    }
+  }
+
+  async function refreshBaselines() {
+    try {
+      const r = await bakeoffBaselineModels();
+      baselines = (r.baselines ?? []).map((b) => ({ ...b, enabled: true }));
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : String(e);
+    }
+  }
+
+  async function refreshTrainedModels() {
+    try {
+      const r = await bakeoffTrainedModels();
+      trainedModels = (r.models ?? []).map((m) => ({ ...m, enabled: false, imgsz: 640 }));
+      if (trainedModels.length > 0) trainedModels[0].enabled = true; // newest on
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : String(e);
+    }
+  }
+
+  async function loadMatrix(jobId: string) {
+    selected = jobId;
+    matrix = null;
+    try {
+      matrix = await bakeoffMatrix(jobId);
+    } catch {
+      matrix = null; // not a matrix job / not done yet
     }
   }
 
   async function startRun() {
     error = null;
     busy = true;
-    // Our selected trained runs become ultralytics contenders pointed straight
-    // at their backend checkpoint (the evaluator reads /runs read-only).
+    const datasets = evalDatasets
+      .filter((d) => d.enabled)
+      .map((d) => ({ path: d.path, name: d.name }));
     const ours: BakeoffModelSpec[] = trainedModels
       .filter((t) => t.enabled)
       .map((t) => ({
@@ -150,24 +132,25 @@
         device: 'cuda',
         training_data: `curated vehicles (ours${t.model_size ? ', ' + t.model_size : ''})`,
       }));
-    const baselines = contenders
-      .filter((c) => c.enabled)
+    const base: BakeoffModelSpec[] = baselines
+      .filter((b) => b.enabled)
       .map(({ enabled: _e, ...spec }) => ({ ...spec, mode }));
-    const models = [...ours, ...baselines];
-    if (models.length === 0) {
-      error = 'enable at least one model';
+    const models = [...ours, ...base];
+    if (datasets.length === 0) {
+      error = 'select at least one dataset';
       busy = false;
       return;
     }
-    if (!dataset) {
-      error = 'select a dataset';
+    if (models.length === 0) {
+      error = 'select at least one model';
       busy = false;
       return;
     }
     try {
-      const res = await bakeoffRun({ dataset, models, verify_frozen: true });
+      const res = await bakeoffRun({ datasets, models, verify_frozen: true });
       activeJob = res.job_id;
       activeState = 'enqueued';
+      activeProgress = null;
       await refreshRuns();
       startPolling();
     } catch (e) {
@@ -182,12 +165,16 @@
     poll = setInterval(async () => {
       if (!activeJob) return;
       try {
-        const st = (await bakeoffStatus(activeJob)) as { state?: string };
+        const st = (await bakeoffStatus(activeJob)) as {
+          state?: string;
+          progress?: { done: number; total: number };
+        };
         activeState = st.state ?? null;
+        activeProgress = st.progress ?? null;
         if (st.state === 'done' || st.state === 'error') {
           stopPolling();
           await refreshRuns();
-          if (st.state === 'done') await loadResults(activeJob);
+          if (st.state === 'done') await loadMatrix(activeJob);
         }
       } catch {
         /* keep polling */
@@ -200,28 +187,38 @@
     poll = undefined;
   }
 
-  function pct(v: number): string {
-    return (v * 100).toFixed(1);
+  function fmt(v: number | null | undefined, m: string): string {
+    if (v == null) return '—';
+    return m === 'latency_ms' ? v.toFixed(0) : (v * 100).toFixed(1);
+  }
+
+  function cell(model: string, ds: string): number | null {
+    return matrix?.cells?.[model]?.[ds]?.[metric] ?? null;
+  }
+  function isBest(model: string, ds: string): boolean {
+    return matrix?.best?.[ds]?.[metric] === model;
   }
 
   onMount(() => {
     void refreshRuns();
     void refreshDatasets();
+    void refreshBaselines();
     void refreshTrainedModels();
   });
   onDestroy(stopPolling);
 </script>
 
+<svelte:head><title>Bake-off · legacy Labeler</title></svelte:head>
+
 <div class="mx-auto max-w-6xl p-6 text-zinc-200">
-  <h1 class="mb-1 text-2xl font-semibold">LPR Model Bake-off</h1>
+  <h1 class="mb-1 text-2xl font-semibold">LPR Model × Dataset Bake-off</h1>
   <p class="mb-6 text-sm text-zinc-400">
-    Every model scored on the same frozen test split with one IoU metric (pycocotools).
-    Runs execute in the on-demand <code>legacy-evaluator</code> container and log to MLflow.
+    Every selected model scored on every selected frozen dataset with one IoU
+    metric (pycocotools), in the on-demand <code>legacy-evaluator</code>. Best
+    per dataset is <strong>bold</strong>.
   </p>
 
-  <div class="mb-6">
-    <MonitoringLinks />
-  </div>
+  <div class="mb-6"><MonitoringLinks /></div>
 
   {#if error}
     <div class="mb-4 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200">{error}</div>
@@ -229,106 +226,76 @@
 
   <!-- Run form -->
   <section class="mb-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-    <h2 class="mb-3 text-lg font-medium">New comparison</h2>
-    <label class="mb-3 block text-sm">
-      <span class="text-zinc-400">Frozen test dataset (curated LPR export)</span>
-      {#if datasets.length > 0}
-        <select
-          bind:value={dataset}
-          class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs"
-        >
-          {#each datasets as d (d.export_dir)}
-            <option value={d.export_dir}>{datasetLabel(d)}</option>
+    <div class="mb-4 grid gap-4 md:grid-cols-2">
+      <!-- Datasets -->
+      <div>
+        <h2 class="mb-2 text-sm font-medium text-zinc-300">Datasets ({evalDatasets.filter((d) => d.enabled).length}/{evalDatasets.length})</h2>
+        <div class="max-h-44 space-y-1 overflow-auto pr-1">
+          {#each evalDatasets as d (d.path)}
+            <label class="flex items-center gap-2 text-xs">
+              <input type="checkbox" bind:checked={d.enabled} />
+              <span class="font-mono">{d.name}</span>
+              <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">{d.kind}</span>
+              {#if d.n_test}<span class="text-[10px] text-zinc-500">{d.n_test} frames</span>{/if}
+            </label>
+          {:else}
+            <p class="text-xs text-zinc-600">no frozen datasets discovered</p>
           {/each}
+        </div>
+      </div>
+
+      <!-- Models -->
+      <div>
+        <h2 class="mb-2 text-sm font-medium text-zinc-300">Models</h2>
+        <div class="max-h-44 space-y-1 overflow-auto pr-1">
+          <p class="text-[10px] uppercase tracking-wide text-zinc-500">Our trained</p>
+          {#each trainedModels as t (t.run_id)}
+            <label class="flex items-center gap-2 text-xs">
+              <input type="checkbox" bind:checked={t.enabled} />
+              <span class="font-mono">{t.name}</span>
+              {#if t.model_size}<span class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200">{t.model_size}</span>{/if}
+              <input type="number" min="320" step="32" bind:value={t.imgsz}
+                class="w-16 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px]" />
+            </label>
+          {/each}
+          <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">Baselines</p>
+          {#each baselines as b (b.name)}
+            <label class="flex items-center gap-2 text-xs">
+              <input type="checkbox" bind:checked={b.enabled} />
+              <span class="font-mono">{b.name}</span>
+              <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">{b.backend}</span>
+            </label>
+          {/each}
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-4">
+      <label class="text-sm">
+        <span class="text-zinc-400">Regime</span>
+        <select bind:value={mode} class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs">
+          <option value="both">both (full + crop)</option>
+          <option value="full">full-frame</option>
+          <option value="crop">vehicle-crop</option>
         </select>
-      {:else}
-        <input
-          bind:value={dataset}
-          placeholder="/data/legacy_train_dataset_v7/lpr_exports/<run>"
-          class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs"
-        />
-      {/if}
-    </label>
-
-    <label class="mb-3 block text-sm">
-      <span class="text-zinc-400">Inference regime</span>
-      <select
-        bind:value={mode}
-        class="mt-1 w-48 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+      </label>
+      <button
+        onclick={startRun}
+        disabled={busy}
+        class="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
       >
-        <option value="both">both (full + crop)</option>
-        <option value="full">full-frame</option>
-        <option value="crop">vehicle-crop</option>
-      </select>
-    </label>
-
-    <!-- Our trained models — selected straight from the backend (no upload) -->
-    <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-      Our trained models ({trainedModels.length})
-    </h3>
-    <div class="mb-3 space-y-2">
-      {#each trainedModels as t (t.run_id)}
-        <label class="flex flex-wrap items-center gap-2 text-sm">
-          <input type="checkbox" bind:checked={t.enabled} />
-          <span class="font-mono text-xs font-medium">{t.name}</span>
-          {#if t.model_size}
-            <span class="rounded bg-blue-900/60 px-1.5 py-0.5 text-xs text-blue-200">{t.model_size}</span>
-          {/if}
-          <label class="flex items-center gap-1 text-xs text-zinc-400">
-            imgsz
-            <input
-              type="number"
-              min="320"
-              step="32"
-              bind:value={t.imgsz}
-              class="w-20 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-xs"
-            />
-          </label>
-          <span class="text-xs text-zinc-500">
-            {t.map50 != null ? `mAP50 ${(t.map50 * 100).toFixed(1)}` : ''}
-          </span>
-        </label>
-      {:else}
-        <p class="text-xs text-zinc-600">No finished training runs yet.</p>
-      {/each}
+        {busy ? 'Enqueuing…' : 'Run matrix bake-off'}
+      </button>
+      {#if activeJob}
+        <span class="text-sm text-zinc-400">
+          job <code>{activeJob}</code> — <strong>{activeState}</strong>
+          {#if activeProgress}({activeProgress.done}/{activeProgress.total}){/if}
+        </span>
+      {/if}
     </div>
-
-    <!-- Baselines + external model -->
-    <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-      Baselines &amp; external
-    </h3>
-    <div class="mb-3 space-y-2">
-      {#each contenders as c (c.name)}
-        <label class="flex items-center gap-2 text-sm">
-          <input type="checkbox" bind:checked={c.enabled} />
-          <span class="font-medium">{c.name}</span>
-          <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400">{c.backend}</span>
-          {#if c.backend === 'ultralytics'}
-            <input
-              bind:value={c.weights}
-              placeholder="weights .pt path"
-              class="flex-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-0.5 font-mono text-xs"
-            />
-          {/if}
-          <span class="text-xs text-zinc-500">{c.training_data}</span>
-        </label>
-      {/each}
-    </div>
-    <button
-      onclick={startRun}
-      disabled={busy}
-      class="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
-    >
-      {busy ? 'Enqueuing…' : 'Run bake-off'}
-    </button>
-    {#if activeJob}
-      <span class="ml-3 text-sm text-zinc-400">
-        job <code>{activeJob}</code> — <strong>{activeState}</strong>
-      </span>
-    {/if}
   </section>
 
-  <div class="grid grid-cols-[220px_1fr] gap-6">
+  <div class="grid grid-cols-[240px_1fr] gap-6">
     <!-- Runs list -->
     <aside>
       <h2 class="mb-2 text-sm font-medium text-zinc-400">Runs</h2>
@@ -336,7 +303,7 @@
         {#each runs as r (r.job_id)}
           <li>
             <button
-              onclick={() => loadResults(r.job_id)}
+              onclick={() => loadMatrix(r.job_id)}
               class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {selected === r.job_id ? 'bg-zinc-800' : ''}"
             >
               <div class="flex items-center justify-between gap-2">
@@ -344,9 +311,7 @@
                 <span class="shrink-0 text-zinc-500">{r.state ?? ''}</span>
               </div>
               {#if r.started_at}
-                <div class="text-[10px] text-zinc-600">
-                  {new Date(r.started_at).toLocaleString()}
-                </div>
+                <div class="text-[10px] text-zinc-600">{new Date(r.started_at).toLocaleString()}</div>
               {/if}
             </button>
           </li>
@@ -356,51 +321,52 @@
       </ul>
     </aside>
 
-    <!-- Results table -->
+    <!-- Matrix -->
     <main>
-      {#if comparison && comparison.models.length}
-        <h2 class="mb-2 text-sm font-medium text-zinc-400">
-          Results — {selected} (ranked by mAP@.5:.95)
-        </h2>
+      {#if matrix && matrix.models.length}
+        <div class="mb-2 flex items-center justify-between">
+          <h2 class="text-sm font-medium text-zinc-400">Matrix — {selected}</h2>
+          <label class="text-xs text-zinc-400">
+            metric
+            <select bind:value={metric} class="ml-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs">
+              {#each matrix.metrics as m (m)}
+                <option value={m}>{METRIC_LABELS[m] ?? m}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
         <div class="overflow-x-auto rounded-lg border border-zinc-800">
           <table class="w-full text-sm">
             <thead class="bg-zinc-900 text-xs uppercase text-zinc-400">
               <tr>
-                <th class="px-3 py-2 text-left">Model</th>
-                <th class="px-3 py-2 text-left">Training data</th>
-                <th class="px-2 py-2 text-right">mAP@.5</th>
-                <th class="px-2 py-2 text-right">mAP@.5:.95</th>
-                <th class="px-2 py-2 text-right">AP_s</th>
-                <th class="px-2 py-2 text-right">meanIoU</th>
-                <th class="px-2 py-2 text-right">P</th>
-                <th class="px-2 py-2 text-right">R</th>
-                <th class="px-2 py-2 text-right">F1</th>
-                <th class="px-2 py-2 text-right">ms</th>
+                <th class="px-3 py-2 text-left">Model \\ Dataset</th>
+                {#each matrix.datasets as ds (ds)}
+                  <th class="px-2 py-2 text-right">{ds}</th>
+                {/each}
               </tr>
             </thead>
             <tbody>
-              {#each comparison.models as m, i (m.model)}
-                <tr class="border-t border-zinc-800 {i === 0 ? 'bg-emerald-950/40' : ''}">
-                  <td class="px-3 py-2 font-medium">{m.model}</td>
-                  <td class="px-3 py-2 text-xs text-zinc-400">{m.training_data || '—'}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.map_50)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.map_50_95)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.ap_small)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.mean_iou)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.precision)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.recall)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.f1)}</td>
-                  <td class="px-2 py-2 text-right text-zinc-400">{m.latency_ms.toFixed(0)}</td>
+              {#each matrix.models as m (m)}
+                <tr class="border-t border-zinc-800 hover:bg-zinc-800/40">
+                  <td class="px-3 py-2 font-mono text-xs">{m}</td>
+                  {#each matrix.datasets as ds (ds)}
+                    <td class="px-2 py-2 text-right {isBest(m, ds) ? 'font-bold text-emerald-300' : ''}">
+                      {fmt(cell(m, ds), metric)}
+                    </td>
+                  {/each}
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
-        <p class="mt-2 text-xs text-zinc-500">Values are %; top row (green) leads on mAP@.5:.95.</p>
+        <p class="mt-2 text-xs text-zinc-500">
+          {metric === 'latency_ms' ? 'milliseconds (lower better)' : 'percent'}; best per
+          dataset in <span class="font-bold text-emerald-300">bold</span>.
+        </p>
       {:else if selected}
-        <p class="text-sm text-zinc-500">No comparison for {selected} yet (still running?).</p>
+        <p class="text-sm text-zinc-500">No matrix for {selected} yet (still running, or a legacy single-dataset run).</p>
       {:else}
-        <p class="text-sm text-zinc-500">Select a run to view its ranked comparison.</p>
+        <p class="text-sm text-zinc-500">Select a run to view its model × dataset matrix.</p>
       {/if}
     </main>
   </div>

@@ -1739,11 +1739,54 @@ export function bakeoffTrainedModels(
   return apiFetch('/curation/bakeoff/trained_models', {}, signal);
 }
 
+/** A frozen evaluation dataset (a column in the bake-off matrix). */
+export interface BakeoffEvalDataset {
+  name: string;
+  path: string;
+  kind: string;
+  n_test: number | null;
+  frozen_sha: string | null;
+}
+
+/** model x dataset matrix from a finished matrix bake-off. */
+export interface BakeoffMatrix {
+  datasets: string[];
+  models: string[];
+  metrics: string[];
+  cells: Record<string, Record<string, Record<string, number | null>>>;
+  best: Record<string, Record<string, string>>;
+}
+
 export function bakeoffRun(
-  body: { dataset: string; models: BakeoffModelSpec[]; verify_frozen?: boolean; job_id?: string },
+  body: {
+    dataset?: string;
+    datasets?: { path: string; name?: string }[];
+    models: BakeoffModelSpec[];
+    verify_frozen?: boolean;
+    job_id?: string;
+  },
   signal?: AbortSignal,
 ): Promise<{ status: string; job_id: string; out_dir: string }> {
   return apiFetch('/curation/bakeoff/run', { method: 'POST', body: JSON.stringify(body) }, signal);
+}
+
+/** Auto-discovered frozen evaluation datasets (matrix columns). */
+export function bakeoffEvalDatasets(
+  signal?: AbortSignal,
+): Promise<{ datasets: BakeoffEvalDataset[]; count: number }> {
+  return apiFetch('/curation/bakeoff/eval_datasets', {}, signal);
+}
+
+/** Public/commercial baseline detectors from the editable registry. */
+export function bakeoffBaselineModels(
+  signal?: AbortSignal,
+): Promise<{ baselines: BakeoffModelSpec[]; count: number }> {
+  return apiFetch('/curation/bakeoff/baseline_models', {}, signal);
+}
+
+/** The model x dataset matrix for a finished matrix job. */
+export function bakeoffMatrix(jobId: string, signal?: AbortSignal): Promise<BakeoffMatrix> {
+  return apiFetch(`/curation/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
 }
 
 export function bakeoffRuns(signal?: AbortSignal): Promise<{ runs: BakeoffRunSummary[] }> {
