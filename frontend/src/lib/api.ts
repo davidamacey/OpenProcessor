@@ -1717,6 +1717,27 @@ export interface BakeoffRunSummary {
   finished_at?: string;
 }
 
+/** A finished training run selectable as a bake-off contender. */
+export interface BakeoffTrainedModel {
+  run_id: string;
+  name: string;
+  model_size: string | null;
+  checkpoint_path: string;
+  map50: number | null;
+  finished_at: string | null;
+  campaign_id: string | null;
+}
+
+/**
+ * List finished training runs (with a checkpoint) so the bake-off can score an
+ * already-trained model straight from the backend — no download/re-upload.
+ */
+export function bakeoffTrainedModels(
+  signal?: AbortSignal,
+): Promise<{ models: BakeoffTrainedModel[]; count: number }> {
+  return apiFetch('/curation/bakeoff/trained_models', {}, signal);
+}
+
 export function bakeoffRun(
   body: { dataset: string; models: BakeoffModelSpec[]; verify_frozen?: boolean; job_id?: string },
   signal?: AbortSignal,

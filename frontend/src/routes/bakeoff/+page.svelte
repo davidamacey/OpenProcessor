@@ -14,21 +14,37 @@
     bakeoffRun,
     bakeoffRuns,
     bakeoffStatus,
+    bakeoffTrainedModels,
+    listDatasets,
     type BakeoffComparison,
     type BakeoffModelSpec,
     type BakeoffRunSummary,
+    type BakeoffTrainedModel,
   } from '$lib/api';
+  import type { OpDataset } from '$lib/types';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
 
-  // Sensible default contenders. Operator edits the dataset path + toggles.
-  const DEFAULT_DATASET = '/data/legacy_train_dataset_v7/lpr_exports/current';
   const LPDNET = '/data/datasets/models/lpdnet_pruned_v2.2.1/lpdnet_pruned_v2.2.1/LPDNet_usa_pruned_tao5.onnx';
 
   interface Contender extends BakeoffModelSpec {
     enabled: boolean;
   }
 
-  let dataset = $state(DEFAULT_DATASET);
+  // One of our finished training runs, toggled + with an editable eval imgsz.
+  interface TrainedChoice extends BakeoffTrainedModel {
+    enabled: boolean;
+    imgsz: number;
+  }
+
+  // ---- dataset selection (LPR exports from /curation/export/datasets) ----------
+  let datasets = $state<OpDataset[]>([]);
+  let dataset = $state<string>('');
+
+  // ---- our trained YOLO models (selectable from the backend) -------------
+  let trainedModels = $state<TrainedChoice[]>([]);
+
+  // Public / external baselines + an "external model" row for testing a
+  // different yolov11/yolo26 by path (no need to re-train it here).
   let contenders = $state<Contender[]>([
     { enabled: true, backend: 'triton', name: 'lpr_nanov11_640', triton_model: 'lpr_nanov11_640',
       triton_url: 'triton-server:4601', training_data: 'andrewmvd Kaggle' } as Contender,
@@ -36,9 +52,44 @@
       device: 'cuda', training_data: 'open plate datasets' },
     { enabled: true, backend: 'lpdnet', name: 'lpdnet-usa', weights: LPDNET, lpdnet_variant: 'usa',
       device: '0', training_data: 'NVIDIA TAO (US)' },
-    { enabled: false, backend: 'ultralytics', name: 'ours-yolo26', weights: '', imgsz: 1280,
-      device: '0', training_data: 'curated vehicles' },
+    { enabled: false, backend: 'ultralytics', name: 'external-model', weights: '', imgsz: 640,
+      device: 'cuda', training_data: 'external (.pt path)' },
   ]);
+
+  async function refreshDatasets() {
+    try {
+      const r = await listDatasets('lpr');
+      datasets = r.datasets ?? [];
+      // Default to the current export, else the newest.
+      const cur = datasets.find((d) => d.is_current) ?? datasets[0];
+      if (cur && !dataset) dataset = cur.export_dir;
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : String(e);
+    }
+  }
+
+  async function refreshTrainedModels() {
+    try {
+      const r = await bakeoffTrainedModels();
+      trainedModels = (r.models ?? []).map((m) => ({
+        ...m,
+        // First (newest) ours model on by default; eval at 640 (LPR train size).
+        enabled: false,
+        imgsz: 640,
+      }));
+      if (trainedModels.length > 0) trainedModels[0].enabled = true;
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : String(e);
+    }
+  }
+
+  function datasetLabel(d: OpDataset): string {
+    const n = d.image_count != null ? d.image_count.toLocaleString() : '?';
+    const samp = d.sampling === 'stratified_even' ? ' · sampled' : '';
+    const cur = d.is_current ? ' · current' : '';
+    const dir = d.export_dir.split('/').pop() ?? d.export_dir;
+    return `${dir} (${n} imgs${samp}${cur})`;
+  }
 
   let runs = $state<BakeoffRunSummary[]>([]);
   let selected = $state<string | null>(null);
@@ -71,11 +122,29 @@
   async function startRun() {
     error = null;
     busy = true;
-    const models = contenders
+    // Our selected trained runs become ultralytics contenders pointed straight
+    // at their backend checkpoint (the evaluator reads /runs read-only).
+    const ours: BakeoffModelSpec[] = trainedModels
+      .filter((t) => t.enabled)
+      .map((t) => ({
+        backend: 'ultralytics',
+        name: t.name,
+        weights: t.checkpoint_path,
+        imgsz: t.imgsz,
+        device: 'cuda',
+        training_data: `curated vehicles (ours${t.model_size ? ', ' + t.model_size : ''})`,
+      }));
+    const baselines = contenders
       .filter((c) => c.enabled)
       .map(({ enabled: _e, ...spec }) => spec);
+    const models = [...ours, ...baselines];
     if (models.length === 0) {
       error = 'enable at least one model';
+      busy = false;
+      return;
+    }
+    if (!dataset) {
+      error = 'select a dataset';
       busy = false;
       return;
     }
@@ -119,7 +188,11 @@
     return (v * 100).toFixed(1);
   }
 
-  onMount(refreshRuns);
+  onMount(() => {
+    void refreshRuns();
+    void refreshDatasets();
+    void refreshTrainedModels();
+  });
   onDestroy(stopPolling);
 </script>
 
@@ -142,12 +215,60 @@
   <section class="mb-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
     <h2 class="mb-3 text-lg font-medium">New comparison</h2>
     <label class="mb-3 block text-sm">
-      <span class="text-zinc-400">Frozen test dataset (export root)</span>
-      <input
-        bind:value={dataset}
-        class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs"
-      />
+      <span class="text-zinc-400">Frozen test dataset (curated LPR export)</span>
+      {#if datasets.length > 0}
+        <select
+          bind:value={dataset}
+          class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs"
+        >
+          {#each datasets as d (d.export_dir)}
+            <option value={d.export_dir}>{datasetLabel(d)}</option>
+          {/each}
+        </select>
+      {:else}
+        <input
+          bind:value={dataset}
+          placeholder="/data/legacy_train_dataset_v7/lpr_exports/<run>"
+          class="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs"
+        />
+      {/if}
     </label>
+
+    <!-- Our trained models — selected straight from the backend (no upload) -->
+    <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+      Our trained models ({trainedModels.length})
+    </h3>
+    <div class="mb-3 space-y-2">
+      {#each trainedModels as t (t.run_id)}
+        <label class="flex flex-wrap items-center gap-2 text-sm">
+          <input type="checkbox" bind:checked={t.enabled} />
+          <span class="font-mono text-xs font-medium">{t.name}</span>
+          {#if t.model_size}
+            <span class="rounded bg-blue-900/60 px-1.5 py-0.5 text-xs text-blue-200">{t.model_size}</span>
+          {/if}
+          <label class="flex items-center gap-1 text-xs text-zinc-400">
+            imgsz
+            <input
+              type="number"
+              min="320"
+              step="32"
+              bind:value={t.imgsz}
+              class="w-20 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-xs"
+            />
+          </label>
+          <span class="text-xs text-zinc-500">
+            {t.map50 != null ? `mAP50 ${(t.map50 * 100).toFixed(1)}` : ''}
+          </span>
+        </label>
+      {:else}
+        <p class="text-xs text-zinc-600">No finished training runs yet.</p>
+      {/each}
+    </div>
+
+    <!-- Baselines + external model -->
+    <h3 class="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+      Baselines &amp; external
+    </h3>
     <div class="mb-3 space-y-2">
       {#each contenders as c (c.name)}
         <label class="flex items-center gap-2 text-sm">
