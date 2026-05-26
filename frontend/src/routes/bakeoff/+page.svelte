@@ -339,8 +339,15 @@
               onclick={() => loadResults(r.job_id)}
               class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {selected === r.job_id ? 'bg-zinc-800' : ''}"
             >
-              <span class="font-mono">{r.job_id}</span>
-              <span class="ml-1 text-zinc-500">{r.state ?? ''}</span>
+              <div class="flex items-center justify-between gap-2">
+                <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
+                <span class="shrink-0 text-zinc-500">{r.state ?? ''}</span>
+              </div>
+              {#if r.started_at}
+                <div class="text-[10px] text-zinc-600">
+                  {new Date(r.started_at).toLocaleString()}
+                </div>
+              {/if}
             </button>
           </li>
         {:else}
