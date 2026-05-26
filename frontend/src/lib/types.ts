@@ -100,6 +100,9 @@ export interface OpLprExportResult {
   background_images?: number | null;
   false_positive_background_images?: number | null;
   positives_zero_warning?: boolean | null;
+  dedup?: Record<string, unknown> | null;
+  image_mode?: 'whole_frame' | 'vehicle_crop' | null;
+  img_max_side?: number | null;
   current_symlink?: string | null;
   started_at?: string | null;
   finished_at?: string | null;

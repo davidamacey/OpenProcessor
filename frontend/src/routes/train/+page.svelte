@@ -99,6 +99,12 @@
   let lprExporting = $state<boolean>(false);
   let lprExportDir = $state<string>('');
   let lprMessage = $state<string | null>(null);
+  // Export options. whole_frame = full source frame (deployment distribution);
+  // vehicle_crop = parent vehicle crop with the plate re-projected. 640 for a
+  // fast pass, 1280 for the full run. dedup collapses >=0.98 near-dup frames.
+  let lprImageMode = $state<'whole_frame' | 'vehicle_crop'>('whole_frame');
+  let lprImgSize = $state<640 | 1280>(1280);
+  let lprDedup = $state<boolean>(true);
 
   async function refreshLprStatus(): Promise<void> {
     try {
@@ -113,11 +119,17 @@
     lprExporting = true;
     lprMessage = null;
     try {
-      const r = await exportLpr({});
+      const r = await exportLpr({
+        image_mode: lprImageMode,
+        img_max_side: lprImgSize,
+        dedup_threshold: lprDedup ? 0.98 : null,
+      });
       lprExportDir = r.export_dir;
       const pos = r.positive_images ?? '?';
       const fp = r.false_positive_background_images ?? '?';
-      lprMessage = `LPR export done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives). dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      const mode = r.image_mode ?? lprImageMode;
+      const size = r.img_max_side ?? lprImgSize;
+      lprMessage = `LPR export done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives), ${mode} @ ${size}px${lprDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
         lprMessage += ' ⚠ zero positives — check plate labeling.';
       }
@@ -599,6 +611,34 @@
       >
         {lprExporting ? 'Exporting…' : 'Build LPR export'}
       </button>
+    </div>
+    <div class="mt-3 flex flex-wrap items-end gap-4">
+      <label class="block">
+        <span class="mb-1 block text-xs text-zinc-400">image mode</span>
+        <select
+          bind:value={lprImageMode}
+          disabled={lprExporting}
+          class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="whole_frame">whole frame</option>
+          <option value="vehicle_crop">vehicle crop</option>
+        </select>
+      </label>
+      <label class="block">
+        <span class="mb-1 block text-xs text-zinc-400">image size</span>
+        <select
+          bind:value={lprImgSize}
+          disabled={lprExporting}
+          class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+        >
+          <option value={640}>640 (fast)</option>
+          <option value={1280}>1280 (full)</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-2 pb-1.5">
+        <input type="checkbox" bind:checked={lprDedup} disabled={lprExporting} />
+        <span class="text-xs text-zinc-400">dedup near-dup frames (cos ≥ 0.98)</span>
+      </label>
     </div>
     {#if lprExportDir}
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>

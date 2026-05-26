@@ -1179,6 +1179,9 @@ export function exportLpr(
     empty_bg_ratio?: number;
     max_positive_images?: number;
     skip_test_split?: boolean;
+    dedup_threshold?: number | null;
+    image_mode?: 'whole_frame' | 'vehicle_crop';
+    img_max_side?: 640 | 1280;
   } = {},
   signal?: AbortSignal,
 ): Promise<OpLprExportResult> {
@@ -1187,6 +1190,9 @@ export function exportLpr(
   if (opts.empty_bg_ratio !== undefined) body.empty_bg_ratio = opts.empty_bg_ratio;
   if (opts.max_positive_images !== undefined) body.max_positive_images = opts.max_positive_images;
   if (opts.skip_test_split !== undefined) body.skip_test_split = opts.skip_test_split;
+  if (opts.dedup_threshold !== undefined) body.dedup_threshold = opts.dedup_threshold;
+  if (opts.image_mode !== undefined) body.image_mode = opts.image_mode;
+  if (opts.img_max_side !== undefined) body.img_max_side = opts.img_max_side;
   return apiFetch<OpLprExportResult>(
     '/curation/export/lpr',
     { method: 'POST', body: JSON.stringify(body) },
