@@ -75,6 +75,16 @@
   async function refreshRuns() {
     try {
       runs = (await bakeoffRuns()).runs;
+      // Adopt an already-running run (e.g. triggered from another tab or the
+      // API) so its progress bar shows even when this session didn't start it.
+      if (!activeJob) {
+        const live = runs.find((r) => r.state === 'running' || r.state === 'enqueued');
+        if (live) {
+          activeJob = live.job_id;
+          activeState = live.state;
+          startPolling();
+        }
+      }
     } catch (e) {
       error = e instanceof ApiError ? e.message : String(e);
     }
@@ -247,16 +257,22 @@
       <div>
         <h2 class="mb-2 text-sm font-medium text-zinc-300">Datasets ({evalDatasets.filter((d) => d.enabled).length}/{evalDatasets.length})</h2>
         <div class="max-h-44 space-y-1 overflow-auto pr-1">
-          {#each evalDatasets as d (d.path)}
-            <label class="flex items-center gap-2 text-xs">
-              <input type="checkbox" bind:checked={d.enabled} />
-              <span class="font-mono">{d.name}</span>
-              <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">{d.kind}</span>
-              {#if d.n_test}<span class="text-[10px] text-zinc-500">{d.n_test} frames</span>{/if}
-            </label>
-          {:else}
-            <p class="text-xs text-zinc-600">no frozen datasets discovered</p>
+          {#each [['curated', 'Curated (ours, frozen split)'], ['public', 'Public — full split'], ['sample', 'Balanced — deduplicated cluster sample']] as [kind, heading] (kind)}
+            {@const group = evalDatasets.filter((d) => d.kind === kind)}
+            {#if group.length}
+              <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{heading}</p>
+              {#each group as d (d.path)}
+                <label class="flex items-center gap-2 text-xs">
+                  <input type="checkbox" bind:checked={d.enabled} />
+                  <span class="font-mono">{d.name}</span>
+                  {#if d.n_test}<span class="text-[10px] text-zinc-500">{d.n_test} frames</span>{/if}
+                </label>
+              {/each}
+            {/if}
           {/each}
+          {#if evalDatasets.length === 0}
+            <p class="text-xs text-zinc-600">no frozen datasets discovered</p>
+          {/if}
         </div>
       </div>
 
