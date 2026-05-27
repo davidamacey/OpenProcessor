@@ -309,6 +309,22 @@
         </span>
       {/if}
     </div>
+
+    {#if activeJob && activeProgress && activeProgress.total > 0 && activeState !== 'done' && activeState !== 'error'}
+      <div class="mt-3">
+        <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
+          <div
+            class="h-full bg-emerald-600 transition-all"
+            style="width: {Math.round((activeProgress.done / activeProgress.total) * 100)}%"
+          ></div>
+        </div>
+        <p class="mt-1 text-xs text-zinc-500">
+          {activeProgress.done} / {activeProgress.total} evaluations
+          ({Math.round((activeProgress.done / activeProgress.total) * 100)}%) — auto-stops
+          SAM3/Gemma during the run, restores them when done.
+        </p>
+      </div>
+    {/if}
   </section>
 
   <div class="grid grid-cols-[240px_1fr] gap-6">
