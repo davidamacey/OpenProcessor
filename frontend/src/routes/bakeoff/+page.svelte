@@ -15,10 +15,12 @@
     bakeoffBaselineModels,
     bakeoffEvalDatasets,
     bakeoffMatrix,
+    bakeoffResults,
     bakeoffRun,
     bakeoffRuns,
     bakeoffStatus,
     bakeoffTrainedModels,
+    type BakeoffComparison,
     type BakeoffEvalDataset,
     type BakeoffMatrix,
     type BakeoffModelSpec,
@@ -49,6 +51,8 @@
   let runs = $state<BakeoffRunSummary[]>([]);
   let selected = $state<string | null>(null);
   let matrix = $state<BakeoffMatrix | null>(null);
+  // Fallback for single-dataset / older runs that only wrote comparison.json.
+  let comparison = $state<BakeoffComparison | null>(null);
   let metric = $state<string>('map_50');
   let activeJob = $state<string | null>(null);
   let activeState = $state<string | null>(null);
@@ -108,11 +112,23 @@
   async function loadMatrix(jobId: string) {
     selected = jobId;
     matrix = null;
+    comparison = null;
     try {
       matrix = await bakeoffMatrix(jobId);
     } catch {
-      matrix = null; // not a matrix job / not done yet
+      matrix = null; // not a matrix job — fall back to the single-dataset table
     }
+    if (!matrix) {
+      try {
+        comparison = await bakeoffResults(jobId);
+      } catch {
+        comparison = null; // still running / no results yet
+      }
+    }
+  }
+
+  function pct(v: number): string {
+    return (v * 100).toFixed(1);
   }
 
   async function startRun() {
@@ -363,10 +379,45 @@
           {metric === 'latency_ms' ? 'milliseconds (lower better)' : 'percent'}; best per
           dataset in <span class="font-bold text-emerald-300">bold</span>.
         </p>
+      {:else if comparison && comparison.models.length}
+        <h2 class="mb-2 text-sm font-medium text-zinc-400">
+          Results — {selected} (single dataset, ranked by mAP@.5:.95)
+        </h2>
+        <div class="overflow-x-auto rounded-lg border border-zinc-800">
+          <table class="w-full text-sm">
+            <thead class="bg-zinc-900 text-xs uppercase text-zinc-400">
+              <tr>
+                <th class="px-3 py-2 text-left">Model</th>
+                <th class="px-2 py-2 text-right">mAP@.5</th>
+                <th class="px-2 py-2 text-right">mAP@.5:.95</th>
+                <th class="px-2 py-2 text-right">meanIoU</th>
+                <th class="px-2 py-2 text-right">P</th>
+                <th class="px-2 py-2 text-right">R</th>
+                <th class="px-2 py-2 text-right">F1</th>
+                <th class="px-2 py-2 text-right">ms</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each comparison.models as m, i (m.model)}
+                <tr class="border-t border-zinc-800 {i === 0 ? 'bg-emerald-950/40' : ''}">
+                  <td class="px-3 py-2 font-mono text-xs">{m.model}</td>
+                  <td class="px-2 py-2 text-right">{pct(m.map_50)}</td>
+                  <td class="px-2 py-2 text-right">{pct(m.map_50_95)}</td>
+                  <td class="px-2 py-2 text-right">{pct(m.mean_iou)}</td>
+                  <td class="px-2 py-2 text-right">{pct(m.precision)}</td>
+                  <td class="px-2 py-2 text-right">{pct(m.recall)}</td>
+                  <td class="px-2 py-2 text-right">{pct(m.f1)}</td>
+                  <td class="px-2 py-2 text-right text-zinc-400">{m.latency_ms.toFixed(0)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-2 text-xs text-zinc-500">Percent; top row (green) leads on mAP@.5:.95.</p>
       {:else if selected}
-        <p class="text-sm text-zinc-500">No matrix for {selected} yet (still running, or a legacy single-dataset run).</p>
+        <p class="text-sm text-zinc-500">No results for {selected} yet (still running?).</p>
       {:else}
-        <p class="text-sm text-zinc-500">Select a run to view its model × dataset matrix.</p>
+        <p class="text-sm text-zinc-500">Select a run to view its results.</p>
       {/if}
     </main>
   </div>
