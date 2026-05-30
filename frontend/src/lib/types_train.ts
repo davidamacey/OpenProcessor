@@ -72,6 +72,10 @@ export interface TrainJobSpec {
   augmentation?: AugmentationSpec | null;
 
   mlflow_run_name?: string | null;
+
+  // Opt-in: on successful finish, auto-export all deployable formats and
+  // benchmark them (drives the trainer's auto_quantize_bakeoff hook).
+  auto_quantize_bakeoff?: boolean;
 }
 
 export interface CampaignRunSpec {

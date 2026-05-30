@@ -108,6 +108,9 @@
   let campaignSizes = $state<ModelSize[]>(['n', 's', 'm']);
   let autoPromoteBest = $state<boolean>(false);
   let stopWhenMap50 = $state<number | null>(0.9);
+  // Opt-in: on successful finish, auto-export the model to all deployable
+  // formats (FP16/INT8 ONNX, + CoreML on the Mac) and benchmark them.
+  let autoQuantizeBakeoff = $state<boolean>(false);
 
   function applyProfile(p: ProfileName): void {
     profileName = p;
@@ -179,6 +182,7 @@
       single_cls: lpr ? true : singleCls,
       hyperparameters: buildHyperparameters(),
       augmentation: augmentation && augmentation.enabled ? augmentation : null,
+      auto_quantize_bakeoff: autoQuantizeBakeoff,
     };
   }
 
@@ -545,6 +549,18 @@
         class="h-4 w-4 cursor-pointer accent-blue-500"
       />
       Multi-size campaign
+    </label>
+
+    <label
+      class="flex cursor-pointer items-center gap-2 text-xs text-zinc-300"
+      title="On successful finish, auto-export FP16/INT8 ONNX (+ CoreML on the Mac) and benchmark size, accuracy, and speed."
+    >
+      <input
+        type="checkbox"
+        bind:checked={autoQuantizeBakeoff}
+        class="h-4 w-4 cursor-pointer accent-emerald-500"
+      />
+      Auto-export &amp; benchmark on finish
     </label>
 
     {#if campaignMode}
