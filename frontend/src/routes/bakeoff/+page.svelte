@@ -28,6 +28,7 @@
     type BakeoffTrainedModel,
   } from '$lib/api';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
+  import QuantizationPanel from '$components/QuantizationPanel.svelte';
 
   // Inference regime applied to every model: full-frame, vehicle-crop, or both
   // (the runner expands 'both' into [full] + [crop]).
@@ -70,6 +71,7 @@
     recall: 'Recall',
     f1: 'F1',
     latency_ms: 'Latency (ms)',
+    size_mb: 'Size (MB)',
   };
 
   async function refreshRuns() {
@@ -215,7 +217,9 @@
 
   function fmt(v: number | null | undefined, m: string): string {
     if (v == null) return '—';
-    return m === 'latency_ms' ? v.toFixed(0) : (v * 100).toFixed(1);
+    if (m === 'latency_ms') return v.toFixed(0);
+    if (m === 'size_mb') return v.toFixed(1);
+    return (v * 100).toFixed(1);
   }
 
   function cell(model: string, ds: string): number | null {
@@ -408,9 +412,15 @@
           </table>
         </div>
         <p class="mt-2 text-xs text-zinc-500">
-          {metric === 'latency_ms' ? 'milliseconds (lower better)' : 'percent'}; best per
+          {metric === 'latency_ms'
+            ? 'milliseconds (lower better)'
+            : metric === 'size_mb'
+              ? 'megabytes (lower better)'
+              : 'percent'}; best per
           dataset in <span class="font-bold text-emerald-300">bold</span>.
         </p>
+
+        <QuantizationPanel {matrix} dataset={matrix.datasets[0]} />
       {:else if comparison && comparison.models.length}
         <h2 class="mb-2 text-sm font-medium text-zinc-400">
           Results — {selected} (single dataset, ranked by mAP@.5:.95)

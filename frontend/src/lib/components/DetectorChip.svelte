@@ -68,6 +68,12 @@
       case 'yolov11_small_trt_end2end': return 'YOLO11';
       case 'coco_yolo11_proposal': return 'YOLO11';
       case 'ingest_v6': return 'Ingest v6';
+      // Quantization-variant runtimes (bake-off / quantization panel).
+      case 'onnxruntime': return 'ORT';
+      case 'ort-cuda': return 'ORT·CUDA';
+      case 'ort-trt': return 'ORT·TRT';
+      case 'ort-cpu': return 'ORT·CPU';
+      case 'coreml': return 'CoreML';
       default: return d;
     }
   }
@@ -95,6 +101,12 @@
     }
     if (d.startsWith('yolov11') || d === 'coco_yolo11_proposal') {
       return { border: 'border-sky-500/50', bg: 'bg-sky-500/10', text: 'text-sky-200' };
+    }
+    if (d.startsWith('ort') || d === 'onnxruntime') {
+      return { border: 'border-indigo-500/50', bg: 'bg-indigo-500/10', text: 'text-indigo-200' };
+    }
+    if (d.startsWith('coreml')) {
+      return { border: 'border-orange-500/50', bg: 'bg-orange-500/10', text: 'text-orange-200' };
     }
     return { border: 'border-zinc-700', bg: 'bg-zinc-800/60', text: 'text-zinc-300' };
   }
