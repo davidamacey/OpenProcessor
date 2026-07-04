@@ -36,7 +36,7 @@ from typing import Any
 import onnx
 import tensorrt as trt
 import torch
-from trt_utils import create_explicit_network
+from trt_utils import create_explicit_network, enable_fp16
 from ultralytics import YOLO
 
 
@@ -63,7 +63,9 @@ DEFAULT_MODELS: dict[str, dict[str, Any]] = {
     'small': {
         'pt_file': '/app/pytorch_models/yolo26s.pt',
         'triton_name': 'yolo26_small',
-        'max_batch': 64,
+        # 32 keeps the batch-64 FP16 activation footprint (~13 GB) off
+        # 12 GB-class cards; raise on 24 GB+ GPUs via --custom-model.
+        'max_batch': 32,
     },
     'medium': {
         'pt_file': '/app/pytorch_models/yolo26m.pt',
@@ -156,7 +158,27 @@ def inspect_fused_output(onnx_path: Path) -> tuple[str, list[int]]:
 
 
 def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
-    """Build a TensorRT engine with a dynamic-batch profile."""
+    """Build an FP16 TensorRT engine with a bounded dynamic-batch profile.
+
+    TensorRT 11 is strongly-typed (no FP16 builder flag), so FP16 is baked
+    into the ONNX first via NVIDIA ModelOpt AutoCast (ultralytics helper).
+    The engine is then built with an explicit optimization profile that
+    bounds EVERY dynamic axis — the ultralytics export leaves H/W dynamic,
+    and an unbounded spatial axis makes TRT budget for gigantic activations
+    (12+ GB tactics) that fail on consumer GPUs.
+    """
+    from ultralytics.utils.export.engine import modelopt_quantize_onnx
+
+    logger.info('Baking FP16 into ONNX via ModelOpt AutoCast...')
+    fp16_onnx = Path(
+        modelopt_quantize_onnx(
+            str(onnx_path),
+            quantize=16,
+            shape=(max_batch, 3, IMG_SIZE, IMG_SIZE),
+            dynamic=True,
+        )
+    )
+
     trt_logger = trt.Logger(trt.Logger.INFO)
     trt.init_libnvinfer_plugins(trt_logger, '')
 
@@ -166,7 +188,7 @@ def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
     network = create_explicit_network(builder)
     parser = trt.OnnxParser(network, trt_logger)
 
-    if not parser.parse_from_file(str(onnx_path)):
+    if not parser.parse_from_file(str(fp16_onnx)):
         for i in range(parser.num_errors):
             logger.error(f'  ONNX parse error [{i}]: {parser.get_error(i)}')
         return False
@@ -178,10 +200,6 @@ def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
     for i in range(network.num_inputs):
         profile.set_shape(network.get_input(i).name, min=min_shape, opt=opt_shape, max=max_shape)
     config.add_optimization_profile(profile)
-
-    if builder.platform_has_fast_fp16:
-        config.set_flag(trt.BuilderFlag.FP16)
-        logger.info('FP16 precision enabled')
 
     gc.collect()
     if torch.cuda.is_available():

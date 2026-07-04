@@ -10,13 +10,14 @@ ultralytics>=8.4.82,<8.5  # 8.4.x = YOLO26 support (native NMS-free export + .pt
 tritonclient[all]
 
 # Model Export Dependencies
-onnx>=1.12.0,<=1.19.1
+onnx>=1.12.0,<1.22  # upper bound tracks nvidia-modelopt; venv-y11 keeps its own tighter pin
 onnxslim>=0.1.71
 onnxsim>=0.4.33
 onnxscript
 onnxruntime-gpu
 onnx-graphsurgeon  # Required for End2End TensorRT NMS graph manipulation
 tensorrt-cu13==11.0.0.114  # MUST match Triton 26.06 TensorRT version (11.0.0.114) for engine compatibility — do NOT bump to 11.1.x independently
+nvidia-modelopt[onnx]  # TRT 11 is strongly-typed: FP16 is baked into ONNX via ModelOpt AutoCast at export time
 
 # PyTorch
 torch

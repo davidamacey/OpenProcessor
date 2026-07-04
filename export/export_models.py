@@ -87,7 +87,7 @@ apply_end2end_patch()
 import onnx  # noqa: E402
 import tensorrt as trt  # noqa: E402
 import torch  # noqa: E402
-from trt_utils import create_explicit_network  # noqa: E402
+from trt_utils import create_explicit_network, enable_fp16  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
@@ -627,12 +627,14 @@ def save_triton_config(
 
 
 def enable_fp16_if_available(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
-    """Enable FP16 precision if hardware supports it."""
-    if HALF and builder.platform_has_fast_fp16:
-        config.set_flag(trt.BuilderFlag.FP16)
+    """Enable FP16 precision where supported (see trt_utils.enable_fp16)."""
+    if enable_fp16(builder, config):
         logger.info('FP16 precision enabled')
         return True
-    logger.info('Using FP32 precision (FP16 not available or disabled)')
+    logger.info(
+        'Building typed precision (TRT 11 strongly-typed: FP32 weights + TF32 '
+        'tensor cores; bake FP16 into the ONNX via ModelOpt AutoCast to go faster)'
+    )
     return False
 
 

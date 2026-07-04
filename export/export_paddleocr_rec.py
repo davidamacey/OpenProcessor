@@ -20,6 +20,7 @@ Usage:
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,8 @@ MAX_BATCH = 64  # Match Triton max_batch_size
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPT_DIR.parent
 MODELS_DIR = _PROJECT_DIR / 'models'
+# Container that provides trtexec (override for renamed deployments)
+TRITON_CONTAINER = os.environ.get('TRITON_CONTAINER', 'triton-server')
 
 ONNX_PATH = (
     Path('/app/pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx')
@@ -155,13 +158,13 @@ def check_triton_container() -> bool:
     try:
         # Using docker CLI with fixed arguments - safe from injection
         result = subprocess.run(
-            ['docker', 'ps', '--filter', 'name=triton-server', '--format', '{{.Names}}'],
+            ['docker', 'ps', '--filter', f'name={TRITON_CONTAINER}', '--format', '{{.Names}}'],
             check=False,
             capture_output=True,
             text=True,
             timeout=10,
         )
-        return 'triton-server' in result.stdout
+        return TRITON_CONTAINER in result.stdout
     except Exception:
         return False
 
@@ -233,7 +236,7 @@ def convert_to_tensorrt_via_trtexec(onnx_path: Path, plan_path: Path) -> Path | 
     # Build command - write output to file inside container for reliable capture
     # NOTE: --workspace is deprecated in TRT 10+, use --memPoolSize=workspace:8192MiB instead
     trtexec_cmd = f"""
-/usr/src/tensorrt/bin/trtexec \\
+trtexec \\
     --onnx=/models/{onnx_path.name} \\
     --saveEngine=/models/paddleocr_rec_trt/1/model.plan \\
     --minShapes={min_shapes} \\
@@ -255,7 +258,7 @@ fi
 exit $EXIT_CODE
 """
 
-    cmd = ['docker', 'exec', 'triton-server', 'bash', '-c', trtexec_cmd]
+    cmd = ['docker', 'exec', TRITON_CONTAINER, 'bash', '-c', trtexec_cmd]
 
     print('Running trtexec with dynamic shapes:')
     print(f'  Min: {min_shapes}')
