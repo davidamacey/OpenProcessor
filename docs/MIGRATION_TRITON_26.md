@@ -66,7 +66,26 @@ docker run --rm -v $(pwd)/monitoring:/cfg grafana/alloy:v1.17.1 \
   convert --source-format=promtail --output=/cfg/alloy-config.alloy /cfg/promtail-config.yml
 ```
 
-## 4. Health endpoint semantics
+## 4. YOLO26 support (new, optional)
+
+ultralytics moved to the 8.4 line (YOLO26). The YOLO11 EfficientNMS export
+toolchain keeps its exact production pin in an isolated venv inside the
+image (`/opt/venv-y11`) — `export_models.py` re-execs into it
+automatically, so existing export commands are unchanged.
+
+To serve YOLO26 alongside YOLO11:
+
+```bash
+docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+curl -X POST http://localhost:4603/models/yolo26_small_trt/load
+curl -F image=@test.jpg 'http://localhost:4603/detect?model_name=yolo26_small_trt'
+```
+
+Set `YOLO_MODEL=yolo26_small_trt` on the yolo-api service to make it the
+default detector. Output-format differences between the families are
+handled transparently (adapter resolved from Triton model metadata).
+
+## 5. Health endpoint semantics
 
 - `/live` — process liveness only (new; used by the container HEALTHCHECK).
 - `/ready` — actively probes Triton (gRPC `is_server_live`) and OpenSearch;
@@ -74,7 +93,7 @@ docker run --rm -v $(pwd)/monitoring:/cfg grafana/alloy:v1.17.1 \
 - `/health` — now an alias of `/ready`. If you previously treated `/health`
   as an always-200 liveness signal, point that consumer at `/live`.
 
-## 5. Pinned image matrix
+## 6. Pinned image matrix
 
 | Service | Image |
 |---|---|
