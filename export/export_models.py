@@ -28,24 +28,57 @@ docker compose exec yolo-api python /app/export/export_models.py --models nano s
 docker compose exec yolo-api python /app/export/export_models.py --formats all
 """
 
+import os
 import sys
+from pathlib import Path
 
 
 sys.path.insert(0, '/app/src')
 
-import argparse
-import gc
-import json
-import logging
-import re
-import shutil
-from pathlib import Path
-from typing import Any
+# ----------------------------------------------------------------------------
+# Toolchain guard — this exporter REQUIRES ultralytics < 8.4
+# ----------------------------------------------------------------------------
+# The EfficientNMS end2end patch (src/ultralytics_patches) targets the 8.3.x
+# exporter API; ultralytics 8.4 (YOLO26) changed the end2end property and
+# breaks it. The image ships a dedicated venv at /opt/venv-y11 with the pinned
+# toolchain; when this script is launched under a newer ultralytics it
+# transparently re-execs into that venv. YOLO26 exports (natively NMS-free,
+# no patch needed) live in export/export_yolo26.py.
+_Y11_VENV_PYTHON = os.environ.get('YOLO11_EXPORT_PYTHON', '/opt/venv-y11/bin/python')
 
-import yaml
+
+def _ultralytics_is_pre_84() -> bool:
+    try:
+        from importlib.metadata import version
+
+        major, minor, *_rest = version('ultralytics').split('.')
+        return (int(major), int(minor)) < (8, 4)
+    except Exception:
+        return False
+
+
+if not _ultralytics_is_pre_84():
+    if Path(_Y11_VENV_PYTHON).exists() and os.environ.get('_Y11_REEXEC') != '1':
+        os.environ['_Y11_REEXEC'] = '1'
+        os.execv(_Y11_VENV_PYTHON, [_Y11_VENV_PYTHON, *sys.argv])
+    raise SystemExit(
+        'export_models.py requires ultralytics<8.4 (EfficientNMS end2end patch) '
+        f'and no pinned toolchain was found at {_Y11_VENV_PYTHON}. '
+        'For YOLO26 models use export/export_yolo26.py instead.'
+    )
+
+import argparse  # noqa: E402
+import gc  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import re  # noqa: E402
+import shutil  # noqa: E402
+from typing import Any  # noqa: E402
+
+import yaml  # noqa: E402
 
 # Apply end2end patch for onnx_trt format
-from ultralytics_patches import apply_end2end_patch
+from ultralytics_patches import apply_end2end_patch  # noqa: E402
 
 
 apply_end2end_patch()
