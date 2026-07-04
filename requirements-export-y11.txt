@@ -29,7 +29,7 @@ onnx-graphsurgeon
 nvidia-modelopt[onnx]
 
 # Engine build — MUST match the Triton server's TensorRT (see requirements.txt)
-tensorrt-cu13==11.0.0.114
+tensorrt-cu13==11.1.0.106
 
 # Script deps
 pyyaml

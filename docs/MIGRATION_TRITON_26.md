@@ -1,7 +1,7 @@
 # Migration Guide: Triton 26.06 / TensorRT 11 Upgrade
 
 This release moves the stack from Triton 25.10 (TensorRT 10.13) to
-**Triton 26.06 (CUDA 13.3, TensorRT 11.0)** and pins every container in
+**Triton 26.06 (CUDA 13.3, TensorRT 11.1)** and pins every container in
 `docker-compose.yml`. Existing deployments need the one-time steps below.
 
 ## 1. Re-export ALL TensorRT engines (required)
@@ -32,7 +32,7 @@ docker compose restart triton-server
 
 Notes:
 
-- The client-side `tensorrt-cu13==11.0.0.114` pin **must** match the TRT
+- The client-side `tensorrt-cu13==11.1.0.106` pin **must** match the TRT
   bundled in the Triton image. Do not bump it independently; upgrade it
   together with the Triton base tag.
 - GPU requirements: driver R570+ (CUDA 13.x) and compute capability >= 7.5
