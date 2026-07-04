@@ -54,6 +54,7 @@ apply_end2end_patch()
 import onnx  # noqa: E402
 import tensorrt as trt  # noqa: E402
 import torch  # noqa: E402
+from trt_utils import create_explicit_network  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
@@ -185,17 +186,11 @@ def setup_trt_builder(
     builder = trt.Builder(trt_logger)
     config = builder.create_builder_config()
 
-    # Set workspace size
+    # Set workspace size (TRT >= 10 memory-pool API; requirements pin TRT 11)
     workspace_bytes = int(workspace_gb * (1 << 30))
-    is_trt10 = int(trt.__version__.split('.')[0]) >= 10
-    if is_trt10:
-        config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
-    else:
-        config.max_workspace_size = workspace_bytes
+    config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_bytes)
 
-    # Create network with explicit batch flag
-    flag = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-    network = builder.create_network(flag)
+    network = create_explicit_network(builder)
 
     return builder, config, network, trt_logger
 
@@ -635,23 +630,13 @@ def build_and_save_engine(
 
     logger.info('Building TensorRT engine (this may take 5-10 minutes)...')
 
-    is_trt10 = int(trt.__version__.split('.')[0]) >= 10
-
     try:
-        if is_trt10:
-            serialized_engine = builder.build_serialized_network(network, config)
-            if serialized_engine is None:
-                logger.error('Failed to build engine - builder returned None')
-                return False
-            with open(output_path, 'wb') as f:
-                f.write(serialized_engine)
-        else:
-            engine = builder.build_engine(network, config)
-            if engine is None:
-                logger.error('Failed to build engine - builder returned None')
-                return False
-            with open(output_path, 'wb') as f:
-                f.write(engine.serialize())
+        serialized_engine = builder.build_serialized_network(network, config)
+        if serialized_engine is None:
+            logger.error('Failed to build engine - builder returned None')
+            return False
+        with open(output_path, 'wb') as f:
+            f.write(serialized_engine)
 
         file_size_mb = output_path.stat().st_size / (1024 * 1024)
         logger.info(f'Engine saved: {output_path} ({file_size_mb:.2f} MB)')
