@@ -17,7 +17,6 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from contextvars import ContextVar
 from pathlib import Path
 
 import orjson
@@ -27,7 +26,13 @@ from fastapi.responses import ORJSONResponse, Response
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
-from src.core.logging import configure_logging, get_logger
+from src.core.logging import (
+    bind_request_id,
+    configure_logging,
+    get_logger,
+    get_request_id,
+    request_id_ctx,
+)
 from src.routers import (
     analyze_router,
     clusters_router,
@@ -45,17 +50,11 @@ from src.routers import (
 )
 
 
-# =============================================================================
-# Request Context (for correlation IDs)
-# =============================================================================
-
-# Context variable to store current request ID (thread-safe)
-request_id_ctx: ContextVar[str] = ContextVar('request_id', default='-')
-
-
-def get_request_id() -> str:
-    """Get the current request ID from context."""
-    return request_id_ctx.get()
+# Request correlation IDs (request_id_ctx / get_request_id) live in
+# src.core.logging so service-layer modules and out-of-process workers can
+# import them without pulling in the FastAPI app. Re-exported here for
+# backward compatibility.
+__all__ = ['get_request_id', 'request_id_ctx']
 
 
 # =============================================================================
@@ -361,11 +360,12 @@ def create_app() -> FastAPI:
         Add correlation ID (X-Request-ID) to all requests.
 
         If client provides X-Request-ID header, use it. Otherwise generate a new UUID.
-        The request ID is available via get_request_id() in any code path.
+        The request ID is available via get_request_id() in any code path, and
+        bind_request_id() also attaches it to every structlog event on this task.
         """
         # Get or generate request ID
         req_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())[:8]
-        request_id_ctx.set(req_id)
+        bind_request_id(req_id)
 
         # Process request
         response = await call_next(request)
