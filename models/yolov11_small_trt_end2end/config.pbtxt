@@ -35,12 +35,18 @@ output [
 
 dynamic_batching {
   preferred_batch_size: [ 8, 16, 32, 64 ]
-  max_queue_delay_microseconds: 5000
+  # 25ms (was 5ms): under sustained ingest the per-image arrival rate is
+  # too slow to assemble preferred-size batches in 5ms, so Triton fired
+  # near batch=1. 25ms reaches batch 8-16 while staying well inside the
+  # request latency budget.
+  max_queue_delay_microseconds: 25000
 }
 
 instance_group [
   {
-    count: 2
+    # 3 instances (~1.5 GB each) let concurrent ingest batches pipeline
+    # through more GPU streams. Drop to 2 on cards under ~8 GB.
+    count: 3
     kind: KIND_GPU
     gpus: [ 0 ]
   }
