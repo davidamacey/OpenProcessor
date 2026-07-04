@@ -1790,7 +1790,15 @@ class OpenSearchClient:
             }
 
             if sort_by_distance:
-                query['sort'] = [{'cluster_distance': 'asc'}]
+                query['sort'] = [
+                    {
+                        'cluster_distance': {
+                            'order': 'asc',
+                            'missing': '_last',
+                            'unmapped_type': 'double',
+                        }
+                    }
+                ]
 
             response = await self.client.search(index=index_name.value, body=query)
 
