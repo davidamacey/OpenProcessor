@@ -8,7 +8,7 @@ Complete production-grade monitoring for NVIDIA Triton Inference Server.
 - **Node Exporter**: System-level CPU, memory, and hardware metrics
 - **Grafana**: Visualization dashboards
 - **Loki**: Log aggregation
-- **Promtail**: Log shipping agent
+- **Alloy**: Log shipping agent (Grafana Alloy; replaced EOL Promtail)
 
 ## Quick Start
 
@@ -17,7 +17,7 @@ Complete production-grade monitoring for NVIDIA Triton Inference Server.
 docker compose up -d
 
 # Check monitoring services
-docker compose ps prometheus grafana loki promtail
+docker compose ps prometheus grafana loki alloy
 
 # View logs
 docker compose logs -f grafana
@@ -323,14 +323,11 @@ curl http://localhost:4602/metrics
 ### Loki not receiving logs
 
 ```bash
-# Check Promtail logs
-docker compose logs promtail
+# Check Alloy logs
+docker compose logs alloy
 
 # Verify Loki is ready
 curl http://localhost:4606/ready
-
-# Check Promtail targets
-curl http://localhost:9080/targets
 ```
 
 ### Missing metrics in Grafana
@@ -408,7 +405,7 @@ monitoring/
 ├── grafana-dashboards.yml                # Dashboard auto-provisioning config
 ├── grafana-alerting.yml                  # Grafana unified alerting rules & notifications
 ├── loki-config.yml                       # Loki log aggregation config
-├── promtail-config.yml                   # Promtail log shipping config
+├── alloy-config.alloy                    # Grafana Alloy log shipping config
 ├── alerts/
 │   └── triton-alerts.yml                 # Prometheus alert rules (legacy)
 └── dashboards/
