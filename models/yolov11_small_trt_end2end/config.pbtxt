@@ -18,14 +18,14 @@ output [
   },
   {
     name: "det_boxes"
-    # FP16: boxes/scores flow out of EfficientNMS_TRT at the baked
-    # engine precision (TRT 11 typed builds)
-    data_type: TYPE_FP16
+    # Boxes/scores precision follows the built engine (TRT-version
+    # dependent); the exporter rewrites this config from the engine.
+    data_type: TYPE_FP32
     dims: [ 300, 4 ]
   },
   {
     name: "det_scores"
-    data_type: TYPE_FP16
+    data_type: TYPE_FP32
     dims: [ 300 ]
   },
   {
