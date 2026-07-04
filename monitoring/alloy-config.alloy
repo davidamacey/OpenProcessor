@@ -1,0 +1,76 @@
+// Grafana Alloy configuration — ships container logs to Loki.
+//
+// Replaces the former Promtail setup (Promtail is EOL since 2026-03-02).
+// Same topology: discover containers over the Docker socket, keep only
+// the Triton and FastAPI services, label with container + stream, and
+// push to Loki. Regexes use a trailing wildcard so renamed variants
+// (e.g. compose-project prefixes/suffixes) still match.
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// Triton server logs
+discovery.relabel "triton" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/triton-server.*"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "triton"
+  }
+}
+
+// FastAPI logs
+discovery.relabel "fastapi" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(yolo-api|pytorch-api).*"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "fastapi"
+  }
+}
+
+loki.source.docker "triton" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.triton.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.source.docker "fastapi" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.fastapi.output
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
