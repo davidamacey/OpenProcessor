@@ -19,12 +19,33 @@ LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
-# Pull in the latest Ubuntu security patches on every build; the NGC base
-# lags point releases between monthly tags.
+# Pull in the latest Ubuntu + NVIDIA updates on every build; the NGC base
+# lags between monthly tags. This intentionally tracks the newest TensorRT
+# from NVIDIA's apt repo — engines are always re-exported from ONNX as part
+# of deployment, so we take the latest rather than pinning to the image's
+# stock TRT.
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Lockstep assertion: serialized engines are TRT-version-locked, so the
+# server's TRT and the client-side tensorrt-cu13 pip pin (requirements.txt,
+# requirements-export-y11.txt) MUST move together. When apt brings a newer
+# TRT, this fails the build until the pip pins and this check are bumped in
+# the same commit — drift can never ship silently.
+ARG TRT_VERSION=11.1.0.106
+RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
+    && case "$actual" in "${TRT_VERSION}"*) echo "TensorRT ${actual} matches pinned ${TRT_VERSION}";; \
+       *) echo "ERROR: image TensorRT is ${actual}, expected ${TRT_VERSION}." \
+          "Bump tensorrt-cu13 pins in requirements*.txt AND TRT_VERSION here together."; exit 1;; esac
+
+# CVE hygiene beyond apt:
+# - Nsight Systems profiler CLI ships Go binaries carrying stdlib CVEs and
+#   is dev tooling unused at inference — drop it (also shrinks the image).
+# - starlette in the image's python env lags its security fixes.
+RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
+    && pip install --no-cache-dir --upgrade 'starlette>=1.3.1'
 
 # Install PyTorch and TorchVision (CUDA 13.x wheels)
 # Required for Python backend models (ROI align, per-box embeddings, OCR pipeline)

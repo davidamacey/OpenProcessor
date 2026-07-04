@@ -290,7 +290,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network
+        from trt_utils import create_explicit_network, enable_fp16
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -299,6 +299,13 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
+        if fp16:
+            from ultralytics.utils.export.engine import modelopt_quantize_onnx
+
+            print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+            onnx_path = modelopt_quantize_onnx(
+                str(onnx_path), quantize=16, shape=(max_batch_size, 3, 256, 256), dynamic=True
+            )
         # Parse ONNX
         print('  Parsing ONNX model...')
         with open(onnx_path, 'rb') as f:
@@ -313,8 +320,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
 
-        if fp16:
-            config.set_flag(trt.BuilderFlag.FP16)
+        if fp16 and enable_fp16(builder, config):
             print('  ✓ FP16 mode enabled')
 
         # Optimization profile for dynamic batch sizes

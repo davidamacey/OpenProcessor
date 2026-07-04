@@ -28,24 +28,57 @@ docker compose exec yolo-api python /app/export/export_models.py --models nano s
 docker compose exec yolo-api python /app/export/export_models.py --formats all
 """
 
+import os
 import sys
+from pathlib import Path
 
 
 sys.path.insert(0, '/app/src')
 
-import argparse
-import gc
-import json
-import logging
-import re
-import shutil
-from pathlib import Path
-from typing import Any
+# ----------------------------------------------------------------------------
+# Toolchain guard — this exporter REQUIRES ultralytics < 8.4
+# ----------------------------------------------------------------------------
+# The EfficientNMS end2end patch (src/ultralytics_patches) targets the 8.3.x
+# exporter API; ultralytics 8.4 (YOLO26) changed the end2end property and
+# breaks it. The image ships a dedicated venv at /opt/venv-y11 with the pinned
+# toolchain; when this script is launched under a newer ultralytics it
+# transparently re-execs into that venv. YOLO26 exports (natively NMS-free,
+# no patch needed) live in export/export_yolo26.py.
+_Y11_VENV_PYTHON = os.environ.get('YOLO11_EXPORT_PYTHON', '/opt/venv-y11/bin/python')
 
-import yaml
+
+def _ultralytics_is_pre_84() -> bool:
+    try:
+        from importlib.metadata import version
+
+        major, minor, *_rest = version('ultralytics').split('.')
+        return (int(major), int(minor)) < (8, 4)
+    except Exception:
+        return False
+
+
+if not _ultralytics_is_pre_84():
+    if Path(_Y11_VENV_PYTHON).exists() and os.environ.get('_Y11_REEXEC') != '1':
+        os.environ['_Y11_REEXEC'] = '1'
+        os.execv(_Y11_VENV_PYTHON, [_Y11_VENV_PYTHON, *sys.argv])
+    raise SystemExit(
+        'export_models.py requires ultralytics<8.4 (EfficientNMS end2end patch) '
+        f'and no pinned toolchain was found at {_Y11_VENV_PYTHON}. '
+        'For YOLO26 models use export/export_yolo26.py instead.'
+    )
+
+import argparse  # noqa: E402
+import gc  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import re  # noqa: E402
+import shutil  # noqa: E402
+from typing import Any  # noqa: E402
+
+import yaml  # noqa: E402
 
 # Apply end2end patch for onnx_trt format
-from ultralytics_patches import apply_end2end_patch
+from ultralytics_patches import apply_end2end_patch  # noqa: E402
 
 
 apply_end2end_patch()
@@ -54,7 +87,7 @@ apply_end2end_patch()
 import onnx  # noqa: E402
 import tensorrt as trt  # noqa: E402
 import torch  # noqa: E402
-from trt_utils import create_explicit_network  # noqa: E402
+from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
@@ -486,12 +519,12 @@ output [
   }},
   {{
     name: "det_boxes"
-    data_type: TYPE_FP32
+    data_type: TYPE_FP16
     dims: [ 300, 4 ]
   }},
   {{
     name: "det_scores"
-    data_type: TYPE_FP32
+    data_type: TYPE_FP16
     dims: [ 300 ]
   }},
   {{
@@ -594,12 +627,14 @@ def save_triton_config(
 
 
 def enable_fp16_if_available(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
-    """Enable FP16 precision if hardware supports it."""
-    if HALF and builder.platform_has_fast_fp16:
-        config.set_flag(trt.BuilderFlag.FP16)
+    """Enable FP16 precision where supported (see trt_utils.enable_fp16)."""
+    if enable_fp16(builder, config):
         logger.info('FP16 precision enabled')
         return True
-    logger.info('Using FP32 precision (FP16 not available or disabled)')
+    logger.info(
+        'Building typed precision (TRT 11 strongly-typed: FP32 weights + TF32 '
+        'tensor cores; bake FP16 into the ONNX via ModelOpt AutoCast to go faster)'
+    )
     return False
 
 
@@ -608,6 +643,8 @@ def parse_onnx_model(
     onnx_path: Path,
 ) -> bool:
     """Parse ONNX model and report any errors."""
+    logger.info('Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+    onnx_path = bake_fp16_onnx(onnx_path)
     if not parser.parse_from_file(str(onnx_path)):
         logger.error('Failed to parse ONNX model:')
         for i in range(parser.num_errors):

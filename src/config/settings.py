@@ -5,6 +5,7 @@ All configuration is loaded from environment variables with sensible defaults.
 Use get_settings() to access the singleton settings instance.
 """
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -24,8 +25,12 @@ def _read_version() -> str:
 class TritonModelConfig:
     """Model configurations for visual search pipeline."""
 
-    # Object Detection
-    YOLO_MODEL = 'yolov11_small_trt_end2end'
+    # Object Detection — default detector for endpoints that don't pass an
+    # explicit model_name. Override via YOLO_MODEL env to switch families
+    # (e.g. YOLO_MODEL=yolo26_small_trt); the output-format adapter is
+    # resolved per model from Triton metadata, so both YOLO11 end2end and
+    # YOLO26 fused engines work interchangeably.
+    YOLO_MODEL = os.environ.get('YOLO_MODEL', 'yolov11_small_trt_end2end')
 
     # Face Detection/Recognition (SCRFD + Umeyama alignment + ArcFace)
     FACE_DETECT_MODEL = 'scrfd_10g_bnkps'

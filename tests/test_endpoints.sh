@@ -102,8 +102,10 @@ test_health() {
     resp=$(curl -s "$API_URL/health" 2>/dev/null) || { fail "health endpoint unreachable"; return; }
     local status
     status=$(echo "$resp" | jq -r '.status' 2>/dev/null)
-    if [ "$status" = "healthy" ]; then
-        pass "API healthy"
+    # /health aliases /ready since the live/ready split: 'ready' when all
+    # dependencies respond ('healthy' accepted for older deployments)
+    if [ "$status" = "ready" ] || [ "$status" = "healthy" ]; then
+        pass "API ready"
     else
         fail "API status: $status"
     fi
@@ -315,6 +317,55 @@ test_analyze() {
 
 # =============================================================================
 # Main
+
+test_dual_family() {
+    echo ""
+    echo "=== Dual YOLO Family (dynamic load/unload) ==="
+
+    # Skip when the yolo26 engine has not been exported yet
+    local state
+    state=$(curl -s -X POST "$TRITON_URL/v2/repository/index" \
+        | jq -r '.[] | select(.name=="yolo26_small_trt") | .state // "UNLOADED"' 2>/dev/null)
+    if [ -z "$state" ]; then
+        skip "yolo26_small_trt not in model repository (run export/export_yolo26.py)"
+        return
+    fi
+
+    local ok
+    ok=$(curl -s -X POST "$API_URL/models/yolo26_small_trt/load" | jq -r '.success')
+    if [ "$ok" = "true" ]; then pass "yolo26 dynamic load"; else fail "yolo26 dynamic load"; fi
+
+    local n26
+    n26=$(curl -s -F "image=@$TEST_IMAGE_BUS" "$API_URL/detect?model_name=yolo26_small_trt" \
+        | jq '.detections | length')
+    if [ "${n26:-0}" -ge 1 ] 2>/dev/null; then
+        pass "yolo26 detect: $n26 detections"
+    else
+        fail "yolo26 detect returned no detections"
+    fi
+
+    local n11
+    n11=$(curl -s -F "image=@$TEST_IMAGE_BUS" "$API_URL/detect" | jq '.detections | length')
+    if [ "${n11:-0}" -ge 1 ] 2>/dev/null; then
+        pass "default-family detect alongside yolo26: $n11 detections"
+    else
+        fail "default-family detect returned no detections"
+    fi
+
+    curl -s -X POST "$API_URL/models/yolo26_small_trt/unload" > /dev/null
+    local err
+    err=$(curl -s -F "image=@$TEST_IMAGE_BUS" "$API_URL/detect?model_name=yolo26_small_trt" \
+        | jq -r '.detail // ""')
+    if echo "$err" | grep -qiE 'unknown model|no available'; then
+        pass "yolo26 unload blocks inference"
+    else
+        fail "yolo26 still served after unload: $err"
+    fi
+
+    # Leave the stack serving both families
+    curl -s -X POST "$API_URL/models/yolo26_small_trt/load" > /dev/null
+}
+
 # =============================================================================
 echo "============================================="
 echo " Visual Search API - Endpoint Tests"
@@ -332,6 +383,7 @@ case "$target" in
     embed)   test_embed ;;
     ocr)     test_ocr ;;
     analyze) test_analyze ;;
+    dual)    test_dual_family ;;
     all)
         test_health
         test_models
@@ -340,10 +392,11 @@ case "$target" in
         test_embed
         test_ocr
         test_analyze
+        test_dual_family
         ;;
     *)
         echo "Unknown target: $target"
-        echo "Valid targets: all, health, models, detect, faces, embed, ocr, analyze"
+        echo "Valid targets: all, health, models, detect, faces, embed, ocr, analyze, dual"
         exit 1
         ;;
 esac

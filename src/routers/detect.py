@@ -16,6 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import ORJSONResponse
 
+from src.config.settings import TritonModelConfig
 from src.schemas.detection import BatchInferenceResult, InferenceResult
 from src.services.inference import InferenceService
 
@@ -31,8 +32,9 @@ router = APIRouter(
 # Service instance
 inference_service = InferenceService()
 
-# Default model configuration
-DEFAULT_MODEL = 'yolov11_small_trt_end2end'
+# Default model configuration (env-overridable via YOLO_MODEL; both YOLO11
+# end2end and YOLO26 fused engines are accepted per-request via model_name)
+DEFAULT_MODEL = TritonModelConfig.YOLO_MODEL
 MAX_BATCH_SIZE = 64
 
 
@@ -54,7 +56,7 @@ def detect_single(
 
     Args:
         image: Image file (JPEG, PNG)
-        model_name: Triton model name (default: yolov11_small_trt_end2end)
+        model_name: Triton model name (default: settings YOLO_MODEL)
         confidence: Minimum detection confidence (default: 0.25)
 
     Returns:
@@ -74,12 +76,13 @@ def detect_single(
             model_name=model_name,
         )
 
-        # Filter detections by confidence if threshold differs from model default
-        if confidence > 0.25:
-            result['detections'] = [
-                det for det in result['detections'] if det['confidence'] >= confidence
-            ]
-            result['num_detections'] = len(result['detections'])
+        # Always filter by confidence: end2end YOLO11 engines bake a 0.25
+        # floor at export, but NMS-free YOLO26 engines emit all top-K
+        # candidates (including near-zero scores) and rely on this filter.
+        result['detections'] = [
+            det for det in result['detections'] if det['confidence'] >= confidence
+        ]
+        result['num_detections'] = len(result['detections'])
 
         return result
 
@@ -108,7 +111,7 @@ def detect_batch(
 
     Args:
         images: List of image files (max 64)
-        model_name: Triton model name (default: yolov11_small_trt_end2end)
+        model_name: Triton model name (default: settings YOLO_MODEL)
         confidence: Minimum detection confidence (default: 0.25)
 
     Returns:
@@ -177,10 +180,11 @@ def detect_batch(
                     model_name=model_name,
                 )
 
-                # Filter detections by confidence
-                detections = result['detections']
-                if confidence > 0.25:
-                    detections = [det for det in detections if det['confidence'] >= confidence]
+                # Always filter by confidence (NMS-free engines emit all
+                # top-K candidates; see detect_single)
+                detections = [
+                    det for det in result['detections'] if det['confidence'] >= confidence
+                ]
 
                 all_results.append(
                     {

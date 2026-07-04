@@ -1,7 +1,7 @@
 # Migration Guide: Triton 26.06 / TensorRT 11 Upgrade
 
 This release moves the stack from Triton 25.10 (TensorRT 10.13) to
-**Triton 26.06 (CUDA 13.3, TensorRT 11.0)** and pins every container in
+**Triton 26.06 (CUDA 13.3, TensorRT 11.1)** and pins every container in
 `docker-compose.yml`. Existing deployments need the one-time steps below.
 
 ## 1. Re-export ALL TensorRT engines (required)
@@ -32,7 +32,7 @@ docker compose restart triton-server
 
 Notes:
 
-- The client-side `tensorrt-cu13==11.0.0.114` pin **must** match the TRT
+- The client-side `tensorrt-cu13==11.1.0.106` pin **must** match the TRT
   bundled in the Triton image. Do not bump it independently; upgrade it
   together with the Triton base tag.
 - GPU requirements: driver R570+ (CUDA 13.x) and compute capability >= 7.5
@@ -66,7 +66,26 @@ docker run --rm -v $(pwd)/monitoring:/cfg grafana/alloy:v1.17.1 \
   convert --source-format=promtail --output=/cfg/alloy-config.alloy /cfg/promtail-config.yml
 ```
 
-## 4. Health endpoint semantics
+## 4. YOLO26 support (new, optional)
+
+ultralytics moved to the 8.4 line (YOLO26). The YOLO11 EfficientNMS export
+toolchain keeps its exact production pin in an isolated venv inside the
+image (`/opt/venv-y11`) — `export_models.py` re-execs into it
+automatically, so existing export commands are unchanged.
+
+To serve YOLO26 alongside YOLO11:
+
+```bash
+docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+curl -X POST http://localhost:4603/models/yolo26_small_trt/load
+curl -F image=@test.jpg 'http://localhost:4603/detect?model_name=yolo26_small_trt'
+```
+
+Set `YOLO_MODEL=yolo26_small_trt` on the yolo-api service to make it the
+default detector. Output-format differences between the families are
+handled transparently (adapter resolved from Triton model metadata).
+
+## 5. Health endpoint semantics
 
 - `/live` — process liveness only (new; used by the container HEALTHCHECK).
 - `/ready` — actively probes Triton (gRPC `is_server_live`) and OpenSearch;
@@ -74,7 +93,7 @@ docker run --rm -v $(pwd)/monitoring:/cfg grafana/alloy:v1.17.1 \
 - `/health` — now an alias of `/ready`. If you previously treated `/health`
   as an always-200 liveness signal, point that consumer at `/live`.
 
-## 5. Pinned image matrix
+## 6. Pinned image matrix
 
 | Service | Image |
 |---|---|

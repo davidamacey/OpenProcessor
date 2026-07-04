@@ -1,0 +1,33 @@
+name: "yolo26_small_trt"
+platform: "tensorrt_plan"
+max_batch_size: 32
+
+input [
+  {
+    name: "images"
+    data_type: TYPE_FP32
+    dims: [ 3, 640, 640 ]
+  }
+]
+
+# Fused NMS-free output: one row per detection, [x1, y1, x2, y2, score, class]
+output [
+  {
+    name: "output0"
+    data_type: TYPE_FP32
+    dims: [ 300, 6 ]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 8, 16, 32 ]
+  max_queue_delay_microseconds: 25000
+}
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]
