@@ -322,15 +322,8 @@ test_dual_family() {
     echo ""
     echo "=== Dual YOLO Family (dynamic load/unload) ==="
 
-    # Skip when the yolo26 engine has not been exported yet
-    local state
-    state=$(curl -s -X POST "$TRITON_URL/v2/repository/index" \
-        | jq -r '.[] | select(.name=="yolo26_small_trt") | .state // "UNLOADED"' 2>/dev/null)
-    if [ -z "$state" ]; then
-        skip "yolo26_small_trt not in model repository (run export/export_yolo26.py)"
-        return
-    fi
-
+    # The load attempt itself is the availability check: Triton's
+    # repository index does not list never-loaded models on all releases.
     local ok
     ok=$(curl -s -X POST "$API_URL/models/yolo26_small_trt/load" | jq -r '.success')
     if [ "$ok" != "true" ]; then
