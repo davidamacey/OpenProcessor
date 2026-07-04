@@ -834,6 +834,22 @@ check-all: ## Full system health check (API + Triton + OpenSearch)
 	@echo "==================================================================================="
 
 # ==================================================================================
+# Security Scanning
+# ==================================================================================
+
+.PHONY: scan
+scan: ## Scan both Docker images for vulnerabilities (trivy/grype/dockle; FAIL_ON_CRITICAL=true)
+	bash $(SCRIPTS_DIR)/security-scan.sh all
+
+.PHONY: scan-api
+scan-api: ## Scan only the API image
+	bash $(SCRIPTS_DIR)/security-scan.sh api
+
+.PHONY: scan-triton
+scan-triton: ## Scan only the Triton image
+	bash $(SCRIPTS_DIR)/security-scan.sh triton
+
+# ==================================================================================
 # Cleanup
 # ==================================================================================
 

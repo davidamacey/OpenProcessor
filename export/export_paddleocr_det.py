@@ -122,12 +122,13 @@ def convert_to_tensorrt(
 
     try:
         import tensorrt as trt
+        from trt_utils import create_explicit_network
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
         # Create builder
         builder = trt.Builder(TRT_LOGGER)
-        network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+        network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
         # Parse ONNX
