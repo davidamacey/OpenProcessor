@@ -26,6 +26,12 @@ scrape_configs:
         labels:
           group: 'system'
 
+  - job_name: 'dcgm'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+        labels:
+          group: 'gpu'
+
   - job_name: 'loki'
     static_configs:
       - targets: ['loki:3100']
