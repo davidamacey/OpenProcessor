@@ -87,7 +87,12 @@ apply_end2end_patch()
 import onnx  # noqa: E402
 import tensorrt as trt  # noqa: E402
 import torch  # noqa: E402
-from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16  # noqa: E402
+from trt_utils import (  # noqa: E402
+    bake_fp16_onnx,
+    create_explicit_network,
+    enable_fp16,
+    engine_output_dtypes,
+)
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
@@ -467,6 +472,7 @@ def generate_triton_config(
     max_batch: int,
     num_classes: int = 80,
     has_nms: bool = False,
+    output_dtypes: dict[str, str] | None = None,
 ) -> str:
     """
     Generate Triton config.pbtxt content for a model.
@@ -498,7 +504,11 @@ def generate_triton_config(
     platform = f'{backend}_plan' if backend == 'tensorrt' else 'onnxruntime_onnx'
 
     if has_nms:
-        # End2End model with NMS outputs
+        # End2End model with NMS outputs. Box/score precision follows the
+        # BUILT engine (differs across TRT releases) — see engine_output_dtypes.
+        dtypes = output_dtypes or {}
+        box_dtype = dtypes.get('det_boxes', 'TYPE_FP32')
+        score_dtype = dtypes.get('det_scores', 'TYPE_FP32')
         config = f"""name: "{triton_name}"
 platform: "{platform}"
 max_batch_size: {max_batch}
@@ -519,12 +529,12 @@ output [
   }},
   {{
     name: "det_boxes"
-    data_type: TYPE_FP16
+    data_type: {box_dtype}
     dims: [ 300, 4 ]
   }},
   {{
     name: "det_scores"
-    data_type: TYPE_FP16
+    data_type: {score_dtype}
     dims: [ 300 ]
   }},
   {{
@@ -595,6 +605,7 @@ def save_triton_config(
     max_batch: int,
     num_classes: int = 80,
     has_nms: bool = False,
+    output_dtypes: dict[str, str] | None = None,
 ) -> Path:
     """
     Save Triton config.pbtxt file for a model.
@@ -616,6 +627,7 @@ def save_triton_config(
         max_batch=max_batch,
         num_classes=num_classes,
         has_nms=has_nms,
+        output_dtypes=output_dtypes,
     )
 
     config_path = model_dir / 'config.pbtxt'
@@ -1150,6 +1162,7 @@ def export_model(
                     max_batch=config['max_batch'],
                     num_classes=num_classes,
                     has_nms=True,
+                    output_dtypes=engine_output_dtypes(model_dir / '1' / 'model.plan'),
                 )
 
     return results

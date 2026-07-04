@@ -47,6 +47,37 @@ def enable_fp16(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
     return False
 
 
+def engine_output_dtypes(plan_path: str | Path) -> dict[str, str]:
+    """Map a serialized engine's output tensors to Triton dtype strings.
+
+    Output precisions are decided by TensorRT (e.g. the EfficientNMS_TRT
+    plugin emits FP16 boxes under TRT 11.0 but FP32 under 11.1), so
+    config.pbtxt must be written from the BUILT engine rather than
+    assumed — a hardcoded dtype breaks across TRT releases.
+    """
+    dtype_map = {
+        trt.DataType.FLOAT: 'TYPE_FP32',
+        trt.DataType.HALF: 'TYPE_FP16',
+        trt.DataType.INT32: 'TYPE_INT32',
+        trt.DataType.INT64: 'TYPE_INT64',
+        trt.DataType.BOOL: 'TYPE_BOOL',
+        trt.DataType.INT8: 'TYPE_INT8',
+    }
+    trt_logger = trt.Logger(trt.Logger.ERROR)
+    trt.init_libnvinfer_plugins(trt_logger, '')
+    runtime = trt.Runtime(trt_logger)
+    engine = runtime.deserialize_cuda_engine(Path(plan_path).read_bytes())
+    if engine is None:
+        raise RuntimeError(f'could not deserialize engine {plan_path}')
+
+    outputs: dict[str, str] = {}
+    for i in range(engine.num_io_tensors):
+        name = engine.get_tensor_name(i)
+        if engine.get_tensor_mode(name) == trt.TensorIOMode.OUTPUT:
+            outputs[name] = dtype_map.get(engine.get_tensor_dtype(name), 'TYPE_FP32')
+    return outputs
+
+
 def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None) -> Path:
     """Bake FP16 mixed precision into an ONNX for TRT >= 11 typed builds.
 
