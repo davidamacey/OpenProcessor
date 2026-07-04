@@ -76,12 +76,13 @@ def detect_single(
             model_name=model_name,
         )
 
-        # Filter detections by confidence if threshold differs from model default
-        if confidence > 0.25:
-            result['detections'] = [
-                det for det in result['detections'] if det['confidence'] >= confidence
-            ]
-            result['num_detections'] = len(result['detections'])
+        # Always filter by confidence: end2end YOLO11 engines bake a 0.25
+        # floor at export, but NMS-free YOLO26 engines emit all top-K
+        # candidates (including near-zero scores) and rely on this filter.
+        result['detections'] = [
+            det for det in result['detections'] if det['confidence'] >= confidence
+        ]
+        result['num_detections'] = len(result['detections'])
 
         return result
 
@@ -179,10 +180,11 @@ def detect_batch(
                     model_name=model_name,
                 )
 
-                # Filter detections by confidence
-                detections = result['detections']
-                if confidence > 0.25:
-                    detections = [det for det in detections if det['confidence'] >= confidence]
+                # Always filter by confidence (NMS-free engines emit all
+                # top-K candidates; see detect_single)
+                detections = [
+                    det for det in result['detections'] if det['confidence'] >= confidence
+                ]
 
                 all_results.append(
                     {

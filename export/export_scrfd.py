@@ -442,7 +442,7 @@ def convert_to_tensorrt(
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network, enable_fp16
+        from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16
 
         trt.init_libnvinfer_plugins(None, '')
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
@@ -451,6 +451,8 @@ def convert_to_tensorrt(
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
+        logger.info('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+        onnx_path = bake_fp16_onnx(onnx_path)
         logger.info('  Parsing ONNX...')
         with open(onnx_path, 'rb') as f:
             if not parser.parse(f.read()):

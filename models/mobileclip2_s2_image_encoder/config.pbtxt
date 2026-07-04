@@ -42,7 +42,7 @@ dynamic_batching {
 # Multiple instances for parallel processing
 instance_group [
   {
-    count: 4  # Optimal for stability and throughput
+    count: 2  # baseline for 12 GB cards; raise on 24 GB+ GPUs
     kind: KIND_GPU
     gpus: [ 0 ]
   }
