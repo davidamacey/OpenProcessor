@@ -171,8 +171,8 @@ validate_cuda() {
     local major_version
     major_version=$(echo "$driver_version" | cut -d'.' -f1)
 
-    # Triton 25.10 requires driver >= 535
-    local min_driver=535
+    # Triton 26.06 (CUDA 13.x) requires driver >= 570
+    local min_driver=570
 
     if [[ "$major_version" -lt "$min_driver" ]]; then
         log_error "NVIDIA driver $driver_version is too old."

@@ -18,8 +18,11 @@ FROM python:3.13-slim-trixie AS builder
 
 WORKDIR /build
 
-# Install build dependencies (isolated to this stage)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install build dependencies (isolated to this stage).
+# apt-get upgrade pulls Debian point-release security fixes the base tag
+# may lag behind.
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
@@ -48,8 +51,10 @@ LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
-# Runtime-only system packages (no build tools)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Runtime-only system packages (no build tools); upgrade first for
+# Debian point-release security fixes.
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
     curl \
     jq \
     libgl1 \

@@ -124,7 +124,7 @@ services:
       - triton_net
 
   triton-sdk:
-    image: nvcr.io/nvidia/tritonserver:25.10-py3-sdk
+    image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
     container_name: triton-sdk
     profiles:
       - benchmark
@@ -136,7 +136,7 @@ services:
       - triton_net
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.10.2
     container_name: triton-node-exporter
     restart: always
     command:
@@ -170,7 +170,7 @@ services:
       - triton_net
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.12.0
     container_name: triton-prometheus
     restart: always
     ports:
@@ -191,7 +191,7 @@ services:
       - node-exporter
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.1.0
     container_name: triton-grafana
     restart: always
     ports:
@@ -216,10 +216,12 @@ services:
       - loki
 
   loki:
-    image: grafana/loki:latest
+    # Runs as the image's builtin non-root user (uid 10001). Existing
+    # root-owned loki_data volumes need a one-time chown — see
+    # docs/MIGRATION_TRITON_26.md.
+    image: grafana/loki:3.6.12
     container_name: triton-loki
     restart: always
-    user: "0"  # Run as root to avoid permission issues
     ports:
       - 4606:3100  # Loki
     volumes:
@@ -229,15 +231,19 @@ services:
     networks:
       - triton_net
 
-  promtail:
-    image: grafana/promtail:latest
-    container_name: triton-promtail
+# Log shipper: Grafana Alloy (Promtail reached EOL 2026-03-02).
+  alloy:
+    image: grafana/alloy:v1.17.1
+    container_name: triton-alloy
     restart: always
     volumes:
-      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yml
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/tmp/alloy
     networks:
       - triton_net
     depends_on:
@@ -248,7 +254,7 @@ services:
   # OpenSearch 3.x with k-NN plugin for vector similarity search
   # ===================================================================
   opensearch:
-    image: opensearchproject/opensearch:3.3.1
+    image: opensearchproject/opensearch:3.6.0
     container_name: triton-opensearch
     restart: always
     environment:
@@ -276,7 +282,7 @@ services:
       - triton_net
 
   opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:3.3.0
+    image: opensearchproject/opensearch-dashboards:3.6.0
     container_name: triton-opensearch-dashboards
     restart: always
     environment:
