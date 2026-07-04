@@ -34,7 +34,9 @@ from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
+from src.clients.model_adapters import DetectionAdapter, resolve_adapter
 from src.clients.triton_pool import TritonClientManager
+from src.config.settings import TritonModelConfig
 from src.utils.affine import format_detections_from_triton
 from src.utils.retry import retry_sync
 
@@ -68,6 +70,10 @@ class TritonClient:
         self.max_retries = max_retries
         self.retry_base_delay = retry_base_delay
         self.retry_max_delay = retry_max_delay
+        # Detection-output adapters keyed by model name, resolved lazily
+        # from Triton model metadata (supports YOLO11 end2end 4-tensor and
+        # YOLO26 fused single-tensor engines side by side).
+        self._detection_adapters: dict[str, DetectionAdapter] = {}
         logger.info(f'Unified Triton client initialized (sync, retries={max_retries})')
 
     def _infer_with_retry(self, model_name: str, inputs: list, outputs: list):
@@ -81,6 +87,15 @@ class TritonClient:
             base_delay=self.retry_base_delay,
             max_delay=self.retry_max_delay,
         )
+
+    def _get_detection_adapter(self, model_name: str) -> DetectionAdapter:
+        """Resolve (and cache) the output adapter for a detection model."""
+        adapter = self._detection_adapters.get(model_name)
+        if adapter is None:
+            metadata = self.client.get_model_metadata(model_name)
+            adapter = resolve_adapter(metadata)
+            self._detection_adapters[model_name] = adapter
+        return adapter
 
     # =========================================================================
     # YOLO End2End: CPU Preprocessing + TensorRT + GPU NMS
@@ -126,25 +141,14 @@ class TritonClient:
         inputs = [InferInput('images', input_data.shape, 'FP32')]
         inputs[0].set_data_from_numpy(input_data)
 
-        outputs = [
-            InferRequestedOutput('num_dets'),
-            InferRequestedOutput('det_boxes'),
-            InferRequestedOutput('det_scores'),
-            InferRequestedOutput('det_classes'),
-        ]
+        adapter = self._get_detection_adapter(model_name)
+        outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
 
         response = self._infer_with_retry(model_name, inputs, outputs)
-
-        num_dets = int(response.as_numpy('num_dets')[0][0])
-        boxes = response.as_numpy('det_boxes')[0][:num_dets]
-        scores = response.as_numpy('det_scores')[0][:num_dets]
-        classes = response.as_numpy('det_classes')[0][:num_dets]
+        detections = adapter.parse(response, batch_size=1)[0]
 
         return {
-            'num_dets': num_dets,
-            'boxes': boxes,
-            'scores': scores,
-            'classes': classes,
+            **detections,
             'orig_shape': (orig_h, orig_w),
             'scale': scale,
             'padding': padding,
@@ -197,36 +201,20 @@ class TritonClient:
         inputs = [InferInput('images', input_data.shape, 'FP32')]
         inputs[0].set_data_from_numpy(input_data)
 
-        outputs = [
-            InferRequestedOutput('num_dets'),
-            InferRequestedOutput('det_boxes'),
-            InferRequestedOutput('det_scores'),
-            InferRequestedOutput('det_classes'),
-        ]
+        adapter = self._get_detection_adapter(model_name)
+        outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
 
         response = self._infer_with_retry(model_name, inputs, outputs)
 
-        num_dets_batch = response.as_numpy('num_dets')
-        boxes_batch = response.as_numpy('det_boxes')
-        scores_batch = response.as_numpy('det_scores')
-        classes_batch = response.as_numpy('det_classes')
-
-        results = []
-        for i in range(batch_size):
-            num_dets = int(num_dets_batch[i][0])
-            results.append(
-                {
-                    'num_dets': num_dets,
-                    'boxes': boxes_batch[i][:num_dets],
-                    'scores': scores_batch[i][:num_dets],
-                    'classes': classes_batch[i][:num_dets],
-                    'orig_shape': orig_shapes[i],
-                    'scale': scales[i],
-                    'padding': paddings[i],
-                }
-            )
-
-        return results
+        return [
+            {
+                **detections,
+                'orig_shape': orig_shapes[i],
+                'scale': scales[i],
+                'padding': paddings[i],
+            }
+            for i, detections in enumerate(adapter.parse(response, batch_size))
+        ]
 
     # =========================================================================
     # YOLO + MobileCLIP: CPU Preprocessing (stable, high-throughput)
@@ -259,18 +247,14 @@ class TritonClient:
         # CLIP preprocessing (CPU resize/crop)
         clip_input = self._preprocess_clip_cpu(img_array)
 
-        # Run YOLO TRT inference
+        # Run YOLO TRT inference (default detector; adapter handles either
+        # the end2end 4-tensor or the fused single-tensor contract)
+        yolo_model = TritonModelConfig.YOLO_MODEL
+        adapter = self._get_detection_adapter(yolo_model)
         yolo_inputs = [InferInput('images', yolo_input.shape, 'FP32')]
         yolo_inputs[0].set_data_from_numpy(yolo_input)
-        yolo_outputs = [
-            InferRequestedOutput('num_dets'),
-            InferRequestedOutput('det_boxes'),
-            InferRequestedOutput('det_scores'),
-            InferRequestedOutput('det_classes'),
-        ]
-        yolo_response = self._infer_with_retry(
-            'yolov11_small_trt_end2end', yolo_inputs, yolo_outputs
-        )
+        yolo_outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
+        yolo_response = self._infer_with_retry(yolo_model, yolo_inputs, yolo_outputs)
 
         # Run CLIP TRT inference
         clip_inputs = [InferInput('images', clip_input.shape, 'FP32')]
@@ -281,17 +265,11 @@ class TritonClient:
         )
 
         # Parse outputs
-        num_dets = int(yolo_response.as_numpy('num_dets')[0][0])
-        boxes = yolo_response.as_numpy('det_boxes')[0][:num_dets]
-        scores = yolo_response.as_numpy('det_scores')[0][:num_dets]
-        classes = yolo_response.as_numpy('det_classes')[0][:num_dets]
+        detections = adapter.parse(yolo_response, batch_size=1)[0]
         image_embedding = clip_response.as_numpy('image_embeddings')[0]
 
         return {
-            'num_dets': num_dets,
-            'boxes': boxes,
-            'scores': scores,
-            'classes': classes,
+            **detections,
             'image_embedding': image_embedding,
             'orig_shape': (orig_h, orig_w),
             'scale': scale,
@@ -627,6 +605,7 @@ class TritonClient:
         self,
         images: np.ndarray,
         max_batch_size: int = 64,
+        model_name: str | None = None,
     ) -> list[dict]:
         """
         Batched YOLO inference for object detection.
@@ -634,12 +613,16 @@ class TritonClient:
         Args:
             images: [N, 3, 640, 640] FP32 normalized tensor
             max_batch_size: Maximum batch size per Triton request
+            model_name: Triton detection model (default: settings YOLO_MODEL)
 
         Returns:
             List of N dicts with detections per image
         """
         if images.shape[0] == 0:
             return []
+
+        model = model_name or TritonModelConfig.YOLO_MODEL
+        adapter = self._get_detection_adapter(model)
 
         n_images = images.shape[0]
         all_results = []
@@ -651,30 +634,10 @@ class TritonClient:
             input_tensor = InferInput('images', [batch_size, 3, 640, 640], 'FP32')
             input_tensor.set_data_from_numpy(batch.astype(np.float32))
 
-            outputs = [
-                InferRequestedOutput('num_dets'),
-                InferRequestedOutput('det_boxes'),
-                InferRequestedOutput('det_scores'),
-                InferRequestedOutput('det_classes'),
-            ]
+            outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
 
-            response = self._infer_with_retry('yolov11_small_trt_end2end', [input_tensor], outputs)
-
-            num_dets = response.as_numpy('num_dets')
-            det_boxes = response.as_numpy('det_boxes')
-            det_scores = response.as_numpy('det_scores')
-            det_classes = response.as_numpy('det_classes')
-
-            for j in range(batch_size):
-                n_det = int(num_dets[j, 0])
-                all_results.append(
-                    {
-                        'num_dets': n_det,
-                        'boxes': det_boxes[j, :n_det],
-                        'scores': det_scores[j, :n_det],
-                        'classes': det_classes[j, :n_det],
-                    }
-                )
+            response = self._infer_with_retry(model, [input_tensor], outputs)
+            all_results.extend(adapter.parse(response, batch_size))
 
         return all_results
 

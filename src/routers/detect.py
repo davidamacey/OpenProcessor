@@ -16,6 +16,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import ORJSONResponse
 
+from src.config.settings import TritonModelConfig
 from src.schemas.detection import BatchInferenceResult, InferenceResult
 from src.services.inference import InferenceService
 
@@ -31,8 +32,9 @@ router = APIRouter(
 # Service instance
 inference_service = InferenceService()
 
-# Default model configuration
-DEFAULT_MODEL = 'yolov11_small_trt_end2end'
+# Default model configuration (env-overridable via YOLO_MODEL; both YOLO11
+# end2end and YOLO26 fused engines are accepted per-request via model_name)
+DEFAULT_MODEL = TritonModelConfig.YOLO_MODEL
 MAX_BATCH_SIZE = 64
 
 
@@ -54,7 +56,7 @@ def detect_single(
 
     Args:
         image: Image file (JPEG, PNG)
-        model_name: Triton model name (default: yolov11_small_trt_end2end)
+        model_name: Triton model name (default: settings YOLO_MODEL)
         confidence: Minimum detection confidence (default: 0.25)
 
     Returns:
@@ -108,7 +110,7 @@ def detect_batch(
 
     Args:
         images: List of image files (max 64)
-        model_name: Triton model name (default: yolov11_small_trt_end2end)
+        model_name: Triton model name (default: settings YOLO_MODEL)
         confidence: Minimum detection confidence (default: 0.25)
 
     Returns:
