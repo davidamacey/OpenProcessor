@@ -8,7 +8,7 @@ Uses multiprocessing for fast processing of thousands of images.
 
 Usage:
     python scripts/resize_images.py /path/to/images --size 640
-    python scripts/resize_images.py /mnt/nvm/KILLBOY_SAMPLE_PICTURES --size 1024
+    python scripts/resize_images.py /data/sample_pictures --size 1024
     python scripts/resize_images.py /path/to/images --size 640 --workers 16
 """
 
