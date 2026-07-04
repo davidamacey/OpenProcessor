@@ -49,6 +49,9 @@ pyyaml
 # Structured Logging
 structlog>=24.1.0  # Structured logging with context and JSON output
 
+# Metrics
+prometheus-client>=0.20  # /metrics exposition + HTTP latency histogram
+
 # OpenSearch for Visual Search
 opensearch-py>=2.3.0  # Async OpenSearch client with k-NN support
 transformers>=4.30.0  # CLIP tokenizer for text-to-image search
