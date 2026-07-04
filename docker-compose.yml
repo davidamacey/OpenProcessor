@@ -124,7 +124,7 @@ services:
       - triton_net
 
   triton-sdk:
-    image: nvcr.io/nvidia/tritonserver:25.10-py3-sdk
+    image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
     container_name: triton-sdk
     profiles:
       - benchmark
