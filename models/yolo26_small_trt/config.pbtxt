@@ -1,6 +1,6 @@
 name: "yolo26_small_trt"
 platform: "tensorrt_plan"
-max_batch_size: 64
+max_batch_size: 32
 
 input [
   {
@@ -10,10 +10,7 @@ input [
   }
 ]
 
-# YOLO26 fused NMS-free output: one row per detection,
-# [x1, y1, x2, y2, score, class] in letterboxed input coordinates.
-# The output tensor name is rewritten by export/export_yolo26.py from the
-# actual ONNX graph if it differs.
+# Fused NMS-free output: one row per detection, [x1, y1, x2, y2, score, class]
 output [
   {
     name: "output0"
@@ -23,7 +20,7 @@ output [
 ]
 
 dynamic_batching {
-  preferred_batch_size: [ 8, 16, 32, 64 ]
+  preferred_batch_size: [ 8, 16, 32 ]
   max_queue_delay_microseconds: 25000
 }
 

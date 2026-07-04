@@ -277,7 +277,7 @@ def convert_to_tensorrt(
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network
+        from trt_utils import create_explicit_network, enable_fp16
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -300,8 +300,7 @@ def convert_to_tensorrt(
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, WORKSPACE_GB << 30)
 
-        if fp16:
-            config.set_flag(trt.BuilderFlag.FP16)
+        if fp16 and enable_fp16(builder, config):
             print('  ✓ FP16 mode enabled')
 
         # Get input tensor name from network
