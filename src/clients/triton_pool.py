@@ -54,10 +54,14 @@ GRPC_CHANNEL_OPTIONS = [
     ('grpc.keepalive_time_ms', 30000),  # Send keepalive ping every 30s
     ('grpc.keepalive_timeout_ms', 10000),  # Wait 10s for keepalive response
     ('grpc.keepalive_permit_without_calls', 1),  # Allow keepalive when idle
-    # Handle large tensors (embeddings, image batches)
-    # 100MB limit handles batch=128 x 512-dim embeddings + overhead
-    ('grpc.max_send_message_length', 100 * 1024 * 1024),  # 100MB
-    ('grpc.max_receive_message_length', 100 * 1024 * 1024),  # 100MB
+    # Handle large tensors (embeddings, image batches, raw detector heads).
+    # The ceiling is dominated by *output* size, not input: a raw
+    # (non-end2end) detector head can emit hundreds of MB for a full
+    # max-batch chunk (e.g. (N, ~100k anchors, 85) FP32). 512 MB fits a
+    # full max_batch response with comfortable headroom; client-side
+    # chunking already keeps inputs well under this.
+    ('grpc.max_send_message_length', 512 * 1024 * 1024),  # 512MB
+    ('grpc.max_receive_message_length', 512 * 1024 * 1024),  # 512MB
     # Connection pooling - allow many concurrent streams per connection
     ('grpc.max_concurrent_streams', 1000),
     # HTTP/2 flow control optimization - relaxed for high-concurrency batch processing

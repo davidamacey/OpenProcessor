@@ -13,11 +13,24 @@ scrape_configs:
         labels:
           group: 'triton_inference_server'
 
+  - job_name: 'yolo-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['yolo-api:8000']
+        labels:
+          group: 'api'
+
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
           group: 'system'
+
+  - job_name: 'dcgm'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+        labels:
+          group: 'gpu'
 
   - job_name: 'loki'
     static_configs:

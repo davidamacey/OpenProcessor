@@ -147,6 +147,28 @@ services:
     networks:
       - triton_net
 
+  # Per-GPU utilization / VRAM / power / temperature for Grafana across ALL
+  # host GPUs (not just Triton's). Read-only; does not reserve compute.
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
+    container_name: triton-dcgm-exporter
+    restart: always
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      - DCGM_EXPORTER_LISTEN=:9400
+    ports:
+      - 4610:9400  # DCGM GPU metrics
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]
+    networks:
+      - triton_net
+
   prometheus:
     image: prom/prometheus:latest
     container_name: triton-prometheus

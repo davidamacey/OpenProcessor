@@ -17,7 +17,6 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from contextvars import ContextVar
 from pathlib import Path
 
 import orjson
@@ -27,7 +26,13 @@ from fastapi.responses import ORJSONResponse, Response
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
-from src.core.logging import configure_logging, get_logger
+from src.core.logging import (
+    bind_request_id,
+    configure_logging,
+    get_logger,
+    get_request_id,
+    request_id_ctx,
+)
 from src.routers import (
     analyze_router,
     clusters_router,
@@ -45,17 +50,11 @@ from src.routers import (
 )
 
 
-# =============================================================================
-# Request Context (for correlation IDs)
-# =============================================================================
-
-# Context variable to store current request ID (thread-safe)
-request_id_ctx: ContextVar[str] = ContextVar('request_id', default='-')
-
-
-def get_request_id() -> str:
-    """Get the current request ID from context."""
-    return request_id_ctx.get()
+# Request correlation IDs (request_id_ctx / get_request_id) live in
+# src.core.logging so service-layer modules and out-of-process workers can
+# import them without pulling in the FastAPI app. Re-exported here for
+# backward compatibility.
+__all__ = ['get_request_id', 'request_id_ctx']
 
 
 # =============================================================================
@@ -354,6 +353,29 @@ def create_app() -> FastAPI:
             headers={'X-Request-ID': req_id},
         )
 
+    @application.middleware('http')
+    async def http_duration_middleware(request: Request, call_next):
+        """Record per-request latency into the Prometheus histogram."""
+        from src.core.metrics import HTTP_REQUEST_DURATION_SECONDS
+
+        started = time.monotonic()
+        response = await call_next(request)
+        # FastAPI populates scope['route'] once a route has matched. For
+        # 404s (no match) fall back to a low-cardinality truncation of
+        # the raw path (first 2 segments) so the label space isn't
+        # exploded by `/v1/whatever/<random-id>` misses.
+        route_obj = request.scope.get('route')
+        route_template = getattr(route_obj, 'path', None)
+        if not route_template:
+            segments = request.url.path.strip('/').split('/')
+            route_template = '/' + '/'.join(segments[:2]) if segments and segments[0] else '/'
+        HTTP_REQUEST_DURATION_SECONDS.labels(
+            method=request.method,
+            route=route_template,
+            status=str(response.status_code),
+        ).observe(time.monotonic() - started)
+        return response
+
     # Request ID Middleware (defined last, runs first in LIFO order)
     @application.middleware('http')
     async def request_id_middleware(request: Request, call_next):
@@ -361,11 +383,12 @@ def create_app() -> FastAPI:
         Add correlation ID (X-Request-ID) to all requests.
 
         If client provides X-Request-ID header, use it. Otherwise generate a new UUID.
-        The request ID is available via get_request_id() in any code path.
+        The request ID is available via get_request_id() in any code path, and
+        bind_request_id() also attaches it to every structlog event on this task.
         """
         # Get or generate request ID
         req_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())[:8]
-        request_id_ctx.set(req_id)
+        bind_request_id(req_id)
 
         # Process request
         response = await call_next(request)
