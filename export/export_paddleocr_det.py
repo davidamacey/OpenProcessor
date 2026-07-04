@@ -131,8 +131,9 @@ def convert_to_tensorrt(
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
-        print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
-        onnx_path = bake_fp16_onnx(onnx_path)
+        if fp16:
+            print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+            onnx_path = bake_fp16_onnx(onnx_path)
         # Parse ONNX
         print('  Parsing ONNX model...')
         with open(onnx_path, 'rb') as f:
@@ -280,7 +281,11 @@ def parse_args():
         default=PLAN_OUTPUT,
         help='Output path for TensorRT plan',
     )
-    parser.add_argument('--fp32', action='store_true', help='Use FP32 instead of FP16')
+    parser.add_argument(
+        '--fp16',
+        action='store_true',
+        help='Bake FP16 (default FP32: text detection is threshold-sensitive and the engine is small)',
+    )
     parser.add_argument(
         '--max-batch-size',
         type=int,
@@ -320,7 +325,7 @@ def main():
         plan_path = convert_to_tensorrt(
             args.onnx_path,
             args.output,
-            fp16=not args.fp32,
+            fp16=args.fp16,
             max_batch_size=args.max_batch_size,
         )
 
