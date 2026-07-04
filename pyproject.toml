@@ -57,6 +57,7 @@ dependencies = [
     "transformers>=4.30.0",
     "timm",
     "huggingface_hub",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]
@@ -281,6 +282,9 @@ addopts = [
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",
+]
+markers = [
+    "integration: tests that exercise several components together (no live stack required)",
 ]
 
 # =============================================================================

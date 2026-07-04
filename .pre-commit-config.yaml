@@ -113,6 +113,23 @@ repos:
         language: system
         files: ^benchmarks/.*\.go$
         types: [go]
+      - id: max-file-size
+        name: Enforce 700 LOC max per source file (ratchet)
+        entry: python3 scripts/codegen/check_file_size.py --max 700
+        language: system
+        files: ^(src|scripts)/.*\.py$
+        # Ratchet: modules already over the cap are grandfathered until
+        # they get split. Do NOT add new entries here — split the module.
+        exclude: |
+          (?x)^(
+              src/ultralytics_patches/|
+              src/clients/opensearch\.py|
+              src/services/visual_search\.py|
+              src/services/face_identity\.py|
+              src/services/duplicate_detection\.py|
+              src/routers/ingest\.py|
+              src/routers/search\.py
+          )
 
   # Commit message linting (conventional commits)
   # Note: Disabled for now - requires separate hook installation with:
