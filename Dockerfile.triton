@@ -19,17 +19,26 @@ LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
-# Pull in the latest Ubuntu security patches on every build; the NGC base
-# lags point releases between monthly tags. TensorRT packages are HELD:
-# NVIDIA's apt repo offers newer TRT (e.g. 11.1.x over the image's
-# 11.0.0.114) and letting upgrade move it silently invalidates every
-# client-built engine (plans are TRT-version-locked) and breaks the
-# tensorrt-cu13 pip pin lockstep.
+# Pull in the latest Ubuntu + NVIDIA updates on every build; the NGC base
+# lags between monthly tags. This intentionally tracks the newest TensorRT
+# from NVIDIA's apt repo — engines are always re-exported from ONNX as part
+# of deployment, so we take the latest rather than pinning to the image's
+# stock TRT.
 RUN apt-get update \
-    && apt-mark hold 'libnvinfer*' 'libnvonnxparsers*' 'tensorrt*' 'python3-libnvinfer*' 2>/dev/null; \
-    apt-get upgrade -y \
+    && apt-get upgrade -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Lockstep assertion: serialized engines are TRT-version-locked, so the
+# server's TRT and the client-side tensorrt-cu13 pip pin (requirements.txt,
+# requirements-export-y11.txt) MUST move together. When apt brings a newer
+# TRT, this fails the build until the pip pins and this check are bumped in
+# the same commit — drift can never ship silently.
+ARG TRT_VERSION=11.1.0.106
+RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
+    && case "$actual" in "${TRT_VERSION}"*) echo "TensorRT ${actual} matches pinned ${TRT_VERSION}";; \
+       *) echo "ERROR: image TensorRT is ${actual}, expected ${TRT_VERSION}." \
+          "Bump tensorrt-cu13 pins in requirements*.txt AND TRT_VERSION here together."; exit 1;; esac
 
 # CVE hygiene beyond apt:
 # - Nsight Systems profiler CLI ships Go binaries carrying stdlib CVEs and

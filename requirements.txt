@@ -16,7 +16,7 @@ onnxsim>=0.4.33
 onnxscript
 onnxruntime-gpu
 onnx-graphsurgeon  # Required for End2End TensorRT NMS graph manipulation
-tensorrt-cu13==11.0.0.114  # MUST match Triton 26.06 TensorRT version (11.0.0.114) for engine compatibility — do NOT bump to 11.1.x independently
+tensorrt-cu13==11.1.0.106  # MUST match the Triton image TensorRT (11.1.0.106 — asserted at image build) for engine compatibility — bump only together with the Dockerfile.triton TRT_VERSION assertion
 nvidia-modelopt[onnx]  # TRT 11 is strongly-typed: FP16 is baked into ONNX via ModelOpt AutoCast at export time
 
 # PyTorch
