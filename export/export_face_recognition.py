@@ -277,7 +277,7 @@ def convert_to_tensorrt(
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network, enable_fp16
+        from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -286,6 +286,8 @@ def convert_to_tensorrt(
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
+        print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+        onnx_path = bake_fp16_onnx(onnx_path)
         # Parse ONNX
         print('  Parsing ONNX model...')
         with open(onnx_path, 'rb') as f:

@@ -274,6 +274,8 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
+        # Typed FP32 on TRT 11: the token-id input shape does not fit the
+        # ModelOpt calibration path and the encoder is small (~125 MB).
         # Parse ONNX
         print('  Parsing ONNX model...')
         with open(onnx_path, 'rb') as f:

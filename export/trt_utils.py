@@ -6,6 +6,8 @@ export scripts don't each carry their own compatibility branches.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import tensorrt as trt
 
 
@@ -43,3 +45,41 @@ def enable_fp16(builder: trt.Builder, config: trt.IBuilderConfig) -> bool:
         config.set_flag(fp16_flag)
         return True
     return False
+
+
+def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None) -> Path:
+    """Bake FP16 mixed precision into an ONNX for TRT >= 11 typed builds.
+
+    TensorRT 11 removed the FP16 builder flag; reduced precision must live
+    in the ONNX graph itself. Converts weights/activations to FP16 via
+    onnxconverter-common's graph rewrite (no ONNX Runtime execution — it
+    also works on graphs containing TRT plugin ops like EfficientNMS_TRT,
+    which ORT-based tools cannot type-infer). ``keep_io_types=True`` keeps
+    graph inputs/outputs FP32, so Triton config dtypes (TYPE_FP32) remain
+    valid and clients are unaffected.
+
+    On older TRT (classic FP16 flag still present) this is a no-op and
+    returns the input path — :func:`enable_fp16` handles precision there.
+    """
+    if getattr(trt.BuilderFlag, 'FP16', None) is not None:
+        return Path(onnx_path)
+
+    import onnx
+    from onnxconverter_common import float16
+
+    model = onnx.load(str(onnx_path))
+    fp16_model = float16.convert_float_to_float16(
+        model,
+        keep_io_types=True,
+        # Numerically sensitive defaults plus ops TRT executes outside the
+        # FP16 path anyway (plugins, index math).
+        op_block_list=[
+            *float16.DEFAULT_OP_BLOCK_LIST,
+            'EfficientNMS_TRT',
+            'NonMaxSuppression',
+            'Range',
+        ],
+    )
+    out = Path(output_path) if output_path else Path(onnx_path).with_suffix('.fp16.onnx')
+    onnx.save(fp16_model, str(out))
+    return out

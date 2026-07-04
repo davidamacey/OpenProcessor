@@ -20,10 +20,13 @@ torch
 torchvision
 
 # ONNX toolchain for the EfficientNMS graph surgery
-onnx>=1.12.0,<=1.19.1
+onnx>=1.12.0,<1.22  # upper bound tracks nvidia-modelopt
 onnxslim>=0.1.71
 onnxsim>=0.4.33
 onnx-graphsurgeon
+
+# TRT 11 typed builds: FP16 baked into ONNX via ModelOpt AutoCast
+nvidia-modelopt[onnx]
 
 # Engine build — MUST match the Triton server's TensorRT (see requirements.txt)
 tensorrt-cu13==11.0.0.114

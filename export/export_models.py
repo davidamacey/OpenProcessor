@@ -87,7 +87,7 @@ apply_end2end_patch()
 import onnx  # noqa: E402
 import tensorrt as trt  # noqa: E402
 import torch  # noqa: E402
-from trt_utils import create_explicit_network, enable_fp16  # noqa: E402
+from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16  # noqa: E402
 from ultralytics import YOLO  # noqa: E402
 from ultralytics.cfg import get_cfg  # noqa: E402
 from ultralytics.engine.exporter import Exporter  # noqa: E402
@@ -519,12 +519,12 @@ output [
   }},
   {{
     name: "det_boxes"
-    data_type: TYPE_FP32
+    data_type: TYPE_FP16
     dims: [ 300, 4 ]
   }},
   {{
     name: "det_scores"
-    data_type: TYPE_FP32
+    data_type: TYPE_FP16
     dims: [ 300 ]
   }},
   {{
@@ -643,6 +643,8 @@ def parse_onnx_model(
     onnx_path: Path,
 ) -> bool:
     """Parse ONNX model and report any errors."""
+    logger.info('Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+    onnx_path = bake_fp16_onnx(onnx_path)
     if not parser.parse_from_file(str(onnx_path)):
         logger.error('Failed to parse ONNX model:')
         for i in range(parser.num_errors):

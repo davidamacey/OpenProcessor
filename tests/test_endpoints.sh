@@ -102,8 +102,10 @@ test_health() {
     resp=$(curl -s "$API_URL/health" 2>/dev/null) || { fail "health endpoint unreachable"; return; }
     local status
     status=$(echo "$resp" | jq -r '.status' 2>/dev/null)
-    if [ "$status" = "healthy" ]; then
-        pass "API healthy"
+    # /health aliases /ready since the live/ready split: 'ready' when all
+    # dependencies respond ('healthy' accepted for older deployments)
+    if [ "$status" = "ready" ] || [ "$status" = "healthy" ]; then
+        pass "API ready"
     else
         fail "API status: $status"
     fi
