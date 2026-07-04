@@ -18,10 +18,11 @@ import httpx
 import psutil
 import torch
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from src.clients.triton_pool import get_async_triton_client, get_client_pool_stats
 from src.config import get_settings
+from src.core.metrics import render_metrics
 
 
 logger = logging.getLogger(__name__)
@@ -222,6 +223,13 @@ async def health() -> JSONResponse:
     (liveness) or /ready (readiness) explicitly.
     """
     return await ready()
+
+
+@router.get('/metrics')
+def metrics() -> Response:
+    """Prometheus exposition endpoint (scraped by the monitoring stack)."""
+    body, content_type = render_metrics()
+    return Response(content=body, media_type=content_type)
 
 
 @router.get('/connection_pool_info')

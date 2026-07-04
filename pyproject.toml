@@ -57,6 +57,7 @@ dependencies = [
     "transformers>=4.30.0",
     "timm",
     "huggingface_hub",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]
