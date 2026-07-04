@@ -18,12 +18,14 @@ output [
   },
   {
     name: "det_boxes"
-    data_type: TYPE_FP32
+    # FP16: boxes/scores flow out of EfficientNMS_TRT at the baked
+    # engine precision (TRT 11 typed builds)
+    data_type: TYPE_FP16
     dims: [ 300, 4 ]
   },
   {
     name: "det_scores"
-    data_type: TYPE_FP32
+    data_type: TYPE_FP16
     dims: [ 300 ]
   },
   {
@@ -44,9 +46,9 @@ dynamic_batching {
 
 instance_group [
   {
-    # 3 instances (~1.5 GB each) let concurrent ingest batches pipeline
-    # through more GPU streams. Drop to 2 on cards under ~8 GB.
-    count: 3
+    # Baseline for 12 GB cards (each context is ~1.8 GB at max_batch 64).
+    # Raise to 3+ on 24 GB+ GPUs for higher ingest throughput.
+    count: 2
     kind: KIND_GPU
     gpus: [ 0 ]
   }
