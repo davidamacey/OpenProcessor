@@ -211,7 +211,7 @@ export_detection() {
     # --rm: clean up container after exit
     # --no-deps: don't start dependent services
     # -T: disable pseudo-TTY (needed for non-interactive/piped output)
-    docker compose run --rm --no-deps -T triton-server /usr/src/tensorrt/bin/trtexec \
+    docker compose run --rm --no-deps -T triton-server trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$DET_MIN_SHAPES" \
@@ -264,7 +264,7 @@ export_recognition() {
     log_warn "This may take 10-20 minutes for dynamic width optimization..."
 
     # Use 'docker compose run' instead of 'exec' to avoid chicken-and-egg problem.
-    docker compose run --rm --no-deps -T triton-server /usr/src/tensorrt/bin/trtexec \
+    docker compose run --rm --no-deps -T triton-server trtexec \
         --onnx="$onnx_path" \
         --saveEngine="$plan_path" \
         --minShapes="$REC_MIN_SHAPES" \

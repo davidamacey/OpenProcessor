@@ -53,6 +53,8 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '1'
           ignore-unfixed: true
+          # ~19 GB image: default 5m analysis deadline is far too short
+          timeout: 30m
 
   # The Triton image is ~20 GB (NGC base) — too heavy for hosted runners'
   # disk on every PR. It is scanned locally via `make scan-triton` before
