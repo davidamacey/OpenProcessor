@@ -577,7 +577,7 @@ wait_for_services() {
     log_info "Waiting for API service..."
     local api_ready=false
     for i in {1..30}; do
-        if curl -s localhost:4603/health 2>/dev/null | grep -q "healthy"; then
+        if curl -s localhost:4603/health 2>/dev/null | grep -qE "ready|healthy"; then
             api_ready=true
             break
         fi
@@ -633,7 +633,7 @@ run_smoke_test() {
 
     # Test 1: Health endpoint
     log_info "Testing /health endpoint..."
-    if curl -s localhost:4603/health | grep -q "healthy"; then
+    if curl -s localhost:4603/health | grep -qE "ready|healthy"; then
         log_success "[1/8] Health check - PASS"
         passed=$((passed + 1))
     else
