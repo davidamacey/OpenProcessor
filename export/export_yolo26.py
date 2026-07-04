@@ -36,7 +36,7 @@ from typing import Any
 import onnx
 import tensorrt as trt
 import torch
-from trt_utils import create_explicit_network, enable_fp16
+from trt_utils import create_explicit_network
 from ultralytics import YOLO
 
 
@@ -167,6 +167,9 @@ def build_engine(onnx_path: Path, plan_path: Path, max_batch: int) -> bool:
     and an unbounded spatial axis makes TRT budget for gigantic activations
     (12+ GB tactics) that fail on consumer GPUs.
     """
+    # ModelOpt AutoCast via the ultralytics wrapper (it feeds proper
+    # calibration shapes for the dynamic axes; the plain graph rewrite in
+    # trt_utils.bake_fp16_onnx mis-types this graph's Concat nodes).
     from ultralytics.utils.export.engine import modelopt_quantize_onnx
 
     logger.info('Baking FP16 into ONNX via ModelOpt AutoCast...')
