@@ -14,6 +14,7 @@ import numpy as np
 from src.clients.fast_face_client import get_fast_face_client
 from src.clients.triton_client import get_triton_client
 from src.config import get_settings
+from src.config.settings import TritonModelConfig
 from src.utils.cache import get_clip_tokenizer, get_image_cache, get_text_cache
 from src.utils.image_processing import decode_image, validate_image
 
@@ -94,7 +95,7 @@ class InferenceService:
     def detect(
         self,
         image_bytes: bytes,
-        model_name: str = 'yolov11_small_trt_end2end',
+        model_name: str | None = None,
     ) -> dict[str, Any]:
         """
         Detect objects in image using YOLOv11 TensorRT End2End model.
@@ -104,11 +105,13 @@ class InferenceService:
 
         Args:
             image_bytes: Raw image bytes (JPEG/PNG)
-            model_name: Triton model name (default: yolov11_small_trt_end2end)
+            model_name: Triton model name (default: settings YOLO_MODEL)
 
         Returns:
             Standardized response dict with detections
         """
+        model_name = model_name or TritonModelConfig.YOLO_MODEL
+
         # Decode and validate image
         img = decode_image(image_bytes, 'image')
         validate_image(img, 'image')
@@ -129,18 +132,20 @@ class InferenceService:
     def detect_batch(
         self,
         images: list[bytes],
-        model_name: str = 'yolov11_small_trt_end2end',
+        model_name: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Detect objects in multiple images using batched inference.
 
         Args:
             images: List of raw image bytes (JPEG/PNG)
-            model_name: Triton model name (default: yolov11_small_trt_end2end)
+            model_name: Triton model name (default: settings YOLO_MODEL)
 
         Returns:
             List of standardized response dicts, one per image
         """
+        model_name = model_name or TritonModelConfig.YOLO_MODEL
+
         # Decode and validate all images
         decoded_images = []
         image_shapes = []
