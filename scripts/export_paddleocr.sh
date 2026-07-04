@@ -54,7 +54,7 @@ DICT_FILE="$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt"
 # TensorRT configuration
 # CRITICAL: Use --memPoolSize=workspace:8G syntax (not --workspace)
 TRT_WORKSPACE="8G"  # 8GB workspace for TRT optimization (required for dynamic shapes)
-TRT_FP16="--fp16"   # Use FP16 precision
+TRT_FP16=""   # trtexec --fp16 was removed in TensorRT 11 (strongly-typed builds follow the ONNX dtypes)
 
 # Detection model shapes (H,W are multiples of 32, max 960)
 DET_MIN_SHAPES="x:1x3x32x32"
