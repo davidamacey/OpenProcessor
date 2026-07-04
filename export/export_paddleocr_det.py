@@ -122,7 +122,7 @@ def convert_to_tensorrt(
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network
+        from trt_utils import bake_fp16_onnx, create_explicit_network, enable_fp16
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -131,6 +131,9 @@ def convert_to_tensorrt(
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
+        if fp16:
+            print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
+            onnx_path = bake_fp16_onnx(onnx_path)
         # Parse ONNX
         print('  Parsing ONNX model...')
         with open(onnx_path, 'rb') as f:
@@ -145,8 +148,7 @@ def convert_to_tensorrt(
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
 
-        if fp16:
-            config.set_flag(trt.BuilderFlag.FP16)
+        if fp16 and enable_fp16(builder, config):
             print('  FP16 mode enabled')
 
         # Optimization profile for dynamic shapes
@@ -279,7 +281,11 @@ def parse_args():
         default=PLAN_OUTPUT,
         help='Output path for TensorRT plan',
     )
-    parser.add_argument('--fp32', action='store_true', help='Use FP32 instead of FP16')
+    parser.add_argument(
+        '--fp16',
+        action='store_true',
+        help='Bake FP16 (default FP32: text detection is threshold-sensitive and the engine is small)',
+    )
     parser.add_argument(
         '--max-batch-size',
         type=int,
@@ -319,7 +325,7 @@ def main():
         plan_path = convert_to_tensorrt(
             args.onnx_path,
             args.output,
-            fp16=not args.fp32,
+            fp16=args.fp16,
             max_batch_size=args.max_batch_size,
         )
 

@@ -41,7 +41,7 @@ dynamic_batching {
 
 instance_group [
   {
-    count: 4
+    count: 2  # baseline for 12 GB cards; raise on 24 GB+ GPUs
     kind: KIND_GPU
     gpus: [ 0 ]
   }
