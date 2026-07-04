@@ -69,7 +69,9 @@ output [
 
 dynamic_batching {
   preferred_batch_size: [ 8, 16, 32 ]
-  max_queue_delay_microseconds: 5000
+  # 25ms (was 5ms) — same rationale as yolov11: per-image arrival rate
+  # under ingest load is too slow to fill preferred batches in 5ms.
+  max_queue_delay_microseconds: 25000
 }
 
 instance_group [
