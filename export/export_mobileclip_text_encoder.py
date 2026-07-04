@@ -51,7 +51,7 @@ CONTEXT_LENGTH = 77  # Max token sequence length
 EMBEDDING_DIM = 512  # MobileCLIP2-S2 uses 512-dim embeddings (same as image encoder)
 
 # ONNX export settings
-# TensorRT 10.x (Triton 25.10) supports opset 9-20
+# TensorRT 11.x (Triton 26.06) supports opset 9-20
 # For Transformer/LayerNorm models with dynamic batch: opset 17+ recommended
 # See: https://docs.nvidia.com/deeplearning/tensorrt/latest/getting-started/support-matrix.html
 ONNX_OPSET_VERSION = 17
@@ -266,11 +266,12 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=64):
 
     try:
         import tensorrt as trt
+        from trt_utils import create_explicit_network
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
         builder = trt.Builder(TRT_LOGGER)
-        network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+        network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, TRT_LOGGER)
 
         # Parse ONNX
