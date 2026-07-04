@@ -96,6 +96,7 @@ Subsequent starts take only seconds since compiled engines are cached.
 | Model | Export Time | Engine Size |
 |-------|-----------|-------------|
 | YOLO11 detection | ~8 min | ~45 MB |
+| YOLO26 detection (optional) | ~6 min | ~40 MB |
 | SCRFD face detection | ~2 min | ~20 MB |
 | ArcFace embeddings | ~2 min | ~86 MB |
 | MobileCLIP image encoder | ~4 min | ~35 MB |
@@ -104,6 +105,27 @@ Subsequent starts take only seconds since compiled engines are cached.
 
 Times vary by GPU. Faster GPUs with more CUDA cores export faster.
 Lower VRAM GPUs (8-12GB) may take 45-60 minutes total.
+
+**Dual YOLO families — YOLO11 and YOLO26 side by side.** One Triton
+instance and one API serve both:
+
+- **YOLO11** exports through the EfficientNMS end2end toolchain
+  (`export/export_models.py`, GPU-NMS 4-tensor engines — the proven
+  default path).
+- **YOLO26** exports through the stock ultralytics native toolchain
+  (`export/export_yolo26.py`, natively NMS-free single-tensor engines —
+  no plugin required):
+
+  ```bash
+  docker compose exec yolo-api python /app/export/export_yolo26.py --models small
+  curl -X POST http://localhost:4603/models/yolo26_small_trt/load
+  ```
+
+- The API resolves each model's output format from **Triton metadata**,
+  so `/detect?model_name=yolo26_small_trt` and the YOLO11 default work
+  interchangeably; set `YOLO_MODEL=yolo26_small_trt` to switch the
+  default detector. Models load/unload at runtime via
+  `POST /models/{name}/load` / `POST /models/{name}/unload`.
 
 ---
 
