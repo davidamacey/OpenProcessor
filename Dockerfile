@@ -87,8 +87,12 @@ USER appuser
 
 EXPOSE 8000
 
+# /live = process liveness only. /health now probes dependencies (Triton,
+# OpenSearch) and returns 503 while any is down — gating the container's
+# health on it would mark yolo-api unhealthy (and cascade via
+# depends_on: service_healthy) whenever a *downstream* dep degrades.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/live || exit 1
 
 # Production defaults (docker-compose.yml overrides workers, backlog, etc.)
 CMD ["uvicorn", "src.main:app", \
