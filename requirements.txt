@@ -6,7 +6,7 @@ orjson  # 2-3x faster JSON encoding/decoding vs stdlib json
 pydantic-settings  # Pydantic v2 settings management
 
 # YOLO and Triton
-ultralytics<8.4  # Pin to <8.4: v8.4 introduced YOLO26 and breaking changes to end2end property
+ultralytics>=8.4.82,<8.5  # 8.4.x = YOLO26 support (native NMS-free export + .pt loading). The legacy YOLO11 EfficientNMS export toolchain is isolated in /opt/venv-y11 (requirements-export-y11.txt) because its patch requires <8.4.
 tritonclient[all]
 
 # Model Export Dependencies

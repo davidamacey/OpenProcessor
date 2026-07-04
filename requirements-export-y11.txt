@@ -1,0 +1,33 @@
+# =============================================================================
+# YOLO11 EfficientNMS export toolchain (installed into /opt/venv-y11)
+# =============================================================================
+# The vendored end2end patch (src/ultralytics_patches) injects the TensorRT
+# EfficientNMS_TRT plugin into YOLO11 ONNX exports. It targets the 8.3.x
+# exporter API — ultralytics 8.4 (YOLO26) changed the end2end handling and
+# breaks it — so this toolchain is pinned and isolated in its own venv.
+# export/export_models.py transparently re-execs into it (see the toolchain
+# guard at the top of that script). YOLO26 uses the main environment.
+#
+# ultralytics pinned to the exact version validated in production with the
+# patch. Bump deliberately, never with a range.
+ultralytics==8.3.253
+
+# CPU-only torch is sufficient here: the ONNX export traces on CPU and the
+# TensorRT engine build talks to the GPU through the tensorrt wheels below,
+# not through torch. Saves ~5 GB over CUDA torch in the image.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+
+# ONNX toolchain for the EfficientNMS graph surgery
+onnx>=1.12.0,<=1.19.1
+onnxslim>=0.1.71
+onnxsim>=0.4.33
+onnx-graphsurgeon
+
+# Engine build — MUST match the Triton server's TensorRT (see requirements.txt)
+tensorrt-cu13==11.0.0.114
+
+# Script deps
+pyyaml
+opencv-python-headless

@@ -38,6 +38,17 @@ RUN pip install --user --no-cache-dir --upgrade pip \
         --extra-index-url https://pypi.nvidia.com \
         -r requirements.txt
 
+# Isolated YOLO11 EfficientNMS export toolchain (ultralytics pinned <8.4 for
+# the vendored end2end patch; CPU torch — see requirements-export-y11.txt).
+# export/export_models.py re-execs into this venv automatically.
+COPY requirements-export-y11.txt .
+
+RUN python -m venv /opt/venv-y11 \
+    && /opt/venv-y11/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv-y11/bin/pip install --no-cache-dir \
+        --extra-index-url https://pypi.nvidia.com \
+        -r requirements-export-y11.txt
+
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # -----------------------------------------------------------------------------
@@ -76,6 +87,9 @@ WORKDIR /app
 
 # Copy Python packages from builder stage
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
+
+# Pinned YOLO11 export venv (see requirements-export-y11.txt)
+COPY --from=builder --chown=appuser:appuser /opt/venv-y11 /opt/venv-y11
 
 ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \

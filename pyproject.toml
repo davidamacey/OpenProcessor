@@ -29,7 +29,7 @@ dependencies = [
     "python-multipart",
     "orjson",
     "pydantic-settings",
-    "ultralytics<8.4",
+    "ultralytics>=8.4.82,<8.5",
     "tritonclient[all]",
     "onnx>=1.12.0,<=1.19.1",
     "onnxslim>=0.1.71",
