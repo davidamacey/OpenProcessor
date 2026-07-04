@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-04
+
+### Fixed
+- Fresh-install path (`scripts/setup.sh`) on Triton 26.06: trtexec moved
+  to `/usr/bin` and its `--fp16` flag was removed in TensorRT 11 — the
+  PaddleOCR engine step now works out of the box.
+- End2end `config.pbtxt` is written from the built engine's actual output
+  dtypes (EfficientNMS_TRT precision varies across TRT releases/builds).
+- Health checks in `setup.sh` accept the `/health` -> `/ready` status
+  contract.
+- CI: valid action pins (trivy-action v0.36.0, checkout v5,
+  codeql-action v4) and a scan timeout suited to the image size.
+- Endpoint suite: dual-family checks skip gracefully when the optional
+  YOLO26 engine is not exported.
+
 ## [0.2.0] - 2026-07-04
 
 ### Added
