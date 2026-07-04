@@ -397,7 +397,7 @@ The project includes production-optimized Dockerfiles:
 | File | Purpose | Base Image |
 |------|---------|------------|
 | `Dockerfile` | FastAPI service | `python:3.13-slim-trixie` |
-| `Dockerfile.triton` | Triton server | `nvcr.io/nvidia/tritonserver:25.10-py3` |
+| `Dockerfile.triton` | Triton server | `nvcr.io/nvidia/tritonserver:26.06-py3` |
 
 ### Building Images
 

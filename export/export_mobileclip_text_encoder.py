@@ -51,7 +51,7 @@ CONTEXT_LENGTH = 77  # Max token sequence length
 EMBEDDING_DIM = 512  # MobileCLIP2-S2 uses 512-dim embeddings (same as image encoder)
 
 # ONNX export settings
-# TensorRT 10.x (Triton 25.10) supports opset 9-20
+# TensorRT 11.x (Triton 26.06) supports opset 9-20
 # For Transformer/LayerNorm models with dynamic batch: opset 17+ recommended
 # See: https://docs.nvidia.com/deeplearning/tensorrt/latest/getting-started/support-matrix.html
 ONNX_OPSET_VERSION = 17
