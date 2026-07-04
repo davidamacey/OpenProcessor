@@ -290,7 +290,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
 
     try:
         import tensorrt as trt
-        from trt_utils import create_explicit_network
+        from trt_utils import create_explicit_network, enable_fp16
 
         TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
@@ -313,8 +313,7 @@ def convert_to_tensorrt(onnx_path, plan_path, fp16=True, max_batch_size=128):
         config = builder.create_builder_config()
         config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)  # 4GB workspace
 
-        if fp16:
-            config.set_flag(trt.BuilderFlag.FP16)
+        if fp16 and enable_fp16(builder, config):
             print('  ✓ FP16 mode enabled')
 
         # Optimization profile for dynamic batch sizes
