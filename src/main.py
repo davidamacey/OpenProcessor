@@ -353,6 +353,29 @@ def create_app() -> FastAPI:
             headers={'X-Request-ID': req_id},
         )
 
+    @application.middleware('http')
+    async def http_duration_middleware(request: Request, call_next):
+        """Record per-request latency into the Prometheus histogram."""
+        from src.core.metrics import HTTP_REQUEST_DURATION_SECONDS
+
+        started = time.monotonic()
+        response = await call_next(request)
+        # FastAPI populates scope['route'] once a route has matched. For
+        # 404s (no match) fall back to a low-cardinality truncation of
+        # the raw path (first 2 segments) so the label space isn't
+        # exploded by `/v1/whatever/<random-id>` misses.
+        route_obj = request.scope.get('route')
+        route_template = getattr(route_obj, 'path', None)
+        if not route_template:
+            segments = request.url.path.strip('/').split('/')
+            route_template = '/' + '/'.join(segments[:2]) if segments and segments[0] else '/'
+        HTTP_REQUEST_DURATION_SECONDS.labels(
+            method=request.method,
+            route=route_template,
+            status=str(response.status_code),
+        ).observe(time.monotonic() - started)
+        return response
+
     # Request ID Middleware (defined last, runs first in LIFO order)
     @application.middleware('http')
     async def request_id_middleware(request: Request, call_next):
