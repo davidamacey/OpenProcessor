@@ -283,6 +283,9 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
 ]
+markers = [
+    "integration: tests that exercise several components together (no live stack required)",
+]
 
 # =============================================================================
 # Coverage Configuration
