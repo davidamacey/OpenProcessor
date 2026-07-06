@@ -1,0 +1,32 @@
+# VEX / accepted-risk exceptions for deepstream-hardened:9.0
+# Passed to trivy via: --ignorefile docker/hardened/deepstream/trivyignore.txt
+# Each entry MUST have a justification and an owner sign-off before use in a gate.
+#
+# ----------------------------------------------------------------------------
+# CVE-2025-3887 — GStreamer gst-plugins-bad H.265 parser stack buffer overflow (HIGH)
+#   Package : gstreamer1.0-plugins-bad / libgstreamer-plugins-bad1.0-0  (1.24.2-1ubuntu4)
+#   Status  : NO Ubuntu 24.04 fix available as of this build (fix=none upstream-only 1.26.3).
+#   Why kept: gst-plugins-bad is a hard runtime dependency of DeepStream (codec parsing);
+#             it cannot be removed without breaking the pipeline, and no patched Ubuntu
+#             revision exists yet to upgrade to.
+#   Exposure: reachable ONLY if the pipeline decodes attacker-supplied H.265/HEVC streams.
+#   Compensating controls: (a) restrict ingest to trusted camera sources / private network;
+#             (b) prefer H.264 sources where possible; (c) track Ubuntu USN and drop this
+#             waiver the moment 1.24.2-1ubuntu4.x ships the backport.
+#   ACTION  : re-review at next base bump; this is the one item that could not be fixed.
+CVE-2025-3887
+#
+# ----------------------------------------------------------------------------
+# CVE-2026-24049 — wheel (HIGH)  and  CVE-2026-23949 — jaraco.context (HIGH)
+#   Where   : vendored inside setuptools (setuptools/_vendor/wheel-0.45.1,
+#             jaraco.context-5.3.0) + a stale debian python3-wheel 0.42.0.
+#   Status  : cannot be cleanly upgraded — setuptools pins these vendored copies,
+#             and debian python3-wheel can't be pip-uninstalled (no RECORD) nor
+#             apt-purged (pip depends on it). Fixed versions exist upstream but not
+#             as a drop-in for the vendored/debian copies here.
+#   Exposure: BUILD/packaging tooling only (wheel building, setuptools internals);
+#             not loaded by the deepstream-app / nvinfer / Triton serving path, and
+#             not remotely reachable. No untrusted input flows to them at runtime.
+#   ACTION  : drop when the base image ships patched setuptools/wheel.
+CVE-2026-24049
+CVE-2026-23949
