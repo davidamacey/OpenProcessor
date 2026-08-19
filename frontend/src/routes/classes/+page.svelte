@@ -6,6 +6,7 @@
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyLabel, adequacyTooltip } from '$lib/adequacy';
+  import { setClassHotkey } from '$lib/classHotkey';
   import type { OpClass } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -128,38 +129,9 @@
   }
 
   async function setHotkey(cls: OpClass, raw: string): Promise<void> {
-    const next = raw.trim().toLowerCase();
-    const current = (cls.hotkey_letter ?? '').toLowerCase();
-    if (next === current) return;
-    if (next.length > 1) {
-      toastStore.error('Hotkey must be a single character.');
-      return;
-    }
-    // Reject duplicates against other classes' already-bound letters.
-    // Backend enforces this too (returns 400); doing it client-side
-    // surfaces a clearer message without a round-trip.
-    if (next) {
-      const owner = classesStore.classes.find(
-        (c) =>
-          c.id !== cls.id &&
-          !c.deprecated &&
-          (c.hotkey_letter ?? '').toLowerCase() === next,
-      );
-      if (owner) {
-        toastStore.error(`'${next}' is already assigned to ${owner.name}.`);
-        return;
-      }
-    }
     busy = true;
     try {
-      // PUT /curation/classes/{id} treats '' as "clear binding".
-      await renameClass(cls.id, { hotkey_letter: next });
-      toastStore.success(
-        next ? `${cls.name} → hotkey '${next}'` : `${cls.name} → hotkey cleared`,
-      );
-      await classesStore.clearAndRefetch();
-    } catch (e) {
-      toastStore.error(`Hotkey set failed: ${(e as Error).message}`);
+      await setClassHotkey(cls, raw);
     } finally {
       busy = false;
     }

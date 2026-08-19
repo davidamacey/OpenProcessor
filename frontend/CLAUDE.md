@@ -53,21 +53,62 @@ the **Model Disagreements** tab on `/review` surfaces validated crops
 where the new model and the human label diverge — high-signal candidates
 for the next training cycle.
 
-## Keyboard shortcuts (every page)
+## Keyboard shortcuts
+
+Class assignment is per-class `hotkey_letter`, configured on `/classes` (or in
+the `~` overlay) and routed through `dropOnClassStore` by the layout-level
+keydown listener in `src/routes/+layout.svelte`. There is no `1-9, 0` top-N
+scheme — it was removed; one binding scheme means no "what does this key do
+here?" friction. On `/clusters/[id]` a class letter labels the current
+selection (or the just-dragged set); on `/review` it labels the current item.
+
+Reserved single-char action keys (`g n d z x u a m`) cannot be bound to a
+class — `setClassHotkey` (`src/lib/classHotkey.ts`) rejects them. Both window
+keydown listeners fire on the same keypress, so a class bound to `d` would be
+assigned *and* the selection discarded.
+
+Global:
 
 | Key | Action |
 |---|---|
-| `1-9, 0` | Assign top-10 most frequent classes for context |
-| `Enter` | Confirm selected + advance to next unvalidated |
+| `` ` `` / `~` | Toggle keyboard shortcut overlay |
+| `Esc` | Close the overlay |
+| *class letter* | Assign that class (selection / current item) |
+
+`/clusters/[id]`:
+
+| Key | Action |
+|---|---|
+| `Enter` | Confirm selected to the chosen class + advance |
+| `Shift+Enter` | Accept all Gemma suggestions on the page |
 | `G` | Accept Gemma suggestion for selected |
-| `N` | Skip (defer to review queue) |
-| `D` | Discard (mark for delete) |
-| `Z` | Undo last action |
+| `N` | Skip + advance |
+| `Shift+N` | Flag selected as needing a new class (curator review) |
+| `D` | Discard (unlabel) selected |
+| `Z` | Undo last label action |
+| `X` | Ignore selected (exclude from training + clustering) |
+| `U` | Undo last ignore |
 | `A` | Select all on page |
-| `Shift+Enter` | Confirm all Gemma suggestions on page |
-| `←/→` | Page navigation |
-| `~` | Toggle keyboard shortcut overlay |
-| `Esc` | Cancel in-progress drag |
+| `←` / `→` | Move the selection by one crop (not page nav) |
+| `M` | Move selected to another cluster… |
+| `Esc` | Clear drag capture / close picker / clear selection |
+
+`/review`:
+
+| Key | Action |
+|---|---|
+| `Enter` | Confirm proposed + advance (plates tab: confirm plate) |
+| `D` | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible) |
+| `N` | Skip |
+| `Z` | Undo last |
+| `←` / `→` | Previous / next item (plates tab `←` / `B`: step back) |
+| `F` | Plates tab: mark false positive (box kept) |
+| `E` | Plates tab: enter bbox edit mode |
+| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit |
+
+`Esc` cannot cancel an in-progress pointer drag — `svelte-dnd-action` only
+Escape-cancels keyboard (aria) drags. It clears the captured multi-drag set
+and restores the grid layout; the drag itself ends on pointer release.
 
 ## Data integrity
 

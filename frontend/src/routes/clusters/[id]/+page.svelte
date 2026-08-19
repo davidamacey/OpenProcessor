@@ -1,13 +1,13 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
-  import { goto } from '$app/navigation';
   import {
     bulkLabel,
     deleteCropLabel,
     excludeCrops,
     flagNeedsNewClass,
     getCluster,
+    getCrop,
     moveCropsToCluster,
     putCropLabel,
     refineCluster,
@@ -15,10 +15,14 @@
     unexcludeCrops,
     type ExcludeReason,
   } from '$lib/api';
+  import BlurSlider from '$components/BlurSlider.svelte';
   import CropCard from '$components/CropCard.svelte';
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
+  import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import { createPager } from '$lib/pager.svelte';
+  import { createSelection } from '$lib/selection.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type { OpClass, OpCluster, OpCrop, PaginatedResponse, UndoEntry } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
@@ -48,20 +52,26 @@
     clsForCluster?.name ?? cluster?.dominant_class_name ?? null,
   );
 
-  let crops = $state<OpCrop[]>([]);
-  let total = $state<number>(0);
-  let loadedPages = $state<number>(0);
   const pageSize = 60;
-  let loading = $state<boolean>(false);
-  let loadingMore = $state<boolean>(false);
-  let error = $state<string | null>(null);
-  const hasMore = $derived(crops.length < total);
+  // Crop pager. cropQuery() feeds page 1 and every later page, so a filter
+  // can't be applied to the first request and silently dropped on the next.
+  const cropPager = createPager<OpCrop>({
+    fetchPage: async (page) => {
+      const res = await getCluster(clusterId, page, pageSize, undefined, cropQuery());
+      cluster = res.cluster;
+      return res.crops as PaginatedResponse<OpCrop>;
+    },
+    keyOf: (c) => c.id,
+    onLoadFirstError: () => {
+      cluster = null;
+    },
+  });
 
   // Crop opened in the read-only details modal (info button on each card).
   let detailCrop = $state<OpCrop | null>(null);
 
-  // Selection set (crop_id)
-  let selected = $state<Set<string>>(new Set());
+  // Selection set (crop_id) + shift-range anchor.
+  const sel = createSelection({ plainClick: 'replace' });
 
   // Sub-cluster tab (null = all). Backend stores cluster_subid as a
   // keyword string ("47a", "47b", "47aa", ...).
@@ -128,58 +138,23 @@
   let movePickerValue = $state<string>('');
   let movePickerInput = $state<HTMLInputElement | null>(null);
 
+  function cropQuery() {
+    return {
+      classSource: classSourceFilter,
+      maxRank,
+      minBlurRatio,
+      order: outliersFirst ? ('outliers' as const) : null,
+    };
+  }
+
   async function loadFirst(): Promise<void> {
     if (!Number.isFinite(clusterId)) return;
-    loading = true;
-    error = null;
-    crops = [];
-    loadedPages = 0;
-    total = 0;
-    try {
-      const res = await getCluster(clusterId, 1, pageSize, undefined, {
-        classSource: classSourceFilter,
-        maxRank,
-        minBlurRatio,
-        order: outliersFirst ? 'outliers' : null,
-      });
-      cluster = res.cluster;
-      const list = res.crops as PaginatedResponse<OpCrop>;
-      crops = list.items;
-      total = list.total ?? list.items.length;
-      loadedPages = 1;
-    } catch (e) {
-      error = (e as Error).message;
-      cluster = null;
-      crops = [];
-      total = 0;
-    } finally {
-      loading = false;
-    }
+    await cropPager.loadFirst();
   }
 
   async function loadMore(): Promise<void> {
-    if (!Number.isFinite(clusterId) || loadingMore || !hasMore) return;
-    loadingMore = true;
-    try {
-      const next = loadedPages + 1;
-      const res = await getCluster(clusterId, next, pageSize, undefined, {
-        classSource: classSourceFilter,
-        maxRank,
-        minBlurRatio,
-        order: outliersFirst ? 'outliers' : null,
-      });
-      const list = res.crops as PaginatedResponse<OpCrop>;
-      // Dedup by id in case server returns overlapping pages after a relabel.
-      const seen = new Set(crops.map((c) => c.id));
-      const fresh = list.items.filter((c) => !seen.has(c.id));
-      crops = [...crops, ...fresh];
-      total = list.total ?? total;
-      loadedPages = next;
-    } catch (e) {
-      error = (e as Error).message;
-    } finally {
-      loadingMore = false;
-    }
+    if (!Number.isFinite(clusterId)) return;
+    await cropPager.loadMore();
   }
 
   $effect(() => {
@@ -199,39 +174,41 @@
   // drop dispatches.
   $effect(() => {
     const off = dropOnClassStore.register(async (cls: OpClass, droppedIds: string[]) => {
-      // onGridConsider captures the full drag set at drag-start time
-      // (Finder pattern — grab any selected card to drag all selected;
-      // grab an unselected card to drag just that one). The
-      // ClassSidebar's own consider/finalize events only see the single
-      // shadow item, so dragIds is the authoritative source. droppedIds
-      // is kept as a defensive fallback.
-      const ids = dragIds.length > 0 ? [...dragIds] : droppedIds;
+      // Priority order matters. onGroupConsider captures the full drag
+      // set at drag-start time (Finder pattern — grab any selected card
+      // to drag all selected; grab an unselected card to drag just that
+      // one), and the ClassSidebar's own finalize only ever sees the
+      // single shadow item — so for a multi-drag drop droppedIds has 1 id
+      // while dragIds has N. dragIds must therefore win. The `selected`
+      // fallback serves the keyboard path: the layout's class-letter
+      // listener dispatches with an empty droppedIds and no drag context.
+      // Consume dragIds here — leaving it populated would make the NEXT
+      // hotkey press relabel the previously dragged crops.
+      const ids =
+        dragIds.length > 0
+          ? [...dragIds]
+          : droppedIds.length > 0
+            ? droppedIds
+            : [...sel.ids];
+      dragIds = [];
       if (ids.length === 0) {
-        toastStore.warn('Drag a crop card onto a class to label it.');
+        toastStore.warn('Select or drag crops first, then press a class hotkey.');
         return;
       }
       for (const id of ids) {
-        const c = crops.find((x) => x.id === id);
-        if (c) {
-          undoStore.push({
-            crop_id: c.id,
-            prior_class_id: c.class_id,
-            prior_label_source: c.label_source,
-            prior_validated: c.label_validated,
-            at: Date.now(),
-          });
-        }
+        const c = cropPager.items.find((x) => x.id === id);
+        if (c) undoStore.push(undoStore.snapshotOf(c));
       }
       // Optimistic: remove the dropped crops from the visible grid
       // BEFORE the await, so the labeling feels real-time. The dragged
       // selection is the source of truth — if the backend reports
       // conflicts we re-sync, if it errors we restore the snapshot.
-      const snap = crops;
-      const snapTotal = total;
+      const snap = cropPager.items;
+      const snapTotal = cropPager.total;
       const droppedSet = new Set(ids);
-      crops = crops.filter((c) => !droppedSet.has(c.id));
-      total = Math.max(0, total - ids.length);
-      selected = new Set();
+      cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
+      cropPager.total = Math.max(0, cropPager.total - ids.length);
+      sel.ids = new Set();
       try {
         const res = await bulkLabel(ids, cls.id);
         const conflicts = res.conflicts?.length ?? 0;
@@ -248,8 +225,8 @@
         }
       } catch (e) {
         // Revert the optimistic mutation on hard failure.
-        crops = snap;
-        total = snapTotal;
+        cropPager.items = snap;
+        cropPager.total = snapTotal;
         toastStore.error(`Label failed: ${(e as Error).message}`);
       }
     });
@@ -259,12 +236,12 @@
   // Sub-cluster filtering (in-memory, after load). cluster_subid is
   // backend-owned (keyword like "47a") — the frontend string-matches.
   const filteredCrops = $derived(
-    subTab == null ? crops : crops.filter((c) => c.cluster_subid === subTab),
+    subTab == null ? cropPager.items : cropPager.items.filter((c) => c.cluster_subid === subTab),
   );
 
   const subClusterIds = $derived.by(() => {
     const set = new Set<string>();
-    for (const c of crops) {
+    for (const c of cropPager.items) {
       if (c.cluster_subid != null) set.add(c.cluster_subid);
     }
     // Lexicographic sort keeps "47a","47b","47aa"... in human-expected order.
@@ -282,17 +259,6 @@
     !outliersFirst && subTab == null && subClusterIds.length > 0,
   );
 
-  // Per-subid crop counts for the separator-header labels. '__none__'
-  // buckets the crops refine left ungrouped (or pre-refine crops).
-  const subCounts = $derived.by(() => {
-    const m = new Map<string, number>();
-    for (const c of crops) {
-      const k = c.cluster_subid ?? '__none__';
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  });
-
   // Build gridGroups from filteredCrops. When grouping, partition into
   // contiguous sub-cluster groups (sorted by cluster_subid, unrefined
   // last) each with its own header + dndzone. When not grouping, one
@@ -309,15 +275,23 @@
       return sa < sb ? -1 : sa > sb ? 1 : 0;
     });
     const groups: GridGroup[] = [];
+    let lastSub: string | null = null;
     for (const c of sorted) {
       const sub = c.cluster_subid ?? '__none__';
       const last = groups[groups.length - 1];
-      if (!last || last.key !== sub) {
+      if (!last || lastSub !== sub) {
+        // The key carries the run index, not just the subid: this is a
+        // contiguity walk, so a subid that reappears non-contiguously
+        // (a transient render over a not-yet-sorted list) would emit the
+        // same key twice and crash the keyed {#each} with
+        // each_key_duplicate. The sibling grouping on /clusters documents
+        // the same crash.
         groups.push({
-          key: sub,
+          key: `${sub}#${groups.length}`,
           label: sub === '__none__' ? 'unrefined' : `sub-cluster ${sub}`,
           items: [c],
         });
+        lastSub = sub;
       } else {
         last.items.push(c);
       }
@@ -351,70 +325,28 @@
 
   // ---------------- selection ----------------
 
-  // Anchor for shift-range selection: the last item clicked without
-  // shift (plain or ctrl/cmd). Range selects span [anchor .. clicked]
-  // in the visible filteredCrops order.
-  let anchorId = $state<string | null>(null);
-
+  // Range selects span [anchor .. clicked] in the visible order, so the
+  // ordered id list is handed to the selection helper per click.
   function clickSelect(id: string, e?: MouseEvent): void {
-    const isToggle = !!(e && (e.ctrlKey || e.metaKey));
-    const isRange = !!(e && e.shiftKey);
-
-    if (isRange && anchorId) {
-      // Shift+click: select the contiguous range between the anchor and
-      // the clicked card (inclusive), unioned with the current
-      // selection so shift-after-ctrl extends rather than replaces.
-      const ids = filteredCrops.map((c) => c.id);
-      const a = ids.indexOf(anchorId);
-      const b = ids.indexOf(id);
-      if (a !== -1 && b !== -1) {
-        const [lo, hi] = a <= b ? [a, b] : [b, a];
-        const next = new Set(selected);
-        for (let i = lo; i <= hi; i++) next.add(ids[i]!);
-        selected = next;
-        return;
-      }
-      // Anchor no longer visible — fall through to single-select.
-    }
-
-    if (isToggle) {
-      // Ctrl/Cmd+click: add or remove just this card; move the anchor.
-      const next = new Set(selected);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      selected = next;
-      anchorId = id;
-      return;
-    }
-
-    // Plain click: select only this card and set it as the new anchor.
-    selected = new Set([id]);
-    anchorId = id;
+    sel.click(
+      id,
+      e,
+      filteredCrops.map((c) => c.id),
+    );
   }
 
   function selectAllPage(): void {
-    selected = new Set(filteredCrops.map((c) => c.id));
+    sel.selectAll(filteredCrops.map((c) => c.id));
   }
 
   function deselectAll(): void {
-    selected = new Set();
-    anchorId = null;
+    sel.clear();
   }
 
   // ---------------- mutations ----------------
 
-  function snapshot(crop: OpCrop): UndoEntry {
-    return {
-      crop_id: crop.id,
-      prior_class_id: crop.class_id,
-      prior_label_source: crop.label_source,
-      prior_validated: crop.label_validated,
-      at: Date.now(),
-    };
-  }
-
   function applyLocalLabel(id: string, classId: number, className: string | null): void {
-    crops = crops.map((c) =>
+    cropPager.items = cropPager.items.map((c) =>
       c.id === id
         ? {
             ...c,
@@ -428,7 +360,7 @@
   }
 
   function revertLocalLabel(prev: UndoEntry, prevName: string | null): void {
-    crops = crops.map((c) =>
+    cropPager.items = cropPager.items.map((c) =>
       c.id === prev.crop_id
         ? {
             ...c,
@@ -442,7 +374,7 @@
   }
 
   async function assignClassToSelected(classId: number): Promise<void> {
-    const ids = [...selected];
+    const ids = [...sel.ids];
     if (ids.length === 0) {
       toastStore.warn('Nothing selected.');
       return;
@@ -454,10 +386,17 @@
     }
     // No nag-confirm — undo is one keystroke (Z) and the snapshot below
     // captures the prior state, so any mistake is instantly reversible.
-    // Snapshot for undo
+    // Keep our own references to the pushed entries: the revert path must
+    // drop exactly these, not pop N off a stack the operator may have
+    // changed (by pressing Z) while the request was in flight.
+    const pushed: UndoEntry[] = [];
     for (const id of ids) {
-      const prior = crops.find((c) => c.id === id);
-      if (prior) undoStore.push(snapshot(prior));
+      const prior = cropPager.items.find((c) => c.id === id);
+      if (prior) {
+        const entry = undoStore.snapshotOf(prior);
+        undoStore.push(entry);
+        pushed.push(entry);
+      }
       applyLocalLabel(id, classId, cls.name);
     }
     try {
@@ -467,22 +406,21 @@
         await bulkLabel(ids, classId);
       }
       toastStore.success(`Labeled ${ids.length} crop${ids.length === 1 ? '' : 's'}.`);
-      selected = new Set();
+      sel.ids = new Set();
     } catch (e) {
       toastStore.error(`Label failed: ${(e as Error).message}`);
-      // Revert: pop snapshots back
-      for (let i = 0; i < ids.length; i++) {
-        const prev = undoStore.pop();
-        if (!prev) break;
+      for (const prev of pushed) {
         const prevCls = prev.prior_class_id != null ? classesStore.byId(prev.prior_class_id) : null;
         revertLocalLabel(prev, prevCls?.name ?? null);
       }
+      undoStore.remove(pushed);
     }
   }
 
   async function acceptGemmaForCrop(crop: OpCrop): Promise<void> {
     if (crop.gemma_suggested_class_id == null) return;
-    undoStore.push(snapshot(crop));
+    const entry = undoStore.snapshotOf(crop);
+    undoStore.push(entry);
     applyLocalLabel(
       crop.id,
       crop.gemma_suggested_class_id,
@@ -492,18 +430,16 @@
       await putCropLabel(crop.id, crop.gemma_suggested_class_id);
     } catch (e) {
       toastStore.error(`Accept Gemma failed: ${(e as Error).message}`);
-      const prev = undoStore.pop();
-      if (prev) {
-        const prevCls =
-          prev.prior_class_id != null ? classesStore.byId(prev.prior_class_id) : null;
-        revertLocalLabel(prev, prevCls?.name ?? null);
-      }
+      const prevCls =
+        entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
+      revertLocalLabel(entry, prevCls?.name ?? null);
+      undoStore.remove([entry]);
     }
   }
 
   async function rejectGemmaForCrop(crop: OpCrop): Promise<void> {
     // Reject = clear the suggestion locally; the server clears on next batch.
-    crops = crops.map((c) =>
+    cropPager.items = cropPager.items.map((c) =>
       c.id === crop.id
         ? { ...c, gemma_suggested_class_id: null, gemma_suggested_class_name: null }
         : c,
@@ -522,20 +458,70 @@
     // below feed undoStore so Z reverts instantly. No nag-confirm.
     // Group by class id for bulk_label; fall back to per-crop PUT for the long tail.
     const groups = new Map<number, string[]>();
+    // Snapshot per crop id so a failing group can be reverted precisely —
+    // a single try/catch around the whole loop left the failed group and
+    // every later group locally green but never sent.
+    const snaps = new Map<string, UndoEntry>();
     for (const t of targets) {
       const k = t.gemma_suggested_class_id!;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(t.id);
-      undoStore.push(snapshot(t));
+      const entry = undoStore.snapshotOf(t);
+      snaps.set(t.id, entry);
+      undoStore.push(entry);
       applyLocalLabel(t.id, k, t.gemma_suggested_class_name ?? null);
     }
-    try {
-      for (const [k, ids] of groups) {
+    let ok = 0;
+    let lastError: string | null = null;
+    const failedIds: string[] = [];
+    for (const [k, ids] of groups) {
+      try {
         await bulkLabel(ids, k);
+        ok += ids.length;
+      } catch (e) {
+        lastError = (e as Error).message;
+        failedIds.push(...ids);
       }
+    }
+    if (failedIds.length === 0) {
       toastStore.success(`Accepted ${targets.length} suggestions.`);
+      return;
+    }
+    const stale: UndoEntry[] = [];
+    for (const id of failedIds) {
+      const s = snaps.get(id);
+      if (!s) continue;
+      const prevCls = s.prior_class_id != null ? classesStore.byId(s.prior_class_id) : null;
+      revertLocalLabel(s, prevCls?.name ?? null);
+      stale.push(s);
+    }
+    undoStore.remove(stale);
+    toastStore.error(
+      `Accepted ${ok}, failed ${failedIds.length} (reverted)${lastError ? `: ${lastError}` : '.'}`,
+    );
+  }
+
+  /**
+   * Flag the selection for curator review as needing a class the registry
+   * doesn't have yet. Shared by the Shift+N binding and the toolbar chip.
+   */
+  async function flagSelectedForNewClass(): Promise<void> {
+    const ids = [...sel.ids];
+    if (ids.length === 0) {
+      toastStore.info('Select crops first to flag for new class.');
+      return;
+    }
+    // Note is optional; skip the blocking prompt and flag immediately.
+    // Curator can add notes later via /review when triaging the flagged
+    // queue, where it doesn't interrupt the labeling cadence.
+    try {
+      const res = await flagNeedsNewClass(ids, '');
+      toastStore.success(
+        `${res.flagged} flagged for new-class review${res.errors ? ` (${res.errors} errors)` : ''}`,
+      );
+      sel.ids = new Set();
     } catch (e) {
-      toastStore.error(`Bulk accept failed: ${(e as Error).message}`);
+      toastStore.error(`Flag failed: ${(e as Error).message}`);
     }
   }
 
@@ -549,10 +535,34 @@
       entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
     revertLocalLabel(entry, prevCls?.name ?? null);
     try {
-      await deleteCropLabel(entry.crop_id);
+      if (entry.prior_validated && entry.prior_class_id != null) {
+        // The crop carried a human-validated label before the action we're
+        // undoing. DELETE would reset it to the model suggestion instead,
+        // silently diverging from what the grid shows. putCropLabel sets
+        // validated=true server-side, which matches prior_validated; the
+        // finer prior_label_source granularity is lost, which is fine.
+        await putCropLabel(entry.crop_id, entry.prior_class_id);
+      } else {
+        await deleteCropLabel(entry.crop_id);
+      }
       toastStore.success('Reverted.');
+      // Crops labeled via the sidebar-drop path were removed from the
+      // grid, so revertLocalLabel above was a no-op for them. Pull the
+      // crop back so the operator can see what returned.
+      if (!cropPager.items.some((c) => c.id === entry.crop_id)) {
+        try {
+          const restored = await getCrop(entry.crop_id);
+          cropPager.items = [restored, ...cropPager.items];
+          cropPager.total += 1;
+        } catch (e) {
+          toastStore.info(`Reverted, but could not re-fetch the crop: ${(e as Error).message}`);
+        }
+      }
     } catch (e) {
       toastStore.error(`Undo failed: ${(e as Error).message}`);
+      // Put the entry back so Z can be retried; the local revert stands
+      // (re-applying the label optimistically would be the bigger lie).
+      undoStore.push(entry);
     }
   }
 
@@ -590,7 +600,7 @@
   ];
 
   async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
-    const ids = [...selected];
+    const ids = [...sel.ids];
     if (ids.length === 0) {
       toastStore.info('Select crops first to ignore.');
       return;
@@ -598,8 +608,8 @@
     ignoreMenuOpen = false;
     try {
       const res = await excludeCrops(ids, reason);
-      crops = crops.filter((c) => !ids.includes(c.id));
-      selected = new Set();
+      cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
+      sel.ids = new Set();
       lastExcludedIds = ids;
       const tag = reason === 'ignore' ? '' : ` (${reason})`;
       toastStore.success(`Ignored ${res.excluded}${tag}. Press U to undo.`);
@@ -649,15 +659,15 @@
   async function advance(): Promise<void> {
     // Advance: jump to next unvalidated crop. If we're at the end of what's
     // loaded but more pages exist, fetch them; otherwise tell the user.
-    const next = filteredCrops.find((c) => !c.label_validated && !selected.has(c.id));
+    const next = filteredCrops.find((c) => !c.label_validated && !sel.has(c.id));
     if (next) {
-      selected = new Set([next.id]);
-    } else if (hasMore) {
+      sel.ids = new Set([next.id]);
+    } else if (cropPager.hasMore) {
       await loadMore();
       const nextAfterLoad = filteredCrops.find(
-        (c) => !c.label_validated && !selected.has(c.id),
+        (c) => !c.label_validated && !sel.has(c.id),
       );
-      if (nextAfterLoad) selected = new Set([nextAfterLoad.id]);
+      if (nextAfterLoad) sel.ids = new Set([nextAfterLoad.id]);
     } else {
       toastStore.info('End of cluster.');
     }
@@ -682,9 +692,9 @@
     }
     if (ids.length === 0) return;
     // Snapshot for revert: full crops list before mutation.
-    const snap = crops;
-    crops = crops.filter((c) => !ids.includes(c.id));
-    selected = new Set();
+    const snap = cropPager.items;
+    cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
+    sel.ids = new Set();
     rememberTarget(targetClusterId);
     try {
       const res = await moveCropsToCluster(ids, targetClusterId);
@@ -701,13 +711,13 @@
         );
       }
     } catch (e) {
-      crops = snap;
+      cropPager.items = snap;
       toastStore.error(`Move failed: ${(e as Error).message}`);
     }
   }
 
   function openMovePicker(): void {
-    if (selected.size === 0) {
+    if (sel.size === 0) {
       toastStore.warn('Select crops to move first.');
       return;
     }
@@ -728,18 +738,14 @@
       return;
     }
     movePickerOpen = false;
-    await moveCropIds([...selected], id);
-  }
-
-  function jumpToCluster(id: number): void {
-    void goto(`/clusters/${id}`);
+    await moveCropIds([...sel.ids], id);
   }
 
   /**
-   * dnd-action handlers. We treat the source grid as a draggable-only zone:
-   * removing items is fine (they animate out), adding is rejected. Each
-   * target zone receives the dropped items, fires the move RPC, and then
-   * resets its own items array so the visual placeholder doesn't linger.
+   * dnd-action handlers. The grid is a draggable-only zone: removing items
+   * is fine (they animate out), adding is rejected. The real label RPC
+   * fires from the layout ClassSidebar's own finalize, routed back here
+   * through dropOnClassStore.
    */
   function _setGroupItems(key: string, items: OpCrop[]): void {
     const g = gridGroups.find((x) => x.key === key);
@@ -758,11 +764,11 @@
     // only see the one shadow item being hovered.
     const draggedId = e.detail.info?.id;
     if (draggedId && !dragIds.includes(draggedId)) {
-      if (selected.has(draggedId) && selected.size > 1) {
-        dragIds = [...selected];
+      if (sel.has(draggedId) && sel.size > 1) {
+        dragIds = [...sel.ids];
       } else {
         dragIds = [draggedId];
-        selected = new Set([draggedId]);
+        sel.ids = new Set([draggedId]);
       }
     }
     _setGroupItems(key, e.detail.items);
@@ -773,38 +779,27 @@
     e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>,
   ): void {
     _setGroupItems(key, e.detail.items);
-    if (
-      e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE ||
-      e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER
-    ) {
-      // Real label-move RPCs fire from the ClassSidebar's finalize.
-      // Dropping into another grid sub-group has no semantic meaning
-      // (all groups share cluster_id) — rebuild to undo the shuffle.
-      gridGroups = buildGroups(filteredCrops);
+    // Every branch rebuilds the grid: real label-move RPCs fire from the
+    // ClassSidebar's finalize, and dropping into another grid sub-group
+    // has no semantic meaning (all groups share cluster_id).
+    gridGroups = buildGroups(filteredCrops);
+    if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
+      // The crop landed in the sidebar zone. The ClassSidebar finalize
+      // that dispatches this drop reads dragIds synchronously (before its
+      // first await) as the authoritative multi-drag set, and the drop
+      // handler clears it after use — so clearing here synchronously
+      // would strand the sidebar with only its single shadow item. The
+      // deferred clear covers the no-dispatch edge, where the sidebar
+      // finalize early-returns because both its live items array and its
+      // pendingDroppedIds snapshot are empty.
+      setTimeout(() => {
+        dragIds = [];
+      }, 0);
     } else {
-      // DROPPED_OUTSIDE_OF_ANY / DRAG_STOPPED → restore.
-      gridGroups = buildGroups(filteredCrops);
+      // DROPPED_INTO_ZONE (in-grid reorder — no sidebar dispatch follows),
+      // DROPPED_OUTSIDE_OF_ANY, DRAG_STOPPED.
       dragIds = [];
     }
-  }
-
-  // Per-target consider: we render an empty `items: []` array; dnd-action
-  // accepts the shadow item but we never persist it.
-  function onTargetConsider(_targetId: number) {
-    return (_e: CustomEvent<{ items: OpCrop[] }>): void => {
-      // We deliberately do nothing — keeping the visual cue but never
-      // mutating any persistent state on hover.
-    };
-  }
-
-  function onTargetFinalize(targetId: number) {
-    return (e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>): void => {
-      const dropped = e.detail.items.filter((it) => it && typeof it.id === 'string');
-      const ids = dropped.length > 0 ? dropped.map((it) => it.id) : dragIds;
-      dragIds = [];
-      if (ids.length === 0) return;
-      void moveCropIds(ids, targetId);
-    };
   }
 
   // ---------------- SSE: live updates for this cluster's class ----
@@ -843,7 +838,7 @@
   $effect(() => {
     // Auto-refresh while user is at the top — they're not actively
     // labeling far down the list, so prepending new cards is safe.
-    if (liveNewCount > 0 && !scrolledPastFirst20 && !loading && !loadingMore) {
+    if (liveNewCount > 0 && !scrolledPastFirst20 && !cropPager.loading && !cropPager.loadingMore) {
       const n = liveNewCount;
       liveNewCount = 0;
       void loadFirst().then(() => {
@@ -881,9 +876,9 @@
     reg(
       'g',
       async () => {
-        const ids = [...selected];
+        const ids = [...sel.ids];
         for (const id of ids) {
-          const c = crops.find((cc) => cc.id === id);
+          const c = cropPager.items.find((cc) => cc.id === id);
           if (c) await acceptGemmaForCrop(c);
         }
       },
@@ -897,49 +892,55 @@
       },
       'Skip selected',
     );
+    // 'shift+n', not 'N': register() lowercases combos, so 'N' would
+    // collapse onto the skip binding above and never fire.
     reg(
-      'N',
-      async () => {
-        const ids = [...selected];
-        if (ids.length === 0) {
-          toastStore.info('Select crops first to flag for new class.');
-          return;
-        }
-        // Note is optional; skip the blocking prompt and flag immediately.
-        // Curator can add notes later via /review when triaging the flagged
-        // queue, where it doesn't interrupt the labeling cadence.
-        try {
-          const res = await flagNeedsNewClass(ids, '');
-          toastStore.success(
-            `${res.flagged} flagged for new-class review${res.errors ? ` (${res.errors} errors)` : ''}`,
-          );
-          selected = new Set();
-        } catch (e) {
-          toastStore.error(`Flag failed: ${(e as Error).message}`);
-        }
-      },
+      'shift+n',
+      flagSelectedForNewClass,
       'Flag selected as needing new class (curator review)',
     );
     reg(
       'd',
       async () => {
-        const ids = [...selected];
+        const ids = [...sel.ids];
         if (ids.length === 0) return;
-        // Snapshot before discard so undo (Z) brings them back.
+        // Snapshot per id BEFORE the delete (the crop must still be in the
+        // grid to read its prior label), but only push the snapshots for
+        // ids the server actually accepted — an undo entry for a crop that
+        // was never unlabeled would clobber its real label on Z.
+        const snaps = new Map<string, UndoEntry>();
         for (const id of ids) {
-          const c = crops.find((cc) => cc.id === id);
-          if (c) undoStore.push(snapshot(c));
+          const c = cropPager.items.find((cc) => cc.id === id);
+          if (c) snaps.set(id, undoStore.snapshotOf(c));
         }
+        const succeeded: string[] = [];
+        const failed: string[] = [];
+        let lastError: string | null = null;
         for (const id of ids) {
           try {
             await deleteCropLabel(id);
+            succeeded.push(id);
           } catch (e) {
-            toastStore.error(`Discard failed: ${(e as Error).message}`);
+            lastError = (e as Error).message;
+            failed.push(id);
           }
         }
-        crops = crops.filter((c) => !ids.includes(c.id));
-        selected = new Set();
-        toastStore.success(`Discarded ${ids.length}. Press Z to undo.`);
+        for (const id of succeeded) {
+          const s = snaps.get(id);
+          if (s) undoStore.push(s);
+        }
+        const succeededSet = new Set(succeeded);
+        cropPager.items = cropPager.items.filter((c) => !succeededSet.has(c.id));
+        // Keep the failures visible and selected so the operator can retry.
+        sel.ids = new Set(failed);
+        if (succeeded.length > 0) {
+          toastStore.success(`Discarded ${succeeded.length}. Press Z to undo.`);
+        }
+        if (failed.length > 0) {
+          toastStore.error(
+            `${failed.length} discard(s) failed — still selected${lastError ? `: ${lastError}` : '.'}`,
+          );
+        }
       },
       'Discard selected',
     );
@@ -955,10 +956,10 @@
       () => {
         const ids = filteredCrops.map((c) => c.id);
         if (ids.length === 0) return;
-        const cur = ids.findIndex((id) => selected.has(id));
+        const cur = ids.findIndex((id) => sel.has(id));
         const prev = cur <= 0 ? ids.length - 1 : cur - 1;
-        selected = new Set([ids[prev]!]);
-        anchorId = ids[prev]!;
+        sel.ids = new Set([ids[prev]!]);
+        sel.anchorId = ids[prev]!;
       },
       'Previous crop',
     );
@@ -967,11 +968,11 @@
       () => {
         const ids = filteredCrops.map((c) => c.id);
         if (ids.length === 0) return;
-        const cur = ids.findIndex((id) => selected.has(id));
+        const cur = ids.findIndex((id) => sel.has(id));
         const next = cur < 0 || cur >= ids.length - 1 ? 0 : cur + 1;
-        selected = new Set([ids[next]!]);
-        anchorId = ids[next]!;
-        if (next === ids.length - 1 && hasMore) void loadMore();
+        sel.ids = new Set([ids[next]!]);
+        sel.anchorId = ids[next]!;
+        if (next === ids.length - 1 && cropPager.hasMore) void loadMore();
       },
       'Next crop',
     );
@@ -988,16 +989,21 @@
           return;
         }
         if (dragIds.length > 0) {
-          // Synthesize a drag-cancel: dispatch a global Escape that
-          // svelte-dnd-action listens for to abort the active pointer drag.
-          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+          // svelte-dnd-action can't cancel an in-progress POINTER drag —
+          // its only Escape handling is gated on the keyboard-drag (aria)
+          // module's isDragging flag. So all Escape can do here is discard
+          // the captured multi-drag set and restore the grid layout; the
+          // drag itself ends when the user releases the pointer. Do NOT
+          // re-dispatch a synthetic Escape on window: dispatchEvent is
+          // synchronous, so it re-enters this same handler with dragIds
+          // still populated and recurses until the stack blows.
           dragIds = [];
           gridGroups = buildGroups(filteredCrops);
           return;
         }
-        selected = new Set();
+        sel.ids = new Set();
       },
-      'Cancel drag / picker / clear selection',
+      'Clear drag capture / close picker / clear selection',
     );
 
     return () => offs.forEach((off) => off());
@@ -1057,7 +1063,7 @@
       <button class="btn" type="button" onclick={deselectAll} title="Esc">
         Deselect
       </button>
-      <span class="font-mono text-xs text-zinc-500">{selected.size} selected</span>
+      <span class="font-mono text-xs text-zinc-500">{sel.size} selected</span>
 
       <select
         bind:value={confirmClassId}
@@ -1072,7 +1078,7 @@
         class="btn btn-primary"
         type="button"
         onclick={confirmSelected}
-        disabled={selected.size === 0 || confirmClassId == null}
+        disabled={sel.size === 0 || confirmClassId == null}
         title="Enter — confirm selected to chosen class"
       >
         Confirm Selected
@@ -1085,7 +1091,7 @@
         class="btn"
         type="button"
         onclick={openMovePicker}
-        disabled={selected.size === 0}
+        disabled={sel.size === 0}
         title="M — move selected to a different cluster"
       >
         Move <kbd class="ml-1 font-mono text-[10px] text-zinc-400">M</kbd>
@@ -1093,20 +1099,8 @@
       <button
         class="btn"
         type="button"
-        onclick={async () => {
-          const ids = [...selected];
-          if (ids.length === 0) return;
-          try {
-            const res = await flagNeedsNewClass(ids, '');
-            toastStore.success(
-              `${res.flagged} flagged for new-class review${res.errors ? ` (${res.errors} errors)` : ''}`,
-            );
-            selected = new Set();
-          } catch (e) {
-            toastStore.error(`Flag failed: ${(e as Error).message}`);
-          }
-        }}
-        disabled={selected.size === 0}
+        onclick={() => void flagSelectedForNewClass()}
+        disabled={sel.size === 0}
         title="Shift+N — flag selected as needing a new class"
       >
         Flag <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧N</kbd>
@@ -1207,7 +1201,7 @@
     {/each}
     {#if classSourceFilter !== null}
       <span class="ml-auto text-zinc-500">
-        showing {total.toLocaleString()} from {classSourceFilter}
+        showing {cropPager.total.toLocaleString()} from {classSourceFilter}
       </span>
     {/if}
   </div>
@@ -1219,42 +1213,23 @@
   <div
     class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-1.5 text-xs"
   >
-    <span class="text-zinc-500">subject:</span>
-    <div class="inline-flex overflow-hidden rounded border border-zinc-700">
-      {#each [{ v: 0, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: 'Largest + 2nd' }] as opt (opt.v)}
-        <button
-          type="button"
-          class="px-2 py-0.5 {subjectScope === opt.v
-            ? 'bg-blue-600 text-white'
-            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-          onclick={() => (subjectScope = opt.v as 0 | 1 | 2)}
-        >
-          {opt.l}
-        </button>
-      {/each}
-    </div>
-
-    <span class="ml-2 text-zinc-500">clarity ≥</span>
-    <input
-      type="range"
-      min="0"
-      max={BLUR_MAX}
-      step="0.05"
-      list="blur-stops"
-      bind:value={blurSlider}
-      onchange={commitBlur}
-      class="h-1 w-40 cursor-pointer accent-blue-500"
-      title="Hide crops blurrier than this (blur_lap_ratio). 1.1/1.3/1.4 are the
-v1.1.9 sale-quality stops; training tolerance is lower."
+    <SubjectScopeToggle
+      bind:value={subjectScope}
+      labels={['All', 'Largest', 'Largest + 2nd']}
+      label="subject:"
+      labelClass="text-zinc-500"
+      dense
     />
-    <datalist id="blur-stops">
-      <option value="1.1"></option>
-      <option value="1.3"></option>
-      <option value="1.4"></option>
-    </datalist>
-    <span class="w-16 tabular-nums text-zinc-400">
-      {blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}
-    </span>
+
+    <BlurSlider
+      bind:value={blurSlider}
+      oncommit={commitBlur}
+      max={BLUR_MAX}
+      labelClass="ml-2 text-zinc-500"
+      width="w-40"
+      stops
+      title="Hide crops blurrier than this (blur_lap_ratio). 1.1/1.3/1.4 are the v1.1.9 sale-quality stops; training tolerance is lower."
+    />
 
     <!-- Outliers-first: float the members least like the cluster centroid to
          the top, so wrong/atypical items are easy to cherry-pick out. -->
@@ -1335,10 +1310,10 @@ v1.1.9 sale-quality stops; training tolerance is lower."
           {liveNewCount} new crop{liveNewCount === 1 ? '' : 's'} · click to refresh
         </button>
       {/if}
-      {#if loading && crops.length === 0}
+      {#if cropPager.loading && cropPager.items.length === 0}
         <p class="text-sm text-zinc-500">Loading...</p>
-      {:else if error}
-        <p class="text-sm text-red-300">API unavailable: {error}</p>
+      {:else if cropPager.error}
+        <p class="text-sm text-red-300">API unavailable: {cropPager.error}</p>
       {:else if filteredCrops.length === 0}
         <p class="text-sm text-zinc-500">No crops in this cluster yet.</p>
       {:else}
@@ -1389,7 +1364,7 @@ v1.1.9 sale-quality stops; training tolerance is lower."
               {/if}
               <CropCard
                 {crop}
-                selected={selected.has(crop.id)}
+                selected={sel.has(crop.id)}
                 onclick={(c, e) => clickSelect(c.id, e)}
                 onacceptGemma={(c) => void acceptGemmaForCrop(c)}
                 onrejectGemma={(c) => void rejectGemmaForCrop(c)}
@@ -1403,7 +1378,7 @@ v1.1.9 sale-quality stops; training tolerance is lower."
         <div
           use:infiniteScroll={{
             onload: loadMore,
-            disabled: loadingMore || !hasMore || loading,
+            disabled: cropPager.loadingMore || !cropPager.hasMore || cropPager.loading,
           }}
           class="mt-4 h-1"
           aria-hidden="true"
@@ -1421,11 +1396,11 @@ v1.1.9 sale-quality stops; training tolerance is lower."
     class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {crops.length} / {total}
-      {#if selected.size > 0}<span class="ml-2 text-blue-300">· {selected.size} selected</span>{/if}
+      {cropPager.items.length} / {cropPager.total}
+      {#if sel.size > 0}<span class="ml-2 text-blue-300">· {sel.size} selected</span>{/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}scroll for more{:else}all loaded{/if}
+      {#if cropPager.loadingMore}loading more…{:else if cropPager.hasMore}scroll for more{:else}all loaded{/if}
     </span>
   </div>
 </div>
@@ -1438,7 +1413,7 @@ v1.1.9 sale-quality stops; training tolerance is lower."
     aria-label="Move crops to cluster"
   >
     <div class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
-      <h3 class="mb-2 text-base font-semibold">Move {selected.size} crop{selected.size === 1 ? '' : 's'}</h3>
+      <h3 class="mb-2 text-base font-semibold">Move {sel.size} crop{sel.size === 1 ? '' : 's'}</h3>
       <p class="mb-3 text-xs text-zinc-400">
         Move these from cluster #{clusterId} to a target cluster id. The
         operation is reversible per crop via the cluster page.

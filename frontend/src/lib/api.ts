@@ -63,15 +63,45 @@ const RAW_BASE =
 
 export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
 
+const DETAIL_MAX_CHARS = 200;
+
+/**
+ * Pull the human-readable reason out of an error response body.
+ *
+ * The backend is FastAPI, so 4xx bodies are `{detail: "..."}` (occasionally
+ * `{message: "..."}`, or a plain-text body). Without this, every toast in
+ * the app shows `API 422 http://…/batch_label` and the operator has no idea
+ * what the server objected to — the callsites all render `Error.message`.
+ */
+function errorDetail(body: unknown): string | null {
+  let raw: unknown = null;
+  if (typeof body === 'string') {
+    raw = body;
+  } else if (body && typeof body === 'object') {
+    const rec = body as Record<string, unknown>;
+    raw = rec.detail ?? rec.message ?? null;
+  }
+  if (typeof raw !== 'string') return null;
+  const text = raw.trim();
+  if (!text) return null;
+  return text.length > DETAIL_MAX_CHARS
+    ? `${text.slice(0, DETAIL_MAX_CHARS - 1)}…`
+    : text;
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
   url: string;
+  /** The server's `detail`/`message` string, when it sent one. */
+  detail: string | null;
   constructor(status: number, url: string, body: unknown, message?: string) {
-    super(message ?? `API ${status} ${url}`);
+    const detail = errorDetail(body);
+    super(message ?? `API ${status} ${url}${detail ? ` — ${detail}` : ''}`);
     this.status = status;
     this.body = body;
     this.url = url;
+    this.detail = detail;
   }
 }
 

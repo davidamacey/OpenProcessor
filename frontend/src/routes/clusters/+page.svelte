@@ -20,20 +20,24 @@
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { bboxNormToXYXY } from '$lib/plate_geometry';
+  import { createPager } from '$lib/pager.svelte';
+  import { createSelection } from '$lib/selection.svelte';
+  import BlurSlider from '$lib/components/BlurSlider.svelte';
   import PlateCard from '$lib/components/PlateCard.svelte';
   import PlateEditor from '$lib/components/PlateEditor.svelte';
+  import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import type { ClusterFilter, OpCluster, OpCrop } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
 
-  let clusters = $state<OpCluster[]>([]);
-  let total = $state<number>(0);
-  let loadedPages = $state<number>(0);
-  let loading = $state<boolean>(false);
-  let loadingMore = $state<boolean>(false);
-  let error = $state<string | null>(null);
-  const hasMore = $derived(clusters.length < total);
+  // Cluster grid pager. One params builder (clusterQuery) feeds page 1 and
+  // every later page, so a filter can't be sent on the first request and
+  // silently dropped on the next.
+  const clusterPager = createPager<OpCluster>({
+    fetchPage: async (page) => await getClusters(clusterQuery(page)),
+    keyOf: (c) => String(c.id),
+  });
 
   // Synthetic license_plate gallery card. Plates are sub-bboxes on
   // vehicle crops, not FAISS docs, so the cluster grid never produces
@@ -91,16 +95,16 @@
 
   // --- Plate browse (replaces the "License plates aren't clustered" placeholder
   //     when the operator selects the license_plate class filter).
-  let plates = $state<PlateBrowseItem[]>([]);
-  let platesTotal = $state<number>(0);
-  let platesLoading = $state<boolean>(false);
-  let platesPage = $state<number>(1);
-  let platesError = $state<string | null>(null);
-  const platesHasMore = $derived(plates.length < platesTotal);
   const PLATES_PAGE_SIZE = 60;
+  const platePager = createPager<PlateBrowseItem>({
+    fetchPage: async (page) => await getPlates(_plateQuery(page)),
+    keyOf: (p) => p.crop_id,
+  });
 
   // Plate triage: multi-select for bulk actions + the inline PlateEditor.
-  let plateSelected = $state<Set<string>>(new Set());
+  // Plain click TOGGLES here (accumulating), unlike the crop grid where
+  // it replaces — plate triage is a bulk-marking flow.
+  const plateSel = createSelection({ plainClick: 'toggle' });
   let editPlateCrop = $state<OpCrop | null>(null);
   let plateBusy = $state<boolean>(false);
 
@@ -131,14 +135,14 @@
   // "9a","9aa","9ab"… land in human-expected order.
   const plateSubclusterIds = $derived.by(() => {
     const set = new Set<string>();
-    for (const p of plates) if (p.plate_cluster_subid) set.add(p.plate_cluster_subid);
+    for (const p of platePager.items) if (p.plate_cluster_subid) set.add(p.plate_cluster_subid);
     return [...set].sort();
   });
 
   // Per-subid counts for the separator-header labels ('__none__' = unrefined).
   const plateSubCounts = $derived.by(() => {
     const m = new Map<string, number>();
-    for (const p of plates) {
+    for (const p of platePager.items) {
       const k = p.plate_cluster_subid ?? '__none__';
       m.set(k, (m.get(k) ?? 0) + 1);
     }
@@ -159,9 +163,9 @@
   // as multiple groups there, producing duplicate {#each} keys and a Svelte
   // each_key_duplicate crash that froze the detail view from opening.
   const plateGroups = $derived.by((): { key: string; label: string; items: PlateBrowseItem[] }[] => {
-    if (!groupPlatesBySubid) return [{ key: '__all__', label: '', items: plates }];
+    if (!groupPlatesBySubid) return [{ key: '__all__', label: '', items: platePager.items }];
     const byKey = new Map<string, PlateBrowseItem[]>();
-    for (const p of plates) {
+    for (const p of platePager.items) {
       const sub = p.plate_cluster_subid ?? '__none__';
       let bucket = byKey.get(sub);
       if (!bucket) {
@@ -214,9 +218,9 @@
         pageSize: 200,
       });
       selectedPlateCluster = null;
-      plateSelected = new Set();
-      plates = res.items as SuspectedFpItem[];
-      platesTotal = res.items.length;
+      plateSel.clear();
+      platePager.items = res.items as SuspectedFpItem[];
+      platePager.total = res.items.length;
       suspectedFpView = true;
       if (!res.centroids_built) {
         toastStore.info(res.message ?? 'No FP centroids yet — build them first.');
@@ -329,7 +333,7 @@
     plateRefineMsg = null;
     // Clear the previous gallery synchronously so the render between selecting
     // the bucket and its data arriving doesn't group a stale mixed-bucket list.
-    plates = [];
+    platePager.items = [];
     selectedPlateCluster = id;
   }
 
@@ -343,7 +347,7 @@
     selectedPlateCluster = null;
     plateSubTab = null;
     plateRefineMsg = null;
-    plateSelected = new Set();
+    plateSel.clear();
     if (suspectedFpView) {
       // Leaving the suspected-FP view: reload the real plate gallery the
       // filter effect would otherwise have populated.
@@ -352,48 +356,18 @@
     }
   }
 
-  // Anchor for shift-range selection (mirrors the vehicle cluster detail).
-  let plateAnchorId = $state<string | null>(null);
-
+  // Range selects span the currently displayed order, so hand the helper
+  // the loaded plate ids on each click.
   function togglePlateSelect(p: PlateBrowseItem, e?: MouseEvent): void {
-    const id = p.crop_id;
-    const isToggle = !!(e && (e.ctrlKey || e.metaKey));
-    const isRange = !!(e && e.shiftKey);
-
-    if (isRange && plateAnchorId) {
-      // Shift+click: select the contiguous range (in the current displayed
-      // order) between the anchor and this card, unioned with the selection.
-      const ids = plates.map((x) => x.crop_id);
-      const a = ids.indexOf(plateAnchorId);
-      const b = ids.indexOf(id);
-      if (a !== -1 && b !== -1) {
-        const [lo, hi] = a <= b ? [a, b] : [b, a];
-        const next = new Set(plateSelected);
-        for (let i = lo; i <= hi; i++) next.add(ids[i]!);
-        plateSelected = next;
-        return;
-      }
-    }
-    if (isToggle) {
-      // Ctrl/Cmd+click: add/remove just this card; move the anchor.
-      const next = new Set(plateSelected);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      plateSelected = next;
-      plateAnchorId = id;
-      return;
-    }
-    // Plain click: toggle this card (accumulating) + set as anchor, so a
-    // following shift-click extends from here.
-    const next = new Set(plateSelected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    plateSelected = next;
-    plateAnchorId = id;
+    plateSel.click(
+      p.crop_id,
+      e,
+      platePager.items.map((x) => x.crop_id),
+    );
   }
 
   function selectAllPlates(): void {
-    plateSelected = new Set(plates.map((p) => p.crop_id));
+    plateSel.selectAll(platePager.items.map((p) => p.crop_id));
   }
 
   async function openPlateEditor(p: PlateBrowseItem): Promise<void> {
@@ -414,7 +388,7 @@
     // grid's #each is keyed by crop_id, so patching the array (rather than
     // reloading page 1) reuses the existing DOM nodes and preserves scroll
     // position — critical when the operator is deep in a 15k-item gallery.
-    const snap = plates;
+    const snap = platePager.items;
     const snapById = new Map(snap.map((p) => [p.crop_id, p]));
     const idSet = new Set(cropIds);
     const verified = status === 'detected' ? true : undefined;
@@ -428,8 +402,8 @@
       plate_verified: verified ?? p.plate_verified,
       plate_validated: true,
     });
-    plates = plates.map((p) => (idSet.has(p.crop_id) ? patch(p) : p));
-    plateSelected = new Set();
+    platePager.items = platePager.items.map((p) => (idSet.has(p.crop_id) ? patch(p) : p));
+    plateSel.clear();
     try {
       const res = await batchPlateStatus(cropIds, status, {
         plateVerified: verified,
@@ -439,7 +413,7 @@
       // pre-edit state rather than leaving a falsely-applied status.
       const conflictIds = new Set((res.conflicts ?? []).map((c) => c.crop_id));
       if (conflictIds.size > 0) {
-        plates = plates.map((p) =>
+        platePager.items = platePager.items.map((p) =>
           conflictIds.has(p.crop_id) ? (snapById.get(p.crop_id) ?? p) : p,
         );
         toastStore.error(
@@ -449,7 +423,7 @@
         toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
       }
     } catch (err) {
-      plates = snap;
+      platePager.items = snap;
       toastStore.error(`Bulk update failed: ${(err as Error).message}`);
     } finally {
       plateBusy = false;
@@ -480,30 +454,23 @@
     return (cls?.name ?? '').toLowerCase() === 'license_plate';
   });
 
+  // One params builder for both pages of the cluster grid. loadMore used
+  // to omit max_rank / min_blur_ratio, so scrolling past page 1 appended
+  // unfiltered clusters over a filtered page 1.
+  function clusterQuery(page: number): ClusterFilter {
+    return {
+      class_id: classFilter ?? undefined,
+      sort,
+      page,
+      page_size: pageSize,
+      max_rank: maxRank,
+      min_blur_ratio: minBlurRatio,
+    };
+  }
+
   async function loadFirst(): Promise<void> {
-    loading = true;
-    error = null;
-    clusters = [];
-    total = 0;
-    loadedPages = 0;
-    try {
-      const res = await getClusters({
-        class_id: classFilter ?? undefined,
-        sort,
-        page: 1,
-        page_size: pageSize,
-        max_rank: maxRank,
-        min_blur_ratio: minBlurRatio,
-      });
-      clusters = res?.items ?? [];
-      total = res?.total ?? clusters.length;
-      loadedPages = 1;
-      await loadLicensePlateCard();
-    } catch (e) {
-      error = (e as Error).message;
-    } finally {
-      loading = false;
-    }
+    await clusterPager.loadFirst();
+    if (clusterPager.error == null) await loadLicensePlateCard();
   }
 
   // Build the synthetic license_plate gallery card. Plates live as
@@ -602,8 +569,8 @@
 
   const gridItems = $derived.by<OpCluster[]>(() => {
     const filtered = unlabeledOnly
-      ? clusters.filter((c) => c.cluster_kind !== 'class')
-      : clusters;
+      ? clusterPager.items.filter((c) => c.cluster_kind !== 'class')
+      : clusterPager.items;
     const sorted = sortClusters(filtered, sort);
     // Keep the synthetic license_plate card pinned first (entry point to
     // the plate inventory), unaffected by sort, only on the unfiltered
@@ -613,31 +580,10 @@
       : sorted;
   });
   const unlabeledCount = $derived(
-    clusters.filter((c) => c.cluster_kind !== 'class').length,
+    clusterPager.items.filter((c) => c.cluster_kind !== 'class').length,
   );
 
-  async function loadMore(): Promise<void> {
-    if (loadingMore || !hasMore) return;
-    loadingMore = true;
-    try {
-      const next = loadedPages + 1;
-      const res = await getClusters({
-        class_id: classFilter ?? undefined,
-        sort,
-        page: next,
-        page_size: pageSize,
-      });
-      const seen = new Set(clusters.map((c) => c.id));
-      const fresh = (res?.items ?? []).filter((c) => !seen.has(c.id));
-      clusters = [...clusters, ...fresh];
-      total = res?.total ?? total;
-      loadedPages = next;
-    } catch (e) {
-      error = (e as Error).message;
-    } finally {
-      loadingMore = false;
-    }
-  }
+  const loadMore = () => clusterPager.loadMore();
 
   $effect(() => {
     keyboardStore.setScope('clusters');
@@ -672,39 +618,8 @@
     };
   }
 
-  async function loadPlatesFirst(): Promise<void> {
-    platesLoading = true;
-    platesError = null;
-    plates = [];
-    platesTotal = 0;
-    platesPage = 1;
-    try {
-      const res = await getPlates(_plateQuery(1));
-      plates = res.items;
-      platesTotal = res.total;
-    } catch (e) {
-      platesError = (e as Error).message;
-    } finally {
-      platesLoading = false;
-    }
-  }
-
-  async function loadPlatesMore(): Promise<void> {
-    if (platesLoading || !platesHasMore) return;
-    platesLoading = true;
-    try {
-      const next = platesPage + 1;
-      const res = await getPlates(_plateQuery(next));
-      const seen = new Set(plates.map((p) => p.crop_id));
-      plates = [...plates, ...res.items.filter((p) => !seen.has(p.crop_id))];
-      platesTotal = res.total;
-      platesPage = next;
-    } catch (e) {
-      platesError = (e as Error).message;
-    } finally {
-      platesLoading = false;
-    }
-  }
+  const loadPlatesFirst = () => platePager.loadFirst();
+  const loadPlatesMore = () => platePager.loadMore();
 
   // Re-load plates whenever a filter, the top-N rank gate, or the selected
   // plate cluster changes. When no cluster is selected, also refresh the
@@ -737,7 +652,7 @@
       // plate_status the backend returned (clearing the box → no_plate_visible
       // server-side) instead of guessing. The plate thumbnail is a
       // server-rendered URL, so bust its cache to pull the re-cropped box.
-      plates = plates.map((p) =>
+      platePager.items = platePager.items.map((p) =>
         p.crop_id === cropId
           ? {
               ...p,
@@ -867,32 +782,18 @@
     <!-- Primary-subject grid filters: scope cards to the largest / clear
          crops. Card size + reps reflect only passing crops, so a filtered
          grid is ready to drag-drop + AHC-refine on the subjects that matter. -->
-    <div class="inline-flex overflow-hidden rounded border border-zinc-700 text-xs">
-      {#each [{ v: 0, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }] as o (o.v)}
-        <button
-          type="button"
-          class="px-2 py-1 {subjectScope === o.v
-            ? 'bg-blue-600 text-white'
-            : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
-          onclick={() => (subjectScope = o.v as 0 | 1 | 2)}
-        >
-          {o.l}
-        </button>
-      {/each}
+    <div class="text-xs">
+      <SubjectScopeToggle bind:value={subjectScope} />
     </div>
-    <label class="flex items-center gap-1.5 text-xs text-zinc-400" title="Hide crops blurrier than this (blur_lap_ratio)">
-      clarity ≥
-      <input
-        type="range"
-        min="0"
-        max={BLUR_MAX}
-        step="0.05"
+    <div class="text-xs">
+      <BlurSlider
         bind:value={blurSlider}
-        onchange={commitClusterBlur}
-        class="h-1 w-28 cursor-pointer accent-blue-500"
+        oncommit={commitClusterBlur}
+        max={BLUR_MAX}
+        width="w-28"
+        title="Hide crops blurrier than this (blur_lap_ratio)"
       />
-      <span class="w-9 tabular-nums text-zinc-400">{blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}</span>
-    </label>
+    </div>
   </div>
 
   <!-- Grid -->
@@ -1066,7 +967,7 @@
             {/if}
           {/if}
           <span class="grow"></span>
-          {#if plates.length > 0}
+          {#if platePager.items.length > 0}
             <button
               type="button"
               class="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-300 hover:bg-zinc-700"
@@ -1077,23 +978,23 @@
             </button>
           {/if}
           <span class="font-mono text-[11px] text-zinc-500">
-            {plates.length.toLocaleString()} / {platesTotal.toLocaleString()} plates
+            {platePager.items.length.toLocaleString()} / {platePager.total.toLocaleString()} platePager.items
           </span>
         </div>
 
         <!-- Bulk-action toolbar — appears when plates are selected. Triage
              outliers without leaving the gallery (no /review round-trip). -->
-        {#if plateSelected.size > 0}
+        {#if plateSel.size > 0}
           <div
             class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
           >
-            <span class="font-medium text-blue-200">{plateSelected.size} selected</span>
+            <span class="font-medium text-blue-200">{plateSel.size} selected</span>
             <span class="grow"></span>
             <button
               type="button"
               disabled={plateBusy}
               class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
-              onclick={() => applyPlateStatus([...plateSelected], 'false_positive')}
+              onclick={() => applyPlateStatus([...plateSel.ids], 'false_positive')}
             >
               ✗ Mark false positive
             </button>
@@ -1101,7 +1002,7 @@
               type="button"
               disabled={plateBusy}
               class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-              onclick={() => applyPlateStatus([...plateSelected], 'no_plate_visible')}
+              onclick={() => applyPlateStatus([...plateSel.ids], 'no_plate_visible')}
             >
               No plate
             </button>
@@ -1109,14 +1010,14 @@
               type="button"
               disabled={plateBusy}
               class="rounded border border-green-500/50 bg-green-500/20 px-2 py-1 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
-              onclick={() => applyPlateStatus([...plateSelected], 'detected')}
+              onclick={() => applyPlateStatus([...plateSel.ids], 'detected')}
             >
               ✓ Verify
             </button>
             <button
               type="button"
               class="rounded border border-zinc-700 px-2 py-1 text-zinc-400 hover:bg-zinc-800"
-              onclick={() => (plateSelected = new Set())}
+              onclick={() => plateSel.clear()}
             >
               Clear
             </button>
@@ -1125,8 +1026,8 @@
         </div>
         <!-- /sticky header -->
 
-        {#if platesError}
-          <p class="text-sm text-red-300">API unavailable: {platesError}</p>
+        {#if platePager.error}
+          <p class="text-sm text-red-300">API unavailable: {platePager.error}</p>
         {:else if !suspectedFpView && selectedPlateCluster == null && plateClusters.length > 0}
           <!-- Plate cluster cards. Click one to open its plates (with the
                bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
@@ -1177,9 +1078,9 @@
               </li>
             {/each}
           </ul>
-        {:else if platesLoading && plates.length === 0}
+        {:else if platePager.loading && platePager.items.length === 0}
           <p class="text-sm text-zinc-500">Loading plates...</p>
-        {:else if plates.length === 0}
+        {:else if platePager.items.length === 0}
           <p class="text-sm text-zinc-500">
             No plates match the current filters. The re-detection drain
             may still be populating provenance — fresh rows appear here
@@ -1230,7 +1131,7 @@
               {#each g.items as p (p.crop_id)}
                 <PlateCard
                   crop={p}
-                  selected={plateSelected.has(p.crop_id)}
+                  selected={plateSel.has(p.crop_id)}
                   onclick={togglePlateSelect}
                   onedit={openPlateEditor}
                   onmarkfp={(c) => applyPlateStatus([c.crop_id], 'false_positive')}
@@ -1243,19 +1144,22 @@
                bottom. Attaching to the tall grid itself keeps it permanently
                intersecting and loads every page at once. -->
           <div
-            use:infiniteScroll={{ onload: loadPlatesMore, disabled: platesLoading || !platesHasMore }}
+            use:infiniteScroll={{
+              onload: loadPlatesMore,
+              disabled: platePager.loading || platePager.loadingMore || !platePager.hasMore,
+            }}
             class="mt-4 h-1"
             aria-hidden="true"
           ></div>
-          {#if platesLoading}
+          {#if platePager.loadingMore}
             <p class="py-2 text-center text-xs text-zinc-500">Loading more…</p>
           {/if}
         {/if}
       </div>
-    {:else if loading && gridItems.length === 0}
+    {:else if clusterPager.loading && gridItems.length === 0}
       <p class="text-sm text-zinc-500">Loading...</p>
-    {:else if error}
-      <p class="text-sm text-red-300">API unavailable: {error}</p>
+    {:else if clusterPager.error}
+      <p class="text-sm text-red-300">API unavailable: {clusterPager.error}</p>
     {:else if gridItems.length === 0}
       <p class="text-sm text-zinc-500">
         No clusters yet — ingest some images and run the auto-label pipeline.
@@ -1330,7 +1234,7 @@
       <div
         use:infiniteScroll={{
           onload: loadMore,
-          disabled: loadingMore || !hasMore || loading,
+          disabled: clusterPager.loadingMore || !clusterPager.hasMore || clusterPager.loading,
         }}
         class="mt-4 h-1"
         aria-hidden="true"
@@ -1343,10 +1247,10 @@
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {gridItems.length} / {total + (classFilter == null && lpCard != null ? 1 : 0)}
+      {gridItems.length} / {clusterPager.total + (classFilter == null && lpCard != null ? 1 : 0)}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if hasMore}scroll for more{:else}all loaded{/if}
+      {#if clusterPager.loadingMore}loading more…{:else if clusterPager.hasMore}scroll for more{:else}all loaded{/if}
     </span>
   </div>
 </div>

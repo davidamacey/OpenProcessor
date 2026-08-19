@@ -45,7 +45,13 @@
       );
     }
     function onKeydown(e: KeyboardEvent): void {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Shift is guarded like the other modifiers: hotkey letters are
+      // single lowercase chars by design, and this listener runs in
+      // parallel with the keyboardStore dispatcher (preventDefault does
+      // not stop the other listener). Without the guard, Shift+N would
+      // both flag-for-new-class AND assign whichever class is bound to
+      // 'n' — two actions from one keypress.
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       if (isTextInputActive()) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const cls = classesStore.classes.find(
@@ -53,9 +59,9 @@
       );
       if (cls) {
         e.preventDefault();
-        // Keyboard hotkey path has no dragged-crop context — the
+        // Keyboard hotkey path carries no dragged-crop context — the
         // page-level handler falls back to its `selected` set when
-        // droppedIds is empty.
+        // droppedIds is empty (see dropOnClass.svelte.ts).
         void dropOnClassStore.dispatch(cls, []);
       }
     }

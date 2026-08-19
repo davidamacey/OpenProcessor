@@ -29,12 +29,19 @@ class DropOnClassStore {
   }
 
   /**
-   * Called by the sidebar when a drop happens on a class row.
+   * Called by the sidebar when a drop happens on a class row, and by the
+   * layout's class-letter keydown listener.
    *
-   * ``droppedIds`` carries the actual crops the user dropped (sourced
-   * from the dnd-action ``items`` array on finalize). The handler is
-   * authoritative on those — it should NOT fall back to page-level
-   * selection state, since the user can drag an un-selected card.
+   * Two callers, two contracts:
+   *
+   * - **Drop**: ``droppedIds`` carries the crops the sidebar saw on
+   *   finalize. The handler must prefer its own drag capture when it has
+   *   one (the sidebar only ever sees the single shadow item, so a
+   *   multi-drag arrives here as 1 id), and must NOT fall back to
+   *   page-level selection — the user can drag an un-selected card.
+   * - **Hotkey**: ``droppedIds`` is empty and there is no drag context at
+   *   all. Only then may the handler fall back to its ``selected`` set;
+   *   without that fallback the keyboard-first labeling path does nothing.
    */
   async dispatch(cls: OpClass, droppedIds: string[]): Promise<void> {
     if (this.handler) await this.handler(cls, droppedIds);

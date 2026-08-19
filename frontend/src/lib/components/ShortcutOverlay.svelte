@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { renameClass } from '$lib/api';
+  import { setClassHotkey } from '$lib/classHotkey';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { toastStore } from '$stores/toast.svelte';
   import type { OpClass } from '$lib/types';
 
   const shortcuts = $derived(keyboardStore.shortcutsForCurrentScope());
@@ -27,35 +26,9 @@
   let pending = $state<Record<number, boolean>>({});
 
   async function setHotkey(cls: OpClass, raw: string): Promise<void> {
-    const next = raw.trim().toLowerCase();
-    const current = (cls.hotkey_letter ?? '').toLowerCase();
-    if (next === current) return;
-    if (next.length > 1) {
-      toastStore.error('Hotkey must be a single character.');
-      return;
-    }
-    // Reject duplicates against other classes' already-bound letters.
-    // Backend enforces this too (PUT /curation/classes/{id} returns 400), but
-    // catching it client-side gives the operator a clearer message
-    // and avoids a round-trip.
-    if (next) {
-      const owner = classesStore.classes.find(
-        (c) => c.id !== cls.id && !c.deprecated && (c.hotkey_letter ?? '').toLowerCase() === next,
-      );
-      if (owner) {
-        toastStore.error(`'${next}' is already assigned to ${owner.name}.`);
-        return;
-      }
-    }
     pending[cls.id] = true;
     try {
-      await renameClass(cls.id, { hotkey_letter: next });
-      toastStore.success(
-        next ? `${cls.name} → '${next}'` : `${cls.name} → cleared`,
-      );
-      await classesStore.clearAndRefetch();
-    } catch (e) {
-      toastStore.error(`Hotkey set failed: ${(e as Error).message}`);
+      await setClassHotkey(cls, raw);
     } finally {
       pending[cls.id] = false;
     }

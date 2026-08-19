@@ -1,0 +1,79 @@
+/**
+ * Shared "bind a letter to a class" flow.
+ *
+ * Used by /classes and the ~ shortcut overlay, which previously carried
+ * verbatim copies of this validation.
+ */
+
+import { renameClass } from '$lib/api';
+import { classesStore } from '$stores/classes.svelte';
+import { toastStore } from '$stores/toast.svelte';
+import type { OpClass } from '$lib/types';
+
+/**
+ * Single-char keys the labeling pages bind to actions.
+ *
+ * Two window keydown listeners run for every keypress — the keyboardStore
+ * dispatcher and the layout's class-letter listener — and preventDefault in
+ * one does not stop the other. So a class bound to 'd' would discard the
+ * selection AND label it in the same keypress. (b / e / f are also bound on
+ * the review plates tab, but class letters are inert there: the review page
+ * registers no drop handler on that tab.)
+ */
+export const RESERVED_HOTKEY_LETTERS = new Set([
+  'g',
+  'n',
+  'd',
+  'z',
+  'x',
+  'u',
+  'a',
+  'm',
+]);
+
+/**
+ * Validate and persist a class's hotkey letter. Empty string clears it.
+ *
+ * Toasts on both success and rejection; never throws. Callers own their own
+ * busy/pending flag.
+ */
+export async function setClassHotkey(cls: OpClass, raw: string): Promise<void> {
+  const next = raw.trim().toLowerCase();
+  const current = (cls.hotkey_letter ?? '').toLowerCase();
+  if (next === current) return;
+  if (next.length > 1) {
+    toastStore.error('Hotkey must be a single character.');
+    return;
+  }
+  if (next) {
+    if (RESERVED_HOTKEY_LETTERS.has(next)) {
+      toastStore.error(
+        `'${next}' is reserved for a labeling action — pick another letter.`,
+      );
+      return;
+    }
+    // Reject duplicates against other classes' already-bound letters. The
+    // backend enforces this too (PUT /curation/classes/{id} returns 400), but
+    // catching it client-side gives a clearer message with no round-trip.
+    const owner = classesStore.classes.find(
+      (c) =>
+        c.id !== cls.id &&
+        !c.deprecated &&
+        (c.hotkey_letter ?? '').toLowerCase() === next,
+    );
+    if (owner) {
+      toastStore.error(`'${next}' is already assigned to ${owner.name}.`);
+      return;
+    }
+  }
+  try {
+    // PUT /curation/classes/{id} treats '' as "clear binding".
+    await renameClass(cls.id, { hotkey_letter: next });
+    toastStore.success(
+      next ? `${cls.name} → hotkey '${next}'` : `${cls.name} → hotkey cleared`,
+    );
+    await classesStore.clearAndRefetch();
+  } catch (e) {
+    toastStore.error(`Hotkey set failed: ${(e as Error).message}`);
+  }
+}

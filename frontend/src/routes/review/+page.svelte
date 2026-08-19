@@ -11,15 +11,17 @@
     updateCropPlateMeta,
     type PlateMetaPatch,
   } from '$lib/api';
-  import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import BlurSlider from '$lib/components/BlurSlider.svelte';
   import DetectorChip from '$lib/components/DetectorChip.svelte';
   import PlateBboxCanvas from '$lib/components/PlateBboxCanvas.svelte';
+  import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import {
     bboxNormToXYXY,
     cropToSourceFrame,
     sourceToCropFrame,
   } from '$lib/plate_geometry';
-  import type { BBoxNorm, OpClass, ReviewItem, ReviewTab, UndoEntry } from '$lib/types';
+  import type { BBoxNorm, OpClass, ReviewItem, ReviewTab } from '$lib/types';
+  import { createPager } from '$lib/pager.svelte';
   import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
   import { untrack } from 'svelte';
   import { classesStore } from '$stores/classes.svelte';
@@ -57,13 +59,17 @@
   let tab = $state<ReviewTab>('all');
   const pageSize = 30;
   let cursor = $state<number>(0); // index within accumulated items
-  let items = $state<ReviewItem[]>([]);
-  let total = $state<number>(0);
-  let loadedPages = $state<number>(0);
-  let loading = $state<boolean>(false);
-  let loadingMore = $state<boolean>(false);
-  let error = $state<string | null>(null);
-  const hasMore = $derived(items.length < total);
+  // Queue pager. One fetchPage closure means the tab + filter set can't
+  // drift between page 1 and the pages the cursor pulls in behind it.
+  const queue = createPager<ReviewItem>({
+    fetchPage: (page) => getReviewQueue(tab, page, pageSize, _filter()),
+    keyOf: (i) => i.id,
+    onReset: () => {
+      cursor = 0;
+      handledIds.clear();
+    },
+    accept: (i) => !handledIds.has(i.id),
+  });
 
   // Eagerly prefetch the next page when the cursor is within this many
   // items of the end of the loaded buffer. Without this, the user sees
@@ -72,11 +78,21 @@
   // along.
   const PREFETCH_AHEAD = 5;
   function maybePrefetch(): void {
-    if (loadingMore || !hasMore) return;
-    if (items.length - cursor <= PREFETCH_AHEAD) {
+    if (queue.loadingMore || !queue.hasMore) return;
+    if (queue.items.length - cursor <= PREFETCH_AHEAD) {
       void loadMore();
     }
   }
+
+  // Crop ids this session has already assigned / discarded / triaged.
+  // The queue is page-numbered over a server collection that SHRINKS as
+  // you label, so page N+1 can contain a crop that page N would have held
+  // before the shift. loadMore's dedup only compares against the items
+  // still in the buffer — a handled crop was removed from that buffer, so
+  // it would sail straight back into the queue. Entries come back out on
+  // rollback and on undo-restore. Not $state: only loadMore reads it, and
+  // that read is inside an async callback, never in a reactive context.
+  const handledIds = new Set<string>();
 
   // Filter bar
   let hddSource = $state<string>('');
@@ -119,42 +135,8 @@
   // drained every page upfront, which on the busy 'all' tab fired ~4
   // chained network calls before first paint and made the page feel
   // frozen on slow connections. Lazy paging keeps first-paint snappy.
-  async function loadFirst(): Promise<void> {
-    loading = true;
-    error = null;
-    items = [];
-    total = 0;
-    loadedPages = 0;
-    cursor = 0;
-    try {
-      const data = await getReviewQueue(tab, 1, pageSize, _filter());
-      items = data?.items ?? [];
-      total = data?.total ?? items.length;
-      loadedPages = 1;
-    } catch (e) {
-      error = (e as Error).message;
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function loadMore(): Promise<void> {
-    if (loadingMore || !hasMore) return;
-    loadingMore = true;
-    try {
-      const next = loadedPages + 1;
-      const data = await getReviewQueue(tab, next, pageSize, _filter());
-      const seen = new Set(items.map((i) => i.id));
-      const fresh = (data?.items ?? []).filter((i) => !seen.has(i.id));
-      items = [...items, ...fresh];
-      total = data?.total ?? total;
-      loadedPages = next;
-    } catch (e) {
-      error = (e as Error).message;
-    } finally {
-      loadingMore = false;
-    }
-  }
+  const loadFirst = () => queue.loadFirst();
+  const loadMore = () => queue.loadMore();
 
   $effect(() => {
     keyboardStore.setScope('review');
@@ -242,34 +224,52 @@
     };
   });
 
-  const current = $derived<ReviewItem | null>(items[cursor] ?? null);
+  const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
 
   const topClasses = $derived(classesStore.topNForCluster(0, 10));
 
-  function snap(it: ReviewItem): UndoEntry {
-    return {
-      crop_id: it.id,
-      prior_class_id: it.class_id,
-      prior_label_source: it.label_source,
-      prior_validated: it.label_validated,
-      at: Date.now(),
+  /**
+   * Optimistically drop an item from the queue and advance.
+   *
+   * Returns the undo closure that puts it back at the same index with the
+   * same cursor. EVERY caller must invoke it when the API call fails —
+   * otherwise the item vanishes from the operator's queue while the server
+   * still holds it unchanged, and it is never seen again this session.
+   */
+  function _removeFromQueue(item: ReviewItem): () => void {
+    const found = queue.items.findIndex((x) => x.id === item.id);
+    const removedIdx = found >= 0 ? found : cursor;
+    const priorCursor = cursor;
+    queue.items = queue.items.filter((x) => x.id !== item.id);
+    queue.total = Math.max(0, queue.total - 1);
+    cursor = Math.min(cursor, Math.max(0, queue.items.length - 1));
+    handledIds.add(item.id);
+    maybePrefetch();
+    return () => {
+      handledIds.delete(item.id);
+      const at = Math.min(removedIdx, queue.items.length);
+      queue.items = [...queue.items.slice(0, at), item, ...queue.items.slice(at)];
+      queue.total += 1;
+      cursor = priorCursor;
     };
   }
 
   async function assign(classId: number): Promise<void> {
     if (!current) return;
-    undoStore.push(snap(current));
+    const item = current;
+    const entry = undoStore.snapshotOf(item);
+    undoStore.push(entry);
     const cls = classesStore.byId(classId);
     // Optimistic: drop from list and advance.
-    const id = current.id;
-    items = items.filter((x) => x.id !== id);
-    total = Math.max(0, total - 1);
-    cursor = Math.min(cursor, Math.max(0, items.length - 1));
-    maybePrefetch();
+    const restore = _removeFromQueue(item);
     try {
-      await putCropLabel(id, classId);
+      await putCropLabel(item.id, classId);
       toastStore.success(`Labeled "${cls?.name ?? classId}".`);
     } catch (e) {
+      // The label never landed: drop the now-stale undo entry (pressing Z
+      // on it would clobber the crop's real label) and put the item back.
+      undoStore.remove([entry]);
+      restore();
       toastStore.error(`Label failed: ${(e as Error).message}`);
     }
   }
@@ -285,7 +285,7 @@
   }
 
   function skip(): void {
-    cursor = Math.min(items.length - 1, cursor + 1);
+    cursor = Math.min(queue.items.length - 1, cursor + 1);
     maybePrefetch();
   }
 
@@ -293,19 +293,22 @@
     if (!current) return;
     // Discard = "permanently dismiss this crop from every review queue."
     // Stamps review_dismissed_at on the backend; the review queue's
-    // must_not filter excludes any crop with that field set. The
-    // original class / plate state is preserved (this is NOT an
-    // unlabel — use Z to undo if dismissed by mistake).
-    undoStore.push(snap(current));
-    const id = current.id;
-    items = items.filter((x) => x.id !== id);
-    total = Math.max(0, total - 1);
-    cursor = Math.min(cursor, Math.max(0, items.length - 1));
-    maybePrefetch();
+    // must_not filter excludes any crop with that field set. The crop's
+    // class / plate state is left intact — this is NOT an unlabel.
+    //
+    // Deliberately does NOT push an undoStore entry. Z restores a *label*
+    // (PUT the prior class, or DELETE back to the model suggestion) and
+    // there is no un-dismiss endpoint (openprocessor op_crops.py says so
+    // outright), so a Z here could not undo the dismissal and would
+    // instead mutate the label: on an unvalidated crop, DELETE clobbers
+    // whatever gemma/v6 had proposed. Dismiss is one-way by design.
+    const item = current;
+    const restore = _removeFromQueue(item);
     try {
-      await reviewDismissCrop(id);
-      toastStore.success('Dismissed from review. Press Z to undo.');
+      await reviewDismissCrop(item.id);
+      toastStore.success('Dismissed from review (permanent).');
     } catch (e) {
+      restore();
       toastStore.error(`Discard failed: ${(e as Error).message}`);
     }
   }
@@ -365,10 +368,18 @@
      */
     saved: [number, number, number, number] | null;
   }
-  let plateUndoStack = $state<PlateUndoEntry[]>([]);
+  // $state.raw, not $state: deep reactivity would proxy every pushed entry,
+  // so _removePlateUndo could never match the raw object the caller holds.
+  // Every mutation reassigns the array, so raw is just as reactive here.
+  let plateUndoStack = $state.raw<PlateUndoEntry[]>([]);
   const PLATE_UNDO_MAX = 20;
   function _pushPlateUndo(entry: PlateUndoEntry): void {
     plateUndoStack = [...plateUndoStack, entry].slice(-PLATE_UNDO_MAX);
+  }
+
+  /** Drop a specific step-back entry — used when its API call failed. */
+  function _removePlateUndo(entry: PlateUndoEntry): void {
+    plateUndoStack = plateUndoStack.filter((e) => e !== entry);
   }
 
   async function plateBack(): Promise<void> {
@@ -378,6 +389,8 @@
       return;
     }
     plateUndoStack = plateUndoStack.slice(0, -1);
+    // Back in play: let loadMore surface it again if a later page returns it.
+    handledIds.delete(last.item.id);
     // Refetch the crop so the operator sees what the database actually
     // holds — the local snapshot can lag (e.g. another worker re-ran
     // OCR or another curator edited concurrently). This is the
@@ -396,11 +409,11 @@
       );
       fresh = last.item;
     }
-    const insertAt = Math.min(last.insertAt, items.length);
-    const next = [...items];
+    const insertAt = Math.min(last.insertAt, queue.items.length);
+    const next = [...queue.items];
     next.splice(insertAt, 0, fresh);
-    items = next;
-    total = total + 1;
+    queue.items = next;
+    queue.total = queue.total + 1;
     cursor = insertAt;
     toastStore.info('Stepped back. Press E to re-edit, Enter to re-confirm.');
   }
@@ -473,14 +486,14 @@
     // Look up by id, not cursor — if the user advances mid-save the
     // captured idx would point at the next crop and the revert would
     // corrupt unrelated state.
-    const findIdx = () => items.findIndex((x) => x.id === id);
+    const findIdx = () => queue.items.findIndex((x) => x.id === id);
     const idx0 = findIdx();
     const prior: Partial<ReviewItem> = {};
     if (idx0 >= 0) {
       for (const k of Object.keys(snapshot) as Array<keyof ReviewItem>) {
-        (prior as Record<string, unknown>)[k] = items[idx0][k];
+        (prior as Record<string, unknown>)[k] = queue.items[idx0][k];
       }
-      items[idx0] = { ...items[idx0], ...snapshot } as ReviewItem;
+      queue.items[idx0] = { ...queue.items[idx0], ...snapshot } as ReviewItem;
     }
     // Abort any in-flight save on this crop so we don't get an ABA-style
     // response that overwrites a newer edit.
@@ -492,14 +505,14 @@
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer save
       const idx1 = findIdx();
-      if (idx1 >= 0) items[idx1] = { ...items[idx1], ...prior } as ReviewItem;
+      if (idx1 >= 0) queue.items[idx1] = { ...queue.items[idx1], ...prior } as ReviewItem;
       // Reseed local inputs only if we're still on the same crop the
       // user was editing; otherwise leave the inputs alone — they're
       // already bound to the new crop's state.
       if (current?.id === id) {
-        editedPlateText = items[idx1]?.plate_text ?? '';
-        editedPlateStatus = items[idx1]?.plate_status ?? '';
-        editedRejectionReason = items[idx1]?.plate_rejection_reason ?? '';
+        editedPlateText = queue.items[idx1]?.plate_text ?? '';
+        editedPlateStatus = queue.items[idx1]?.plate_status ?? '';
+        editedRejectionReason = queue.items[idx1]?.plate_rejection_reason ?? '';
       }
       toastStore.error(`Save failed: ${(e as Error).message}`);
     } finally {
@@ -527,10 +540,10 @@
     if (editedPlateStatus === 'no_plate_visible') {
       try {
         await setCropPlate(current.id, null);
-        const idx = items.findIndex((x) => x.id === current.id);
+        const idx = queue.items.findIndex((x) => x.id === current.id);
         if (idx >= 0) {
-          items[idx] = {
-            ...items[idx],
+          queue.items[idx] = {
+            ...queue.items[idx],
             plate_bbox_norm: null,
             plate_status: 'no_plate_visible',
           } as ReviewItem;
@@ -591,10 +604,10 @@
       await setCropPlate(id, tuple);
       // Server flips plate_status to 'detected'/'human_confirmed' on bbox
       // write; reflect that locally without waiting for a queue refetch.
-      const idx = items.findIndex((x) => x.id === id);
+      const idx = queue.items.findIndex((x) => x.id === id);
       if (idx >= 0) {
-        items[idx] = {
-          ...items[idx],
+        queue.items[idx] = {
+          ...queue.items[idx],
           plate_bbox_norm: sourceBox,
           plate_status: 'detected',
           plate_verified: true,
@@ -609,13 +622,6 @@
     }
   }
 
-  function _advancePastPlate(id: string): void {
-    items = items.filter((x) => x.id !== id);
-    total = Math.max(0, total - 1);
-    cursor = Math.min(cursor, Math.max(0, items.length - 1));
-    maybePrefetch();
-  }
-
   async function confirmPlate(): Promise<void> {
     if (!current) return;
     if (!editedPlateLocal) {
@@ -626,48 +632,57 @@
       toastStore.error('Missing parent vehicle bbox; cannot project to source frame.');
       return;
     }
-    const id = current.id;
-    const sourceBox = cropToSourceFrame(editedPlateLocal, current.bbox_norm);
+    const item = current;
+    const sourceBox = cropToSourceFrame(editedPlateLocal, item.bbox_norm!);
     const tuple = bboxNormToXYXY(sourceBox) as [number, number, number, number];
     // Snapshot for "Back" before mutating the queue.
-    _pushPlateUndo({ item: current, insertAt: cursor, saved: tuple });
-    _advancePastPlate(id);
+    const undoEntry: PlateUndoEntry = { item, insertAt: cursor, saved: tuple };
+    _pushPlateUndo(undoEntry);
+    const restore = _removeFromQueue(item);
     try {
-      await setCropPlate(id, tuple);
+      await setCropPlate(item.id, tuple);
       toastStore.success('Plate confirmed. ← to go back.');
     } catch (e) {
+      _removePlateUndo(undoEntry);
+      restore();
       toastStore.error(`Confirm failed: ${(e as Error).message}`);
     }
   }
 
   async function rejectPlate(): Promise<void> {
     if (!current) return;
-    const id = current.id;
-    _pushPlateUndo({ item: current, insertAt: cursor, saved: null });
-    _advancePastPlate(id);
+    const item = current;
+    const undoEntry: PlateUndoEntry = { item, insertAt: cursor, saved: null };
+    _pushPlateUndo(undoEntry);
+    const restore = _removeFromQueue(item);
     try {
       // null bbox = "no plate visible" per setCropPlate contract.
-      await setCropPlate(id, null);
+      await setCropPlate(item.id, null);
       toastStore.success('Plate rejected. ← to go back.');
     } catch (e) {
+      _removePlateUndo(undoEntry);
+      restore();
       toastStore.error(`Reject failed: ${(e as Error).message}`);
     }
   }
 
   async function markFalsePositive(): Promise<void> {
     if (!current) return;
-    const id = current.id;
+    const item = current;
     // False positive: a detector drew this box but it is NOT a plate.
     // We KEEP the box + all detection metadata (unlike Reject, which
     // clears it) — flipping only plate_status. The retained geometry
     // feeds FP analysis and becomes a hard negative in the dedicated
     // LPR training export.
-    _pushPlateUndo({ item: current, insertAt: cursor, saved: null });
-    _advancePastPlate(id);
+    const undoEntry: PlateUndoEntry = { item, insertAt: cursor, saved: null };
+    _pushPlateUndo(undoEntry);
+    const restore = _removeFromQueue(item);
     try {
-      await updateCropPlateMeta(id, { plate_status: 'false_positive' });
+      await updateCropPlateMeta(item.id, { plate_status: 'false_positive' });
       toastStore.success('Marked false positive (box kept). ← to go back.');
     } catch (e) {
+      _removePlateUndo(undoEntry);
+      restore();
       toastStore.error(`Mark FP failed: ${(e as Error).message}`);
     }
   }
@@ -679,10 +694,43 @@
       return;
     }
     try {
-      await deleteCropLabel(entry.crop_id);
+      if (entry.prior_validated && entry.prior_class_id != null) {
+        // The crop held a human-validated label before this action. DELETE
+        // would reset it to the model suggestion instead of restoring what
+        // the operator had confirmed. putCropLabel sets validated=true
+        // server-side, matching prior_validated; the finer
+        // prior_label_source granularity is lost, which is acceptable.
+        await putCropLabel(entry.crop_id, entry.prior_class_id);
+      } else {
+        await deleteCropLabel(entry.crop_id);
+      }
       toastStore.success('Reverted.');
     } catch (e) {
       toastStore.error(`Undo failed: ${(e as Error).message}`);
+      undoStore.push(entry); // keep Z retryable
+      return;
+    }
+    // The item was removed from the queue by assign/discard, so re-fetch
+    // and re-insert it at the cursor — otherwise the operator has no way
+    // to see (or re-verify) what the undo brought back.
+    handledIds.delete(entry.crop_id);
+    try {
+      const crop = await getCrop(entry.crop_id);
+      // /curation/crops/{id} returns a OpCrop; the queue-only fields have no
+      // meaningful value for a restored item, so label it as such.
+      const restored: ReviewItem = {
+        ...crop,
+        reason: 'restored by undo',
+        proposed_class_id: crop.class_id,
+        proposed_class_name: crop.class_name ?? null,
+      };
+      const at = Math.min(cursor, queue.items.length);
+      queue.items = [...queue.items.slice(0, at), restored, ...queue.items.slice(at)];
+      queue.total += 1;
+      cursor = at;
+    } catch (e) {
+      // The undo itself succeeded; only the re-display failed.
+      toastStore.info(`Reverted, but could not re-fetch the crop: ${(e as Error).message}`);
     }
   }
 
@@ -719,7 +767,7 @@
         reg(
           'arrowright',
           () => {
-            cursor = Math.min(items.length - 1, cursor + 1);
+            cursor = Math.min(queue.items.length - 1, cursor + 1);
             maybePrefetch();
           },
           'Next item',
@@ -756,7 +804,7 @@
       reg(
         'arrowright',
         () => {
-          cursor = Math.min(items.length - 1, cursor + 1);
+          cursor = Math.min(queue.items.length - 1, cursor + 1);
           maybePrefetch();
         },
         'Next item',
@@ -790,7 +838,7 @@
       {/each}
     </div>
     <span class="shrink-0 pl-2 font-mono text-xs text-zinc-500">
-      {items.length > 0 ? `${cursor + 1} / ${items.length}` : '—'} loaded · {total} total
+      {queue.items.length > 0 ? `${cursor + 1} / ${queue.items.length}` : '—'} loaded · {queue.total} total
     </span>
     {#if liveNewCount > 0}
       <button
@@ -867,37 +915,17 @@
     {/if}
 
     {#if PRIMARY_TABS.includes(tab)}
-      <div class="flex shrink-0 items-center gap-1.5">
-        <span class="text-zinc-400">subject</span>
-        <div class="inline-flex overflow-hidden rounded border border-zinc-700">
-          {#each [{ v: 0, l: 'Top 2' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }] as o (o.v)}
-            <button
-              type="button"
-              class="px-2 py-1 {subjectScope === o.v
-                ? 'bg-blue-600 text-white'
-                : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
-              onclick={() => (subjectScope = o.v as 0 | 1 | 2)}
-            >
-              {o.l}
-            </button>
-          {/each}
-        </div>
-      </div>
-      <label class="flex shrink-0 items-center gap-1.5" title="Hide crops blurrier than this">
-        <span class="text-zinc-400">clarity ≥</span>
-        <input
-          type="range"
-          min="0"
-          max={BLUR_MAX}
-          step="0.05"
-          bind:value={blurSlider}
-          onchange={commitBlur}
-          class="h-1 w-32 cursor-pointer accent-blue-500"
-        />
-        <span class="w-10 tabular-nums text-zinc-400">
-          {blurSlider > 0 ? blurSlider.toFixed(2) : 'off'}
-        </span>
-      </label>
+      <SubjectScopeToggle
+        bind:value={subjectScope}
+        labels={['Top 2', 'Largest', '+2nd']}
+        label="subject"
+      />
+      <BlurSlider
+        bind:value={blurSlider}
+        oncommit={commitBlur}
+        max={BLUR_MAX}
+        title="Hide crops blurrier than this"
+      />
     {/if}
 
     <span class="grow"></span>
@@ -918,10 +946,10 @@
 
   <!-- Body -->
   <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
-    {#if loading && items.length === 0}
+    {#if queue.loading && queue.items.length === 0}
       <p class="col-span-full text-sm text-zinc-500">Loading...</p>
-    {:else if error}
-      <p class="col-span-full text-sm text-red-300">API unavailable: {error}</p>
+    {:else if queue.error}
+      <p class="col-span-full text-sm text-red-300">API unavailable: {queue.error}</p>
     {:else if !current}
       <p class="col-span-full text-sm text-zinc-500">Queue empty.</p>
     {:else}
@@ -1267,13 +1295,13 @@
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {Math.min(cursor + 1, items.length)} / {total}
-      {#if items.length < total}
-        <span class="ml-1 text-zinc-600">(loaded {items.length})</span>
+      {Math.min(cursor + 1, queue.items.length)} / {queue.total}
+      {#if queue.items.length < queue.total}
+        <span class="ml-1 text-zinc-600">(loaded {queue.items.length})</span>
       {/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if loadingMore}loading more…{:else if !hasMore && items.length > 0}all loaded{:else if hasMore}auto-fetching{/if}
+      {#if queue.loadingMore}loading more…{:else if !queue.hasMore && queue.items.length > 0}all loaded{:else if queue.hasMore}auto-fetching{/if}
     </span>
   </div>
 </div>
