@@ -23,16 +23,16 @@ keyboard-first UX matching the legacy_sorter manual-mode speed budget.
 
 ## Routes (post-MVP)
 
-| Route | Purpose | MVP? |
-|---|---|---|
-| `/` | Dashboard (class balance, ingestion stats) | yes |
-| `/clusters` | Cluster grid view, sidebar filter. When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`) | yes |
-| `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops | yes |
-| `/review` | Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** / **Plates** review queues. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings | yes |
-| `/classes` | Add / rename / merge classes | post-MVP |
-| `/export` | Trigger YOLO export, view balance gap | post-MVP |
-| `/models` | Triton model registry browser | post-MVP |
-| `/train` | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected) | post-MVP |
+| Route            | Purpose                                                                                                                                                                                                                                              | MVP?     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `/`              | Dashboard (class balance, ingestion stats)                                                                                                                                                                                                           | yes      |
+| `/clusters`      | Cluster grid view, sidebar filter. When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`) | yes      |
+| `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops                                                                                                                                                                                                            | yes      |
+| `/review`        | Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** / **Plates** review queues. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings                                                              | yes      |
+| `/classes`       | Add / rename / merge classes                                                                                                                                                                                                                         | post-MVP |
+| `/export`        | Trigger YOLO export, view balance gap                                                                                                                                                                                                                | post-MVP |
+| `/models`        | Triton model registry browser                                                                                                                                                                                                                        | post-MVP |
+| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                           | post-MVP |
 
 ## Training UI — `/train` (Phase 2 of legacy_train_pipeline)
 
@@ -42,6 +42,7 @@ log every 2s, both stop on terminal state. Multi-size campaigns get a
 size-chip swap in the submit row (auto-promote-best + `stop_when` threshold).
 
 Past-runs table actions:
+
 - **Promote ↑** — opens `PromoteModal` (Triton model name, max_batch_size,
   fp16, overwrite, force-bypass-gate). 422 with the gate report renders
   inline; `force=true` bypasses for known-good experimental runs.
@@ -65,46 +66,46 @@ selection (or the just-dragged set); on `/review` it labels the current item.
 Reserved single-char action keys (`g n d z x u a m`) cannot be bound to a
 class — `setClassHotkey` (`src/lib/classHotkey.ts`) rejects them. Both window
 keydown listeners fire on the same keypress, so a class bound to `d` would be
-assigned *and* the selection discarded.
+assigned _and_ the selection discarded.
 
 Global:
 
-| Key | Action |
-|---|---|
-| `` ` `` / `~` | Toggle keyboard shortcut overlay |
-| `Esc` | Close the overlay |
-| *class letter* | Assign that class (selection / current item) |
+| Key            | Action                                       |
+| -------------- | -------------------------------------------- |
+| `` ` `` / `~`  | Toggle keyboard shortcut overlay             |
+| `Esc`          | Close the overlay                            |
+| _class letter_ | Assign that class (selection / current item) |
 
 `/clusters/[id]`:
 
-| Key | Action |
-|---|---|
-| `Enter` | Confirm selected to the chosen class + advance |
-| `Shift+Enter` | Accept all Gemma suggestions on the page |
-| `G` | Accept Gemma suggestion for selected |
-| `N` | Skip + advance |
-| `Shift+N` | Flag selected as needing a new class (curator review) |
-| `D` | Discard (unlabel) selected |
-| `Z` | Undo last label action |
-| `X` | Ignore selected (exclude from training + clustering) |
-| `U` | Undo last ignore |
-| `A` | Select all on page |
-| `←` / `→` | Move the selection by one crop (not page nav) |
-| `M` | Move selected to another cluster… |
-| `Esc` | Clear drag capture / close picker / clear selection |
+| Key           | Action                                                |
+| ------------- | ----------------------------------------------------- |
+| `Enter`       | Confirm selected to the chosen class + advance        |
+| `Shift+Enter` | Accept all Gemma suggestions on the page              |
+| `G`           | Accept Gemma suggestion for selected                  |
+| `N`           | Skip + advance                                        |
+| `Shift+N`     | Flag selected as needing a new class (curator review) |
+| `D`           | Discard (unlabel) selected                            |
+| `Z`           | Undo last label action                                |
+| `X`           | Ignore selected (exclude from training + clustering)  |
+| `U`           | Undo last ignore                                      |
+| `A`           | Select all on page                                    |
+| `←` / `→`     | Move the selection by one crop (not page nav)         |
+| `M`           | Move selected to another cluster…                     |
+| `Esc`         | Clear drag capture / close picker / clear selection   |
 
 `/review`:
 
-| Key | Action |
-|---|---|
-| `Enter` | Confirm proposed + advance (plates tab: confirm plate) |
-| `D` | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible) |
-| `N` | Skip |
-| `Z` | Undo last |
-| `←` / `→` | Previous / next item (plates tab `←` / `B`: step back) |
-| `F` | Plates tab: mark false positive (box kept) |
-| `E` | Plates tab: enter bbox edit mode |
-| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit |
+| Key             | Action                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `Enter`         | Confirm proposed + advance (plates tab: confirm plate)                                           |
+| `D`             | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible) |
+| `N`             | Skip                                                                                             |
+| `Z`             | Undo last                                                                                        |
+| `←` / `→`       | Previous / next item (plates tab `←` / `B`: step back)                                           |
+| `F`             | Plates tab: mark false positive (box kept)                                                       |
+| `E`             | Plates tab: enter bbox edit mode                                                                 |
+| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                   |
 
 `Esc` cannot cancel an in-progress pointer drag — `svelte-dnd-action` only
 Escape-cancels keyboard (aria) drags. It clears the captured multi-drag set
@@ -115,7 +116,7 @@ and restores the grid layout; the drag itself ends on pointer release.
 - Every label change → immediate API call. No "save" button.
 - Optimistic UI with error rollback toast on API failure.
 - Audit trail lives server-side in `op_vehicle_crops.{label_source,
-  label_validated, class_source, updated_at}`.
+label_validated, class_source, updated_at}`.
 - Bulk ops show a confirmation dialog with affected count.
 - Test-set crops (`test_holdout=true`) are filtered out at the API level —
   the UI never receives them. Don't try to bypass.

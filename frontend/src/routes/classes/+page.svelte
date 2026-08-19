@@ -1,11 +1,8 @@
 <script lang="ts">
-  import {
-    mergeClasses,
-    renameClass,
-    syncClassesToOpensearch,
-  } from '$lib/api';
+  import { mergeClasses, renameClass, syncClassesToOpensearch } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
-  import { adequacyChipClass, adequacyLabel, adequacyTooltip } from '$lib/adequacy';
+  import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
   import { setClassHotkey } from '$lib/classHotkey';
   import type { OpClass } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
@@ -15,15 +12,6 @@
   $effect(() => {
     keyboardStore.setScope('classes');
   });
-
-  // Action: focus + select on mount (used by the inline rename input).
-  function focusOnMount(node: HTMLInputElement): { destroy?(): void } {
-    queueMicrotask(() => {
-      node.focus();
-      node.select();
-    });
-    return {};
-  }
 
   // ---- table state -------------------------------------------------------
 
@@ -148,10 +136,14 @@
   }
 
   const mergeSource = $derived(
-    mergeSourceId != null ? allClasses.find((c) => c.id === mergeSourceId) ?? null : null,
+    mergeSourceId != null
+      ? (allClasses.find((c) => c.id === mergeSourceId) ?? null)
+      : null,
   );
   const mergeTarget = $derived(
-    mergeTargetId != null ? allClasses.find((c) => c.id === mergeTargetId) ?? null : null,
+    mergeTargetId != null
+      ? (allClasses.find((c) => c.id === mergeTargetId) ?? null)
+      : null,
   );
 
   async function submitMerge(): Promise<void> {
@@ -193,7 +185,9 @@
       const res = await syncClassesToOpensearch();
       const created = res.created ?? 0;
       const updated = res.updated ?? 0;
-      toastStore.success(`Synced to OpenSearch (${created} created, ${updated} updated).`);
+      toastStore.success(
+        `Synced to OpenSearch (${created} created, ${updated} updated).`,
+      );
     } catch (e) {
       toastStore.error(`Sync failed: ${(e as Error).message}`);
     } finally {
@@ -213,8 +207,15 @@
       placeholder="Filter by name, group, id…"
       class="w-64 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
     />
-    <button class="btn" type="button" onclick={openMerge} disabled={busy}>Merge classes</button>
-    <button class="btn" type="button" onclick={() => void syncToOpensearch()} disabled={busy}>
+    <button class="btn" type="button" onclick={openMerge} disabled={busy}
+      >Merge classes</button
+    >
+    <button
+      class="btn"
+      type="button"
+      onclick={() => void syncToOpensearch()}
+      disabled={busy}
+    >
       Sync to OpenSearch
     </button>
     <button class="btn btn-primary" type="button" onclick={openAdd} disabled={busy}>
@@ -232,7 +233,9 @@
       <div class="p-6 text-sm text-zinc-500">No classes match this filter.</div>
     {:else}
       <table class="w-full text-sm">
-        <thead class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400">
+        <thead
+          class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400"
+        >
           <tr>
             <th class="px-3 py-2 font-medium">ID</th>
             <th class="px-3 py-2 font-medium">Name</th>
@@ -263,7 +266,7 @@
                         cancelEdit();
                       }
                     }}
-                    use:focusOnMount
+                    use:focusOnMount={{ select: true }}
                   />
                 {:else}
                   <button
@@ -315,7 +318,9 @@
                   {cls.validated_count ?? 0}
                 </span>
               </td>
-              <td class="px-3 py-1.5 text-right font-mono text-zinc-400">{cls.count ?? 0}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-zinc-400"
+                >{cls.count ?? 0}</td
+              >
               <td class="px-3 py-1.5 text-xs text-zinc-500">
                 {cls.added_at ? new Date(cls.added_at).toLocaleDateString() : '—'}
               </td>
@@ -333,7 +338,12 @@
                     Cancel
                   </button>
                 {:else}
-                  <button type="button" class="btn" onclick={() => startEdit(cls)} disabled={busy}>
+                  <button
+                    type="button"
+                    class="btn"
+                    onclick={() => startEdit(cls)}
+                    disabled={busy}
+                  >
                     Rename
                   </button>
                 {/if}
@@ -359,7 +369,9 @@
       {#if showDeprecated}
         <div class="surface mt-2 overflow-auto">
           <table class="w-full text-sm">
-            <thead class="border-b border-zinc-800 text-left text-xs uppercase text-zinc-500">
+            <thead
+              class="border-b border-zinc-800 text-left text-xs uppercase text-zinc-500"
+            >
               <tr>
                 <th class="px-3 py-2 font-medium">ID</th>
                 <th class="px-3 py-2 font-medium">Name</th>
@@ -374,7 +386,12 @@
                   <td class="px-3 py-1.5 line-through">{cls.name}</td>
                   <td class="px-3 py-1.5">{cls.group ?? '—'}</td>
                   <td class="px-3 py-1.5 text-right">
-                    <button type="button" class="btn" disabled title="Restore not yet implemented">
+                    <button
+                      type="button"
+                      class="btn"
+                      disabled
+                      title="Restore not yet implemented"
+                    >
                       Restore
                     </button>
                   </td>
@@ -398,10 +415,13 @@
     aria-modal="true"
     aria-label="Merge classes"
   >
-    <div class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
+    <div
+      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    >
       <h3 class="mb-3 text-base font-semibold">Merge classes</h3>
       <p class="mb-3 text-xs text-zinc-400">
-        Source class is marked deprecated; all crops + label rows are relabeled to the target.
+        Source class is marked deprecated; all crops + label rows are relabeled to the
+        target.
       </p>
 
       <label class="mb-3 block text-sm">
@@ -434,13 +454,19 @@
         <div
           class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
         >
-          Will relabel <strong>{mergeSource.validated_count ?? 0}</strong> validated crops from
+          Will relabel <strong>{mergeSource.validated_count ?? 0}</strong> validated crops
+          from
           <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>.
         </div>
       {/if}
 
       <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={() => (mergeOpen = false)} disabled={busy}>
+        <button
+          type="button"
+          class="btn"
+          onclick={() => (mergeOpen = false)}
+          disabled={busy}
+        >
           Cancel
         </button>
         <button
@@ -455,4 +481,3 @@
     </div>
   </div>
 {/if}
-

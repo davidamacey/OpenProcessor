@@ -324,9 +324,7 @@
   // (source-frame) by projecting through the parent vehicle bbox; the
   // seeding effect re-runs whenever the cursor advances to a new crop.
   let editedPlateLocal = $state<BBoxNorm | null>(null);
-  let plateCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(
-    null,
-  );
+  let plateCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(null);
   // Read-only by default: the canvas only becomes interactive when the
   // operator presses E (or clicks Edit bbox). Most cascade-detected
   // plates are already correct — forcing the heavy drag-handle UI on
@@ -480,7 +478,10 @@
   // edits to a *different* crop don't interfere with each other.
   const plateMetaAborts = new Map<string, AbortController>();
 
-  async function savePlateMeta(patch: PlateMetaPatch, snapshot: Partial<ReviewItem>): Promise<void> {
+  async function savePlateMeta(
+    patch: PlateMetaPatch,
+    snapshot: Partial<ReviewItem>,
+  ): Promise<void> {
     if (!current) return;
     const id = current.id;
     // Look up by id, not cursor — if the user advances mid-save the
@@ -526,7 +527,11 @@
     if ((current.plate_text ?? null) === next) return;
     await savePlateMeta(
       { plate_text: next },
-      { plate_text: next, plate_text_source: 'human', plate_text_confidence: next ? 1.0 : null },
+      {
+        plate_text: next,
+        plate_text_source: 'human',
+        plate_text_confidence: next ? 1.0 : null,
+      },
     );
   }
 
@@ -730,7 +735,9 @@
       cursor = at;
     } catch (e) {
       // The undo itself succeeded; only the re-display failed.
-      toastStore.info(`Reverted, but could not re-fetch the crop: ${(e as Error).message}`);
+      toastStore.info(
+        `Reverted, but could not re-fetch the crop: ${(e as Error).message}`,
+      );
     }
   }
 
@@ -837,8 +844,12 @@
         </button>
       {/each}
     </div>
-    <span class="shrink-0 pl-2 font-mono text-xs text-zinc-500">
-      {queue.items.length > 0 ? `${cursor + 1} / ${queue.items.length}` : '—'} loaded · {queue.total} total
+    <span
+      data-testid="queue-counter"
+      class="shrink-0 pl-2 font-mono text-xs text-zinc-500"
+    >
+      {queue.items.length > 0 ? `${cursor + 1} / ${queue.items.length}` : '—'} loaded · {queue.total}
+      total
     </span>
     {#if liveNewCount > 0}
       <button
@@ -1196,7 +1207,12 @@
               >
                 Save bbox
               </button>
-              <button class="btn" type="button" onclick={toggleEdit} disabled={plateSaving}>
+              <button
+                class="btn"
+                type="button"
+                onclick={toggleEdit}
+                disabled={plateSaving}
+              >
                 Cancel
               </button>
             {:else}
@@ -1246,7 +1262,8 @@
               Confirm
             </button>
             <button class="btn" type="button" onclick={skip}>Skip</button>
-            <button class="btn btn-danger" type="button" onclick={discard}>Discard</button>
+            <button class="btn btn-danger" type="button" onclick={discard}>Discard</button
+            >
             <button class="btn" type="button" onclick={undoLast}>Undo</button>
           </div>
         {/if}
@@ -1257,32 +1274,32 @@
              still clickable, just no kbd hint). The class strip is hidden
              on the plates tab; class assignment isn't relevant there. -->
         {#if tab !== 'plates'}
-        <div class="mt-3 flex flex-wrap gap-1.5">
-          {#each topClasses as cls (cls.id)}
-            <button
-              type="button"
-              class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
+          <div class="mt-3 flex flex-wrap gap-1.5">
+            {#each topClasses as cls (cls.id)}
+              <button
+                type="button"
+                class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
                      hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
                      focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              title={cls.hotkey_letter
-                ? `Assign ${cls.name} (press ${cls.hotkey_letter})`
-                : `Assign ${cls.name}`}
-              onclick={() => assign(cls.id)}
-            >
-              {#if cls.hotkey_letter}
-                <kbd
-                  class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
-                >
-                  {cls.hotkey_letter}
-                </kbd>
-              {/if}
-              {cls.name}
-            </button>
-          {/each}
-        </div>
-        <p class="mt-1.5 text-[10px] text-zinc-500">
-          Click a class or press its bound letter (set hotkeys on /classes).
-        </p>
+                title={cls.hotkey_letter
+                  ? `Assign ${cls.name} (press ${cls.hotkey_letter})`
+                  : `Assign ${cls.name}`}
+                onclick={() => assign(cls.id)}
+              >
+                {#if cls.hotkey_letter}
+                  <kbd
+                    class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
+                  >
+                    {cls.hotkey_letter}
+                  </kbd>
+                {/if}
+                {cls.name}
+              </button>
+            {/each}
+          </div>
+          <p class="mt-1.5 text-[10px] text-zinc-500">
+            Click a class or press its bound letter (set hotkeys on /classes).
+          </p>
         {/if}
       </div>
     {/if}
@@ -1301,7 +1318,8 @@
       {/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if queue.loadingMore}loading more…{:else if !queue.hasMore && queue.items.length > 0}all loaded{:else if queue.hasMore}auto-fetching{/if}
+      {#if queue.loadingMore}loading more…{:else if !queue.hasMore && queue.items.length > 0}all
+        loaded{:else if queue.hasMore}auto-fetching{/if}
     </span>
   </div>
 </div>

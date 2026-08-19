@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusOnMount } from '$lib/actions/focusOnMount';
   import { addClass } from '$lib/api';
   import { classesStore } from '$stores/classes.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -85,16 +86,17 @@
     role="dialog"
     aria-modal="true"
     aria-label="Add class"
+    use:focusOnMount
     tabindex="-1"
-    onclick={onclose}
+    onclick={(e) => {
+      // Backdrop only: a click that bubbled up from the panel is not a
+      // dismiss gesture.
+      if (e.target === e.currentTarget) onclose();
+    }}
     onkeydown={(e) => e.key === 'Escape' && onclose()}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-      role="document"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
     >
       <h3 class="mb-3 text-base font-semibold">Add Class</h3>
       <form
@@ -104,7 +106,8 @@
         }}
       >
         <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400">Class name (lowercase slug)</span>
+          <span class="mb-1 block text-xs text-zinc-400">Class name (lowercase slug)</span
+          >
           <input
             type="text"
             bind:value={name}

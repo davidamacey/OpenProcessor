@@ -17,7 +17,7 @@
     abortCtrl = new AbortController();
     try {
       const res = await getModelsStatus(abortCtrl.signal);
-      models = res.models;
+      models = res.models ?? [];
       lastUpdated = new Date();
       error = null;
     } catch (e) {
@@ -120,7 +120,10 @@
           <div class="mb-2 flex items-start justify-between gap-3">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <h2 class="truncate text-base font-semibold text-white" title={m.friendly_name}>
+                <h2
+                  class="truncate text-base font-semibold text-white"
+                  title={m.friendly_name}
+                >
                   {m.friendly_name}
                 </h2>
                 <span
@@ -145,32 +148,45 @@
 
           <p class="mb-3 text-sm text-zinc-300">{m.role}</p>
 
-          <dl class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-zinc-800 pt-3 text-sm">
+          <dl
+            class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-zinc-800 pt-3 text-sm"
+          >
             <div>
               <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Type</dt>
               <dd class="text-zinc-200">{m.model_type}</dd>
             </div>
             <div>
               <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Endpoint</dt>
-              <dd class="truncate font-mono text-xs text-zinc-300" title={m.endpoint ?? ''}>
+              <dd
+                class="truncate font-mono text-xs text-zinc-300"
+                title={m.endpoint ?? ''}
+              >
                 {m.endpoint ?? '—'}
               </dd>
             </div>
             <div>
-              <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Inferences</dt>
+              <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
+                Inferences
+              </dt>
               <dd class="font-mono text-zinc-200">{fmtCount(m.inference_count)}</dd>
             </div>
             <div>
-              <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Avg latency</dt>
+              <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
+                Avg latency
+              </dt>
               <dd class="font-mono text-zinc-200">{fmtMs(m.avg_latency_ms)}</dd>
             </div>
             {#if m.kind === 'triton'}
               <div>
-                <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Batched execs</dt>
+                <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Batched execs
+                </dt>
                 <dd class="font-mono text-zinc-200">{fmtCount(m.exec_count)}</dd>
               </div>
               <div>
-                <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Failures</dt>
+                <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Failures
+                </dt>
                 <dd
                   class="font-mono {m.inference_failed && m.inference_failed > 0
                     ? 'text-red-300'

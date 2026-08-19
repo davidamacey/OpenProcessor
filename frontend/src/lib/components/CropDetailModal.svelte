@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusOnMount } from '$lib/actions/focusOnMount';
   import { getSourceImageWithBbox, getThumbUrl } from '$lib/api';
   import type { OpCrop } from '$lib/types';
   import CropMetaPanel from './CropMetaPanel.svelte';
@@ -27,17 +28,19 @@
   role="dialog"
   aria-modal="true"
   aria-label="Crop details"
-  onclick={onclose}
+  use:focusOnMount
+  onclick={(e) => {
+    // Backdrop only: a click that bubbled up from the panel is not a
+    // dismiss gesture.
+    if (e.target === e.currentTarget) onclose();
+  }}
   onkeydown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') onclose();
+    if (e.key === 'Escape') onclose();
   }}
   tabindex="-1"
 >
   <div
     class="relative grid max-h-[92vh] w-full max-w-6xl grid-cols-1 gap-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 p-4 md:grid-cols-[1fr_320px]"
-    role="document"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
   >
     <!-- Source image with burned-in bbox. Same endpoint as the review
          page so the rendering matches across surfaces. -->

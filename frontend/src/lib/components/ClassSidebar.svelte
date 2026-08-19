@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import AddClassModal from './AddClassModal.svelte';
-  import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
+  import { adequacyChipClass } from '$lib/adequacy';
   import { classesStore } from '$stores/classes.svelte';
   import type { OpClass } from '$lib/types';
 
@@ -111,8 +111,7 @@
     const list = q
       ? classesStore.classes.filter(
           (c) =>
-            c.name.toLowerCase().includes(q) ||
-            (c.group ?? '').toLowerCase().includes(q),
+            c.name.toLowerCase().includes(q) || (c.group ?? '').toLowerCase().includes(q),
         )
       : classesStore.classes;
     // Sort by cluster bucket size desc — matches what the chip shows so
@@ -127,7 +126,9 @@
 
 <aside class="relative flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-950">
   <div class="border-b border-zinc-800 p-3">
-    <h2 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">Classes</h2>
+    <h2 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+      Classes
+    </h2>
     <input
       type="search"
       bind:value={query}
@@ -225,7 +226,9 @@
                   class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
                     cls.validated_count ?? 0,
                   )}"
-                  title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ?? 0} of {cls.count ?? 0} labeled crops are human-validated.&#10;Chip color reflects validated-count adequacy."
+                  title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ??
+                    0} of {cls.count ??
+                    0} labeled crops are human-validated.&#10;Chip color reflects validated-count adequacy."
                 >
                   {(cls.cluster_size ?? 0).toLocaleString()}
                 </span>
@@ -238,7 +241,11 @@
   </div>
 
   <div class="border-t border-zinc-800 p-2">
-    <button type="button" class="btn w-full justify-center" onclick={() => (modalOpen = true)}>
+    <button
+      type="button"
+      class="btn w-full justify-center"
+      onclick={() => (modalOpen = true)}
+    >
       + Add Class
     </button>
   </div>

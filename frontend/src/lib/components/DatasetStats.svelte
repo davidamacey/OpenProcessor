@@ -22,9 +22,9 @@
    *   - Last clustering run summary (timestamp, method, cluster_count,
    *     residual_count, noise_count)
    */
-  import { onDestroy } from "svelte";
-  import { type DatasetStats } from "$lib/api";
-  import { subscribePipelineEvents, type OpEventSubscription } from "$lib/sse";
+  import { onDestroy } from 'svelte';
+  import { type DatasetStats } from '$lib/api';
+  import { subscribePipelineEvents, type OpEventSubscription } from '$lib/sse';
 
   // Polling interval prop preserved for back-compat with existing
   // callers; ignored now that we're push-driven.
@@ -32,8 +32,9 @@
     /** @deprecated polling removed 2026-05-21 — kept so callers don't break. */
     pollMs?: number;
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let _props: Props = $props();
+  // Destructured, not a bare `$props()` binding: Svelte can't infer the
+  // exposed property set from a non-destructured declaration.
+  let { pollMs: _pollMs }: Props = $props();
 
   let stats = $state<DatasetStats | null>(null);
   let error = $state<string | null>(null);
@@ -109,30 +110,30 @@
       tone: string;
     }> = [
       {
-        key: "by_human",
-        label: "Human",
+        key: 'by_human',
+        label: 'Human',
         count: l.by_human,
-        tone: "bg-green-500",
+        tone: 'bg-green-500',
       },
       {
-        key: "by_gemma",
-        label: "Gemma",
+        key: 'by_gemma',
+        label: 'Gemma',
         count: l.by_gemma,
-        tone: "bg-blue-500",
+        tone: 'bg-blue-500',
       },
       {
-        key: "by_v6",
-        label: "v6 model",
+        key: 'by_v6',
+        label: 'v6 model',
         count: l.by_v6,
-        tone: "bg-purple-500",
+        tone: 'bg-purple-500',
       },
       {
-        key: "by_yolo11_proposal",
-        label: "YOLO11 proposal",
+        key: 'by_yolo11_proposal',
+        label: 'YOLO11 proposal',
         count: l.by_yolo11_proposal,
-        tone: "bg-amber-500",
+        tone: 'bg-amber-500',
       },
-      { key: "other", label: "Other", count: l.other, tone: "bg-zinc-500" },
+      { key: 'other', label: 'Other', count: l.other, tone: 'bg-zinc-500' },
     ];
     return rows.map((r) => ({
       ...r,
@@ -155,32 +156,32 @@
       tone: string;
     }> = [
       {
-        key: "by_lpr",
-        label: "LPR (nanov11)",
+        key: 'by_lpr',
+        label: 'LPR (nanov11)',
         count: p.by_lpr,
-        tone: "bg-cyan-500",
+        tone: 'bg-cyan-500',
       },
       {
-        key: "by_sam3",
-        label: "SAM3 fallback",
+        key: 'by_sam3',
+        label: 'SAM3 fallback',
         count: p.by_sam3,
-        tone: "bg-teal-500",
+        tone: 'bg-teal-500',
       },
       {
-        key: "by_human_drew",
-        label: "Human-drew bbox",
+        key: 'by_human_drew',
+        label: 'Human-drew bbox',
         count: p.by_human_drew ?? p.by_human,
-        tone: "bg-green-500",
+        tone: 'bg-green-500',
       },
       // Plates the operator confirmed (AI proposed the bbox, human
       // hit Confirm). Distinct from by_human_drew (only when the
       // operator created the bbox from scratch). validated_by_human is
       // the union — every plate the operator touched.
       {
-        key: "validated_by_human",
-        label: "Confirmed by human",
+        key: 'validated_by_human',
+        label: 'Confirmed by human',
         count: p.validated_by_human ?? 0,
-        tone: "bg-emerald-500",
+        tone: 'bg-emerald-500',
       },
     ];
     return rows.map((r) => ({
@@ -244,7 +245,7 @@
   }
 
   function fmtTimestamp(iso: string | null): string {
-    if (!iso) return "—";
+    if (!iso) return '—';
     try {
       return new Date(iso).toLocaleString();
     } catch {
@@ -253,7 +254,7 @@
   }
 
   function fmtRelative(ms: number | null): string {
-    if (ms == null) return "—";
+    if (ms == null) return '—';
     const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
     if (secs < 60) return `${secs}s ago`;
     if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
@@ -265,7 +266,7 @@
   <header class="flex items-center justify-between">
     <h2 class="text-sm font-semibold text-zinc-300">Pipeline stats</h2>
     <div class="flex items-center gap-2 text-xs text-zinc-500">
-      <span title={lastUpdated ? new Date(lastUpdated).toLocaleString() : ""}>
+      <span title={lastUpdated ? new Date(lastUpdated).toLocaleString() : ''}>
         updated {fmtRelative(lastUpdated)}
       </span>
       <span
@@ -274,11 +275,9 @@
         class:text-emerald-50={connected}
         class:bg-zinc-700={!connected}
         class:text-zinc-300={!connected}
-        title={connected
-          ? "Live via /curation/pipeline/events SSE"
-          : "Reconnecting…"}
+        title={connected ? 'Live via /curation/pipeline/events SSE' : 'Reconnecting…'}
       >
-        {connected ? "live" : "…"}
+        {connected ? 'live' : '…'}
       </span>
     </div>
   </header>
@@ -295,9 +294,7 @@
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
       <!-- Headline -->
       <div class="surface p-4 lg:col-span-1">
-        <div class="text-xs uppercase tracking-wide text-zinc-500">
-          Total crops
-        </div>
+        <div class="text-xs uppercase tracking-wide text-zinc-500">Total crops</div>
         <div class="mt-2 font-mono text-3xl font-semibold text-zinc-100">
           {fmt(stats.total_crops)}
         </div>
@@ -330,9 +327,7 @@
             {#each labeledRows as row (row.key)}
               <li class="flex items-center gap-3 text-xs">
                 <span class="w-24 shrink-0 text-zinc-300">{row.label}</span>
-                <div
-                  class="relative h-3 grow overflow-hidden rounded bg-zinc-900"
-                >
+                <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">
                   <div
                     class="h-full {row.tone}"
                     style:width="{Math.max(0.5, row.pct)}%"
@@ -353,13 +348,11 @@
 
       <!-- Last clustering -->
       <div class="surface p-4 lg:col-span-1">
-        <h3 class="mb-3 text-sm font-semibold text-zinc-300">
-          Last clustering
-        </h3>
+        <h3 class="mb-3 text-sm font-semibold text-zinc-300">Last clustering</h3>
         <dl class="space-y-1.5 text-xs">
           <div class="flex justify-between">
             <dt class="text-zinc-400">When</dt>
-            <dd class="text-zinc-300" title={stats.clusters.last_run_at ?? "—"}>
+            <dd class="text-zinc-300" title={stats.clusters.last_run_at ?? '—'}>
               {fmtTimestamp(stats.clusters.last_run_at)}
             </dd>
           </div>
@@ -378,7 +371,7 @@
           <div class="flex justify-between">
             <dt class="text-zinc-400">Method</dt>
             <dd class="font-mono text-zinc-300">
-              {stats.clusters.method ?? "—"}
+              {stats.clusters.method ?? '—'}
             </dd>
           </div>
         </dl>
@@ -427,23 +420,24 @@
 
       <!-- Plate coverage summary -->
       <div class="surface p-4">
-        <h3 class="mb-3 text-sm font-semibold text-zinc-300">
-          Plate coverage
-        </h3>
+        <h3 class="mb-3 text-sm font-semibold text-zinc-300">Plate coverage</h3>
         <div class="flex items-baseline gap-2">
           <span class="font-mono text-2xl text-zinc-100">
-            {(((stats.plates?.boxed ?? 0) / Math.max(1, stats.total_crops)) * 100).toFixed(1)}%
+            {(
+              ((stats.plates?.boxed ?? 0) / Math.max(1, stats.total_crops)) *
+              100
+            ).toFixed(1)}%
           </span>
           <span class="text-xs text-zinc-500">of crops have a plate box</span>
         </div>
         <p class="mt-2 text-xs text-zinc-500">
-          {fmt(stats.plates?.boxed ?? 0)} crops carry a plate box
-          ({fmt(stats.plates?.confirmed ?? 0)} Gemma-confirmed). The remaining
-          {fmt(stats.total_crops - (stats.plates?.boxed ?? 0))} either had no
-          visible plate (Gemma pre-filter said no) or the LPR/SAM3 detectors
-          haven't reached them yet. A detector ran on
-          {fmt(stats.plates?.total_detected ?? 0)} crops total (includes
-          rejected/failed attempts).
+          {fmt(stats.plates?.boxed ?? 0)} crops carry a plate box ({fmt(
+            stats.plates?.confirmed ?? 0,
+          )} Gemma-confirmed). The remaining
+          {fmt(stats.total_crops - (stats.plates?.boxed ?? 0))} either had no visible plate
+          (Gemma pre-filter said no) or the LPR/SAM3 detectors haven't reached them yet. A detector
+          ran on
+          {fmt(stats.plates?.total_detected ?? 0)} crops total (includes rejected/failed attempts).
         </p>
       </div>
     </div>
@@ -479,9 +473,7 @@
 
       <!-- In-progress queue + ETA -->
       <div class="surface p-4">
-        <h3 class="mb-3 text-sm font-semibold text-zinc-300">
-          In-flight pipeline
-        </h3>
+        <h3 class="mb-3 text-sm font-semibold text-zinc-300">In-flight pipeline</h3>
         <div class="flex items-baseline gap-3">
           <span class="font-mono text-2xl text-zinc-100">
             {fmt(stats.in_progress.sam_drain_total_unfinished)}
@@ -501,7 +493,11 @@
               <dd class="font-mono text-zinc-100">
                 {#if etaSeconds == null}
                   <span class="text-zinc-500" title="Need ≥10s + 2 samples to compute">
-                    {drainRate == null ? "computing…" : drainRate <= 0 ? "queue not shrinking" : "—"}
+                    {drainRate == null
+                      ? 'computing…'
+                      : drainRate <= 0
+                        ? 'queue not shrinking'
+                        : '—'}
                   </span>
                 {:else}
                   {formatDuration(etaSeconds)}
@@ -532,10 +528,9 @@
           <p class="mt-3 text-xs text-green-400">queue drained</p>
         {/if}
         <p class="mt-3 text-xs text-zinc-500">
-          Matches <code class="font-mono">/curation/ingest/sam_drain</code> total. While
-          &gt; 0 the ingest walker waits before triggering the next clustering pass.
-          SAM3 only runs on crops that pass the Gemma visible-filter — most
-          time is spent in Gemma, not SAM3.
+          Matches <code class="font-mono">/curation/ingest/sam_drain</code> total. While &gt; 0 the
+          ingest walker waits before triggering the next clustering pass. SAM3 only runs on
+          crops that pass the Gemma visible-filter — most time is spent in Gemma, not SAM3.
         </p>
       </div>
     </div>

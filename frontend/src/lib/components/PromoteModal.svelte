@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusOnMount } from '$lib/actions/focusOnMount';
   /**
    * Promote-to-Triton modal. Phase 4 wiring; the labeler-side knob set
    * is intentionally minimal — Triton model name + max_batch_size +
@@ -65,20 +66,23 @@
     role="dialog"
     aria-modal="true"
     aria-label="Promote to Triton"
+    use:focusOnMount
     tabindex="-1"
-    onclick={onclose}
+    onclick={(e) => {
+      // Backdrop only: a click that bubbled up from the panel is not a
+      // dismiss gesture.
+      if (e.target === e.currentTarget) onclose();
+    }}
     onkeydown={(e) => e.key === 'Escape' && onclose()}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
-      role="document"
-      tabindex="-1"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
     >
       <h3 class="mb-3 text-base font-semibold">Promote to Triton</h3>
       {#if jobId}
-        <p class="mb-3 truncate font-mono text-[11px] text-zinc-500" title={jobId}>{jobId}</p>
+        <p class="mb-3 truncate font-mono text-[11px] text-zinc-500" title={jobId}>
+          {jobId}
+        </p>
       {/if}
 
       <form

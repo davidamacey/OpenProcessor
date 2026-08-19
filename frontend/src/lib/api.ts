@@ -58,8 +58,7 @@ import type {
 // Empty default: in Docker the labeler's nginx proxies /curation/* and /clusters/{train|assign|stats}/*
 // to op-api on the same docker network. Relative URLs work from any LAN IP / VPN client.
 // For local `npm run dev` outside Docker, set PUBLIC_TRITON_API_URL=http://localhost:4603 in .env.
-const RAW_BASE =
-  (import.meta.env?.PUBLIC_TRITON_API_URL as string | undefined) ?? '';
+const RAW_BASE = (import.meta.env?.PUBLIC_TRITON_API_URL as string | undefined) ?? '';
 
 export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
 
@@ -171,11 +170,8 @@ export async function apiFetch<T>(
       lastError = e;
     }
     if (attempt < RETRY_DELAYS_MS.length) {
-      try {
-        await sleep(RETRY_DELAYS_MS[attempt]!, signal);
-      } catch (e) {
-        throw e;
-      }
+      // An abort during the backoff propagates — the caller cancelled.
+      await sleep(RETRY_DELAYS_MS[attempt]!, signal);
     }
   }
   throw lastError ?? new Error(`apiFetch failed: ${url}`);
@@ -270,8 +266,15 @@ export interface PlatesQuery {
   include_test?: boolean;
 }
 
-export function getPlates(params: PlatesQuery = {}, signal?: AbortSignal): Promise<PlatesPage> {
-  return apiFetch<PlatesPage>(`/curation/plates${qs(params as Record<string, unknown>)}`, {}, signal);
+export function getPlates(
+  params: PlatesQuery = {},
+  signal?: AbortSignal,
+): Promise<PlatesPage> {
+  return apiFetch<PlatesPage>(
+    `/curation/plates${qs(params as Record<string, unknown>)}`,
+    {},
+    signal,
+  );
 }
 
 /** Plate-clustering background-job snapshot. The one-click pipeline result also
@@ -322,12 +325,13 @@ export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateCluste
 export function refinePlateCluster(
   clusterId: number,
   signal?: AbortSignal,
-): Promise<{ cluster_id: number; n_members: number; n_subclusters: number; action: string }> {
-  return apiFetch(
-    `/curation/plates/clusters/refine/${clusterId}`,
-    { method: 'POST' },
-    signal,
-  );
+): Promise<{
+  cluster_id: number;
+  n_members: number;
+  n_subclusters: number;
+  action: string;
+}> {
+  return apiFetch(`/curation/plates/clusters/refine/${clusterId}`, { method: 'POST' }, signal);
 }
 
 /** Plate cluster cards (mirrors getClusters' OpCluster shape). */
@@ -353,7 +357,11 @@ export interface PlateFpCentroidJob {
   finished_at: string | null;
   result: { status: string; n_members: number; k: number } | null;
   error: string | null;
-  centroids: { trained_at: string | null; k: number | null; n_members: number | null } | null;
+  centroids: {
+    trained_at: string | null;
+    k: number | null;
+    n_members: number | null;
+  } | null;
 }
 
 /** (Re)build the FP centroid store — sub-types the FP bucket (background job). */
@@ -362,7 +370,9 @@ export function buildPlateFpCentroids(signal?: AbortSignal): Promise<PlateFpCent
 }
 
 /** Poll the FP-centroid build job + read persisted centroid metadata. */
-export function getPlateFpCentroidStatus(signal?: AbortSignal): Promise<PlateFpCentroidJob> {
+export function getPlateFpCentroidStatus(
+  signal?: AbortSignal,
+): Promise<PlateFpCentroidJob> {
   return apiFetch('/curation/plates/fp_centroids/status', {}, signal);
 }
 
@@ -514,7 +524,10 @@ export async function getStats(signal?: AbortSignal): Promise<OpStats> {
     apiFetch<RawDataset>('/curation/stats/dataset', {}, signal),
     apiFetch<RawClasses>('/curation/stats/classes', {}, signal).catch(() => ({ classes: [] })),
   ]);
-  const totalImages = (ds.by_source ?? []).reduce((acc, b) => acc + (b.doc_count || 0), 0);
+  const totalImages = (ds.by_source ?? []).reduce(
+    (acc, b) => acc + (b.doc_count || 0),
+    0,
+  );
   return {
     total_crops: ds.total_crops ?? 0,
     validated_crops: ds.validated ?? 0,
@@ -552,8 +565,12 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
     added_at?: string;
     hotkey_letter?: string | null;
   };
-  const res = await apiFetch<{ classes: RawClass[] } | RawClass[]>('/curation/classes', {}, signal);
-  const raw = Array.isArray(res) ? res : res.classes ?? [];
+  const res = await apiFetch<{ classes: RawClass[] } | RawClass[]>(
+    '/curation/classes',
+    {},
+    signal,
+  );
+  const raw = Array.isArray(res) ? res : (res.classes ?? []);
   return raw.map((c) => ({
     id: c.class_id ?? c.id ?? -1,
     name: c.class_name ?? c.name ?? '',
@@ -760,7 +777,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
     class_source: c.class_source ?? null,
-    label_source: ((c.label_source || 'model') as OpCrop['label_source']),
+    label_source: (c.label_source || 'model') as OpCrop['label_source'],
     label_validated: !!c.label_validated,
     label_confidence: c.confidence ?? null,
     cluster_id: c.cluster_id ?? null,
@@ -949,10 +966,7 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
  * future un-dismiss endpoint is added). The crop's class / plate state
  * is left intact — only review visibility changes.
  */
-export function reviewDismissCrop(
-  cropId: string,
-  signal?: AbortSignal,
-): Promise<void> {
+export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise<void> {
   return apiFetch<void>(
     `/curation/crops/${encodeURIComponent(cropId)}/review_dismiss`,
     { method: 'POST' },
@@ -1047,7 +1061,10 @@ export function batchPlateStatus(
   plateStatus: 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
   opts: { plateVerified?: boolean; labelSource?: string } = {},
   signal?: AbortSignal,
-): Promise<{ updated: number; conflicts: { crop_id: string; current_source: string | null }[] }> {
+): Promise<{
+  updated: number;
+  conflicts: { crop_id: string; current_source: string | null }[];
+}> {
   return apiFetch(
     '/curation/plates/batch_status',
     {
@@ -1219,7 +1236,8 @@ export function exportLpr(
   const body: Record<string, unknown> = {};
   if (opts.version_tag) body.version_tag = opts.version_tag;
   if (opts.empty_bg_ratio !== undefined) body.empty_bg_ratio = opts.empty_bg_ratio;
-  if (opts.max_positive_images !== undefined) body.max_positive_images = opts.max_positive_images;
+  if (opts.max_positive_images !== undefined)
+    body.max_positive_images = opts.max_positive_images;
   if (opts.skip_test_split !== undefined) body.skip_test_split = opts.skip_test_split;
   if (opts.dedup_threshold !== undefined) body.dedup_threshold = opts.dedup_threshold;
   if (opts.image_mode !== undefined) body.image_mode = opts.image_mode;
@@ -1533,11 +1551,7 @@ export function getTrainRuns(
   offset: number = 0,
   signal?: AbortSignal,
 ): Promise<RunsListResponse> {
-  return apiFetch<RunsListResponse>(
-    `/curation/train/runs${qs({ limit, offset })}`,
-    {},
-    signal,
-  );
+  return apiFetch<RunsListResponse>(`/curation/train/runs${qs({ limit, offset })}`, {}, signal);
 }
 
 export function tailTrainLog(
@@ -1640,12 +1654,7 @@ export interface AutoLabelStartParams {
   n_clusters?: number | null;
 }
 
-export type AutoLabelStatus =
-  | 'idle'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+export type AutoLabelStatus = 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface AutoLabelJobState {
   job_id: string;
@@ -1684,11 +1693,7 @@ export function startAutoLabel(
 }
 
 export function getAutoLabelStatus(signal?: AbortSignal): Promise<AutoLabelJobState> {
-  return apiFetch<AutoLabelJobState>(
-    '/curation/pipeline/auto_label/status',
-    {},
-    signal,
-  );
+  return apiFetch<AutoLabelJobState>('/curation/pipeline/auto_label/status', {}, signal);
 }
 
 export function cancelAutoLabel(
@@ -1797,7 +1802,11 @@ export function bakeoffRun(
   },
   signal?: AbortSignal,
 ): Promise<{ status: string; job_id: string; out_dir: string }> {
-  return apiFetch('/curation/bakeoff/run', { method: 'POST', body: JSON.stringify(body) }, signal);
+  return apiFetch(
+    '/curation/bakeoff/run',
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
 }
 
 /** Auto-discovered frozen evaluation datasets (matrix columns). */
@@ -1815,11 +1824,16 @@ export function bakeoffBaselineModels(
 }
 
 /** The model x dataset matrix for a finished matrix job. */
-export function bakeoffMatrix(jobId: string, signal?: AbortSignal): Promise<BakeoffMatrix> {
+export function bakeoffMatrix(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<BakeoffMatrix> {
   return apiFetch(`/curation/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
 }
 
-export function bakeoffRuns(signal?: AbortSignal): Promise<{ runs: BakeoffRunSummary[] }> {
+export function bakeoffRuns(
+  signal?: AbortSignal,
+): Promise<{ runs: BakeoffRunSummary[] }> {
   return apiFetch('/curation/bakeoff/runs', {}, signal);
 }
 
@@ -1830,6 +1844,9 @@ export function bakeoffStatus(
   return apiFetch(`/curation/bakeoff/status/${encodeURIComponent(jobId)}`, {}, signal);
 }
 
-export function bakeoffResults(jobId: string, signal?: AbortSignal): Promise<BakeoffComparison> {
+export function bakeoffResults(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<BakeoffComparison> {
   return apiFetch(`/curation/bakeoff/results/${encodeURIComponent(jobId)}`, {}, signal);
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { focusOnMount } from '$lib/actions/focusOnMount';
   /**
    * Single-crop plate editor (modal).
    *
@@ -19,7 +20,11 @@
    *   Escape   close without saving
    */
   import { getThumbUrl, setCropPlate } from '$lib/api';
-  import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/plate_geometry';
+  import {
+    bboxNormToXYXY,
+    cropToSourceFrame,
+    sourceToCropFrame,
+  } from '$lib/plate_geometry';
   import { toastStore } from '$stores/toast.svelte';
   import type { BBoxNorm, OpCrop } from '$lib/types';
 
@@ -84,14 +89,20 @@
 
   // Drag state ---------------------------------------------------------
   type DragMode =
-    | 'create'      // user dragging from empty canvas — paint a fresh box
-    | 'move'        // dragging the whole box body
-    | 'n' | 's' | 'e' | 'w'
-    | 'ne' | 'nw' | 'se' | 'sw';
+    | 'create' // user dragging from empty canvas — paint a fresh box
+    | 'move' // dragging the whole box body
+    | 'n'
+    | 's'
+    | 'e'
+    | 'w'
+    | 'ne'
+    | 'nw'
+    | 'se'
+    | 'sw';
 
   interface DragState {
     mode: DragMode;
-    startX: number;       // normalized [0,1] start point
+    startX: number; // normalized [0,1] start point
     startY: number;
     initialBox: BBoxNorm | null; // box at drag-start (for move / resize math)
   }
@@ -369,16 +380,17 @@
   role="dialog"
   aria-modal="true"
   aria-label="Edit plate bounding box"
+  use:focusOnMount
   tabindex="-1"
-  onclick={onclose}
+  onclick={(e) => {
+    // Backdrop only: a click that bubbled up from the panel is not a
+    // dismiss gesture.
+    if (e.target === e.currentTarget) onclose();
+  }}
   onkeydown={(e) => e.key === 'Escape' && onclose()}
 >
   <div
     class="flex w-full max-w-3xl flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-2xl"
-    role="document"
-    tabindex="-1"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
   >
     <header class="flex items-baseline justify-between">
       <h3 class="text-base font-semibold text-zinc-100">Edit plate</h3>
@@ -471,7 +483,11 @@
     <!-- Footer: hotkey reference + coord summary -->
     <footer class="flex flex-col gap-1 text-[11px] text-zinc-400">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
-        <span><kbd class="rounded bg-zinc-800 px-1">[</kbd>/<kbd class="rounded bg-zinc-800 px-1">]</kbd> right edge</span>
+        <span
+          ><kbd class="rounded bg-zinc-800 px-1">[</kbd>/<kbd
+            class="rounded bg-zinc-800 px-1">]</kbd
+          > right edge</span
+        >
         <span><kbd class="rounded bg-zinc-800 px-1">←↑↓→</kbd> move</span>
         <span><kbd class="rounded bg-zinc-800 px-1">⌫</kbd> clear</span>
         <span><kbd class="rounded bg-zinc-800 px-1">↵</kbd> save</span>

@@ -24,6 +24,19 @@ from playwright.sync_api import sync_playwright
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:5182"
 
+ROUTES = [
+    "/",
+    "/dashboard",
+    "/clusters",
+    "/clusters/1",
+    "/review",
+    "/classes",
+    "/export",
+    "/models",
+    "/train",
+    "/bakeoff",
+]
+
 CLASSES = [
     {
         "id": 1,
@@ -149,6 +162,8 @@ class Stub:
                 c["proposed_class_name"] = "ducati"
                 items.append(c)
             return ok({"items": items, "total": 3, "page": 1, "page_size": 30})
+        if path.startswith("/curation/models/status"):
+            return ok({"models": []})
         if path.startswith("/curation/events") or "stream" in path:
             return route.fulfill(status=204, body="")
         return ok({})
@@ -247,7 +262,7 @@ def main() -> int:
         stub.fail_put_label = True
         page.goto(f"{BASE}/review", wait_until="networkidle")
         page.wait_for_timeout(700)
-        counter = page.get_by_text(re.compile(r"loaded · \d+ total"))
+        counter = page.get_by_test_id("queue-counter")
         before = counter.first.inner_text()
         page.keyboard.press("Enter")
         page.wait_for_timeout(800)
@@ -266,7 +281,54 @@ def main() -> int:
         )
 
         errors = [c for c in console if c.startswith("pageerror") or "Uncaught" in c]
-        check("no uncaught page errors", not errors, str(errors[:3]))
+        check("no uncaught review page errors", not errors, str(errors[:3]))
+        stub.fail_put_label = False
+
+        # ---- every route still mounts --------------------------------
+        print("\nroutes")
+        for route in ROUTES:
+            console.clear()
+            page.goto(f"{BASE}{route}", wait_until="networkidle")
+            page.wait_for_timeout(400)
+            crashed = [c for c in console if c.startswith("pageerror") or "Uncaught" in c]
+            # `main` always renders; a crashed page leaves it empty.
+            body = page.locator("main").first.inner_text()
+            check(
+                f"{route} mounts without errors",
+                not crashed and len(body.strip()) > 0,
+                f"errors={crashed[:2]} body_len={len(body.strip())}",
+            )
+
+        # ---- modal backdrops -----------------------------------------
+        # The panels used to stop propagation on their own click/keydown;
+        # the backdrop now gates on e.target === e.currentTarget instead.
+        # Clicking inside must NOT dismiss; clicking the backdrop must.
+        print("\nmodals")
+        page.goto(f"{BASE}/classes", wait_until="networkidle")
+        page.wait_for_timeout(400)
+        page.get_by_role("button", name="+ Add Class").first.click()
+        dialog = page.get_by_role("dialog", name="Add class")
+        check("Add Class modal opens", dialog.count() > 0)
+        dialog.get_by_text("Add Class").first.click()
+        page.wait_for_timeout(250)
+        check("click inside the panel keeps the modal open", dialog.count() > 0)
+        box = dialog.bounding_box()
+        assert box is not None
+        page.mouse.click(box["x"] + 6, box["y"] + 6)   # backdrop corner
+        page.wait_for_timeout(300)
+        check("click on the backdrop closes the modal", dialog.count() == 0)
+
+        page.get_by_role("button", name="+ Add Class").first.click()
+        page.wait_for_timeout(200)
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(300)
+        check(
+            "Escape closes the modal",
+            page.get_by_role("dialog", name="Add class").count() == 0,
+        )
+
+        errors = [c for c in console if c.startswith("pageerror") or "Uncaught" in c]
+        check("no uncaught errors in the modal flow", not errors, str(errors[:3]))
         browser.close()
 
     print()
