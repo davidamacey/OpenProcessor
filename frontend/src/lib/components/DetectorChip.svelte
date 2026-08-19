@@ -52,61 +52,116 @@
   function labelFor(d: string | null): string {
     if (!d) return '—';
     switch (d) {
-      case 'lpr_nanov11_640': return 'LPR';
-      case 'sam3': return 'SAM3';
-      case 'paddleocr_det_trt': return 'Paddle det';
-      case 'paddleocr_rec_trt': return 'Paddle rec';
-      case 'paddleocr_rec': return 'Paddle rec';
-      case 'paddleocr_det': return 'Paddle det';
-      case 'paddleocr': return 'Paddle';
-      case 'human': return 'Human';
-      case 'gemma-4-e4b': return 'Gemma';
-      case 'gemma': return 'Gemma';
-      case 'gemma_propose': return 'Gemma';
-      case 'gemma_prefilter': return 'Gemma prefilter';
-      case 'legacy_vehicle_v6_trt': return 'v6';
-      case 'yolov11_small_trt_end2end': return 'YOLO11';
-      case 'coco_yolo11_proposal': return 'YOLO11';
-      case 'ingest_v6': return 'Ingest v6';
+      case 'lpr_nanov11_640':
+        return 'LPR';
+      case 'sam3':
+        return 'SAM3';
+      case 'paddleocr_det_trt':
+        return 'Paddle det';
+      case 'paddleocr_rec_trt':
+        return 'Paddle rec';
+      case 'paddleocr_rec':
+        return 'Paddle rec';
+      case 'paddleocr_det':
+        return 'Paddle det';
+      case 'paddleocr':
+        return 'Paddle';
+      case 'human':
+        return 'Human';
+      case 'gemma-4-e4b':
+        return 'Gemma';
+      case 'gemma':
+        return 'Gemma';
+      case 'gemma_propose':
+        return 'Gemma';
+      case 'gemma_prefilter':
+        return 'Gemma prefilter';
+      case 'legacy_vehicle_v6_trt':
+        return 'v6';
+      case 'yolov11_small_trt_end2end':
+        return 'YOLO11';
+      case 'coco_yolo11_proposal':
+        return 'YOLO11';
+      case 'ingest_v6':
+        return 'Ingest v6';
       // Quantization-variant runtimes (bake-off / quantization panel).
-      case 'onnxruntime': return 'ORT';
-      case 'ort-cuda': return 'ORT·CUDA';
-      case 'ort-trt': return 'ORT·TRT';
-      case 'ort-cpu': return 'ORT·CPU';
-      case 'coreml': return 'CoreML';
-      default: return d;
+      case 'onnxruntime':
+        return 'ORT';
+      case 'ort-cuda':
+        return 'ORT·CUDA';
+      case 'ort-trt':
+        return 'ORT·TRT';
+      case 'ort-cpu':
+        return 'ORT·CPU';
+      case 'coreml':
+        return 'CoreML';
+      default:
+        return d;
     }
   }
 
   // Color family by detector. Miss/reject tags get a muted background.
   function paletteFor(d: string | null): { border: string; bg: string; text: string } {
-    if (!d) return { border: 'border-zinc-700', bg: 'bg-zinc-800/60', text: 'text-zinc-300' };
+    if (!d)
+      return { border: 'border-zinc-700', bg: 'bg-zinc-800/60', text: 'text-zinc-300' };
     if (d.startsWith('lpr')) {
-      return { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-200' };
+      return {
+        border: 'border-blue-500/50',
+        bg: 'bg-blue-500/10',
+        text: 'text-blue-200',
+      };
     }
     if (d.startsWith('sam')) {
-      return { border: 'border-purple-500/50', bg: 'bg-purple-500/10', text: 'text-purple-200' };
+      return {
+        border: 'border-purple-500/50',
+        bg: 'bg-purple-500/10',
+        text: 'text-purple-200',
+      };
     }
     if (d.startsWith('paddle')) {
-      return { border: 'border-amber-500/50', bg: 'bg-amber-500/10', text: 'text-amber-200' };
+      return {
+        border: 'border-amber-500/50',
+        bg: 'bg-amber-500/10',
+        text: 'text-amber-200',
+      };
     }
     if (d === 'human') {
-      return { border: 'border-emerald-500/50', bg: 'bg-emerald-500/10', text: 'text-emerald-200' };
+      return {
+        border: 'border-emerald-500/50',
+        bg: 'bg-emerald-500/10',
+        text: 'text-emerald-200',
+      };
     }
     if (d.startsWith('gemma')) {
-      return { border: 'border-teal-500/50', bg: 'bg-teal-500/10', text: 'text-teal-200' };
+      return {
+        border: 'border-teal-500/50',
+        bg: 'bg-teal-500/10',
+        text: 'text-teal-200',
+      };
     }
     if (d === 'legacy_vehicle_v6_trt' || d === 'ingest_v6') {
-      return { border: 'border-rose-500/50', bg: 'bg-rose-500/10', text: 'text-rose-200' };
+      return {
+        border: 'border-rose-500/50',
+        bg: 'bg-rose-500/10',
+        text: 'text-rose-200',
+      };
     }
     if (d.startsWith('yolov11') || d === 'coco_yolo11_proposal') {
       return { border: 'border-sky-500/50', bg: 'bg-sky-500/10', text: 'text-sky-200' };
     }
     if (d.startsWith('ort') || d === 'onnxruntime') {
-      return { border: 'border-indigo-500/50', bg: 'bg-indigo-500/10', text: 'text-indigo-200' };
+      return {
+        border: 'border-indigo-500/50',
+        bg: 'bg-indigo-500/10',
+        text: 'text-indigo-200',
+      };
     }
     if (d.startsWith('coreml')) {
-      return { border: 'border-orange-500/50', bg: 'bg-orange-500/10', text: 'text-orange-200' };
+      return {
+        border: 'border-orange-500/50',
+        bg: 'bg-orange-500/10',
+        text: 'text-orange-200',
+      };
     }
     return { border: 'border-zinc-700', bg: 'bg-zinc-800/60', text: 'text-zinc-300' };
   }
@@ -129,7 +184,7 @@
   class="inline-flex items-center gap-1 rounded border {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
     ? 'opacity-60'
     : ''}"
-  title={version ? `${parsed.detector ?? ''} v${version}` : parsed.detector ?? ''}
+  title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}
 >
   <span>{labelFor(parsed.detector)}</span>
   {#if parsed.tag}

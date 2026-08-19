@@ -20,16 +20,7 @@ import type { OpClass } from '$lib/types';
  * the review plates tab, but class letters are inert there: the review page
  * registers no drop handler on that tab.)
  */
-export const RESERVED_HOTKEY_LETTERS = new Set([
-  'g',
-  'n',
-  'd',
-  'z',
-  'x',
-  'u',
-  'a',
-  'm',
-]);
+export const RESERVED_HOTKEY_LETTERS = new Set(['g', 'n', 'd', 'z', 'x', 'u', 'a', 'm']);
 
 /**
  * Validate and persist a class's hotkey letter. Empty string clears it.

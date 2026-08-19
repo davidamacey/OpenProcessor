@@ -1,6 +1,13 @@
 <script lang="ts">
   import AutoLabelPanel from '$lib/components/AutoLabelPanel.svelte';
-  import { apiBase, exportYolo, getCrops, getStats, getThumbUrl, runGemmaOnCluster } from '$lib/api';
+  import {
+    apiBase,
+    exportYolo,
+    getCrops,
+    getStats,
+    getThumbUrl,
+    runGemmaOnCluster,
+  } from '$lib/api';
   import { adequacyLevel } from '$lib/adequacy';
   import type { OpCrop, OpStats } from '$lib/types';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -32,7 +39,8 @@
       else stats = null;
       if (c.status === 'fulfilled') recent = c.value.items;
       else recent = [];
-      error = s.status === 'rejected' && c.status === 'rejected' ? 'API unavailable' : null;
+      error =
+        s.status === 'rejected' && c.status === 'rejected' ? 'API unavailable' : null;
     } finally {
       loading = false;
     }
@@ -54,7 +62,9 @@
     gemmaBusy = true;
     try {
       const res = await runGemmaOnCluster(id);
-      toastStore.success(`Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`);
+      toastStore.success(
+        `Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
+      );
       gemmaOpen = false;
     } catch (e) {
       toastStore.error(`Gemma run failed: ${(e as Error).message}`);
@@ -149,10 +159,7 @@
                 {row.class_name}
               </span>
               <div class="relative h-4 grow overflow-hidden rounded bg-zinc-900">
-                <div
-                  class="h-full {tierBg(row.tier)}"
-                  style:width="{row.pct}%"
-                ></div>
+                <div class="h-full {tierBg(row.tier)}" style:width="{row.pct}%"></div>
               </div>
               <span class="w-16 shrink-0 text-right font-mono text-zinc-400">
                 {row.validated_count}
@@ -243,7 +250,9 @@
     role="dialog"
     aria-modal="true"
   >
-    <div class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
+    <div
+      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    >
       <h3 class="mb-3 text-base font-semibold">Run Gemma on cluster</h3>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Cluster ID</span>
@@ -256,8 +265,8 @@
         />
       </label>
       <p class="mb-4 text-xs text-zinc-500">
-        Only un-validated crops in the cluster will be sent. Test-holdout crops are excluded by
-        the API.
+        Only un-validated crops in the cluster will be sent. Test-holdout crops are
+        excluded by the API.
       </p>
       <div class="flex justify-end gap-2">
         <button

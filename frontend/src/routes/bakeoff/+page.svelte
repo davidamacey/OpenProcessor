@@ -96,7 +96,10 @@
     try {
       const r = await bakeoffEvalDatasets();
       // Default: curated + public on; balanced samples off (opt-in).
-      evalDatasets = (r.datasets ?? []).map((d) => ({ ...d, enabled: d.kind !== 'sample' }));
+      evalDatasets = (r.datasets ?? []).map((d) => ({
+        ...d,
+        enabled: d.kind !== 'sample',
+      }));
     } catch (e) {
       error = e instanceof ApiError ? e.message : String(e);
     }
@@ -182,7 +185,8 @@
       await refreshRuns();
       startPolling();
     } catch (e) {
-      error = e instanceof ApiError ? `${e.message}: ${JSON.stringify(e.body)}` : String(e);
+      error =
+        e instanceof ApiError ? `${e.message}: ${JSON.stringify(e.body)}` : String(e);
     } finally {
       busy = false;
     }
@@ -243,15 +247,17 @@
 <div class="mx-auto max-w-6xl p-6 text-zinc-200">
   <h1 class="mb-1 text-2xl font-semibold">LPR Model × Dataset Bake-off</h1>
   <p class="mb-6 text-sm text-zinc-400">
-    Every selected model scored on every selected frozen dataset with one IoU
-    metric (pycocotools), in the on-demand <code>legacy-evaluator</code>. Best
-    per dataset is <strong>bold</strong>.
+    Every selected model scored on every selected frozen dataset with one IoU metric
+    (pycocotools), in the on-demand <code>legacy-evaluator</code>. Best per dataset is
+    <strong>bold</strong>.
   </p>
 
   <div class="mb-6"><MonitoringLinks /></div>
 
   {#if error}
-    <div class="mb-4 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200">{error}</div>
+    <div class="mb-4 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200">
+      {error}
+    </div>
   {/if}
 
   <!-- Run form -->
@@ -259,17 +265,23 @@
     <div class="mb-4 grid gap-4 md:grid-cols-2">
       <!-- Datasets -->
       <div>
-        <h2 class="mb-2 text-sm font-medium text-zinc-300">Datasets ({evalDatasets.filter((d) => d.enabled).length}/{evalDatasets.length})</h2>
+        <h2 class="mb-2 text-sm font-medium text-zinc-300">
+          Datasets ({evalDatasets.filter((d) => d.enabled).length}/{evalDatasets.length})
+        </h2>
         <div class="max-h-44 space-y-1 overflow-auto pr-1">
           {#each [['curated', 'Curated (ours, frozen split)'], ['public', 'Public — full split'], ['sample', 'Balanced — deduplicated cluster sample']] as [kind, heading] (kind)}
             {@const group = evalDatasets.filter((d) => d.kind === kind)}
             {#if group.length}
-              <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">{heading}</p>
+              <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
+                {heading}
+              </p>
               {#each group as d (d.path)}
                 <label class="flex items-center gap-2 text-xs">
                   <input type="checkbox" bind:checked={d.enabled} />
                   <span class="font-mono">{d.name}</span>
-                  {#if d.n_test}<span class="text-[10px] text-zinc-500">{d.n_test} frames</span>{/if}
+                  {#if d.n_test}<span class="text-[10px] text-zinc-500"
+                      >{d.n_test} frames</span
+                    >{/if}
                 </label>
               {/each}
             {/if}
@@ -289,9 +301,17 @@
             <label class="flex items-center gap-2 text-xs">
               <input type="checkbox" bind:checked={t.enabled} />
               <span class="font-mono">{t.name}</span>
-              {#if t.model_size}<span class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200">{t.model_size}</span>{/if}
-              <input type="number" min="320" step="32" bind:value={t.imgsz}
-                class="w-16 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px]" />
+              {#if t.model_size}<span
+                  class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200"
+                  >{t.model_size}</span
+                >{/if}
+              <input
+                type="number"
+                min="320"
+                step="32"
+                bind:value={t.imgsz}
+                class="w-16 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px]"
+              />
             </label>
           {/each}
           <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">Baselines</p>
@@ -299,7 +319,9 @@
             <label class="flex items-center gap-2 text-xs">
               <input type="checkbox" bind:checked={b.enabled} />
               <span class="font-mono">{b.name}</span>
-              <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">{b.backend}</span>
+              <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400"
+                >{b.backend}</span
+              >
             </label>
           {/each}
         </div>
@@ -309,7 +331,10 @@
     <div class="flex flex-wrap items-center gap-4">
       <label class="text-sm">
         <span class="text-zinc-400">Regime</span>
-        <select bind:value={mode} class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs">
+        <select
+          bind:value={mode}
+          class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+        >
           <option value="both">both (full + crop)</option>
           <option value="full">full-frame</option>
           <option value="crop">vehicle-crop</option>
@@ -335,13 +360,15 @@
         <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
           <div
             class="h-full bg-emerald-600 transition-all"
-            style="width: {Math.round((activeProgress.done / activeProgress.total) * 100)}%"
+            style="width: {Math.round(
+              (activeProgress.done / activeProgress.total) * 100,
+            )}%"
           ></div>
         </div>
         <p class="mt-1 text-xs text-zinc-500">
-          {activeProgress.done} / {activeProgress.total} evaluations
-          ({Math.round((activeProgress.done / activeProgress.total) * 100)}%) — auto-stops
-          SAM3/Gemma during the run, restores them when done.
+          {activeProgress.done} / {activeProgress.total} evaluations ({Math.round(
+            (activeProgress.done / activeProgress.total) * 100,
+          )}%) — auto-stops SAM3/Gemma during the run, restores them when done.
         </p>
       </div>
     {/if}
@@ -356,14 +383,19 @@
           <li>
             <button
               onclick={() => loadMatrix(r.job_id)}
-              class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {selected === r.job_id ? 'bg-zinc-800' : ''}"
+              class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {selected ===
+              r.job_id
+                ? 'bg-zinc-800'
+                : ''}"
             >
               <div class="flex items-center justify-between gap-2">
                 <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
                 <span class="shrink-0 text-zinc-500">{r.state ?? ''}</span>
               </div>
               {#if r.started_at}
-                <div class="text-[10px] text-zinc-600">{new Date(r.started_at).toLocaleString()}</div>
+                <div class="text-[10px] text-zinc-600">
+                  {new Date(r.started_at).toLocaleString()}
+                </div>
               {/if}
             </button>
           </li>
@@ -380,7 +412,10 @@
           <h2 class="text-sm font-medium text-zinc-400">Matrix — {selected}</h2>
           <label class="text-xs text-zinc-400">
             metric
-            <select bind:value={metric} class="ml-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs">
+            <select
+              bind:value={metric}
+              class="ml-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+            >
               {#each matrix.metrics as m (m)}
                 <option value={m}>{METRIC_LABELS[m] ?? m}</option>
               {/each}
@@ -402,7 +437,11 @@
                 <tr class="border-t border-zinc-800 hover:bg-zinc-800/40">
                   <td class="px-3 py-2 font-mono text-xs">{m}</td>
                   {#each matrix.datasets as ds (ds)}
-                    <td class="px-2 py-2 text-right {isBest(m, ds) ? 'font-bold text-emerald-300' : ''}">
+                    <td
+                      class="px-2 py-2 text-right {isBest(m, ds)
+                        ? 'font-bold text-emerald-300'
+                        : ''}"
+                    >
                       {fmt(cell(m, ds), metric)}
                     </td>
                   {/each}
@@ -416,8 +455,8 @@
             ? 'milliseconds (lower better)'
             : metric === 'size_mb'
               ? 'megabytes (lower better)'
-              : 'percent'}; best per
-          dataset in <span class="font-bold text-emerald-300">bold</span>.
+              : 'percent'}; best per dataset in
+          <span class="font-bold text-emerald-300">bold</span>.
         </p>
 
         <QuantizationPanel {matrix} dataset={matrix.datasets[0]} />
@@ -449,15 +488,21 @@
                   <td class="px-2 py-2 text-right">{pct(m.precision)}</td>
                   <td class="px-2 py-2 text-right">{pct(m.recall)}</td>
                   <td class="px-2 py-2 text-right">{pct(m.f1)}</td>
-                  <td class="px-2 py-2 text-right text-zinc-400">{m.latency_ms.toFixed(0)}</td>
+                  <td class="px-2 py-2 text-right text-zinc-400"
+                    >{m.latency_ms.toFixed(0)}</td
+                  >
                 </tr>
               {/each}
             </tbody>
           </table>
         </div>
-        <p class="mt-2 text-xs text-zinc-500">Percent; top row (green) leads on mAP@.5:.95.</p>
+        <p class="mt-2 text-xs text-zinc-500">
+          Percent; top row (green) leads on mAP@.5:.95.
+        </p>
       {:else if selected}
-        <p class="text-sm text-zinc-500">No results for {selected} yet (still running?).</p>
+        <p class="text-sm text-zinc-500">
+          No results for {selected} yet (still running?).
+        </p>
       {:else}
         <p class="text-sm text-zinc-500">Select a run to view its results.</p>
       {/if}

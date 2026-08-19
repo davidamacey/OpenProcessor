@@ -27,7 +27,14 @@
     compact?: boolean;
   }
 
-  let { crop, onclick, onedit, onmarkfp, selected = false, compact = false }: Props = $props();
+  let {
+    crop,
+    onclick,
+    onedit,
+    onmarkfp,
+    selected = false,
+    compact = false,
+  }: Props = $props();
 
   // false_positive plates stay visible (kept as hard negatives) but are
   // dimmed + badged so the operator sees the triage state at a glance.
@@ -55,7 +62,9 @@
   }
 
   const warn = $derived(shapeWarning());
-  const thumbUrl = $derived(crop.plate_thumbnail_url ?? `/curation/crops/${crop.crop_id}/plate_thumbnail`);
+  const thumbUrl = $derived(
+    crop.plate_thumbnail_url ?? `/curation/crops/${crop.crop_id}/plate_thumbnail`,
+  );
 
   function handleClick(e: MouseEvent): void {
     onclick?.(crop, e);
@@ -170,7 +179,9 @@
         <DetectorChip detector={crop.plate_verifier} tag="verify" size="sm" />
       {/if}
       {#if crop.class_name}
-        <span class="rounded border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-300">
+        <span
+          class="rounded border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-300"
+        >
           {crop.class_name}
         </span>
       {/if}

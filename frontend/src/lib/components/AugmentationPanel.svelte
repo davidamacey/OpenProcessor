@@ -105,9 +105,16 @@
     }
   }
 
-  function setAutoBalance(patch: Partial<{ target_count: number; max_multiplier: number }>): void {
+  function setAutoBalance(
+    patch: Partial<{ target_count: number; max_multiplier: number }>,
+  ): void {
     const base = value ?? defaultSpec();
-    const ab = { target_count: 3000, max_multiplier: 10, ...(base.auto_balance ?? {}), ...patch };
+    const ab = {
+      target_count: 3000,
+      max_multiplier: 10,
+      ...(base.auto_balance ?? {}),
+      ...patch,
+    };
     setValue({ ...base, auto_balance: ab });
   }
 
@@ -184,7 +191,9 @@
 
           <label class="block">
             <span class="mb-1 block text-xs text-zinc-400">
-              Multiplier <span class="font-mono text-zinc-500">×{spec.multiplier ?? 1}</span>
+              Multiplier <span class="font-mono text-zinc-500"
+                >×{spec.multiplier ?? 1}</span
+              >
             </span>
             <input
               type="range"
@@ -192,7 +201,8 @@
               max="10"
               step="1"
               value={spec.multiplier ?? 1}
-              oninput={(e) => setMultiplier(Number((e.currentTarget as HTMLInputElement).value))}
+              oninput={(e) =>
+                setMultiplier(Number((e.currentTarget as HTMLInputElement).value))}
               class="w-full accent-blue-500"
             />
           </label>
@@ -251,7 +261,9 @@
           {:else if oversampleMode === 'auto'}
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label class="block">
-                <span class="mb-1 block text-xs text-zinc-400">Target count per class</span>
+                <span class="mb-1 block text-xs text-zinc-400"
+                  >Target count per class</span
+                >
                 <input
                   type="number"
                   min="100"

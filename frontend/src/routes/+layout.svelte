@@ -1,14 +1,14 @@
 <script lang="ts">
-  import "../app.css";
-  import type { Snippet } from "svelte";
-  import { page } from "$app/state";
-  import ClassSidebar from "$components/ClassSidebar.svelte";
-  import { dropOnClassStore } from "$stores/dropOnClass.svelte";
-  import ShortcutOverlay from "$components/ShortcutOverlay.svelte";
-  import Toast from "$components/Toast.svelte";
-  import { classesStore } from "$stores/classes.svelte";
-  import { healthStore } from "$stores/health.svelte";
-  import { keyboardStore } from "$stores/keyboard.svelte";
+  import '../app.css';
+  import type { Snippet } from 'svelte';
+  import { page } from '$app/state';
+  import ClassSidebar from '$components/ClassSidebar.svelte';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
+  import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
+  import Toast from '$components/Toast.svelte';
+  import { classesStore } from '$stores/classes.svelte';
+  import { healthStore } from '$stores/health.svelte';
+  import { keyboardStore } from '$stores/keyboard.svelte';
 
   interface Props {
     children?: Snippet;
@@ -38,9 +38,9 @@
       if (!el) return false;
       const tag = el.tagName.toLowerCase();
       return (
-        tag === "input" ||
-        tag === "textarea" ||
-        tag === "select" ||
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
         (el as HTMLElement).isContentEditable === true
       );
     }
@@ -55,7 +55,7 @@
       if (isTextInputActive()) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const cls = classesStore.classes.find(
-        (c) => (c.hotkey_letter ?? "").toLowerCase() === key,
+        (c) => (c.hotkey_letter ?? '').toLowerCase() === key,
       );
       if (cls) {
         e.preventDefault();
@@ -65,24 +65,22 @@
         void dropOnClassStore.dispatch(cls, []);
       }
     }
-    window.addEventListener("keydown", onKeydown);
-    return () => window.removeEventListener("keydown", onKeydown);
+    window.addEventListener('keydown', onKeydown);
+    return () => window.removeEventListener('keydown', onKeydown);
   });
 
   const path = $derived(page.url.pathname);
-  const showSidebar = $derived(
-    path === "/clusters" || path.startsWith("/clusters/"),
-  );
+  const showSidebar = $derived(path === '/clusters' || path.startsWith('/clusters/'));
 
   // Class filter applied to the cluster grid. Page reads from URL (?class=ID).
   const selectedClassId = $derived.by(() => {
-    const v = page.url.searchParams.get("class");
+    const v = page.url.searchParams.get('class');
     return v == null ? null : Number.isFinite(+v) ? +v : null;
   });
 
   function selectClass(cls: { id: number } | null): void {
     void (async () => {
-      const { goto } = await import("$app/navigation");
+      const { goto } = await import('$app/navigation');
       // In the legacy ensemble, cluster_id == class_id, so clicking a
       // class in the sidebar navigates straight to that class's cluster
       // instead of filtering the current page. Behaves the same on /classes
@@ -93,7 +91,7 @@
         // backed by /curation/plates so the operator sees every plate-bearing
         // crop, not just the 1-2 rows whose PRIMARY class is license_plate.
         const lpClass = classesStore.classes.find(
-          (c) => (c.name ?? "").toLowerCase() === "license_plate",
+          (c) => (c.name ?? '').toLowerCase() === 'license_plate',
         );
         if (lpClass && cls.id === lpClass.id) {
           void goto(`/clusters?class=${cls.id}`, {
@@ -109,8 +107,8 @@
         return;
       }
       const url = new URL(page.url);
-      url.searchParams.delete("class");
-      history.pushState({}, "", url);
+      url.searchParams.delete('class');
+      history.pushState({}, '', url);
       void goto(url.pathname + url.search, {
         replaceState: false,
         keepFocus: true,
@@ -120,24 +118,22 @@
 
   // Build crumbs from the path.
   const crumbs = $derived.by(() => {
-    const parts = path.split("/").filter(Boolean);
-    if (parts.length === 0) return [{ label: "Dashboard", href: "/" }];
-    const out: Array<{ label: string; href: string }> = [
-      { label: "Home", href: "/" },
-    ];
-    let acc = "";
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length === 0) return [{ label: 'Dashboard', href: '/' }];
+    const out: Array<{ label: string; href: string }> = [{ label: 'Home', href: '/' }];
+    let acc = '';
     for (const p of parts) {
-      acc += "/" + p;
+      acc += '/' + p;
       out.push({ label: decodeURIComponent(p), href: acc });
     }
     return out;
   });
 
-  const dotClass = $derived(healthStore.ok ? "bg-green-500" : "bg-red-500");
+  const dotClass = $derived(healthStore.ok ? 'bg-green-500' : 'bg-red-500');
   const dotTitle = $derived(
     healthStore.ok
-      ? `openprocessor OK (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : "—"})`
-      : `openprocessor unavailable: ${healthStore.error ?? "no response"}`,
+      ? `openprocessor OK (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
+      : `openprocessor unavailable: ${healthStore.error ?? 'no response'}`,
   );
 </script>
 
@@ -146,12 +142,8 @@
   <header
     class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
   >
-    <a
-      href="/"
-      class="flex items-center gap-2 text-sm font-semibold tracking-tight"
-    >
-      <span
-        class="rounded bg-blue-600 px-1.5 py-0.5 font-mono text-xs text-white"
+    <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
+      <span class="rounded bg-blue-600 px-1.5 py-0.5 font-mono text-xs text-white"
         >KB</span
       >
       legacy Labeler
@@ -165,7 +157,7 @@
         <a
           href={c.href}
           class="rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
-          aria-current={i === crumbs.length - 1 ? "page" : undefined}
+          aria-current={i === crumbs.length - 1 ? 'page' : undefined}
         >
           {c.label}
         </a>
@@ -200,7 +192,7 @@
       title={dotTitle}
     >
       <span class="h-2 w-2 rounded-full {dotClass}"></span>
-      <span class="font-mono">{healthStore.ok ? "API OK" : "API down"}</span>
+      <span class="font-mono">{healthStore.ok ? 'API OK' : 'API down'}</span>
     </span>
 
     <span class="font-mono text-xs text-zinc-500">{data.apiBase}</span>

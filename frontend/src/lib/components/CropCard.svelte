@@ -59,7 +59,7 @@
   // so we read it via a narrow cast instead of widening the public type
   // (which is outside this task's allowed-modify list).
   const plateStatus = $derived<string | null>(
-    ((crop as unknown as { plate_status?: string | null }).plate_status ?? null),
+    (crop as unknown as { plate_status?: string | null }).plate_status ?? null,
   );
 
   const noPlate = $derived(plateStatus === 'no_plate_visible');
@@ -78,7 +78,12 @@
   // Letterbox-compensated ring rectangle (percent of the aspect-square
   // container). When natural dims aren't known yet (still loading), fall
   // back to naive container-relative placement so first paint isn't blank.
-  const ringRectPct = $derived.by<{ left: number; top: number; width: number; height: number } | null>(() => {
+  const ringRectPct = $derived.by<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(() => {
     if (!plateInCrop) return null;
     const x1 = plateInCrop.cx - plateInCrop.w / 2;
     const y1 = plateInCrop.cy - plateInCrop.h / 2;
@@ -120,21 +125,30 @@
   // most crops in the ensemble pipeline are auto-validated by Gemma,
   // ensemble consensus, or cluster propagation; only true human labels
   // (label_source='human') get the green chip.
-  const labelBadgeClass = (src: LabelSource | null | undefined, validated: boolean): string => {
+  const labelBadgeClass = (
+    src: LabelSource | null | undefined,
+    validated: boolean,
+  ): string => {
     if (!validated) {
-      if (src === 'gemma_suggestion') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+      if (src === 'gemma_suggestion')
+        return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
       return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
     }
     if (src === 'human' || src === 'human_confirmed') {
       return 'bg-green-500/20 text-green-200 border-green-500/40';
     }
     if (src === 'ensemble') return 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40';
-    if (src === 'gemma_suggestion') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
-    if (src === 'cluster_propagation') return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
+    if (src === 'gemma_suggestion')
+      return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+    if (src === 'cluster_propagation')
+      return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
     return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
   };
 
-  const labelBadgeText = (src: LabelSource | null | undefined, validated: boolean): string => {
+  const labelBadgeText = (
+    src: LabelSource | null | undefined,
+    validated: boolean,
+  ): string => {
     if (!validated) {
       if (src === 'gemma_suggestion') return 'gemma?';
       return src ?? 'unlabeled';
@@ -302,7 +316,10 @@
     <div
       class="flex items-center gap-1 border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs"
     >
-      <span class="grow truncate text-yellow-200" title={crop.gemma_suggested_class_name ?? ''}>
+      <span
+        class="grow truncate text-yellow-200"
+        title={crop.gemma_suggested_class_name ?? ''}
+      >
         Gemma: {crop.gemma_suggested_class_name ?? '—'}
         {#if crop.gemma_suggested_confidence != null}
           <span class="ml-1 text-yellow-400/70"

@@ -72,12 +72,7 @@
     </span>
     <span class="grow"></span>
     {#if status.mlflow_run_url}
-      <a
-        href={status.mlflow_run_url}
-        target="_blank"
-        rel="noopener"
-        class="btn"
-      >
+      <a href={status.mlflow_run_url} target="_blank" rel="noopener" class="btn">
         Open MLflow run
       </a>
     {/if}

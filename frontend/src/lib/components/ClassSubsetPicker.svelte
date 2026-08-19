@@ -41,8 +41,7 @@
     const list = q
       ? allClasses.filter(
           (c) =>
-            c.name.toLowerCase().includes(q) ||
-            (c.group ?? '').toLowerCase().includes(q),
+            c.name.toLowerCase().includes(q) || (c.group ?? '').toLowerCase().includes(q),
         )
       : allClasses;
     return [...list].sort((a, b) => (b.validated_count ?? 0) - (a.validated_count ?? 0));
@@ -182,7 +181,7 @@
                 >
                   <input
                     type="checkbox"
-                    checked={checked}
+                    {checked}
                     onchange={() => toggle(cls.id)}
                     class="h-4 w-4 cursor-pointer accent-blue-500"
                   />

@@ -88,7 +88,10 @@
   {#if crop.class_detector}
     <dt class="text-zinc-500">Class detector</dt>
     <dd>
-      <DetectorChip detector={crop.class_detector} version={crop.class_detector_version} />
+      <DetectorChip
+        detector={crop.class_detector}
+        version={crop.class_detector_version}
+      />
     </dd>
   {/if}
 
@@ -149,7 +152,9 @@
       {#if crop.plate_text != null}
         <dt class="text-zinc-500">Text</dt>
         <dd class="flex items-center gap-1.5">
-          <span class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100">
+          <span
+            class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
+          >
             {crop.plate_text || '∅'}
           </span>
           {#if crop.plate_text_source}
@@ -175,7 +180,8 @@
   <div class="mt-4 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
     {#if crop.source_image_path}
       <div class="truncate" title={crop.source_image_path}>
-        <span class="text-zinc-600">src:</span> {crop.source_image_path}
+        <span class="text-zinc-600">src:</span>
+        {crop.source_image_path}
       </div>
     {/if}
     {#if crop.updated_at}

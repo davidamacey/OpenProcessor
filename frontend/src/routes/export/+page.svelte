@@ -10,11 +10,7 @@
     getStats,
     getTestHoldoutStats,
   } from '$lib/api';
-  import type {
-    OpExportStatus,
-    OpStats,
-    OpTestHoldoutStats,
-  } from '$lib/types';
+  import type { OpExportStatus, OpStats, OpTestHoldoutStats } from '$lib/types';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -30,13 +26,7 @@
   let error = $state<string | null>(null);
 
   // Sort
-  type SortKey =
-    | 'class_name'
-    | 'class_id'
-    | 'total'
-    | 'validated'
-    | 'aug_target'
-    | 'gap';
+  type SortKey = 'class_name' | 'class_id' | 'total' | 'validated' | 'aug_target' | 'gap';
   let sortKey = $state<SortKey>('gap');
   let sortDir = $state<'asc' | 'desc'>('desc');
 
@@ -286,7 +276,6 @@
       }
     })();
   });
-
 </script>
 
 <div class="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
@@ -325,7 +314,9 @@
           {(holdout?.by_class?.length ?? 0).toString()} classes.
         </span>
         {#if testDeficient > 0}
-          <span class="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-red-200">
+          <span
+            class="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-red-200"
+          >
             {testDeficient} class{testDeficient === 1 ? '' : 'es'} below 5 test crops
           </span>
         {/if}
@@ -359,7 +350,9 @@
     {:else if error}
       <div class="p-6 text-sm text-red-300">{error}</div>
     {:else if rows.length === 0}
-      <div class="p-6 text-sm text-zinc-500">No classes yet — ingest some data first.</div>
+      <div class="p-6 text-sm text-zinc-500">
+        No classes yet — ingest some data first.
+      </div>
     {:else}
       <table class="w-full text-sm">
         <thead
@@ -409,7 +402,9 @@
               </td>
               <td class="px-3 py-1.5 text-right">
                 <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(row.gap)}"
+                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+                    row.gap,
+                  )}"
                   title={row.gap <= 0 ? 'on target' : `${row.gap} more crops needed`}
                 >
                   {row.gap > 0 ? '+' : ''}{row.gap.toLocaleString()}
@@ -417,7 +412,9 @@
               </td>
               <td class="px-3 py-1.5 text-right">
                 <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(row.test_count)}"
+                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
+                    row.test_count,
+                  )}"
                 >
                   {row.test_count}
                 </span>
@@ -448,7 +445,11 @@
         onclick={() => void runExport()}
         disabled={exportRunning}
       >
-        {exportRunning ? 'Exporting…' : exportState?.status === 'success' ? 'Re-export' : 'Export'}
+        {exportRunning
+          ? 'Exporting…'
+          : exportState?.status === 'success'
+            ? 'Re-export'
+            : 'Export'}
       </button>
 
       <span class="grow"></span>
@@ -518,7 +519,9 @@
     aria-modal="true"
     aria-label="Export progress"
   >
-    <div class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
+    <div
+      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    >
       <h3 class="mb-3 text-base font-semibold">YOLO export</h3>
       {#if exportState?.status === 'running' || exportRunning}
         <p class="mb-3 text-xs text-zinc-400">
@@ -536,7 +539,9 @@
       {:else if exportState?.status === 'success'}
         <p class="mb-2 text-sm text-green-300">Export complete.</p>
         {#if exportState.export_dir}
-          <p class="mb-3 break-all font-mono text-xs text-zinc-300">{exportState.export_dir}</p>
+          <p class="mb-3 break-all font-mono text-xs text-zinc-300">
+            {exportState.export_dir}
+          </p>
         {/if}
         <div class="flex flex-wrap gap-2">
           <button
@@ -549,12 +554,16 @@
         </div>
       {:else if exportState?.status === 'failed'}
         <p class="mb-2 text-sm text-red-300">Export failed.</p>
-        <p class="font-mono text-xs text-red-200">{exportState.error ?? 'unknown error'}</p>
+        <p class="font-mono text-xs text-red-200">
+          {exportState.error ?? 'unknown error'}
+        </p>
       {:else}
         <p class="text-xs text-zinc-400">No active export.</p>
       {/if}
       <div class="mt-4 flex justify-end">
-        <button type="button" class="btn" onclick={() => (exportModalOpen = false)}>Close</button>
+        <button type="button" class="btn" onclick={() => (exportModalOpen = false)}
+          >Close</button
+        >
       </div>
     </div>
   </div>
@@ -568,13 +577,15 @@
     aria-modal="true"
     aria-label="Freeze test holdout"
   >
-    <div class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
+    <div
+      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    >
       <h3 class="mb-2 text-base font-semibold">Freeze test holdout</h3>
       <div
         class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
       >
-        One-shot per dataset version. Stratified by (class × hdd_source) using a
-        fixed seed for reproducibility (Plan §B4).
+        One-shot per dataset version. Stratified by (class × hdd_source) using a fixed
+        seed for reproducibility (Plan §B4).
       </div>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Percent of validated crops</span>
@@ -595,7 +606,12 @@
         />
       </label>
       <div class="flex justify-end gap-2">
-        <button type="button" class="btn" onclick={() => (freezeOpen = false)} disabled={freezeBusy}>
+        <button
+          type="button"
+          class="btn"
+          onclick={() => (freezeOpen = false)}
+          disabled={freezeBusy}
+        >
           Cancel
         </button>
         <button

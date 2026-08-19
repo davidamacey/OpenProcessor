@@ -26,9 +26,7 @@
     dense = false,
   }: Props = $props();
 
-  const options = $derived(
-    labels.map((l, i) => ({ v: i as 0 | 1 | 2, l })),
-  );
+  const options = $derived(labels.map((l, i) => ({ v: i as 0 | 1 | 2, l })));
 </script>
 
 <div class="flex shrink-0 items-center gap-1.5">

@@ -92,7 +92,9 @@
 </script>
 
 <div class="flex flex-col rounded-md border border-zinc-800 bg-zinc-950">
-  <div class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-1.5">
+  <div
+    class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-1.5"
+  >
     <h3 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
       Live log <span class="font-mono text-[10px] text-zinc-500">tail {lines}</span>
     </h3>

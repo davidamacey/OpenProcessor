@@ -2,7 +2,6 @@
 // Source: openprocessor/src/config/plate_state.py (PlateStatus enum)
 // DO NOT EDIT BY HAND — re-run the codegen script after editing the Python source.
 
-
 export enum PlateStatus {
   PENDING_DETECTION = 'pending_detection',
   PENDING_VERIFICATION = 'pending_verification',
@@ -14,7 +13,6 @@ export enum PlateStatus {
   FALSE_POSITIVE = 'false_positive',
 }
 
-
 export type PlateStatusValue =
   | 'pending_detection'
   | 'pending_verification'
@@ -24,7 +22,6 @@ export type PlateStatusValue =
   | 'no_plate_visible'
   | 'detection_failed'
   | 'false_positive';
-
 
 export const PLATE_STATUS_VALUES: readonly PlateStatusValue[] = [
   'pending_detection',

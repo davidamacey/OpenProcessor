@@ -56,9 +56,7 @@
   });
 
   const hasActive = $derived(
-    runs.some((r) =>
-      ['queued', 'starting', 'running', 'exporting'].includes(r.state),
-    ),
+    runs.some((r) => ['queued', 'starting', 'running', 'exporting'].includes(r.state)),
   );
 
   // Sort: keep submission order within a campaign (ids are
@@ -69,7 +67,9 @@
 <section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
     <h2 class="font-mono text-sm text-white">{campaignId}</h2>
-    <span class="rounded-sm border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-blue-200">
+    <span
+      class="rounded-sm border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-blue-200"
+    >
       campaign
     </span>
     <span class="grow"></span>
@@ -98,7 +98,9 @@
 
   <ul class="divide-y divide-zinc-800 rounded border border-zinc-800 bg-zinc-950">
     {#each ordered as r (r.job_id)}
-      <li class="grid grid-cols-1 gap-2 px-3 py-2 text-sm sm:grid-cols-[auto_8rem_auto_1fr]">
+      <li
+        class="grid grid-cols-1 gap-2 px-3 py-2 text-sm sm:grid-cols-[auto_8rem_auto_1fr]"
+      >
         <span
           class="rounded-sm border px-1.5 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide {statePillClass(
             r.state,
@@ -126,7 +128,8 @@
       Best so far:
       <span class="font-mono text-zinc-200">{best.job_id}</span>
       <span class="text-zinc-500">·</span>
-      mAP50 <span class="font-mono text-zinc-200">{best.best_metric?.map50?.toFixed(3)}</span>
+      mAP50
+      <span class="font-mono text-zinc-200">{best.best_metric?.map50?.toFixed(3)}</span>
     </p>
   {/if}
 </section>

@@ -10,11 +10,7 @@ import { keyboardStore } from './keyboard.svelte';
 
 const cleanups: Array<() => void> = [];
 
-function reg(
-  combo: string,
-  handler: (e: KeyboardEvent) => void,
-  scope = 'global',
-): void {
+function reg(combo: string, handler: (e: KeyboardEvent) => void, scope = 'global'): void {
   cleanups.push(keyboardStore.register(combo, handler, scope));
 }
 

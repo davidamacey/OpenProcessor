@@ -65,11 +65,7 @@
     viewBox = null,
   }: Props = $props();
 
-  type DragMode =
-    | 'create'
-    | 'move'
-    | 'n' | 's' | 'e' | 'w'
-    | 'ne' | 'nw' | 'se' | 'sw';
+  type DragMode = 'create' | 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
   interface DragState {
     mode: DragMode;
@@ -368,42 +364,50 @@
           role="presentation"
         ></div>
         <div
-          class="absolute -top-1 -left-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute -top-1 -left-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
           role="presentation"
         ></div>
         <div
-          class="absolute -top-1 -right-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute -top-1 -right-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
           role="presentation"
         ></div>
         <div
-          class="absolute -bottom-1 -left-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute -bottom-1 -left-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
           role="presentation"
         ></div>
         <div
-          class="absolute -right-1 -bottom-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute -right-1 -bottom-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'se')}
           role="presentation"
         ></div>
         <div
-          class="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'n')}
           role="presentation"
         ></div>
         <div
-          class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 's')}
           role="presentation"
         ></div>
         <div
-          class="absolute top-1/2 -left-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute top-1/2 -left-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'w')}
           role="presentation"
         ></div>
         <div
-          class="absolute top-1/2 -right-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]" style="background-color: rgb(80, 200, 255);"
+          class="absolute top-1/2 -right-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
+          style="background-color: rgb(80, 200, 255);"
           onpointerdown={(e) => onPointerDownHandle(e, 'e')}
           role="presentation"
         ></div>

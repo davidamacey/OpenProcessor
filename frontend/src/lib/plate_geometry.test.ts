@@ -3,11 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  bboxNormToXYXY,
-  cropToSourceFrame,
-  sourceToCropFrame,
-} from './plate_geometry';
+import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from './plate_geometry';
 import type { BBoxNorm } from './types';
 
 const EPS = 1e-9;

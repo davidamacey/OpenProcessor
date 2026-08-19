@@ -87,10 +87,7 @@
   // site (toggle button, sort dropdown) without per-handler bookkeeping.
   $effect(() => {
     if (typeof sessionStorage === 'undefined') return;
-    sessionStorage.setItem(
-      FILTER_PERSIST_KEY,
-      JSON.stringify({ sort, unlabeledOnly }),
-    );
+    sessionStorage.setItem(FILTER_PERSIST_KEY, JSON.stringify({ sort, unlabeledOnly }));
   });
 
   // --- Plate browse (replaces the "License plates aren't clustered" placeholder
@@ -135,7 +132,8 @@
   // "9a","9aa","9ab"… land in human-expected order.
   const plateSubclusterIds = $derived.by(() => {
     const set = new Set<string>();
-    for (const p of platePager.items) if (p.plate_cluster_subid) set.add(p.plate_cluster_subid);
+    for (const p of platePager.items)
+      if (p.plate_cluster_subid) set.add(p.plate_cluster_subid);
     return [...set].sort();
   });
 
@@ -162,30 +160,33 @@
   // (subid-sorted) data arrives. A contiguity walk would emit the same subid
   // as multiple groups there, producing duplicate {#each} keys and a Svelte
   // each_key_duplicate crash that froze the detail view from opening.
-  const plateGroups = $derived.by((): { key: string; label: string; items: PlateBrowseItem[] }[] => {
-    if (!groupPlatesBySubid) return [{ key: '__all__', label: '', items: platePager.items }];
-    const byKey = new Map<string, PlateBrowseItem[]>();
-    for (const p of platePager.items) {
-      const sub = p.plate_cluster_subid ?? '__none__';
-      let bucket = byKey.get(sub);
-      if (!bucket) {
-        bucket = [];
-        byKey.set(sub, bucket);
+  const plateGroups = $derived.by(
+    (): { key: string; label: string; items: PlateBrowseItem[] }[] => {
+      if (!groupPlatesBySubid)
+        return [{ key: '__all__', label: '', items: platePager.items }];
+      const byKey = new Map<string, PlateBrowseItem[]>();
+      for (const p of platePager.items) {
+        const sub = p.plate_cluster_subid ?? '__none__';
+        let bucket = byKey.get(sub);
+        if (!bucket) {
+          bucket = [];
+          byKey.set(sub, bucket);
+        }
+        bucket.push(p);
       }
-      bucket.push(p);
-    }
-    // Sort subids lexically; the '__none__' (unrefined) group always last.
-    const keys = [...byKey.keys()].sort((a, b) => {
-      if (a === '__none__') return 1;
-      if (b === '__none__') return -1;
-      return a < b ? -1 : a > b ? 1 : 0;
-    });
-    return keys.map((k) => ({
-      key: k,
-      label: k === '__none__' ? 'unrefined' : `sub-cluster ${k}`,
-      items: byKey.get(k)!,
-    }));
-  });
+      // Sort subids lexically; the '__none__' (unrefined) group always last.
+      const keys = [...byKey.keys()].sort((a, b) => {
+        if (a === '__none__') return 1;
+        if (b === '__none__') return -1;
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+      return keys.map((k) => ({
+        key: k,
+        label: k === '__none__' ? 'unrefined' : `sub-cluster ${k}`,
+        items: byKey.get(k)!,
+      }));
+    },
+  );
 
   async function loadPlateClusters(): Promise<void> {
     try {
@@ -225,7 +226,9 @@
       if (!res.centroids_built) {
         toastStore.info(res.message ?? 'No FP centroids yet — build them first.');
       } else {
-        toastStore.success(`${res.total} suspected false positive(s) at ≤ ${suspectedFpThreshold}.`);
+        toastStore.success(
+          `${res.total} suspected false positive(s) at ≤ ${suspectedFpThreshold}.`,
+        );
       }
     } catch (e) {
       toastStore.error(`Load suspected FPs failed: ${(e as Error).message}`);
@@ -269,7 +272,9 @@
       // re-partition good plates) is a multi-minute background job, so we kick
       // it off and poll for completion instead of holding one request open.
       await clusterPlates(plateMaxRank ?? undefined);
-      toastStore.info('Clustering plates… rebuilding FP centroids, pulling FPs, re-bucketing.');
+      toastStore.info(
+        'Clustering plates… rebuilding FP centroids, pulling FPs, re-bucketing.',
+      );
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
         const job = await getPlateClusterStatus();
@@ -539,7 +544,8 @@
   // correct and complete. Without this the sort dropdown did nothing.
   function sortClusters(list: OpCluster[], mode: typeof sort): OpCluster[] {
     const out = [...list];
-    const purity = (c: OpCluster) => (c.purity == null ? Number.POSITIVE_INFINITY : c.purity);
+    const purity = (c: OpCluster) =>
+      c.purity == null ? Number.POSITIVE_INFINITY : c.purity;
     switch (mode) {
       case 'size_desc':
         out.sort((a, b) => (b.size ?? 0) - (a.size ?? 0));
@@ -614,7 +620,8 @@
       // "all" tab) ask the server to order by sub-cluster so AHC groups come
       // back contiguous across pages and we can render them with separators.
       plate_cluster_subid: plateSubTab ?? undefined,
-      sort_by_subid: selectedPlateCluster != null && plateSubTab == null ? true : undefined,
+      sort_by_subid:
+        selectedPlateCluster != null && plateSubTab == null ? true : undefined,
     };
   }
 
@@ -637,14 +644,19 @@
     }
   });
 
-  async function savePlateBbox(plateBboxSrc: import('$lib/types').BBoxNorm | null): Promise<void> {
+  async function savePlateBbox(
+    plateBboxSrc: import('$lib/types').BBoxNorm | null,
+  ): Promise<void> {
     if (!editPlateCrop) return;
     const cropId = editPlateCrop.id;
     // PlateEditor yields a source-frame BBoxNorm {cx,cy,w,h}; the API takes
     // [x1,y1,x2,y2]. null clears the box (→ no_plate_visible server-side).
     const arr = plateBboxSrc ? bboxNormToXYXY(plateBboxSrc) : null;
     try {
-      const res = await setCropPlate(cropId, arr as [number, number, number, number] | null);
+      const res = await setCropPlate(
+        cropId,
+        arr as [number, number, number, number] | null,
+      );
       toastStore.success('Plate saved');
       editPlateCrop = null;
       // Patch just this card in place rather than reloading page 1 (which
@@ -709,9 +721,7 @@
 
 <div class="flex h-full flex-col">
   <!-- Toolbar -->
-  <div
-    class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5"
-  >
+  <div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
     <h1 class="text-lg font-semibold">Clusters</h1>
 
     {#if classFilter != null}
@@ -727,13 +737,17 @@
     <!-- Color legend for the card border. The cluster grid uses border
          color to encode purity at a glance; without this strip the user
          has to mouse over each card to figure out what the colors mean. -->
-    <div class="flex items-center gap-2 text-[10px] text-zinc-500" title="Card border color encodes cluster purity">
+    <div
+      class="flex items-center gap-2 text-[10px] text-zinc-500"
+      title="Card border color encodes cluster purity"
+    >
       <span class="flex items-center gap-1">
         <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"></span>
         ≥80%
       </span>
       <span class="flex items-center gap-1">
-        <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"></span>
+        <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"
+        ></span>
         ≥60%
       </span>
       <span class="flex items-center gap-1">
@@ -812,217 +826,226 @@
         <div
           class="sticky top-0 z-20 -mx-4 -mt-4 flex flex-col gap-3 border-b border-zinc-800 bg-zinc-950 px-4 pt-4 pb-3"
         >
-        <!-- Filter strip: detector / verified / score / text-search. -->
-        <div
-          class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs"
-        >
-          <label class="flex items-center gap-1.5">
-            <span class="text-zinc-400">Detector</span>
-            <select
-              bind:value={plateDetectorFilter}
-              class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
-            >
-              <option value="">any</option>
-              <option value="lpr_nanov11_640">LPR</option>
-              <option value="sam3">SAM3</option>
-              <option value="paddleocr_det_trt">Paddle det</option>
-              <option value="human">Human</option>
-            </select>
-          </label>
-          <label class="flex items-center gap-1.5">
-            <input type="checkbox" bind:checked={plateVerifiedOnly} class="accent-blue-500" />
-            <span class="text-zinc-400">Verified only</span>
-          </label>
-          <label class="flex items-center gap-1.5">
-            <span class="text-zinc-400">Min score</span>
-            <input
-              type="number"
-              min="0"
-              max="1"
-              step="0.05"
-              bind:value={plateMinScore}
-              class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
-            />
-          </label>
-          <label class="flex items-center gap-1.5">
-            <span class="text-zinc-400">Text</span>
-            <input
-              type="text"
-              bind:value={plateTextQuery}
-              placeholder="e.g. S14"
-              class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
-            />
-          </label>
-
-          <!-- Top-N largest-crop gate. The sort runs on the largest 1-3
-               crops, so this is the key filter for the plates that matter. -->
-          <div class="inline-flex overflow-hidden rounded border border-zinc-700">
-            {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
-              <button
-                type="button"
-                class="px-2 py-1 {plateMaxRank === o.v
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
-                onclick={() => (plateMaxRank = o.v as number | null)}
+          <!-- Filter strip: detector / verified / score / text-search. -->
+          <div
+            class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs"
+          >
+            <label class="flex items-center gap-1.5">
+              <span class="text-zinc-400">Detector</span>
+              <select
+                bind:value={plateDetectorFilter}
+                class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
               >
-                {o.l}
-              </button>
-            {/each}
-          </div>
-
-          {#if suspectedFpView}
-            <button
-              type="button"
-              class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
-              onclick={backToPlateClusters}
-            >
-              ← Clusters
-            </button>
-            <span class="font-medium text-red-200">Suspected false positives</span>
-            <label class="flex items-center gap-1 text-[11px] text-zinc-400">
-              ≤
+                <option value="">any</option>
+                <option value="lpr_nanov11_640">LPR</option>
+                <option value="sam3">SAM3</option>
+                <option value="paddleocr_det_trt">Paddle det</option>
+                <option value="human">Human</option>
+              </select>
+            </label>
+            <label class="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                bind:checked={plateVerifiedOnly}
+                class="accent-blue-500"
+              />
+              <span class="text-zinc-400">Verified only</span>
+            </label>
+            <label class="flex items-center gap-1.5">
+              <span class="text-zinc-400">Min score</span>
               <input
                 type="number"
-                step="0.05"
                 min="0"
-                max="2"
-                bind:value={suspectedFpThreshold}
-                class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-zinc-200"
+                max="1"
+                step="0.05"
+                bind:value={plateMinScore}
+                class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
               />
             </label>
-            <button
-              type="button"
-              disabled={plateClusterBusy}
-              class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
-              onclick={loadSuspectedFp}
-            >
-              {plateClusterBusy ? 'Loading…' : 'Reload'}
-            </button>
-          {:else if selectedPlateCluster == null}
-            <button
-              type="button"
-              disabled={plateClusterBusy}
-              class="rounded border border-purple-500/50 bg-purple-500/20 px-2 py-1 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
-              onclick={runClusterPlates}
-              title="Group plates by visual similarity so outliers/false-positives surface"
-            >
-              {plateClusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
-            </button>
-            <button
-              type="button"
-              disabled={plateClusterBusy}
-              class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
-              onclick={loadSuspectedFp}
-              title="List plate crops that look like known false positives (needs FP centroids built)"
-            >
-              Suspected FPs
-            </button>
-            <button
-              type="button"
-              disabled={plateClusterBusy}
-              class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
-              onclick={runBuildFpCentroids}
-              title="Sub-type the false-positive bucket and (re)build its centroids"
-            >
-              {plateClusterBusy ? 'Building…' : 'Build FP centroids'}
-            </button>
-          {:else}
-            <button
-              type="button"
-              class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
-              onclick={backToPlateClusters}
-            >
-              ← Clusters
-            </button>
-            {#if selectedPlateCluster === FP_PLATE_CLUSTER_ID}
-              <span
-                class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
+            <label class="flex items-center gap-1.5">
+              <span class="text-zinc-400">Text</span>
+              <input
+                type="text"
+                bind:value={plateTextQuery}
+                placeholder="e.g. S14"
+                class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+              />
+            </label>
+
+            <!-- Top-N largest-crop gate. The sort runs on the largest 1-3
+               crops, so this is the key filter for the plates that matter. -->
+            <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+              {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
+                <button
+                  type="button"
+                  class="px-2 py-1 {plateMaxRank === o.v
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
+                  onclick={() => (plateMaxRank = o.v as number | null)}
+                >
+                  {o.l}
+                </button>
+              {/each}
+            </div>
+
+            {#if suspectedFpView}
+              <button
+                type="button"
+                class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
+                onclick={backToPlateClusters}
               >
-                ✗ False-positive cluster
-              </span>
-              <span class="text-[11px] text-zinc-400">not plates — hard negatives for LPR</span>
+                ← Clusters
+              </button>
+              <span class="font-medium text-red-200">Suspected false positives</span>
+              <label class="flex items-center gap-1 text-[11px] text-zinc-400">
+                ≤
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="2"
+                  bind:value={suspectedFpThreshold}
+                  class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-zinc-200"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={plateClusterBusy}
+                class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+                onclick={loadSuspectedFp}
+              >
+                {plateClusterBusy ? 'Loading…' : 'Reload'}
+              </button>
+            {:else if selectedPlateCluster == null}
+              <button
+                type="button"
+                disabled={plateClusterBusy}
+                class="rounded border border-purple-500/50 bg-purple-500/20 px-2 py-1 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
+                onclick={runClusterPlates}
+                title="Group plates by visual similarity so outliers/false-positives surface"
+              >
+                {plateClusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
+              </button>
+              <button
+                type="button"
+                disabled={plateClusterBusy}
+                class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+                onclick={loadSuspectedFp}
+                title="List plate crops that look like known false positives (needs FP centroids built)"
+              >
+                Suspected FPs
+              </button>
               <button
                 type="button"
                 disabled={plateClusterBusy}
                 class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
                 onclick={runBuildFpCentroids}
-                title="Refine the FP bucket into sub-types and rebuild its centroids"
+                title="Sub-type the false-positive bucket and (re)build its centroids"
               >
-                {plateClusterBusy ? 'Refining…' : 'Refine FP (build centroids)'}
+                {plateClusterBusy ? 'Building…' : 'Build FP centroids'}
               </button>
             {:else}
-              <span class="font-mono text-[11px] text-zinc-300">bucket #{selectedPlateCluster}</span>
               <button
                 type="button"
-                disabled={plateClusterBusy}
-                class="rounded border border-blue-500/50 bg-blue-500/20 px-2 py-1 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-                onclick={runRefinePlateCluster}
-                title="AHC-refine this bucket into sub-clusters to isolate outliers"
+                class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
+                onclick={backToPlateClusters}
               >
-                {plateClusterBusy ? 'Refining…' : 'Refine AHC'}
+                ← Clusters
               </button>
-              {#if plateRefineMsg}
-                <span class="text-[11px] text-zinc-400">{plateRefineMsg}</span>
+              {#if selectedPlateCluster === FP_PLATE_CLUSTER_ID}
+                <span
+                  class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
+                >
+                  ✗ False-positive cluster
+                </span>
+                <span class="text-[11px] text-zinc-400"
+                  >not plates — hard negatives for LPR</span
+                >
+                <button
+                  type="button"
+                  disabled={plateClusterBusy}
+                  class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+                  onclick={runBuildFpCentroids}
+                  title="Refine the FP bucket into sub-types and rebuild its centroids"
+                >
+                  {plateClusterBusy ? 'Refining…' : 'Refine FP (build centroids)'}
+                </button>
+              {:else}
+                <span class="font-mono text-[11px] text-zinc-300"
+                  >bucket #{selectedPlateCluster}</span
+                >
+                <button
+                  type="button"
+                  disabled={plateClusterBusy}
+                  class="rounded border border-blue-500/50 bg-blue-500/20 px-2 py-1 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+                  onclick={runRefinePlateCluster}
+                  title="AHC-refine this bucket into sub-clusters to isolate outliers"
+                >
+                  {plateClusterBusy ? 'Refining…' : 'Refine AHC'}
+                </button>
+                {#if plateRefineMsg}
+                  <span class="text-[11px] text-zinc-400">{plateRefineMsg}</span>
+                {/if}
               {/if}
             {/if}
-          {/if}
-          <span class="grow"></span>
-          {#if platePager.items.length > 0}
-            <button
-              type="button"
-              class="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-300 hover:bg-zinc-700"
-              onclick={selectAllPlates}
-              title="Select all loaded plates (shift-click a card for a range, ctrl/cmd-click to toggle)"
-            >
-              Select all
-            </button>
-          {/if}
-          <span class="font-mono text-[11px] text-zinc-500">
-            {platePager.items.length.toLocaleString()} / {platePager.total.toLocaleString()} platePager.items
-          </span>
-        </div>
-
-        <!-- Bulk-action toolbar — appears when plates are selected. Triage
-             outliers without leaving the gallery (no /review round-trip). -->
-        {#if plateSel.size > 0}
-          <div
-            class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
-          >
-            <span class="font-medium text-blue-200">{plateSel.size} selected</span>
             <span class="grow"></span>
-            <button
-              type="button"
-              disabled={plateBusy}
-              class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
-              onclick={() => applyPlateStatus([...plateSel.ids], 'false_positive')}
-            >
-              ✗ Mark false positive
-            </button>
-            <button
-              type="button"
-              disabled={plateBusy}
-              class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-              onclick={() => applyPlateStatus([...plateSel.ids], 'no_plate_visible')}
-            >
-              No plate
-            </button>
-            <button
-              type="button"
-              disabled={plateBusy}
-              class="rounded border border-green-500/50 bg-green-500/20 px-2 py-1 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
-              onclick={() => applyPlateStatus([...plateSel.ids], 'detected')}
-            >
-              ✓ Verify
-            </button>
-            <button
-              type="button"
-              class="rounded border border-zinc-700 px-2 py-1 text-zinc-400 hover:bg-zinc-800"
-              onclick={() => plateSel.clear()}
-            >
-              Clear
-            </button>
+            {#if platePager.items.length > 0}
+              <button
+                type="button"
+                class="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-300 hover:bg-zinc-700"
+                onclick={selectAllPlates}
+                title="Select all loaded plates (shift-click a card for a range, ctrl/cmd-click to toggle)"
+              >
+                Select all
+              </button>
+            {/if}
+            <span class="font-mono text-[11px] text-zinc-500">
+              {platePager.items.length.toLocaleString()} / {platePager.total.toLocaleString()}
+              platePager.items
+            </span>
           </div>
-        {/if}
+
+          <!-- Bulk-action toolbar — appears when plates are selected. Triage
+             outliers without leaving the gallery (no /review round-trip). -->
+          {#if plateSel.size > 0}
+            <div
+              class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
+            >
+              <span class="font-medium text-blue-200">{plateSel.size} selected</span>
+              <span class="grow"></span>
+              <button
+                type="button"
+                disabled={plateBusy}
+                class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+                onclick={() => applyPlateStatus([...plateSel.ids], 'false_positive')}
+              >
+                ✗ Mark false positive
+              </button>
+              <button
+                type="button"
+                disabled={plateBusy}
+                class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+                onclick={() => applyPlateStatus([...plateSel.ids], 'no_plate_visible')}
+              >
+                No plate
+              </button>
+              <button
+                type="button"
+                disabled={plateBusy}
+                class="rounded border border-green-500/50 bg-green-500/20 px-2 py-1 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
+                onclick={() => applyPlateStatus([...plateSel.ids], 'detected')}
+              >
+                ✓ Verify
+              </button>
+              <button
+                type="button"
+                class="rounded border border-zinc-700 px-2 py-1 text-zinc-400 hover:bg-zinc-800"
+                onclick={() => plateSel.clear()}
+              >
+                Clear
+              </button>
+            </div>
+          {/if}
         </div>
         <!-- /sticky header -->
 
@@ -1033,7 +1056,9 @@
                bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
                get a blue border so refined buckets are easy to spot. The
                permanent false-positive bucket gets a red border + label. -->
-          <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <ul
+            class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+          >
             {#each plateClusters as c (c.id)}
               <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
                 <button
@@ -1046,7 +1071,9 @@
                       : 'border-zinc-700'}"
                   onclick={() => openPlateCluster(c.id)}
                 >
-                  <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
+                  <div
+                    class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950"
+                  >
                     {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
                       <img
                         src={url}
@@ -1069,7 +1096,8 @@
                     {/if}
                     <span class="text-zinc-400">{c.size.toLocaleString()}</span>
                     {#if c.n_subclusters > 0}
-                      <span class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
+                      <span
+                        class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
                         >{c.n_subclusters} sub</span
                       >
                     {/if}
@@ -1082,9 +1110,8 @@
           <p class="text-sm text-zinc-500">Loading plates...</p>
         {:else if platePager.items.length === 0}
           <p class="text-sm text-zinc-500">
-            No plates match the current filters. The re-detection drain
-            may still be populating provenance — fresh rows appear here
-            as the worker processes them.
+            No plates match the current filters. The re-detection drain may still be
+            populating provenance — fresh rows appear here as the worker processes them.
           </p>
         {:else}
           <!-- Sub-cluster tabs: appear once a bucket has been AHC-refined.
@@ -1146,7 +1173,8 @@
           <div
             use:infiniteScroll={{
               onload: loadPlatesMore,
-              disabled: platePager.loading || platePager.loadingMore || !platePager.hasMore,
+              disabled:
+                platePager.loading || platePager.loadingMore || !platePager.hasMore,
             }}
             class="mt-4 h-1"
             aria-hidden="true"
@@ -1192,10 +1220,9 @@
               <div class="p-3">
                 <div class="mb-1 flex items-center gap-2">
                   <span class="text-sm font-semibold">#{c.id}</span>
-                  <span
-                    class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
-                  >
-                    {pb.text} {((c.purity ?? 0) * 100).toFixed(0)}
+                  <span class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}">
+                    {pb.text}
+                    {((c.purity ?? 0) * 100).toFixed(0)}
                   </span>
                   {#if c.has_subclusters}
                     <span
@@ -1234,7 +1261,8 @@
       <div
         use:infiniteScroll={{
           onload: loadMore,
-          disabled: clusterPager.loadingMore || !clusterPager.hasMore || clusterPager.loading,
+          disabled:
+            clusterPager.loadingMore || !clusterPager.hasMore || clusterPager.loading,
         }}
         class="mt-4 h-1"
         aria-hidden="true"
@@ -1247,10 +1275,12 @@
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {gridItems.length} / {clusterPager.total + (classFilter == null && lpCard != null ? 1 : 0)}
+      {gridItems.length} / {clusterPager.total +
+        (classFilter == null && lpCard != null ? 1 : 0)}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if clusterPager.loadingMore}loading more…{:else if clusterPager.hasMore}scroll for more{:else}all loaded{/if}
+      {#if clusterPager.loadingMore}loading more…{:else if clusterPager.hasMore}scroll for
+        more{:else}all loaded{/if}
     </span>
   </div>
 </div>

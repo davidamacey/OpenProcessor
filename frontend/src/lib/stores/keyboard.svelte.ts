@@ -17,7 +17,9 @@
 
 import type { KeyboardShortcut } from '$lib/types';
 
-export type ShortcutHandler = (e: KeyboardEvent) => void | boolean | Promise<void | boolean>;
+export type ShortcutHandler = (
+  e: KeyboardEvent,
+) => void | boolean | Promise<void | boolean>;
 
 interface Registration {
   combo: string;

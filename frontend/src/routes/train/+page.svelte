@@ -209,7 +209,11 @@
         ? await getTrainStatus(trackedJobId, statusAbort.signal)
         : await getTrainStatus(undefined, statusAbort.signal);
       activeStatus = next;
-      if (next?.state === 'finished' || next?.state === 'failed' || next?.state === 'cancelled') {
+      if (
+        next?.state === 'finished' ||
+        next?.state === 'failed' ||
+        next?.state === 'cancelled'
+      ) {
         // Refresh the past-runs table as soon as the active one
         // terminates so the row appears immediately.
         void refreshRuns();
@@ -325,7 +329,9 @@
 
   function maybeRenderPreflight(err: unknown): void {
     if (err instanceof ApiError && err.body && typeof err.body === 'object') {
-      const body = err.body as { detail?: { preflight?: PreflightReport; message?: string } };
+      const body = err.body as {
+        detail?: { preflight?: PreflightReport; message?: string };
+      };
       const pf = body.detail?.preflight;
       if (pf) preflight = pf;
       const msg = body.detail?.message ?? err.message;
@@ -439,8 +445,7 @@
         profile: (spec.profile as TrainJobSpec['profile']) ?? 'medium',
         hyperparameters:
           (spec.hyperparameters as Record<string, unknown> | undefined) ?? {},
-        augmentation:
-          (spec.augmentation as TrainJobSpec['augmentation']) ?? null,
+        augmentation: (spec.augmentation as TrainJobSpec['augmentation']) ?? null,
       };
       const res = await trainStart(body as TrainJobSpec);
       toastStore.success(`Reproduced as ${res.job_id}`);
@@ -646,7 +651,8 @@
     {#if kindDatasets.length > 0}
       <label class="mt-3 block">
         <span class="mb-1 block text-xs text-zinc-400">
-          dataset version ({kindDatasets.length} available — pick a sample, subset, or the full set)
+          dataset version ({kindDatasets.length} available — pick a sample, subset, or the full
+          set)
         </span>
         <select
           bind:value={selectedExportDir}
@@ -665,15 +671,17 @@
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{datasetExportDir}</p>
       {#if datasetKind === 'lpr'}
         <p class="mt-2 text-xs text-zinc-400">
-          Single-class <span class="font-mono">license_plate</span> dataset
-          (positives + FP hard-negatives + plate-free backgrounds), cluster-stratified.
+          Single-class <span class="font-mono">license_plate</span> dataset (positives + FP
+          hard-negatives + plate-free backgrounds), cluster-stratified.
         </p>
       {:else}
         <p class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
           <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
             {classesStore.classes.filter((c) => !c.deprecated).length} classes
           </span>
-          <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono">
+          <span
+            class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
+          >
             {classesStore.classes
               .reduce((acc, c) => acc + (c.validated_count ?? 0), 0)
               .toLocaleString()} validated crops
@@ -692,9 +700,7 @@
   <!-- LPR (license-plate) export — standalone single-class dataset -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
     <div class="flex items-center justify-between gap-3">
-      <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">
-        LPR plate dataset
-      </h2>
+      <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">LPR plate dataset</h2>
       <button
         type="button"
         class="rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
@@ -728,7 +734,9 @@
         </select>
       </label>
       <label class="block">
-        <span class="mb-1 block text-xs text-zinc-400">sample N positives (blank = all)</span>
+        <span class="mb-1 block text-xs text-zinc-400"
+          >sample N positives (blank = all)</span
+        >
         <input
           type="number"
           min="0"
@@ -745,9 +753,8 @@
       </label>
     </div>
     <p class="mt-2 text-[11px] text-zinc-500">
-      N samples positives spread <em>evenly across plate clusters</em> — build a
-      small set first, then a larger one from the same labeled pool for
-      progressive training.
+      N samples positives spread <em>evenly across plate clusters</em> — build a small set first,
+      then a larger one from the same labeled pool for progressive training.
     </p>
     {#if lprExportDir}
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>
@@ -756,8 +763,8 @@
       <p class="mt-2 text-xs text-zinc-400">{lprMessage}</p>
     {:else}
       <p class="mt-2 text-xs text-zinc-500">
-        Single-class plate dataset (positives + human FP hard-negatives + a
-        sample of plate-free backgrounds). Train it as a YOLO26 LPR detector.
+        Single-class plate dataset (positives + human FP hard-negatives + a sample of
+        plate-free backgrounds). Train it as a YOLO26 LPR detector.
       </p>
     {/if}
   </section>
@@ -791,22 +798,26 @@
 
   <!-- Form (collapses to a hint banner when a run is active) -->
   {#if isActive}
-    <p class="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-200">
-      A run is in progress. Submit a new run after it finishes — the trainer
-      handles one job at a time.
+    <p
+      class="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-200"
+    >
+      A run is in progress. Submit a new run after it finishes — the trainer handles one
+      job at a time.
     </p>
   {:else if !datasetExportDir}
-    <p class="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
+    <p
+      class="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200"
+    >
       Form disabled until a frozen export is available.
     </p>
   {:else}
     <TrainForm
-      datasetExportDir={datasetExportDir}
-      profiles={profiles}
-      presets={presets}
-      preflight={preflight}
-      preflighting={preflighting}
-      starting={starting}
+      {datasetExportDir}
+      {profiles}
+      {presets}
+      {preflight}
+      {preflighting}
+      {starting}
       onPreflight={runPreflight}
       onStart={startSingle}
       onStartCampaign={startCampaign}
@@ -820,12 +831,14 @@
        be built from "where did LPR miss but SAM3 + Gemma agree" cohorts.
        Selecting a mode loads a 24-card sanity-preview grid. -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900">
-    <header class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <header
+      class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2"
+    >
       <div class="flex flex-col">
         <h2 class="text-sm font-semibold text-zinc-100">Plate training cohorts</h2>
         <p class="text-[11px] text-zinc-500">
-          Provenance-derived slices for the next LPR training cycle. Pick a
-          mode to preview a sanity grid before committing.
+          Provenance-derived slices for the next LPR training cycle. Pick a mode to
+          preview a sanity grid before committing.
         </p>
       </div>
       <button
@@ -850,7 +863,9 @@
           onclick={() => void loadPlateCohortPreview(c.mode)}
         >
           <span class="font-semibold">{c.label}</span>
-          <span class="font-mono text-[11px] {selected ? 'text-blue-200' : 'text-zinc-400'}">
+          <span
+            class="font-mono text-[11px] {selected ? 'text-blue-200' : 'text-zinc-400'}"
+          >
             {count == null ? '…' : count.toLocaleString()} rows
           </span>
           <span class="text-[10px] text-zinc-500">{c.description}</span>
@@ -865,11 +880,13 @@
           <p class="text-xs text-zinc-500">Loading preview…</p>
         {:else if plateCohortPreview.length === 0}
           <p class="text-xs text-zinc-500">
-            No rows match this cohort yet — the re-detection drain may still
-            be populating provenance. Check back as the queue drains.
+            No rows match this cohort yet — the re-detection drain may still be populating
+            provenance. Check back as the queue drains.
           </p>
         {:else}
-          <div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+          <div
+            class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
+          >
             {#each plateCohortPreview as p (p.crop_id)}
               <PlateCard crop={p} onclick={openPlateInReview} compact />
             {/each}
@@ -881,7 +898,9 @@
 
   <!-- Past runs -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900">
-    <header class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <header
+      class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2"
+    >
       <h2 class="text-sm font-semibold text-zinc-100">Past runs</h2>
       <span class="font-mono text-xs text-zinc-500">{runs.length} / {runsTotal}</span>
     </header>
@@ -892,12 +911,12 @@
       {#if runsLoading && runs.length === 0}
         <p class="px-3 py-3 text-xs text-zinc-500">Loading…</p>
       {:else if runs.length === 0}
-        <p class="px-3 py-3 text-xs text-zinc-500">
-          No runs yet. Start one above.
-        </p>
+        <p class="px-3 py-3 text-xs text-zinc-500">No runs yet. Start one above.</p>
       {:else}
         <table class="w-full table-fixed text-sm">
-          <thead class="sticky top-0 bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500">
+          <thead
+            class="sticky top-0 bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500"
+          >
             <tr>
               <th class="px-3 py-2 text-left">Name</th>
               <th class="w-20 px-3 py-2 text-left">Family</th>
@@ -914,7 +933,10 @@
                     {r.job_id}
                   </div>
                   {#if r.campaign_id}
-                    <div class="truncate font-mono text-[10px] text-zinc-500" title={r.campaign_id}>
+                    <div
+                      class="truncate font-mono text-[10px] text-zinc-500"
+                      title={r.campaign_id}
+                    >
                       ↳ {r.campaign_id}
                     </div>
                   {/if}

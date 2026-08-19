@@ -68,11 +68,7 @@ const RECONNECT_INITIAL_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 // Event types we care about. Everything else is silently ignored so a
 // future event type added on the backend doesn't trip up older clients.
-const KNOWN_EVENT_TYPES = [
-  'crop.created',
-  'crop.classified',
-  'crop.plate_verified',
-];
+const KNOWN_EVENT_TYPES = ['crop.created', 'crop.classified', 'crop.plate_verified'];
 
 /**
  * Open an SSE subscription to /curation/events.
@@ -161,7 +157,10 @@ export function subscribePipelineEvents(
     };
     es.addEventListener('snapshot', (ev: MessageEvent) => {
       try {
-        const payload = JSON.parse(ev.data) as { state: Record<string, unknown>; stats: Record<string, unknown> };
+        const payload = JSON.parse(ev.data) as {
+          state: Record<string, unknown>;
+          stats: Record<string, unknown>;
+        };
         opts.onSnapshot?.(payload.state ?? {}, payload.stats ?? {});
       } catch (err) {
         console.warn('[sse] failed to parse snapshot', err);
@@ -209,7 +208,6 @@ export function subscribePipelineEvents(
     },
   };
 }
-
 
 export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscription {
   let es: EventSource | null = null;

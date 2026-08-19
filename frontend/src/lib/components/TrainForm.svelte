@@ -115,7 +115,10 @@
   function applyProfile(p: ProfileName): void {
     profileName = p;
     const def = profiles.find((x) => x.name === p)?.defaults ?? {};
-    if (typeof def.model_size === 'string' && SIZES.includes(def.model_size as ModelSize)) {
+    if (
+      typeof def.model_size === 'string' &&
+      SIZES.includes(def.model_size as ModelSize)
+    ) {
       modelSize = def.model_size as ModelSize;
     }
     hpEpochs = (def.epochs as number | undefined) ?? null;
@@ -337,9 +340,7 @@
       {/each}
     </div>
     {#if cudaDevices === '0'}
-      <p class="mt-2 text-[11px] text-yellow-300">
-        Gemma worker stays alive on GPU 2.
-      </p>
+      <p class="mt-2 text-[11px] text-yellow-300">Gemma worker stays alive on GPU 2.</p>
     {/if}
   </div>
 
@@ -348,9 +349,9 @@
     classes={classesStore.classes}
     selected={selectedClasses}
     setSelected={(ids) => (selectedClasses = ids)}
-    singleCls={singleCls}
+    {singleCls}
     setSingleCls={(v) => (singleCls = v)}
-    presets={presets}
+    {presets}
   />
 
   <!-- Augmentation -->
@@ -372,7 +373,9 @@
     </button>
 
     {#if hpExpanded}
-      <div class="grid grid-cols-2 gap-3 border-t border-zinc-800 p-3 text-sm sm:grid-cols-4">
+      <div
+        class="grid grid-cols-2 gap-3 border-t border-zinc-800 p-3 text-sm sm:grid-cols-4"
+      >
         <label class="block">
           <span class="mb-1 block text-xs text-zinc-400">epochs</span>
           <input
@@ -541,7 +544,9 @@
   </section>
 
   <!-- Submit row -->
-  <div class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900 p-3">
+  <div
+    class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900 p-3"
+  >
     <label class="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
       <input
         type="checkbox"

@@ -15,7 +15,12 @@
     { key: 'mlflow', label: 'MLflow', port: 5000, env: 'PUBLIC_MLFLOW_URL' },
     { key: 'grafana', label: 'Grafana', port: 4605, env: 'PUBLIC_GRAFANA_URL' },
     { key: 'prometheus', label: 'Prometheus', port: 4604, env: 'PUBLIC_PROMETHEUS_URL' },
-    { key: 'opensearch', label: 'OpenSearch', port: 4608, env: 'PUBLIC_OPENSEARCH_DASHBOARDS_URL' },
+    {
+      key: 'opensearch',
+      label: 'OpenSearch',
+      port: 4608,
+      env: 'PUBLIC_OPENSEARCH_DASHBOARDS_URL',
+    },
   ];
 
   let links = $state<Array<{ label: string; href: string }>>([]);

@@ -24,7 +24,13 @@
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
-  import type { OpClass, OpCluster, OpCrop, PaginatedResponse, UndoEntry } from '$lib/types';
+  import type {
+    OpClass,
+    OpCluster,
+    OpCrop,
+    PaginatedResponse,
+    UndoEntry,
+  } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -91,7 +97,11 @@
     { value: 'v6_low_conf', label: 'v6 low', hint: 'v6 below 0.75; demoted' },
     { value: 'gemma_unmatched', label: 'Gemma ?', hint: 'Gemma class not in registry' },
     { value: 'coco_yolo11_proposal', label: 'COCO', hint: 'Raw yolo proposal' },
-    { value: 'gemma_new_class_pending', label: 'New cls', hint: 'Gemma proposed new class' },
+    {
+      value: 'gemma_new_class_pending',
+      label: 'New cls',
+      hint: 'Gemma proposed new class',
+    },
   ];
 
   // Primary-subject scope: 0 = all crops, 1 = largest only, 2 = largest + 2nd.
@@ -236,7 +246,9 @@
   // Sub-cluster filtering (in-memory, after load). cluster_subid is
   // backend-owned (keyword like "47a") — the frontend string-matches.
   const filteredCrops = $derived(
-    subTab == null ? cropPager.items : cropPager.items.filter((c) => c.cluster_subid === subTab),
+    subTab == null
+      ? cropPager.items
+      : cropPager.items.filter((c) => c.cluster_subid === subTab),
   );
 
   const subClusterIds = $derived.by(() => {
@@ -410,7 +422,8 @@
     } catch (e) {
       toastStore.error(`Label failed: ${(e as Error).message}`);
       for (const prev of pushed) {
-        const prevCls = prev.prior_class_id != null ? classesStore.byId(prev.prior_class_id) : null;
+        const prevCls =
+          prev.prior_class_id != null ? classesStore.byId(prev.prior_class_id) : null;
         revertLocalLabel(prev, prevCls?.name ?? null);
       }
       undoStore.remove(pushed);
@@ -491,7 +504,8 @@
     for (const id of failedIds) {
       const s = snaps.get(id);
       if (!s) continue;
-      const prevCls = s.prior_class_id != null ? classesStore.byId(s.prior_class_id) : null;
+      const prevCls =
+        s.prior_class_id != null ? classesStore.byId(s.prior_class_id) : null;
       revertLocalLabel(s, prevCls?.name ?? null);
       stale.push(s);
     }
@@ -555,7 +569,9 @@
           cropPager.items = [restored, ...cropPager.items];
           cropPager.total += 1;
         } catch (e) {
-          toastStore.info(`Reverted, but could not re-fetch the crop: ${(e as Error).message}`);
+          toastStore.info(
+            `Reverted, but could not re-fetch the crop: ${(e as Error).message}`,
+          );
         }
       }
     } catch (e) {
@@ -576,7 +592,9 @@
     gemmaRunning = true;
     try {
       const res = await runGemmaOnCluster(clusterId);
-      toastStore.success(`Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`);
+      toastStore.success(
+        `Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
+      );
     } catch (e) {
       toastStore.error(`Gemma run failed: ${(e as Error).message}`);
     } finally {
@@ -754,7 +772,10 @@
 
   function onGroupConsider(
     key: string,
-    e: CustomEvent<{ items: OpCrop[]; info: { id: string; trigger: TRIGGERS; source: SOURCES } }>,
+    e: CustomEvent<{
+      items: OpCrop[];
+      info: { id: string; trigger: TRIGGERS; source: SOURCES };
+    }>,
   ): void {
     // The `!dragIds.includes` guard makes this block run once per drag
     // (consider fires repeatedly). Finder pattern: grabbing any selected
@@ -838,7 +859,12 @@
   $effect(() => {
     // Auto-refresh while user is at the top — they're not actively
     // labeling far down the list, so prepending new cards is safe.
-    if (liveNewCount > 0 && !scrolledPastFirst20 && !cropPager.loading && !cropPager.loadingMore) {
+    if (
+      liveNewCount > 0 &&
+      !scrolledPastFirst20 &&
+      !cropPager.loading &&
+      !cropPager.loadingMore
+    ) {
       const n = liveNewCount;
       liveNewCount = 0;
       void loadFirst().then(() => {
@@ -868,11 +894,7 @@
     // do here?" friction.
 
     reg('enter', confirmSelected, 'Confirm selected & advance');
-    reg(
-      'shift+enter',
-      acceptAllGemmaOnPage,
-      'Confirm all Gemma suggestions on page',
-    );
+    reg('shift+enter', acceptAllGemmaOnPage, 'Confirm all Gemma suggestions on page');
     reg(
       'g',
       async () => {
@@ -945,7 +967,11 @@
       'Discard selected',
     );
     reg('z', undoLast, 'Undo last action');
-    reg('x', () => void ignoreSelected('ignore'), 'Ignore selected (exclude from training)');
+    reg(
+      'x',
+      () => void ignoreSelected('ignore'),
+      'Ignore selected (exclude from training)',
+    );
     reg('u', undoIgnore, 'Undo last ignore');
     reg('a', selectAllPage, 'Select all on page');
     // Arrow keys navigate within the loaded grid. With infinite scroll the
@@ -976,11 +1002,7 @@
       },
       'Next crop',
     );
-    reg(
-      'm',
-      openMovePicker,
-      'Move selected to cluster…',
-    );
+    reg('m', openMovePicker, 'Move selected to cluster…');
     reg(
       'escape',
       () => {
@@ -1013,9 +1035,7 @@
 <div class="flex h-full flex-col">
   <!-- Toolbar — title + summary + bulk-action buttons + class assignment.
        Drag-and-drop onto the left ClassSidebar is the alternative path. -->
-  <div
-    class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5"
-  >
+  <div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
     <h1 class="flex items-baseline gap-2 text-lg font-semibold">
       {#if clusterName}
         <span class="capitalize text-zinc-100">{clusterName}</span>
@@ -1043,13 +1063,17 @@
         class="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 font-mono text-[11px] text-zinc-300"
         title="validated · labeled · cluster total"
       >
-        <span class="text-emerald-300">{(clsForCluster.validated_count ?? 0).toLocaleString()}</span>
+        <span class="text-emerald-300"
+          >{(clsForCluster.validated_count ?? 0).toLocaleString()}</span
+        >
         <span class="text-zinc-500">validated</span>
         <span class="mx-1 text-zinc-600">·</span>
         <span class="text-blue-300">{(clsForCluster.count ?? 0).toLocaleString()}</span>
         <span class="text-zinc-500">labeled</span>
         <span class="mx-1 text-zinc-600">·</span>
-        <span class="text-zinc-200">{(clsForCluster.cluster_size ?? 0).toLocaleString()}</span>
+        <span class="text-zinc-200"
+          >{(clsForCluster.cluster_size ?? 0).toLocaleString()}</span
+        >
         <span class="text-zinc-500">in cluster</span>
       </span>
     {/if}
@@ -1118,7 +1142,9 @@
 
       <button class="btn" type="button" onclick={runGemma} disabled={gemmaRunning}>
         {#if gemmaRunning}
-          <span class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"></span>
+          <span
+            class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"
+          ></span>
           Running…
         {:else}
           Run Gemma
@@ -1132,7 +1158,9 @@
         title="Sub-cluster this cluster with AHC"
       >
         {#if refining}
-          <span class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"></span>
+          <span
+            class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"
+          ></span>
           Refining…
         {:else}
           Refine (AHC)
@@ -1262,9 +1290,7 @@
 
   <!-- Sub-cluster tabs -->
   {#if subClusterIds.length > 0}
-    <div
-      class="flex items-center gap-2 border-b border-zinc-800 px-4 py-1.5 text-xs"
-    >
+    <div class="flex items-center gap-2 border-b border-zinc-800 px-4 py-1.5 text-xs">
       <span class="text-zinc-500">sub-clusters:</span>
       <button
         type="button"
@@ -1327,7 +1353,9 @@
             <div
               class="mt-3 flex items-center gap-2 pt-1 text-xs font-medium text-zinc-300 first:mt-0"
             >
-              <span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100">{group.label}</span>
+              <span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-100"
+                >{group.label}</span
+              >
               <span class="text-zinc-500">
                 {group.items.length} crop{group.items.length === 1 ? '' : 's'}
               </span>
@@ -1400,7 +1428,8 @@
       {#if sel.size > 0}<span class="ml-2 text-blue-300">· {sel.size} selected</span>{/if}
     </span>
     <span class="font-mono text-xs text-zinc-400">
-      {#if cropPager.loadingMore}loading more…{:else if cropPager.hasMore}scroll for more{:else}all loaded{/if}
+      {#if cropPager.loadingMore}loading more…{:else if cropPager.hasMore}scroll for more{:else}all
+        loaded{/if}
     </span>
   </div>
 </div>
@@ -1412,11 +1441,15 @@
     aria-modal="true"
     aria-label="Move crops to cluster"
   >
-    <div class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl">
-      <h3 class="mb-2 text-base font-semibold">Move {sel.size} crop{sel.size === 1 ? '' : 's'}</h3>
+    <div
+      class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    >
+      <h3 class="mb-2 text-base font-semibold">
+        Move {sel.size} crop{sel.size === 1 ? '' : 's'}
+      </h3>
       <p class="mb-3 text-xs text-zinc-400">
-        Move these from cluster #{clusterId} to a target cluster id. The
-        operation is reversible per crop via the cluster page.
+        Move these from cluster #{clusterId} to a target cluster id. The operation is reversible
+        per crop via the cluster page.
       </p>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Target cluster id</span>
@@ -1441,7 +1474,11 @@
       </label>
       <div class="flex justify-end gap-2">
         <button type="button" class="btn" onclick={cancelMovePicker}>Cancel</button>
-        <button type="button" class="btn btn-primary" onclick={() => void confirmMovePicker()}>
+        <button
+          type="button"
+          class="btn btn-primary"
+          onclick={() => void confirmMovePicker()}
+        >
           Move
         </button>
       </div>

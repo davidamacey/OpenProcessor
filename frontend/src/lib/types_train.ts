@@ -116,8 +116,16 @@ export interface TrainJobStatus {
   current_epoch?: number | null;
   total_epochs?: number | null;
   epoch_time_s?: number | null;
-  best_metric?: { map50?: number; map50_95?: number; [k: string]: number | undefined } | null;
-  last_metric?: { map50?: number; map50_95?: number; [k: string]: number | undefined } | null;
+  best_metric?: {
+    map50?: number;
+    map50_95?: number;
+    [k: string]: number | undefined;
+  } | null;
+  last_metric?: {
+    map50?: number;
+    map50_95?: number;
+    [k: string]: number | undefined;
+  } | null;
   mlflow_run_id?: string | null;
   mlflow_run_url?: string | null;
   checkpoint_path?: string | null;

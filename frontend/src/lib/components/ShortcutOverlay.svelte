@@ -67,7 +67,9 @@
     >
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
-        <span class="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300">
+        <span
+          class="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300"
+        >
           {scopeLabel} page
         </span>
       </div>
@@ -91,7 +93,9 @@
       </section>
 
       <section class="mb-5">
-        <h3 class="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+        <h3
+          class="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase"
+        >
           Class hotkeys
           <span class="text-[10px] font-normal normal-case text-zinc-600">
             (single letter; tab to next class; Enter to save)
@@ -103,7 +107,10 @@
           <ul class="grid grid-cols-1 gap-y-1 sm:grid-cols-2 sm:gap-x-4">
             {#each editableClasses as cls (cls.id)}
               <li class="flex items-center justify-between gap-3 text-sm">
-                <span class="truncate text-zinc-300" title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}>
+                <span
+                  class="truncate text-zinc-300"
+                  title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
+                >
                   {cls.name}
                   {#if cls.validated_count != null}
                     <span class="ml-1 font-mono text-[10px] text-zinc-500">

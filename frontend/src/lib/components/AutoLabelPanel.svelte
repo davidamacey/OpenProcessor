@@ -71,7 +71,8 @@
   function formatDuration(seconds: number | null): string {
     if (seconds == null || !Number.isFinite(seconds)) return '—';
     if (seconds < 60) return `${Math.round(seconds)}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+    if (seconds < 3600)
+      return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     return `${h}h ${m}m`;
@@ -143,8 +144,12 @@
     if (pollTimer) clearTimeout(pollTimer);
   });
 
-  const isRunning: boolean = $derived(((job as AutoLabelJobState | null)?.status ?? '') === 'running');
-  const stageIdx: number = $derived(stageIndex((job as AutoLabelJobState | null)?.stage ?? ''));
+  const isRunning: boolean = $derived(
+    ((job as AutoLabelJobState | null)?.status ?? '') === 'running',
+  );
+  const stageIdx: number = $derived(
+    stageIndex((job as AutoLabelJobState | null)?.stage ?? ''),
+  );
   const percent: number | null = $derived.by(() => {
     if (!job || job.total <= 0) return null;
     return Math.min(100, Math.round((job.processed / job.total) * 100));
@@ -153,7 +158,9 @@
   // Backend chip — gpu (cuml …) vs cpu (sklearn …). Empty string when
   // the worker is on an older build that doesn't emit the field, so the
   // chip renders only when the backend has been detected.
-  const backendName: string = $derived(((job as AutoLabelJobState | null)?.backend ?? '') as string);
+  const backendName: string = $derived(
+    ((job as AutoLabelJobState | null)?.backend ?? '') as string,
+  );
   const backendDetail: string = $derived(
     ((job as AutoLabelJobState | null)?.backend_detail ?? '') as string,
   );
@@ -181,10 +188,9 @@
       <h2 class="text-base font-semibold">Data integrity — recluster</h2>
       <p class="mt-0.5 text-xs text-zinc-400">
         Aligns <code class="text-zinc-300">cluster_id</code> with
-        <code class="text-zinc-300">class_id</code>, re-clusters
-        unlabeled residuals (AHC), promotes high-purity clusters,
-        and runs Gemma over remaining unvalidated crops. v6's confident
-        labels and human validations are never overwritten. Hours at
+        <code class="text-zinc-300">class_id</code>, re-clusters unlabeled residuals
+        (AHC), promotes high-purity clusters, and runs Gemma over remaining unvalidated
+        crops. v6's confident labels and human validations are never overwritten. Hours at
         350k-crop scale. Safe to cancel.
       </p>
     </div>
@@ -208,7 +214,10 @@
             </button>
           {/each}
         </div>
-        <label class="flex items-center gap-1.5" title="Train/assign only crops at or above this clarity (blur_lap_ratio).">
+        <label
+          class="flex items-center gap-1.5"
+          title="Train/assign only crops at or above this clarity (blur_lap_ratio)."
+        >
           <span class="text-zinc-500">clarity ≥</span>
           <input
             type="range"
@@ -219,9 +228,14 @@
             disabled={busy}
             class="h-1 w-28 cursor-pointer accent-blue-500"
           />
-          <span class="w-10 tabular-nums text-zinc-400">{clusterBlur > 0 ? clusterBlur.toFixed(2) : 'off'}</span>
+          <span class="w-10 tabular-nums text-zinc-400"
+            >{clusterBlur > 0 ? clusterBlur.toFixed(2) : 'off'}</span
+          >
         </label>
-        <label class="flex items-center gap-1.5" title="IVF centroid count (default 512). Sweep down with the gate on.">
+        <label
+          class="flex items-center gap-1.5"
+          title="IVF centroid count (default 512). Sweep down with the gate on."
+        >
           <span class="text-zinc-500">clusters</span>
           <input
             type="number"
@@ -254,21 +268,11 @@
         </label>
       {/if}
       {#if isRunning}
-        <button
-          class="btn btn-danger"
-          type="button"
-          onclick={cancel}
-          disabled={busy}
-        >
+        <button class="btn btn-danger" type="button" onclick={cancel} disabled={busy}>
           Cancel
         </button>
       {:else}
-        <button
-          class="btn btn-primary"
-          type="button"
-          onclick={start}
-          disabled={busy}
-        >
+        <button class="btn btn-primary" type="button" onclick={start} disabled={busy}>
           Recluster now
         </button>
       {/if}
@@ -332,7 +336,9 @@
             <div class="h-full w-1/3 animate-pulse bg-blue-500/50"></div>
           {/if}
         </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-zinc-400">
+        <div
+          class="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-zinc-400"
+        >
           <span>
             {#if job.total > 0}
               {job.processed.toLocaleString()} / {job.total.toLocaleString()}

@@ -25,11 +25,11 @@
   --system-gray-6: 28 28 30;
 
   /* Semantic */
-  --bg-base: 9 9 11;          /* zinc-950 */
-  --bg-elevated: 24 24 27;    /* zinc-900 */
-  --bg-hover: 39 39 42;       /* zinc-800 */
-  --border-subtle: 39 39 42;  /* zinc-800 */
-  --border-strong: 63 63 70;  /* zinc-700 */
+  --bg-base: 9 9 11; /* zinc-950 */
+  --bg-elevated: 24 24 27; /* zinc-900 */
+  --bg-hover: 39 39 42; /* zinc-800 */
+  --border-subtle: 39 39 42; /* zinc-800 */
+  --border-strong: 63 63 70; /* zinc-700 */
   --text-primary: 244 244 245;
   --text-secondary: 161 161 170;
   --text-tertiary: 113 113 122;
@@ -40,8 +40,7 @@ body {
   background-color: rgb(var(--bg-base));
   color: rgb(var(--text-primary));
   font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui,
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

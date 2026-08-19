@@ -33,32 +33,32 @@ that repo's `scripts/legacy/RUNBOOK.md`).
 
 ## Routes
 
-| Route | Purpose |
-|---|---|
-| `/` | Dashboard — class balance bar chart, ingestion progress, recent activity, quick actions |
-| `/clusters` | Grid of clusters; sort by purity / size / dominant class; click into one. Each card shows server-computed `dominant_class_name`, `purity`, and `cluster_kind` (`class` / `candidate` / `unassigned`). The dashboard's **Recluster** panel has a *Merge candidate clusters* toggle that broadens the AHC residual pool so smaller candidates can fuse together. Selecting `class=license_plate` replaces the cluster grid with a **plate browse view** — paginated plate thumbnails filtered by detector / verified / score / plate-text |
-| `/clusters/[id]` | Per-cluster paginated crop grid + DnD-to-class-sidebar + bulk label/Gemma/AHC + similarity cut-line + sub-cluster tabs. Multi-select honors the Finder pattern — drag any *selected* card to bulk-move the whole selection; grab an *unselected* card to replace the selection with that one. Sub-cluster tabs render the backend-owned `cluster_subid` string (e.g. `"47a"`, `"47b"`) — the frontend never recomputes sub-cluster groupings. Hover any crop and click **ⓘ** for a Crop Detail modal (full source image + class / plate provenance, same metadata the review page shows). |
-| `/review` | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty / Model Disagreements / **Plates**. Plate rows show detector chips, the cascade chain, Gemma-read plate text, and a ⚠ shape-warning when the bbox envelope fails. LPR + Gemma agreement is auto-confirmed server-side (no human needed); only SAM3-only / LPR-blind-spot plates surface for review. **D (Discard)** marks the crop as permanently dismissed from every review queue — it stays in OpenSearch with its original label intact, just never shows up in `/review` again. |
-| `/classes` | Add/rename/regroup/merge classes; sync to OpenSearch; adequacy badges |
-| `/export` | YOLO export status + augmentation gap table + Test Holdout freeze + downloads |
-| `/train` | Training cockpit + **plate training cohort picker** (lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected) |
+| Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`              | Dashboard — class balance bar chart, ingestion progress, recent activity, quick actions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `/clusters`      | Grid of clusters; sort by purity / size / dominant class; click into one. Each card shows server-computed `dominant_class_name`, `purity`, and `cluster_kind` (`class` / `candidate` / `unassigned`). The dashboard's **Recluster** panel has a _Merge candidate clusters_ toggle that broadens the AHC residual pool so smaller candidates can fuse together. Selecting `class=license_plate` replaces the cluster grid with a **plate browse view** — paginated plate thumbnails filtered by detector / verified / score / plate-text                                                   |
+| `/clusters/[id]` | Per-cluster paginated crop grid + DnD-to-class-sidebar + bulk label/Gemma/AHC + similarity cut-line + sub-cluster tabs. Multi-select honors the Finder pattern — drag any _selected_ card to bulk-move the whole selection; grab an _unselected_ card to replace the selection with that one. Sub-cluster tabs render the backend-owned `cluster_subid` string (e.g. `"47a"`, `"47b"`) — the frontend never recomputes sub-cluster groupings. Hover any crop and click **ⓘ** for a Crop Detail modal (full source image + class / plate provenance, same metadata the review page shows). |
+| `/review`        | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty / Model Disagreements / **Plates**. Plate rows show detector chips, the cascade chain, Gemma-read plate text, and a ⚠ shape-warning when the bbox envelope fails. LPR + Gemma agreement is auto-confirmed server-side (no human needed); only SAM3-only / LPR-blind-spot plates surface for review. **D (Discard)** marks the crop as permanently dismissed from every review queue — it stays in OpenSearch with its original label intact, just never shows up in `/review` again.                                  |
+| `/classes`       | Add/rename/regroup/merge classes; sync to OpenSearch; adequacy badges                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/export`        | YOLO export status + augmentation gap table + Test Holdout freeze + downloads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `/train`         | Training cockpit + **plate training cohort picker** (lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## Keyboard shortcuts
 
-| Key | Action |
-|---|---|
-| `1-9, 0` | Assign top-10 most-frequent classes for the current cluster |
-| `Enter` | Confirm selected + advance to next unvalidated |
-| `G` | Accept Gemma suggestion for selected |
-| `N` | Skip (defer to review queue) |
-| `D` | Discard — permanently dismiss the crop from every review queue (writes `review_dismissed_at` server-side; can still undo within the session via `Z`) |
-| `Z` | Undo last action (50-entry ring) |
-| `A` | Select all on page |
-| `Shift+Enter` | Confirm all Gemma suggestions on page |
-| `M` | Open inline cluster picker (move selected to a different cluster) |
-| `←` / `→` | Page navigation |
-| `` ` `` | Toggle keyboard-shortcut overlay — also acts as an **inline hotkey editor**: every class has a 1-char input next to it; Tab between them, type a letter to bind, Enter saves. Duplicates are rejected client-side with a clear message. |
-| `Esc` | Cancel drag / picker / dismiss overlay |
+| Key           | Action                                                                                                                                                                                                                                  |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `1-9, 0`      | Assign top-10 most-frequent classes for the current cluster                                                                                                                                                                             |
+| `Enter`       | Confirm selected + advance to next unvalidated                                                                                                                                                                                          |
+| `G`           | Accept Gemma suggestion for selected                                                                                                                                                                                                    |
+| `N`           | Skip (defer to review queue)                                                                                                                                                                                                            |
+| `D`           | Discard — permanently dismiss the crop from every review queue (writes `review_dismissed_at` server-side; can still undo within the session via `Z`)                                                                                    |
+| `Z`           | Undo last action (50-entry ring)                                                                                                                                                                                                        |
+| `A`           | Select all on page                                                                                                                                                                                                                      |
+| `Shift+Enter` | Confirm all Gemma suggestions on page                                                                                                                                                                                                   |
+| `M`           | Open inline cluster picker (move selected to a different cluster)                                                                                                                                                                       |
+| `←` / `→`     | Page navigation                                                                                                                                                                                                                         |
+| `` ` ``       | Toggle keyboard-shortcut overlay — also acts as an **inline hotkey editor**: every class has a 1-char input next to it; Tab between them, type a letter to bind, Enter saves. Duplicates are rejected client-side with a clear message. |
+| `Esc`         | Cancel drag / picker / dismiss overlay                                                                                                                                                                                                  |
 
 The shortcut overlay (`` ` ``) is the canonical place to manage class
 hotkeys. Reserved letters are no longer blocked — bind any single
@@ -68,9 +68,9 @@ character; the only invariant is "two classes can't share a letter."
 
 Env vars (`.env` or via Vite `--define`):
 
-| Var | Default | Purpose |
-|---|---|---|
-| `PUBLIC_TRITON_API_URL` | *(empty)* | Override the openprocessor base URL. Leave empty in Docker — nginx proxies `/curation/*` and `/clusters/*` to `op-api:4603` same-origin, so no CORS and no hostname hardcoding. Set to `http://localhost:4603` for local `npm run dev` only. |
+| Var                     | Default   | Purpose                                                                                                                                                                                                                               |
+| ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_TRITON_API_URL` | _(empty)_ | Override the openprocessor base URL. Leave empty in Docker — nginx proxies `/curation/*` and `/clusters/*` to `op-api:4603` same-origin, so no CORS and no hostname hardcoding. Set to `http://localhost:4603` for local `npm run dev` only. |
 
 The app is a pure SPA consumer of `openprocessor` — there is **no** local
 database. State is reconstructed from API calls; `localStorage` only
@@ -166,6 +166,7 @@ The host port mapping in `docker-compose.legacy.yml` exposes it on **5184**.
 **nginx proxy (LAN-transparent API routing)**
 The nginx config inside the container routes `/curation/*` and `/clusters/*` paths
 to `op-api:4603` via `proxy_pass`. This means:
+
 - The browser always makes same-origin requests (`/curation/...`) — no CORS issues.
 - `PUBLIC_TRITON_API_URL` defaults to `''` so all API paths are relative URLs.
 - The app works identically whether accessed from `localhost` or any LAN IP.
@@ -217,16 +218,16 @@ processing automatically when you `make gpu-legacy`.
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
-|---|---|
-| Red health dot in top bar | openprocessor not reachable at `PUBLIC_TRITON_API_URL`; or `/curation/health` returns 5xx |
-| Empty cluster grid | OpenSearch not running, or `op_vehicle_crops` not yet populated by ingest |
-| Thumbnails 404 | `op_vehicle_crops` doc missing `bbox_norm`; or NAS path not mounted into op-api container |
-| Hotkeys do nothing | A modal is open; or the focused element is an `<input>` (the keyboard store ignores typing) |
+| Symptom                                                             | Likely cause                                                                                                                                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Red health dot in top bar                                           | openprocessor not reachable at `PUBLIC_TRITON_API_URL`; or `/curation/health` returns 5xx                                                                                               |
+| Empty cluster grid                                                  | OpenSearch not running, or `op_vehicle_crops` not yet populated by ingest                                                                                                      |
+| Thumbnails 404                                                      | `op_vehicle_crops` doc missing `bbox_norm`; or NAS path not mounted into op-api container                                                                                    |
+| Hotkeys do nothing                                                  | A modal is open; or the focused element is an `<input>` (the keyboard store ignores typing)                                                                                    |
 | Drag-drop appears to move but the crop is still there after refresh | Stale `dist/` bundle — `make ml-resume` then hard-reload (⌘⇧R / Ctrl+Shift+R). If `PUT /curation/crops/batch_label` never shows up in DevTools Network on drop, the bundle is stale. |
-| Discard reappears on tab switch | Should not happen anymore (the backend writes `review_dismissed_at` with `refresh=True` and the queue must_not's it). If it does, hard-reload — your bundle predates the fix. |
-| Counters in /review header showing 10,000 when there should be more | Should not happen anymore (`track_total_hits=true` is on by default). If you see it, the deployed `op-api` predates the fix — `docker compose restart op-api`. |
-| Build fails with `Cannot find module 'svelte-dnd-action'` | `npm install` not run, or node_modules stale (`rm -rf node_modules && npm install`) |
+| Discard reappears on tab switch                                     | Should not happen anymore (the backend writes `review_dismissed_at` with `refresh=True` and the queue must_not's it). If it does, hard-reload — your bundle predates the fix.  |
+| Counters in /review header showing 10,000 when there should be more | Should not happen anymore (`track_total_hits=true` is on by default). If you see it, the deployed `op-api` predates the fix — `docker compose restart op-api`.             |
+| Build fails with `Cannot find module 'svelte-dnd-action'`           | `npm install` not run, or node_modules stale (`rm -rf node_modules && npm install`)                                                                                            |
 
 ## Repos this depends on
 

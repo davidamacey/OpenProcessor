@@ -92,16 +92,23 @@
   const deltaPts = (v: number | null): string =>
     v == null ? '—' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}`;
   const deltaCls = (v: number | null): string =>
-    v == null ? 'text-zinc-500' : v >= -0.005 ? 'text-emerald-300' : v >= -0.02 ? 'text-amber-300' : 'text-red-300';
+    v == null
+      ? 'text-zinc-500'
+      : v >= -0.005
+        ? 'text-emerald-300'
+        : v >= -0.02
+          ? 'text-amber-300'
+          : 'text-red-300';
 </script>
 
 {#if variants.length}
   <section class="mt-6 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
     <h2 class="text-sm font-medium text-zinc-300">Quantization — lighter &amp; faster</h2>
     <p class="mb-3 text-xs text-zinc-500">
-      Size / accuracy / latency by precision on <code>{dataset}</code>, with ΔmAP@.5:.95 vs FP32.
-      <strong class="text-indigo-200">FP16 ONNX</strong> is the shipped NVIDIA artifact; INT8 is the
-      lighter edge / Apple option. Lower size + latency = better.
+      Size / accuracy / latency by precision on <code>{dataset}</code>, with ΔmAP@.5:.95
+      vs FP32.
+      <strong class="text-indigo-200">FP16 ONNX</strong> is the shipped NVIDIA artifact; INT8
+      is the lighter edge / Apple option. Lower size + latency = better.
     </p>
     <div class="overflow-x-auto rounded border border-zinc-800">
       <table class="w-full text-sm">
@@ -122,12 +129,15 @@
               <td class="px-3 py-2 font-mono text-xs">{PREC_LABEL[v.precision]}</td>
               <td class="px-2 py-2">
                 <DetectorChip detector={v.detector} size="sm" />
-                <span class="ml-1 text-[10px] text-zinc-500">{TARGET_LABEL[v.target]}</span>
+                <span class="ml-1 text-[10px] text-zinc-500"
+                  >{TARGET_LABEL[v.target]}</span
+                >
               </td>
               <td class="px-2 py-2 text-right">{mb(v.size)}</td>
               <td class="px-2 py-2 text-right">{pct(v.map)}</td>
               <td class="px-2 py-2 text-right text-zinc-400">{pct(v.apSmall)}</td>
-              <td class="px-2 py-2 text-right {deltaCls(v.delta)}">{deltaPts(v.delta)}</td>
+              <td class="px-2 py-2 text-right {deltaCls(v.delta)}">{deltaPts(v.delta)}</td
+              >
               <td class="px-2 py-2 text-right text-zinc-400">{ms(v.latency)}</td>
             </tr>
           {/each}

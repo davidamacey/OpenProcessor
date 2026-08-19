@@ -21,10 +21,11 @@ describe('createPager', () => {
   });
 
   it('loadMore appends the next page and dedups by key', async () => {
-    const fetchPage = vi.fn(async (page: number) =>
-      page === 1
-        ? { items: rows('a', 'b'), total: 4 }
-        : { items: rows('b', 'c'), total: 4 }, // 'b' shifted onto page 2
+    const fetchPage = vi.fn(
+      async (page: number) =>
+        page === 1
+          ? { items: rows('a', 'b'), total: 4 }
+          : { items: rows('b', 'c'), total: 4 }, // 'b' shifted onto page 2
     );
     const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
     await pager.loadFirst();
@@ -61,7 +62,9 @@ describe('createPager', () => {
     const dropped = new Set(['b', 'd']);
     const pager = createPager<Row>({
       fetchPage: async (page) =>
-        page === 1 ? { items: rows('a', 'b'), total: 4 } : { items: rows('c', 'd'), total: 4 },
+        page === 1
+          ? { items: rows('a', 'b'), total: 4 }
+          : { items: rows('c', 'd'), total: 4 },
       keyOf: (r) => r.id,
       accept: (r) => !dropped.has(r.id),
     });

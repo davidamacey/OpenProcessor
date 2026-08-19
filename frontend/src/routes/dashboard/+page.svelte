@@ -8,14 +8,14 @@
    *      with stage-by-stage progress; reused so the manual trigger
    *      and the daemon-fired run share UI.
    */
-  import { apiBase } from "$lib/api";
-  import { healthStore } from "$stores/health.svelte";
-  import { keyboardStore } from "$stores/keyboard.svelte";
-  import AutoLabelPanel from "$components/AutoLabelPanel.svelte";
-  import DatasetStats from "$components/DatasetStats.svelte";
+  import { apiBase } from '$lib/api';
+  import { healthStore } from '$stores/health.svelte';
+  import { keyboardStore } from '$stores/keyboard.svelte';
+  import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import DatasetStats from '$components/DatasetStats.svelte';
 
   $effect(() => {
-    keyboardStore.setScope("dashboard");
+    keyboardStore.setScope('dashboard');
   });
 </script>
 
@@ -35,8 +35,7 @@
     >
       <strong>API unavailable.</strong> Check that openprocessor is running on
       <code class="font-mono"
-        >{apiBase ||
-          (typeof window !== "undefined" ? window.location.host : "")}</code
+        >{apiBase || (typeof window !== 'undefined' ? window.location.host : '')}</code
       >.
     </div>
   {/if}

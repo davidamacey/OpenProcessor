@@ -8,7 +8,7 @@ const ctrl = { ctrlKey: true } as MouseEvent;
 const shift = { shiftKey: true } as MouseEvent;
 
 describe('createSelection', () => {
-  it("replace mode: a plain click selects exactly one card", () => {
+  it('replace mode: a plain click selects exactly one card', () => {
     const sel = createSelection({ plainClick: 'replace' });
     sel.click('a', plain, ORDER);
     sel.click('c', plain, ORDER);
