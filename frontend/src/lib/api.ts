@@ -10,6 +10,11 @@
  * All endpoint URL patterns come from Section "Phase 2D" of the v7 plan.
  */
 
+import {
+  FALLBACK_METHODS,
+  parseKbMethodsResponse,
+  type OpMethodsResponse,
+} from './strategies';
 import type {
   BulkLabelResult,
   ClusterFilter,
@@ -193,6 +198,32 @@ function qs(params: Record<string, unknown>): string {
 
 export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
   return apiFetch<OpHealth>('/curation/health', {}, signal);
+}
+
+/**
+ * Capability discovery for the curation-strategy registries (plan §3/§5.3):
+ * which cluster methods / review sorts / overlays / scores the backend
+ * currently offers, each with a `stable | experimental | shadow |
+ * disabled` status. Phase 0 plumbing only — nothing consumes this yet.
+ *
+ * **Never rejects.** `/curation/methods` may not exist yet (backend Phase 0
+ * lands independently — see `strategies.ts`'s header), and this endpoint
+ * is pure capability discovery, not something a caller should have to
+ * try/catch around. `apiFetch` already applies the house retry rule (no
+ * retry on 4xx, 3 retries with backoff on 5xx/network errors); once that
+ * settles, a 404 or any other failure here resolves to `FALLBACK_METHODS`
+ * — the hardcoded stable-only list matching what's actually implemented
+ * today — instead of throwing. A caller-initiated abort still propagates,
+ * since that's a cancellation, not a backend failure.
+ */
+export async function getMethods(signal?: AbortSignal): Promise<OpMethodsResponse> {
+  try {
+    const raw = await apiFetch<unknown>('/curation/methods', {}, signal);
+    return parseKbMethodsResponse(raw);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e;
+    return FALLBACK_METHODS;
+  }
 }
 
 // -- plates browse / training-cohort selection ---------------------------
