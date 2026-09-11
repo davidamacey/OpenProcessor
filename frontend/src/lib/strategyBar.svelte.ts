@@ -1,9 +1,10 @@
 /**
  * State/logic for the shared `<StrategyBar>` control (curation-strategy
- * plan Phase 3, docs/curation-strategy-plan-2026-09.md §5.4/§5.1).
+ * plan Phase 3/4, docs/curation-strategy-plan-2026-09.md §5.4/§5.1).
  *
- * Holds the operator's current sort selection plus any active
- * score-filter thresholds, and exposes `toQueryParams()` — the single
+ * Holds the operator's current sort selection, any active score-filter
+ * thresholds, and (Phase 4) the `k` count for a pool-scale overlay
+ * selection, and exposes `toQueryParams()` — the single
  * place that turns "what the operator picked" into the query-param
  * object `getReviewQueue`/`getCluster` forward to the backend. Same
  * "logic extracted from the component so it's unit-testable" pattern as
@@ -42,6 +43,17 @@ export interface StrategyBar {
    *  non-zero coverage for a dup-group field — StrategyBar.svelte gates
    *  whether this is even offered). */
   hideNearDuplicates: boolean;
+  /** "How many diverse crops?" count for a pool-scale overlay selection
+   *  (currently only `sort === 'diverse'` on `/clusters/[id]` — the
+   *  curation-strategy plan's Phase 4 `k` stepper). `null` = not set by
+   *  the operator yet; the caller seeds/reads a route-specific default
+   *  (e.g. the page size) at the point of use, since "what's a sane
+   *  default" is a per-route concept this shared module deliberately
+   *  doesn't know about (same reasoning as the module-level doc comment
+   *  above re: `/curation/methods`/status). Not part of `toQueryParams()` —
+   *  only `/clusters/[id]` forwards it today, reading `.k` directly the
+   *  same way it already reads `.sort` directly. */
+  k: number | null;
   /** True when every field is at its default (nothing to reset). */
   readonly isDefault: boolean;
   /** Query-param object for `getReviewQueue`'s `filter` argument. Only
@@ -59,6 +71,7 @@ export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
   let sort = $state<string>(defaultId);
   let minMistakenness = $state<number | null>(null);
   let hideNearDuplicates = $state<boolean>(false);
+  let k = $state<number | null>(null);
 
   return {
     get sort() {
@@ -79,8 +92,16 @@ export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
     set hideNearDuplicates(next: boolean) {
       hideNearDuplicates = next;
     },
+    get k() {
+      return k;
+    },
+    set k(next: number | null) {
+      k = next;
+    },
     get isDefault() {
-      return sort === defaultId && minMistakenness == null && !hideNearDuplicates;
+      return (
+        sort === defaultId && minMistakenness == null && !hideNearDuplicates && k == null
+      );
     },
 
     toQueryParams(): Record<string, unknown> {
@@ -95,6 +116,7 @@ export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
       sort = defaultId;
       minMistakenness = null;
       hideNearDuplicates = false;
+      k = null;
     },
   };
 }
