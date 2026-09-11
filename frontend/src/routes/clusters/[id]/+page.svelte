@@ -19,10 +19,12 @@
   import CropCard from '$components/CropCard.svelte';
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
+  import StrategyBar from '$components/StrategyBar.svelte';
   import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
+  import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type {
     OpClass,
@@ -110,10 +112,21 @@
   let subjectScope = $state<0 | 1 | 2>(0);
   const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
 
+  // Order strategy (curation-strategy plan Phase 3 — generalizes the old
+  // outliersFirst boolean into an id string so the fuller StrategyBar
+  // selector and the "Outliers first" shortcut button share one source
+  // of truth). `strategyBar.sort` IS the order id here — 'default' means
+  // newest-first (today's behavior), unchanged from before this phase.
+  // Only 'default'/'outliers' are offered today (see the `allowedIds`
+  // passed to <StrategyBar> below): `/curation/crops?order=` only special-cases
+  // 'outliers' server-side per docs/curation-strategy-plan-2026-09.md §1,
+  // so any other id would silently do nothing were it offered here.
+  const strategyBar = createStrategyBar({ defaultId: 'default' });
+  const orderMode = $derived(strategyBar.sort);
   // Outliers-first: rank members by distance from the cluster centroid (most
   // atypical first) so mislabels / junk in this cluster float to the top.
   // Computed on-the-fly + cached server-side. Off = newest-first.
-  let outliersFirst = $state<boolean>(false);
+  const outliersFirst = $derived(orderMode === 'outliers');
 
   // Clarity slider. `blurSlider` is the live drag value; `minBlurRatio` only
   // commits on release (change, not input) so dragging doesn't spam the API.
@@ -153,7 +166,7 @@
       classSource: classSourceFilter,
       maxRank,
       minBlurRatio,
-      order: outliersFirst ? ('outliers' as const) : null,
+      order: orderMode === 'default' ? null : orderMode,
     };
   }
 
@@ -174,7 +187,7 @@
     void classSourceFilter;
     void maxRank;
     void minBlurRatio;
-    void outliersFirst;
+    void orderMode;
     void loadFirst();
   });
 
@@ -1260,19 +1273,30 @@
     />
 
     <!-- Outliers-first: float the members least like the cluster centroid to
-         the top, so wrong/atypical items are easy to cherry-pick out. -->
+         the top, so wrong/atypical items are easy to cherry-pick out. Kept
+         as a direct shortcut into strategyBar.sort — same muscle memory as
+         before this phase, just backed by the generalized order id now. -->
     <button
       type="button"
       class="rounded border px-2 py-0.5 {outliersFirst
         ? 'border-amber-500/60 bg-amber-500/20 text-amber-100'
         : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-      onclick={() => (outliersFirst = !outliersFirst)}
+      onclick={() => (strategyBar.sort = outliersFirst ? 'default' : 'outliers')}
       title="Sort by distance from the cluster centroid (most atypical first) to spot mislabels/junk"
     >
       {outliersFirst ? '◤ Outliers first' : 'Outliers first'}
     </button>
 
-    {#if subjectScope !== 0 || minBlurRatio !== null || outliersFirst}
+    <!-- Fuller order selector — additive alongside the shortcut above.
+         Filters are hidden here: the crop query doesn't forward
+         min-mistakenness / hide-near-dup params (Phase 3 review-only). -->
+    <StrategyBar
+      bar={strategyBar}
+      allowedIds={['default', 'outliers']}
+      showFilters={false}
+    />
+
+    {#if subjectScope !== 0 || minBlurRatio !== null || !strategyBar.isDefault}
       <button
         type="button"
         class="ml-auto rounded bg-zinc-800 px-2 py-0.5 text-zinc-300 hover:bg-zinc-700"
@@ -1280,7 +1304,7 @@
           subjectScope = 0;
           blurSlider = 0;
           minBlurRatio = null;
-          outliersFirst = false;
+          strategyBar.reset();
         }}
       >
         reset
