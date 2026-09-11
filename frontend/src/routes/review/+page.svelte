@@ -14,6 +14,8 @@
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import DetectorChip from '$lib/components/DetectorChip.svelte';
   import PlateBboxCanvas from '$lib/components/PlateBboxCanvas.svelte';
+  import ScoreChip from '$lib/components/ScoreChip.svelte';
+  import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import {
     bboxNormToXYXY,
@@ -22,6 +24,7 @@
   } from '$lib/plate_geometry';
   import type { BBoxNorm, OpClass, ReviewItem, ReviewTab } from '$lib/types';
   import { createPager } from '$lib/pager.svelte';
+  import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
   import { untrack } from 'svelte';
   import { classesStore } from '$stores/classes.svelte';
@@ -59,10 +62,25 @@
   let tab = $state<ReviewTab>('all');
   const pageSize = 30;
   let cursor = $state<number>(0); // index within accumulated items
+
+  // Sort/filter strategy (curation-strategy plan Phase 3). 'default'
+  // keeps every request byte-identical to pre-Phase-3 behavior — the
+  // regression guard the backend plan requires (§8.6).
+  const strategyBar = createStrategyBar();
+  // Set from the review-queue response whenever the requested `?sort=`
+  // couldn't be honored server-side (e.g. the field isn't backfilled
+  // yet). Rendered as a small inline note, never a toast — this isn't a
+  // failure, just a degraded request.
+  let sortFallbackReason = $state<string | null>(null);
+
   // Queue pager. One fetchPage closure means the tab + filter set can't
   // drift between page 1 and the pages the cursor pulls in behind it.
   const queue = createPager<ReviewItem>({
-    fetchPage: (page) => getReviewQueue(tab, page, pageSize, _filter()),
+    fetchPage: async (page) => {
+      const res = await getReviewQueue(tab, page, pageSize, _filter());
+      sortFallbackReason = res.sort_fallback_reason ?? null;
+      return res;
+    },
     keyOf: (i) => i.id,
     onReset: () => {
       cursor = 0;
@@ -126,6 +144,7 @@
       if (subjectScope !== 0) f.max_rank = subjectScope;
       if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
     }
+    Object.assign(f, strategyBar.toQueryParams());
     return f;
   }
 
@@ -211,6 +230,13 @@
     void plateTextQuery;
     void confMin;
     void confMax;
+    // Strategy-bar sort/filter changes join the debounced path, not the
+    // immediate one above — a sort pick or a threshold nudge shouldn't
+    // feel snappier than dragging a confidence slider, and it keeps this
+    // as the single refetch path new filters join (no third debounce).
+    void strategyBar.sort;
+    void strategyBar.minMistakenness;
+    void strategyBar.hideNearDuplicates;
     if (filterDebounce) clearTimeout(filterDebounce);
     filterDebounce = setTimeout(() => {
       filterDebounce = null;
@@ -863,6 +889,21 @@
     {/if}
   </div>
 
+  <!-- Strategy bar — collapsed one-line sort/filter chip by default (see
+       StrategyBar.svelte); the fallback note only appears when the
+       server couldn't honor the requested sort. -->
+  <div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-1.5">
+    <StrategyBar bar={strategyBar} />
+    {#if sortFallbackReason}
+      <span
+        class="text-[11px] text-amber-300"
+        title="The requested sort couldn't be honored server-side; showing the default order instead."
+      >
+        sort fallback: {sortFallbackReason}
+      </span>
+    {/if}
+  </div>
+
   <!-- Filter bar — flex children keep their width via flex-shrink-0; hotkey hint
        hides below md so it doesn't collide with controls on narrow viewports
        (same content is on the ~ overlay). -->
@@ -1081,6 +1122,19 @@
               {/if}
             </dd>
           {/if}
+
+          {#if current.mistakenness_score != null}
+            <dt class="text-zinc-500">Scores</dt>
+            <dd>
+              <ScoreChip
+                label="mistakenness"
+                value={current.mistakenness_score}
+                method={current.mistakenness_method}
+                version={current.mistakenness_version}
+                size="sm"
+              />
+            </dd>
+          {/if}
         </dl>
 
         {#if tab === 'plates'}
@@ -1134,6 +1188,15 @@
                 >
                   ⚠ shape · press E to fix
                 </span>
+              {/if}
+              {#if current.mistakenness_score != null}
+                <ScoreChip
+                  label="mistakenness"
+                  value={current.mistakenness_score}
+                  method={current.mistakenness_method}
+                  version={current.mistakenness_version}
+                  size="sm"
+                />
               {/if}
               {#if !editedPlateLocal && !editMode}
                 <span
