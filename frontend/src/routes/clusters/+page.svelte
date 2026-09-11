@@ -580,10 +580,14 @@
     const sorted = sortClusters(filtered, sort);
     // Keep the synthetic license_plate card pinned first (entry point to
     // the plate inventory), unaffected by sort, only on the unfiltered
-    // labelled view.
-    return classFilter == null && lpCard != null && !unlabeledOnly
-      ? [lpCard, ...sorted]
-      : sorted;
+    // labelled view. The real class-kind cluster for license_plate shares
+    // its `id` with `lpCard` (cluster_id === class_id for class-kind
+    // clusters) — drop it so the keyed #each below never sees a duplicate
+    // key; lpCard is its replacement entry point, not an addition to it.
+    if (classFilter == null && lpCard != null && !unlabeledOnly) {
+      return [lpCard, ...sorted.filter((c) => c.id !== lpCard!.id)];
+    }
+    return sorted;
   });
   const unlabeledCount = $derived(
     clusterPager.items.filter((c) => c.cluster_kind !== 'class').length,
