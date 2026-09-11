@@ -33,6 +33,7 @@
    * the single gate `/clusters/[id]` and this component both use.
    */
 
+  import { untrack } from 'svelte';
   import { isDiverseOverlayAvailable, type MethodStatus } from '$lib/strategies';
   import type { StrategyBar } from '$lib/strategyBar.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -100,6 +101,16 @@
     void strategiesStore.init();
   });
 
+  // `bar.sort`'s value the moment this component mounts — the "no
+  // override" sentinel (`strategyBar.svelte.ts`'s `defaultId`, 'default'
+  // at both current call sites). Captured once (plain `let`, not
+  // `$derived`) rather than read live: sortOptions must keep offering a
+  // way back to "no override" even after the operator picks a real
+  // strategy and `bar.sort` moves away from this value — reading
+  // `bar.sort` live for this would make the synthetic option vanish the
+  // moment it stopped being selected (see the fix note below).
+  const sentinelSortId = untrack(() => bar.sort);
+
   const sortOptions = $derived.by(() => {
     // Only a caller that restricts allowedIds (today: `/clusters/[id]`)
     // also considers the `overlays` registry — `'diverse'` lives there,
@@ -120,9 +131,30 @@
     const stableOrExperimental = deduped.filter(
       (s) => s.status === 'stable' || s.status === 'experimental',
     );
-    return allowedIds
+    const filtered = allowedIds
       ? stableOrExperimental.filter((s) => allowedIds!.includes(s.id))
       : stableOrExperimental;
+    // `sentinelSortId` ("no override") is never a real `/curation/methods`
+    // entry. Without a matching <option> the <select> either silently
+    // falls back to displaying its first real option while `bar.sort`
+    // stays on the sentinel (a DOM/state mismatch), or — on
+    // `/clusters/[id]`, where `allowedIds` restricts to ['default',
+    // 'outliers', 'diverse'] and neither 'default' nor 'outliers' is
+    // ever a registry entry — `filtered` can be at most length 1
+    // ('diverse'), so the old `length > 1` gate could never render the
+    // control at all. Always include a synthetic "back to default"
+    // option, unconditionally (not just when `bar.sort` currently
+    // doesn't match anything) — gating on the *live* `bar.sort` would
+    // make this entry vanish the instant the operator picked the one
+    // real option, collapsing the list back below the render threshold
+    // and leaving no way to switch back.
+    if (!filtered.some((s) => s.id === sentinelSortId)) {
+      return [
+        { id: sentinelSortId, label: 'Default order', status: 'stable' as MethodStatus },
+        ...filtered,
+      ];
+    }
+    return filtered;
   });
 
   const currentSort = $derived(sortOptions.find((s) => s.id === bar.sort) ?? null);
