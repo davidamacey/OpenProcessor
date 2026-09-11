@@ -332,3 +332,89 @@ describe('getCluster order param', () => {
     expect(cropsUrl).not.toContain('order');
   });
 });
+
+/**
+ * `k` (curation-strategy plan Phase 4 — "how many diverse crops?", forwarded
+ * alongside `order=diverse`). Same forward-verbatim contract as `order`:
+ * getCluster doesn't validate the id/count pair, it just plumbs whatever the
+ * caller (gated by /curation/methods, see strategies.test.ts's
+ * isDiverseOverlayAvailable coverage) decided to send.
+ */
+describe('getCluster k param', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubCrops(body: unknown) {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/curation/crops')) return Promise.resolve(jsonResponse(body));
+      return Promise.resolve(jsonResponse({ items: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('forwards k to /curation/crops when set alongside order=diverse', async () => {
+    const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
+
+    await getCluster(42, 1, 60, undefined, { order: 'diverse', k: 120 });
+
+    const cropsUrl = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.startsWith('/curation/crops'));
+    expect(cropsUrl).toContain('order=diverse');
+    expect(cropsUrl).toContain('k=120');
+  });
+
+  it('omits k entirely when null/undefined (qs() drops it, no ?k= at all)', async () => {
+    const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
+
+    await getCluster(42, 1, 60, undefined, { order: null, k: null });
+
+    const cropsUrl = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.startsWith('/curation/crops'));
+    expect(cropsUrl).not.toContain('k=');
+
+    fetchMock.mockClear();
+    await getCluster(42, 1, 60, undefined, {});
+    const cropsUrl2 = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.startsWith('/curation/crops'));
+    expect(cropsUrl2).not.toContain('k=');
+  });
+
+  it('surfaces order_method/order_version/n_pool when the server sends them', async () => {
+    stubCrops({
+      total: 500,
+      page: 1,
+      page_size: 60,
+      crops: [],
+      method: 'kcenter_greedy',
+      version: '1',
+      n_pool: 4832,
+    });
+
+    const res = await getCluster(42, 1, 60, undefined, { order: 'diverse', k: 60 });
+
+    expect(res.crops.order_method).toBe('kcenter_greedy');
+    expect(res.crops.order_version).toBe('1');
+    expect(res.crops.n_pool).toBe(4832);
+  });
+
+  it('defaults order_method/order_version/n_pool to null when the server omits them', async () => {
+    stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
+
+    const res = await getCluster(42, 1, 60, undefined, { order: null });
+
+    expect(res.crops.order_method).toBeNull();
+    expect(res.crops.order_version).toBeNull();
+    expect(res.crops.n_pool).toBeNull();
+  });
+});

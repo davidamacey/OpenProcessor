@@ -890,6 +890,13 @@ export async function getCluster(
      * ids they actually offer against what `/curation/methods` reports.
      */
     order?: string | null;
+    /**
+     * Pool-scale overlay parameter, forwarded to `/curation/crops?k=` only when
+     * set (curation-strategy plan Phase 4 — `order: 'diverse'`'s "how
+     * many diverse crops" count). Meaningless for every other `order`
+     * value; the caller (`/clusters/[id]`) only sets it in diverse mode.
+     */
+    k?: number | null;
   } = {},
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
   // Two parallel calls: paginated crops + the authoritative cluster
@@ -900,7 +907,20 @@ export async function getCluster(
   // (v6_model / gemma / human / v6_low_conf / ...) without touching
   // the cluster card stats — the header still shows the whole-cluster
   // totals so the operator sees the filter against the full size.
-  type CropPage = { total: number; page: number; page_size: number; crops: RawCrop[] };
+  type CropPage = {
+    total: number;
+    page: number;
+    page_size: number;
+    crops: RawCrop[];
+    /** Only present for a pool-scale overlay ordering (e.g.
+     *  `order=diverse`) — see `PaginatedResponse.order_method` /
+     *  `.order_version` / `.n_pool` in types.ts. Untyped/optional and
+     *  parsed tolerantly below: the shape belongs to whichever `order`
+     *  overlay is active, not something this function should assume. */
+    method?: unknown;
+    version?: unknown;
+    n_pool?: unknown;
+  };
   const cropQuery: Record<string, unknown> = {
     cluster_id: id,
     page,
@@ -911,6 +931,7 @@ export async function getCluster(
   if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
   if (opts.v6ConfLt != null) cropQuery.v6_conf_lt = opts.v6ConfLt;
   if (opts.order) cropQuery.order = opts.order;
+  if (opts.k != null) cropQuery.k = opts.k;
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`/curation/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
@@ -949,6 +970,9 @@ export async function getCluster(
       total: cropPage.total,
       page: cropPage.page,
       page_size: cropPage.page_size,
+      order_method: typeof cropPage.method === 'string' ? cropPage.method : null,
+      order_version: typeof cropPage.version === 'string' ? cropPage.version : null,
+      n_pool: typeof cropPage.n_pool === 'number' ? cropPage.n_pool : null,
     },
   };
 }
