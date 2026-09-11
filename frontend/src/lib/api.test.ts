@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, getMethods } from './api';
+import { ApiError, getCluster, getMethods, getReviewQueue } from './api';
 import { FALLBACK_METHODS } from './strategies';
 
 const URL = 'http://localhost:4603/op/crops/batch_label';
@@ -153,5 +153,182 @@ describe('getMethods', () => {
     const p = getMethods(ctrl.signal);
     ctrl.abort();
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+/**
+ * Phase 3 (curation-strategy plan §5): getReviewQueue's `filter` argument
+ * already accepts arbitrary keys, so StrategyBar's `sort` /
+ * `min_mistakenness` / `hide_near_duplicates` need no new plumbing in
+ * getReviewQueue itself — just qs()'s existing null-dropping behavior and
+ * a pass-through of the new `sort_fallback_reason` + mistakenness fields
+ * on the response.
+ */
+describe('getReviewQueue', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('forwards sort/min_mistakenness/hide_near_duplicates from an arbitrary filter object', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getReviewQueue('all', 1, 30, {
+      sort: 'mistakenness',
+      min_mistakenness: 0.5,
+      hide_near_duplicates: true,
+    });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('sort=mistakenness');
+    expect(url).toContain('min_mistakenness=0.5');
+    expect(url).toContain('hide_near_duplicates=true');
+  });
+
+  it('omits strategy params entirely when the filter object is empty (qs() drops nothing extra)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getReviewQueue('all', 1, 30, {});
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('sort=');
+    expect(url).not.toContain('min_mistakenness');
+    expect(url).not.toContain('hide_near_duplicates');
+  });
+
+  it('surfaces sort_fallback_reason from the raw response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 0,
+        page: 1,
+        page_size: 30,
+        items: [],
+        sort_fallback_reason: 'mistakenness not backfilled for this pool',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, { sort: 'mistakenness' });
+    expect(res.sort_fallback_reason).toBe('mistakenness not backfilled for this pool');
+  });
+
+  it('defaults sort_fallback_reason to null when the server omits it', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    expect(res.sort_fallback_reason).toBeNull();
+  });
+
+  it('maps mistakenness_score/method/version through onto each item', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [
+          {
+            crop_id: 'c1',
+            image_path: '/x/y.jpg',
+            bbox_norm: [0, 0, 1, 1],
+            mistakenness_score: 0.87,
+            mistakenness_method: 'mistakenness',
+            mistakenness_version: 'v1',
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    expect(res.items[0]?.mistakenness_score).toBe(0.87);
+    expect(res.items[0]?.mistakenness_method).toBe('mistakenness');
+    expect(res.items[0]?.mistakenness_version).toBe('v1');
+  });
+
+  it('leaves mistakenness fields null when the server omits them (un-backfilled pool)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [{ crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1] }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    expect(res.items[0]?.mistakenness_score).toBeNull();
+  });
+});
+
+/**
+ * getCluster's `order` param is forwarded verbatim to `/curation/crops?order=`
+ * (broadened from a fixed `'outliers'` literal so a future
+ * `/curation/methods`-reported order id doesn't require touching this
+ * signature — see the comment on `order` in api.ts). An id the backend
+ * doesn't recognize should be harmless: qs() still sends it, and callers
+ * are responsible for only offering ids `/curation/methods` actually reports.
+ */
+describe('getCluster order param', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('forwards an arbitrary order id to /curation/crops without special-casing it client-side', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/curation/crops')) {
+        return Promise.resolve(
+          jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ items: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getCluster(42, 1, 60, undefined, { order: 'mistakenness' });
+
+    const cropsUrl = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.startsWith('/curation/crops'));
+    expect(cropsUrl).toContain('order=mistakenness');
+  });
+
+  it('omits order entirely when null (unchanged default behavior)', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/curation/crops')) {
+        return Promise.resolve(
+          jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
+        );
+      }
+      return Promise.resolve(jsonResponse({ items: [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getCluster(42, 1, 60, undefined, { order: null });
+
+    const cropsUrl = fetchMock.mock.calls
+      .map((c) => c[0] as string)
+      .find((u) => u.startsWith('/curation/crops'));
+    expect(cropsUrl).not.toContain('order');
   });
 });

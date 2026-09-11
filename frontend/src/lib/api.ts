@@ -757,6 +757,12 @@ type RawCrop = {
   blur_lap_ratio?: number | null;
   v6_raw_confidence?: number | null;
   coco_proposal_name?: string | null;
+  // Curation scores (Phase 3, docs/curation-strategy-plan-2026-09.md §4).
+  // Optional/forward-tolerant: an un-backfilled pool just omits these.
+  mistakenness_score?: number | null;
+  mistakenness_method?: string | null;
+  mistakenness_version?: string | null;
+  mistakenness_scored_at?: string | null;
   thumbnail_url?: string;
   updated_at?: string;
 };
@@ -848,6 +854,10 @@ function mapRawCrop(c: RawCrop): OpCrop {
     blur_lap_ratio: c.blur_lap_ratio ?? null,
     v6_raw_confidence: c.v6_raw_confidence ?? null,
     coco_proposal_name: c.coco_proposal_name ?? null,
+    mistakenness_score: c.mistakenness_score ?? null,
+    mistakenness_method: c.mistakenness_method ?? null,
+    mistakenness_version: c.mistakenness_version ?? null,
+    mistakenness_scored_at: c.mistakenness_scored_at ?? null,
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
     // (Svelte each_key_duplicate).
@@ -869,8 +879,17 @@ export async function getCluster(
     maxRank?: number | null;
     minBlurRatio?: number | null;
     v6ConfLt?: number | null;
-    /** 'outliers' ranks members farthest-from-centroid first. */
-    order?: 'outliers' | null;
+    /**
+     * Forwarded verbatim to `/curation/crops?order=`. Only `'outliers'` is
+     * special-cased server-side today (op_crops.py `order` query param —
+     * see docs/curation-strategy-plan-2026-09.md §1); an id the backend
+     * doesn't recognize is harmless (qs() still sends it, the server
+     * just falls back to its default ordering). Typed as `string` rather
+     * than a fixed union so a new `/curation/methods`-reported order id doesn't
+     * require touching this signature — callers should still gate which
+     * ids they actually offer against what `/curation/methods` reports.
+     */
+    order?: string | null;
   } = {},
 ): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
   // Two parallel calls: paginated crops + the authoritative cluster
@@ -1198,6 +1217,9 @@ export async function getReviewQueue(
     page: number;
     page_size: number;
     items: RawReviewItem[];
+    /** Set when the requested `?sort=` fell back to the default — see
+     *  PaginatedResponse.sort_fallback_reason in types.ts. */
+    sort_fallback_reason?: string | null;
   };
   const raw = await apiFetch<RawPage>(
     `/curation/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
@@ -1223,6 +1245,7 @@ export async function getReviewQueue(
     total: raw.total ?? items.length,
     page: raw.page ?? page,
     page_size: raw.page_size ?? pageSize,
+    sort_fallback_reason: raw.sort_fallback_reason ?? null,
   };
 }
 

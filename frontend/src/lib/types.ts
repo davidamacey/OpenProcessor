@@ -247,6 +247,20 @@ export interface OpCrop {
   v6_raw_confidence?: number | null;
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
   coco_proposal_name?: string | null;
+  // -- Curation scores (Phase 3 review-queue strategies, 2026-09) --------
+  // Provenance quad mirroring the plate_detector/plate_detector_version
+  // pattern (docs/curation-strategy-plan-2026-09.md §4). `mistakenness`
+  // is the only curation score that cleared the full validation gate as
+  // of openprocessor/docs/design/curation_scores.md — representativeness/
+  // atypicality/uncertainty_entropy are pre-existing fields (cluster
+  // distance, probe entropy) exposed as named sorts, not new score
+  // fields, so they don't need their own OpCrop fields. Everything else
+  // in the plan (uniqueness, near-dup) is still shadow/pending and has
+  // no field here yet — added when/if it clears validation.
+  mistakenness_score?: number | null;
+  mistakenness_method?: string | null;
+  mistakenness_version?: string | null;
+  mistakenness_scored_at?: string | null;
   updated_at: string;
 }
 
@@ -340,6 +354,12 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
+  /** Set by `/curation/review/{tab}` when the requested `?sort=` couldn't be
+   *  honored (e.g. the field isn't backfilled yet) and the server fell
+   *  back to the default ordering. Rendered as an inline note, never a
+   *  toast — this isn't an error, just a degraded request. Absent on
+   *  every other endpoint and on a request that didn't ask for a sort. */
+  sort_fallback_reason?: string | null;
 }
 
 export interface CropFilter {
