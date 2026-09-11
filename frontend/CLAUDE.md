@@ -113,7 +113,7 @@ scheme — it was removed; one binding scheme means no "what does this key do
 here?" friction. On `/clusters/[id]` a class letter labels the current
 selection (or the just-dragged set); on `/review` it labels the current item.
 
-Reserved single-char action keys (`g n d z x u a m`) cannot be bound to a
+Reserved single-char action keys (`g n d z x u a m /`) cannot be bound to a
 class — `setClassHotkey` (`src/lib/classHotkey.ts`) rejects them. Both window
 keydown listeners fire on the same keypress, so a class bound to `d` would be
 assigned _and_ the selection discarded.
@@ -148,7 +148,8 @@ Global:
 
 | Key             | Action                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------ |
-| `Enter`         | Confirm proposed + advance (plates tab: confirm plate)                                           |
+| `Enter`         | Confirm proposed + advance; opens the class picker instead when there's no proposal (plates tab: confirm plate) |
+| `/`             | Open the fuzzy-search class picker (all non-deprecated classes, not just the top-10 quick-assign row). Not offered on the plates tab. |
 | `D`             | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible) |
 | `N`             | Skip                                                                                             |
 | `Z`             | Undo last                                                                                        |
@@ -156,6 +157,14 @@ Global:
 | `F`             | Plates tab: mark false positive (box kept)                                                       |
 | `E`             | Plates tab: enter bbox edit mode                                                                 |
 | `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                   |
+
+The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over
+every non-deprecated class — the top-10 quick-assign row under the crop
+(`classesStore.topNForCluster(0, 10)`) only ever surfaces the most-validated
+classes, leaving the long tail (including brand-new, zero-sample classes)
+reachable only via `/classes` without it. `/` is reserved
+(`RESERVED_HOTKEY_LETTERS` in `src/lib/classHotkey.ts`) so a class can never
+be bound to it.
 
 `Esc` cannot cancel an in-progress pointer drag — `svelte-dnd-action` only
 Escape-cancels keyboard (aria) drags. It clears the captured multi-drag set

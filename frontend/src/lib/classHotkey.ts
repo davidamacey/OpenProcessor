@@ -19,8 +19,23 @@ import type { OpClass } from '$lib/types';
  * selection AND label it in the same keypress. (b / e / f are also bound on
  * the review plates tab, but class letters are inert there: the review page
  * registers no drop handler on that tab.)
+ *
+ * '/' is reserved too (Phase 7, audit remediation plan P1-4): it opens the
+ * `/review` fuzzy-search class picker via keyboardStore. Same collision
+ * shape as the letters above — a class bound to '/' would both open the
+ * picker and assign itself on the same keypress.
  */
-export const RESERVED_HOTKEY_LETTERS = new Set(['g', 'n', 'd', 'z', 'x', 'u', 'a', 'm']);
+export const RESERVED_HOTKEY_LETTERS = new Set([
+  'g',
+  'n',
+  'd',
+  'z',
+  'x',
+  'u',
+  'a',
+  'm',
+  '/',
+]);
 
 /**
  * Validate and persist a class's hotkey letter. Empty string clears it.

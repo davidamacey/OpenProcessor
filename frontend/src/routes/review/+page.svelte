@@ -17,6 +17,7 @@
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
+  import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import {
     bboxNormToXYXY,
     cropToSourceFrame,
@@ -254,6 +255,87 @@
 
   const topClasses = $derived(classesStore.topNForCluster(0, 10));
 
+  // Non-deprecated classes for the filter dropdown (P2-1). classesStore.classes
+  // is unfiltered; every other class-offering surface in the app already
+  // excludes deprecated (ClassSidebar.svelte:111, ClassSubsetPicker.svelte:35,
+  // ShortcutOverlay.svelte:15) — this dropdown was the one that didn't.
+  const filterableClasses = $derived(classesStore.classes.filter((c) => !c.deprecated));
+
+  // P1-5: what Enter/Confirm would actually assign, or null when there's
+  // nothing to confirm (67/100 `all`-tab items today). Drives the Confirm
+  // button's disabled state and whether Enter confirms vs. opens the class
+  // picker below.
+  const canConfirm = $derived(resolveConfirmClassId(current) != null);
+
+  // -- class picker (P1-4) ---------------------------------------------
+  // Fuzzy-search combobox over *every* non-deprecated class, opened with
+  // '/'. topClasses above caps quick-assign at the 10 most-validated
+  // classes; 73 of 84 need a round-trip to /classes without this. Pure
+  // filter/ranking logic lives in $lib/classPicker.ts (searchClasses) so
+  // it's unit-testable without @testing-library/svelte.
+  let pickerOpen = $state(false);
+  let pickerQuery = $state('');
+  let pickerIndex = $state(0);
+  let pickerInputEl = $state<HTMLInputElement | null>(null);
+
+  const pickerResults = $derived(searchClasses(classesStore.classes, pickerQuery, 50));
+
+  // Re-center the highlighted row on the best match whenever the query
+  // (re-ranks the list) changes. Doesn't fire on arrow-key navigation,
+  // which only touches pickerIndex.
+  $effect(() => {
+    void pickerQuery;
+    pickerIndex = 0;
+  });
+
+  function openPicker(): void {
+    if (tab === 'plates' || !current) return;
+    pickerOpen = true;
+    pickerQuery = '';
+    pickerIndex = 0;
+    // Input isn't in the DOM until this render commits.
+    requestAnimationFrame(() => pickerInputEl?.focus());
+  }
+
+  function closePicker(): void {
+    pickerOpen = false;
+    pickerQuery = '';
+    pickerIndex = 0;
+  }
+
+  async function pickClass(cls: OpClass): Promise<void> {
+    closePicker();
+    await assign(cls.id);
+  }
+
+  // Element-scoped handler on the picker's own <input> — not a second
+  // window keydown listener (keyboard.svelte.test.ts's guard). Browser
+  // focus already keeps this from colliding with keyboardStore/the
+  // layout's per-class dispatcher: both treat a focused <input> as a
+  // typing target and skip it entirely.
+  function onPickerKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closePicker();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      pickerIndex = Math.min(pickerResults.length - 1, pickerIndex + 1);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      pickerIndex = Math.max(0, pickerIndex - 1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cls = pickerResults[pickerIndex];
+      if (cls) void pickClass(cls);
+    }
+  }
+
   /**
    * Optimistically drop an item from the queue and advance.
    *
@@ -302,9 +384,13 @@
 
   async function confirmAndAdvance(): Promise<void> {
     if (!current) return;
-    const proposed = current.proposed_class_id ?? current.class_id;
+    const proposed = resolveConfirmClassId(current);
     if (proposed == null) {
-      toastStore.warn('No proposed class on this item.');
+      // Enter's registration below already routes here vs. openPicker()
+      // based on canConfirm, so this only fires from the Confirm button —
+      // which is disabled in this state — or a stale click race. Keep the
+      // toast as a safety net either way.
+      toastStore.warn('No proposed class on this item — press / to search.');
       return;
     }
     await assign(proposed);
@@ -807,8 +893,19 @@
         );
       }
     } else {
-      reg('enter', confirmAndAdvance, 'Confirm proposed & advance');
+      reg(
+        'enter',
+        () => {
+          // P1-5: a blank proposal made Enter a silent no-op. Open the
+          // class picker instead so the operator can act in one keystroke
+          // rather than hitting Enter and wondering why nothing happened.
+          if (canConfirm) return confirmAndAdvance();
+          openPicker();
+        },
+        'Confirm proposed & advance (or search classes if blank)',
+      );
       reg('d', discard, 'Discard');
+      reg('/', openPicker, 'Search all classes…');
     }
     reg('n', skip, 'Skip');
     reg('z', undoLast, 'Undo last');
@@ -864,6 +961,7 @@
             : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
           onclick={() => {
             tab = t.id;
+            closePicker();
           }}
         >
           {t.label}
@@ -927,7 +1025,7 @@
         class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
       >
         <option value={null}>any</option>
-        {#each classesStore.classes as cls (cls.id)}
+        {#each filterableClasses as cls (cls.id)}
           <option value={cls.id}>{cls.name}</option>
         {/each}
       </select>
@@ -990,8 +1088,9 @@
         <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>F</kbd> false-pos ·
         <kbd>E</kbd> edit · <kbd>N</kbd> skip · <kbd>←</kbd> back
       {:else}
-        per-class letter assigns · <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip ·
-        <kbd>D</kbd> discard · <kbd>Z</kbd> undo
+        per-class letter assigns · <kbd>/</kbd> search all classes ·
+        <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip · <kbd>D</kbd> discard ·
+        <kbd>Z</kbd> undo
       {/if}
     </span>
   </div>
@@ -1321,7 +1420,15 @@
           {/if}
         {:else}
           <div class="mt-3 flex flex-wrap gap-2">
-            <button class="btn btn-primary" type="button" onclick={confirmAndAdvance}>
+            <button
+              class="btn btn-primary"
+              type="button"
+              onclick={confirmAndAdvance}
+              disabled={!canConfirm}
+              title={canConfirm
+                ? undefined
+                : 'No proposed class on this item — press / or Enter to search.'}
+            >
               Confirm
             </button>
             <button class="btn" type="button" onclick={skip}>Skip</button>
@@ -1359,9 +1466,28 @@
                 {cls.name}
               </button>
             {/each}
+            <!-- P1-4: only the 10 most-validated classes are one click above;
+                 this opens the fuzzy-search picker over all non-deprecated
+                 classes (same action as pressing /). -->
+            <button
+              type="button"
+              class="rounded border border-dashed border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400
+                   hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
+                   focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              title="Search all classes (/)"
+              onclick={openPicker}
+            >
+              <kbd
+                class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-blue-300"
+              >
+                /
+              </kbd>
+              search all classes…
+            </button>
           </div>
           <p class="mt-1.5 text-[10px] text-zinc-500">
-            Click a class or press its bound letter (set hotkeys on /classes).
+            Click a class, press its bound letter, or press / to search all classes (set
+            hotkeys on /classes).
           </p>
         {/if}
       </div>
@@ -1386,3 +1512,62 @@
     </span>
   </div>
 </div>
+
+{#if pickerOpen}
+  <!-- Class picker (P1-4) — fuzzy-search over every non-deprecated class,
+       opened with / or the "search all classes…" button. Backdrop click
+       and Esc both close without assigning. -->
+  <div
+    class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
+    onclick={closePicker}
+    role="presentation"
+  >
+    <div
+      class="w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+      onclick={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <input
+        bind:this={pickerInputEl}
+        bind:value={pickerQuery}
+        type="text"
+        placeholder="Search all {classesStore.classes.length} classes…"
+        class="w-full border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:outline-none"
+        onkeydown={onPickerKeydown}
+      />
+      <ul class="max-h-72 overflow-y-auto py-1 text-sm">
+        {#if pickerResults.length === 0}
+          <li class="px-3 py-2 text-zinc-500">No matching class.</li>
+        {/if}
+        {#each pickerResults as cls, i (cls.id)}
+          <li>
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left {i ===
+              pickerIndex
+                ? 'bg-blue-500/20 text-white'
+                : 'text-zinc-200 hover:bg-zinc-800'}"
+              onclick={() => pickClass(cls)}
+              onmouseenter={() => (pickerIndex = i)}
+            >
+              {#if cls.hotkey_letter}
+                <kbd
+                  class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
+                >
+                  {cls.hotkey_letter}
+                </kbd>
+              {/if}
+              <span class="grow truncate">{cls.name}</span>
+              <span class="shrink-0 text-[10px] text-zinc-500"
+                >{cls.validated_count} validated</span
+              >
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <p class="border-t border-zinc-800 px-3 py-1.5 text-[10px] text-zinc-500">
+        <kbd>↑↓</kbd> navigate · <kbd>Enter</kbd> assign · <kbd>Esc</kbd> close
+      </p>
+    </div>
+  </div>
+{/if}

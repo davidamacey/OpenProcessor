@@ -7,6 +7,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { keyboardStore } from './keyboard.svelte';
+import { RESERVED_HOTKEY_LETTERS } from '$lib/classHotkey';
 
 const cleanups: Array<() => void> = [];
 
@@ -119,5 +120,39 @@ describe('keyboardStore', () => {
     press({ key: 'q' });
 
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  // Phase 7 (audit remediation plan, P1-4): /review opens a fuzzy-search
+  // class picker on '/'. Two guards for that addition, per the plan's test
+  // list.
+  it('registering the review class-picker "/" combo does not install a second window keydown listener', () => {
+    // keyboardStore lazily installs exactly one 'keydown' listener the first
+    // time anything registers, and #install() no-ops on every call after
+    // that (#listenerInstalled). A combobox that rolled its own
+    // window.addEventListener instead of going through keyboardStore.register
+    // would break this invariant — the guard this test pins.
+    const spy = vi.spyOn(window, 'addEventListener');
+    const keydownCallsBefore = spy.mock.calls.filter((c) => c[0] === 'keydown').length;
+    reg('/', vi.fn(), 'review');
+    reg('some-other-review-combo', vi.fn(), 'review');
+    const keydownCallsAfter = spy.mock.calls.filter((c) => c[0] === 'keydown').length;
+    expect(keydownCallsAfter).toBe(keydownCallsBefore);
+    spy.mockRestore();
+  });
+
+  it('"/" dispatches only to the registered review-scope handler', () => {
+    const handler = vi.fn();
+    reg('/', handler, 'review');
+    keyboardStore.setScope('review');
+    press({ key: '/' });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves "/" as a class hotkey so it can never collide with the class-picker open key', () => {
+    // Mirrors the existing g/n/d/z/x/u/a/m guard: a class bound to '/'
+    // would fire both the layout's per-class assign listener AND the
+    // class-picker's open handler on the same keypress (neither listener's
+    // preventDefault stops the other).
+    expect(RESERVED_HOTKEY_LETTERS.has('/')).toBe(true);
   });
 });
