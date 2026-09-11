@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_METHODS,
+  hasFieldCoverage,
   isDiverseOverlayAvailable,
   isEmbeddingVizAvailable,
   isEmbeddingVizBannerRequired,
   normalizeMethodStatus,
   parseKbMethodsResponse,
 } from './strategies';
-import type { OverlayInfo } from './strategies';
+import type { OverlayInfo, ReviewSortInfo } from './strategies';
 
 describe('normalizeMethodStatus', () => {
   it('passes through every known status value', () => {
@@ -51,8 +52,19 @@ describe('parseKbMethodsResponse', () => {
           status: 'stable',
           default: true,
         },
-        { id: 'hdbscan', axis: 'cluster', label: 'HDBSCAN (dormant)', status: 'disabled' },
-        { id: 'default', axis: 'sort', label: 'Recent first', status: 'stable', default: true },
+        {
+          id: 'hdbscan',
+          axis: 'cluster',
+          label: 'HDBSCAN (dormant)',
+          status: 'disabled',
+        },
+        {
+          id: 'default',
+          axis: 'sort',
+          label: 'Recent first',
+          status: 'stable',
+          default: true,
+        },
         {
           id: 'uncertainty_entropy',
           axis: 'sort',
@@ -105,7 +117,12 @@ describe('parseKbMethodsResponse', () => {
   it('defaults requires_banner to undefined when the server omits it', () => {
     const parsed = parseKbMethodsResponse({
       strategies: [
-        { id: 'viz_projection', axis: 'overlay', label: 'UMAP scatter', status: 'experimental' },
+        {
+          id: 'viz_projection',
+          axis: 'overlay',
+          label: 'UMAP scatter',
+          status: 'experimental',
+        },
       ],
     });
     expect(parsed.overlays[0]?.requires_banner).toBeUndefined();
@@ -202,8 +219,18 @@ describe('parseKbMethodsResponse', () => {
   it('the same id may legitimately appear in more than one axis bucket (score vs sort)', () => {
     const parsed = parseKbMethodsResponse({
       strategies: [
-        { id: 'mistakenness', axis: 'score', label: 'Mistakenness', status: 'experimental' },
-        { id: 'mistakenness', axis: 'sort', label: 'Mistakenness', status: 'experimental' },
+        {
+          id: 'mistakenness',
+          axis: 'score',
+          label: 'Mistakenness',
+          status: 'experimental',
+        },
+        {
+          id: 'mistakenness',
+          axis: 'sort',
+          label: 'Mistakenness',
+          status: 'experimental',
+        },
       ],
     });
     expect(parsed.scores).toHaveLength(1);
@@ -234,13 +261,17 @@ describe('isDiverseOverlayAvailable', () => {
 
   it('is false when diverse is reported but shadow (mid-validation, never selectable)', () => {
     expect(
-      isDiverseOverlayAvailable([{ id: 'diverse', label: 'Diversity', status: 'shadow' }]),
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity', status: 'shadow' },
+      ]),
     ).toBe(false);
   });
 
   it('is false when diverse is reported but disabled (OP_SELECT_DIVERSE_ENABLED off)', () => {
     expect(
-      isDiverseOverlayAvailable([{ id: 'diverse', label: 'Diversity', status: 'disabled' }]),
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity', status: 'disabled' },
+      ]),
     ).toBe(false);
   });
 
@@ -254,7 +285,9 @@ describe('isDiverseOverlayAvailable', () => {
 
   it('is true when diverse is reported stable', () => {
     expect(
-      isDiverseOverlayAvailable([{ id: 'diverse', label: 'Diversity', status: 'stable' }]),
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity', status: 'stable' },
+      ]),
     ).toBe(true);
   });
 
@@ -388,6 +421,111 @@ describe('isEmbeddingVizBannerRequired', () => {
   });
 });
 
+/**
+ * hasFieldCoverage is the audit-remediation plan Phase 6 fix (P1-2/P1-3):
+ * `StrategyBar.svelte`'s old local `hasCoverage()` used
+ * `(entry.field_coverage ?? 0) > 0`, which treats `null`/`undefined`
+ * ("coverage unknown") identically to `0` ("coverage confirmed empty").
+ * Before Phase 6, no real backend ever sent `field_coverage` at all, so
+ * every entry hit the `?? 0` branch and every chip/gated-sort was hidden
+ * regardless of real data. These are the tests that would have caught
+ * that: `field_coverage: undefined`/`null` must render, only a real `0`
+ * must hide.
+ */
+describe('hasFieldCoverage', () => {
+  it('is true when coverage is a positive count', () => {
+    expect(hasFieldCoverage({ field_coverage: 124_921 })).toBe(true);
+  });
+
+  it('is false when coverage is a confirmed zero (the one real hide case)', () => {
+    expect(hasFieldCoverage({ field_coverage: 0 })).toBe(false);
+  });
+
+  it('is true when coverage is null (unknown -- e.g. requires_field is null, or a transient backend failure)', () => {
+    expect(hasFieldCoverage({ field_coverage: null })).toBe(true);
+  });
+
+  it('is true when coverage is undefined/absent (pre-Phase-6 backend, or the FALLBACK_METHODS/synthetic sentinel path)', () => {
+    expect(hasFieldCoverage({})).toBe(true);
+    expect(hasFieldCoverage({ field_coverage: undefined })).toBe(true);
+  });
+});
+
+/**
+ * The exact filter StrategyBar.svelte's sortOptions applies: stable/
+ * experimental status AND hasFieldCoverage. Exercised here against ids
+ * and coverage values lifted straight from the plan's live-verification
+ * snippet (audit-remediation-plan-2026-09.md Phase 6) so this test would
+ * have caught the bug against the real reported numbers, not a synthetic
+ * stand-in.
+ */
+describe('sort dropdown filtering (mirrors StrategyBar.svelte sortOptions)', () => {
+  function selectable(sorts: ReviewSortInfo[]): string[] {
+    return sorts
+      .filter(
+        (s) =>
+          (s.status === 'stable' || s.status === 'experimental') && hasFieldCoverage(s),
+      )
+      .map((s) => s.id);
+  }
+
+  it('omits sorts with real, confirmed-zero coverage; keeps ones with real positive coverage', () => {
+    const sorts: ReviewSortInfo[] = [
+      { id: 'recent', label: 'Recently updated', status: 'stable', field_coverage: null },
+      {
+        id: 'representativeness',
+        label: 'Representativeness',
+        status: 'stable',
+        requires_field: 'cluster_distance',
+        field_coverage: 124_921,
+      },
+      {
+        id: 'atypicality',
+        label: 'Atypicality',
+        status: 'stable',
+        requires_field: 'cluster_distance',
+        field_coverage: 124_921,
+      },
+      {
+        id: 'uncertainty_entropy',
+        label: 'Uncertainty (probe entropy)',
+        status: 'stable',
+        requires_field: 'probe_pred_entropy',
+        field_coverage: 0,
+      },
+      {
+        id: 'disagreement_entropy_asc',
+        label: 'Model disagreement',
+        status: 'stable',
+        requires_field: 'probe_pred_entropy',
+        field_coverage: 0,
+      },
+      {
+        id: 'mistakenness',
+        label: 'Mistakenness · beta',
+        status: 'experimental',
+        requires_field: 'mistakenness_score',
+        field_coverage: 0,
+      },
+    ];
+
+    expect(selectable(sorts)).toEqual(['recent', 'representativeness', 'atypicality']);
+  });
+
+  it('keeps a sort whose coverage is unknown (null) rather than hiding it like a confirmed zero', () => {
+    const sorts: ReviewSortInfo[] = [
+      {
+        id: 'plate_score',
+        label: 'Plate detection score',
+        status: 'stable',
+        requires_field: 'plate_score',
+        field_coverage: null,
+      },
+    ];
+    expect(selectable(sorts)).toEqual(['plate_score']);
+  });
+});
+
 describe('FALLBACK_METHODS', () => {
   it('is a stable-only list matching what is actually implemented today', () => {
     expect(FALLBACK_METHODS.cluster_methods).toEqual([
@@ -399,7 +537,13 @@ describe('FALLBACK_METHODS', () => {
       },
     ]);
     expect(FALLBACK_METHODS.review_sorts).toEqual([
-      { id: 'default', label: 'Recent first', status: 'stable', default: true },
+      {
+        id: 'default',
+        label: 'Recent first',
+        status: 'stable',
+        default: true,
+        field_coverage: null,
+      },
     ]);
     expect(FALLBACK_METHODS.overlays).toEqual([]);
     expect(FALLBACK_METHODS.scores).toEqual([]);

@@ -72,13 +72,32 @@ export interface ReviewSortInfo extends MethodInfoBase {
   /** OpenSearch field this sort reads; used to grey out the option when
    *  `field_coverage` is 0 (nothing has been backfilled yet). */
   requires_field?: string | null;
-  /** Fraction [0,1] of the pool that has this field populated. */
+  /**
+   * Real count of pool docs that have `requires_field` populated
+   * (`strategy_registry.py`'s `_compute_field_coverage`, audit-remediation
+   * plan Phase 6 — CONFIRMED against the real backend, 2026-09-11: this is
+   * a raw exists-count, e.g. `124921`, NOT a `[0,1]` fraction as an earlier
+   * draft of this comment assumed before the real contract shipped).
+   * `null`/`undefined` means "unknown" (coverage wasn't computed — e.g. a
+   * transient OpenSearch failure, or `requires_field` is itself `null`
+   * because this sort doesn't depend on a backfilled field at all) and
+   * must NOT be treated the same as `0` ("genuinely empty, never
+   * backfilled") — see `hasFieldCoverage` below, the single place that
+   * distinction is encoded.
+   */
   field_coverage?: number | null;
+  /** Pool size the `field_coverage` count above is out of (same denominator
+   *  for every entry in a given `/curation/methods` response). `null` whenever
+   *  `field_coverage` itself is `null`. */
+  field_coverage_total?: number | null;
 }
 
 export interface OverlayInfo extends MethodInfoBase {
   requires_field?: string | null;
+  /** See `ReviewSortInfo.field_coverage` — same raw-count semantics. */
   field_coverage?: number | null;
+  /** See `ReviewSortInfo.field_coverage_total`. */
+  field_coverage_total?: number | null;
   /**
    * CONFIRMED (2026-09-10, live against the real `embedding_viz.py` /
    * `op_viz.py` / `strategy_registry.py` after the Phase 5 UMAP
@@ -102,7 +121,10 @@ export interface OverlayInfo extends MethodInfoBase {
 
 export interface ScoreInfo extends MethodInfoBase {
   requires_field?: string | null;
+  /** See `ReviewSortInfo.field_coverage` — same raw-count semantics. */
   field_coverage?: number | null;
+  /** See `ReviewSortInfo.field_coverage_total`. */
+  field_coverage_total?: number | null;
   /** Scorer version, for surfacing mixed-version coverage. */
   version?: string | null;
 }
@@ -194,20 +216,26 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
   const rec = isRecord(raw) ? raw : {};
   const strategies = Array.isArray(rec.strategies) ? rec.strategies : [];
   return {
-    cluster_methods: normalizeAxis<ClusterMethodInfo>(strategies, 'cluster', (base, e) => ({
-      ...base,
-      default: optBool(e.default),
-    })),
+    cluster_methods: normalizeAxis<ClusterMethodInfo>(
+      strategies,
+      'cluster',
+      (base, e) => ({
+        ...base,
+        default: optBool(e.default),
+      }),
+    ),
     review_sorts: normalizeAxis<ReviewSortInfo>(strategies, 'sort', (base, e) => ({
       ...base,
       default: optBool(e.default),
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
+      field_coverage_total: optNumber(e.field_coverage_total),
     })),
     overlays: normalizeAxis<OverlayInfo>(strategies, 'overlay', (base, e) => ({
       ...base,
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
+      field_coverage_total: optNumber(e.field_coverage_total),
       requires_banner: optBool(e.requires_banner),
       purity: optNumber(e.purity),
     })),
@@ -215,6 +243,7 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
       ...base,
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
+      field_coverage_total: optNumber(e.field_coverage_total),
       version: optString(e.version),
     })),
   };
@@ -264,7 +293,8 @@ export function isDiverseOverlayAvailable(overlays: OverlayInfo[]): boolean {
  */
 export function isEmbeddingVizAvailable(overlays: OverlayInfo[]): boolean {
   return overlays.some(
-    (o) => o.id === 'viz_projection' && (o.status === 'stable' || o.status === 'experimental'),
+    (o) =>
+      o.id === 'viz_projection' && (o.status === 'stable' || o.status === 'experimental'),
   );
 }
 
@@ -278,9 +308,40 @@ export function isEmbeddingVizAvailable(overlays: OverlayInfo[]): boolean {
  */
 export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
   const entry = overlays.find(
-    (o) => o.id === 'viz_projection' && (o.status === 'stable' || o.status === 'experimental'),
+    (o) =>
+      o.id === 'viz_projection' && (o.status === 'stable' || o.status === 'experimental'),
   );
   return !!entry?.requires_banner;
+}
+
+/**
+ * Whether an entry's `field_coverage` should be treated as "has real data,
+ * safe to offer" (audit-remediation plan Phase 6, P1-2/P1-3). This is the
+ * single place the null-vs-zero distinction lives — every caller (the sort
+ * dropdown filter, the mistakenness/near-dup score chips in
+ * `StrategyBar.svelte`) must go through this instead of re-deriving it,
+ * the same "one gate, checked everywhere" convention
+ * `isDiverseOverlayAvailable`/`isEmbeddingVizAvailable` already use.
+ *
+ * `field_coverage === 0` is the ONE case that means "hide it" — a real
+ * exists-count of zero, e.g. `mistakenness` today (no probe checkpoint has
+ * ever run, plan §0.1's live counts). Every other value — a positive
+ * count, `null` (coverage genuinely doesn't apply, e.g.
+ * `requires_field: null`, or a transient backend failure per
+ * `strategy_registry.py`'s "fall back to None, not 0" contract), or
+ * `undefined` (an older/pre-Phase-6 backend that never sent the field at
+ * all, or the synthetic "Default order" sentinel option) — must be
+ * treated as "unknown, don't hide a control that might work."
+ *
+ * Before this fix, `StrategyBar.svelte`'s local `hasCoverage()` used
+ * `(entry.field_coverage ?? 0) > 0`, which conflates "coverage is
+ * null/unknown" with "coverage is zero" — the exact bug this function
+ * fixes. A backend that had never shipped `field_coverage` at all (every
+ * real backend, until this phase) made `?? 0` fire on every single entry,
+ * hiding every chip and filtering every entry out of the sort dropdown.
+ */
+export function hasFieldCoverage(entry: { field_coverage?: number | null }): boolean {
+  return entry.field_coverage !== 0;
 }
 
 /**
@@ -318,6 +379,10 @@ export const FALLBACK_METHODS: OpMethodsResponse = {
       label: 'Recent first',
       status: 'stable',
       default: true,
+      // Explicit null, not omitted (audit-remediation plan Phase 6): this
+      // is the 404-fallback path, so field_coverage is "unknown," not
+      // "empty" -- hasFieldCoverage() must keep rendering this entry.
+      field_coverage: null,
     },
   ],
   overlays: [],
