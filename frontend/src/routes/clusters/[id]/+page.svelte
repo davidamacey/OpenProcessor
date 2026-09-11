@@ -25,6 +25,7 @@
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
+  import { isDiverseOverlayAvailable } from '$lib/strategies';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type {
     OpClass,
@@ -35,6 +36,7 @@
   } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
+  import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
@@ -50,6 +52,17 @@
   );
 
   let cluster = $state<OpCluster | null>(null);
+
+  // Provenance echoed back by a pool-scale overlay ordering (Phase 4 —
+  // order=diverse). Captured here (not by cropPager, which only retains
+  // items/total) the same way `cluster` is captured out-of-band from the
+  // fetchPage closure below. null whenever not in diverse mode or the
+  // backend didn't send it.
+  let orderMeta = $state<{
+    method: string | null;
+    version: string | null;
+    n_pool: number | null;
+  } | null>(null);
 
   // Human-readable cluster name for the header. Class clusters resolve to
   // the registry class name (cluster_id == class_id), falling back to the
@@ -67,6 +80,14 @@
     fetchPage: async (page) => {
       const res = await getCluster(clusterId, page, pageSize, undefined, cropQuery());
       cluster = res.cluster;
+      orderMeta =
+        orderMode === 'diverse'
+          ? {
+              method: res.crops.order_method ?? null,
+              version: res.crops.order_version ?? null,
+              n_pool: res.crops.n_pool ?? null,
+            }
+          : null;
       return res.crops as PaginatedResponse<OpCrop>;
     },
     keyOf: (c) => c.id,
@@ -112,21 +133,41 @@
   let subjectScope = $state<0 | 1 | 2>(0);
   const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
 
-  // Order strategy (curation-strategy plan Phase 3 — generalizes the old
+  // Order strategy (curation-strategy plan Phase 3/4 — generalizes the old
   // outliersFirst boolean into an id string so the fuller StrategyBar
   // selector and the "Outliers first" shortcut button share one source
   // of truth). `strategyBar.sort` IS the order id here — 'default' means
-  // newest-first (today's behavior), unchanged from before this phase.
-  // Only 'default'/'outliers' are offered today (see the `allowedIds`
+  // newest-first (today's behavior), unchanged from before Phase 3.
+  // 'default'/'outliers' are always offered (see the `allowedOrderIds`
   // passed to <StrategyBar> below): `/curation/crops?order=` only special-cases
-  // 'outliers' server-side per docs/curation-strategy-plan-2026-09.md §1,
-  // so any other id would silently do nothing were it offered here.
+  // those server-side per docs/curation-strategy-plan-2026-09.md §1, so
+  // any other id would silently do nothing were it offered here — except
+  // 'diverse' (Phase 4), which is *conditionally* offered, gated purely on
+  // /curation/methods reporting it (mirrors the mistakenness-filter gating
+  // pattern in StrategyBar.svelte — see isDiverseOverlayAvailable).
   const strategyBar = createStrategyBar({ defaultId: 'default' });
   const orderMode = $derived(strategyBar.sort);
   // Outliers-first: rank members by distance from the cluster centroid (most
   // atypical first) so mislabels / junk in this cluster float to the top.
   // Computed on-the-fly + cached server-side. Off = newest-first.
   const outliersFirst = $derived(orderMode === 'outliers');
+
+  // 'diverse' (Phase 4, core-set / k-center-greedy pool selection) is only
+  // ever offered when /curation/methods reports it at stable/experimental status
+  // — a pre-Phase-4 backend, or OP_SELECT_DIVERSE_ENABLED off, means the
+  // 'diverse' id is passed through but StrategyBar's own gate (same
+  // predicate) never actually surfaces it in the <select>, so this page
+  // never ends up requesting an order the backend doesn't support.
+  const diverseAvailable = $derived(
+    isDiverseOverlayAvailable(strategiesStore.methods.overlays),
+  );
+  const allowedOrderIds = $derived(
+    diverseAvailable ? ['default', 'outliers', 'diverse'] : ['default', 'outliers'],
+  );
+  // "How many diverse crops?" — defaults to the page's own pageSize
+  // (60) until the operator overrides it via the StrategyBar stepper.
+  // Only forwarded to the API while actually in diverse mode.
+  const diverseK = $derived(orderMode === 'diverse' ? (strategyBar.k ?? pageSize) : null);
 
   // Clarity slider. `blurSlider` is the live drag value; `minBlurRatio` only
   // commits on release (change, not input) so dragging doesn't spam the API.
@@ -167,6 +208,7 @@
       maxRank,
       minBlurRatio,
       order: orderMode === 'default' ? null : orderMode,
+      k: diverseK,
     };
   }
 
@@ -188,6 +230,7 @@
     void maxRank;
     void minBlurRatio;
     void orderMode;
+    void diverseK;
     void loadFirst();
   });
 
@@ -277,11 +320,15 @@
   // the grid inline by cluster_subid (contiguous groups + a labeled
   // separator before each) so the operator sees what refine found at a
   // glance instead of clicking through sub-cluster tabs one at a time.
-  // Outliers-first wins over sub-cluster grouping: when ranking by centroid
-  // distance we want one flat, server-ordered list (most atypical at top),
-  // not a regroup by subid.
+  // Outliers-first (and, Phase 4, diverse mode) wins over sub-cluster
+  // grouping: when ranking by centroid distance, or when the server
+  // already hand-picked a diverse subset/order, we want one flat,
+  // server-ordered list — not a regroup by subid that would scramble it.
   const groupBySubcluster = $derived(
-    !outliersFirst && subTab == null && subClusterIds.length > 0,
+    !outliersFirst &&
+      orderMode !== 'diverse' &&
+      subTab == null &&
+      subClusterIds.length > 0,
   );
 
   // Build gridGroups from filteredCrops. When grouping, partition into
@@ -1289,11 +1336,17 @@
 
     <!-- Fuller order selector — additive alongside the shortcut above.
          Filters are hidden here: the crop query doesn't forward
-         min-mistakenness / hide-near-dup params (Phase 3 review-only). -->
+         min-mistakenness / hide-near-dup params (Phase 3 review-only).
+         'diverse' (Phase 4) is included in allowedOrderIds unconditionally
+         — StrategyBar only actually renders it once /curation/methods reports
+         the overlay, so this is harmless against a backend that hasn't
+         shipped it yet. -->
     <StrategyBar
       bar={strategyBar}
-      allowedIds={['default', 'outliers']}
+      allowedIds={allowedOrderIds}
       showFilters={false}
+      diverseKDefault={pageSize}
+      diverseMeta={orderMeta}
     />
 
     {#if subjectScope !== 0 || minBlurRatio !== null || !strategyBar.isDefault}

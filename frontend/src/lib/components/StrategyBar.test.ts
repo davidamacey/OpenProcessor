@@ -51,3 +51,27 @@ describe('routes wired to <StrategyBar> keep their keydown listener count unchan
     expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
   });
 });
+
+// Phase 4 added the 'diverse' overlay + k stepper (a plain <input
+// type="number"> with an `oninput` handler, not a global listener) to
+// both StrategyBar.svelte and clusters/[id]/+page.svelte. Re-running the
+// exact same assertions post-Phase-4 is the regression guard: the k
+// stepper must stay a pointer/keyboard-in-the-input-field-only control,
+// never a new global keydown binding (CLAUDE.md's Keyboard shortcuts
+// section — reserved keys `g n d z x u a m` stay untouched, and this
+// phase adds zero new global keybindings).
+describe('Phase 4 (diverse overlay + k stepper) adds no new listeners', () => {
+  it('StrategyBar.svelte still calls zero addEventListener with the k stepper present', () => {
+    const src = read('./StrategyBar.svelte');
+    expect(src).not.toMatch(/addEventListener/);
+    // Sanity: the k stepper is actually there, so the above isn't
+    // vacuously true against a component that never got the feature.
+    expect(src).toMatch(/diverseSelected/);
+  });
+
+  it('clusters/[id]/+page.svelte still registers zero direct keydown listeners with diverse wiring present', () => {
+    const src = read('../../routes/clusters/[id]/+page.svelte');
+    expect(src).not.toMatch(/(window|document)\.addEventListener\(['"]keydown['"]/);
+    expect(src).toMatch(/diverseAvailable/);
+  });
+});
