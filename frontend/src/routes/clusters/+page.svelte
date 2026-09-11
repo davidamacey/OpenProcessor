@@ -22,7 +22,9 @@
   import { bboxNormToXYXY } from '$lib/plate_geometry';
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
+  import { isEmbeddingVizAvailable, isEmbeddingVizBannerRequired } from '$lib/strategies';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
+  import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
   import PlateCard from '$lib/components/PlateCard.svelte';
   import PlateEditor from '$lib/components/PlateEditor.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
@@ -30,6 +32,7 @@
   import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
+  import { strategiesStore } from '$stores/strategies.svelte';
 
   // Cluster grid pager. One params builder (clusterQuery) feeds page 1 and
   // every later page, so a filter can't be sent on the first request and
@@ -459,6 +462,33 @@
     return (cls?.name ?? '').toLowerCase() === 'license_plate';
   });
 
+  // Embedding-plot overlay (curation-strategy plan Phase 5 —
+  // docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Off by default,
+  // lazily mounted: <EmbeddingPlot> only appears in the template inside
+  // the {#if showEmbeddingViz} block below, so it never instantiates
+  // (never calls getVizProjection) until the operator explicitly toggles
+  // it on. Mirrors isDiverseOverlayAvailable's gating pattern exactly —
+  // the toggle button itself is absent (not just disabled) unless
+  // /curation/methods reports the overlay at stable/experimental.
+  $effect(() => {
+    void strategiesStore.init();
+  });
+  const embeddingVizAvailable = $derived(
+    isEmbeddingVizAvailable(strategiesStore.methods.overlays),
+  );
+  const embeddingVizBannerRequired = $derived(
+    isEmbeddingVizBannerRequired(strategiesStore.methods.overlays),
+  );
+  let showEmbeddingViz = $state<boolean>(false);
+  // The synthetic plate-browse view (isLicensePlateFilter) has its own
+  // grid + bulk-triage toolbar; the embedding plot projects vehicle
+  // crops with a real cluster_id, which plates (sub-bboxes, not their
+  // own cluster docs) never have. Force the toggle off rather than
+  // leaving a stale plot mounted over a view it doesn't apply to.
+  $effect(() => {
+    if (isLicensePlateFilter && showEmbeddingViz) showEmbeddingViz = false;
+  });
+
   // One params builder for both pages of the cluster grid. loadMore used
   // to omit max_rank / min_blur_ratio, so scrolling past page 1 appended
   // unfiltered clusters over a filtered page 1.
@@ -783,6 +813,25 @@
       <span class="ml-1 font-mono text-[10px] text-zinc-500">({unlabeledCount})</span>
     </button>
 
+    <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
+         unless /curation/methods actually reports the overlay, same convention
+         as the diverse overlay in <StrategyBar>. Replaces the card grid
+         when active (never overlays it) — see the {#if showEmbeddingViz}
+         branch below. Hidden on the plate-browse view, which has its own
+         grid + toolbar and no per-crop cluster_id to color by. -->
+    {#if embeddingVizAvailable && !isLicensePlateFilter}
+      <button
+        type="button"
+        onclick={() => (showEmbeddingViz = !showEmbeddingViz)}
+        class="rounded border px-2 py-1 text-xs transition-colors {showEmbeddingViz
+          ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
+          : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
+        title="Toggle a 2-d embedding-projection scatter plot (replaces the grid); lasso-select feeds the same label/move actions as the grid"
+      >
+        {showEmbeddingViz ? '✓ ' : ''}Embedding plot
+      </button>
+    {/if}
+
     <label class="flex items-center gap-2 text-xs text-zinc-400">
       Sort
       <select
@@ -816,7 +865,13 @@
 
   <!-- Grid -->
   <div class="flex-1 overflow-auto p-4">
-    {#if isLicensePlateFilter}
+    {#if showEmbeddingViz}
+      <!-- Replaces the card grid entirely (plan §5.6 — no layout thrash
+           from showing both at once). Lazily mounted: this is the only
+           place <EmbeddingPlot> appears, so it never instantiates (never
+           fetches) while the toggle is off. -->
+      <EmbeddingPlot classId={classFilter} bannerRequired={embeddingVizBannerRequired} />
+    {:else if isLicensePlateFilter}
       <!-- Plates list view — backed by /curation/plates. Plates live as a
            plate_bbox_norm sub-bbox on each vehicle crop (not as their
            own cluster docs), so this view surfaces them directly with
