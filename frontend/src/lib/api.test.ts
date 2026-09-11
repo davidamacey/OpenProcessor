@@ -6,7 +6,14 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, getCluster, getMethods, getReviewQueue } from './api';
+import {
+  ApiError,
+  getCluster,
+  getMethods,
+  getReviewQueue,
+  getVizProjection,
+  rebuildVizProjection,
+} from './api';
 import { FALLBACK_METHODS } from './strategies';
 
 const URL = 'http://localhost:4603/op/crops/batch_label';
@@ -417,4 +424,214 @@ describe('getCluster k param', () => {
     expect(res.crops.order_version).toBeNull();
     expect(res.crops.n_pool).toBeNull();
   });
+});
+
+/**
+ * getVizProjection() — curation-strategy plan Phase 5
+ * (docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Never rejects
+ * (same contract as getMethods): `/curation/viz/projection` may not exist yet
+ * (the openprocessor Phase 5 branch lands independently) and the UMAP
+ * purity gate may mean the capability never ships at all — a fetch
+ * failure here must degrade `EmbeddingPlot` to its pending/empty state,
+ * never crash the page it replaced the grid on.
+ */
+describe('getVizProjection', () => {
+  const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      ...init,
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('parses a well-formed built response, dropping malformed points', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        points: [
+          { crop_id: 'a', x: 1.5, y: -2.3, cluster_id: 17, class_name: 'sedan' },
+          { crop_id: 'b', x: 0, y: 0, cluster_id: null, class_name: null },
+          // Malformed entries — must be dropped, not crash the whole parse.
+          { crop_id: '', x: 1, y: 1 },
+          { x: 1, y: 1 },
+          { crop_id: 'c', x: 'nope', y: 1 },
+          null,
+          'garbage',
+        ],
+        total: 2,
+        built: true,
+        built_at: '2026-09-10T00:00:00Z',
+        version: '1',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getVizProjection({ max_points: 100 });
+
+    expect(res.built).toBe(true);
+    expect(res.points).toEqual([
+      {
+        crop_id: 'a',
+        x: 1.5,
+        y: -2.3,
+        cluster_id: 17,
+        class_name: 'sedan',
+        class_source: null,
+      },
+      {
+        crop_id: 'b',
+        x: 0,
+        y: 0,
+        cluster_id: null,
+        class_name: null,
+        class_source: null,
+      },
+    ]);
+    expect(res.total).toBe(2);
+    expect(res.version).toBe('1');
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('/curation/viz/projection');
+    expect(url).toContain('max_points=100');
+  });
+
+  it('forwards cluster_id/class_id and omits unset params', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ points: [], total: 0, built: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getVizProjection({ cluster_id: 42 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('cluster_id=42');
+    expect(url).not.toContain('class_id');
+    expect(url).not.toContain('max_points');
+  });
+
+  it('reports built:false when the server says built:false or not_built:true', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ points: [], total: 0, built: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await getVizProjection()).built).toBe(false);
+
+    vi.unstubAllGlobals();
+    const fetchMock2 = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ points: [], total: 0, not_built: true }));
+    vi.stubGlobal('fetch', fetchMock2);
+    expect((await getVizProjection()).built).toBe(false);
+  });
+
+  it('defaults built to true when the server omits the field entirely', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ points: [], total: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect((await getVizProjection()).built).toBe(true);
+  });
+
+  it('resolves to the empty/pending fallback on a 404, without throwing or retrying', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getVizProjection();
+    expect(res).toEqual({
+      points: [],
+      total: 0,
+      built: false,
+      built_at: null,
+      version: null,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves to the empty/pending fallback on a network failure, after the retry budget', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getVizProjection();
+    expect(res.built).toBe(false);
+    expect(res.points).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  }, 10_000);
+
+  it('resolves to the empty/pending fallback (not throws) on a malformed 200 body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('not json', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getVizProjection();
+    expect(res.points).toEqual([]);
+    expect(res.built).toBe(false);
+  });
+
+  it('propagates a caller-initiated abort instead of swallowing it into the fallback', async () => {
+    const ctrl = new AbortController();
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const p = getVizProjection(undefined, ctrl.signal);
+    ctrl.abort();
+    await expect(p).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('rebuildVizProjection', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs to /curation/viz/projection/rebuild and returns the job snapshot', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        running: true,
+        started_at: '2026-09-10T00:00:00Z',
+        finished_at: null,
+        result: null,
+        error: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await rebuildVizProjection();
+
+    expect(res.running).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/curation/viz/projection/rebuild');
+    expect(init.method).toBe('POST');
+  });
+
+  it('propagates a 5xx failure rather than swallowing it (unlike getVizProjection)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'busy' }), { status: 503 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(rebuildVizProjection()).rejects.toBeInstanceOf(ApiError);
+  }, 10_000);
 });

@@ -226,6 +226,163 @@ export async function getMethods(signal?: AbortSignal): Promise<OpMethodsRespons
   }
 }
 
+// -- embedding projection (2-d visualization overlay, Phase 5) -----------
+//
+// docs/curation-strategy-plan-2026-09.md §2.7/§5.6/§7 — `embedding_viz.py`
+// + `op_viz.py` (openprocessor). UMAP-as-a-visualization-only overlay is the
+// one method in the whole curation-strategy plan that was NOT validated
+// in Phase 2 before implementation started; its own §6 acceptance bar
+// (2-d neighborhood purity vs. the real IVF cluster_id) decides whether
+// it ships plain, ships behind an "approximate" banner, or doesn't ship
+// at all. Nothing here assumes an outcome — `isEmbeddingVizAvailable`
+// (strategies.ts) is what actually gates whether any UI renders at all,
+// exactly like `isDiverseOverlayAvailable` gates Phase 4's `diverse`
+// overlay.
+//
+// Coordinates are cached/batch-computed server-side (plan §2.7's
+// non-negotiable rule: "never fit on a request path") — `getVizProjection`
+// only ever serves whatever the last `rebuildVizProjection()` job
+// produced.
+
+/**
+ * One projected point. Color is derived client-side from `cluster_id`
+ * (see `colorForCluster` in `embeddingPlot.ts`) — this overlay decorates
+ * an existing assignment, it never computes or chooses one.
+ */
+export interface VizPoint {
+  crop_id: string;
+  x: number;
+  y: number;
+  cluster_id: number | null;
+  class_name: string | null;
+  class_source: string | null;
+}
+
+export interface VizProjectionResponse {
+  points: VizPoint[];
+  total: number;
+  /**
+   * False when the backend has the feature enabled but no fitted
+   * projection has been built yet (an empty cache, not an error) —
+   * drives `EmbeddingPlot`'s "not built yet" pending state instead of a
+   * blank canvas. Defaults to `true` when the server omits the field
+   * entirely (an older/minimal backend that just returns points), so a
+   * genuinely-empty-but-built result doesn't get mislabeled as pending.
+   */
+  built: boolean;
+  built_at: string | null;
+  version: string | null;
+}
+
+const EMPTY_VIZ_PROJECTION: VizProjectionResponse = {
+  points: [],
+  total: 0,
+  built: false,
+  built_at: null,
+  version: null,
+};
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+function parseVizPoint(raw: unknown): VizPoint | null {
+  if (!isPlainObject(raw)) return null;
+  const { crop_id, x, y } = raw;
+  if (typeof crop_id !== 'string' || !crop_id) return null;
+  if (typeof x !== 'number' || !Number.isFinite(x)) return null;
+  if (typeof y !== 'number' || !Number.isFinite(y)) return null;
+  const cluster_id =
+    typeof raw.cluster_id === 'number' && Number.isFinite(raw.cluster_id)
+      ? raw.cluster_id
+      : null;
+  return {
+    crop_id,
+    x,
+    y,
+    cluster_id,
+    class_name: typeof raw.class_name === 'string' ? raw.class_name : null,
+    class_source: typeof raw.class_source === 'string' ? raw.class_source : null,
+  };
+}
+
+/**
+ * Fetch the cached 2-d projection. **Never rejects** (mirrors
+ * `getMethods`'s contract) — `/curation/viz/projection` may not exist yet (the
+ * backend Phase 5 lands independently of this frontend branch) or may
+ * 404/5xx for any other reason, and a fetch failure here should degrade
+ * `EmbeddingPlot` to its pending/empty state rather than crash the page
+ * it replaced the grid on. A caller-initiated abort still propagates —
+ * that's a cancellation, not a backend failure.
+ *
+ * Tolerant of either `built: false` or `not_built: true` on the raw
+ * payload — the exact field name the backend uses for "enabled but not
+ * fit yet" wasn't confirmed against openprocessor's real commits as of this
+ * phase (see the matching note on `OverlayInfo.banner_required` in
+ * strategies.ts), so both spellings are accepted defensively.
+ */
+export async function getVizProjection(
+  params: {
+    cluster_id?: number | null;
+    class_id?: number | null;
+    max_points?: number;
+  } = {},
+  signal?: AbortSignal,
+): Promise<VizProjectionResponse> {
+  try {
+    const raw = await apiFetch<unknown>(
+      `/curation/viz/projection${qs({
+        cluster_id: params.cluster_id ?? undefined,
+        class_id: params.class_id ?? undefined,
+        max_points: params.max_points ?? undefined,
+      })}`,
+      {},
+      signal,
+    );
+    if (!isPlainObject(raw)) return EMPTY_VIZ_PROJECTION;
+    const rawPoints = Array.isArray(raw.points) ? raw.points : [];
+    const points = rawPoints.map(parseVizPoint).filter((p): p is VizPoint => p != null);
+    const notBuilt = raw.built === false || raw.not_built === true;
+    return {
+      points,
+      total: typeof raw.total === 'number' ? raw.total : points.length,
+      built: !notBuilt,
+      built_at: typeof raw.built_at === 'string' ? raw.built_at : null,
+      version: typeof raw.version === 'string' ? raw.version : null,
+    };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw e;
+    return EMPTY_VIZ_PROJECTION;
+  }
+}
+
+/** Background rebuild-job snapshot — same shape convention as
+ *  `PlateFpCentroidJob` / `PlateClusterJob`. */
+export interface VizProjectionJob {
+  running: boolean;
+  started_at: string | null;
+  finished_at: string | null;
+  result: { n_points?: number; version?: string } | null;
+  error: string | null;
+}
+
+/**
+ * Kick off a projection (re)fit — a background job, not a request-path
+ * fit (plan §2.7/§3: "coordinates cached/batch-computed... never fit on
+ * a request path"). Unlike `getVizProjection`, this is an explicit
+ * user-initiated action (the operator clicked "Rebuild"), so — matching
+ * the `buildPlateFpCentroids`/`clusterPlates` precedent — it lets the
+ * error propagate for the caller to catch + toast rather than swallowing
+ * it into a fallback value.
+ */
+export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectionJob> {
+  return apiFetch<VizProjectionJob>(
+    '/curation/viz/projection/rebuild',
+    { method: 'POST' },
+    signal,
+  );
+}
+
 // -- plates browse / training-cohort selection ---------------------------
 
 export interface PlateBrowseItem {
@@ -1377,12 +1534,21 @@ export function renameClass(
 export function mergeClasses(
   payload: OpClassMerge,
   signal?: AbortSignal,
-): Promise<{ source_id: number; target_id: number; relabeled: number }> {
-  return apiFetch<{ source_id: number; target_id: number; relabeled: number }>(
-    '/curation/classes/merge',
-    { method: 'POST', body: JSON.stringify(payload) },
-    signal,
-  );
+): Promise<{
+  source_id: number;
+  target_id: number;
+  deprecated: boolean;
+  source_name: string;
+  target_name: string;
+}> {
+  // The backend does not return a relabeled count -- don't claim one.
+  return apiFetch<{
+    source_id: number;
+    target_id: number;
+    deprecated: boolean;
+    source_name: string;
+    target_name: string;
+  }>('/curation/classes/merge', { method: 'POST', body: JSON.stringify(payload) }, signal);
 }
 
 export function syncClassesToOpensearch(
