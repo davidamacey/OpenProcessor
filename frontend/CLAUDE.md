@@ -21,18 +21,68 @@ keyboard-first UX matching the legacy_sorter manual-mode speed budget.
   localStorage that can't be reconstructed by an API call
 - **Build**: SvelteKit static adapter → nginx in production Docker container
 
-## Routes (post-MVP)
+## Routes
 
-| Route            | Purpose                                                                                                                                                                                                                                              | MVP?     |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| `/`              | Dashboard (class balance, ingestion stats)                                                                                                                                                                                                           | yes      |
-| `/clusters`      | Cluster grid view, sidebar filter. When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`) | yes      |
-| `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops                                                                                                                                                                                                            | yes      |
-| `/review`        | Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** / **Plates** review queues. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings                                                              | yes      |
-| `/classes`       | Add / rename / merge classes                                                                                                                                                                                                                         | post-MVP |
-| `/export`        | Trigger YOLO export, view balance gap                                                                                                                                                                                                                | post-MVP |
-| `/models`        | Triton model registry browser                                                                                                                                                                                                                        | post-MVP |
-| `/train`         | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                           | post-MVP |
+All routes below are shipped and linked from the top nav (`+layout.svelte`)
+except `/` and `/clusters/[id]`, which are reached via the logo / a cluster
+card respectively. The MVP/post-MVP split from the original design doc is
+gone — every route in this table exists and works; nothing here is a stub.
+
+| Route                        | Purpose                                                                                                                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/` (legacy, logo link only) | Older stats + recent-crops + quick Gemma-cluster-run page. Superseded by `/dashboard` for nav purposes but still reachable; not deleted since it's a working page, just not the primary entry point.                                                |
+| `/dashboard`                  | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run.                                                                       |
+| `/clusters`                   | Cluster grid view, sidebar filter, **strategy bar** (cluster-method picker + review-sort dropdown + score chips, see below). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). |
+| `/clusters/[id]`              | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                               |
+| `/review`                     | 9 review-queue tabs: Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** / **Plates** / **Primary · Low-Conf** / **COCO Blind Spots** / All, each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings. |
+| `/classes`                    | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                |
+| `/export`                     | Trigger YOLO export, view balance gap                                                                                                                                                                                                                 |
+| `/models`                     | Triton model registry browser                                                                                                                                                                                                                         |
+| `/train`                      | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                           |
+| `/bakeoff`                    | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `legacy-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded)                             |
+
+## Curation-strategy selector bar (`StrategyBar.svelte`, 2026-09)
+
+`/clusters`, `/clusters/[id]`, and `/review` all render a `StrategyBar` —
+a collapsed-by-default chip row that expands into independent, **stackable**
+controls, never a replacement for the production defaults:
+
+- **Cluster-method picker** — `axis=cluster` entries from `/curation/methods`.
+  Production default (`ivf`, FAISS IVF-512 + AHC refine, see
+  `openprocessor/docs/design/clustering_methods.md`) is untouched; other
+  methods (`hdbscan`, retired `ahc`-primary) are informational/dormant
+  unless explicitly selected.
+- **Review-sort dropdown** — `axis=sort` entries (`review_sorts.py`):
+  `recent`, `representativeness`, `atypicality`, `uncertainty_entropy`,
+  `mistakenness`, `uniqueness`, `plate_score`, `disagreement_entropy_asc`,
+  plus each tab's own legacy default (`primary_low_conf_default`,
+  `coco_blind_spots_default`). Never replaces a tab's default — it's an
+  additional option layered on top.
+- **Score chips** (`ScoreChip.svelte`) — render inline when a crop carries
+  an `axis=score` value (`mistakenness_score`, uniqueness); invisible when
+  absent, so an un-backfilled pool renders identically to today.
+- **Diverse overlay** (`/clusters/[id]` only) — `order=diverse&k=N`
+  pool-scale k-center-greedy selection, gated by `isDiverseOverlayAvailable`
+  (`strategies.ts`) on the `diverse` overlay's status being `stable` or
+  `experimental`. Never renders against a backend that hasn't shipped or
+  enabled it (`OP_SELECT_DIVERSE_ENABLED`).
+- **Embedding plot** (`/clusters` only) — 2-d UMAP scatter, **visualization
+  only** (never feeds a clustering decision — see `clustering_methods.md`
+  §8), colored by the *existing* `cluster_id`. Gated by
+  `isEmbeddingVizAvailable`/`isEmbeddingVizBannerRequired`
+  (`strategies.ts`) on the `viz_projection` overlay's status; renders an
+  "approximate" banner when the backend flags `requires_banner`. Points
+  come from a cached, batch-computed projection (`GET /curation/viz/projection`)
+  — never fit on the request path — with an explicit "Rebuild" action
+  (`POST /curation/viz/projection/rebuild`, a background job).
+
+Every one of these degrades gracefully to invisible/default when its
+backend flag is off or `/curation/methods` fails: `strategiesStore` falls back
+to `FALLBACK_METHODS` (`strategies.ts`) — the hardcoded stable-only list
+matching what's always been implemented — so a missing endpoint never
+breaks page load. Flags live in openprocessor's `.env.legacy.example`
+(`OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SELECT_DIVERSE_ENABLED`,
+`OP_VIZ_PROJECTION_ENABLED`), all default off.
 
 ## Training UI — `/train` (Phase 2 of legacy_train_pipeline)
 
