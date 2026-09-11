@@ -31,45 +31,54 @@ describe('normalizeMethodStatus', () => {
   });
 });
 
+// The real /curation/methods wire shape (confirmed 2026-09-10 against the live
+// backend, strategy_registry.py's get_registry()): one flat `strategies`
+// array, each entry carrying an `axis` field (`'cluster' | 'sort' |
+// 'score' | 'overlay'`), plus a top-level `flags` object this file
+// doesn't consume. parseKbMethodsResponse groups by `axis` into the four
+// buckets every downstream consumer (isDiverseOverlayAvailable, etc.)
+// already expects — these tests exercise that grouping directly rather
+// than the four-separate-top-level-arrays shape an earlier version of
+// this file assumed before the real contract was confirmed.
 describe('parseKbMethodsResponse', () => {
-  it('parses a well-formed full payload into typed lists', () => {
+  it('parses a well-formed full payload into typed lists, grouped by axis', () => {
     const raw = {
-      cluster_methods: [
+      strategies: [
         {
           id: 'ivf',
+          axis: 'cluster',
           label: 'FAISS IVF-512 (production)',
           status: 'stable',
           default: true,
         },
-        { id: 'hdbscan', label: 'HDBSCAN (dormant)', status: 'disabled' },
-      ],
-      review_sorts: [
-        { id: 'default', label: 'Recent first', status: 'stable', default: true },
+        { id: 'hdbscan', axis: 'cluster', label: 'HDBSCAN (dormant)', status: 'disabled' },
+        { id: 'default', axis: 'sort', label: 'Recent first', status: 'stable', default: true },
         {
-          id: 'uncertainty',
+          id: 'uncertainty_entropy',
+          axis: 'sort',
           label: 'Uncertainty margin',
           status: 'experimental',
           requires_field: 'probe_pred_margin',
           field_coverage: 0.42,
         },
-      ],
-      overlays: [
         {
-          id: 'umap_viz',
+          id: 'viz_projection',
+          axis: 'overlay',
           label: 'UMAP scatter',
           status: 'shadow',
-          banner_required: true,
+          requires_banner: true,
+          purity: 0.472,
         },
-      ],
-      scores: [
         {
           id: 'uniqueness',
+          axis: 'score',
           label: 'Uniqueness (kNN)',
           status: 'experimental',
           version: '1',
           field_coverage: 0.9,
         },
       ],
+      flags: { op_scores_enabled: false },
     };
     const parsed = parseKbMethodsResponse(raw);
     expect(parsed.cluster_methods).toEqual([
@@ -82,35 +91,39 @@ describe('parseKbMethodsResponse', () => {
       },
     ]);
     expect(parsed.review_sorts[1]).toMatchObject({
-      id: 'uncertainty',
+      id: 'uncertainty_entropy',
       requires_field: 'probe_pred_margin',
       field_coverage: 0.42,
     });
     expect(parsed.overlays).toHaveLength(1);
     expect(parsed.overlays[0]?.status).toBe('shadow');
-    expect(parsed.overlays[0]?.banner_required).toBe(true);
+    expect(parsed.overlays[0]?.requires_banner).toBe(true);
+    expect(parsed.overlays[0]?.purity).toBe(0.472);
     expect(parsed.scores[0]).toMatchObject({ id: 'uniqueness', version: '1' });
   });
 
-  it('defaults banner_required to undefined when the server omits it', () => {
+  it('defaults requires_banner to undefined when the server omits it', () => {
     const parsed = parseKbMethodsResponse({
-      overlays: [{ id: 'umap_viz', label: 'UMAP scatter', status: 'experimental' }],
+      strategies: [
+        { id: 'viz_projection', axis: 'overlay', label: 'UMAP scatter', status: 'experimental' },
+      ],
     });
-    expect(parsed.overlays[0]?.banner_required).toBeUndefined();
+    expect(parsed.overlays[0]?.requires_banner).toBeUndefined();
   });
 
-  it('ignores a non-boolean banner_required rather than throwing', () => {
+  it('ignores a non-boolean requires_banner rather than throwing', () => {
     const parsed = parseKbMethodsResponse({
-      overlays: [
+      strategies: [
         {
-          id: 'umap_viz',
+          id: 'viz_projection',
+          axis: 'overlay',
           label: 'UMAP scatter',
           status: 'stable',
-          banner_required: 'yes',
+          requires_banner: 'yes',
         },
       ],
     });
-    expect(parsed.overlays[0]?.banner_required).toBeUndefined();
+    expect(parsed.overlays[0]?.requires_banner).toBeUndefined();
   });
 
   it('never throws on a completely unusable payload (null / string / number / array)', () => {
@@ -126,27 +139,28 @@ describe('parseKbMethodsResponse', () => {
     }
   });
 
-  it('defaults a missing/non-array registry key to an empty list without throwing', () => {
-    const parsed = parseKbMethodsResponse({
-      cluster_methods: [{ id: 'ivf', label: 'IVF', status: 'stable' }],
-      review_sorts: 'not-an-array',
-      // overlays omitted entirely
-      scores: null,
-    });
-    expect(parsed.cluster_methods).toHaveLength(1);
-    expect(parsed.review_sorts).toEqual([]);
-    expect(parsed.overlays).toEqual([]);
-    expect(parsed.scores).toEqual([]);
+  it('defaults a missing/non-array/malformed strategies key to empty lists without throwing', () => {
+    for (const bad of ['not-an-array', null, undefined, 42]) {
+      const parsed = parseKbMethodsResponse({ strategies: bad });
+      expect(parsed).toEqual({
+        cluster_methods: [],
+        review_sorts: [],
+        overlays: [],
+        scores: [],
+      });
+    }
   });
 
-  it('drops entries missing a usable id or label instead of crashing the whole parse', () => {
+  it('drops entries missing a usable id or label, or an unrecognized axis, instead of crashing the whole parse', () => {
     const parsed = parseKbMethodsResponse({
-      cluster_methods: [
-        { id: 'ivf', label: 'FAISS IVF-512', status: 'stable' },
-        { label: 'no id' },
-        { id: 'no-label' },
-        { id: '', label: 'empty id' },
-        { id: 123, label: 'non-string id' },
+      strategies: [
+        { id: 'ivf', axis: 'cluster', label: 'FAISS IVF-512', status: 'stable' },
+        { axis: 'cluster', label: 'no id' },
+        { id: 'no-label', axis: 'cluster' },
+        { id: '', axis: 'cluster', label: 'empty id' },
+        { id: 123, axis: 'cluster', label: 'non-string id' },
+        { id: 'no-axis', label: 'missing axis entirely' },
+        { id: 'future-axis', axis: 'quantum', label: "an axis this build doesn't route" },
         null,
         'garbage',
         42,
@@ -155,12 +169,20 @@ describe('parseKbMethodsResponse', () => {
     expect(parsed.cluster_methods).toEqual([
       { id: 'ivf', label: 'FAISS IVF-512', status: 'stable', default: undefined },
     ]);
+    expect(parsed.review_sorts).toEqual([]);
+    expect(parsed.overlays).toEqual([]);
+    expect(parsed.scores).toEqual([]);
   });
 
   it('carries an unrecognized-but-well-formed id through untouched (forward-tolerant)', () => {
     const parsed = parseKbMethodsResponse({
-      cluster_methods: [
-        { id: 'some_future_method_v9', label: 'Future Method', status: 'experimental' },
+      strategies: [
+        {
+          id: 'some_future_method_v9',
+          axis: 'cluster',
+          label: 'Future Method',
+          status: 'experimental',
+        },
       ],
     });
     expect(parsed.cluster_methods[0]?.id).toBe('some_future_method_v9');
@@ -169,10 +191,23 @@ describe('parseKbMethodsResponse', () => {
 
   it('normalizes an unrecognized status on a real entry to disabled rather than throwing', () => {
     const parsed = parseKbMethodsResponse({
-      review_sorts: [{ id: 'mistakenness', label: 'Mistakenness', status: 'beta_v2' }],
+      strategies: [
+        { id: 'mistakenness', axis: 'sort', label: 'Mistakenness', status: 'beta_v2' },
+      ],
     });
     expect(parsed.review_sorts).toHaveLength(1);
     expect(parsed.review_sorts[0]?.status).toBe('disabled');
+  });
+
+  it('the same id may legitimately appear in more than one axis bucket (score vs sort)', () => {
+    const parsed = parseKbMethodsResponse({
+      strategies: [
+        { id: 'mistakenness', axis: 'score', label: 'Mistakenness', status: 'experimental' },
+        { id: 'mistakenness', axis: 'sort', label: 'Mistakenness', status: 'experimental' },
+      ],
+    });
+    expect(parsed.scores).toHaveLength(1);
+    expect(parsed.review_sorts).toHaveLength(1);
   });
 });
 
@@ -192,24 +227,20 @@ describe('isDiverseOverlayAvailable', () => {
   it('is false when /curation/methods does not report a diverse entry at all', () => {
     const overlays: OverlayInfo[] = [
       { id: 'near_dup', label: 'Near-duplicates', status: 'stable' },
-      { id: 'umap_viz', label: 'UMAP scatter', status: 'experimental' },
+      { id: 'viz_projection', label: 'UMAP scatter', status: 'experimental' },
     ];
     expect(isDiverseOverlayAvailable(overlays)).toBe(false);
   });
 
   it('is false when diverse is reported but shadow (mid-validation, never selectable)', () => {
     expect(
-      isDiverseOverlayAvailable([
-        { id: 'diverse', label: 'Diversity', status: 'shadow' },
-      ]),
+      isDiverseOverlayAvailable([{ id: 'diverse', label: 'Diversity', status: 'shadow' }]),
     ).toBe(false);
   });
 
   it('is false when diverse is reported but disabled (OP_SELECT_DIVERSE_ENABLED off)', () => {
     expect(
-      isDiverseOverlayAvailable([
-        { id: 'diverse', label: 'Diversity', status: 'disabled' },
-      ]),
+      isDiverseOverlayAvailable([{ id: 'diverse', label: 'Diversity', status: 'disabled' }]),
     ).toBe(false);
   });
 
@@ -223,9 +254,7 @@ describe('isDiverseOverlayAvailable', () => {
 
   it('is true when diverse is reported stable', () => {
     expect(
-      isDiverseOverlayAvailable([
-        { id: 'diverse', label: 'Diversity', status: 'stable' },
-      ]),
+      isDiverseOverlayAvailable([{ id: 'diverse', label: 'Diversity', status: 'stable' }]),
     ).toBe(true);
   });
 
@@ -240,13 +269,17 @@ describe('isDiverseOverlayAvailable', () => {
  * plot" toggle exists at all. Same case coverage, same reasoning: this
  * repo has no component-mount test harness, so this predicate (not a DOM
  * assertion) is the real regression guard.
+ *
+ * `'viz_projection'` is the real id (confirmed against
+ * `strategy_registry.py`'s `_viz_projection_strategy`) — an earlier
+ * placeholder id, `'umap_viz'`, has been corrected throughout this file.
  */
 describe('isEmbeddingVizAvailable', () => {
   it('is false when overlays is empty (pre-Phase-5 backend, or OP_VIZ_PROJECTION_ENABLED off)', () => {
     expect(isEmbeddingVizAvailable([])).toBe(false);
   });
 
-  it('is false when /curation/methods does not report a umap_viz entry at all', () => {
+  it('is false when /curation/methods does not report a viz_projection entry at all', () => {
     const overlays: OverlayInfo[] = [
       { id: 'diverse', label: 'Diversity', status: 'stable' },
       { id: 'near_dup', label: 'Near-duplicates', status: 'experimental' },
@@ -254,34 +287,34 @@ describe('isEmbeddingVizAvailable', () => {
     expect(isEmbeddingVizAvailable(overlays)).toBe(false);
   });
 
-  it('is false when umap_viz is reported but shadow (mid-validation — the UMAP purity gate has not passed yet)', () => {
+  it('is false when viz_projection is reported but shadow (mid-validation — the UMAP purity gate has not passed yet)', () => {
     expect(
       isEmbeddingVizAvailable([
-        { id: 'umap_viz', label: 'UMAP scatter', status: 'shadow' },
+        { id: 'viz_projection', label: 'UMAP scatter', status: 'shadow' },
       ]),
     ).toBe(false);
   });
 
-  it('is false when umap_viz is reported but disabled (OP_VIZ_PROJECTION_ENABLED off, or the purity gate failed outright)', () => {
+  it('is false when viz_projection is reported but disabled (OP_VIZ_PROJECTION_ENABLED off, or the purity gate failed outright)', () => {
     expect(
       isEmbeddingVizAvailable([
-        { id: 'umap_viz', label: 'UMAP scatter', status: 'disabled' },
+        { id: 'viz_projection', label: 'UMAP scatter', status: 'disabled' },
       ]),
     ).toBe(false);
   });
 
-  it('is true when umap_viz is reported experimental', () => {
+  it('is true when viz_projection is reported experimental', () => {
     expect(
       isEmbeddingVizAvailable([
-        { id: 'umap_viz', label: 'UMAP scatter', status: 'experimental' },
+        { id: 'viz_projection', label: 'UMAP scatter', status: 'experimental' },
       ]),
     ).toBe(true);
   });
 
-  it('is true when umap_viz is reported stable', () => {
+  it('is true when viz_projection is reported stable', () => {
     expect(
       isEmbeddingVizAvailable([
-        { id: 'umap_viz', label: 'UMAP scatter', status: 'stable' },
+        { id: 'viz_projection', label: 'UMAP scatter', status: 'stable' },
       ]),
     ).toBe(true);
   });
@@ -297,54 +330,54 @@ describe('isEmbeddingVizBannerRequired', () => {
     expect(
       isEmbeddingVizBannerRequired([
         {
-          id: 'umap_viz',
+          id: 'viz_projection',
           label: 'UMAP scatter',
           status: 'shadow',
-          banner_required: true,
+          requires_banner: true,
         },
       ]),
     ).toBe(false);
     expect(
       isEmbeddingVizBannerRequired([
         {
-          id: 'umap_viz',
+          id: 'viz_projection',
           label: 'UMAP scatter',
           status: 'disabled',
-          banner_required: true,
+          requires_banner: true,
         },
       ]),
     ).toBe(false);
   });
 
-  it('is false when the overlay is available but does not carry banner_required', () => {
+  it('is false when the overlay is available but does not carry requires_banner', () => {
     expect(
       isEmbeddingVizBannerRequired([
-        { id: 'umap_viz', label: 'UMAP scatter', status: 'stable' },
+        { id: 'viz_projection', label: 'UMAP scatter', status: 'stable' },
       ]),
     ).toBe(false);
   });
 
-  it('is false when banner_required is explicitly false', () => {
+  it('is false when requires_banner is explicitly false', () => {
     expect(
       isEmbeddingVizBannerRequired([
         {
-          id: 'umap_viz',
+          id: 'viz_projection',
           label: 'UMAP scatter',
           status: 'experimental',
-          banner_required: false,
+          requires_banner: false,
         },
       ]),
     ).toBe(false);
   });
 
-  it('is true when the overlay is available (stable/experimental) and banner_required is true', () => {
+  it('is true when the overlay is available (stable/experimental) and requires_banner is true', () => {
     expect(
       isEmbeddingVizBannerRequired([
         {
-          id: 'umap_viz',
+          id: 'viz_projection',
           label: 'UMAP scatter (approximate)',
           status: 'experimental',
-          banner_required: true,
+          requires_banner: true,
         },
       ]),
     ).toBe(true);
@@ -382,7 +415,11 @@ describe('FALLBACK_METHODS', () => {
     expect(all.every((m) => m.status === 'stable')).toBe(true);
   });
 
-  it('round-trips through parseKbMethodsResponse unchanged', () => {
-    expect(parseKbMethodsResponse(FALLBACK_METHODS)).toEqual(FALLBACK_METHODS);
-  });
+  // FALLBACK_METHODS is the already-parsed *output* shape (four buckets),
+  // not a valid raw /curation/methods *input* (the real wire format is a flat
+  // `strategies` array with an `axis` field per entry — see the header
+  // comment on parseKbMethodsResponse's describe block above). It is
+  // never fed back through the parser in real usage (api.ts's getMethods
+  // returns it directly on a fetch failure), so there is no round-trip
+  // invariant to assert here anymore.
 });

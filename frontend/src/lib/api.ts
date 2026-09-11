@@ -260,26 +260,35 @@ export interface VizPoint {
 
 export interface VizProjectionResponse {
   points: VizPoint[];
+  /** `points.length`, kept as a field for parity with other list responses
+   *  in this file — the server doesn't send a separate total, there's no
+   *  pagination here (`max_points` is a hard cap, not a page size). */
   total: number;
   /**
-   * False when the backend has the feature enabled but no fitted
-   * projection has been built yet (an empty cache, not an error) —
-   * drives `EmbeddingPlot`'s "not built yet" pending state instead of a
-   * blank canvas. Defaults to `true` when the server omits the field
-   * entirely (an older/minimal backend that just returns points), so a
-   * genuinely-empty-but-built result doesn't get mislabeled as pending.
+   * CONFIRMED (2026-09-10) against the real `GET /curation/viz/projection`
+   * (`embedding_viz.get_cached_projection`): the server returns
+   * `{status: 'not_built'}` when nothing has been fit yet, or
+   * `{points, projection_version, fitted_at, stale}` otherwise — there is
+   * no `built`/`not_built` boolean on the wire. `built` here is this
+   * file's own derived convenience (`status !== 'not_built'`), kept so
+   * `EmbeddingPlot` doesn't need to know the raw sentinel shape.
    */
   built: boolean;
-  built_at: string | null;
-  version: string | null;
+  fitted_at: string | null;
+  projection_version: string | null;
+  /** True iff some in-scope crop's cached coordinates predate the latest
+   *  fit (partial-coverage signal, same philosophy as the scores
+   *  endpoints' `field_coverage`) — `false` when `built` is `false`. */
+  stale: boolean;
 }
 
 const EMPTY_VIZ_PROJECTION: VizProjectionResponse = {
   points: [],
   total: 0,
   built: false,
-  built_at: null,
-  version: null,
+  fitted_at: null,
+  projection_version: null,
+  stale: false,
 };
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -315,11 +324,10 @@ function parseVizPoint(raw: unknown): VizPoint | null {
  * it replaced the grid on. A caller-initiated abort still propagates —
  * that's a cancellation, not a backend failure.
  *
- * Tolerant of either `built: false` or `not_built: true` on the raw
- * payload — the exact field name the backend uses for "enabled but not
- * fit yet" wasn't confirmed against openprocessor's real commits as of this
- * phase (see the matching note on `OverlayInfo.banner_required` in
- * strategies.ts), so both spellings are accepted defensively.
+ * The real payload is `{status: 'not_built'}` (nothing fit yet) or
+ * `{points, projection_version, fitted_at, stale}` (confirmed 2026-09-10
+ * against `embedding_viz.get_cached_projection`) — normalized here into
+ * this file's own `built`/`fitted_at`/`projection_version`/`stale` shape.
  */
 export async function getVizProjection(
   params: {
@@ -340,15 +348,17 @@ export async function getVizProjection(
       signal,
     );
     if (!isPlainObject(raw)) return EMPTY_VIZ_PROJECTION;
+    if (raw.status === 'not_built') return EMPTY_VIZ_PROJECTION;
     const rawPoints = Array.isArray(raw.points) ? raw.points : [];
     const points = rawPoints.map(parseVizPoint).filter((p): p is VizPoint => p != null);
-    const notBuilt = raw.built === false || raw.not_built === true;
     return {
       points,
-      total: typeof raw.total === 'number' ? raw.total : points.length,
-      built: !notBuilt,
-      built_at: typeof raw.built_at === 'string' ? raw.built_at : null,
-      version: typeof raw.version === 'string' ? raw.version : null,
+      total: points.length,
+      built: true,
+      fitted_at: typeof raw.fitted_at === 'string' ? raw.fitted_at : null,
+      projection_version:
+        typeof raw.projection_version === 'string' ? raw.projection_version : null,
+      stale: raw.stale === true,
     };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
@@ -356,14 +366,26 @@ export async function getVizProjection(
   }
 }
 
-/** Background rebuild-job snapshot — same shape convention as
- *  `PlateFpCentroidJob` / `PlateClusterJob`. */
+/**
+ * Background rebuild-job snapshot. CONFIRMED (2026-09-10) against the
+ * real `embedding_viz._JobState` — flat, not the nested
+ * `{running, result: {...}}` shape this file originally guessed:
+ * `status` is a string enum (`'idle' | 'running' | 'completed' |
+ * 'failed' | 'cancelled'`), timestamps are unix-epoch numbers (`0` when
+ * unset, not `null`), and `n_written`/`projection_version` are top-level
+ * fields, not nested under a `result` key.
+ */
 export interface VizProjectionJob {
-  running: boolean;
-  started_at: string | null;
-  finished_at: string | null;
-  result: { n_points?: number; version?: string } | null;
+  job_id: string;
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  scope: string;
+  cluster_id: number | null;
+  n_pool: number;
+  n_written: number;
+  started_at: number;
+  finished_at: number;
   error: string | null;
+  projection_version: string | null;
 }
 
 /**

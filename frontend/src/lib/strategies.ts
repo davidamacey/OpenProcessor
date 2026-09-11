@@ -3,22 +3,33 @@
  * discovery response (curation-strategy plan, Phase 0 —
  * docs/curation-strategy-plan-2026-09.md §3, §5.3, §7).
  *
- * The backend exposes four orthogonal registries so the frontend can
- * discover what's currently offered without hardcoding ids:
- * `cluster_methods` (assignment, writes cluster_id), `review_sorts`
- * (review-queue ordering), `overlays` (selection/projection that never
- * write cluster_id), `scores` (per-crop scored fields backing sorts /
- * overlays). Every entry carries at least `id`, `label`, `status`.
+ * CONFIRMED AGAINST THE REAL BACKEND (2026-09-10, live end-to-end check
+ * after rebuilding/restarting op-api from `feat/op-curation-scores`):
+ * the actual wire shape is a single flat `{strategies: [...], flags: {...}}`
+ * — every entry carries an `axis: 'cluster' | 'sort' | 'score' | 'overlay'`
+ * field (see `strategy_registry.py`'s `StrategyAxis`), NOT four separate
+ * top-level arrays as this file originally assumed from the plan doc's
+ * illustrative example. `parseKbMethodsResponse` below reshapes the flat
+ * list into the four buckets (`cluster_methods`/`review_sorts`/`overlays`/
+ * `scores`) client-side by grouping on `axis`, so every downstream consumer
+ * (`isDiverseOverlayAvailable`, `StrategyBar`, etc.) keeps working against
+ * the original four-array `OpMethodsResponse` shape unchanged — only this
+ * parse function needed to change once the real contract was confirmed.
  *
- * This phase (Phase 0) is pure plumbing — types + a fetch helper + an
- * inert store. Nothing in the UI renders any of this yet; that's Phase 3.
+ * The same `id` can legitimately appear in more than one axis (e.g.
+ * `mistakenness` is both a `score` entry — the raw scored field/coverage —
+ * and a `sort` entry — the review-queue ordering built on that field).
+ * This is not a collision: each bucket is consumed in its own UI context.
+ *
+ * Every entry carries at least `id`, `label`, `status`.
  *
  * Forward-tolerant, matching the convention documented at the top of
  * `./types.ts`: a server that's ahead of this build (new ids, a new
- * status value) must degrade gracefully, never throw. `status` values
- * this build doesn't recognize normalize to `'disabled'` — the one
- * bucket a caller must never surface as selectable — and malformed
- * entries (missing/non-string `id` or `label`) are dropped rather than
+ * status value, an unrecognized `axis`) must degrade gracefully, never
+ * throw. `status` values this build doesn't recognize normalize to
+ * `'disabled'` — the one bucket a caller must never surface as selectable
+ * — and malformed entries (missing/non-string `id` or `label`, or an
+ * `axis` this build doesn't route anywhere) are dropped rather than
  * crashing the whole parse.
  */
 
@@ -69,24 +80,24 @@ export interface OverlayInfo extends MethodInfoBase {
   requires_field?: string | null;
   field_coverage?: number | null;
   /**
-   * ASSUMPTION (Phase 5, docs/curation-strategy-plan-2026-09.md §2.7/§6)
-   * — NOT confirmed against openprocessor's real `embedding_viz.py` /
-   * `op_viz.py` commits, since the UMAP 2-d neighborhood-purity gate was
-   * still running when this field was added. Per the plan's UMAP
-   * acceptance bar (>=0.30 purity ships plain, 0.15-0.30 ships behind a
-   * persistent "this projection is approximate" banner, <0.15 doesn't
-   * ship at all — the third tier is already handled by
-   * `isEmbeddingVizAvailable` returning false), the backend needs some
-   * way to tell the frontend which of the first two tiers it landed in.
-   * `banner_required` is this repo's best guess at that field's name,
-   * mirroring the `requires_field`/`field_coverage` naming convention
-   * every other `MethodInfoBase` subtype already uses. If the real
-   * backend ships a different key (`approximate`, `is_approximate`, a
-   * raw purity float the frontend would have to threshold itself, ...)
-   * this field and `isEmbeddingVizBannerRequired` below both need
-   * updating together — grep `banner_required` to find every call site.
+   * CONFIRMED (2026-09-10, live against the real `embedding_viz.py` /
+   * `op_viz.py` / `strategy_registry.py` after the Phase 5 UMAP
+   * neighborhood-purity gate finished — `requires_banner`, not the
+   * earlier guessed `banner_required`). Per the plan's UMAP acceptance
+   * bar (>=0.30 purity ships plain, 0.15-0.30 ships behind a persistent
+   * "this projection is approximate" banner, <0.15 doesn't ship at all —
+   * the third tier is already handled by `isEmbeddingVizAvailable`
+   * returning false), this tells the frontend which of the first two
+   * tiers the real measured purity (also sent as `purity`, a float)
+   * landed in. Today it's `false` — the real run measured 0.472,
+   * comfortably in the "ship plain" tier.
    */
-  banner_required?: boolean;
+  requires_banner?: boolean;
+  /** The measured 2-d neighborhood-purity value backing `requires_banner`
+   *  (see `docs/design/curation_scores.md` in openprocessor for the full
+   *  measurement writeup). Informational — nothing in this file
+   *  re-derives a ship-tier decision from it; that's the backend's job. */
+  purity?: number | null;
 }
 
 export interface ScoreInfo extends MethodInfoBase {
@@ -138,15 +149,25 @@ function normalizeBase(raw: unknown): MethodInfoBase | null {
   return base;
 }
 
-function normalizeList<T extends MethodInfoBase>(
+/**
+ * Group the real wire shape's flat `strategies` array by its `axis` field,
+ * normalizing each entry through `extra`. An entry whose `axis` isn't one
+ * of the four this build knows how to route (a future server's new axis)
+ * or whose `id`/`label` aren't usable strings is dropped rather than
+ * taking the whole parse down — same forward-tolerant contract as every
+ * other malformed-entry case in this file.
+ */
+function normalizeAxis<T extends MethodInfoBase>(
   raw: unknown,
+  axis: string,
   extra: (base: MethodInfoBase, rawEntry: Record<string, unknown>) => T,
 ): T[] {
   if (!Array.isArray(raw)) return [];
   const out: T[] = [];
   for (const entry of raw) {
+    if (!isRecord(entry) || entry.axis !== axis) continue;
     const base = normalizeBase(entry);
-    if (!base || !isRecord(entry)) continue;
+    if (!base) continue;
     out.push(extra(base, entry));
   }
   return out;
@@ -154,34 +175,43 @@ function normalizeList<T extends MethodInfoBase>(
 
 /**
  * Parse+normalize a raw `/curation/methods` payload. Never throws — any
- * unrecognized shape (missing keys, non-array registries, garbage
- * entries) degrades to empty lists for the affected registry rather than
- * propagating an exception into the api/store layer. Unknown `id`s are
- * carried through as-is (nothing here validates ids against a fixed
- * enum, by design — that's how a new server-side method shows up without
- * a frontend redeploy); unknown `status` values are neutralized to
- * `'disabled'` by `normalizeMethodStatus`.
+ * unrecognized shape (missing `strategies` key, a non-array value, garbage
+ * entries, an entry whose `axis` isn't one of the four known ones) degrades
+ * to empty lists for the affected bucket rather than propagating an
+ * exception into the api/store layer. Unknown `id`s are carried through
+ * as-is (nothing here validates ids against a fixed enum, by design —
+ * that's how a new server-side method shows up without a frontend
+ * redeploy); unknown `status` values are neutralized to `'disabled'` by
+ * `normalizeMethodStatus`.
+ *
+ * The real backend sends one flat `strategies: [...]` array with an
+ * `axis` field per entry (confirmed live 2026-09-10 — see this file's
+ * header comment), not four separate top-level arrays. This function is
+ * the sole place that reshapes it; everything downstream still sees the
+ * original four-bucket `OpMethodsResponse` shape.
  */
 export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
   const rec = isRecord(raw) ? raw : {};
+  const strategies = Array.isArray(rec.strategies) ? rec.strategies : [];
   return {
-    cluster_methods: normalizeList<ClusterMethodInfo>(rec.cluster_methods, (base, e) => ({
+    cluster_methods: normalizeAxis<ClusterMethodInfo>(strategies, 'cluster', (base, e) => ({
       ...base,
       default: optBool(e.default),
     })),
-    review_sorts: normalizeList<ReviewSortInfo>(rec.review_sorts, (base, e) => ({
+    review_sorts: normalizeAxis<ReviewSortInfo>(strategies, 'sort', (base, e) => ({
       ...base,
       default: optBool(e.default),
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
     })),
-    overlays: normalizeList<OverlayInfo>(rec.overlays, (base, e) => ({
+    overlays: normalizeAxis<OverlayInfo>(strategies, 'overlay', (base, e) => ({
       ...base,
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
-      banner_required: optBool(e.banner_required),
+      requires_banner: optBool(e.requires_banner),
+      purity: optNumber(e.purity),
     })),
-    scores: normalizeList<ScoreInfo>(rec.scores, (base, e) => ({
+    scores: normalizeAxis<ScoreInfo>(strategies, 'score', (base, e) => ({
       ...base,
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
@@ -226,33 +256,31 @@ export function isDiverseOverlayAvailable(overlays: OverlayInfo[]): boolean {
  * fully absent) and the one `EmbeddingPlot.svelte` itself never has to
  * re-derive.
  *
- * `'umap_viz'` is the id this repo's earlier Phase 3/4 test fixtures
- * already used as the placeholder id for this overlay (see
- * `strategies.test.ts` / `StrategyBar.test.ts`'s `nearDupInfo`-adjacent
- * fixtures) — kept for continuity since the real backend hadn't shipped
- * `/curation/methods`'s overlays entry for this feature yet as of this phase
- * (the sibling openprocessor validation pass was still running the UMAP
- * purity gate, plan §6, when this was written).
+ * `'viz_projection'` is the real id (confirmed live 2026-09-10 against
+ * `strategy_registry.py`'s `_viz_projection_strategy` — an earlier
+ * placeholder id, `'umap_viz'`, was a guess made while the sibling
+ * openprocessor validation pass was still running and has been corrected
+ * here and in every test fixture that used it).
  */
 export function isEmbeddingVizAvailable(overlays: OverlayInfo[]): boolean {
   return overlays.some(
-    (o) => o.id === 'umap_viz' && (o.status === 'stable' || o.status === 'experimental'),
+    (o) => o.id === 'viz_projection' && (o.status === 'stable' || o.status === 'experimental'),
   );
 }
 
 /**
  * Whether the currently-available embedding-viz overlay entry requires
  * the persistent "this projection is approximate" banner (plan §6's
- * middle UMAP-purity tier — see the `banner_required` doc comment on
- * `OverlayInfo` for the field-name caveat). Returns `false` whenever the
- * overlay isn't offered at all (mirrors `isEmbeddingVizAvailable`'s own
- * gate, so a caller never needs to check both before rendering).
+ * middle UMAP-purity tier — `requires_banner` on `OverlayInfo`, confirmed
+ * against the real backend). Returns `false` whenever the overlay isn't
+ * offered at all (mirrors `isEmbeddingVizAvailable`'s own gate, so a
+ * caller never needs to check both before rendering).
  */
 export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
   const entry = overlays.find(
-    (o) => o.id === 'umap_viz' && (o.status === 'stable' || o.status === 'experimental'),
+    (o) => o.id === 'viz_projection' && (o.status === 'stable' || o.status === 'experimental'),
   );
-  return !!entry?.banner_required;
+  return !!entry?.requires_banner;
 }
 
 /**

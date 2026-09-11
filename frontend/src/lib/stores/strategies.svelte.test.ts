@@ -34,19 +34,23 @@ describe('strategiesStore', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          cluster_methods: [
+          strategies: [
             {
               id: 'ivf',
+              axis: 'cluster',
               label: 'FAISS IVF-512 (production)',
               status: 'stable',
               default: true,
             },
+            {
+              id: 'default',
+              axis: 'sort',
+              label: 'Recent first',
+              status: 'stable',
+              default: true,
+            },
           ],
-          review_sorts: [
-            { id: 'default', label: 'Recent first', status: 'stable', default: true },
-          ],
-          overlays: [],
-          scores: [],
+          flags: {},
         }),
       ),
     );
@@ -66,20 +70,18 @@ describe('strategiesStore', () => {
 
   it('loads the real response from /curation/methods on success', async () => {
     const serverBody = {
-      cluster_methods: [
+      strategies: [
         {
           id: 'ivf',
+          axis: 'cluster',
           label: 'FAISS IVF-512 (production)',
           status: 'stable',
           default: true,
         },
+        { id: 'default', axis: 'sort', label: 'Recent first', status: 'stable', default: true },
+        { id: 'uncertainty', axis: 'sort', label: 'Uncertainty margin', status: 'experimental' },
       ],
-      review_sorts: [
-        { id: 'default', label: 'Recent first', status: 'stable', default: true },
-        { id: 'uncertainty', label: 'Uncertainty margin', status: 'experimental' },
-      ],
-      overlays: [],
-      scores: [],
+      flags: {},
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(serverBody)));
 
@@ -112,7 +114,7 @@ describe('strategiesStore', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        jsonResponse({ cluster_methods: [], review_sorts: [], overlays: [], scores: [] }),
+        jsonResponse({ strategies: [], flags: {} }),
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -126,14 +128,7 @@ describe('strategiesStore', () => {
   it('reset() clears back to the fallback and allows a fresh load', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({
-          cluster_methods: [],
-          review_sorts: [],
-          overlays: [],
-          scores: [],
-        }),
-      ),
+      vi.fn().mockResolvedValue(jsonResponse({ strategies: [], flags: {} })),
     );
     await strategiesStore.init();
     expect(strategiesStore.loaded).toBe(true);

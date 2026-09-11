@@ -75,21 +75,23 @@ describe('getMethods', () => {
   });
 
   it('returns the real parsed response on success', async () => {
+    // Real /curation/methods wire shape (confirmed 2026-09-10 against
+    // strategy_registry.py's get_registry()): a flat `strategies` array,
+    // each entry carrying an `axis` field — not four separate top-level
+    // arrays.
     const serverBody = {
-      cluster_methods: [
+      strategies: [
         {
           id: 'ivf',
+          axis: 'cluster',
           label: 'FAISS IVF-512 (production)',
           status: 'stable',
           default: true,
         },
+        { id: 'default', axis: 'sort', label: 'Recent first', status: 'stable', default: true },
+        { id: 'uncertainty', axis: 'sort', label: 'Uncertainty margin', status: 'experimental' },
       ],
-      review_sorts: [
-        { id: 'default', label: 'Recent first', status: 'stable', default: true },
-        { id: 'uncertainty', label: 'Uncertainty margin', status: 'experimental' },
-      ],
-      overlays: [],
-      scores: [],
+      flags: {},
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(serverBody));
     vi.stubGlobal('fetch', fetchMock);
@@ -97,8 +99,13 @@ describe('getMethods', () => {
     const result = await getMethods();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result.cluster_methods).toEqual(serverBody.cluster_methods);
-    expect(result.review_sorts).toEqual(serverBody.review_sorts.map((s) => ({ ...s })));
+    expect(result.cluster_methods).toEqual([
+      { id: 'ivf', label: 'FAISS IVF-512 (production)', status: 'stable', default: true },
+    ]);
+    expect(result.review_sorts).toEqual([
+      { id: 'default', label: 'Recent first', status: 'stable', default: true },
+      { id: 'uncertainty', label: 'Uncertainty margin', status: 'experimental', default: undefined },
+    ]);
     // Real backend response, not the hardcoded fallback.
     expect(result).not.toEqual(FALLBACK_METHODS);
   });
@@ -434,6 +441,13 @@ describe('getCluster k param', () => {
  * purity gate may mean the capability never ships at all — a fetch
  * failure here must degrade `EmbeddingPlot` to its pending/empty state,
  * never crash the page it replaced the grid on.
+ *
+ * The real wire shape (confirmed 2026-09-10 against
+ * `embedding_viz.get_cached_projection`) is `{status: 'not_built'}` when
+ * nothing has been fit, or `{points, projection_version, fitted_at,
+ * stale}` otherwise — there is no `built`/`built_at`/`version` on the
+ * wire; those were an earlier, wrong guess. `built` is this file's own
+ * derived convenience field.
  */
 describe('getVizProjection', () => {
   const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
@@ -460,10 +474,9 @@ describe('getVizProjection', () => {
           null,
           'garbage',
         ],
-        total: 2,
-        built: true,
-        built_at: '2026-09-10T00:00:00Z',
-        version: '1',
+        projection_version: '1',
+        fitted_at: '2026-09-10T00:00:00Z',
+        stale: false,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -490,7 +503,9 @@ describe('getVizProjection', () => {
       },
     ]);
     expect(res.total).toBe(2);
-    expect(res.version).toBe('1');
+    expect(res.projection_version).toBe('1');
+    expect(res.fitted_at).toBe('2026-09-10T00:00:00Z');
+    expect(res.stale).toBe(false);
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain('/curation/viz/projection');
@@ -500,7 +515,7 @@ describe('getVizProjection', () => {
   it('forwards cluster_id/class_id and omits unset params', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ points: [], total: 0, built: true }));
+      .mockResolvedValue(jsonResponse({ points: [], projection_version: '1', fitted_at: null, stale: false }));
     vi.stubGlobal('fetch', fetchMock);
 
     await getVizProjection({ cluster_id: 42 });
@@ -511,26 +526,19 @@ describe('getVizProjection', () => {
     expect(url).not.toContain('max_points');
   });
 
-  it('reports built:false when the server says built:false or not_built:true', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ points: [], total: 0, built: false }));
+  it("reports built:false when the server says status: 'not_built'", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ status: 'not_built' }));
     vi.stubGlobal('fetch', fetchMock);
-    expect((await getVizProjection()).built).toBe(false);
-
-    vi.unstubAllGlobals();
-    const fetchMock2 = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ points: [], total: 0, not_built: true }));
-    vi.stubGlobal('fetch', fetchMock2);
     expect((await getVizProjection()).built).toBe(false);
   });
 
-  it('defaults built to true when the server omits the field entirely', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ points: [], total: 0 }));
+  it('reports stale:true when the server flags a partial-coverage projection', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ points: [], projection_version: '2', fitted_at: '2026-09-01T00:00:00Z', stale: true }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
-    expect((await getVizProjection()).built).toBe(true);
+    expect((await getVizProjection()).stale).toBe(true);
   });
 
   it('resolves to the empty/pending fallback on a 404, without throwing or retrying', async () => {
@@ -546,8 +554,9 @@ describe('getVizProjection', () => {
       points: [],
       total: 0,
       built: false,
-      built_at: null,
-      version: null,
+      fitted_at: null,
+      projection_version: null,
+      stale: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -593,6 +602,13 @@ describe('getVizProjection', () => {
   });
 });
 
+/**
+ * rebuildVizProjection() — the real `embedding_viz._JobState` is flat
+ * (confirmed 2026-09-10), not the nested `{running, result: {...}}`
+ * shape an earlier version of this file guessed: `status` is a string
+ * enum, timestamps are unix-epoch numbers (0 when unset), and
+ * `n_written`/`projection_version` are top-level fields.
+ */
 describe('rebuildVizProjection', () => {
   const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {
@@ -607,18 +623,24 @@ describe('rebuildVizProjection', () => {
   it('POSTs to /curation/viz/projection/rebuild and returns the job snapshot', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
-        running: true,
-        started_at: '2026-09-10T00:00:00Z',
-        finished_at: null,
-        result: null,
+        job_id: 'viz-rebuild-1',
+        status: 'running',
+        scope: 'all',
+        cluster_id: null,
+        n_pool: 1200,
+        n_written: 0,
+        started_at: 1757462400,
+        finished_at: 0,
         error: null,
+        projection_version: null,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await rebuildVizProjection();
 
-    expect(res.running).toBe(true);
+    expect(res.status).toBe('running');
+    expect(res.job_id).toBe('viz-rebuild-1');
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/curation/viz/projection/rebuild');
     expect(init.method).toBe('POST');
