@@ -15,15 +15,20 @@
    * Sort options come straight from `strategiesStore` (`/curation/methods`),
    * filtered to `stable`/`experimental` only — `shadow`/`disabled` entries
    * must never be selectable (they're either mid-validation or explicitly
-   * killed). The currently-selected sort gets a small amber "beta" badge
-   * when its status is `experimental`.
+   * killed) — and, since audit-remediation plan Phase 6 (P1-2), further
+   * filtered by `hasFieldCoverage` to drop any entry the backend reports
+   * as genuinely 0% covered (e.g. `mistakenness` today — no probe
+   * checkpoint has ever run, so offering it would be a control with no
+   * effect). An entry whose coverage is merely *unknown* (`null`/absent —
+   * a transient backend failure, or `requires_field: null`) still shows;
+   * only a confirmed `field_coverage === 0` hides it. The currently-selected
+   * sort gets a small amber "beta" badge when its status is `experimental`.
    *
-   * Filter chips (min-mistakenness threshold, hide-near-duplicates) only
-   * render when the backend actually reports non-zero `field_coverage`
-   * for a matching `scores`/`overlays` entry — an un-backfilled or
-   * not-yet-shipped scorer means the filter would silently do nothing,
-   * so it degrades to hidden rather than showing a control that can't
-   * work yet.
+   * Filter chips (min-mistakenness threshold, hide-near-duplicates) render
+   * whenever the matching `scores`/`overlays` entry passes the same
+   * `hasFieldCoverage` gate (P1-3) — hidden only on a confirmed-zero
+   * `field_coverage`, not on unknown/absent coverage, so a transient
+   * `/curation/methods` hiccup can never make a chip that already works vanish.
    *
    * Phase 4 adds the pool-scale `'diverse'` overlay (core-set /
    * k-center-greedy selection) as an option `/clusters/[id]` can fold into
@@ -34,7 +39,11 @@
    */
 
   import { untrack } from 'svelte';
-  import { isDiverseOverlayAvailable, type MethodStatus } from '$lib/strategies';
+  import {
+    hasFieldCoverage,
+    isDiverseOverlayAvailable,
+    type MethodStatus,
+  } from '$lib/strategies';
   import type { StrategyBar } from '$lib/strategyBar.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
 
@@ -128,8 +137,15 @@
       seen.add(s.id);
       return true;
     });
+    // Audit-remediation plan Phase 6 (P1-2): a sort backed by a field with
+    // real, confirmed-zero coverage (e.g. `mistakenness` today -- no probe
+    // checkpoint has ever run) is genuinely inert, so it's excluded here,
+    // not just left selectable-but-useless. `hasFieldCoverage` is what
+    // keeps this from also excluding a sort whose coverage is merely
+    // unknown (null/undefined) -- see that function's doc comment.
     const stableOrExperimental = deduped.filter(
-      (s) => s.status === 'stable' || s.status === 'experimental',
+      (s) =>
+        (s.status === 'stable' || s.status === 'experimental') && hasFieldCoverage(s),
     );
     const filtered = allowedIds
       ? stableOrExperimental.filter((s) => allowedIds!.includes(s.id))
@@ -172,13 +188,19 @@
     bar.sort === 'diverse' && isDiverseOverlayAvailable(strategiesStore.methods.overlays),
   );
 
+  // Audit-remediation plan Phase 6 (P1-3): delegates the null-vs-zero
+  // distinction to the shared, unit-tested `hasFieldCoverage` (strategies.ts)
+  // instead of the old local nullish-coalesce-to-zero-then-compare gate,
+  // which was the bug -- it silently treated "coverage unknown" (undefined,
+  // on every backend before this phase) the same as "coverage confirmed
+  // zero," hiding these chips permanently regardless of real data.
   function hasCoverage(entry: {
     status: MethodStatus;
     field_coverage?: number | null;
   }): boolean {
     return (
       (entry.status === 'stable' || entry.status === 'experimental') &&
-      (entry.field_coverage ?? 0) > 0
+      hasFieldCoverage(entry)
     );
   }
 
