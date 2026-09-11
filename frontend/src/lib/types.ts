@@ -360,6 +360,17 @@ export interface PaginatedResponse<T> {
    *  toast — this isn't an error, just a degraded request. Absent on
    *  every other endpoint and on a request that didn't ask for a sort. */
   sort_fallback_reason?: string | null;
+  /** Provenance for a pool-scale overlay ordering (curation-strategy plan
+   *  Phase 4 — currently only `/curation/crops?order=diverse`): which
+   *  overlay/version produced this selection, and how large the pool it
+   *  drew from was. `n_pool` lets the UI note when diverse selection is
+   *  sampling a much larger cohort than what's on screen, rather than
+   *  silently truncating. All three are optional/tolerant — absent on
+   *  every other order value and on any backend that hasn't shipped this
+   *  yet (Phase 0/3 backend, or `OP_SELECT_DIVERSE_ENABLED` off). */
+  order_method?: string | null;
+  order_version?: string | null;
+  n_pool?: number | null;
 }
 
 export interface CropFilter {

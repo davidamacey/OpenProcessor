@@ -171,6 +171,31 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
 }
 
 /**
+ * Whether `/curation/methods` currently reports the pool-scale `diverse` overlay
+ * (curation-strategy plan Phase 4 — core-set / k-center-greedy selection,
+ * `POST /curation/select/diverse` + `GET /curation/crops?order=diverse`) as safe to
+ * offer in the UI.
+ *
+ * `diverse` lives in the `overlays` registry, not `review_sorts` — it
+ * never writes `cluster_id` (plan §3), so it's a different axis from a
+ * review-queue sort even though `/clusters/[id]` folds it into the same
+ * `orderMode`/`strategyBar.sort` selection for UX simplicity.
+ *
+ * Single source of truth for the gate: both `/clusters/[id]` (deciding
+ * whether to widen `allowedIds` past `['default', 'outliers']`) and
+ * `StrategyBar.svelte` (deciding whether to render the `k` stepper) call
+ * this instead of re-deriving the same `status` check twice. `shadow` /
+ * `disabled` / simply-absent (talking to a pre-Phase-4 backend, or
+ * `OP_SELECT_DIVERSE_ENABLED` off) must never surface the control — same
+ * stable/experimental-only bar every other overlay/score entry clears.
+ */
+export function isDiverseOverlayAvailable(overlays: OverlayInfo[]): boolean {
+  return overlays.some(
+    (o) => o.id === 'diverse' && (o.status === 'stable' || o.status === 'experimental'),
+  );
+}
+
+/**
  * Hardcoded fallback for when `/curation/methods` 404s, or the request fails
  * for any other reason (plan §5.3 — graceful degradation is required so
  * the two repos can deploy independently). This must mirror what's

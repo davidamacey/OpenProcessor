@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_METHODS,
+  isDiverseOverlayAvailable,
   normalizeMethodStatus,
   parseKbMethodsResponse,
 } from './strategies';
+import type { OverlayInfo } from './strategies';
 
 describe('normalizeMethodStatus', () => {
   it('passes through every known status value', () => {
@@ -140,6 +142,64 @@ describe('parseKbMethodsResponse', () => {
     });
     expect(parsed.review_sorts).toHaveLength(1);
     expect(parsed.review_sorts[0]?.status).toBe('disabled');
+  });
+});
+
+/**
+ * isDiverseOverlayAvailable is the single gate both `/clusters/[id]`
+ * (widening allowedIds) and `StrategyBar.svelte` (rendering the k
+ * stepper) call — this is the real regression guard for "the diverse UI
+ * must not render against a backend that hasn't shipped it," since this
+ * repo has no component-mount test harness to assert absence in the DOM
+ * directly (see StrategyBar.test.ts's header comment).
+ */
+describe('isDiverseOverlayAvailable', () => {
+  it('is false when overlays is empty (pre-Phase-4 / Phase-0/3-only backend)', () => {
+    expect(isDiverseOverlayAvailable([])).toBe(false);
+  });
+
+  it('is false when /curation/methods does not report a diverse entry at all', () => {
+    const overlays: OverlayInfo[] = [
+      { id: 'near_dup', label: 'Near-duplicates', status: 'stable' },
+      { id: 'umap_viz', label: 'UMAP scatter', status: 'experimental' },
+    ];
+    expect(isDiverseOverlayAvailable(overlays)).toBe(false);
+  });
+
+  it('is false when diverse is reported but shadow (mid-validation, never selectable)', () => {
+    expect(
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity', status: 'shadow' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false when diverse is reported but disabled (OP_SELECT_DIVERSE_ENABLED off)', () => {
+    expect(
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity', status: 'disabled' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is true when diverse is reported experimental', () => {
+    expect(
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity (core-set)', status: 'experimental' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('is true when diverse is reported stable', () => {
+    expect(
+      isDiverseOverlayAvailable([
+        { id: 'diverse', label: 'Diversity', status: 'stable' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
+    expect(isDiverseOverlayAvailable(FALLBACK_METHODS.overlays)).toBe(false);
   });
 });
 
