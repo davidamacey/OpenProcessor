@@ -108,12 +108,13 @@
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
+    const active = classesStore.classes.filter((c) => !c.deprecated);
     const list = q
-      ? classesStore.classes.filter(
+      ? active.filter(
           (c) =>
             c.name.toLowerCase().includes(q) || (c.group ?? '').toLowerCase().includes(q),
         )
-      : classesStore.classes;
+      : active;
     // Sort by cluster bucket size desc — matches what the chip shows so
     // operators can scan top-down to find the biggest backlog.
     return [...list].sort((a, b) => (b.cluster_size ?? 0) - (a.cluster_size ?? 0));

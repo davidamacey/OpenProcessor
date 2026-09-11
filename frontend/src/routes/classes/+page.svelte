@@ -167,9 +167,7 @@
         source_id: mergeSourceId,
         target_id: mergeTargetId,
       });
-      toastStore.success(
-        `Merged: ${res.relabeled ?? 0} crops relabeled to ${mergeTarget?.name}.`,
-      );
+      toastStore.success(`Merged '${res.source_name}' into '${res.target_name}'.`);
       mergeOpen = false;
       await classesStore.clearAndRefetch();
     } catch (e) {

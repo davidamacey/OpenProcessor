@@ -55,7 +55,7 @@
       if (isTextInputActive()) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const cls = classesStore.classes.find(
-        (c) => (c.hotkey_letter ?? '').toLowerCase() === key,
+        (c) => !c.deprecated && (c.hotkey_letter ?? '').toLowerCase() === key,
       );
       if (cls) {
         e.preventDefault();
