@@ -68,6 +68,25 @@ export interface ReviewSortInfo extends MethodInfoBase {
 export interface OverlayInfo extends MethodInfoBase {
   requires_field?: string | null;
   field_coverage?: number | null;
+  /**
+   * ASSUMPTION (Phase 5, docs/curation-strategy-plan-2026-09.md §2.7/§6)
+   * — NOT confirmed against openprocessor's real `embedding_viz.py` /
+   * `op_viz.py` commits, since the UMAP 2-d neighborhood-purity gate was
+   * still running when this field was added. Per the plan's UMAP
+   * acceptance bar (>=0.30 purity ships plain, 0.15-0.30 ships behind a
+   * persistent "this projection is approximate" banner, <0.15 doesn't
+   * ship at all — the third tier is already handled by
+   * `isEmbeddingVizAvailable` returning false), the backend needs some
+   * way to tell the frontend which of the first two tiers it landed in.
+   * `banner_required` is this repo's best guess at that field's name,
+   * mirroring the `requires_field`/`field_coverage` naming convention
+   * every other `MethodInfoBase` subtype already uses. If the real
+   * backend ships a different key (`approximate`, `is_approximate`, a
+   * raw purity float the frontend would have to threshold itself, ...)
+   * this field and `isEmbeddingVizBannerRequired` below both need
+   * updating together — grep `banner_required` to find every call site.
+   */
+  banner_required?: boolean;
 }
 
 export interface ScoreInfo extends MethodInfoBase {
@@ -160,6 +179,7 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
       ...base,
       requires_field: optString(e.requires_field),
       field_coverage: optNumber(e.field_coverage),
+      banner_required: optBool(e.banner_required),
     })),
     scores: normalizeList<ScoreInfo>(rec.scores, (base, e) => ({
       ...base,
@@ -193,6 +213,46 @@ export function isDiverseOverlayAvailable(overlays: OverlayInfo[]): boolean {
   return overlays.some(
     (o) => o.id === 'diverse' && (o.status === 'stable' || o.status === 'experimental'),
   );
+}
+
+/**
+ * Whether `/curation/methods` currently reports the 2-d embedding-projection
+ * overlay (curation-strategy plan Phase 5 — UMAP-as-visualization-only,
+ * `embedding_viz.py` + `op_viz.py`, `GET /curation/viz/projection`) as safe to
+ * offer in the UI. Mirrors `isDiverseOverlayAvailable` exactly: same
+ * stable/experimental-only bar, same "absent/shadow/disabled never
+ * renders" contract — this is the single gate `/clusters` uses to decide
+ * whether the "Embedding plot" toggle exists at all (not greyed out —
+ * fully absent) and the one `EmbeddingPlot.svelte` itself never has to
+ * re-derive.
+ *
+ * `'umap_viz'` is the id this repo's earlier Phase 3/4 test fixtures
+ * already used as the placeholder id for this overlay (see
+ * `strategies.test.ts` / `StrategyBar.test.ts`'s `nearDupInfo`-adjacent
+ * fixtures) — kept for continuity since the real backend hadn't shipped
+ * `/curation/methods`'s overlays entry for this feature yet as of this phase
+ * (the sibling openprocessor validation pass was still running the UMAP
+ * purity gate, plan §6, when this was written).
+ */
+export function isEmbeddingVizAvailable(overlays: OverlayInfo[]): boolean {
+  return overlays.some(
+    (o) => o.id === 'umap_viz' && (o.status === 'stable' || o.status === 'experimental'),
+  );
+}
+
+/**
+ * Whether the currently-available embedding-viz overlay entry requires
+ * the persistent "this projection is approximate" banner (plan §6's
+ * middle UMAP-purity tier — see the `banner_required` doc comment on
+ * `OverlayInfo` for the field-name caveat). Returns `false` whenever the
+ * overlay isn't offered at all (mirrors `isEmbeddingVizAvailable`'s own
+ * gate, so a caller never needs to check both before rendering).
+ */
+export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
+  const entry = overlays.find(
+    (o) => o.id === 'umap_viz' && (o.status === 'stable' || o.status === 'experimental'),
+  );
+  return !!entry?.banner_required;
 }
 
 /**

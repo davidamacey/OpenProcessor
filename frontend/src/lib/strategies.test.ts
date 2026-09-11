@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_METHODS,
   isDiverseOverlayAvailable,
+  isEmbeddingVizAvailable,
+  isEmbeddingVizBannerRequired,
   normalizeMethodStatus,
   parseKbMethodsResponse,
 } from './strategies';
@@ -51,7 +53,14 @@ describe('parseKbMethodsResponse', () => {
           field_coverage: 0.42,
         },
       ],
-      overlays: [{ id: 'umap_viz', label: 'UMAP scatter', status: 'shadow' }],
+      overlays: [
+        {
+          id: 'umap_viz',
+          label: 'UMAP scatter',
+          status: 'shadow',
+          banner_required: true,
+        },
+      ],
       scores: [
         {
           id: 'uniqueness',
@@ -79,7 +88,29 @@ describe('parseKbMethodsResponse', () => {
     });
     expect(parsed.overlays).toHaveLength(1);
     expect(parsed.overlays[0]?.status).toBe('shadow');
+    expect(parsed.overlays[0]?.banner_required).toBe(true);
     expect(parsed.scores[0]).toMatchObject({ id: 'uniqueness', version: '1' });
+  });
+
+  it('defaults banner_required to undefined when the server omits it', () => {
+    const parsed = parseKbMethodsResponse({
+      overlays: [{ id: 'umap_viz', label: 'UMAP scatter', status: 'experimental' }],
+    });
+    expect(parsed.overlays[0]?.banner_required).toBeUndefined();
+  });
+
+  it('ignores a non-boolean banner_required rather than throwing', () => {
+    const parsed = parseKbMethodsResponse({
+      overlays: [
+        {
+          id: 'umap_viz',
+          label: 'UMAP scatter',
+          status: 'stable',
+          banner_required: 'yes',
+        },
+      ],
+    });
+    expect(parsed.overlays[0]?.banner_required).toBeUndefined();
   });
 
   it('never throws on a completely unusable payload (null / string / number / array)', () => {
@@ -200,6 +231,127 @@ describe('isDiverseOverlayAvailable', () => {
 
   it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
     expect(isDiverseOverlayAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  });
+});
+
+/**
+ * isEmbeddingVizAvailable is the Phase 5 analog of isDiverseOverlayAvailable
+ * — the single gate `/clusters` uses to decide whether the "Embedding
+ * plot" toggle exists at all. Same case coverage, same reasoning: this
+ * repo has no component-mount test harness, so this predicate (not a DOM
+ * assertion) is the real regression guard.
+ */
+describe('isEmbeddingVizAvailable', () => {
+  it('is false when overlays is empty (pre-Phase-5 backend, or OP_VIZ_PROJECTION_ENABLED off)', () => {
+    expect(isEmbeddingVizAvailable([])).toBe(false);
+  });
+
+  it('is false when /curation/methods does not report a umap_viz entry at all', () => {
+    const overlays: OverlayInfo[] = [
+      { id: 'diverse', label: 'Diversity', status: 'stable' },
+      { id: 'near_dup', label: 'Near-duplicates', status: 'experimental' },
+    ];
+    expect(isEmbeddingVizAvailable(overlays)).toBe(false);
+  });
+
+  it('is false when umap_viz is reported but shadow (mid-validation — the UMAP purity gate has not passed yet)', () => {
+    expect(
+      isEmbeddingVizAvailable([
+        { id: 'umap_viz', label: 'UMAP scatter', status: 'shadow' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false when umap_viz is reported but disabled (OP_VIZ_PROJECTION_ENABLED off, or the purity gate failed outright)', () => {
+    expect(
+      isEmbeddingVizAvailable([
+        { id: 'umap_viz', label: 'UMAP scatter', status: 'disabled' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is true when umap_viz is reported experimental', () => {
+    expect(
+      isEmbeddingVizAvailable([
+        { id: 'umap_viz', label: 'UMAP scatter', status: 'experimental' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('is true when umap_viz is reported stable', () => {
+    expect(
+      isEmbeddingVizAvailable([
+        { id: 'umap_viz', label: 'UMAP scatter', status: 'stable' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
+    expect(isEmbeddingVizAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  });
+});
+
+describe('isEmbeddingVizBannerRequired', () => {
+  it('is false when the overlay is not available at all (empty/absent/shadow/disabled)', () => {
+    expect(isEmbeddingVizBannerRequired([])).toBe(false);
+    expect(
+      isEmbeddingVizBannerRequired([
+        {
+          id: 'umap_viz',
+          label: 'UMAP scatter',
+          status: 'shadow',
+          banner_required: true,
+        },
+      ]),
+    ).toBe(false);
+    expect(
+      isEmbeddingVizBannerRequired([
+        {
+          id: 'umap_viz',
+          label: 'UMAP scatter',
+          status: 'disabled',
+          banner_required: true,
+        },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false when the overlay is available but does not carry banner_required', () => {
+    expect(
+      isEmbeddingVizBannerRequired([
+        { id: 'umap_viz', label: 'UMAP scatter', status: 'stable' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false when banner_required is explicitly false', () => {
+    expect(
+      isEmbeddingVizBannerRequired([
+        {
+          id: 'umap_viz',
+          label: 'UMAP scatter',
+          status: 'experimental',
+          banner_required: false,
+        },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is true when the overlay is available (stable/experimental) and banner_required is true', () => {
+    expect(
+      isEmbeddingVizBannerRequired([
+        {
+          id: 'umap_viz',
+          label: 'UMAP scatter (approximate)',
+          status: 'experimental',
+          banner_required: true,
+        },
+      ]),
+    ).toBe(true);
+  });
+
+  it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
+    expect(isEmbeddingVizBannerRequired(FALLBACK_METHODS.overlays)).toBe(false);
   });
 });
 
