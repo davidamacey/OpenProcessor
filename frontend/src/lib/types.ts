@@ -380,6 +380,52 @@ export interface PaginatedResponse<T> {
   n_pool?: number | null;
 }
 
+/**
+ * `POST /curation/select/diverse`'s scope object (P2-10, `/review`'s diverse
+ * overlay — docs/CLAUDE.md's curation-strategy-selector-bar section).
+ * Distinct from `/clusters/[id]`'s `GET /curation/crops?order=diverse&k=N` —
+ * that path is a small, synchronous, cluster-scoped selection; this one
+ * scopes to a review-tab cohort (`review_tab` reuses the backend's
+ * existing tab-query builder) which can be pool-scale (the `all` tab is
+ * ~320k crops), hence the job/poll contract below. `filters` only
+ * supports term/terms filters server-side (`class_id`, `hdd_source`) —
+ * NOT `conf_min`/`conf_max`/`min_blur_ratio`/`max_rank`/plate `text`.
+ */
+export interface SelectDiverseScope {
+  cluster_id?: number | null;
+  review_tab?: string | null;
+  filters?: Record<string, unknown>;
+}
+
+/**
+ * Immediate (200) result of `POST /curation/select/diverse` for a small pool.
+ * Forward-tolerant per this file's convention — an unrecognized `method`
+ * string is still carried through as-is.
+ */
+export interface DiverseSelection {
+  crop_ids: string[];
+  method: string;
+  version: string;
+  n_pool: number;
+}
+
+/** Background-job state for a large-pool diverse selection (202 path),
+ *  polled via `GET /curation/select/status`. CONFIRMED against the real backend
+ *  (`selection/job.py`'s `_JobState`, 2026-09-12): `status` is one of
+ *  `'idle' | 'running' | 'completed' | 'failed' | 'cancelled'`, and the
+ *  finished selection is nested under `result` (the same
+ *  `{crop_ids, method, version, n_pool}` shape the sync 200 path returns
+ *  directly) — NOT flattened onto the job status object. `status` values
+ *  this build doesn't recognize are carried through as-is rather than
+ *  normalized — callers should treat anything other than `'running'` as
+ *  "stop polling." */
+export interface SelectJobStatus {
+  job_id?: string | null;
+  status: string;
+  result?: DiverseSelection | null;
+  error?: string | null;
+}
+
 export interface CropFilter {
   class_id?: number | null;
   cluster_id?: number | null;

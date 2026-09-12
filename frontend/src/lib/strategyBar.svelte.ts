@@ -32,6 +32,16 @@ export interface StrategyBarOptions {
   /** The id treated as "no explicit sort requested" — omitted from
    *  toQueryParams() and restored by reset(). Defaults to 'default'. */
   defaultId?: string;
+  /** Sort ids that are actually pool-scale overlays (Phase 4's `'diverse'`),
+   *  not a real `/curation/review/{tab}` or `/curation/crops` sort param — that
+   *  endpoint 400s if `sort=diverse` is ever forwarded to it (P2-10).
+   *  `toQueryParams()` omits `sort` entirely whenever the current
+   *  selection is one of these; the caller drives the overlay through its
+   *  own separate call (`selectDiverse`), not through the sort query
+   *  param. Defaults to `[]` so every existing caller (today: only
+   *  `/clusters/[id]`, which reads `.sort` directly rather than going
+   *  through `toQueryParams()`) is unaffected. */
+  overlayIds?: string[];
 }
 
 export interface StrategyBar {
@@ -67,6 +77,7 @@ export interface StrategyBar {
 
 export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
   const defaultId = opts.defaultId ?? 'default';
+  const overlayIds = new Set(opts.overlayIds ?? []);
 
   let sort = $state<string>(defaultId);
   let minMistakenness = $state<number | null>(null);
@@ -106,7 +117,11 @@ export function createStrategyBar(opts: StrategyBarOptions = {}): StrategyBar {
 
     toQueryParams(): Record<string, unknown> {
       const params: Record<string, unknown> = {};
-      if (sort !== defaultId) params.sort = sort;
+      // An overlay id (e.g. 'diverse') is never a real backend sort param
+      // — the caller drives it through a separate call, so omit `sort`
+      // entirely rather than forwarding an id the review-queue endpoint
+      // would 400 on (P2-10).
+      if (sort !== defaultId && !overlayIds.has(sort)) params.sort = sort;
       if (minMistakenness != null) params.min_mistakenness = minMistakenness;
       if (hideNearDuplicates) params.hide_near_duplicates = true;
       return params;

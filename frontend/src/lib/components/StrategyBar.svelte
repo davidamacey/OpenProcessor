@@ -73,6 +73,14 @@
     /** Whether to offer the score-filter chips at all. `/clusters/[id]`
      *  passes `false` — its crop query doesn't forward these params. */
     showFilters?: boolean;
+    /** Offer the pool-scale `'diverse'` overlay in the sort dropdown
+     *  without inheriting `allowedIds`'s other restrictions (P2-10,
+     *  `/review`). `/clusters/[id]` continues to get `'diverse'` via
+     *  `allowedIds` instead — this prop exists so a route that wants
+     *  every `review_sorts` entry AND `'diverse'` doesn't have to
+     *  enumerate every sort id by hand. Still gated by
+     *  `isDiverseOverlayAvailable` like every other `'diverse'` path. */
+    offerDiverse?: boolean;
     /** Seed value for the `k` stepper the first time the operator selects
      *  `'diverse'` and `bar.k` is still unset. Route-specific ("current
      *  page size" on `/clusters/[id]`) — omit on routes that never offer
@@ -97,6 +105,7 @@
     bar,
     allowedIds = null,
     showFilters = true,
+    offerDiverse = false,
     diverseKDefault,
     diverseKMin = 4,
     diverseKMax = 500,
@@ -121,16 +130,25 @@
   const sentinelSortId = untrack(() => bar.sort);
 
   const sortOptions = $derived.by(() => {
-    // Only a caller that restricts allowedIds (today: `/clusters/[id]`)
+    // Only a caller that restricts allowedIds (today: `/clusters/[id]`) —
+    // or one that opts in via offerDiverse (today: `/review`, P2-10) —
     // also considers the `overlays` registry — `'diverse'` lives there,
     // not in `review_sorts` (plan §3: overlays never write cluster_id, a
-    // different axis from review-queue sort/filter, even though this page
-    // folds both into one `orderMode` selection for UX simplicity). Plain
-    // `/review` (allowedIds=null) is unaffected: only `review_sorts` is
+    // different axis from review-queue sort/filter, even though these
+    // pages fold both into one `orderMode`/sort selection for UX
+    // simplicity). Plain `/review` pre-P2-10 (allowedIds=null,
+    // offerDiverse=false) is unaffected: only `review_sorts` is
     // considered there, exactly as before Phase 4.
-    const source = allowedIds
-      ? [...strategiesStore.methods.review_sorts, ...strategiesStore.methods.overlays]
-      : strategiesStore.methods.review_sorts;
+    // Only 'diverse' is ever folded in from the overlays registry — other
+    // overlay entries (e.g. 'viz_projection') aren't sort-shaped and must
+    // never leak into this dropdown.
+    const diverseOverlayOnly = strategiesStore.methods.overlays.filter(
+      (o) => o.id === 'diverse',
+    );
+    const source =
+      allowedIds || offerDiverse
+        ? [...strategiesStore.methods.review_sorts, ...diverseOverlayOnly]
+        : strategiesStore.methods.review_sorts;
     const seen = new Set<string>();
     const deduped = source.filter((s) => {
       if (seen.has(s.id)) return false;
@@ -147,6 +165,12 @@
       (s) =>
         (s.status === 'stable' || s.status === 'experimental') && hasFieldCoverage(s),
     );
+    // `allowedIds` still restricts to an explicit id list when given
+    // (`/clusters/[id]`'s `/curation/crops?order=` only special-cases a few
+    // ids). `offerDiverse` with no `allowedIds` (today: `/review`) needs
+    // no further filtering here — `source` above already limited the
+    // overlays half to exactly `'diverse'`, so every review_sorts entry
+    // plus that one overlay entry is exactly what should render.
     const filtered = allowedIds
       ? stableOrExperimental.filter((s) => allowedIds!.includes(s.id))
       : stableOrExperimental;
