@@ -14,6 +14,7 @@
   import AugmentationPanel from './AugmentationPanel.svelte';
   import ClassSubsetPicker from './ClassSubsetPicker.svelte';
   import { classesStore } from '$stores/classes.svelte';
+  import { GPU_OPTIONS, gpuAdvisory } from '$lib/trainGpuOptions';
   import type {
     AugmentationSpec,
     CampaignRunSpec,
@@ -72,11 +73,6 @@
     'large',
     'xlarge',
   ];
-  const GPU_OPTIONS = [
-    { value: '0,2', label: '2× A6000 (slots 0, 2)', warn: false },
-    { value: '0', label: '1× A6000 (slot 0)', warn: true },
-  ] as const;
-
   let modelSize = $state<ModelSize>('m');
   let profileName = $state<ProfileName>('medium');
   let cudaDevices = $state<string>('0,2');
@@ -339,8 +335,8 @@
         </label>
       {/each}
     </div>
-    {#if cudaDevices === '0'}
-      <p class="mt-2 text-[11px] text-yellow-300">Gemma worker stays alive on GPU 2.</p>
+    {#if gpuAdvisory(cudaDevices)}
+      <p class="mt-2 text-[11px] text-yellow-300">{gpuAdvisory(cudaDevices)}</p>
     {/if}
   </div>
 
