@@ -102,6 +102,56 @@ describe('createPager', () => {
     expect(pager.error).toBeNull();
   });
 
+  it('a loadMore() in flight when loadFirst() reloads does not clobber the fresh page (refine-then-reload race)', async () => {
+    // Mirrors /clusters' plate bucket view: the user has scrolled a bucket
+    // (loadMore() in flight fetching an old, pre-refine page) and then
+    // triggers "Refine AHC", whose handler calls loadFirst() to reload page 1
+    // with the freshly-refined data. If the stale loadMore() resolves AFTER
+    // loadFirst()'s own fetch, it must not be allowed to append its
+    // pre-refine items onto (or otherwise corrupt) the just-reloaded state.
+    let resolveLoadMorePage: (v: { items: Row[]; total: number }) => void;
+    const loadMorePagePromise = new Promise<{ items: Row[]; total: number }>((res) => {
+      resolveLoadMorePage = res;
+    });
+    let call = 0;
+    const pager = createPager<Row>({
+      fetchPage: async () => {
+        call++;
+        if (call === 1) {
+          // Initial loadFirst(): page 1 of the pre-refine bucket.
+          return { items: rows('old1', 'old2'), total: 4 };
+        }
+        if (call === 2) {
+          // loadMore() for page 2 -- held open until after the reload below.
+          return loadMorePagePromise;
+        }
+        // The refine handler's own loadFirst(): fresh, post-refine page 1.
+        return { items: rows('new1', 'new2'), total: 2 };
+      },
+      keyOf: (r) => r.id,
+    });
+
+    await pager.loadFirst();
+    const loadMoreDone = pager.loadMore(); // page 2 fetch now in flight, unresolved
+
+    // "Refine AHC" reloads page 1 with fresh data while loadMore() is still
+    // pending -- this must fully win, exactly like production's
+    // runRefinePlateCluster() -> loadPlatesFirst() after the refine POST.
+    await pager.loadFirst();
+    expect(pager.items.map((r) => r.id)).toEqual(['new1', 'new2']);
+    expect(pager.total).toBe(2);
+
+    // Now let the stale loadMore() response land late.
+    resolveLoadMorePage!({ items: rows('old2', 'old3'), total: 4 });
+    await loadMoreDone;
+
+    // The stale page must not have been appended onto the fresh reload.
+    expect(pager.items.map((r) => r.id)).toEqual(['new1', 'new2']);
+    expect(pager.total).toBe(2);
+    expect(pager.loadedPages).toBe(1);
+    expect(pager.loadingMore).toBe(false);
+  });
+
   it('items and total stay writable for optimistic mutations', async () => {
     const pager = createPager<Row>({
       fetchPage: async () => ({ items: rows('a', 'b'), total: 2 }),

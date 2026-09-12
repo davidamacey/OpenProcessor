@@ -53,6 +53,19 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
   let error = $state<string | null>(null);
   const hasMore = $derived(items.length < total);
 
+  // Bumped by every loadFirst(). loadMore() and loadFirst() itself each
+  // capture the epoch in effect when their fetch started; if a newer
+  // loadFirst() has since started by the time a fetch resolves, its result
+  // is discarded instead of applied. Without this, a loadMore() left in
+  // flight when the caller triggers a fresh loadFirst() (e.g. /clusters'
+  // plate bucket view: the user has scrolled a bucket, loading page 2+, then
+  // clicks "Refine AHC", whose handler reloads page 1 once the refine POST
+  // resolves) can resolve *after* the reload and silently append its stale,
+  // pre-reload page onto the freshly loaded buffer — with no error and no
+  // visible sign anything went wrong, until a full page reload happens to
+  // land cleanly with no competing stale fetch.
+  let epoch = 0;
+
   return {
     get items() {
       return items;
@@ -86,6 +99,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
     },
 
     async loadFirst(): Promise<void> {
+      const myEpoch = ++epoch;
       loading = true;
       error = null;
       items = [];
@@ -94,24 +108,34 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       opts.onReset?.();
       try {
         const res = await opts.fetchPage(1);
+        // A newer loadFirst() already started (and owns `loading`) — leave
+        // its result alone rather than overwrite with our now-stale fetch.
+        if (myEpoch !== epoch) return;
         const fresh = (res?.items ?? []).filter((i) => opts.accept?.(i) ?? true);
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = 1;
       } catch (e) {
+        if (myEpoch !== epoch) return;
         error = (e as Error).message;
         opts.onLoadFirstError?.();
       } finally {
-        loading = false;
+        if (myEpoch === epoch) loading = false;
       }
     },
 
     async loadMore(): Promise<void> {
       if (loading || loadingMore || items.length >= total) return;
+      const myEpoch = epoch;
       loadingMore = true;
       try {
         const next = loadedPages + 1;
         const res = await opts.fetchPage(next);
+        // A loadFirst() reset the buffer while this page was in flight
+        // (e.g. a scroll-triggered loadMore() racing a refine-then-reload).
+        // Applying it now would silently splice a stale page onto the fresh
+        // reload, so drop it instead.
+        if (myEpoch !== epoch) return;
         // Dedup: the server collection shrinks as crops are relabeled, so a
         // later page can repeat an item an earlier page already returned.
         const seen = new Set(items.map(opts.keyOf));
@@ -122,8 +146,11 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         total = res?.total ?? total;
         loadedPages = next;
       } catch (e) {
-        error = (e as Error).message;
+        if (myEpoch === epoch) error = (e as Error).message;
       } finally {
+        // Always clear the busy flag, even if superseded — otherwise a
+        // discarded stale loadMore() would leave loadingMore stuck `true`
+        // and permanently block future loadMore() calls.
         loadingMore = false;
       }
     },
