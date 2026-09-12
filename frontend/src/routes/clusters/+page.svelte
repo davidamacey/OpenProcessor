@@ -11,9 +11,11 @@
     getPlateClusterStatus,
     getPlateFpCentroidStatus,
     getPlates,
+    getPlateThumbUrl,
     getSuspectedFalsePositives,
     getThumbUrl,
     refinePlateCluster,
+    resolveApiUrl,
     setCropPlate,
     type PlateBrowseItem,
     type SuspectedFpItem,
@@ -545,9 +547,7 @@
         // point of this card is that the operator is browsing plates.
         // /curation/crops/{id}/plate_thumbnail returns the plate sub-bbox
         // rendered to a 160px tile.
-        representative_thumb_urls: reps.map(
-          (p) => `/curation/crops/${encodeURIComponent(p.crop_id)}/plate_thumbnail?size=160`,
-        ),
+        representative_thumb_urls: reps.map((p) => getPlateThumbUrl(p.crop_id, 160)),
         updated_at: null,
       } as OpCluster;
     } catch {
@@ -704,7 +704,7 @@
               ...p,
               plate_status: res.plate_status ?? p.plate_status,
               plate_bbox_norm: arr ?? null,
-              plate_thumbnail_url: `/curation/crops/${cropId}/plate_thumbnail?v=${Date.now()}`,
+              plate_thumbnail_url: getPlateThumbUrl(cropId, 160, Date.now()),
             }
           : p,
       );
@@ -1135,7 +1135,7 @@
                   >
                     {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
                       <img
-                        src={url}
+                        src={resolveApiUrl(url)}
                         alt="plate"
                         loading="lazy"
                         class="aspect-[2/1] w-full bg-zinc-950 object-contain"
@@ -1266,7 +1266,9 @@
               <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
                 {#each c.representative_crop_ids?.slice(0, 4) ?? [] as cropId, i (cropId)}
                   <img
-                    src={c.representative_thumb_urls?.[i] ?? getThumbUrl(cropId)}
+                    src={c.representative_thumb_urls?.[i]
+                      ? resolveApiUrl(c.representative_thumb_urls[i])
+                      : getThumbUrl(cropId)}
                     alt="thumb"
                     loading="lazy"
                     class="aspect-square w-full bg-zinc-950 object-contain"
