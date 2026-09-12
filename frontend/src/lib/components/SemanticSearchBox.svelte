@@ -20,24 +20,36 @@
   import { searchCrops } from '$lib/api';
   import { createSemanticSearchBox } from '$lib/searchBox.svelte';
   import type { SemanticSearchResult } from '$lib/searchBox.svelte';
+  import { onMount } from 'svelte';
 
   interface Props {
     /** Extra query params threaded to `GET /curation/search/text` — e.g.
      *  `{cluster_id}` on `/clusters/[id]`, or the effective tab + live
-     *  filter object on `/review`. */
+     *  filter object on `/review`. Omitting any scoping key (e.g. no
+     *  `cluster_id`) means "search everything" — the global `/clusters`
+     *  search deliberately passes no cluster/tab scope. */
     filter?: Record<string, unknown>;
     pageSize?: number;
     placeholder?: string;
+    /** Seed the box with a query (e.g. from `?q=` on mount) and fire it
+     *  immediately, bypassing the debounce — same as pressing Enter. */
+    initialQuery?: string | null;
     onResults?: (res: SemanticSearchResult) => void;
     onClear?: () => void;
+    /** Fires with the live query text on every keystroke — lets a host
+     *  (e.g. /clusters' search-mode header bar + `?q=` URL sync) track
+     *  what's currently typed without this component owning navigation. */
+    onQueryChange?: (q: string) => void;
   }
 
   let {
     filter = {},
     pageSize = 30,
     placeholder = 'Search crops (e.g. "red sedan", "pickup at night")…',
+    initialQuery = null,
     onResults,
     onClear,
+    onQueryChange,
   }: Props = $props();
 
   const box = createSemanticSearchBox({
@@ -46,6 +58,14 @@
     onResults: (res) => onResults?.(res),
     onClear: () => onClear?.(),
   });
+
+  onMount(() => {
+    if (initialQuery) {
+      box.query = initialQuery;
+      onQueryChange?.(initialQuery);
+      box.submit();
+    }
+  });
 </script>
 
 <div class="inline-flex flex-1 items-center gap-1.5 text-xs">
@@ -53,7 +73,11 @@
     <input
       type="text"
       value={box.query}
-      oninput={(e) => box.oninput((e.currentTarget as HTMLInputElement).value)}
+      oninput={(e) => {
+        const v = (e.currentTarget as HTMLInputElement).value;
+        box.oninput(v);
+        onQueryChange?.(v);
+      }}
       onkeydown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -68,7 +92,10 @@
       <button
         type="button"
         class="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-zinc-500 hover:text-zinc-200"
-        onclick={() => box.clear()}
+        onclick={() => {
+          box.clear();
+          onQueryChange?.('');
+        }}
         title="Clear search"
       >
         ×

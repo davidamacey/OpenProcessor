@@ -3,8 +3,11 @@
   import { page } from '$app/state';
   import {
     batchPlateStatus,
+    bulkLabel,
     buildPlateFpCentroids,
     clusterPlates,
+    deleteCropLabel,
+    excludeCrops,
     getClusters,
     getCrop,
     getPlateClusters,
@@ -14,8 +17,10 @@
     getPlateThumbUrl,
     getSuspectedFalsePositives,
     getThumbUrl,
+    putCropLabel,
     refinePlateCluster,
     resolveApiUrl,
+    searchCrops,
     setCropPlate,
     type PlateBrowseItem,
     type SuspectedFpItem,
@@ -24,17 +29,27 @@
   import { bboxNormToXYXY } from '$lib/plate_geometry';
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
-  import { isEmbeddingVizAvailable, isEmbeddingVizBannerRequired } from '$lib/strategies';
+  import {
+    isEmbeddingVizAvailable,
+    isEmbeddingVizBannerRequired,
+    isSemanticSearchAvailable,
+  } from '$lib/strategies';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
+  import ClusterBadge from '$lib/components/ClusterBadge.svelte';
+  import CropDetailModal from '$lib/components/CropDetailModal.svelte';
+  import CropResultGrid from '$lib/components/CropResultGrid.svelte';
   import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
   import PlateCard from '$lib/components/PlateCard.svelte';
   import PlateEditor from '$lib/components/PlateEditor.svelte';
+  import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
-  import type { ClusterFilter, OpCluster, OpCrop } from '$lib/types';
+  import type { ClusterFilter, OpClass, OpCluster, OpCrop, UndoEntry } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
+  import { undoStore } from '$stores/undo.svelte';
 
   // Cluster grid pager. One params builder (clusterQuery) feeds page 1 and
   // every later page, so a filter can't be sent on the first request and
@@ -464,6 +479,211 @@
     return (cls?.name ?? '').toLowerCase() === 'license_plate';
   });
 
+  // ---------------- global dataset-wide search ----------------
+  // Semantic text search across the WHOLE dataset (not scoped to a
+  // cluster/tab, unlike the existing /clusters/[id] and /review
+  // integrations) — a mode-switch over the card grid, not a new route,
+  // per ClassSidebar's routing gate (src/routes/+layout.svelte:
+  // `showSidebar` only mounts on `/clusters` or `/clusters/[id]`, so a
+  // dedicated `/search` route would silently lose drag-to-label).
+  const semanticSearchAvailable = $derived(
+    isSemanticSearchAvailable(strategiesStore.methods.overlays),
+  );
+  let searchModeActive = $state(false);
+  let searchQuery = $state<string>('');
+  let searchResults = $state<OpCrop[]>([]);
+  let searchTotal = $state(0);
+  let searchScores = $state(new Map<string, number>());
+  const searchSel = createSelection({ plainClick: 'replace' });
+  let detailSearchCrop = $state<OpCrop | null>(null);
+
+  // Cluster-origin badges: build a Map from whatever's already loaded for
+  // the card grid (getClusters({}) returns every cluster, up to 2000, in
+  // one call with dominant_class_name precomputed server-side — never
+  // recompute dominant class client-side, per CLAUDE.md). If a search
+  // result's cluster_id isn't in that map (e.g. the grid was itself
+  // filtered by class), fall back to one additional unfiltered call
+  // rather than showing a blank badge.
+  let clusterMetaMap = $state(new Map<number, OpCluster>());
+  $effect(() => {
+    const m = new Map<number, OpCluster>();
+    for (const c of clusterPager.items) m.set(c.id, c);
+    clusterMetaMap = m;
+  });
+  async function ensureClusterMeta(ids: number[]): Promise<void> {
+    const missing = ids.filter((id) => !clusterMetaMap.has(id));
+    if (missing.length === 0) return;
+    try {
+      const res = await getClusters({});
+      const m = new Map(clusterMetaMap);
+      for (const c of res.items) m.set(c.id, c);
+      clusterMetaMap = m;
+    } catch (e) {
+      toastStore.warn(`Could not load cluster info for badges: ${(e as Error).message}`);
+    }
+  }
+
+  function syncSearchUrl(q: string | null): void {
+    const url = new URL(page.url);
+    if (q) url.searchParams.set('q', q);
+    else url.searchParams.delete('q');
+    void goto(`${url.pathname}${url.search}`, { replaceState: true, keepFocus: true });
+  }
+
+  function exitSearchMode(): void {
+    searchModeActive = false;
+    searchResults = [];
+    searchScores = new Map();
+    searchSel.clear();
+    syncSearchUrl(null);
+  }
+
+  function applyLocalSearchLabel(
+    id: string,
+    classId: number,
+    className: string | null,
+  ): void {
+    searchResults = searchResults.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            class_id: classId,
+            class_name: className,
+            label_validated: true,
+            label_source: 'human_confirmed',
+          }
+        : c,
+    );
+  }
+
+  function revertLocalSearchLabel(prev: UndoEntry, prevName: string | null): void {
+    searchResults = searchResults.map((c) =>
+      c.id === prev.crop_id
+        ? {
+            ...c,
+            class_id: prev.prior_class_id,
+            class_name: prevName,
+            label_validated: prev.prior_validated,
+            label_source: prev.prior_label_source,
+          }
+        : c,
+    );
+  }
+
+  // Label actions in search mode: only A (select all) / Z (undo) / X
+  // (ignore) / Esc (clear selection). M (move-to-cluster) and AHC
+  // sub-cluster grouping are deliberately not offered — search results
+  // aren't a single cluster, those actions don't make sense here.
+  $effect(() => {
+    if (!searchModeActive) return;
+    // Force the embedding plot off — same guard pattern the plate-browse
+    // view already uses (isLicensePlateFilter effect above): the plot
+    // colors by cluster_id over the card grid's own crops, which search
+    // mode replaces entirely.
+    if (showEmbeddingViz) showEmbeddingViz = false;
+
+    const offDrop = dropOnClassStore.register(async (cls: OpClass, droppedIds: string[]) => {
+      const ids = droppedIds.length > 0 ? droppedIds : [...searchSel.ids];
+      if (ids.length === 0) {
+        toastStore.warn('Select or drag crops first, then press a class hotkey.');
+        return;
+      }
+      const pushed: UndoEntry[] = [];
+      for (const id of ids) {
+        const c = searchResults.find((x) => x.id === id);
+        if (c) {
+          const entry = undoStore.snapshotOf(c);
+          undoStore.push(entry);
+          pushed.push(entry);
+        }
+        applyLocalSearchLabel(id, cls.id, cls.name);
+      }
+      searchSel.clear();
+      try {
+        const res = await bulkLabel(ids, cls.id);
+        const conflicts = res.conflicts?.length ?? 0;
+        if (conflicts > 0) {
+          toastStore.warn(
+            `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker).`,
+          );
+        } else {
+          toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+        }
+      } catch (e) {
+        toastStore.error(`Label failed: ${(e as Error).message}`);
+        for (const p of pushed) {
+          const prevCls = p.prior_class_id != null ? classesStore.byId(p.prior_class_id) : null;
+          revertLocalSearchLabel(p, prevCls?.name ?? null);
+        }
+        undoStore.remove(pushed);
+      }
+    });
+
+    const offKeys: Array<() => void> = [];
+    const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
+      offKeys.push(keyboardStore.register(combo, () => void fn(), 'clusters', desc));
+
+    reg('a', () => searchSel.selectAll(searchResults.map((c) => c.id)), 'Select all results');
+    reg(
+      'escape',
+      () => searchSel.clear(),
+      'Clear selection',
+    );
+    reg(
+      'x',
+      async () => {
+        const ids = [...searchSel.ids];
+        if (ids.length === 0) {
+          toastStore.info('Select crops first to ignore.');
+          return;
+        }
+        try {
+          const res = await excludeCrops(ids, 'ignore');
+          const idSet = new Set(ids);
+          searchResults = searchResults.filter((c) => !idSet.has(c.id));
+          searchTotal = Math.max(0, searchTotal - ids.length);
+          searchSel.clear();
+          toastStore.success(`Ignored ${res.excluded}.`);
+        } catch (e) {
+          toastStore.error(`Ignore failed: ${(e as Error).message}`);
+        }
+      },
+      'Ignore selected (exclude from training)',
+    );
+    reg(
+      'z',
+      async () => {
+        const entry = undoStore.pop();
+        if (!entry) {
+          toastStore.info('Nothing to undo.');
+          return;
+        }
+        const prevCls = entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
+        revertLocalSearchLabel(entry, prevCls?.name ?? null);
+        try {
+          if (entry.prior_validated && entry.prior_class_id != null) {
+            await putCropLabel(entry.crop_id, entry.prior_class_id);
+          } else {
+            await deleteCropLabel(entry.crop_id);
+          }
+          toastStore.success('Reverted.');
+        } catch (e) {
+          toastStore.error(`Undo failed: ${(e as Error).message}`);
+          undoStore.push(entry);
+        }
+      },
+      'Undo last action',
+    );
+
+    // Unregister the drop handler + keys when search mode ends. Forgetting
+    // this leaves /clusters eating drops after the user backs out of
+    // search (flagged explicitly in the implementation plan).
+    return () => {
+      offDrop();
+      offKeys.forEach((off) => off());
+    };
+  });
+
   // Embedding-plot overlay (curation-strategy plan Phase 5 —
   // docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Off by default,
   // lazily mounted: <EmbeddingPlot> only appears in the template inside
@@ -832,6 +1052,36 @@
       </button>
     {/if}
 
+    <!-- Dataset-wide semantic search. Deliberately no cluster_id/tab
+         scope in `filter` — unscoped-across-the-whole-dataset is the
+         entire point of this control, unlike the cluster_id-scoped
+         SemanticSearchBox on /clusters/[id]. -->
+    {#if semanticSearchAvailable && !isLicensePlateFilter}
+      <div class="min-w-[16rem]">
+        <SemanticSearchBox
+          pageSize={60}
+          filter={classFilter != null ? { class_id: classFilter } : {}}
+          initialQuery={page.url.searchParams.get('q')}
+          onQueryChange={(q) => (searchQuery = q)}
+          onResults={(res) => {
+            searchModeActive = true;
+            searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+            searchResults = res.items;
+            searchTotal = res.total;
+            syncSearchUrl(searchQuery);
+            void ensureClusterMeta(
+              [
+                ...new Set(
+                  res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
+                ),
+              ],
+            );
+          }}
+          onClear={exitSearchMode}
+        />
+      </div>
+    {/if}
+
     <label class="flex items-center gap-2 text-xs text-zinc-400">
       Sort
       <select
@@ -865,7 +1115,50 @@
 
   <!-- Grid -->
   <div class="flex-1 overflow-auto p-4">
-    {#if showEmbeddingViz}
+    {#if searchModeActive}
+      <!-- Global dataset-wide search results — a mode swap over the card
+           grid, not a new page (mirrors showEmbeddingViz's own swap
+           above). Infinite scroll is not offered: /curation/search/text isn't
+           paginated the way the cluster grid's sentinel expects. -->
+      <div class="mb-3 flex items-center gap-2 text-xs">
+        <span class="text-zinc-300">
+          <strong class="text-zinc-100">{searchTotal.toLocaleString()}</strong> result{searchTotal ===
+          1
+            ? ''
+            : 's'} for
+          <span class="font-medium text-blue-200">"{searchQuery}"</span>
+          across the dataset
+        </span>
+        <span class="grow"></span>
+        <button
+          type="button"
+          class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300 hover:bg-zinc-800"
+          onclick={exitSearchMode}
+        >
+          ← Back to clusters
+        </button>
+      </div>
+      {#if searchResults.length === 0}
+        <p class="text-sm text-zinc-500">No crops matched that search.</p>
+      {:else}
+        <CropResultGrid
+          items={searchResults}
+          sel={searchSel}
+          scoreOf={(c) => searchScores.get(c.id) ?? null}
+          ondetail={(c) => (detailSearchCrop = c)}
+        >
+          {#snippet cornerBadge(crop)}
+            {#if crop.cluster_id != null}
+              <ClusterBadge
+                clusterId={crop.cluster_id}
+                dominantClassName={clusterMetaMap.get(crop.cluster_id)?.dominant_class_name ??
+                  null}
+              />
+            {/if}
+          {/snippet}
+        </CropResultGrid>
+      {/if}
+    {:else if showEmbeddingViz}
       <!-- Replaces the card grid entirely (plan §5.6 — no layout thrash
            from showing both at once). Lazily mounted: this is the only
            place <EmbeddingPlot> appears, so it never instantiates (never
@@ -1352,4 +1645,8 @@
     onsave={savePlateBbox}
     onclose={() => (editPlateCrop = null)}
   />
+{/if}
+
+{#if detailSearchCrop}
+  <CropDetailModal crop={detailSearchCrop} onclose={() => (detailSearchCrop = null)} />
 {/if}
