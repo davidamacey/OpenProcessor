@@ -95,6 +95,7 @@ button {
   color: rgb(var(--text-primary));
   font-size: 0.875rem;
   cursor: pointer;
+  white-space: nowrap;
   transition: background-color 120ms ease;
 }
 .btn:hover {
