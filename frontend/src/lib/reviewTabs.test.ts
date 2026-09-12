@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getReviewQueue } from './api';
 import {
-  PRIMARY_TABS,
   REVIEW_PRESETS,
   REVIEW_TABS,
   resolveEffectiveTab,
@@ -50,13 +49,6 @@ describe('REVIEW_PRESETS (All-tab quick-filter chips)', () => {
   });
 });
 
-describe('PRIMARY_TABS', () => {
-  it('still includes primary_low_conf (as a preset id) and coco_blind_spots (as a tab id)', () => {
-    expect(PRIMARY_TABS).toEqual(
-      expect.arrayContaining(['primary_low_conf', 'coco_blind_spots']),
-    );
-  });
-});
 
 describe('resolveEffectiveTab', () => {
   it('passes non-all tabs straight through, ignoring any stale preset', () => {

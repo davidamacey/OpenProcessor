@@ -42,12 +42,6 @@ export const REVIEW_TABS: ReviewTabDef[] = [
   { id: 'plates', label: 'Plates' },
 ];
 
-/** Which tabs honor the primary-subject controls (rank toggle + clarity).
- *  `primary_low_conf` now lives only behind the All-tab preset chip;
- *  `coco_blind_spots` is still a real top-level tab. Both still forward
- *  `max_rank` / `min_blur_ratio` to the same backend query as before. */
-export const PRIMARY_TABS: ReviewTab[] = ['primary_low_conf', 'coco_blind_spots'];
-
 export type ReviewPresetId = 'mismatches' | 'gemma_low_conf' | 'primary_low_conf';
 
 export interface ReviewPresetDef {

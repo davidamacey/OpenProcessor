@@ -24,7 +24,6 @@
     sourceToCropFrame,
   } from '$lib/plate_geometry';
   import {
-    PRIMARY_TABS,
     REVIEW_PRESETS,
     REVIEW_TABS,
     resolveEffectiveTab,
@@ -139,10 +138,15 @@
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
     if (tab === 'plates' && plateTextQuery) f.text = plateTextQuery;
-    if (PRIMARY_TABS.includes(effectiveTab)) {
-      if (subjectScope !== 0) f.max_rank = subjectScope;
-      if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
-    }
+    // max_rank / min_blur_ratio apply across every tab and preset — the
+    // backend's own op_review.py comment says so explicitly ("Both apply
+    // across tabs"). These used to be gated to only primary_low_conf /
+    // coco_blind_spots, which meant the rank-scope and clarity controls
+    // silently appeared/disappeared depending on which tab or quick-filter
+    // chip was active — confusing and inconsistent with Conf/Class/HDD
+    // source, which were never gated. Always available now, like those.
+    if (subjectScope !== 0) f.max_rank = subjectScope;
+    if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
     Object.assign(f, strategyBar.toQueryParams());
     return f;
   }
@@ -1067,19 +1071,22 @@
       </label>
     {/if}
 
-    {#if PRIMARY_TABS.includes(effectiveTab)}
-      <SubjectScopeToggle
-        bind:value={subjectScope}
-        labels={['Top 2', 'Largest', '+2nd']}
-        label="subject"
-      />
-      <BlurSlider
-        bind:value={blurSlider}
-        oncommit={commitBlur}
-        max={BLUR_MAX}
-        title="Hide crops blurrier than this"
-      />
-    {/if}
+    <!-- Always available, on every tab and preset — matches Conf/Class/HDD
+         source below/above, and the backend's own query builder already
+         treats max_rank/min_blur_ratio as tab-agnostic. Used to be gated to
+         only primary_low_conf/coco_blind_spots, which made these controls
+         appear and disappear depending on which tab or chip was active. -->
+    <SubjectScopeToggle
+      bind:value={subjectScope}
+      labels={['Top 2', 'Largest', '+2nd']}
+      label="subject"
+    />
+    <BlurSlider
+      bind:value={blurSlider}
+      oncommit={commitBlur}
+      max={BLUR_MAX}
+      title="Hide crops blurrier than this"
+    />
 
     {#if tab === 'all'}
       <!-- Quick-filter preset chips (2026-09 tab consolidation) — Mismatches
