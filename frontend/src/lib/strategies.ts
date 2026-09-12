@@ -315,6 +315,28 @@ export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
 }
 
 /**
+ * Whether `/curation/methods` currently reports the free-text semantic-search
+ * overlay (P2-14 — `GET /curation/search/text`) as safe to offer in the UI.
+ * Mirrors `isDiverseOverlayAvailable`/`isEmbeddingVizAvailable` exactly:
+ * same stable/experimental-only bar, same "absent/shadow/disabled never
+ * renders" contract. `semantic_search` lives in the `overlays` registry
+ * (same axis as `diverse`/`viz_projection`), not `review_sorts` — it's an
+ * alternate crop pool, not an ordering over the existing one.
+ *
+ * `FALLBACK_METHODS.overlays` deliberately has no `semantic_search` entry
+ * (it doesn't exist in the pre-P2-14 backend this fallback models), so an
+ * old/flag-off backend hides the search box entirely rather than showing
+ * a control that 404s — same graceful-degradation contract as every other
+ * overlay gate in this file.
+ */
+export function isSemanticSearchAvailable(overlays: OverlayInfo[]): boolean {
+  return overlays.some(
+    (o) =>
+      o.id === 'semantic_search' && (o.status === 'stable' || o.status === 'experimental'),
+  );
+}
+
+/**
  * Whether an entry's `field_coverage` should be treated as "has real data,
  * safe to offer" (audit-remediation plan Phase 6, P1-2/P1-3). This is the
  * single place the null-vs-zero distinction lives — every caller (the sort

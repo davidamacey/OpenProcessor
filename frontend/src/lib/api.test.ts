@@ -17,6 +17,7 @@ import {
   getReviewQueue,
   getVizProjection,
   rebuildVizProjection,
+  searchCrops,
 } from './api';
 import { FALLBACK_METHODS } from './strategies';
 
@@ -290,6 +291,119 @@ describe('getReviewQueue', () => {
 
     const res = await getReviewQueue('all', 1, 30, {});
     expect(res.items[0]?.mistakenness_score).toBeNull();
+  });
+});
+
+/**
+ * searchCrops (P2-14 semantic text search) mirrors getReviewQueue's
+ * response-shape handling — same qs()-forwarding, same mapRawCrop
+ * normalization — but points at `GET /curation/search/text` and adds the
+ * per-item similarity score instead of the review-queue's reason/
+ * proposed-class fields.
+ */
+describe('searchCrops', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends q/page/page_size and hits GET /curation/search/text', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await searchCrops('red sedan', 1, 30);
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('/curation/search/text');
+    expect(url).toContain('q=red+sedan');
+    expect(url).toContain('page=1');
+    expect(url).toContain('page_size=30');
+  });
+
+  it('forwards extra filter params (e.g. cluster_id, review tab filters) unchanged', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await searchCrops('blue truck', 1, 30, { cluster_id: 42, max_rank: 1 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('cluster_id=42');
+    expect(url).toContain('max_rank=1');
+  });
+
+  it('maps similarity_score through onto each item', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [
+          {
+            crop_id: 'c1',
+            image_path: '/x/y.jpg',
+            bbox_norm: [0, 0, 1, 1],
+            similarity_score: 0.91,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await searchCrops('red sedan', 1, 30);
+    expect(res.items[0]?.similarity_score).toBe(0.91);
+    expect(res.items[0]?.id).toBe('c1');
+  });
+
+  it('falls back to a bare score field if the server sends that instead', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [
+          { crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1], score: 0.5 },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await searchCrops('red sedan', 1, 30);
+    expect(res.items[0]?.similarity_score).toBe(0.5);
+  });
+
+  it('defaults similarity_score to 0 when the server omits both fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [{ crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1] }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await searchCrops('red sedan', 1, 30);
+    expect(res.items[0]?.similarity_score).toBe(0);
+  });
+
+  it('returns an empty result set on a zero-hit response (empty-state input)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await searchCrops('zzzznonexistentqueryzzzz', 1, 30);
+    expect(res.items).toEqual([]);
+    expect(res.total).toBe(0);
   });
 });
 
