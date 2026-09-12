@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { getModelsStatus } from '$lib/api';
+  import { getModelsStatus, unloadModel } from '$lib/api';
+  import {
+    unloadButtonState,
+    unloadConfirmMessage,
+    unloadForceConfirmMessage,
+  } from '$lib/modelUnload';
+  import { toastStore } from '$stores/toast.svelte';
   import type { OpModel, OpModelStatus } from '$lib/types';
 
   const REFRESH_MS = 15_000;
@@ -11,6 +17,9 @@
   let lastUpdated = $state<Date | null>(null);
   let timer: ReturnType<typeof setInterval> | null = null;
   let abortCtrl: AbortController | null = null;
+  /** Model name currently mid-unload, or null. Gates the button so a
+   *  double-click can't fire two DELETEs for the same model. */
+  let unloadingName = $state<string | null>(null);
 
   async function refresh(): Promise<void> {
     abortCtrl?.abort();
@@ -70,6 +79,38 @@
     if (sec < 5) return 'just now';
     if (sec < 60) return `${sec}s ago`;
     return `${Math.floor(sec / 60)}m ago`;
+  }
+
+  /**
+   * Unload + delete a model (follow-up gap 2,
+   * docs/design/audit-remediation-plan-2026-09.md Appendix D item 3,
+   * 2026-09-11). `unloadButtonState` decides what's shown at all — this
+   * only handles the click. Force-required models (active vehicle model
+   * / other core pipeline models) get a second, stronger confirmation on
+   * top of the normal one before ever sending `force=true`; the server
+   * is the real guard (LPR models 403 unconditionally) but the double
+   * confirm here matches CLAUDE.md's "bulk ops show a confirmation
+   * dialog" pattern for a destructive single-model action.
+   */
+  async function handleUnload(m: OpModel): Promise<void> {
+    const state = unloadButtonState(m);
+    if (state === 'hidden') return;
+    const forced = state === 'force-required';
+    if (!window.confirm(unloadConfirmMessage(m))) return;
+    if (forced && !window.confirm(unloadForceConfirmMessage(m))) return;
+
+    unloadingName = m.name;
+    try {
+      const res = await unloadModel(m.name, forced);
+      toastStore.success(
+        `Unloaded ${res.triton_name}` + (res.warning ? ` — ${res.warning}` : ''),
+      );
+      await refresh();
+    } catch (e) {
+      toastStore.error(`Unload failed: ${(e as Error).message}`);
+    } finally {
+      unloadingName = null;
+    }
   }
 </script>
 
@@ -205,6 +246,35 @@
             >
               {m.last_error}
             </p>
+          {/if}
+
+          {#if m.job_id}
+            <p class="mt-3 truncate font-mono text-[11px] text-zinc-500" title={m.job_id}>
+              promoted from job {m.job_id}
+            </p>
+          {/if}
+
+          {#if unloadButtonState(m) !== 'hidden'}
+            <div class="mt-3 flex justify-end border-t border-zinc-800 pt-3">
+              <button
+                type="button"
+                class="rounded border px-2 py-1 text-xs transition {unloadButtonState(m) ===
+                'force-required'
+                  ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-900/40'
+                  : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-red-500 hover:text-red-300'}"
+                onclick={() => handleUnload(m)}
+                disabled={unloadingName === m.name}
+                title={unloadButtonState(m) === 'force-required'
+                  ? 'Currently serving live traffic — requires a second confirmation'
+                  : 'Unload from Triton and delete its model repo directory'}
+              >
+                {unloadingName === m.name
+                  ? 'Unloading…'
+                  : unloadButtonState(m) === 'force-required'
+                    ? 'Force unload'
+                    : 'Unload'}
+              </button>
+            </div>
           {/if}
         </li>
       {/each}
