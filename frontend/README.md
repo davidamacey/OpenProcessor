@@ -33,36 +33,24 @@ that repo's `scripts/legacy/RUNBOOK.md`).
 
 ## Routes
 
-| Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`              | Dashboard — class balance bar chart, ingestion progress, recent activity, quick actions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `/clusters`      | Grid of clusters; sort by purity / size / dominant class; click into one. Each card shows server-computed `dominant_class_name`, `purity`, and `cluster_kind` (`class` / `candidate` / `unassigned`). The dashboard's **Recluster** panel has a _Merge candidate clusters_ toggle that broadens the AHC residual pool so smaller candidates can fuse together. Selecting `class=license_plate` replaces the cluster grid with a **plate browse view** — paginated plate thumbnails filtered by detector / verified / score / plate-text                                                   |
-| `/clusters/[id]` | Per-cluster paginated crop grid + DnD-to-class-sidebar + bulk label/Gemma/AHC + similarity cut-line + sub-cluster tabs. Multi-select honors the Finder pattern — drag any _selected_ card to bulk-move the whole selection; grab an _unselected_ card to replace the selection with that one. Sub-cluster tabs render the backend-owned `cluster_subid` string (e.g. `"47a"`, `"47b"`) — the frontend never recomputes sub-cluster groupings. Hover any crop and click **ⓘ** for a Crop Detail modal (full source image + class / plate provenance, same metadata the review page shows). |
-| `/review`        | Review queues: Mismatches / Gemma low-conf / Outliers / Uncertainty / Model Disagreements / **Plates**. Plate rows show detector chips, the cascade chain, Gemma-read plate text, and a ⚠ shape-warning when the bbox envelope fails. LPR + Gemma agreement is auto-confirmed server-side (no human needed); only SAM3-only / LPR-blind-spot plates surface for review. **D (Discard)** marks the crop as permanently dismissed from every review queue — it stays in OpenSearch with its original label intact, just never shows up in `/review` again.                                  |
-| `/classes`       | Add/rename/regroup/merge classes; sync to OpenSearch; adequacy badges                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `/export`        | YOLO export status + augmentation gap table + Test Holdout freeze + downloads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `/train`         | Training cockpit + **plate training cohort picker** (lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+See `CLAUDE.md`'s Routes table for the authoritative, up-to-date list —
+it's kept current as routes change and isn't duplicated here to avoid
+drift. Highlights: `/dashboard` (pipeline health), `/clusters` +
+`/clusters/[id]` (cluster-based triage, drag-and-drop, strategy bar with
+an embedding-plot lasso-select tool), `/review` (5 consolidated tabs +
+quick-filter presets, fuzzy class picker), `/classes`, `/export` (YOLO
+export, test-holdout freeze, frozen-artifact downloads), `/train`
+(training cockpit, promote/reproduce), `/models`, `/bakeoff`.
 
 ## Keyboard shortcuts
 
-| Key           | Action                                                                                                                                                                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `1-9, 0`      | Assign top-10 most-frequent classes for the current cluster                                                                                                                                                                             |
-| `Enter`       | Confirm selected + advance to next unvalidated                                                                                                                                                                                          |
-| `G`           | Accept Gemma suggestion for selected                                                                                                                                                                                                    |
-| `N`           | Skip (defer to review queue)                                                                                                                                                                                                            |
-| `D`           | Discard — permanently dismiss the crop from every review queue (writes `review_dismissed_at` server-side; can still undo within the session via `Z`)                                                                                    |
-| `Z`           | Undo last action (50-entry ring)                                                                                                                                                                                                        |
-| `A`           | Select all on page                                                                                                                                                                                                                      |
-| `Shift+Enter` | Confirm all Gemma suggestions on page                                                                                                                                                                                                   |
-| `M`           | Open inline cluster picker (move selected to a different cluster)                                                                                                                                                                       |
-| `←` / `→`     | Page navigation                                                                                                                                                                                                                         |
-| `` ` ``       | Toggle keyboard-shortcut overlay — also acts as an **inline hotkey editor**: every class has a 1-char input next to it; Tab between them, type a letter to bind, Enter saves. Duplicates are rejected client-side with a clear message. |
-| `Esc`         | Cancel drag / picker / dismiss overlay                                                                                                                                                                                                  |
-
-The shortcut overlay (`` ` ``) is the canonical place to manage class
-hotkeys. Reserved letters are no longer blocked — bind any single
-character; the only invariant is "two classes can't share a letter."
+See `CLAUDE.md`'s Keyboard shortcuts section for the authoritative
+table. There is **no** `1-9, 0` top-N quick-assign scheme — it was
+removed in favor of one binding scheme (per-class `hotkey_letter`,
+configured on `/classes` or the `` ` `` overlay) so there's no "what
+does this key do here?" ambiguity. Reserved single-char action keys
+(`g n d z x u a m /`) can't be bound to a class — both the client and
+the server reject that.
 
 ## Configuration
 
