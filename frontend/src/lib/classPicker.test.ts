@@ -80,6 +80,43 @@ describe('searchClasses', () => {
   });
 });
 
+describe('searchClasses — license_plate is hidden from assignment search', () => {
+  function poolWithPlate(): OpClass[] {
+    return [
+      cls({ id: 8, name: 'bmw', validated_count: 6 }),
+      cls({ id: 80, name: 'license_plate', validated_count: 72 }),
+      cls({ id: 999, name: 'license_plate_holder', validated_count: 0 }),
+    ];
+  }
+
+  it('excludes license_plate from a "license" search (near-miss license_plate_holder still matches)', () => {
+    const results = searchClasses(poolWithPlate(), 'license');
+    expect(results.map((c) => c.name)).not.toContain('license_plate');
+    expect(results.map((c) => c.name)).toContain('license_plate_holder');
+  });
+
+  it('returns zero results for "license_plate" (exact query, no near-miss pool member)', () => {
+    const results = searchClasses(
+      poolWithPlate().filter((c) => c.name !== 'license_plate_holder'),
+      'license_plate',
+    );
+    expect(results).toHaveLength(0);
+  });
+
+  it('excludes license_plate from a "lp" search even though it subsequence-matches', () => {
+    // 'lp' is also a subsequence of "license_plate_holder", which must
+    // still surface normally — only the exact-name license_plate is hidden.
+    const results = searchClasses(poolWithPlate(), 'lp');
+    expect(results.map((c) => c.name)).not.toContain('license_plate');
+  });
+
+  it('omits license_plate from the default (empty-query) full list', () => {
+    const results = searchClasses(poolWithPlate(), '');
+    expect(results.map((c) => c.name)).not.toContain('license_plate');
+    expect(results.map((c) => c.name)).toContain('license_plate_holder');
+  });
+});
+
 describe('resolveConfirmClassId', () => {
   it('prefers proposed_class_id over the current class_id', () => {
     expect(resolveConfirmClassId({ proposed_class_id: 5, class_id: 1 })).toBe(5);

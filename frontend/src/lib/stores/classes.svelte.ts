@@ -8,6 +8,7 @@
  */
 
 import { getClasses } from '$lib/api';
+import { isAssignableClass } from '$lib/classVisibility';
 import type { OpClass } from '$lib/types';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -87,7 +88,8 @@ class ClassesStore {
    * override by passing in a precomputed list.
    */
   topNForCluster(_clusterId: number, n = 10): OpClass[] {
-    return [...this.classes]
+    return this.classes
+      .filter(isAssignableClass)
       .sort((a, b) => (b.validated_count ?? 0) - (a.validated_count ?? 0))
       .slice(0, n);
   }

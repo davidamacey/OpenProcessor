@@ -18,6 +18,7 @@
  * unit-testable with plain arrays.
  */
 
+import { isAssignableClass } from '$lib/classVisibility';
 import type { OpClass } from '$lib/types';
 
 /** Rank buckets, lowest = best match. Exact match beats prefix beats
@@ -56,7 +57,7 @@ export function searchClasses(
   query: string,
   limit?: number,
 ): OpClass[] {
-  const pool = classes.filter((c) => !c.deprecated);
+  const pool = classes.filter(isAssignableClass);
   const q = query.trim().toLowerCase();
 
   let ranked: OpClass[];

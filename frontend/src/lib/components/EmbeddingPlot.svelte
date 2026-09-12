@@ -37,6 +37,7 @@
     rebuildVizProjection,
     type VizPoint,
   } from '$lib/api';
+  import { isAssignableClass } from '$lib/classVisibility';
   import { colorForCluster, computeScale, selectIdsInLasso } from '$lib/embeddingPlot';
   import type { ScreenPoint } from '$lib/embeddingPlot';
   import { classesStore } from '$stores/classes.svelte';
@@ -306,7 +307,7 @@
         class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
       >
         <option value={null}>— class —</option>
-        {#each classesStore.classes as cls (cls.id)}
+        {#each classesStore.classes.filter(isAssignableClass) as cls (cls.id)}
           <option value={cls.id}>{cls.name}</option>
         {/each}
       </select>

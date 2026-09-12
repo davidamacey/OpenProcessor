@@ -2,6 +2,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import AddClassModal from './AddClassModal.svelte';
   import { adequacyChipClass } from '$lib/adequacy';
+  import { isAssignableClass } from '$lib/classVisibility';
   import { classesStore } from '$stores/classes.svelte';
   import type { OpClass } from '$lib/types';
 
@@ -108,7 +109,7 @@
 
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    const active = classesStore.classes.filter((c) => !c.deprecated);
+    const active = classesStore.classes.filter(isAssignableClass);
     const list = q
       ? active.filter(
           (c) =>

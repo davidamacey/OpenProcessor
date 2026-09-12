@@ -6,6 +6,7 @@
  */
 
 import { renameClass } from '$lib/api';
+import { isPickerHiddenClass } from '$lib/classVisibility';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { OpClass } from '$lib/types';
@@ -55,6 +56,12 @@ export async function setClassHotkey(cls: OpClass, raw: string): Promise<void> {
     if (RESERVED_HOTKEY_LETTERS.has(next)) {
       toastStore.error(
         `'${next}' is reserved for a labeling action — pick another letter.`,
+      );
+      return;
+    }
+    if (isPickerHiddenClass(cls.name)) {
+      toastStore.error(
+        `${cls.name} is hidden from class-assignment surfaces and can't be bound to a hotkey.`,
       );
       return;
     }
