@@ -1,12 +1,15 @@
 <script lang="ts">
   import {
+    cancelSelect,
     deleteCropLabel,
     reviewDismissCrop,
     getCrop,
     getReviewQueue,
+    getSelectStatus,
     getSourceImageWithBbox,
     getThumbUrl,
     putCropLabel,
+    selectDiverse,
     setCropPlate,
     updateCropPlateMeta,
     type PlateMetaPatch,
@@ -30,7 +33,14 @@
     resolveEffectiveTab,
     type ReviewPresetId,
   } from '$lib/reviewTabs';
-  import type { BBoxNorm, OpClass, ReviewItem, ReviewTab } from '$lib/types';
+  import { isDiverseOverlayAvailable } from '$lib/strategies';
+  import type {
+    BBoxNorm,
+    DiverseSelection,
+    OpClass,
+    ReviewItem,
+    ReviewTab,
+  } from '$lib/types';
   import { createPager } from '$lib/pager.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { isSemanticSearchAvailable } from '$lib/strategies';
@@ -66,18 +76,171 @@
 
   // Sort/filter strategy (curation-strategy plan Phase 3). 'default'
   // keeps every request byte-identical to pre-Phase-3 behavior — the
-  // regression guard the backend plan requires (§8.6).
-  const strategyBar = createStrategyBar();
+  // regression guard the backend plan requires (§8.6). 'diverse' is
+  // registered as an overlay id (P2-10) so toQueryParams() never forwards
+  // `sort=diverse` to /curation/review/{tab}, which 400s on it — diverse mode
+  // is a wholly separate call (selectDiverse), not a sort param.
+  const strategyBar = createStrategyBar({ overlayIds: ['diverse'] });
   // Set from the review-queue response whenever the requested `?sort=`
   // couldn't be honored server-side (e.g. the field isn't backfilled
   // yet). Rendered as a small inline note, never a toast — this isn't a
   // failure, just a degraded request.
   let sortFallbackReason = $state<string | null>(null);
 
+  // -- diverse overlay (P2-10, pool-scale k-center-greedy selection) ----
+  // Entered via the same StrategyBar sort dropdown as every other sort —
+  // picking 'diverse' swaps the queue's item source entirely (a one-
+  // item-at-a-time cursor has no "side panel" to put an overlay in).
+  const diverseAvailable = $derived(
+    isDiverseOverlayAvailable(strategiesStore.methods.overlays),
+  );
+  const diverseMode = $derived(strategyBar.sort === 'diverse' && diverseAvailable);
+  const DIVERSE_K_DEFAULT = 100;
+  const DIVERSE_K_MAX = 500;
+  let diverseSelection = $state<DiverseSelection | null>(null);
+  let diverseJobId = $state<string | null>(null);
+  let diverseJobStatus = $state<string | null>(null);
+  let diverseError = $state<string | null>(null);
+  let diversePoll: ReturnType<typeof setInterval> | null = null;
+
+  function stopDiversePolling(): void {
+    if (diversePoll) clearInterval(diversePoll);
+    diversePoll = null;
+  }
+
+  function termFilters(): Record<string, unknown> {
+    // Server-side, scope.filters on POST /curation/select/diverse only supports
+    // term/terms filters (class_id, hdd_source) — NOT conf_min/conf_max/
+    // min_blur_ratio/max_rank/plate text. Those controls are disabled in
+    // the UI while diverseMode is active (see the filter bar below) so
+    // this never silently drops something the operator thinks is applied.
+    const f: Record<string, unknown> = {};
+    if (hddSource) f.hdd_source = hddSource;
+    if (classFilter != null) f.class_id = classFilter;
+    return f;
+  }
+
+  async function runDiverseSelection(): Promise<DiverseSelection | null> {
+    stopDiversePolling();
+    diverseError = null;
+    diverseJobId = null;
+    diverseJobStatus = null;
+    const k = strategyBar.k ?? DIVERSE_K_DEFAULT;
+    const res = await selectDiverse(
+      { review_tab: effectiveTab, filters: termFilters() },
+      k,
+    );
+    if (res.kind === 'disabled') {
+      diverseError = 'Diverse selection is disabled on the backend.';
+      return null;
+    }
+    if (res.kind === 'already_running') {
+      diverseError =
+        'A diverse-selection job is already running (singleton — another operator or tab may be using it). Try again shortly.';
+      return null;
+    }
+    if (res.kind === 'ready') {
+      diverseSelection = res.selection;
+      return res.selection;
+    }
+    // 202 — large pool (the `all` tab always takes this path, ~320k
+    // crops). Poll until done, mirroring
+    // /routes/bakeoff/+page.svelte's setInterval pattern. CONFIRMED
+    // against the real backend (selection/job.py's _JobState): status is
+    // 'running' | 'completed' | 'failed' | 'cancelled', and the finished
+    // selection is nested under `result` — not flattened onto the status
+    // object.
+    diverseJobId = res.job_id;
+    diverseJobStatus = 'running';
+    return new Promise((resolve) => {
+      diversePoll = setInterval(async () => {
+        try {
+          const st = await getSelectStatus();
+          diverseJobStatus = st.status;
+          if (st.status === 'running') return;
+          stopDiversePolling();
+          if (st.status === 'completed' && st.result) {
+            diverseSelection = st.result;
+            diverseJobId = null;
+            diverseJobStatus = null;
+            resolve(st.result);
+            return;
+          }
+          // 'failed' | 'cancelled' | any unrecognized terminal status —
+          // clear diverseJobId too, not just the poll interval, so the
+          // "selecting… (failed) cancel" chip doesn't linger for a job
+          // that already terminated server-side (real backend behavior
+          // observed live: k_center_greedy's tight numpy loop blocks the
+          // event loop long enough that the heartbeat goes stale and
+          // get_state() reports 'failed' mid-computation, even though the
+          // job goes on to finish and overwrite its own state to
+          // 'completed' moments later — a openprocessor timing quirk, out of
+          // scope to fix here, but the frontend must still stop treating
+          // this job as "ours" once it reports terminal).
+          diverseError = st.error ?? `Diverse selection ${st.status}.`;
+          diverseJobId = null;
+          diverseJobStatus = null;
+          resolve(null);
+        } catch (e) {
+          stopDiversePolling();
+          diverseError = `Diverse selection failed: ${(e as Error).message}`;
+          diverseJobId = null;
+          diverseJobStatus = null;
+          resolve(null);
+        }
+      }, 2000);
+    });
+  }
+
+  async function cancelDiverseJob(): Promise<void> {
+    stopDiversePolling();
+    if (diverseJobId) {
+      try {
+        await cancelSelect();
+      } catch {
+        /* best-effort — the job may have already finished */
+      }
+    }
+    diverseJobId = null;
+    diverseJobStatus = null;
+  }
+
+  /**
+   * Diverse mode replaces the queue's item source entirely — the pager's
+   * fetchPage slices `diverseSelection.crop_ids` into page_size chunks
+   * and hydrates each id via getCrop, since /curation/select/diverse only
+   * returns ids, not full crop records. Each hydrated item is widened
+   * into a ReviewItem with no per-item proposal (nothing in diverse mode
+   * suggests a class) — resolveConfirmClassId/canConfirm already falls
+   * back to the crop's existing class_id when proposed_class_id is null
+   * (classPicker.ts), so Enter still does the right thing: confirms the
+   * existing label if any, otherwise opens the class picker.
+   */
+  async function fetchDiversePage(
+    page: number,
+  ): Promise<{ items: ReviewItem[]; total: number } | null> {
+    let selection = diverseSelection;
+    if (!selection) {
+      selection = await runDiverseSelection();
+      if (!selection) return { items: [], total: 0 };
+    }
+    const start = (page - 1) * pageSize;
+    const ids = selection.crop_ids.slice(start, start + pageSize);
+    const crops = await Promise.all(ids.map((id) => getCrop(id)));
+    const items: ReviewItem[] = crops.map((crop) => ({
+      ...crop,
+      reason: 'diverse selection (k-center-greedy)',
+      proposed_class_id: null,
+      proposed_class_name: null,
+    }));
+    return { items, total: selection.crop_ids.length };
+  }
+
   // Queue pager. One fetchPage closure means the tab + filter set can't
   // drift between page 1 and the pages the cursor pulls in behind it.
   const queue = createPager<ReviewItem>({
     fetchPage: async (page) => {
+      if (diverseMode) return fetchDiversePage(page);
       const res = await getReviewQueue(effectiveTab, page, pageSize, _filter());
       sortFallbackReason = res.sort_fallback_reason ?? null;
       return res;
@@ -241,15 +404,52 @@
   // are intentional). Text + slider filters debounce by 250ms so typing
   // hddSource or dragging the confidence sliders doesn't cause a refetch
   // per keystroke.
+  // Guards this effect the same way lastFilterKey guards the debounced one
+  // below: observed live, this effect's body can execute an extra time
+  // for the same tab/preset/classFilter/subjectScope/minBlurRatio values
+  // (a harmless Svelte/SvelteKit-dev re-run, not a real dependency
+  // change) — without a same-key guard, that spurious extra run still
+  // unconditionally cancels+invalidates the in-flight diverse selection
+  // (untrack() only stops it from *looping*, not from firing once extra),
+  // which can land right after a real selectDiverse POST and cancel a job
+  // the operator never asked to cancel.
+  let lastImmediateKey: string | null = null;
   $effect(() => {
     void tab;
     void preset;
     void classFilter;
     void subjectScope;
     void minBlurRatio;
+    const key = JSON.stringify([tab, preset, classFilter, subjectScope, minBlurRatio]);
+    if (key === lastImmediateKey) return;
+    lastImmediateKey = key;
+    // effectiveTab/class_id changes invalidate any in-progress diverse
+    // selection (P2-10) — the pool it was drawn from no longer matches
+    // the current scope. Cancel any running job too; a stale poll left
+    // running after the operator moved on would eventually resolve into
+    // diverseSelection for the wrong tab. untrack() is load-bearing here:
+    // cancelDiverseJob() reads diverseJobId, and runDiverseSelection()
+    // (triggered by the loadFirst() below) writes it — without untrack,
+    // that read makes diverseJobId a tracked dependency of THIS effect,
+    // so the job-state write later on retriggers this whole effect,
+    // which calls cancelDiverseJob() again mid-job and loops forever
+    // (observed live: a real diverse job kept getting cancelled and
+    // immediately restarted, 409ing against its own previous attempt).
+    untrack(() => void cancelDiverseJob());
+    diverseSelection = null;
     void loadFirst();
   });
   let filterDebounce: ReturnType<typeof setTimeout> | null = null;
+  // Guards against a spurious extra firing of this effect re-running the
+  // same query it just ran (observed live: a diverse-selection job could
+  // get cancelled and immediately re-requested against itself, 409ing,
+  // when this effect's body executed twice for the same filter state —
+  // Svelte may batch/replay an effect body more than once per logical
+  // change). Comparing against the last key this effect actually acted on
+  // makes the debounced refetch (and, critically, the diverse-mode
+  // cancel/invalidate below) idempotent regardless of how many times the
+  // body runs for the same values.
+  let lastFilterKey: string | null = null;
   $effect(() => {
     void hddSource;
     void plateTextQuery;
@@ -259,12 +459,38 @@
     // immediate one above — a sort pick or a threshold nudge shouldn't
     // feel snappier than dragging a confidence slider, and it keeps this
     // as the single refetch path new filters join (no third debounce).
+    // strategyBar.k joins here too (P2-10) — a diverse-selection POST can
+    // spawn a real backend job, so a k-stepper nudge must debounce the
+    // same as everything else, not re-run per keystroke.
     void strategyBar.sort;
     void strategyBar.minMistakenness;
     void strategyBar.hideNearDuplicates;
+    void strategyBar.k;
+    const key = JSON.stringify([
+      hddSource,
+      plateTextQuery,
+      confMin,
+      confMax,
+      strategyBar.sort,
+      strategyBar.minMistakenness,
+      strategyBar.hideNearDuplicates,
+      strategyBar.k,
+    ]);
     if (filterDebounce) clearTimeout(filterDebounce);
     filterDebounce = setTimeout(() => {
       filterDebounce = null;
+      if (key === lastFilterKey) return; // no real change — skip re-fetching
+      lastFilterKey = key;
+      // Any of the above changing invalidates a prior diverse selection
+      // (new sort, new k, new term filter) — force runDiverseSelection()
+      // to re-run on the next fetchPage rather than reusing a stale pool.
+      // untrack() here for the same reason as the effect above: this
+      // callback still runs inside the *effect's* reactive context (it's
+      // synchronously reachable from the tracked $effect body via the
+      // closure), so an untracked read of diverseJobId is still needed
+      // to avoid diverseJobId writes re-triggering this effect.
+      untrack(() => void cancelDiverseJob());
+      diverseSelection = null;
       void loadFirst();
     }, 250);
     return () => {
@@ -274,6 +500,8 @@
       }
     };
   });
+
+  onMount(() => stopDiversePolling);
 
   const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
 
@@ -1019,7 +1247,19 @@
        StrategyBar.svelte); the fallback note only appears when the
        server couldn't honor the requested sort. -->
   <div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-1.5">
-    <StrategyBar bar={strategyBar} />
+    <StrategyBar
+      bar={strategyBar}
+      offerDiverse={diverseAvailable}
+      diverseKDefault={DIVERSE_K_DEFAULT}
+      diverseKMax={DIVERSE_K_MAX}
+      diverseMeta={diverseSelection
+        ? {
+            method: diverseSelection.method,
+            version: diverseSelection.version,
+            n_pool: diverseSelection.n_pool,
+          }
+        : null}
+    />
     {#if semanticSearchAvailable}
       <SemanticSearchBox
         filter={{ tab: effectiveTab, ..._filter() }}
@@ -1055,6 +1295,25 @@
         sort fallback: {sortFallbackReason}
       </span>
     {/if}
+    {#if diverseMode}
+      {#if diverseJobId}
+        <span class="text-[11px] text-blue-300">
+          selecting… ({diverseJobStatus ?? 'running'})
+          <button
+            type="button"
+            class="ml-1 underline hover:text-blue-100"
+            onclick={() => void cancelDiverseJob()}
+          >
+            cancel
+          </button>
+        </span>
+      {/if}
+      {#if diverseError}
+        <span class="text-[11px] text-red-300" title={diverseError}>
+          {diverseError}
+        </span>
+      {/if}
+    {/if}
   </div>
 
   <!-- Filter bar — flex children keep their width via flex-shrink-0; hotkey hint
@@ -1086,7 +1345,11 @@
       </select>
     </label>
 
-    <label class="flex shrink-0 items-center gap-1.5">
+    <label
+      class="flex shrink-0 items-center gap-1.5"
+      class:opacity-40={diverseMode}
+      title={diverseMode ? 'not applied to diverse selection' : undefined}
+    >
       <span class="text-zinc-400">Conf</span>
       <input
         type="number"
@@ -1094,6 +1357,7 @@
         max="1"
         step="0.05"
         bind:value={confMin}
+        disabled={diverseMode}
         class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
       />
       <span class="text-zinc-500">..</span>
@@ -1103,16 +1367,22 @@
         max="1"
         step="0.05"
         bind:value={confMax}
+        disabled={diverseMode}
         class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
       />
     </label>
 
     {#if tab === 'plates'}
-      <label class="flex shrink-0 items-center gap-1.5">
+      <label
+        class="flex shrink-0 items-center gap-1.5"
+        class:opacity-40={diverseMode}
+        title={diverseMode ? 'not applied to diverse selection' : undefined}
+      >
         <span class="text-zinc-400">Plate text</span>
         <input
           type="text"
           bind:value={plateTextQuery}
+          disabled={diverseMode}
           placeholder="e.g. S14"
           class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
         />
@@ -1123,18 +1393,28 @@
          source below/above, and the backend's own query builder already
          treats max_rank/min_blur_ratio as tab-agnostic. Used to be gated to
          only primary_low_conf/coco_blind_spots, which made these controls
-         appear and disappear depending on which tab or chip was active. -->
-    <SubjectScopeToggle
-      bind:value={subjectScope}
-      labels={['Top 2', 'Largest', '+2nd']}
-      label="subject"
-    />
-    <BlurSlider
-      bind:value={blurSlider}
-      oncommit={commitBlur}
-      max={BLUR_MAX}
-      title="Hide crops blurrier than this"
-    />
+         appear and disappear depending on which tab or chip was active.
+         Disabled (not hidden) while diverseMode is active — scope.filters
+         on POST /curation/select/diverse doesn't support max_rank/min_blur_ratio
+         (P2-10), so applying either here would silently do nothing. -->
+    <div
+      class="contents"
+      class:opacity-40={diverseMode}
+      class:pointer-events-none={diverseMode}
+      title={diverseMode ? 'not applied to diverse selection' : undefined}
+    >
+      <SubjectScopeToggle
+        bind:value={subjectScope}
+        labels={['Top 2', 'Largest', '+2nd']}
+        label="subject"
+      />
+      <BlurSlider
+        bind:value={blurSlider}
+        oncommit={commitBlur}
+        max={BLUR_MAX}
+        title="Hide crops blurrier than this"
+      />
+    </div>
 
     {#if tab === 'all'}
       <!-- Quick-filter preset chips (2026-09 tab consolidation) — Mismatches
