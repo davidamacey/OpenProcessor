@@ -199,7 +199,8 @@
       src={getThumbUrl(crop.id)}
       alt="crop {crop.id}"
       loading="lazy"
-      class="h-full w-full object-contain"
+      draggable="false"
+      class="h-full w-full object-contain [-webkit-user-drag:none]"
       onload={onImgLoad}
       onerror={(e) => {
         const t = e.currentTarget as HTMLImageElement;
