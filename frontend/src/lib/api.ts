@@ -38,6 +38,7 @@ import type {
   PaginatedResponse,
   ReviewItem,
   ReviewTab,
+  UnloadModelResponse,
 } from './types';
 import type {
   CancelResponse,
@@ -639,6 +640,25 @@ export function getTrainingCandidates(
 
 export function getModelsStatus(signal?: AbortSignal): Promise<OpModelsStatus> {
   return apiFetch<OpModelsStatus>('/curation/models/status', {}, signal);
+}
+
+/**
+ * Unload a Triton model and remove its repo directory (follow-up gap 2,
+ * docs/design/audit-remediation-plan-2026-09.md Appendix D item 3,
+ * 2026-09-11). The backend enforces the real guard (LPR models never,
+ * active/core models need `force`) — `force` here only matters for the
+ * latter; passing it for an LPR model still 403s.
+ */
+export function unloadModel(
+  modelName: string,
+  force = false,
+  signal?: AbortSignal,
+): Promise<UnloadModelResponse> {
+  return apiFetch<UnloadModelResponse>(
+    `/curation/models/${encodeURIComponent(modelName)}${qs({ force })}`,
+    { method: 'DELETE' },
+    signal,
+  );
 }
 
 /**

@@ -450,10 +450,32 @@ export interface OpModel {
   avg_latency_ms: number | null;
   last_error: string | null;
   endpoint: string | null;
+  /**
+   * Follow-up gap 2 (docs/design/audit-remediation-plan-2026-09.md
+   * Appendix D item 3, 2026-09-11): `DELETE /curation/models/{name}` guard
+   * flags, mirrored from the same checks the endpoint enforces
+   * server-side so the UI never has to re-derive them (and can't drift
+   * out of sync with the real guard).
+   */
+  /** LPR pipeline model — never unloadable through the UI, no override. */
+  is_lpr?: boolean;
+  /** ACTIVE_VEHICLE_MODEL or another core pipeline model — unload requires force=true. */
+  requires_force_to_unload?: boolean;
+  /** Present (with job_id/version) only for models promoted through this pipeline. */
+  job_id?: string | null;
+  promoted_at?: string | null;
 }
 
 export interface OpModelsStatus {
   models: OpModel[];
+}
+
+export interface UnloadModelResponse {
+  triton_name: string;
+  triton_unloaded: boolean;
+  directory_removed: boolean;
+  forced: boolean;
+  warning: string | null;
 }
 
 export interface UndoEntry {
