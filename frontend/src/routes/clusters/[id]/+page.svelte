@@ -22,6 +22,7 @@
   import StrategyBar from '$components/StrategyBar.svelte';
   import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import { createGridGroups } from '$lib/gridGroups.svelte';
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
@@ -212,8 +213,11 @@
   // separators break that and the drag). When not grouping, there's a
   // single '__all__' group == the whole cluster. Each group.items is a
   // separate mutable array the dnd action shuffles during a drag.
-  type GridGroup = { key: string; label: string; items: OpCrop[] };
-  let gridGroups = $state<GridGroup[]>([]);
+  //
+  // The grouping itself is DERIVED from the pager (see gridGroups below), not
+  // a snapshot the dnd handlers own — see gridGroups.svelte.ts for why that
+  // distinction is the whole fix for "moved crops flicker back and stay".
+  // Declared after filteredCrops/groupBySubcluster, which it reads.
   // Tracks the in-flight drag's payload (one or many crops). Set on dragStart.
   let dragIds = $state<string[]>([]);
   // Inline cluster-picker (opened by M-key) state.
@@ -293,6 +297,11 @@
       const droppedSet = new Set(ids);
       cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
       cropPager.total = Math.max(0, cropPager.total - ids.length);
+      // Tear down any drag-local grid override *now*, so the grid repaints
+      // from the (already-corrected) pager instead of from whatever snapshot
+      // the in-flight drag left behind. Without this the grid's last word is
+      // whichever dnd event fires last, which is how moved crops came back.
+      grid.reset();
       sel.ids = new Set();
       // Claim these ids before the await resolves — see excludedCropIds
       // above. A stale/concurrent fetch that lands between now and the
@@ -358,53 +367,24 @@
       subClusterIds.length > 0,
   );
 
-  // Build gridGroups from filteredCrops. When grouping, partition into
-  // contiguous sub-cluster groups (sorted by cluster_subid, unrefined
-  // last) each with its own header + dndzone. When not grouping, one
-  // '__all__' group holding the whole filtered list. Never feed
-  // filteredCrops directly to a zone — the dnd action mutates items in
-  // place, so each group gets a fresh array copy.
-  function buildGroups(source: OpCrop[]): GridGroup[] {
-    if (!groupBySubcluster) {
-      return [{ key: '__all__', label: '', items: [...source] }];
-    }
-    const sorted = [...source].sort((a, b) => {
-      const sa = a.cluster_subid ?? '￿';
-      const sb = b.cluster_subid ?? '￿';
-      return sa < sb ? -1 : sa > sb ? 1 : 0;
-    });
-    const groups: GridGroup[] = [];
-    let lastSub: string | null = null;
-    for (const c of sorted) {
-      const sub = c.cluster_subid ?? '__none__';
-      const last = groups[groups.length - 1];
-      if (!last || lastSub !== sub) {
-        // The key carries the run index, not just the subid: this is a
-        // contiguity walk, so a subid that reappears non-contiguously
-        // (a transient render over a not-yet-sorted list) would emit the
-        // same key twice and crash the keyed {#each} with
-        // each_key_duplicate. The sibling grouping on /clusters documents
-        // the same crash.
-        groups.push({
-          key: `${sub}#${groups.length}`,
-          label: sub === '__none__' ? 'unrefined' : `sub-cluster ${sub}`,
-          items: [c],
-        });
-        lastSub = sub;
-      } else {
-        last.items.push(c);
-      }
-    }
-    return groups;
-  }
-
-  // Rebuild groups whenever the underlying list (or grouping mode)
-  // changes. Tracked deps: filteredCrops + groupBySubcluster. Does NOT
-  // read gridGroups, so mid-drag mutations of gridGroups don't retrigger
-  // it (which would clobber the in-flight shuffle).
-  $effect(() => {
-    gridGroups = buildGroups(filteredCrops);
+  // The rendered grid. `groups` is a real $derived of filteredCrops +
+  // groupBySubcluster, so it can never fall behind cropPager.items; the dnd
+  // handlers below install a *transient*, id-reconciled override for the
+  // duration of a drag and drop it again on finalize. Before this it was a
+  // plain $state snapshot that consider/finalize wrote the dnd library's own
+  // (pre-drop) list into, with nothing to re-derive it afterwards — which is
+  // how a labelled-away crop could get painted back into the grid and stay
+  // there until a hard reload. See src/lib/gridGroups.svelte.ts.
+  const grid = createGridGroups<OpCrop>({
+    source: () => filteredCrops,
+    grouped: () => groupBySubcluster,
+    keyOf: (c) => c.id,
+    subidOf: (c) => c.cluster_subid ?? null,
+    // Truth is the *whole* pager buffer, not filteredCrops: a sub-cluster tab
+    // narrows what's rendered but doesn't mean the hidden crops left.
+    liveIds: () => new Set(cropPager.items.map((c) => c.id)),
   });
+  const gridGroups = $derived(grid.groups);
 
   // Cut-line index: crops with similarity > 0.75 come first (already
   // sorted by API). Only meaningful in the single '__all__' group;
@@ -868,11 +848,6 @@
    * fires from the layout ClassSidebar's own finalize, routed back here
    * through dropOnClassStore.
    */
-  function _setGroupItems(key: string, items: OpCrop[]): void {
-    const g = gridGroups.find((x) => x.key === key);
-    if (g) g.items = items;
-  }
-
   function onGroupConsider(
     key: string,
     e: CustomEvent<{
@@ -895,18 +870,23 @@
         sel.ids = new Set([draggedId]);
       }
     }
-    _setGroupItems(key, e.detail.items);
+    grid.setZoneItems(key, e.detail.items);
   }
 
   function onGroupFinalize(
-    key: string,
+    _key: string,
     e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>,
   ): void {
-    _setGroupItems(key, e.detail.items);
-    // Every branch rebuilds the grid: real label-move RPCs fire from the
-    // ClassSidebar's finalize, and dropping into another grid sub-group
-    // has no semantic meaning (all groups share cluster_id).
-    gridGroups = buildGroups(filteredCrops);
+    // Drop the drag-local override outright rather than adopting
+    // `e.detail.items`. That payload is the dnd library's own pre-drop
+    // snapshot of the zone — instrumented drops show it arriving with one
+    // more crop than cropPager.items already holds, because the ClassSidebar
+    // finalize (which fires first) has already run the optimistic removal.
+    // Adopting it is exactly how a labelled-away crop got painted back into
+    // its old slot. Nothing here is worth keeping either way: real label RPCs
+    // fire from the sidebar's finalize, and dropping into another grid
+    // sub-group has no semantic meaning (all groups share cluster_id).
+    grid.reset();
     if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
       // The crop landed in the sidebar zone. The ClassSidebar finalize
       // that dispatches this drop reads dragIds synchronously (before its
@@ -1124,7 +1104,7 @@
           // synchronous, so it re-enters this same handler with dragIds
           // still populated and recurses until the stack blows.
           dragIds = [];
-          gridGroups = buildGroups(filteredCrops);
+          grid.reset();
           return;
         }
         sel.ids = new Set();
