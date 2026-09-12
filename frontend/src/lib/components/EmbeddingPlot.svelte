@@ -84,6 +84,11 @@
   let moveTargetInput = $state<string>('');
   let busy = $state<boolean>(false);
   let rebuilding = $state<boolean>(false);
+  // Which selected-preview thumbnail (if any) is shown enlarged. The strip
+  // thumbnails are 56px -- too small to actually judge a crop by, per live
+  // feedback ("I need to be able to individually select and click on them
+  // to see in the larger mode as they are small").
+  let expandedPreviewId = $state<string | null>(null);
 
   async function load(): Promise<void> {
     loading = true;
@@ -341,50 +346,21 @@
         Clear
       </button>
     </div>
-
-    <!-- Thumbnail preview of the lassoed crops. Assign/Move above act on
-         bare dots from a projection this component's own banner admits is
-         approximate -- an operator needs to actually SEE what they're
-         about to bulk-relabel before committing, not just trust proximity
-         on a 2-d scatter. Capped (SELECTED_PREVIEW_CAP) so a huge lasso
-         doesn't render thousands of <img> tags; it's a sanity check, not
-         a full review grid. -->
-    <div class="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-2">
-      {#each selectedPreview as p (p.crop_id)}
-        <div
-          class="group relative h-14 w-14 shrink-0 overflow-hidden rounded border border-zinc-700"
-          title={p.class_name ?? 'unlabeled'}
-        >
-          <img
-            src={getThumbUrl(p.crop_id, 64)}
-            alt="crop {p.crop_id}"
-            draggable="false"
-            class="h-full w-full object-cover [-webkit-user-drag:none]"
-          />
-          {#if p.class_name}
-            <span
-              class="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 text-center text-[9px] text-zinc-200"
-            >
-              {p.class_name}
-            </span>
-          {/if}
-        </div>
-      {/each}
-      {#if selectedIds.size > SELECTED_PREVIEW_CAP}
-        <div
-          class="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-dashed border-zinc-700 text-center text-[10px] text-zinc-500"
-        >
-          +{selectedIds.size - SELECTED_PREVIEW_CAP} more
-        </div>
-      {/if}
-    </div>
   {/if}
 
-  <div
-    bind:clientWidth={containerWidth}
-    class="relative min-h-0 flex-1 overflow-hidden rounded-md border border-zinc-800"
-  >
-    {#if loading}
+  <!-- Plot + selected-crop preview column live side by side so a large
+       lasso's thumbnail strip never pushes the plot down the page --
+       it scrolls in its own fixed-width column instead. Assign/Move act
+       on bare dots from a projection this component's own banner admits
+       is approximate -- an operator needs to actually SEE what they're
+       about to bulk-relabel before committing, not just trust proximity
+       on a 2-d scatter. -->
+  <div class="flex min-h-0 flex-1 gap-2">
+    <div
+      bind:clientWidth={containerWidth}
+      class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-800"
+    >
+      {#if loading}
       <p class="p-4 text-sm text-zinc-500">Loading embedding projection…</p>
     {:else if !built}
       <div class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
@@ -424,5 +400,84 @@
         {points.length.toLocaleString()} points · click-drag to lasso-select
       </p>
     {/if}
+    </div>
+
+    {#if selectedIds.size > 0}
+      <!-- Capped (SELECTED_PREVIEW_CAP) so a huge lasso doesn't render
+           thousands of <img> tags -- this is a sanity check, not a full
+           review grid. Individually clickable: each thumbnail is 56px,
+           too small to actually judge a crop by, so clicking one opens
+           it enlarged (expandedPreviewId below). -->
+      <div
+        class="flex w-40 shrink-0 flex-col gap-1 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-2"
+        style:height="{PLOT_HEIGHT}px"
+      >
+        <p class="text-[10px] text-zinc-500">{selectedIds.size} selected — click to enlarge</p>
+        <div class="grid grid-cols-2 gap-1">
+          {#each selectedPreview as p (p.crop_id)}
+            <button
+              type="button"
+              class="group relative aspect-square overflow-hidden rounded border border-zinc-700 hover:border-blue-400"
+              title={p.class_name ?? 'unlabeled'}
+              onclick={() => (expandedPreviewId = p.crop_id)}
+            >
+              <img
+                src={getThumbUrl(p.crop_id, 64)}
+                alt="crop {p.crop_id}"
+                draggable="false"
+                class="h-full w-full object-cover [-webkit-user-drag:none]"
+              />
+              {#if p.class_name}
+                <span
+                  class="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 text-center text-[9px] text-zinc-200"
+                >
+                  {p.class_name}
+                </span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+        {#if selectedIds.size > SELECTED_PREVIEW_CAP}
+          <p class="text-center text-[10px] text-zinc-500">
+            +{selectedIds.size - SELECTED_PREVIEW_CAP} more
+          </p>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
+
+{#if expandedPreviewId}
+  {@const expandedPoint = points.find((p) => p.crop_id === expandedPreviewId)}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Selected crop preview"
+  >
+    <div class="relative max-h-full max-w-2xl">
+      <img
+        src={getThumbUrl(expandedPreviewId, 512)}
+        alt="crop {expandedPreviewId}"
+        draggable="false"
+        class="max-h-[80vh] max-w-full rounded-md border border-zinc-700 [-webkit-user-drag:none]"
+      />
+      {#if expandedPoint?.class_name}
+        <p class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-sm text-zinc-200">
+          {expandedPoint.class_name}
+        </p>
+      {/if}
+      <button
+        type="button"
+        class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
+        onclick={(e) => {
+          e.stopPropagation();
+          expandedPreviewId = null;
+        }}
+        aria-label="Close"
+      >
+        ×
+      </button>
+    </div>
+  </div>
+{/if}

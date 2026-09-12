@@ -89,6 +89,59 @@ describe('EmbeddingPlot.svelte: selected-crop thumbnail preview', () => {
   });
 });
 
+/**
+ * Regression coverage for live layout feedback (2026-09-12): thumbnails
+ * were too small to individually judge, and a large selection's wrapped
+ * strip pushed the plot down the page. Fix: plot + preview column live
+ * side by side (flex row), the preview column scrolls independently
+ * instead of growing the page, and each thumbnail is clickable to an
+ * enlarged view.
+ */
+describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
+  const src = read('./EmbeddingPlot.svelte');
+
+  it('lays the plot and the preview column out as a row, not stacked', () => {
+    const rowStart = src.indexOf('flex min-h-0 flex-1 gap-2');
+    expect(rowStart).toBeGreaterThan(-1);
+    // The plot's own container and the preview column must both be
+    // descendants of that row div, not siblings stacked above/below it.
+    const plotIdx = src.indexOf('aria-label="Embedding projection scatter plot', rowStart);
+    const previewIdx = src.indexOf('click to enlarge', rowStart);
+    expect(plotIdx).toBeGreaterThan(rowStart);
+    expect(previewIdx).toBeGreaterThan(rowStart);
+  });
+
+  it('the preview column has its own fixed height and independent scroll, not flex-wrap growth', () => {
+    const colStart = src.indexOf('click to enlarge');
+    const colBlock = src.slice(Math.max(0, colStart - 400), colStart);
+    expect(colBlock).toMatch(/overflow-y-auto/);
+    expect(colBlock).toMatch(/height="\{PLOT_HEIGHT\}px"/);
+  });
+
+  it('each preview thumbnail is a clickable button that sets expandedPreviewId', () => {
+    const start = src.indexOf('{#each selectedPreview');
+    const block = src.slice(start, src.indexOf('{/each}', start));
+    expect(block).toMatch(/<button/);
+    expect(block).toMatch(/onclick=\{\(\) => \(expandedPreviewId = p\.crop_id\)\}/);
+  });
+
+  it('renders an enlarged modal for the expanded preview at a much larger thumbnail size', () => {
+    expect(src).toMatch(/\{#if expandedPreviewId\}/);
+    // 512 is the backend's hard cap (crop_thumbnail's `size` Query is
+    // ge=32, le=512) -- 640 was silently rejected with a 422 and never
+    // rendered anything, caught by live browser verification.
+    expect(src).toMatch(/getThumbUrl\(expandedPreviewId, 512\)/);
+    expect(src).toMatch(/role="dialog"/);
+  });
+
+  it('the enlarge modal is dismissible via a close button, matching CropCard\'s existing modal pattern (no backdrop-click/keydown a11y footguns)', () => {
+    const start = src.indexOf('{#if expandedPreviewId}');
+    const block = src.slice(start); // last top-level block in the file
+    expect(block).toMatch(/aria-label="Close"/);
+    expect(block).not.toMatch(/onkeydown=/);
+  });
+});
+
 describe('/clusters wiring adds zero new keydown listeners', () => {
   it('routes/clusters/+page.svelte still registers zero direct window/document keydown listeners', () => {
     const src = read('../../routes/clusters/+page.svelte');
