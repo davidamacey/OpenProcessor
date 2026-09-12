@@ -139,27 +139,6 @@
     return 'bg-red-500/20 text-red-200 border-red-500/40';
   }
 
-  // ---- training command preview -----------------------------------------
-
-  const totalImagesTraining = $derived(
-    rows.reduce((acc, r) => acc + Math.max(0, r.aug_target), 0),
-  );
-  const trainingCommand = $derived(
-    [
-      `# legacy v7 — ${rows.length} classes, ~${totalImagesTraining.toLocaleString()} target images`,
-      `bash /data/legacy_train_dataset_v7/scripts/train_medium.sh`,
-    ].join('\n'),
-  );
-
-  async function copyCommand(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(trainingCommand);
-      toastStore.success('Command copied.');
-    } catch {
-      toastStore.error('Clipboard unavailable.');
-    }
-  }
-
   // ---- export ------------------------------------------------------------
 
   function startPolling(): void {
@@ -459,6 +438,7 @@
           type="button"
           class="btn"
           onclick={() => downloadUrl(getClassRegistryUrl(), 'class_registry.json')}
+          disabled={exportState?.status !== 'success'}
         >
           class_registry.json
         </button>
@@ -494,20 +474,14 @@
           · <span class="text-red-300">{exportState.error}</span>
         {/if}
       </div>
+      {#if exportState.status === 'success'}
+        <p class="mt-2 text-xs text-zinc-400">
+          Next: <a href="/train" class="text-blue-400 underline hover:text-blue-300"
+            >train on this export from the Train cockpit</a
+          >.
+        </p>
+      {/if}
     {/if}
-  </section>
-
-  <!-- Training command preview -->
-  <section class="surface p-4">
-    <header class="mb-2 flex items-center gap-3">
-      <h2 class="text-sm font-semibold text-zinc-300">Training command</h2>
-      <span class="grow"></span>
-      <button class="btn" type="button" onclick={() => void copyCommand()}>Copy</button>
-    </header>
-    <pre
-      class="overflow-auto rounded-md border border-zinc-800 bg-zinc-900 p-3 font-mono text-xs leading-relaxed text-zinc-200"><code
-        >{trainingCommand}</code
-      ></pre>
   </section>
 </div>
 

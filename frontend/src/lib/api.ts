@@ -1704,7 +1704,7 @@ export function getClassRegistryUrl(): string {
 }
 
 export function getDataYamlUrl(): string {
-  return `${apiBase}/curation/export/registry/data_v7.yaml`;
+  return `${apiBase}/curation/export/registry/data.yaml`;
 }
 
 export function getManifestUrl(): string {
