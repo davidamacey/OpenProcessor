@@ -31,6 +31,7 @@
 
   import {
     bulkLabel,
+    getThumbUrl,
     getVizProjection,
     moveCropsToCluster,
     rebuildVizProjection,
@@ -115,6 +116,16 @@
       const s = scale.toScreen(p.x, p.y);
       return { ...s, id: p.crop_id, cluster_id: p.cluster_id };
     }),
+  );
+
+  // The lasso only ever selects by id -- this recovers the full crop data
+  // (thumbnail + current class) for the preview strip below, so an
+  // operator can see what they're about to bulk-assign/move instead of
+  // acting on bare dots. Capped so a large lasso doesn't render thousands
+  // of <img> tags; the strip is a sanity check, not a full review grid.
+  const SELECTED_PREVIEW_CAP = 60;
+  const selectedPreview = $derived.by(() =>
+    points.filter((p) => selectedIds.has(p.crop_id)).slice(0, SELECTED_PREVIEW_CAP),
   );
 
   function canvasPoint(e: PointerEvent): ScreenPoint {
@@ -329,6 +340,43 @@
       >
         Clear
       </button>
+    </div>
+
+    <!-- Thumbnail preview of the lassoed crops. Assign/Move above act on
+         bare dots from a projection this component's own banner admits is
+         approximate -- an operator needs to actually SEE what they're
+         about to bulk-relabel before committing, not just trust proximity
+         on a 2-d scatter. Capped (SELECTED_PREVIEW_CAP) so a huge lasso
+         doesn't render thousands of <img> tags; it's a sanity check, not
+         a full review grid. -->
+    <div class="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-2">
+      {#each selectedPreview as p (p.crop_id)}
+        <div
+          class="group relative h-14 w-14 shrink-0 overflow-hidden rounded border border-zinc-700"
+          title={p.class_name ?? 'unlabeled'}
+        >
+          <img
+            src={getThumbUrl(p.crop_id, 64)}
+            alt="crop {p.crop_id}"
+            draggable="false"
+            class="h-full w-full object-cover [-webkit-user-drag:none]"
+          />
+          {#if p.class_name}
+            <span
+              class="absolute inset-x-0 bottom-0 truncate bg-black/70 px-1 text-center text-[9px] text-zinc-200"
+            >
+              {p.class_name}
+            </span>
+          {/if}
+        </div>
+      {/each}
+      {#if selectedIds.size > SELECTED_PREVIEW_CAP}
+        <div
+          class="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-dashed border-zinc-700 text-center text-[10px] text-zinc-500"
+        >
+          +{selectedIds.size - SELECTED_PREVIEW_CAP} more
+        </div>
+      {/if}
     </div>
   {/if}
 
