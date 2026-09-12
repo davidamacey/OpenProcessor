@@ -74,6 +74,24 @@
   );
 
   const pageSize = 60;
+
+  // Crop ids this page has just optimistically moved/labeled/discarded/
+  // ignored out of the cluster. A GET for this cluster's crops can be
+  // in flight (or triggered fresh, e.g. by the SSE live-refresh effect
+  // below) at the exact moment a human drag-drop or hotkey move fires;
+  // if that GET's snapshot predates our write, its response would
+  // otherwise silently overwrite the optimistic removal and the crop
+  // would flicker back in and *stay* until a hard reload — the crop
+  // really did move, the grid just re-showed stale data. `accept`
+  // below re-applies this exclusion to every fetchPage result
+  // (loadFirst included) so a stale response can never resurrect a
+  // crop we already know left. Cleared per-id when the corresponding
+  // action is undone (see undoLast / undoIgnore) or reverted on
+  // failure, so a crop that never actually left is never hidden.
+  // Not `$state` — it's read only inside pager fetch callbacks, never
+  // by a template/derivation, so it doesn't need reactivity tracking.
+  const excludedCropIds = new Set<string>();
+
   // Crop pager. cropQuery() feeds page 1 and every later page, so a filter
   // can't be applied to the first request and silently dropped on the next.
   const cropPager = createPager<OpCrop>({
@@ -91,6 +109,7 @@
       return res.crops as PaginatedResponse<OpCrop>;
     },
     keyOf: (c) => c.id,
+    accept: (c) => !excludedCropIds.has(c.id),
     onLoadFirstError: () => {
       cluster = null;
     },
@@ -275,13 +294,20 @@
       cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
       cropPager.total = Math.max(0, cropPager.total - ids.length);
       sel.ids = new Set();
+      // Claim these ids before the await resolves — see excludedCropIds
+      // above. A stale/concurrent fetch that lands between now and the
+      // await settling must not be allowed to resurrect them.
+      for (const id of ids) excludedCropIds.add(id);
       try {
         const res = await bulkLabel(ids, cls.id);
         const conflicts = res.conflicts?.length ?? 0;
         if (conflicts > 0) {
           // A concurrent worker (typically op_gemma_worker) beat us on
           // some crops. The backend kept those crops on their old class;
-          // re-fetch so the grid reflects truth.
+          // re-fetch so the grid reflects truth. Only the crops that
+          // actually moved stay excluded — the conflicted ones never
+          // left cluster_id=clusterId, so they must be allowed back.
+          for (const c of res.conflicts) excludedCropIds.delete(c.crop_id);
           toastStore.warn(
             `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker). Reloading.`,
           );
@@ -291,6 +317,7 @@
         }
       } catch (e) {
         // Revert the optimistic mutation on hard failure.
+        for (const id of ids) excludedCropIds.delete(id);
         cropPager.items = snap;
         cropPager.total = snapTotal;
         toastStore.error(`Label failed: ${(e as Error).message}`);
@@ -620,6 +647,9 @@
         await deleteCropLabel(entry.crop_id);
       }
       toastStore.success('Reverted.');
+      // The crop is back in clusterId's class — it must be allowed to
+      // reappear even if some other in-flight fetch had it excluded.
+      excludedCropIds.delete(entry.crop_id);
       // Crops labeled via the sidebar-drop path were removed from the
       // grid, so revertLocalLabel above was a no-op for them. Pull the
       // crop back so the operator can see what returned.
@@ -687,6 +717,7 @@
     try {
       const res = await excludeCrops(ids, reason);
       cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
+      for (const id of ids) excludedCropIds.add(id);
       sel.ids = new Set();
       lastExcludedIds = ids;
       const tag = reason === 'ignore' ? '' : ` (${reason})`;
@@ -704,6 +735,7 @@
     const ids = lastExcludedIds;
     try {
       const res = await unexcludeCrops(ids);
+      for (const id of ids) excludedCropIds.delete(id);
       lastExcludedIds = [];
       toastStore.success(`Restored ${res.unexcluded}. Re-cluster to re-sort them.`);
     } catch (e) {
@@ -774,11 +806,21 @@
     cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
     sel.ids = new Set();
     rememberTarget(targetClusterId);
+    // Claim these ids immediately — see excludedCropIds above. Without
+    // this, a GET for this cluster that was already in flight (or gets
+    // triggered by the SSE live-refresh effect) can resolve after this
+    // optimistic removal with data snapshotted before this move landed,
+    // silently un-removing the crop and leaving it stuck in the grid
+    // until a hard reload.
+    for (const id of ids) excludedCropIds.add(id);
     try {
       const res = await moveCropsToCluster(ids, targetClusterId);
       const moved = res.updated ?? ids.length;
       const conflicts = res.conflicts?.length ?? 0;
       if (conflicts > 0) {
+        // These specific ids never actually left clusterId — let them
+        // back in once the reload below re-syncs.
+        for (const c of res.conflicts) excludedCropIds.delete(c.crop_id);
         toastStore.warn(
           `Moved ${moved} of ${ids.length} crop${ids.length === 1 ? '' : 's'} (${conflicts} blocked by worker). Reloading.`,
         );
@@ -789,6 +831,7 @@
         );
       }
     } catch (e) {
+      for (const id of ids) excludedCropIds.delete(id);
       cropPager.items = snap;
       toastStore.error(`Move failed: ${(e as Error).message}`);
     }
@@ -1013,6 +1056,7 @@
         }
         const succeededSet = new Set(succeeded);
         cropPager.items = cropPager.items.filter((c) => !succeededSet.has(c.id));
+        for (const id of succeeded) excludedCropIds.add(id);
         // Keep the failures visible and selected so the operator can retry.
         sel.ids = new Set(failed);
         if (succeeded.length > 0) {
