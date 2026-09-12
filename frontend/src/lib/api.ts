@@ -130,12 +130,33 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/**
+ * Resolve a path/URL against the configured `apiBase`. Idempotent — an
+ * already-absolute URL (or one already prefixed with `apiBase`) passes
+ * through unchanged, so it's safe to call on a value that might have
+ * already been resolved upstream (e.g. a server-supplied
+ * `representative_thumb_urls` entry rendered through a shared helper).
+ *
+ * The backend intentionally emits relative `/curation/...` URLs in API
+ * response bodies (e.g. `plate_thumbnail_url`, `representative_thumb_urls`)
+ * so the same payload works both same-origin (production nginx proxy,
+ * empty `apiBase`) and cross-origin (a remote `PUBLIC_TRITON_API_URL`).
+ * Resolving those against `apiBase` is the client's job — every render
+ * site that puts a server-supplied URL into an `<img src>` must go
+ * through this function first.
+ */
+export function resolveApiUrl(url: string): string {
+  if (url.startsWith('http')) return url;
+  if (apiBase && url.startsWith(apiBase)) return url;
+  return `${apiBase}${url}`;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
   signal?: AbortSignal,
 ): Promise<T> {
-  const url = path.startsWith('http') ? path : `${apiBase}${path}`;
+  const url = resolveApiUrl(path);
   let attempt = 0;
   let lastError: unknown;
   // 1 initial + 3 retries on 5xx => 4 attempts max.
@@ -1724,6 +1745,21 @@ export function getManifestUrl(): string {
  */
 export function getThumbUrl(cropId: string, size: number = 160): string {
   return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
+}
+
+/**
+ * URL for a plate close-up thumbnail (the plate sub-bbox rendered to a
+ * tile), same construction convention as {@link getThumbUrl}. Pass
+ * `cacheBustKey` (e.g. `Date.now()`) after a bbox edit so the browser
+ * doesn't serve the pre-edit crop from its image cache.
+ */
+export function getPlateThumbUrl(
+  cropId: string,
+  size: number = 160,
+  cacheBustKey?: string | number | null,
+): string {
+  const base = `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/plate_thumbnail?size=${size}`;
+  return cacheBustKey != null ? `${base}&v=${encodeURIComponent(cacheBustKey)}` : base;
 }
 
 export function getSourceImageUrl(cropId: string): string {

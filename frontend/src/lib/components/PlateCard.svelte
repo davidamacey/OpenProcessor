@@ -12,7 +12,7 @@
    * `onclick` event so the parent can navigate to the review queue.
    */
   import DetectorChip from './DetectorChip.svelte';
-  import type { PlateBrowseItem } from '$lib/api';
+  import { getPlateThumbUrl, resolveApiUrl, type PlateBrowseItem } from '$lib/api';
 
   interface Props {
     crop: PlateBrowseItem;
@@ -63,7 +63,9 @@
 
   const warn = $derived(shapeWarning());
   const thumbUrl = $derived(
-    crop.plate_thumbnail_url ?? `/curation/crops/${crop.crop_id}/plate_thumbnail`,
+    crop.plate_thumbnail_url
+      ? resolveApiUrl(crop.plate_thumbnail_url)
+      : getPlateThumbUrl(crop.crop_id),
   );
 
   function handleClick(e: MouseEvent): void {
