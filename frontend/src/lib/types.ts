@@ -327,11 +327,18 @@ export interface OpHealth {
   timestamp: string;
 }
 
+// 'outliers' was retired from the UI in the 2026-09 tab consolidation
+// (3 live rows, functionally identical to the `atypicality` sort already
+// offered via the strategy bar) — its backend /curation/review/outliers query
+// is untouched, but nothing in the frontend calls it anymore, so the
+// literal is gone from this union too. 'mismatches' / 'gemma_low_conf' /
+// 'primary_low_conf' are no longer top-level UI tabs but still real
+// values here — they're driven by the All-tab preset chips instead (see
+// $lib/reviewTabs.ts's resolveEffectiveTab).
 export type ReviewTab =
   | 'all'
   | 'mismatches'
   | 'gemma_low_conf'
-  | 'outliers'
   | 'uncertainty'
   | 'model_disagreements'
   | 'plates'

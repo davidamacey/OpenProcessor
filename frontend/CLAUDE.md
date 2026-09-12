@@ -28,18 +28,48 @@ except `/` and `/clusters/[id]`, which are reached via the logo / a cluster
 card respectively. The MVP/post-MVP split from the original design doc is
 gone — every route in this table exists and works; nothing here is a stub.
 
-| Route                        | Purpose                                                                                                                                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/` (legacy, logo link only) | Older stats + recent-crops + quick Gemma-cluster-run page. Superseded by `/dashboard` for nav purposes but still reachable; not deleted since it's a working page, just not the primary entry point.                                                |
-| `/dashboard`                  | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run.                                                                       |
-| `/clusters`                   | Cluster grid view, sidebar filter, **strategy bar** (cluster-method picker + review-sort dropdown + score chips, see below). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). |
-| `/clusters/[id]`              | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                               |
-| `/review`                     | 9 review-queue tabs: Mismatch / Gemma low-conf / Outlier / Uncertainty / **Model Disagreements** / **Plates** / **Primary · Low-Conf** / **COCO Blind Spots** / All, each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings. |
-| `/classes`                    | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                |
-| `/export`                     | Trigger YOLO export, view balance gap                                                                                                                                                                                                                 |
-| `/models`                     | Triton model registry browser                                                                                                                                                                                                                         |
-| `/train`                      | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                           |
-| `/bakeoff`                    | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `legacy-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded)                             |
+| Route                        | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/` (legacy, logo link only) | Older stats + recent-crops + quick Gemma-cluster-run page. Superseded by `/dashboard` for nav purposes but still reachable; not deleted since it's a working page, just not the primary entry point.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `/dashboard`                 | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `/clusters`                  | Cluster grid view, sidebar filter, **strategy bar** (cluster-method picker + review-sort dropdown + score chips, see below). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below).                                                                                                                                                                                           |
+| `/clusters/[id]`             | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/review`                    | 5 top-level review tabs (2026-09 consolidation, down from 9 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / **Plates**, each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. The All tab additionally offers a row of **quick-filter preset chips** (Gemma mismatches / Gemma low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings. |
+| `/classes`                   | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/export`                    | Trigger YOLO export, view balance gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `/models`                    | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/train`                     | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `/bakeoff`                   | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `legacy-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+## `/review` tab consolidation (2026-09)
+
+A review of all 9 original review-queue tabs against the live
+1,000-crop index found three were too big to function as curated
+queues — closer to "most of the dataset" than a triaged worklist:
+Mismatches (1,000 rows · 97.5% the size of All), Gemma Low-Conf
+(1,000 · 11% of the dataset), and Primary · Low-Conf (1,000 · 92% of
+the _entire_ dataset). A fourth, Outliers, had only 3 live rows and was
+functionally identical to the `atypicality` sort already available via
+the strategy bar below.
+
+- **Outliers** was retired entirely — no tab, no rendering path. Its
+  backend `/curation/review/outliers` query is untouched/unlinked, not
+  deleted (out of scope for a frontend-only change).
+- **Mismatches / Gemma Low-Conf / Primary · Low-Conf** collapsed from
+  top-level tabs into **quick-filter preset chips** shown only on the
+  `all` tab (`REVIEW_PRESETS` in `src/lib/reviewTabs.ts`). Each chip
+  reuses that former tab's exact backend cohort query unchanged — same
+  `GET /curation/review/{id}` endpoint, same default sort, same
+  `max_rank`/`min_blur_ratio` params for Primary · Low-Conf — just
+  triggered from a chip instead of a nav tab. Radio-style: picking a
+  second chip swaps the first; clicking the active chip again (or its
+  "clear" button) returns to plain All. `resolveEffectiveTab(tab,
+preset)` is the single place that decides which queue actually gets
+  fetched — every other tab ignores `preset` outright, and clicking any
+  nav tab resets it.
+- **Uncertainty / Model Disagreements / COCO Blind Spots / Plates**
+  are unchanged — still real top-level tabs with their existing default
+  sorts and keyboard shortcuts.
 
 ## Curation-strategy selector bar (`StrategyBar.svelte`, 2026-09)
 
@@ -68,7 +98,7 @@ controls, never a replacement for the production defaults:
   enabled it (`OP_SELECT_DIVERSE_ENABLED`).
 - **Embedding plot** (`/clusters` only) — 2-d UMAP scatter, **visualization
   only** (never feeds a clustering decision — see `clustering_methods.md`
-  §8), colored by the *existing* `cluster_id`. Gated by
+  §8), colored by the _existing_ `cluster_id`. Gated by
   `isEmbeddingVizAvailable`/`isEmbeddingVizBannerRequired`
   (`strategies.ts`) on the `viz_projection` overlay's status; renders an
   "approximate" banner when the backend flags `requires_banner`. Points
@@ -146,17 +176,17 @@ Global:
 
 `/review`:
 
-| Key             | Action                                                                                           |
-| --------------- | ------------------------------------------------------------------------------------------------ |
-| `Enter`         | Confirm proposed + advance; opens the class picker instead when there's no proposal (plates tab: confirm plate) |
+| Key             | Action                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter`         | Confirm proposed + advance; opens the class picker instead when there's no proposal (plates tab: confirm plate)                       |
 | `/`             | Open the fuzzy-search class picker (all non-deprecated classes, not just the top-10 quick-assign row). Not offered on the plates tab. |
-| `D`             | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible) |
-| `N`             | Skip                                                                                             |
-| `Z`             | Undo last                                                                                        |
-| `←` / `→`       | Previous / next item (plates tab `←` / `B`: step back)                                           |
-| `F`             | Plates tab: mark false positive (box kept)                                                       |
-| `E`             | Plates tab: enter bbox edit mode                                                                 |
-| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                   |
+| `D`             | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible)                                      |
+| `N`             | Skip                                                                                                                                  |
+| `Z`             | Undo last                                                                                                                             |
+| `←` / `→`       | Previous / next item (plates tab `←` / `B`: step back)                                                                                |
+| `F`             | Plates tab: mark false positive (box kept)                                                                                            |
+| `E`             | Plates tab: enter bbox edit mode                                                                                                      |
+| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                                                        |
 
 The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over
 every non-deprecated class — the top-10 quick-assign row under the crop

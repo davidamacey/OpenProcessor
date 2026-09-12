@@ -23,6 +23,13 @@
     cropToSourceFrame,
     sourceToCropFrame,
   } from '$lib/plate_geometry';
+  import {
+    PRIMARY_TABS,
+    REVIEW_PRESETS,
+    REVIEW_TABS,
+    resolveEffectiveTab,
+    type ReviewPresetId,
+  } from '$lib/reviewTabs';
   import type { BBoxNorm, OpClass, ReviewItem, ReviewTab } from '$lib/types';
   import { createPager } from '$lib/pager.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
@@ -36,31 +43,22 @@
   import { onMount } from 'svelte';
 
   // Unified review by default — one continuous queue of every crop that
-  // needs a human, sorted most-uncertain first. The narrower tabs stay
-  // available for diagnosing where uncertainty came from.
-  const TABS: Array<{ id: ReviewTab; label: string }> = [
-    { id: 'all', label: 'All' },
-    { id: 'mismatches', label: 'Mismatches' },
-    { id: 'gemma_low_conf', label: 'Gemma Low-Conf' },
-    { id: 'outliers', label: 'Outliers' },
-    { id: 'uncertainty', label: 'Uncertainty' },
-    // Phase 5 active-learning loop: validated crops where the newly
-    // promoted model disagrees with the human label.
-    { id: 'model_disagreements', label: 'Model Disagreements' },
-    // Plate-detection review: crops with an LPR/SAM3+Gemma-verified
-    // plate bbox waiting for human confirmation in PlateEditor.
-    { id: 'plates', label: 'Plates' },
-    // Primary-subject active-learning queues — the highest-value crops to
-    // label for the next v6 pass (largest subjects v6 was unsure on, and
-    // COCO-confirmed vehicles v6 missed entirely).
-    { id: 'primary_low_conf', label: 'Primary · Low-Conf' },
-    { id: 'coco_blind_spots', label: 'COCO Blind Spots' },
-  ];
-
-  // Which tabs honor the primary-subject controls (rank toggle + clarity).
-  const PRIMARY_TABS: ReviewTab[] = ['primary_low_conf', 'coco_blind_spots'];
-
+  // needs a human, sorted most-uncertain first. Down to 5 top-level tabs
+  // (2026-09 consolidation, see $lib/reviewTabs.ts) — Mismatches / Gemma
+  // Low-Conf / Primary·Low-Conf collapsed into preset chips on the All
+  // tab (below); Outliers retired entirely (see reviewTabs.ts doc
+  // comment). The remaining 4 narrower tabs stay available for
+  // diagnosing where uncertainty came from — each is a real, distinct
+  // signal, not a rebrand of "everything."
   let tab = $state<ReviewTab>('all');
+  // Active quick-filter preset chip on the All tab (null = plain All).
+  // Only ever meaningful while tab === 'all' — resolveEffectiveTab drops
+  // it for every other tab, and switching tabs clears it outright.
+  let preset = $state<ReviewPresetId | null>(null);
+  const effectiveTab = $derived<ReviewTab>(resolveEffectiveTab(tab, preset));
+  function togglePreset(id: ReviewPresetId): void {
+    preset = preset === id ? null : id;
+  }
   const pageSize = 30;
   let cursor = $state<number>(0); // index within accumulated items
 
@@ -78,7 +76,7 @@
   // drift between page 1 and the pages the cursor pulls in behind it.
   const queue = createPager<ReviewItem>({
     fetchPage: async (page) => {
-      const res = await getReviewQueue(tab, page, pageSize, _filter());
+      const res = await getReviewQueue(effectiveTab, page, pageSize, _filter());
       sortFallbackReason = res.sort_fallback_reason ?? null;
       return res;
     },
@@ -141,7 +139,7 @@
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
     if (tab === 'plates' && plateTextQuery) f.text = plateTextQuery;
-    if (PRIMARY_TABS.includes(tab)) {
+    if (PRIMARY_TABS.includes(effectiveTab)) {
       if (subjectScope !== 0) f.max_rank = subjectScope;
       if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
     }
@@ -220,6 +218,7 @@
   // per keystroke.
   $effect(() => {
     void tab;
+    void preset;
     void classFilter;
     void subjectScope;
     void minBlurRatio;
@@ -953,7 +952,7 @@
        without colliding with the loaded-count chip on the right. -->
   <div class="flex items-center gap-1 border-b border-zinc-800 px-4">
     <div class="flex min-w-0 grow items-center gap-1 overflow-x-auto whitespace-nowrap">
-      {#each TABS as t (t.id)}
+      {#each REVIEW_TABS as t (t.id)}
         <button
           type="button"
           class="shrink-0 px-3 py-2.5 text-sm border-b-2 {tab === t.id
@@ -961,6 +960,10 @@
             : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
           onclick={() => {
             tab = t.id;
+            // Presets only make sense on the All tab — switching to any
+            // other tab (or re-landing on All from one) always starts
+            // from plain All rather than silently carrying a stale chip.
+            preset = null;
             closePicker();
           }}
         >
@@ -1064,7 +1067,7 @@
       </label>
     {/if}
 
-    {#if PRIMARY_TABS.includes(tab)}
+    {#if PRIMARY_TABS.includes(effectiveTab)}
       <SubjectScopeToggle
         bind:value={subjectScope}
         labels={['Top 2', 'Largest', '+2nd']}
@@ -1076,6 +1079,41 @@
         max={BLUR_MAX}
         title="Hide crops blurrier than this"
       />
+    {/if}
+
+    {#if tab === 'all'}
+      <!-- Quick-filter preset chips (2026-09 tab consolidation) — Mismatches
+           / Gemma Low-Conf / Primary·Low-Conf collapsed from top-level tabs
+           into these, since live counts showed each was too big (11-97% of
+           the dataset) to be a curated queue. Each chip reuses that former
+           tab's exact backend query unchanged (see $lib/reviewTabs.ts);
+           radio-style — picking a second chip swaps the first, clicking the
+           active one (or "clear") returns to plain All. -->
+      <div class="flex shrink-0 flex-wrap items-center gap-1.5">
+        <span class="text-zinc-400">Quick filter</span>
+        {#each REVIEW_PRESETS as p (p.id)}
+          <button
+            type="button"
+            class="rounded border px-2 py-1 text-xs {preset === p.id
+              ? 'border-blue-500/60 bg-blue-500/15 text-blue-100'
+              : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
+            aria-pressed={preset === p.id}
+            title={p.description}
+            onclick={() => togglePreset(p.id)}
+          >
+            {p.label}
+          </button>
+        {/each}
+        {#if preset}
+          <button
+            type="button"
+            class="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+            onclick={() => (preset = null)}
+          >
+            clear
+          </button>
+        {/if}
+      </div>
     {/if}
 
     <span class="grow"></span>
