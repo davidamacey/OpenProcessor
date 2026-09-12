@@ -7,8 +7,12 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  apiBase,
   ApiError,
   getCluster,
+  getClassRegistryUrl,
+  getDataYamlUrl,
+  getManifestUrl,
   getMethods,
   getReviewQueue,
   getVizProjection,
@@ -656,4 +660,25 @@ describe('rebuildVizProjection', () => {
 
     await expect(rebuildVizProjection()).rejects.toBeInstanceOf(ApiError);
   }, 10_000);
+});
+
+/**
+ * Regression test for the /export download-button filename mismatch:
+ * getDataYamlUrl() used to request `data_v7.yaml`, which the export service
+ * never writes (the real on-disk file is `data.yaml`), so the download would
+ * 404 against the real `/curation/export/registry/{artifact}` backend contract.
+ * Pin all three exact URLs so this can't silently regress.
+ */
+describe('registry download URL builders', () => {
+  it('getClassRegistryUrl() points at the real class_registry.json filename', () => {
+    expect(getClassRegistryUrl()).toBe(`${apiBase}/curation/export/registry/class_registry.json`);
+  });
+
+  it('getDataYamlUrl() points at the real data.yaml filename (not data_v7.yaml)', () => {
+    expect(getDataYamlUrl()).toBe(`${apiBase}/curation/export/registry/data.yaml`);
+  });
+
+  it('getManifestUrl() points at the real manifest.json filename', () => {
+    expect(getManifestUrl()).toBe(`${apiBase}/curation/export/registry/manifest.json`);
+  });
 });
