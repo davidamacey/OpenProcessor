@@ -1629,7 +1629,11 @@ export async function searchCrops(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<SearchCrop>> {
-  type RawSearchItem = RawCrop & { similarity_score?: number | null; score?: number | null };
+  type RawSearchItem = RawCrop & {
+    similarity_score?: number | null;
+    semantic_score?: number | null;
+    score?: number | null;
+  };
   type RawPage = {
     total: number;
     page: number;
@@ -1645,7 +1649,12 @@ export async function searchCrops(
     const base = mapRawCrop(it);
     return {
       ...base,
-      similarity_score: it.similarity_score ?? it.score ?? 0,
+      // The backend's `_hydrate_item` (openprocessor semantic_search.py) sends
+      // the match score as `semantic_score` — `similarity_score`/`score`
+      // are legacy/defensive fallbacks that the live endpoint has never
+      // actually populated. Without the semantic_score read here every
+      // search-result badge silently rendered 0%.
+      similarity_score: it.similarity_score ?? it.semantic_score ?? it.score ?? 0,
     };
   });
   return {
