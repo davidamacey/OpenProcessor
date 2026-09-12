@@ -1,5 +1,6 @@
 <script lang="ts">
   import { setClassHotkey } from '$lib/classHotkey';
+  import { isAssignableClass } from '$lib/classVisibility';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import type { OpClass } from '$lib/types';
@@ -12,7 +13,7 @@
   // /clusters.
   const editableClasses = $derived(
     classesStore.classes
-      .filter((c) => !c.deprecated)
+      .filter(isAssignableClass)
       .slice()
       .sort((a, b) => {
         // Bound hotkeys first, then largest classes

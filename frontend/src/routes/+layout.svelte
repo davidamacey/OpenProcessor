@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import ClassSidebar from '$components/ClassSidebar.svelte';
+  import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
   import Toast from '$components/Toast.svelte';
@@ -55,7 +56,10 @@
       if (isTextInputActive()) return;
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       const cls = classesStore.classes.find(
-        (c) => !c.deprecated && (c.hotkey_letter ?? '').toLowerCase() === key,
+        (c) =>
+          !c.deprecated &&
+          !isPickerHiddenClass(c.name) &&
+          (c.hotkey_letter ?? '').toLowerCase() === key,
       );
       if (cls) {
         e.preventDefault();

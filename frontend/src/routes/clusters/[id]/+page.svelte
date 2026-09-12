@@ -27,6 +27,7 @@
   import { createSelection } from '$lib/selection.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { isDiverseOverlayAvailable } from '$lib/strategies';
+  import { isAssignableClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type {
     OpClass,
@@ -1178,7 +1179,7 @@
         class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
       >
         <option value={null}>— class —</option>
-        {#each classesStore.classes as cls (cls.id)}
+        {#each classesStore.classes.filter(isAssignableClass) as cls (cls.id)}
           <option value={cls.id}>{cls.name}</option>
         {/each}
       </select>
