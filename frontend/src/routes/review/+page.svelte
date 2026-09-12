@@ -15,6 +15,7 @@
   import DetectorChip from '$lib/components/DetectorChip.svelte';
   import PlateBboxCanvas from '$lib/components/PlateBboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
+  import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
@@ -32,11 +33,13 @@
   import type { BBoxNorm, OpClass, ReviewItem, ReviewTab } from '$lib/types';
   import { createPager } from '$lib/pager.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
+  import { isSemanticSearchAvailable } from '$lib/strategies';
   import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
   import { untrack } from 'svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
+  import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
@@ -94,11 +97,29 @@
   // along.
   const PREFETCH_AHEAD = 5;
   function maybePrefetch(): void {
+    if (searchModeActive) return;
     if (queue.loadingMore || !queue.hasMore) return;
     if (queue.items.length - cursor <= PREFETCH_AHEAD) {
       void loadMore();
     }
   }
+
+  // P2-14 semantic text search. Gated behind isSemanticSearchAvailable
+  // exactly like every other overlay control — an old/flag-off backend
+  // hides <SemanticSearchBox> entirely. Results feed straight into
+  // `queue`'s settable items/total (searchScores keyed by crop id, for
+  // the similarity badge alongside the existing mistakenness ScoreChip
+  // below) so the existing one-at-a-time review UI, label hotkeys, and
+  // undo/discard flows keep working completely unchanged. While a
+  // search is active, prefetch/loadMore is disabled (see maybePrefetch
+  // above) — /curation/search/text pagination isn't wired to this page's
+  // page-N `queue.loadMore`, and paging into getReviewQueue while search
+  // results are showing would silently overwrite them.
+  const semanticSearchAvailable = $derived(
+    isSemanticSearchAvailable(strategiesStore.methods.overlays),
+  );
+  let searchModeActive = $state(false);
+  let searchScores = $state(new Map<string, number>());
 
   // Crop ids this session has already assigned / discarded / triaged.
   // The queue is page-numbered over a server collection that SHRINKS as
@@ -999,6 +1020,33 @@
        server couldn't honor the requested sort. -->
   <div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-1.5">
     <StrategyBar bar={strategyBar} />
+    {#if semanticSearchAvailable}
+      <SemanticSearchBox
+        filter={{ tab: effectiveTab, ..._filter() }}
+        pageSize={30}
+        onResults={(res) => {
+          searchModeActive = true;
+          searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+          cursor = 0;
+          handledIds.clear();
+          queue.items = res.items.map((it) => {
+            const { similarity_score: _score, ...rest } = it;
+            return {
+              ...rest,
+              reason: '',
+              proposed_class_id: null,
+              proposed_class_name: null,
+            };
+          });
+          queue.total = res.total;
+        }}
+        onClear={() => {
+          searchModeActive = false;
+          searchScores = new Map();
+          void queue.loadFirst();
+        }}
+      />
+    {/if}
     {#if sortFallbackReason}
       <span
         class="text-[11px] text-amber-300"
@@ -1267,16 +1315,25 @@
             </dd>
           {/if}
 
-          {#if current.mistakenness_score != null}
+          {#if current.mistakenness_score != null || (current && searchScores.has(current.id))}
             <dt class="text-zinc-500">Scores</dt>
-            <dd>
-              <ScoreChip
-                label="mistakenness"
-                value={current.mistakenness_score}
-                method={current.mistakenness_method}
-                version={current.mistakenness_version}
-                size="sm"
-              />
+            <dd class="flex flex-wrap items-center gap-1.5">
+              {#if current.mistakenness_score != null}
+                <ScoreChip
+                  label="mistakenness"
+                  value={current.mistakenness_score}
+                  method={current.mistakenness_method}
+                  version={current.mistakenness_version}
+                  size="sm"
+                />
+              {/if}
+              {#if current && searchScores.has(current.id)}
+                <ScoreChip
+                  label="match"
+                  value={searchScores.get(current.id) ?? 0}
+                  size="sm"
+                />
+              {/if}
             </dd>
           {/if}
         </dl>

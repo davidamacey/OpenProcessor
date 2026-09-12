@@ -19,6 +19,8 @@
   import CropCard from '$components/CropCard.svelte';
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
+  import ScoreChip from '$components/ScoreChip.svelte';
+  import SemanticSearchBox from '$components/SemanticSearchBox.svelte';
   import StrategyBar from '$components/StrategyBar.svelte';
   import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -26,7 +28,7 @@
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
-  import { isDiverseOverlayAvailable } from '$lib/strategies';
+  import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strategies';
   import { isAssignableClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type {
@@ -185,6 +187,23 @@
   const allowedOrderIds = $derived(
     diverseAvailable ? ['default', 'outliers', 'diverse'] : ['default', 'outliers'],
   );
+
+  // P2-14 semantic text search. Gated behind isSemanticSearchAvailable
+  // exactly like isDiverseOverlayAvailable above — an old/flag-off
+  // backend hides <SemanticSearchBox> entirely. Search results are fed
+  // straight into cropPager's settable items/total (searchScores keyed
+  // by crop id, for the similarity badge) so the existing CropCard grid,
+  // selection, DnD, and label hotkeys below keep working completely
+  // unchanged — this is not a parallel rendering path. While a search is
+  // active, "load more" is disabled (see hasMore guard in the pager
+  // section below): /curation/search/text pagination isn't wired to this
+  // cluster page's infinite-scroll trigger, and re-paging into
+  // getCluster would silently overwrite the search results.
+  const semanticSearchAvailable = $derived(
+    isSemanticSearchAvailable(strategiesStore.methods.overlays),
+  );
+  let searchModeActive = $state(false);
+  let searchScores = $state(new Map<string, number>());
   // "How many diverse crops?" — defaults to the page's own pageSize
   // (60) until the operator overrides it via the StrategyBar stepper.
   // Only forwarded to the API while actually in diverse mode.
@@ -1374,6 +1393,24 @@
       diverseMeta={orderMeta}
     />
 
+    {#if semanticSearchAvailable}
+      <SemanticSearchBox
+        filter={{ cluster_id: clusterId }}
+        pageSize={60}
+        onResults={(res) => {
+          searchModeActive = true;
+          searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+          cropPager.items = res.items;
+          cropPager.total = res.total;
+        }}
+        onClear={() => {
+          searchModeActive = false;
+          searchScores = new Map();
+          void cropPager.loadFirst();
+        }}
+      />
+    {/if}
+
     {#if subjectScope !== 0 || minBlurRatio !== null || !strategyBar.isDefault}
       <button
         type="button"
@@ -1492,14 +1529,25 @@
               {#if !groupBySubcluster && i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < group.items.length}
                 <CutLine />
               {/if}
-              <CropCard
-                {crop}
-                selected={sel.has(crop.id)}
-                onclick={(c, e) => clickSelect(c.id, e)}
-                onacceptGemma={(c) => void acceptGemmaForCrop(c)}
-                onrejectGemma={(c) => void rejectGemmaForCrop(c)}
-                ondetail={(c) => (detailCrop = c)}
-              />
+              <div class="relative">
+                <CropCard
+                  {crop}
+                  selected={sel.has(crop.id)}
+                  onclick={(c, e) => clickSelect(c.id, e)}
+                  onacceptGemma={(c) => void acceptGemmaForCrop(c)}
+                  onrejectGemma={(c) => void rejectGemmaForCrop(c)}
+                  ondetail={(c) => (detailCrop = c)}
+                />
+                {#if searchModeActive && searchScores.has(crop.id)}
+                  <div class="pointer-events-none absolute left-1 top-1 z-10">
+                    <ScoreChip
+                      label="match"
+                      value={searchScores.get(crop.id) ?? 0}
+                      size="sm"
+                    />
+                  </div>
+                {/if}
+              </div>
             {/each}
           </div>
         {/each}
@@ -1508,7 +1556,11 @@
         <div
           use:infiniteScroll={{
             onload: loadMore,
-            disabled: cropPager.loadingMore || !cropPager.hasMore || cropPager.loading,
+            disabled:
+              searchModeActive ||
+              cropPager.loadingMore ||
+              !cropPager.hasMore ||
+              cropPager.loading,
           }}
           class="mt-4 h-1"
           aria-hidden="true"

@@ -5,6 +5,7 @@ import {
   isDiverseOverlayAvailable,
   isEmbeddingVizAvailable,
   isEmbeddingVizBannerRequired,
+  isSemanticSearchAvailable,
   normalizeMethodStatus,
   parseKbMethodsResponse,
 } from './strategies';
@@ -354,6 +355,62 @@ describe('isEmbeddingVizAvailable', () => {
 
   it('never throws on FALLBACK_METHODS.overlays (empty today)', () => {
     expect(isEmbeddingVizAvailable(FALLBACK_METHODS.overlays)).toBe(false);
+  });
+});
+
+/**
+ * isSemanticSearchAvailable (P2-14) is the gate for whether
+ * SemanticSearchBox renders at all on /review and /clusters. Same
+ * case coverage/reasoning as isDiverseOverlayAvailable/
+ * isEmbeddingVizAvailable above.
+ */
+describe('isSemanticSearchAvailable', () => {
+  it('is false when overlays is empty (pre-P2-14 backend, or KB flag off)', () => {
+    expect(isSemanticSearchAvailable([])).toBe(false);
+  });
+
+  it('is false when /curation/methods does not report a semantic_search entry at all', () => {
+    const overlays: OverlayInfo[] = [
+      { id: 'diverse', label: 'Diversity', status: 'stable' },
+      { id: 'viz_projection', label: 'UMAP scatter', status: 'experimental' },
+    ];
+    expect(isSemanticSearchAvailable(overlays)).toBe(false);
+  });
+
+  it('is false when semantic_search is reported but shadow', () => {
+    expect(
+      isSemanticSearchAvailable([
+        { id: 'semantic_search', label: 'Text search', status: 'shadow' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false when semantic_search is reported but disabled', () => {
+    expect(
+      isSemanticSearchAvailable([
+        { id: 'semantic_search', label: 'Text search', status: 'disabled' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is true when semantic_search is reported experimental', () => {
+    expect(
+      isSemanticSearchAvailable([
+        { id: 'semantic_search', label: 'Text search', status: 'experimental' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('is true when semantic_search is reported stable', () => {
+    expect(
+      isSemanticSearchAvailable([
+        { id: 'semantic_search', label: 'Text search', status: 'stable' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('never throws on FALLBACK_METHODS.overlays (empty today — no semantic_search entry)', () => {
+    expect(isSemanticSearchAvailable(FALLBACK_METHODS.overlays)).toBe(false);
   });
 });
 

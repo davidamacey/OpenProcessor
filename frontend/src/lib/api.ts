@@ -38,6 +38,7 @@ import type {
   PaginatedResponse,
   ReviewItem,
   ReviewTab,
+  SearchCrop,
   UnloadModelResponse,
 } from './types';
 import type {
@@ -1490,6 +1491,58 @@ export async function getReviewQueue(
     page: raw.page ?? page,
     page_size: raw.page_size ?? pageSize,
     sort_fallback_reason: raw.sort_fallback_reason ?? null,
+  };
+}
+
+/**
+ * Free-text semantic search over vehicle crops (P2-14). Backend:
+ * `GET /curation/search/text`, gated behind the `semantic_search` overlay in
+ * `/curation/methods` (see `isSemanticSearchAvailable` in `./strategies`) — a
+ * caller must check that gate before rendering a UI that calls this.
+ *
+ * Mirrors `getReviewQueue`'s response-shape handling: the endpoint
+ * returns `{items, total, page, page_size}` with items shaped like other
+ * crop payloads plus a similarity score, normalized through `mapRawCrop`
+ * so every existing crop-consuming component (CropCard, thumbnails,
+ * label actions) keeps working unchanged against a search result.
+ *
+ * `filter` threads through arbitrary extra query params — same
+ * `Record<string, unknown>` convention as `getReviewQueue` — so callers
+ * can pass `cluster_id` (search scoped to one cluster on
+ * `/clusters/[id]`) or the active review tab/filters (on `/review`)
+ * without this function needing to know their shape.
+ */
+export async function searchCrops(
+  q: string,
+  page = 1,
+  pageSize = 30,
+  filter: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<PaginatedResponse<SearchCrop>> {
+  type RawSearchItem = RawCrop & { similarity_score?: number | null; score?: number | null };
+  type RawPage = {
+    total: number;
+    page: number;
+    page_size: number;
+    items: RawSearchItem[];
+  };
+  const raw = await apiFetch<RawPage>(
+    `/curation/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
+    {},
+    signal,
+  );
+  const items: SearchCrop[] = (raw.items ?? []).map((it) => {
+    const base = mapRawCrop(it);
+    return {
+      ...base,
+      similarity_score: it.similarity_score ?? it.score ?? 0,
+    };
+  });
+  return {
+    items,
+    total: raw.total ?? items.length,
+    page: raw.page ?? page,
+    page_size: raw.page_size ?? pageSize,
   };
 }
 

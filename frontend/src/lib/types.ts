@@ -356,6 +356,18 @@ export interface ReviewItem extends OpCrop {
   probe_pred_entropy?: number | null;
 }
 
+/**
+ * A crop returned by `GET /curation/search/text` (P2-14 semantic text search).
+ * Same shape as `OpCrop` plus the query-similarity score. Field named
+ * `similarity_score` to match this repo's existing `<name>_score`
+ * convention for per-crop curation scores (`mistakenness_score`), not a
+ * bare `score` — kept distinct from those since it's query-relative, not
+ * an absolute crop property.
+ */
+export interface SearchCrop extends OpCrop {
+  similarity_score: number;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
