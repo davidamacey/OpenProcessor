@@ -13,23 +13,24 @@ function cls(over: Partial<OpClass> & { id: number; name: string }): OpClass {
   };
 }
 
-describe('classesStore.topNForCluster — hides license_plate but stays unfiltered elsewhere', () => {
+describe('classesStore.topNForCluster — license_plate is a normal class', () => {
   afterEach(() => {
     classesStore.classes = [];
   });
 
-  it('never returns license_plate even when its validated_count would rank it first', () => {
+  // Hiding license_plate here was reverted 2026-09-12 — it ranks like any
+  // other class now.
+  it('ranks license_plate by validated_count like any other class', () => {
     classesStore.classes = [
       cls({ id: 80, name: 'license_plate', validated_count: 999_999 }),
       cls({ id: 8, name: 'bmw', validated_count: 6 }),
       cls({ id: 4, name: 'audi', validated_count: 2 }),
     ];
     const top = classesStore.topNForCluster(0, 10);
-    expect(top.map((c) => c.name)).not.toContain('license_plate');
-    expect(top[0]?.name).toBe('bmw');
+    expect(top[0]?.name).toBe('license_plate');
   });
 
-  it('a direct by-id lookup still resolves license_plate — the store itself stays unfiltered', () => {
+  it('a direct by-id lookup resolves license_plate', () => {
     classesStore.classes = [cls({ id: 80, name: 'license_plate', validated_count: 999_999 })];
     expect(classesStore.byId(80)?.name).toBe('license_plate');
     expect(classesStore.byName('license_plate')?.id).toBe(80);
