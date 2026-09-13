@@ -37,6 +37,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   special-casing of either example outside `profiles/`. Neither example
   is bound to a real route or class; they are proof-of-concept configs
   only.
+- `src/routes/review/plateReviewCharacterization.test.ts` — Phase 0
+  characterization tests (`docs/genericization-plan-2026-09-13.md`
+  §5.1) pinning today's Plates-tab behavior in `review/+page.svelte`
+  before any Phase 2 refactor touches it: the scan-mode keymap, the
+  class-drop tab guard invariant behind Finding C.2, the per-crop
+  (not per-cursor) save-abort map, the `$state.raw` undo-stack identity
+  semantics, the frozen-viewport `untrack()` seed read, and today's
+  closed `REVIEW_TABS`/`license_plate`-literal baseline in
+  `clusters/+page.svelte`. Source-scan style (no `@testing-library/svelte`
+  harness exists in this repo) rather than the plan's preferred
+  extract-then-test approach — see the file's doc comment for why.
 
 ### Fixed
 
