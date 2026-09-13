@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `docs/FEATURES.md` — a full visual feature tour (screenshot + explanation
+  for every route), and a `docs/screenshots/demo.gif` slideshow now leading
+  the README instead of a static image grid.
+- `docs/README.md` — an index distinguishing current/maintained docs from
+  historical/reference ones (the 2026-09-11 audit, the curation-strategy
+  design doc, the two market-research docs).
+
+### Fixed
+
+- `GET /curation/clusters` and `/curation/clusters/representatives` (openprocessor) were
+  hardcoded to the pre-cutover `op_vehicle_crops` index, which was left
+  empty after the 2026-09-12 kNN reindex — this silently broke the
+  `/clusters` and `/clusters/[id]` pages entirely (always zero clusters)
+  despite `/review` and other pages working fine against the same data.
+  Fixed on the openprocessor side to use `OP_VEHICLE_CROPS_INDEX` like every
+  other endpoint; verified live (589 clusters return correctly).
+
+### Removed
+
+- `docs/audit-2026-09-11/` (old audit screenshot set, superseded by
+  `docs/screenshots/` + `docs/FEATURES.md`) and two untracked stray
+  directories (`frontend/`, empty; `diagnostics/plate_bbox_audit/`, old
+  ad-hoc scratch output) — none were referenced from any doc.
+
 - Curation-strategy selector bar (`StrategyBar.svelte`) across `/clusters`,
   `/clusters/[id]`, and `/review` — cluster-method picker, review-sort
   dropdown, score chips, diverse overlay, and an embedding-plot toggle.
