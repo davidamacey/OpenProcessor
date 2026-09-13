@@ -1054,7 +1054,7 @@
         unlabeledOnly = !unlabeledOnly;
         if (unlabeledOnly) sort = 'size_desc';
       }}
-      class="rounded border px-2 py-1 text-xs transition-colors {unlabeledOnly
+      class="btn-sm border text-xs transition-colors {unlabeledOnly
         ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
         : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
       title="Show only clusters without a dominant class (need labeling)"
@@ -1073,7 +1073,7 @@
       <button
         type="button"
         onclick={() => (showEmbeddingViz = !showEmbeddingViz)}
-        class="rounded border px-2 py-1 text-xs transition-colors {showEmbeddingViz
+        class="btn-sm border text-xs transition-colors {showEmbeddingViz
           ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
           : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
         title="Toggle a 2-d embedding-projection scatter plot (replaces the grid); lasso-select feeds the same label/move actions as the grid"
@@ -1086,7 +1086,7 @@
       Sort
       <select
         bind:value={sort}
-        class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+        class="select-sm"
       >
         <option value="purity_asc">purity asc</option>
         <option value="purity_desc">purity desc</option>
@@ -1132,7 +1132,7 @@
         <span class="grow"></span>
         <button
           type="button"
-          class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-300 hover:bg-zinc-800"
+          class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
           onclick={exitSearchMode}
         >
           ← Back to clusters
@@ -1186,7 +1186,7 @@
               <span class="text-zinc-400">Detector</span>
               <select
                 bind:value={plateDetectorFilter}
-                class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+                class="select-sm"
               >
                 <option value="">any</option>
                 <option value="lpr_nanov11_640">LPR</option>
@@ -1211,7 +1211,7 @@
                 max="1"
                 step="0.05"
                 bind:value={plateMinScore}
-                class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+                class="input-sm w-16"
               />
             </label>
             <label class="flex items-center gap-1.5">
@@ -1220,7 +1220,7 @@
                 type="text"
                 bind:value={plateTextQuery}
                 placeholder="e.g. S14"
-                class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+                class="input-sm w-28"
               />
             </label>
 
@@ -1230,7 +1230,7 @@
               {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
                 <button
                   type="button"
-                  class="px-2 py-1 {plateMaxRank === o.v
+                  class="chip rounded-none border-0 {plateMaxRank === o.v
                     ? 'bg-blue-600 text-white'
                     : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
                   onclick={() => (plateMaxRank = o.v as number | null)}
@@ -1243,7 +1243,7 @@
             {#if suspectedFpView}
               <button
                 type="button"
-                class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
+                class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
                 onclick={backToPlateClusters}
               >
                 ← Clusters
@@ -1263,7 +1263,7 @@
               <button
                 type="button"
                 disabled={plateClusterBusy}
-                class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+                class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
                 onclick={loadSuspectedFp}
               >
                 {plateClusterBusy ? 'Loading…' : 'Reload'}
@@ -1272,7 +1272,7 @@
               <button
                 type="button"
                 disabled={plateClusterBusy}
-                class="rounded border border-purple-500/50 bg-purple-500/20 px-2 py-1 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
+                class="btn-sm border border-purple-500/50 bg-purple-500/20 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
                 onclick={runClusterPlates}
                 title="Group plates by visual similarity so outliers/false-positives surface"
               >
@@ -1281,7 +1281,7 @@
               <button
                 type="button"
                 disabled={plateClusterBusy}
-                class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+                class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
                 onclick={loadSuspectedFp}
                 title="List plate crops that look like known false positives (needs FP centroids built)"
               >
@@ -1290,7 +1290,7 @@
               <button
                 type="button"
                 disabled={plateClusterBusy}
-                class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+                class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
                 onclick={runBuildFpCentroids}
                 title="Sub-type the false-positive bucket and (re)build its centroids"
               >
@@ -1299,7 +1299,7 @@
             {:else}
               <button
                 type="button"
-                class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700"
+                class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
                 onclick={backToPlateClusters}
               >
                 ← Clusters
@@ -1316,7 +1316,7 @@
                 <button
                   type="button"
                   disabled={plateClusterBusy}
-                  class="rounded border border-amber-500/50 bg-amber-500/20 px-2 py-1 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+                  class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
                   onclick={runBuildFpCentroids}
                   title="Refine the FP bucket into sub-types and rebuild its centroids"
                 >
@@ -1329,7 +1329,7 @@
                 <button
                   type="button"
                   disabled={plateClusterBusy}
-                  class="rounded border border-blue-500/50 bg-blue-500/20 px-2 py-1 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+                  class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
                   onclick={runRefinePlateCluster}
                   title="AHC-refine this bucket into sub-clusters to isolate outliers"
                 >
@@ -1344,7 +1344,7 @@
             {#if platePager.items.length > 0}
               <button
                 type="button"
-                class="rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-zinc-300 hover:bg-zinc-700"
+                class="btn-sm border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                 onclick={selectAllPlates}
                 title="Select all loaded plates (shift-click a card for a range, ctrl/cmd-click to toggle)"
               >
@@ -1368,7 +1368,7 @@
               <button
                 type="button"
                 disabled={plateBusy}
-                class="rounded border border-red-500/50 bg-red-500/20 px-2 py-1 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+                class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
                 onclick={() => applyPlateStatus([...plateSel.ids], 'false_positive')}
               >
                 ✗ Mark false positive
@@ -1376,7 +1376,7 @@
               <button
                 type="button"
                 disabled={plateBusy}
-                class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+                class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
                 onclick={() => applyPlateStatus([...plateSel.ids], 'no_plate_visible')}
               >
                 No plate
@@ -1384,14 +1384,14 @@
               <button
                 type="button"
                 disabled={plateBusy}
-                class="rounded border border-green-500/50 bg-green-500/20 px-2 py-1 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
+                class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
                 onclick={() => applyPlateStatus([...plateSel.ids], 'detected')}
               >
                 ✓ Verify
               </button>
               <button
                 type="button"
-                class="rounded border border-zinc-700 px-2 py-1 text-zinc-400 hover:bg-zinc-800"
+                class="btn-sm border border-zinc-700 text-zinc-400 hover:bg-zinc-800"
                 onclick={() => plateSel.clear()}
               >
                 Clear
@@ -1474,7 +1474,7 @@
               <span class="text-[11px] text-zinc-500">sub-clusters:</span>
               <button
                 type="button"
-                class="rounded px-2 py-0.5 text-[11px] {plateSubTab === null
+                class="chip {plateSubTab === null
                   ? 'bg-blue-500/30 text-blue-100'
                   : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
                 onclick={() => selectPlateSubTab(null)}
@@ -1484,7 +1484,7 @@
               {#each plateSubclusterIds as sid (sid)}
                 <button
                   type="button"
-                  class="rounded px-2 py-0.5 font-mono text-[11px] {plateSubTab === sid
+                  class="chip font-mono {plateSubTab === sid
                     ? 'bg-blue-500/30 text-blue-100'
                     : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
                   onclick={() => selectPlateSubTab(sid)}

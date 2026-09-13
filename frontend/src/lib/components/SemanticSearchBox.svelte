@@ -117,7 +117,7 @@
       }}
       {placeholder}
       spellcheck="false"
-      class="w-full rounded-full border border-zinc-700 bg-zinc-900 py-1.5 pl-8 pr-7 text-zinc-100 placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
+      class="input-sm w-full rounded-full pl-8 pr-7 placeholder:text-zinc-500"
     />
     {#if box.query}
       <button

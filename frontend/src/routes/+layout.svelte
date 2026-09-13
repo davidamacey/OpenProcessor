@@ -183,7 +183,7 @@
 
     <button
       type="button"
-      class="flex items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-white"
+      class="btn-sm gap-1.5 border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
       onclick={() => keyboardStore.toggleOverlay()}
       title="Keyboard shortcuts (~)"
     >
@@ -192,7 +192,7 @@
     </button>
 
     <span
-      class="flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-300"
+      class="chip gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
       title={dotTitle}
     >
       <span class="h-2 w-2 rounded-full {dotClass}"></span>

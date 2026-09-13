@@ -37,7 +37,7 @@
     {#each options as opt (opt.v)}
       <button
         type="button"
-        class="px-2 {dense ? 'py-0.5' : 'py-1'} {value === opt.v
+        class="chip rounded-none border-0 {value === opt.v
           ? 'bg-blue-600 text-white'
           : `${dense ? 'bg-zinc-800' : 'bg-zinc-900'} text-zinc-300 hover:bg-zinc-700`}"
         onclick={() => (value = opt.v)}

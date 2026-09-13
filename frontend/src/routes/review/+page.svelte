@@ -1331,7 +1331,7 @@
         type="text"
         bind:value={hddSource}
         placeholder="any"
-        class="w-32 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+        class="input-sm w-32"
       />
     </label>
 
@@ -1339,7 +1339,7 @@
       <span class="text-zinc-400">Class</span>
       <select
         bind:value={classFilter}
-        class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+        class="select-sm"
       >
         <option value={null}>any</option>
         {#each filterableClasses as cls (cls.id)}
@@ -1361,7 +1361,7 @@
         step="0.05"
         bind:value={confMin}
         disabled={diverseMode}
-        class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+        class="input-sm w-16"
       />
       <span class="text-zinc-500">..</span>
       <input
@@ -1371,7 +1371,7 @@
         step="0.05"
         bind:value={confMax}
         disabled={diverseMode}
-        class="w-16 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
+        class="input-sm w-16"
       />
     </label>
 
@@ -1387,7 +1387,7 @@
           bind:value={plateTextQuery}
           disabled={diverseMode}
           placeholder="e.g. S14"
-          class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="input-sm w-28"
         />
       </label>
     {/if}
@@ -1432,7 +1432,7 @@
         {#each REVIEW_PRESETS as p (p.id)}
           <button
             type="button"
-            class="rounded border px-2 py-1 text-xs {preset === p.id
+            class="chip {preset === p.id
               ? 'border-blue-500/60 bg-blue-500/15 text-blue-100'
               : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
             aria-pressed={preset === p.id}
@@ -1445,7 +1445,7 @@
         {#if preset}
           <button
             type="button"
-            class="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+            class="chip bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
             onclick={() => (preset = null)}
           >
             clear
