@@ -1,9 +1,9 @@
 /**
- * Unit tests for plate_geometry helpers.
+ * Unit tests for bboxFrames helpers.
  */
 
 import { describe, expect, it } from 'vitest';
-import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from './plate_geometry';
+import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from './bboxFrames';
 import type { BBoxNorm } from './types';
 
 const EPS = 1e-9;
@@ -14,7 +14,7 @@ function expectBoxApprox(actual: BBoxNorm, expected: BBoxNorm): void {
   }
 }
 
-describe('plate_geometry', () => {
+describe('bboxFrames', () => {
   it('round-trip: source -> crop -> source returns the input', () => {
     // Vehicle occupies the lower-right quadrant of the source image.
     const vehicle: BBoxNorm = { cx: 0.6, cy: 0.7, w: 0.4, h: 0.3 };

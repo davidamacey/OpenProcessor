@@ -48,6 +48,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `clusters/+page.svelte`. Source-scan style (no `@testing-library/svelte`
   harness exists in this repo) rather than the plan's preferred
   extract-then-test approach — see the file's doc comment for why.
+- `src/lib/review/slotQueueOps.ts` and `src/lib/review/abortRegistry.ts`
+  — the real P0.1/P0.3 extraction of the Plates-tab's undo-stack and
+  per-crop abort-map logic out of `review/+page.svelte`, with executable
+  unit tests. `review/+page.svelte` now delegates to both; behavior is
+  unchanged.
+
+### Changed
+
+- `PlateBboxCanvas.svelte` renamed to `BboxCanvas.svelte` and
+  `plate_geometry.ts` renamed to `bboxFrames.ts` (P2.1,
+  `docs/genericization-plan-2026-09-13.md` §3.1) — both were already
+  fully generic (no plate-specific logic), so this is a pure rename:
+  `vehicleBbox` params renamed to `parentBbox`, and `BboxCanvas` gains a
+  `ringColor` prop (default unchanged, sky-blue matching the
+  server-rendered plate overlay) so a future non-plate slot can use its
+  own ring color. No behavior change; verified live (edit-bbox mode on
+  `/review`'s Plates tab renders and drags correctly).
 
 ### Fixed
 

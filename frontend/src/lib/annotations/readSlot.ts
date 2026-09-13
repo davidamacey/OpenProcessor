@@ -55,7 +55,7 @@ function projectToParent(
     return { cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 };
   }
   // frame === 'source': project through the parent box, matching
-  // sourceToCropFrame's convention (see plate_geometry.ts).
+  // sourceToCropFrame's convention (see bboxFrames.ts).
   const [vx1, vy1, vx2, vy2] = parentSourceXyxy;
   const vw = vx2 - vx1;
   const vh = vy2 - vy1;

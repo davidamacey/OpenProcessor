@@ -16,7 +16,7 @@
   } from '$lib/api';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import DetectorChip from '$lib/components/DetectorChip.svelte';
-  import PlateBboxCanvas from '$lib/components/PlateBboxCanvas.svelte';
+  import BboxCanvas from '$lib/components/BboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
@@ -25,11 +25,7 @@
   import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
   import { AbortRegistry } from '$lib/review/abortRegistry';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
-  import {
-    bboxNormToXYXY,
-    cropToSourceFrame,
-    sourceToCropFrame,
-  } from '$lib/plate_geometry';
+  import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
   import {
     REVIEW_PRESETS,
     REVIEW_TABS,
@@ -687,7 +683,7 @@
   // keystroke (Enter) per plate when scanning thousands of crops.
   //
   // editedPlateLocal lives in the *crop-local* frame (the same space the
-  // PlateBboxCanvas operates in). We seed it from current.plate_bbox_norm
+  // BboxCanvas operates in). We seed it from current.plate_bbox_norm
   // (source-frame) by projecting through the parent vehicle bbox; the
   // seeding effect re-runs whenever the cursor advances to a new crop.
   let editedPlateLocal = $state<BBoxNorm | null>(null);
@@ -1512,7 +1508,7 @@
                  Enter to save. Square aspect keeps the canvas math
                  stable; the read-only default below shows the crop at
                  natural aspect to match the other review tabs. -->
-            <PlateBboxCanvas
+            <BboxCanvas
               bind:this={plateCanvas}
               cropId={current.id}
               bind:bbox={editedPlateLocal}
@@ -1525,7 +1521,7 @@
                  with a thin yellow ring overlay on the proposed bbox.
                  No grabbable handles, no pointer capture — the bbox is
                  just shown. Press E to edit. -->
-            <PlateBboxCanvas
+            <BboxCanvas
               cropId={current.id}
               bbox={editedPlateLocal}
               viewBox={plateViewBox}

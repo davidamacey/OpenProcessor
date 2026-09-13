@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
-  import { sourceToCropFrame } from '$lib/plate_geometry';
+  import { sourceToCropFrame } from '$lib/bboxFrames';
   import type { BBoxNorm, OpCrop, LabelSource } from '$lib/types';
   import PlateEditor from './PlateEditor.svelte';
 

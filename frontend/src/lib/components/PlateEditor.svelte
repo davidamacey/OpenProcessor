@@ -20,11 +20,7 @@
    *   Escape   close without saving
    */
   import { getThumbUrl, setCropPlate } from '$lib/api';
-  import {
-    bboxNormToXYXY,
-    cropToSourceFrame,
-    sourceToCropFrame,
-  } from '$lib/plate_geometry';
+  import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
   import { toastStore } from '$stores/toast.svelte';
   import type { BBoxNorm, OpCrop } from '$lib/types';
 
@@ -66,7 +62,7 @@
   // the ring must compensate or the box lands in the wrong spot (it
   // rendered too low for wide vehicle crops). baseDisp is the actual
   // image rect inside the unit-square canvas: {offX, offY, w, h} ∈ [0,1].
-  // Mirrors PlateBboxCanvas.svelte's baseDisp.
+  // Mirrors BboxCanvas.svelte's baseDisp.
   let imgNaturalW = $state<number>(0);
   let imgNaturalH = $state<number>(0);
   function onImgLoad(e: Event): void {

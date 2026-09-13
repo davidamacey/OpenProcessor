@@ -25,7 +25,7 @@
     type SuspectedFpItem,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import { bboxNormToXYXY } from '$lib/plate_geometry';
+  import { bboxNormToXYXY } from '$lib/bboxFrames';
   import { createPager } from '$lib/pager.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import {

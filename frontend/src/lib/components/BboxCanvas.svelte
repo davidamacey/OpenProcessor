@@ -1,12 +1,21 @@
 <script lang="ts">
   /**
-   * Reusable plate-bbox canvas — image + draggable/resizable sky-blue ring.
-   * Color matches the server-rendered overlay on /curation/crops/{id}/image
-   * (RGB 80,200,255) so the left-pane source preview and the right-pane
-   * crop canvas agree visually.
+   * Reusable sub-bbox canvas — image + draggable/resizable ring for a
+   * child bbox living inside a parent crop (a license plate inside a
+   * vehicle crop today; any similarly-shaped sub-region tomorrow). No
+   * plate-specific logic lives here — this file is domain-agnostic by
+   * construction, which is why it was a pure rename (see
+   * docs/genericization-plan-2026-09-13.md §3.1) rather than a
+   * migration.
+   *
+   * Ring color defaults to sky-blue (RGB 80,200,255), matching the
+   * server-rendered overlay on /curation/crops/{id}/image so the left-pane
+   * source preview and the right-pane crop canvas agree visually for
+   * the license_plate slot; override via `ringColor` for a different
+   * slot's color scheme.
    *
    * Operates in **crop-local frame** ([0, 1]^4 normalized inside the
-   * vehicle bbox). Used both by:
+   * parent bbox). Used both by:
    *   - PlateEditor (modal, with Save/Clear/Cancel chrome)
    *   - /review?tab=plates (inline, parent owns Confirm)
    *
@@ -29,7 +38,7 @@
   interface Props {
     /** Crop id — used to fetch the thumbnail image. */
     cropId: string;
-    /** Plate bbox in crop-local frame. Bind two-way. null = no box. */
+    /** Sub-bbox in crop-local frame. Bind two-way. null = no box. */
     bbox: BBoxNorm | null;
     /** Optional thumbnail size override (px). */
     thumbSize?: number;
@@ -37,6 +46,9 @@
     class?: string;
     /** Disable interaction (during a save). */
     busy?: boolean;
+    /** Ring border color. Default matches the server-rendered plate
+     *  overlay (sky-blue, RGB 80,200,255) — override for another slot. */
+    ringColor?: string;
     /**
      * Read-only display mode. Hides resize handles, ignores pointer
      * events, and uses a thinner ring. Used by /review?tab=plates as
@@ -62,6 +74,7 @@
     class: containerClass = 'aspect-square w-full',
     busy = false,
     readonly = false,
+    ringColor = 'rgb(80, 200, 255)',
     viewBox = null,
   }: Props = $props();
 
@@ -353,9 +366,9 @@
   {#if bbox}
     <div
       class="absolute border-2"
-      style="{ringStyle}; border-color: rgb(80, 200, 255); background-color: {readonly
+      style="{ringStyle}; border-color: {ringColor}; background-color: {readonly
         ? 'transparent'
-        : 'rgba(80, 200, 255, 0.12)'};"
+        : `color-mix(in srgb, ${ringColor} 12%, transparent)`};"
     >
       {#if !readonly}
         <div
@@ -365,49 +378,49 @@
         ></div>
         <div
           class="absolute -top-1 -left-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'nw')}
           role="presentation"
         ></div>
         <div
           class="absolute -top-1 -right-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'ne')}
           role="presentation"
         ></div>
         <div
           class="absolute -bottom-1 -left-1 h-2 w-2 cursor-nesw-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'sw')}
           role="presentation"
         ></div>
         <div
           class="absolute -right-1 -bottom-1 h-2 w-2 cursor-nwse-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'se')}
           role="presentation"
         ></div>
         <div
           class="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'n')}
           role="presentation"
         ></div>
         <div
           class="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 cursor-ns-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 's')}
           role="presentation"
         ></div>
         <div
           class="absolute top-1/2 -left-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'w')}
           role="presentation"
         ></div>
         <div
           class="absolute top-1/2 -right-1 h-2 w-2 -translate-y-1/2 cursor-ew-resize rounded-sm border border-white shadow-[0_0_0_1px_rgba(0,0,0,0.7)]"
-          style="background-color: rgb(80, 200, 255);"
+          style="background-color: {ringColor};"
           onpointerdown={(e) => onPointerDownHandle(e, 'e')}
           role="presentation"
         ></div>
