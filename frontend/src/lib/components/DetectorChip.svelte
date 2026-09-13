@@ -175,13 +175,11 @@
 
   const palette = $derived(paletteFor(parsed.detector));
   const muted = $derived(isMutedTag(parsed.tag));
-  const sizeCls = $derived(
-    size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]',
-  );
+  const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
 </script>
 
 <span
-  class="inline-flex items-center gap-1 rounded border {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
+  class="chip {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
     ? 'opacity-60'
     : ''}"
   title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}

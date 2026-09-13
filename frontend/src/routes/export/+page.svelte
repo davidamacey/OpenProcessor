@@ -415,7 +415,7 @@
           type="text"
           bind:value={versionTag}
           placeholder="e.g. v7.1.0"
-          class="w-48 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          class="input w-48"
         />
       </label>
       <button
@@ -568,7 +568,7 @@
           min="1"
           max="50"
           bind:value={freezePercent}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          class="input w-full"
         />
       </label>
       <label class="mb-3 block text-sm">
@@ -576,7 +576,7 @@
         <input
           type="number"
           bind:value={freezeSeed}
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          class="input w-full"
         />
       </label>
       <div class="flex justify-end gap-2">

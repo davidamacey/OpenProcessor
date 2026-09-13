@@ -35,13 +35,11 @@
     if (!method) return `${label}: ${pct}`;
     return `${label}: ${pct} · ${method}${version ? `@${version}` : ''}`;
   });
-  const sizeCls = $derived(
-    size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]',
-  );
+  const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
 </script>
 
 <span
-  class="inline-flex items-center gap-1 rounded border border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-200 {sizeCls} font-mono"
+  class="chip border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-200 {sizeCls} font-mono"
   title={tooltip}
 >
   <span class="uppercase tracking-wide opacity-80">{label}</span>

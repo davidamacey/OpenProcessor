@@ -253,7 +253,7 @@
   {#if !expanded}
     <button
       type="button"
-      class="flex items-center gap-1 rounded border px-2 py-1 {bar.isDefault
+      class="btn-sm {bar.isDefault
         ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
@@ -276,7 +276,7 @@
         <span class="text-zinc-500">sort</span>
         <select
           bind:value={bar.sort}
-          class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="select-sm"
         >
           {#each sortOptions as opt (opt.id)}
             <option value={opt.id}>
@@ -314,7 +314,7 @@
             const v = (e.currentTarget as HTMLInputElement).value;
             bar.minMistakenness = v === '' ? null : Number(v);
           }}
-          class="w-14 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="input-sm w-14"
         />
       </label>
     {/if}
@@ -322,7 +322,7 @@
     {#if nearDupInfo}
       <button
         type="button"
-        class="rounded border px-2 py-1 {bar.hideNearDuplicates
+        class="btn-sm {bar.hideNearDuplicates
           ? 'border-blue-500/60 bg-blue-500/15 text-blue-100'
           : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
         onclick={() => (bar.hideNearDuplicates = !bar.hideNearDuplicates)}
@@ -349,7 +349,7 @@
             if (!Number.isFinite(raw)) return;
             bar.k = Math.min(diverseKMax, Math.max(diverseKMin, Math.round(raw)));
           }}
-          class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="input-sm w-16"
           title="Pool-scale diverse selection (core-set / k-center-greedy). Capped {diverseKMin}-{diverseKMax} per request — larger cohorts are a backend job (POST /curation/select/diverse), not a page-size control."
         />
       </label>
@@ -376,7 +376,7 @@
     {#if !bar.isDefault}
       <button
         type="button"
-        class="rounded bg-zinc-800 px-2 py-1 text-zinc-300 hover:bg-zinc-700"
+        class="btn-sm bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
         onclick={() => bar.reset()}
       >
         reset
@@ -385,7 +385,7 @@
 
     <button
       type="button"
-      class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-400 hover:bg-zinc-800"
+      class="btn-sm btn-icon border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
       onclick={() => (expanded = false)}
       title="Collapse"
     >

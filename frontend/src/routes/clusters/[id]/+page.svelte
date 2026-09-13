@@ -1184,7 +1184,7 @@
 
     <span class="grow"></span>
 
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center gap-x-0.5 gap-y-1">
       <button class="btn" type="button" onclick={selectAllPage} title="A">
         Select page
       </button>
@@ -1274,7 +1274,7 @@
            Excludes from training + clustering; reversible (U). -->
       <div class="relative inline-flex">
         <button
-          class="btn rounded-r-none"
+          class="btn btn-join-start"
           type="button"
           title="Ignore selected — exclude from training + clustering (X)"
           onclick={() => void ignoreSelected('ignore')}
@@ -1282,7 +1282,7 @@
           Ignore <kbd class="ml-1 font-mono text-[10px] text-zinc-400">X</kbd>
         </button>
         <button
-          class="btn rounded-l-none border-l border-zinc-700 px-1.5"
+          class="btn btn-icon btn-join-end"
           type="button"
           aria-label="Choose ignore reason"
           onclick={() => (ignoreMenuOpen = !ignoreMenuOpen)}
@@ -1320,7 +1320,7 @@
       <button
         type="button"
         title={opt.hint}
-        class="rounded px-2 py-0.5 {classSourceFilter === opt.value
+        class="chip {classSourceFilter === opt.value
           ? 'bg-blue-600 text-white'
           : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
         onclick={() => (classSourceFilter = opt.value)}
@@ -1387,7 +1387,7 @@
          before this phase, just backed by the generalized order id now. -->
     <button
       type="button"
-      class="rounded border px-2 py-0.5 {outliersFirst
+      class="btn-sm {outliersFirst
         ? 'border-amber-500/60 bg-amber-500/20 text-amber-100'
         : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
       onclick={() => (strategyBar.sort = outliersFirst ? 'default' : 'outliers')}
@@ -1414,7 +1414,7 @@
     {#if subjectScope !== 0 || minBlurRatio !== null || !strategyBar.isDefault}
       <button
         type="button"
-        class="ml-auto rounded bg-zinc-800 px-2 py-0.5 text-zinc-300 hover:bg-zinc-700"
+        class="btn-sm ml-auto bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
         onclick={() => {
           subjectScope = 0;
           blurSlider = 0;
@@ -1433,7 +1433,7 @@
       <span class="text-zinc-500">sub-clusters:</span>
       <button
         type="button"
-        class="rounded px-2 py-0.5 {subTab === null
+        class="chip {subTab === null
           ? 'bg-blue-600 text-white'
           : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
         onclick={() => (subTab = null)}
@@ -1443,7 +1443,7 @@
       {#each subClusterIds as sid (sid)}
         <button
           type="button"
-          class="rounded px-2 py-0.5 {subTab === sid
+          class="chip {subTab === sid
             ? 'bg-blue-600 text-white'
             : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
           onclick={() => (subTab = sid)}

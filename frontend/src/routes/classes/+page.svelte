@@ -203,7 +203,7 @@
       type="search"
       bind:value={query}
       placeholder="Filter by name, group, id…"
-      class="w-64 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
+      class="input w-64 placeholder:text-zinc-500"
     />
     <button class="btn" type="button" onclick={openMerge} disabled={busy}
       >Merge classes</button
