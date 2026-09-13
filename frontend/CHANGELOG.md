@@ -17,6 +17,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `CropCard`'s plate ring color rendered green ("human confirmed") for
+  every machine-detected plate, not just human-verified ones. The
+  predicate checked `plate_status === 'human_confirmed' ||
+plate_status === 'detected'` — `'human_confirmed'` is not a value the
+  backend can ever produce (openprocessor's `PlateStatus` has 8 members,
+  none of them that), so that branch was dead, and `'detected'` (written
+  for every machine detection, verified or not) matched the second
+  branch. The correct predicate is the boolean `plate_verified` field,
+  which the component now reads. **Visible behavior change:**
+  machine-detected-but-unverified plates now render a yellow ring
+  instead of green. `types.ts`'s `plate_status` docstring, which invented
+  `human_confirmed`/`pending_verify` and omitted three real pipeline
+  states, is corrected to match openprocessor's `PlateStatus`.
 - Plate-bbox shape-envelope check (the ⚠ "implausible shape" warning) had
   two independent implementations that disagreed on corrupt/non-finite
   input: `api.ts`'s `_platesShapeWarning` guarded with `Number.isFinite`

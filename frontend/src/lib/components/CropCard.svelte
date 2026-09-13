@@ -62,6 +62,14 @@
     (crop as unknown as { plate_status?: string | null }).plate_status ?? null,
   );
 
+  // The predicate for "a human has confirmed this plate" is the boolean
+  // `plate_verified` field, not a status string — `plate_status` never
+  // takes the value `'human_confirmed'` (see Finding C.3,
+  // docs/genericization-plan-2026-09-13.md §2.7 / §3.8).
+  const plateVerified = $derived<boolean>(
+    !!(crop as unknown as { plate_verified?: boolean | null }).plate_verified,
+  );
+
   const noPlate = $derived(plateStatus === 'no_plate_visible');
 
   // Convert the source-frame plate bbox to the crop's local frame so we
@@ -112,10 +120,20 @@
     };
   });
 
-  // Ring color: green when a human has confirmed the plate, yellow for
-  // unverified machine-suggested plates. Mirrors §11.3 of the design doc.
+  // Ring color: green when a human has confirmed the plate (plate_verified
+  // === true), yellow for unverified machine-suggested plates. Mirrors
+  // §11.3 of the design doc.
+  //
+  // Previously this checked `plateStatus === 'human_confirmed' ||
+  // plateStatus === 'detected'`. `'human_confirmed'` is not a value the
+  // backend can ever produce (openprocessor's PlateStatus has 8 members, none
+  // of them that) — so the first branch was dead, and 'detected' (what the
+  // pipeline writes for every machine detection, verified or not) matched
+  // the second branch, meaning every machine-detected plate rendered the
+  // green "human confirmed" ring. See Finding C.3 /
+  // docs/genericization-plan-2026-09-13.md §2.7.
   const plateRingColorClass = $derived(
-    plateStatus === 'human_confirmed' || plateStatus === 'detected'
+    plateVerified
       ? 'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]'
       : 'border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45)]',
   );

@@ -196,9 +196,19 @@ export interface OpCrop {
   plate_bbox_norm?: BBoxNorm | null;
   /** Detector confidence for the plate proposal (0..1). */
   plate_score?: number | null;
-  /** State machine value: 'detected' | 'no_plate_visible' |
-   *  'verify_rejected' | 'no_plate_box' | 'pending_verify' | 'human_confirmed' */
+  /** State machine value — mirrors openprocessor's `PlateStatus`
+   *  (src/config/plate_state.py): 'pending_detection' |
+   *  'pending_verification' | 'detected' | 'verify_rejected' |
+   *  'no_plate_box' | 'no_plate_visible' | 'detection_failed' |
+   *  'false_positive'. There is no 'human_confirmed' or 'pending_verify'
+   *  value — a human confirming the plate is recorded in `plate_verified`,
+   *  not as a distinct status (see Finding C.3,
+   *  docs/genericization-plan-2026-09-13.md). This docstring previously
+   *  invented both and omitted three real pipeline-only states. */
   plate_status?: string | null;
+  /** True once a human has signed off on this plate — the correct
+   *  predicate for "confirmed" UI (e.g. the CropCard ring color), not any
+   *  `plate_status` value. */
   plate_verified?: boolean | null;
   // -- Plate provenance (Wave 1 of plate-integrity overhaul) -------------
   /** Which detector produced the stored bbox. */
