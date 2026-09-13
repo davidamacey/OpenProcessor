@@ -15,6 +15,7 @@ import {
   parseKbMethodsResponse,
   type OpMethodsResponse,
 } from './strategies';
+import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from './shapeGate';
 import type {
   BulkLabelResult,
   ClusterFilter,
@@ -996,37 +997,16 @@ type RawCrop = {
 // openprocessor:src/services/legacy/plate_detect.py. Defense in depth:
 // flags rows whose stored bbox is implausible *after* projecting into
 // the crop frame, regardless of whether the server-side gate caught it.
-function _platePlausibleEnvelope(plate: import('./types').BBoxNorm): boolean {
-  const w = plate.w;
-  const h = plate.h;
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return false;
-  const aspect = w / h;
-  if (aspect < 1.2 || aspect > 8.0) return false;
-  // In crop-frame coords, w IS plate_w/vehicle_w because the canvas is
-  // the vehicle crop. So w > 0.5 → plate covers >50% of vehicle width.
-  if (w > 0.5) return false;
-  if (w * h > 0.15) return false;
-  return true;
-}
-
+//
+// Implementation lives in `shapeGate.ts` and is shared with
+// `PlateCard.svelte`, which used to carry its own inline copy that
+// disagreed on non-finite input (see docs/genericization-plan-2026-09-13.md
+// Finding C.1 and shapeGate.ts's doc comment).
 function _platesShapeWarning(
   plateSrc: number[] | null | undefined,
   vehicleSrc: number[],
 ): boolean {
-  if (!plateSrc || plateSrc.length !== 4) return false;
-  const v = xyxyToBBoxNorm(vehicleSrc);
-  const vw = v.w;
-  const vh = v.h;
-  if (vw <= 1e-9 || vh <= 1e-9) return false;
-  const [px1 = 0, py1 = 0, px2 = 0, py2 = 0] = plateSrc;
-  // Project to crop frame the same way sourceToCropFrame would.
-  const cropPlate: import('./types').BBoxNorm = {
-    cx: ((px1 + px2) / 2 - (v.cx - vw / 2)) / vw,
-    cy: ((py1 + py2) / 2 - (v.cy - vh / 2)) / vh,
-    w: (px2 - px1) / vw,
-    h: (py2 - py1) / vh,
-  };
-  return !_platePlausibleEnvelope(cropPlate);
+  return evaluateShapeGate(plateSrc, vehicleSrc, PLATE_SHAPE_ENVELOPE);
 }
 
 function mapRawCrop(c: RawCrop): OpCrop {

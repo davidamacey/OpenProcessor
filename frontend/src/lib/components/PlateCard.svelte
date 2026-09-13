@@ -13,6 +13,7 @@
    */
   import DetectorChip from './DetectorChip.svelte';
   import { getPlateThumbUrl, resolveApiUrl, type PlateBrowseItem } from '$lib/api';
+  import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
 
   interface Props {
     crop: PlateBrowseItem;
@@ -40,28 +41,16 @@
   // dimmed + badged so the operator sees the triage state at a glance.
   const isFalsePositive = $derived(crop.plate_status === 'false_positive');
 
-  // Client-side shape envelope check — mirrors the server-side
-  // is_plausible_plate_bbox in openprocessor so a row that slips past
-  // the worker's gate still gets a UI warning chip.
-  function shapeWarning(): boolean {
-    if (!crop.plate_bbox_norm || crop.plate_bbox_norm.length !== 4) return false;
-    if (!crop.bbox_norm || crop.bbox_norm.length !== 4) return false;
-    const [vx1 = 0, vy1 = 0, vx2 = 0, vy2 = 0] = crop.bbox_norm;
-    const vw = vx2 - vx1;
-    const vh = vy2 - vy1;
-    if (vw <= 1e-9 || vh <= 1e-9) return false;
-    const [px1 = 0, py1 = 0, px2 = 0, py2 = 0] = crop.plate_bbox_norm;
-    const w = (px2 - px1) / vw;
-    const h = (py2 - py1) / vh;
-    if (w <= 0 || h <= 0) return true;
-    const aspect = w / h;
-    if (aspect < 1.2 || aspect > 8.0) return true;
-    if (w > 0.5) return true;
-    if (w * h > 0.15) return true;
-    return false;
-  }
-
-  const warn = $derived(shapeWarning());
+  // Shared shape envelope check — mirrors the server-side
+  // is_plausible_plate_bbox in openprocessor so a row that slips past the
+  // worker's gate still gets a UI warning chip. Delegates to
+  // `evaluateShapeGate` (shapeGate.ts) so this agrees with the
+  // /clusters (`getPlates`) and /review surfaces on non-finite input —
+  // this card used to have its own inline copy with no `Number.isFinite`
+  // guard, so a corrupt row warned in /review but not here.
+  const warn = $derived(
+    evaluateShapeGate(crop.plate_bbox_norm, crop.bbox_norm, PLATE_SHAPE_ENVELOPE),
+  );
   const thumbUrl = $derived(
     crop.plate_thumbnail_url
       ? resolveApiUrl(crop.plate_thumbnail_url)

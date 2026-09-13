@@ -17,6 +17,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Plate-bbox shape-envelope check (the ⚠ "implausible shape" warning) had
+  two independent implementations that disagreed on corrupt/non-finite
+  input: `api.ts`'s `_platesShapeWarning` guarded with `Number.isFinite`
+  and warned; `PlateCard.svelte`'s inline `shapeWarning()` had no such
+  guard, so a `NaN` box compared `false` against every bound and silently
+  reported no warning. A corrupt row could show ⚠ on `/review` but not on
+  `/clusters`. Both call sites now share one `evaluateShapeGate()`
+  (`src/lib/shapeGate.ts`), so a corrupt row warns consistently everywhere.
+  The `/review` tooltip's hardcoded envelope sentence is also now generated
+  from the same numbers instead of being a third hand-copy.
 - `GET /curation/clusters` and `/curation/clusters/representatives` (openprocessor) were
   hardcoded to the pre-cutover `op_vehicle_crops` index, which was left
   empty after the 2026-09-12 kNN reindex — this silently broke the

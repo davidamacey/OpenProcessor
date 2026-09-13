@@ -21,6 +21,7 @@
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
+  import { describeEnvelope, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import {
     bboxNormToXYXY,
@@ -1660,7 +1661,9 @@
               {#if current.plate_shape_warning}
                 <span
                   class="rounded border border-yellow-500/60 bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-200"
-                  title="Bbox shape fails the plate envelope (aspect ∉ [1.2, 8.0] or covers >50% of vehicle width). Likely legacy / corrupted data — press E to fix."
+                  title="{describeEnvelope(
+                    PLATE_SHAPE_ENVELOPE,
+                  )}. Likely legacy / corrupted data — press E to fix."
                 >
                   ⚠ shape · press E to fix
                 </span>
