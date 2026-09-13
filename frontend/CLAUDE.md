@@ -296,3 +296,10 @@ one place. Image URLs look like `${PUBLIC_TRITON_API_URL}/curation/crops/{id}/th
   endpoint (128×128 LRU cached server-side).
 - Test-holdout crops MUST never be relabeled by Gemma or via cluster
   auto-suggest. The openprocessor `/curation/` endpoints filter; UI is the second line.
+- The `/classes` "Restore" button (deprecated classes table) is
+  intentionally disabled — no backend support exists. `deprecated` is
+  only ever set `True` (via `POST /curation/classes/merge`); there's no
+  un-deprecate endpoint in openprocessor. Restoring also wouldn't reverse
+  a prior merge's bulk crop relabel — that's a separate design decision
+  (real "undo merge" vs. just un-hiding an empty class), not wired up
+  end-to-end yet on either side of the API boundary.

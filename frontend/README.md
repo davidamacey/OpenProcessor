@@ -8,6 +8,16 @@ Built with **SvelteKit 2 + Svelte 5 runes + TypeScript strict + Tailwind v4**.
 Pointer-event drag-and-drop via `svelte-dnd-action`. Dark theme, Apple
 system colors, keyboard-first UX matching the legacy_sorter manual mode.
 
+## Screenshots
+
+| Dashboard | Cluster grid |
+| --- | --- |
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Clusters](docs/screenshots/clusters.png) |
+
+| Cluster detail (drag-and-drop triage) | Review queue |
+| --- | --- |
+| ![Cluster detail](docs/screenshots/cluster-detail.png) | ![Review](docs/screenshots/review.png) |
+
 ## Quick start
 
 ```bash
@@ -203,6 +213,12 @@ processing automatically when you `make gpu-legacy`.
 - **No multi-user permissions.** Whoever loads the URL has full edit
   rights. Front the deployment with auth (oauth2-proxy / nginx
   basic auth) before exposing it beyond the LAN.
+- **Deprecated-class restore is not implemented**, backend or frontend.
+  The `/classes` "Restore" button is disabled — there is no `openprocessor`
+  endpoint that un-deprecates a class (`deprecated` is only ever set to
+  `True`, via merge). Restoring a class also wouldn't automatically
+  revert crops that a prior merge already bulk-relabeled to the target
+  class — that needs its own design decision, not just a toggle.
 
 ## Troubleshooting
 
