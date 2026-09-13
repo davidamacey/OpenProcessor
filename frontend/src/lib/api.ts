@@ -1159,9 +1159,15 @@ export async function getCluster(
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`/curation/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
-      // max_clusters=1 with class_id filter is the cheapest way to ask
-      // for just this cluster's card.
-      `/curation/clusters${qs({ per_cluster: 4, max_clusters: 1, class_id: id })}`,
+      // cluster_id (not class_id!) is the correct filter for "fetch this
+      // one cluster's card by its own identity" — cluster_id == class_id
+      // is only an invariant for 'class' clusters, so filtering by
+      // class_id silently returned nothing for every 'candidate' cluster
+      // (id >= RESIDUAL_CLUSTER_ID_OFFSET, no matching class exists),
+      // which fell back to the null-identity stub below and showed no
+      // human-readable name in the header even though /curation/clusters'
+      // list view has dominant_class_name for the same cluster.
+      `/curation/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
       {},
       signal,
     ).catch(() => null),
