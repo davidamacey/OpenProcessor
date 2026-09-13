@@ -14,6 +14,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `docs/README.md` — an index distinguishing current/maintained docs from
   historical/reference ones (the 2026-09-11 audit, the curation-strategy
   design doc, the two market-research docs).
+- `src/lib/annotations/` — additive foundation for genericizing the
+  `license_plate` vertical into a reusable "annotation slot" mechanism
+  (`docs/genericization-plan-2026-09-13.md`, Phase 1): the `SlotSpec`
+  capability model (`subBox`/`text`/`provenance`/`lifecycle`/`queue`),
+  a field-mapping adapter (`readSlot`) that reads whichever wire field
+  names a slot declares, a merge-by-replace `resolveSlotRegistry`, the
+  legacy `license_plate` profile decomposing today's ~30 `plate_*`
+  fields, and a config-driven detector label/palette registry proven
+  equivalent to `DetectorChip.svelte`'s hand-written switch/if-chain via
+  a 23-case snapshot test. Not yet wired into any route or component —
+  this is the additive Phase 1 slice; `mapRawCrop`/`DetectorChip`/
+  `PlateCard`/`/review`/`/clusters` migrations (Phase 2) and the
+  two-slot falsification proof (Phase 3) are follow-up work.
 
 ### Fixed
 
