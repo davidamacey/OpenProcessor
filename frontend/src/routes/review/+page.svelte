@@ -1247,19 +1247,9 @@
        StrategyBar.svelte); the fallback note only appears when the
        server couldn't honor the requested sort. -->
   <div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-1.5">
-    <StrategyBar
-      bar={strategyBar}
-      offerDiverse={diverseAvailable}
-      diverseKDefault={DIVERSE_K_DEFAULT}
-      diverseKMax={DIVERSE_K_MAX}
-      diverseMeta={diverseSelection
-        ? {
-            method: diverseSelection.method,
-            version: diverseSelection.version,
-            n_pool: diverseSelection.n_pool,
-          }
-        : null}
-    />
+    <!-- Left-aligned, first control in the row, so it reads as the
+         primary way in rather than a control squeezed after the strategy
+         bar. -->
     {#if semanticSearchAvailable}
       <SemanticSearchBox
         filter={{ tab: effectiveTab, ..._filter() }}
@@ -1287,6 +1277,19 @@
         }}
       />
     {/if}
+    <StrategyBar
+      bar={strategyBar}
+      offerDiverse={diverseAvailable}
+      diverseKDefault={DIVERSE_K_DEFAULT}
+      diverseKMax={DIVERSE_K_MAX}
+      diverseMeta={diverseSelection
+        ? {
+            method: diverseSelection.method,
+            version: diverseSelection.version,
+            n_pool: diverseSelection.n_pool,
+          }
+        : null}
+    />
     {#if sortFallbackReason}
       <span
         class="text-[11px] text-amber-300"
