@@ -10,29 +10,9 @@ system colors, keyboard-first UX matching the legacy_sorter manual mode.
 
 ## Screenshots
 
-| Dashboard | Cluster grid |
-| --- | --- |
-| ![Dashboard](docs/screenshots/dashboard.png) | ![Clusters](docs/screenshots/clusters.png) |
+![Demo](docs/screenshots/demo.gif)
 
-| Cluster detail (drag-and-drop triage) | Crop detail modal |
-| --- | --- |
-| ![Cluster detail](docs/screenshots/cluster-detail.png) | ![Crop detail modal](docs/screenshots/crop-detail-modal.png) |
-
-| Review queue | Review — Plates tab (bbox edit, OCR, detector cascade) |
-| --- | --- |
-| ![Review](docs/screenshots/review.png) | ![Review plates](docs/screenshots/review-plates.png) |
-
-| Class management | Export |
-| --- | --- |
-| ![Classes](docs/screenshots/classes.png) | ![Export](docs/screenshots/export.png) |
-
-| Train cockpit | Bake-off |
-| --- | --- |
-| ![Train](docs/screenshots/train.png) | ![Bakeoff](docs/screenshots/bakeoff.png) |
-
-| Model registry (Triton) | Keyboard shortcuts overlay |
-| --- | --- |
-| ![Models](docs/screenshots/models.png) | ![Shortcuts](docs/screenshots/shortcut-overlay.png) |
+Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEATURES.md)**
 
 ## Quick start
 
