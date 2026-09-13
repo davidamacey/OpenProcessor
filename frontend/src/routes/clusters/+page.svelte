@@ -994,7 +994,7 @@
          SemanticSearchBox on /clusters/[id]. -->
     {#if semanticSearchAvailable && !isLicensePlateFilter}
       <SemanticSearchBox
-        pageSize={60}
+        pageSize={200}
         filter={classFilter != null ? { class_id: classFilter } : {}}
         initialQuery={page.url.searchParams.get('q')}
         onQueryChange={(q) => (searchQuery = q)}

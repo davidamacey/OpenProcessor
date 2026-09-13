@@ -1351,7 +1351,7 @@
     {#if semanticSearchAvailable}
       <SemanticSearchBox
         filter={{ cluster_id: clusterId }}
-        pageSize={60}
+        pageSize={200}
         onResults={(res) => {
           searchModeActive = true;
           searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));

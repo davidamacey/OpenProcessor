@@ -1253,7 +1253,7 @@
     {#if semanticSearchAvailable}
       <SemanticSearchBox
         filter={{ tab: effectiveTab, ..._filter() }}
-        pageSize={30}
+        pageSize={200}
         onResults={(res) => {
           searchModeActive = true;
           searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
