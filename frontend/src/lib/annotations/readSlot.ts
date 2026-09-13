@@ -14,7 +14,7 @@
  */
 
 import type { SlotSpec, SlotData, XYXY, SlotFrame, BBoxNormLike } from './types';
-import { evaluateShapeGate } from '../shapeGate';
+import { evaluateShapeEnvelopeOnFraction } from '../shapeGate';
 
 function pick(raw: Record<string, unknown>, field: string | undefined): unknown {
   return field == null ? undefined : raw[field];
@@ -85,9 +85,13 @@ export function readSlot(
     const frame: SlotFrame =
       frameRaw === 'parent' || frameRaw === 'source' ? frameRaw : cap.subBox.storedFrame;
     const parent = rawXyxy ? projectToParent(rawXyxy, parentXyxy, frame) : null;
-    const shapeWarning = cap.subBox.envelope
-      ? evaluateShapeGate(rawXyxy, parentXyxy, cap.subBox.envelope)
-      : false;
+    // Evaluated on the already-projected parent-frame fractions, so this
+    // is correct regardless of whether the slot stores 'source' or
+    // 'parent' frame boxes (see evaluateShapeEnvelopeOnFraction's doc).
+    const shapeWarning =
+      cap.subBox.envelope && rawXyxy && parent
+        ? evaluateShapeEnvelopeOnFraction(parent.w, parent.h, cap.subBox.envelope)
+        : false;
     out.subBox = {
       parent,
       rawXyxy,

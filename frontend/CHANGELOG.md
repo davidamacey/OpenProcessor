@@ -25,8 +25,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   equivalent to `DetectorChip.svelte`'s hand-written switch/if-chain via
   a 23-case snapshot test. Not yet wired into any route or component —
   this is the additive Phase 1 slice; `mapRawCrop`/`DetectorChip`/
-  `PlateCard`/`/review`/`/clusters` migrations (Phase 2) and the
-  two-slot falsification proof (Phase 3) are follow-up work.
+  `PlateCard`/`/review`/`/clusters` migrations (Phase 2) are follow-up
+  work.
+- Two example slot profiles (`aircraft_tail_number`, `defect_code`,
+  under `src/lib/annotations/profiles/`) plus a falsification test
+  proving the capability model above handles a disjoint capability
+  subset (no sub-bbox at all, for `defect_code`), a different stored
+  bbox frame and shape envelope (`aircraft_tail_number`), and a
+  closed-vocabulary text field — with zero changes to `types.ts`,
+  `registry.ts`, or `readSlot.ts` beyond the model, and zero
+  special-casing of either example outside `profiles/`. Neither example
+  is bound to a real route or class; they are proof-of-concept configs
+  only.
 
 ### Fixed
 

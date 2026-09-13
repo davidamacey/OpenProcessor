@@ -70,6 +70,23 @@ export function evaluateShapeGate(
   const w = (px2 - px1) / vw;
   const h = (py2 - py1) / vh;
 
+  return evaluateShapeEnvelopeOnFraction(w, h, envelope);
+}
+
+/**
+ * Evaluates `envelope` against width/height already expressed as
+ * fractions of the parent's size — i.e. after whatever frame projection
+ * already happened. `evaluateShapeGate` above is the `'source'`-frame
+ * convenience wrapper (it divides by the parent box itself); a slot
+ * whose `SubBoxCapability.storedFrame` is `'parent'` has fractions
+ * without a projection step, so it calls this directly (see
+ * `annotations/readSlot.ts`).
+ */
+export function evaluateShapeEnvelopeOnFraction(
+  w: number,
+  h: number,
+  envelope: ShapeEnvelope,
+): boolean {
   if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return true;
 
   const aspect = w / h;
