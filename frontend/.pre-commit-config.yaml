@@ -1,0 +1,73 @@
+# Pre-commit hooks for legacy-labeler.
+# See https://pre-commit.com for more information.
+#
+# Kept deliberately lean: this is a pure SvelteKit/TS frontend with no
+# Python, no Docker builds beyond a single production Dockerfile, and no
+# backend of its own — see openprocessor's much larger .pre-commit-config.yaml
+# for the pattern this is scoped down from.
+
+repos:
+  # General file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        exclude: ^tsconfig\.json$ # tsconfig.json allows comments; not strict JSON
+      - id: check-added-large-files
+        args: [--maxkb=5120] # docs/screenshots/*.png land here deliberately; 5MB covers them
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Formatting — must match `npm run format` / CI exactly, hence
+  # `language: system` + the repo's own prettier binary rather than the
+  # mirrors-prettier hook's pinned version, which can drift from
+  # package.json's prettier and produce a different diff than CI does.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier --write
+        entry: npx prettier --write --ignore-unknown
+        language: system
+        types_or: [javascript, ts, tsx, svelte, json, yaml, css, markdown]
+
+  # Type-check + lint — same two checks CI runs, so a failing commit here
+  # is a failing commit in CI. Deliberately NOT running the production
+  # build at commit time (that's a push-time/CI cost, not an edit-loop
+  # one) — see .github/workflows/ci.yml for where the build actually gets
+  # verified.
+  - repo: local
+    hooks:
+      - id: svelte-check
+        name: svelte-check (type errors)
+        entry: npm run check
+        language: system
+        pass_filenames: false
+        files: \.(ts|svelte)$
+      - id: eslint
+        name: eslint
+        entry: npx eslint
+        language: system
+        types_or: [javascript, ts, svelte]
+
+  # Secret detection
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        args: [--verbose, --no-banner]
+
+  # Commit message convention (matches CONTRIBUTING.md / CLAUDE.md)
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--force-scope]
+
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+fail_fast: false
