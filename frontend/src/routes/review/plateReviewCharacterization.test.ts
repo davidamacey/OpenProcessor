@@ -5,24 +5,19 @@
  * or `clusters/+page.svelte`.
  *
  * This repo has no `@testing-library/svelte` harness (see
- * `plateThumbUrlScan.test.ts`'s doc comment), and the plan's own
- * recommendation is to extract the pure logic into testable modules
- * FIRST (P0.1/P0.3) and write executable tests against the extraction.
- * That extraction was judged too large/risky to do safely in the same
- * pass as this test file (it touches the same 1950-line file the tests
- * are meant to protect, with no existing safety net) — so this file
- * takes the fallback the plan itself names for exactly this repo's
- * situation: a static source scan (the convention `EmbeddingPlot.test.ts`
- * / `StrategyBar.test.ts` / `plateThumbUrlScan.test.ts` already use),
- * pinning the *shape* of the current implementation so a future
- * extraction (P0.1/P0.3) or Phase 2 migration cannot silently drop one of
- * these behaviors without a test going red first.
- *
- * When P0.1/P0.3's real extraction lands, the corresponding assertions
- * here should be replaced by executable unit tests against the extracted
- * modules (slotQueueOps.ts / abortRegistry.ts), per the plan's T1/T2/T3
- * "how it adapts" column — this file is the interim safety net, not the
- * final one.
+ * `plateThumbUrlScan.test.ts`'s doc comment). The plan's P0.1/P0.3 call
+ * for extracting the pure undo-stack/abort-map logic into testable
+ * modules FIRST — that extraction has landed
+ * (`src/lib/review/slotQueueOps.ts`, `src/lib/review/abortRegistry.ts`,
+ * each with its own executable unit-test suite), and `review/+page.svelte`
+ * now delegates to them. The remaining pieces here (the keymap, the
+ * class-drop tab guard, the frozen-viewport `untrack()` seed, and today's
+ * `REVIEW_TABS`/`license_plate` baseline) are still genuinely inline
+ * Svelte state/effects with no extraction seam, so they stay pinned via
+ * the static source-scan convention this repo already uses
+ * (`EmbeddingPlot.test.ts` / `StrategyBar.test.ts` /
+ * `plateThumbUrlScan.test.ts`) until Phase 2's `reviewTabs.ts`
+ * data-driving and keymap parameterization give them one.
  */
 
 import { readFileSync } from 'node:fs';
@@ -84,27 +79,33 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
   );
 });
 
-describe('T2/T3-adjacent: per-crop abort map + undo-stack identity semantics', () => {
-  it('keys the Plates-tab save-abort map by crop id, not by cursor index', () => {
-    // Finding-adjacent: "if the user advances mid-save the captured idx
-    // would point at the next crop and the revert would corrupt unrelated
-    // state" — the fix is a Map<cropId, AbortController>, not an index.
-    expect(reviewPageSrc).toMatch(
-      /plateMetaAborts\s*=\s*new Map<string, AbortController>/,
-    );
+describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack delegate to extracted modules', () => {
+  // These behaviors are no longer inline closures — they were extracted
+  // to src/lib/review/abortRegistry.ts and slotQueueOps.ts (P0.1/P0.3),
+  // each with its own executable unit test suite (abortRegistry.test.ts,
+  // slotQueueOps.test.ts) that supersedes the source-scan style below for
+  // the actual behavior. What's pinned here is that the page still wires
+  // to them the way the plan requires (keyed by crop id, not cursor;
+  // $state.raw for identity-correct removal).
+  it('keys the Plates-tab save-abort registry by crop id, not by cursor index', () => {
+    expect(reviewPageSrc).toMatch(/plateMetaAborts = new AbortRegistry\(\)/);
+    expect(reviewPageSrc).toMatch(/plateMetaAborts\.start\(id\)/);
+    expect(reviewPageSrc).toMatch(/plateMetaAborts\.finish\(id, ac\)/);
   });
 
-  it('undo stack is $state.raw, not deeply-reactive $state (identity-filter correctness)', () => {
-    // Deep reactivity would proxy pushed entries, so the undo removal's
-    // `e !== entry` identity filter could never match a pushed entry.
+  it('undo stack is $state.raw and delegates push/remove/pop to slotQueueOps', () => {
+    // Deep reactivity would proxy pushed entries, so removeUndo's
+    // identity-based filter could never match a pushed entry.
     expect(reviewPageSrc).toMatch(
       /plateUndoStack = \$state\.raw<PlateUndoEntry\[\]>\(\[\]\)/,
     );
-    expect(reviewPageSrc).toMatch(/plateUndoStack\.filter\(\(e\) => e !== entry\)/);
+    expect(reviewPageSrc).toMatch(/pushUndo\(plateUndoStack, entry, PLATE_UNDO_MAX\)/);
+    expect(reviewPageSrc).toMatch(/removeUndo\(plateUndoStack, entry\)/);
+    expect(reviewPageSrc).toMatch(/popUndo\(plateUndoStack\)/);
   });
 
-  it('undo stack is bounded (FIFO-evicted), matching the plan\'s "bounded at 20" characterization', () => {
-    expect(reviewPageSrc).toMatch(/\.slice\(-PLATE_UNDO_MAX\)/);
+  it('plateBack() re-insertion delegates to reinsertAt (clamped splice)', () => {
+    expect(reviewPageSrc).toMatch(/reinsertAt\(queue\.items, last\.insertAt, fresh\)/);
   });
 });
 

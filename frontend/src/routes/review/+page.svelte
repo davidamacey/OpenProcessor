@@ -22,6 +22,8 @@
   import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import { describeEnvelope, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
+  import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
+  import { AbortRegistry } from '$lib/review/abortRegistry';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import {
     bboxNormToXYXY,
@@ -737,21 +739,21 @@
   let plateUndoStack = $state.raw<PlateUndoEntry[]>([]);
   const PLATE_UNDO_MAX = 20;
   function _pushPlateUndo(entry: PlateUndoEntry): void {
-    plateUndoStack = [...plateUndoStack, entry].slice(-PLATE_UNDO_MAX);
+    plateUndoStack = pushUndo(plateUndoStack, entry, PLATE_UNDO_MAX);
   }
 
   /** Drop a specific step-back entry — used when its API call failed. */
   function _removePlateUndo(entry: PlateUndoEntry): void {
-    plateUndoStack = plateUndoStack.filter((e) => e !== entry);
+    plateUndoStack = removeUndo(plateUndoStack, entry);
   }
 
   async function plateBack(): Promise<void> {
-    const last = plateUndoStack[plateUndoStack.length - 1];
+    const { entry: last, rest } = popUndo(plateUndoStack);
     if (!last) {
       toastStore.info('Nothing to go back to.');
       return;
     }
-    plateUndoStack = plateUndoStack.slice(0, -1);
+    plateUndoStack = rest;
     // Back in play: let loadMore surface it again if a later page returns it.
     handledIds.delete(last.item.id);
     // Refetch the crop so the operator sees what the database actually
@@ -773,9 +775,7 @@
       fresh = last.item;
     }
     const insertAt = Math.min(last.insertAt, queue.items.length);
-    const next = [...queue.items];
-    next.splice(insertAt, 0, fresh);
-    queue.items = next;
+    queue.items = reinsertAt(queue.items, last.insertAt, fresh);
     queue.total = queue.total + 1;
     cursor = insertAt;
     toastStore.info('Stepped back. Press E to re-edit, Enter to re-confirm.');
@@ -841,7 +841,7 @@
   // In-flight plate-meta saves, keyed by crop id so concurrent edits to
   // the same crop are aborted-then-replaced (the latest blur wins) and
   // edits to a *different* crop don't interfere with each other.
-  const plateMetaAborts = new Map<string, AbortController>();
+  const plateMetaAborts = new AbortRegistry();
 
   async function savePlateMeta(
     patch: PlateMetaPatch,
@@ -863,9 +863,7 @@
     }
     // Abort any in-flight save on this crop so we don't get an ABA-style
     // response that overwrites a newer edit.
-    plateMetaAborts.get(id)?.abort();
-    const ac = new AbortController();
-    plateMetaAborts.set(id, ac);
+    const ac = plateMetaAborts.start(id);
     try {
       await updateCropPlateMeta(id, patch, ac.signal);
     } catch (e) {
@@ -882,7 +880,7 @@
       }
       toastStore.error(`Save failed: ${(e as Error).message}`);
     } finally {
-      if (plateMetaAborts.get(id) === ac) plateMetaAborts.delete(id);
+      plateMetaAborts.finish(id, ac);
     }
   }
 
