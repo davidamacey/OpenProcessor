@@ -20,6 +20,7 @@
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import CutLine from '$components/CutLine.svelte';
   import ScoreChip from '$components/ScoreChip.svelte';
+  import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import SemanticSearchBox from '$components/SemanticSearchBox.svelte';
   import StrategyBar from '$components/StrategyBar.svelte';
   import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
@@ -1290,7 +1291,7 @@
           aria-label="Choose ignore reason"
           onclick={() => (ignoreMenuOpen = !ignoreMenuOpen)}
         >
-          ▾
+          <ChevronDownIcon size={13} />
         </button>
         {#if ignoreMenuOpen}
           <div

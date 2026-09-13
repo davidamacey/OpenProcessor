@@ -39,6 +39,7 @@
    */
 
   import { untrack } from 'svelte';
+  import ChevronDownIcon from './ChevronDownIcon.svelte';
   import {
     hasFieldCoverage,
     isDiverseOverlayAvailable,
@@ -268,7 +269,7 @@
           beta
         </span>
       {/if}
-      <span class="text-zinc-500">▾</span>
+      <span class="text-zinc-500"><ChevronDownIcon size={11} /></span>
     </button>
   {:else}
     {#if sortOptions.length > 1}
