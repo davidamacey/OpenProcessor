@@ -117,6 +117,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   request/method/body to the correct endpoint via intercepted routes,
   without starting a real multi-minute background job or writing to
   the live 347k-crop index.
+- `SlotCard.svelte` parameterized by slot (P2.7) — now calls `readSlot()`
+  on the raw crop and renders through the resulting `SlotData`
+  (`text`/`subBox`/`provenance`/`lifecycle`) instead of `PlateBrowseItem`'s
+  hardcoded `plate_*` fields, with a `slot: SlotSpec` prop (defaults to
+  the legacy `license_plate` profile). `PlateBrowseItem`'s flat
+  `plate_*` properties already match the profile's wire-field names, so
+  this needed no change to `getPlates`/`api.ts`. No behavior change;
+  verified live — the `/clusters?class=license_plate` gallery renders
+  pixel-identically (detector chips, scores, plate text, shape warnings,
+  false-positive badges) through the new adapter-driven read path.
 
 ### Fixed
 
