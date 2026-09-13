@@ -98,6 +98,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   canceling edit (`Escape`) all still work through the extracted
   keymap table, and the frozen zoom still renders correctly in edit
   mode.
+- `src/lib/components/slots/SlotGallery.svelte` +
+  `src/routes/clusters/plateGalleryController.svelte.ts` (P2.6) — the
+  ~660-line plate-gallery view (plate pager, multi-select, the AHC
+  secondary-clustering sub-system: bucket grid, sub-cluster refine, FP
+  centroid build, suspected-FP triage, and the bbox-editor modal)
+  extracted verbatim out of `clusters/+page.svelte`'s
+  `{:else if isLicensePlateFilter}` branch. The ~30-item state/function
+  surface now lives in a controller factory (following this codebase's
+  existing `createPager`/`createSelection` convention rather than
+  prop-drilling 30 individual bindables), and the route passes one
+  `gallery` object to the new component. Verbatim move only — no
+  parameterization by slot yet (P2.7). No behavior change; verified
+  live against the real backend: bucket grid → sub-cluster drill-down →
+  suspected-FP view all render correctly (real, non-mutating reads),
+  and the three mutating actions (Cluster plates, Build FP centroids,
+  plate edit + Save) were confirmed to dispatch the correct
+  request/method/body to the correct endpoint via intercepted routes,
+  without starting a real multi-minute background job or writing to
+  the live 347k-crop index.
 
 ### Fixed
 
