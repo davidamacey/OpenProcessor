@@ -332,7 +332,8 @@ export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
 export function isSemanticSearchAvailable(overlays: OverlayInfo[]): boolean {
   return overlays.some(
     (o) =>
-      o.id === 'semantic_search' && (o.status === 'stable' || o.status === 'experimental'),
+      o.id === 'semantic_search' &&
+      (o.status === 'stable' || o.status === 'experimental'),
   );
 }
 

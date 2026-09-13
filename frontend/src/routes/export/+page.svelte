@@ -573,11 +573,7 @@
       </label>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Seed</span>
-        <input
-          type="number"
-          bind:value={freezeSeed}
-          class="input w-full"
-        />
+        <input type="number" bind:value={freezeSeed} class="input w-full" />
       </label>
       <div class="flex justify-end gap-2">
         <button

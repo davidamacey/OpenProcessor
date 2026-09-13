@@ -49,7 +49,6 @@ describe('REVIEW_PRESETS (All-tab quick-filter chips)', () => {
   });
 });
 
-
 describe('resolveEffectiveTab', () => {
   it('passes non-all tabs straight through, ignoring any stale preset', () => {
     expect(resolveEffectiveTab('uncertainty', null)).toBe('uncertainty');

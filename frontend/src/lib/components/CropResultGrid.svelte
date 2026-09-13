@@ -88,7 +88,9 @@
     dragItems = e.detail.items;
   }
 
-  function onFinalize(e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>): void {
+  function onFinalize(
+    e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>,
+  ): void {
     dragItems = null;
     if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
       setTimeout(() => {

@@ -78,8 +78,19 @@ describe('strategiesStore', () => {
           status: 'stable',
           default: true,
         },
-        { id: 'default', axis: 'sort', label: 'Recent first', status: 'stable', default: true },
-        { id: 'uncertainty', axis: 'sort', label: 'Uncertainty margin', status: 'experimental' },
+        {
+          id: 'default',
+          axis: 'sort',
+          label: 'Recent first',
+          status: 'stable',
+          default: true,
+        },
+        {
+          id: 'uncertainty',
+          axis: 'sort',
+          label: 'Uncertainty margin',
+          status: 'experimental',
+        },
       ],
       flags: {},
     };
@@ -113,9 +124,7 @@ describe('strategiesStore', () => {
   it('only fetches once across repeated init() calls (idempotent load)', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        jsonResponse({ strategies: [], flags: {} }),
-      );
+      .mockResolvedValue(jsonResponse({ strategies: [], flags: {} }));
     vi.stubGlobal('fetch', fetchMock);
 
     await strategiesStore.init();

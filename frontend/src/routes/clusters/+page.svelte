@@ -20,7 +20,6 @@
     putCropLabel,
     refinePlateCluster,
     resolveApiUrl,
-    searchCrops,
     setCropPlate,
     type PlateBrowseItem,
     type SuspectedFpItem,
@@ -582,53 +581,56 @@
     // mode replaces entirely.
     if (showEmbeddingViz) showEmbeddingViz = false;
 
-    const offDrop = dropOnClassStore.register(async (cls: OpClass, droppedIds: string[]) => {
-      const ids = droppedIds.length > 0 ? droppedIds : [...searchSel.ids];
-      if (ids.length === 0) {
-        toastStore.warn('Select or drag crops first, then press a class hotkey.');
-        return;
-      }
-      const pushed: UndoEntry[] = [];
-      for (const id of ids) {
-        const c = searchResults.find((x) => x.id === id);
-        if (c) {
-          const entry = undoStore.snapshotOf(c);
-          undoStore.push(entry);
-          pushed.push(entry);
+    const offDrop = dropOnClassStore.register(
+      async (cls: OpClass, droppedIds: string[]) => {
+        const ids = droppedIds.length > 0 ? droppedIds : [...searchSel.ids];
+        if (ids.length === 0) {
+          toastStore.warn('Select or drag crops first, then press a class hotkey.');
+          return;
         }
-        applyLocalSearchLabel(id, cls.id, cls.name);
-      }
-      searchSel.clear();
-      try {
-        const res = await bulkLabel(ids, cls.id);
-        const conflicts = res.conflicts?.length ?? 0;
-        if (conflicts > 0) {
-          toastStore.warn(
-            `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker).`,
-          );
-        } else {
-          toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+        const pushed: UndoEntry[] = [];
+        for (const id of ids) {
+          const c = searchResults.find((x) => x.id === id);
+          if (c) {
+            const entry = undoStore.snapshotOf(c);
+            undoStore.push(entry);
+            pushed.push(entry);
+          }
+          applyLocalSearchLabel(id, cls.id, cls.name);
         }
-      } catch (e) {
-        toastStore.error(`Label failed: ${(e as Error).message}`);
-        for (const p of pushed) {
-          const prevCls = p.prior_class_id != null ? classesStore.byId(p.prior_class_id) : null;
-          revertLocalSearchLabel(p, prevCls?.name ?? null);
+        searchSel.clear();
+        try {
+          const res = await bulkLabel(ids, cls.id);
+          const conflicts = res.conflicts?.length ?? 0;
+          if (conflicts > 0) {
+            toastStore.warn(
+              `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker).`,
+            );
+          } else {
+            toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+          }
+        } catch (e) {
+          toastStore.error(`Label failed: ${(e as Error).message}`);
+          for (const p of pushed) {
+            const prevCls =
+              p.prior_class_id != null ? classesStore.byId(p.prior_class_id) : null;
+            revertLocalSearchLabel(p, prevCls?.name ?? null);
+          }
+          undoStore.remove(pushed);
         }
-        undoStore.remove(pushed);
-      }
-    });
+      },
+    );
 
     const offKeys: Array<() => void> = [];
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offKeys.push(keyboardStore.register(combo, () => void fn(), 'clusters', desc));
 
-    reg('a', () => searchSel.selectAll(searchResults.map((c) => c.id)), 'Select all results');
     reg(
-      'escape',
-      () => searchSel.clear(),
-      'Clear selection',
+      'a',
+      () => searchSel.selectAll(searchResults.map((c) => c.id)),
+      'Select all results',
     );
+    reg('escape', () => searchSel.clear(), 'Clear selection');
     reg(
       'x',
       async () => {
@@ -658,7 +660,8 @@
           toastStore.info('Nothing to undo.');
           return;
         }
-        const prevCls = entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
+        const prevCls =
+          entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
         revertLocalSearchLabel(entry, prevCls?.name ?? null);
         try {
           if (entry.prior_validated && entry.prior_class_id != null) {
@@ -1004,13 +1007,13 @@
           searchResults = res.items;
           searchTotal = res.total;
           syncSearchUrl(searchQuery);
-          void ensureClusterMeta(
-            [
-              ...new Set(
-                res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
-              ),
-            ],
-          );
+          void ensureClusterMeta([
+            ...new Set(
+              res.items
+                .map((it) => it.cluster_id)
+                .filter((id): id is number => id != null),
+            ),
+          ]);
         }}
         onClear={exitSearchMode}
       />
@@ -1084,10 +1087,7 @@
 
     <label class="flex items-center gap-2 text-xs text-zinc-400">
       Sort
-      <select
-        bind:value={sort}
-        class="select-sm"
-      >
+      <select bind:value={sort} class="select-sm">
         <option value="purity_asc">purity asc</option>
         <option value="purity_desc">purity desc</option>
         <option value="size_desc">size desc</option>
@@ -1122,10 +1122,8 @@
            paginated the way the cluster grid's sentinel expects. -->
       <div class="mb-3 flex items-center gap-2 text-xs">
         <span class="text-zinc-300">
-          <strong class="text-zinc-100">{searchTotal.toLocaleString()}</strong> result{searchTotal ===
-          1
-            ? ''
-            : 's'} for
+          <strong class="text-zinc-100">{searchTotal.toLocaleString()}</strong>
+          result{searchTotal === 1 ? '' : 's'} for
           <span class="font-medium text-blue-200">"{searchQuery}"</span>
           across the dataset
         </span>
@@ -1151,8 +1149,8 @@
             {#if crop.cluster_id != null}
               <ClusterBadge
                 clusterId={crop.cluster_id}
-                dominantClassName={clusterMetaMap.get(crop.cluster_id)?.dominant_class_name ??
-                  null}
+                dominantClassName={clusterMetaMap.get(crop.cluster_id)
+                  ?.dominant_class_name ?? null}
               />
             {/if}
           {/snippet}
@@ -1184,10 +1182,7 @@
           >
             <label class="flex items-center gap-1.5">
               <span class="text-zinc-400">Detector</span>
-              <select
-                bind:value={plateDetectorFilter}
-                class="select-sm"
-              >
+              <select bind:value={plateDetectorFilter} class="select-sm">
                 <option value="">any</option>
                 <option value="lpr_nanov11_640">LPR</option>
                 <option value="sam3">SAM3</option>

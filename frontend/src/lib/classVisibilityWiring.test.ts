@@ -47,13 +47,17 @@ describe('license_plate assignment-hiding wiring', () => {
   it('cluster-detail confirm-to <select> filters through isAssignableClass, not raw classesStore.classes', () => {
     const src = read('src/routes/clusters/[id]/+page.svelte');
     expect(src).not.toMatch(/\{#each classesStore\.classes as cls/);
-    expect(src).toMatch(/\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/);
+    expect(src).toMatch(
+      /\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/,
+    );
   });
 
   it('embedding-plot assign <select> filters through isAssignableClass, not raw classesStore.classes', () => {
     const src = read('src/lib/components/EmbeddingPlot.svelte');
     expect(src).not.toMatch(/\{#each classesStore\.classes as cls/);
-    expect(src).toMatch(/\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/);
+    expect(src).toMatch(
+      /\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/,
+    );
   });
 
   it('the class-subset picker (export/train) does NOT import classVisibility', () => {

@@ -63,10 +63,7 @@ describe('no raw plate_thumbnail URL construction outside the api.ts helpers', (
 });
 
 describe('PlateCard.svelte uses the shared helpers, not a bare fallback string', () => {
-  const src = readFileSync(
-    path.resolve(libRoot, 'components/PlateCard.svelte'),
-    'utf-8',
-  );
+  const src = readFileSync(path.resolve(libRoot, 'components/PlateCard.svelte'), 'utf-8');
 
   it('imports getPlateThumbUrl and resolveApiUrl from $lib/api', () => {
     expect(src).toMatch(/getPlateThumbUrl/);

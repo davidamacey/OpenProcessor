@@ -2,6 +2,13 @@
   "name": "legacy-labeler",
   "private": true,
   "version": "0.1.0",
+  "description": "Cluster-based, keyboard-first web app for labeling image crops at scale — companion frontend to openprocessor.",
+  "license": "AGPL-3.0-or-later",
+  "author": "example-org LLC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/example-org/openprocessor.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite dev",

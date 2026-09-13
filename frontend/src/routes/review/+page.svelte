@@ -1327,20 +1327,12 @@
   >
     <label class="flex shrink-0 items-center gap-1.5">
       <span class="text-zinc-400">HDD source</span>
-      <input
-        type="text"
-        bind:value={hddSource}
-        placeholder="any"
-        class="input-sm w-32"
-      />
+      <input type="text" bind:value={hddSource} placeholder="any" class="input-sm w-32" />
     </label>
 
     <label class="flex shrink-0 items-center gap-1.5">
       <span class="text-zinc-400">Class</span>
-      <select
-        bind:value={classFilter}
-        class="select-sm"
-      >
+      <select bind:value={classFilter} class="select-sm">
         <option value={null}>any</option>
         {#each filterableClasses as cls (cls.id)}
           <option value={cls.id}>{cls.name}</option>

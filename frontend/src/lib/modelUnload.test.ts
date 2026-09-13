@@ -18,7 +18,11 @@ import {
 describe('unloadButtonState', () => {
   it('hides the button entirely for LPR models', () => {
     expect(
-      unloadButtonState({ kind: 'triton', is_lpr: true, requires_force_to_unload: false }),
+      unloadButtonState({
+        kind: 'triton',
+        is_lpr: true,
+        requires_force_to_unload: false,
+      }),
     ).toBe('hidden');
   });
 
@@ -30,7 +34,11 @@ describe('unloadButtonState', () => {
 
   it('hides the button for non-Triton models (Gemma)', () => {
     expect(
-      unloadButtonState({ kind: 'external', is_lpr: false, requires_force_to_unload: false }),
+      unloadButtonState({
+        kind: 'external',
+        is_lpr: false,
+        requires_force_to_unload: false,
+      }),
     ).toBe('hidden');
   });
 
@@ -39,32 +47,50 @@ describe('unloadButtonState', () => {
     // never be unloadable via the same one-click path as a disposable
     // throwaway promote.
     expect(
-      unloadButtonState({ kind: 'triton', is_lpr: false, requires_force_to_unload: true }),
+      unloadButtonState({
+        kind: 'triton',
+        is_lpr: false,
+        requires_force_to_unload: true,
+      }),
     ).toBe('force-required');
   });
 
   it('is a normal single-confirm action for an ordinary (non-LPR, non-core) Triton model', () => {
     expect(
-      unloadButtonState({ kind: 'triton', is_lpr: false, requires_force_to_unload: false }),
+      unloadButtonState({
+        kind: 'triton',
+        is_lpr: false,
+        requires_force_to_unload: false,
+      }),
     ).toBe('normal');
   });
 
   it('defaults undefined flags to falsy (server omits them for kind=external)', () => {
-    expect(unloadButtonState({ kind: 'triton', is_lpr: undefined, requires_force_to_unload: undefined })).toBe(
-      'normal',
-    );
+    expect(
+      unloadButtonState({
+        kind: 'triton',
+        is_lpr: undefined,
+        requires_force_to_unload: undefined,
+      }),
+    ).toBe('normal');
   });
 });
 
 describe('unloadConfirmMessage', () => {
   it('warns loudly about live traffic + permanence for a force-required model', () => {
-    const msg = unloadConfirmMessage({ name: 'yolov11_small_trt_end2end', requires_force_to_unload: true });
+    const msg = unloadConfirmMessage({
+      name: 'yolov11_small_trt_end2end',
+      requires_force_to_unload: true,
+    });
     expect(msg).toMatch(/live traffic/);
     expect(msg).toMatch(/cannot be undone/);
   });
 
   it('is a plain permanence warning for a normal model', () => {
-    const msg = unloadConfirmMessage({ name: 'op_vehicle_smoke_v1', requires_force_to_unload: false });
+    const msg = unloadConfirmMessage({
+      name: 'op_vehicle_smoke_v1',
+      requires_force_to_unload: false,
+    });
     expect(msg).toMatch(/op_vehicle_smoke_v1/);
     expect(msg).toMatch(/cannot be undone/);
     expect(msg).not.toMatch(/live traffic/);

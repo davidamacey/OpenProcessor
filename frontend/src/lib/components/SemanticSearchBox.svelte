@@ -137,7 +137,9 @@
   {#if box.loading}
     <span class="text-zinc-500">searching…</span>
   {:else if box.error}
-    <span class="rounded border border-red-500/50 bg-red-500/10 px-1.5 py-0.5 text-red-200">
+    <span
+      class="rounded border border-red-500/50 bg-red-500/10 px-1.5 py-0.5 text-red-200"
+    >
       {box.error}
     </span>
   {:else if box.active}

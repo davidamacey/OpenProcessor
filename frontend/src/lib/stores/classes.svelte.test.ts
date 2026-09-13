@@ -31,7 +31,9 @@ describe('classesStore.topNForCluster — license_plate is a normal class', () =
   });
 
   it('a direct by-id lookup resolves license_plate', () => {
-    classesStore.classes = [cls({ id: 80, name: 'license_plate', validated_count: 999_999 })];
+    classesStore.classes = [
+      cls({ id: 80, name: 'license_plate', validated_count: 999_999 }),
+    ];
     expect(classesStore.byId(80)?.name).toBe('license_plate');
     expect(classesStore.byName('license_plate')?.id).toBe(80);
   });

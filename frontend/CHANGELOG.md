@@ -51,7 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   active tab), and `/clusters` (fully global, unscoped across the whole
   dataset) — each result carries a similarity-score badge, and global
   results additionally show a cluster-origin badge (`#id · dominant
-  class`) so an operator can see where a crop lives before relabeling
+class`) so an operator can see where a crop lives before relabeling
   it. Results feed through the existing `CropCard` grid, so labeling/
   drag-drop/bulk-select all work unchanged on search results.
 - Diverse-selection overlay (k-center-greedy core-set) exposed on
@@ -121,7 +121,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `app.css`, which silently defeated every per-instance Tailwind
   override (e.g. the Ignore-dropdown caret's `rounded-l-none`/`px-1.5`
   did nothing — fixed by wrapping the shared classes in `@layer
-  components` and introducing the three-tier scale above).
+components` and introducing the three-tier scale above).
 - The cluster-detail page (`/clusters/[id]`) showed no human-readable
   class name in its header for any "candidate" (unlabeled) cluster —
   the lookup used `class_id` as a stand-in for the cluster's own

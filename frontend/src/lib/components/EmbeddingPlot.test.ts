@@ -105,7 +105,10 @@ describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
     expect(rowStart).toBeGreaterThan(-1);
     // The plot's own container and the preview column must both be
     // descendants of that row div, not siblings stacked above/below it.
-    const plotIdx = src.indexOf('aria-label="Embedding projection scatter plot', rowStart);
+    const plotIdx = src.indexOf(
+      'aria-label="Embedding projection scatter plot',
+      rowStart,
+    );
     const previewIdx = src.indexOf('click to enlarge', rowStart);
     expect(plotIdx).toBeGreaterThan(rowStart);
     expect(previewIdx).toBeGreaterThan(rowStart);
@@ -134,7 +137,7 @@ describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
     expect(src).toMatch(/role="dialog"/);
   });
 
-  it('the enlarge modal is dismissible via a close button, matching CropCard\'s existing modal pattern (no backdrop-click/keydown a11y footguns)', () => {
+  it("the enlarge modal is dismissible via a close button, matching CropCard's existing modal pattern (no backdrop-click/keydown a11y footguns)", () => {
     const start = src.indexOf('{#if expandedPreviewId}');
     const block = src.slice(start); // last top-level block in the file
     expect(block).toMatch(/aria-label="Close"/);

@@ -28,15 +28,34 @@ function read(rel: string): string {
   return readFileSync(path.resolve(here, rel), 'utf-8');
 }
 
+/**
+ * Extract the full `$effect(() => { if (!searchModeActive) return; ... });`
+ * block by counting braces from its opening `{`, rather than a regex
+ * anchored to a specific indentation depth — indentation shifts on every
+ * prettier reformat and previously broke this test without any real
+ * behavior change.
+ */
+function extractSearchModeEffect(src: string): string {
+  const anchor = '$effect(() => {\n    if (!searchModeActive) return;';
+  const start = src.indexOf(anchor);
+  if (start === -1) throw new Error('searchModeActive effect not found');
+  const braceStart = src.indexOf('{', start);
+  let depth = 0;
+  for (let i = braceStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  throw new Error('unbalanced braces in searchModeActive effect');
+}
+
 describe('/clusters search mode', () => {
   const src = read('./+page.svelte');
 
   it('registers dropOnClassStore only inside the searchModeActive-gated effect, and unregisters on cleanup', () => {
-    const effectMatch = src.match(
-      /\$effect\(\(\) => \{\s*if \(!searchModeActive\) return;[\s\S]*?\n {2}\}\);/,
-    );
-    expect(effectMatch).not.toBeNull();
-    const body = effectMatch![0];
+    const body = extractSearchModeEffect(src);
     expect(body).toMatch(/dropOnClassStore\.register/);
     expect(body).toMatch(/return \(\) => \{\s*offDrop\(\);/);
   });
@@ -46,11 +65,8 @@ describe('/clusters search mode', () => {
   });
 
   it('only wires A / Z / X / Escape in search mode — no M (move) or sub-cluster grouping', () => {
-    const effectMatch = src.match(
-      /\$effect\(\(\) => \{\s*if \(!searchModeActive\) return;[\s\S]*?\n {2}\}\);/,
-    );
-    const body = effectMatch![0];
-    expect(body).toMatch(/reg\('a',/);
+    const body = extractSearchModeEffect(src);
+    expect(body).toMatch(/reg\(\s*'a',/);
     expect(body).toMatch(/reg\(\s*'z',/);
     expect(body).toMatch(/reg\(\s*'x',/);
     expect(body).toMatch(/reg\(\s*\n?\s*'escape',/);

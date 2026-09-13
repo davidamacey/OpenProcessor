@@ -362,45 +362,47 @@
       class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-800"
     >
       {#if loading}
-      <p class="p-4 text-sm text-zinc-500">Loading embedding projection…</p>
-    {:else if !built}
-      <div class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <p class="text-sm text-zinc-400">
-          No projection has been built yet. Building one runs as a background job (it
-          never fits on the request path), so this can take a while on a large pool.
-        </p>
-        <button
-          type="button"
-          disabled={rebuilding}
-          class="rounded border border-blue-500/50 bg-blue-500/20 px-3 py-1.5 text-xs text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-          onclick={() => void triggerRebuild()}
+        <p class="p-4 text-sm text-zinc-500">Loading embedding projection…</p>
+      {:else if !built}
+        <div
+          class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
         >
-          {rebuilding ? 'Requesting…' : 'Build projection'}
-        </button>
-      </div>
-    {:else if points.length === 0}
-      <p class="p-4 text-sm text-zinc-500">
-        No points match the current filter — try a broader class/cluster scope.
-      </p>
-    {:else}
-      <canvas
-        bind:this={canvasEl}
-        width={containerWidth}
-        height={PLOT_HEIGHT}
-        class="block cursor-crosshair touch-none"
-        aria-label="Embedding projection scatter plot — click and drag to lasso-select points"
-        onpointerdown={onPointerDown}
-        onpointermove={onPointerMove}
-        onpointerup={onPointerUp}
-        onpointercancel={onPointerLeave}
-        onpointerleave={onPointerLeave}
-      ></canvas>
-      <p
-        class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-[10px] text-zinc-500"
-      >
-        {points.length.toLocaleString()} points · click-drag to lasso-select
-      </p>
-    {/if}
+          <p class="text-sm text-zinc-400">
+            No projection has been built yet. Building one runs as a background job (it
+            never fits on the request path), so this can take a while on a large pool.
+          </p>
+          <button
+            type="button"
+            disabled={rebuilding}
+            class="rounded border border-blue-500/50 bg-blue-500/20 px-3 py-1.5 text-xs text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
+            onclick={() => void triggerRebuild()}
+          >
+            {rebuilding ? 'Requesting…' : 'Build projection'}
+          </button>
+        </div>
+      {:else if points.length === 0}
+        <p class="p-4 text-sm text-zinc-500">
+          No points match the current filter — try a broader class/cluster scope.
+        </p>
+      {:else}
+        <canvas
+          bind:this={canvasEl}
+          width={containerWidth}
+          height={PLOT_HEIGHT}
+          class="block cursor-crosshair touch-none"
+          aria-label="Embedding projection scatter plot — click and drag to lasso-select points"
+          onpointerdown={onPointerDown}
+          onpointermove={onPointerMove}
+          onpointerup={onPointerUp}
+          onpointercancel={onPointerLeave}
+          onpointerleave={onPointerLeave}
+        ></canvas>
+        <p
+          class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-[10px] text-zinc-500"
+        >
+          {points.length.toLocaleString()} points · click-drag to lasso-select
+        </p>
+      {/if}
     </div>
 
     {#if selectedIds.size > 0}
@@ -413,7 +415,9 @@
         class="flex w-40 shrink-0 flex-col gap-1 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-950 p-2"
         style:height="{PLOT_HEIGHT}px"
       >
-        <p class="text-[10px] text-zinc-500">{selectedIds.size} selected — click to enlarge</p>
+        <p class="text-[10px] text-zinc-500">
+          {selectedIds.size} selected — click to enlarge
+        </p>
         <div class="grid grid-cols-2 gap-1">
           {#each selectedPreview as p (p.crop_id)}
             <button
@@ -464,7 +468,9 @@
         class="max-h-[80vh] max-w-full rounded-md border border-zinc-700 [-webkit-user-drag:none]"
       />
       {#if expandedPoint?.class_name}
-        <p class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-sm text-zinc-200">
+        <p
+          class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-sm text-zinc-200"
+        >
           {expandedPoint.class_name}
         </p>
       {/if}

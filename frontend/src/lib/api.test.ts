@@ -96,8 +96,19 @@ describe('getMethods', () => {
           status: 'stable',
           default: true,
         },
-        { id: 'default', axis: 'sort', label: 'Recent first', status: 'stable', default: true },
-        { id: 'uncertainty', axis: 'sort', label: 'Uncertainty margin', status: 'experimental' },
+        {
+          id: 'default',
+          axis: 'sort',
+          label: 'Recent first',
+          status: 'stable',
+          default: true,
+        },
+        {
+          id: 'uncertainty',
+          axis: 'sort',
+          label: 'Uncertainty margin',
+          status: 'experimental',
+        },
       ],
       flags: {},
     };
@@ -112,7 +123,12 @@ describe('getMethods', () => {
     ]);
     expect(result.review_sorts).toEqual([
       { id: 'default', label: 'Recent first', status: 'stable', default: true },
-      { id: 'uncertainty', label: 'Uncertainty margin', status: 'experimental', default: undefined },
+      {
+        id: 'uncertainty',
+        label: 'Uncertainty margin',
+        status: 'experimental',
+        default: undefined,
+      },
     ]);
     // Real backend response, not the hardcoded fallback.
     expect(result).not.toEqual(FALLBACK_METHODS);
@@ -699,9 +715,14 @@ describe('getVizProjection', () => {
   });
 
   it('forwards cluster_id/class_id and omits unset params', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ points: [], projection_version: '1', fitted_at: null, stale: false }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        points: [],
+        projection_version: '1',
+        fitted_at: null,
+        stale: false,
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await getVizProjection({ cluster_id: 42 });
@@ -720,7 +741,12 @@ describe('getVizProjection', () => {
 
   it('reports stale:true when the server flags a partial-coverage projection', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ points: [], projection_version: '2', fitted_at: '2026-09-01T00:00:00Z', stale: true }),
+      jsonResponse({
+        points: [],
+        projection_version: '2',
+        fitted_at: '2026-09-01T00:00:00Z',
+        stale: true,
+      }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -853,7 +879,9 @@ describe('rebuildVizProjection', () => {
  */
 describe('registry download URL builders', () => {
   it('getClassRegistryUrl() points at the real class_registry.json filename', () => {
-    expect(getClassRegistryUrl()).toBe(`${apiBase}/curation/export/registry/class_registry.json`);
+    expect(getClassRegistryUrl()).toBe(
+      `${apiBase}/curation/export/registry/class_registry.json`,
+    );
   });
 
   it('getDataYamlUrl() points at the real data.yaml filename (not data_v7.yaml)', () => {
@@ -881,7 +909,12 @@ describe('selectDiverse', () => {
   it('returns a "ready" result for a 200 response with crop_ids', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ crop_ids: ['a', 'b'], method: 'k_center_greedy', version: 'v1', n_pool: 2 }),
+        JSON.stringify({
+          crop_ids: ['a', 'b'],
+          method: 'k_center_greedy',
+          version: 'v1',
+          n_pool: 2,
+        }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );
@@ -890,12 +923,20 @@ describe('selectDiverse', () => {
     const res = await selectDiverse({ review_tab: 'all' }, 100);
     expect(res).toEqual({
       kind: 'ready',
-      selection: { crop_ids: ['a', 'b'], method: 'k_center_greedy', version: 'v1', n_pool: 2 },
+      selection: {
+        crop_ids: ['a', 'b'],
+        method: 'k_center_greedy',
+        version: 'v1',
+        n_pool: 2,
+      },
     });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/curation/select/diverse');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ scope: { review_tab: 'all' }, k: 100 });
+    expect(JSON.parse(init.body as string)).toEqual({
+      scope: { review_tab: 'all' },
+      k: 100,
+    });
   });
 
   it('returns a "job" result for a 202 response with job_id', async () => {
@@ -924,9 +965,11 @@ describe('selectDiverse', () => {
   });
 
   it('returns "already_running" (not a throw) on a 409', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ detail: 'job already running' }), { status: 409 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'job already running' }), { status: 409 }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await selectDiverse({ review_tab: 'all' }, 100);
@@ -936,18 +979,25 @@ describe('selectDiverse', () => {
   it('still throws on an unrelated 4xx/5xx', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ detail: 'boom' }), { status: 422 }));
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'boom' }), { status: 422 }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(selectDiverse({ review_tab: 'all' }, 100)).rejects.toBeInstanceOf(ApiError);
+    await expect(selectDiverse({ review_tab: 'all' }, 100)).rejects.toBeInstanceOf(
+      ApiError,
+    );
   });
 
   it('forwards seed_crop_id only when given', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ crop_ids: [], method: 'm', version: 'v', n_pool: 0 }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify({ crop_ids: [], method: 'm', version: 'v', n_pool: 0 }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -1010,7 +1060,10 @@ describe('getSelectStatus / cancelSelect', () => {
   it('leaves result null for a failed/cancelled job', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
-        JSON.stringify({ status: 'failed', error: 'selection job heartbeat stale (34.6s ago)' }),
+        JSON.stringify({
+          status: 'failed',
+          error: 'selection job heartbeat stale (34.6s ago)',
+        }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );

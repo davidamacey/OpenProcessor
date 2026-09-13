@@ -1572,7 +1572,10 @@ export async function selectDiverse(
     // Unrecognized 2xx shape — treat as an empty-but-valid selection
     // rather than throwing, mirroring this file's forward-tolerant
     // convention for capability-discovery-adjacent endpoints.
-    return { kind: 'ready', selection: { crop_ids: [], method: 'diverse', version: '', n_pool: 0 } };
+    return {
+      kind: 'ready',
+      selection: { crop_ids: [], method: 'diverse', version: '', n_pool: 0 },
+    };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     if (e instanceof ApiError && e.status === 400) return { kind: 'disabled' };

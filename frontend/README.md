@@ -242,6 +242,12 @@ end-to-end pipeline.
 
 ## License & attribution
 
-Internal. Not for public release. Logic and UX patterns derive from
-the legacy v7 plan at
+[AGPL-3.0-or-later](LICENSE). The repository is currently **private**
+(not yet publicly released) — see
+[GH issue #1](https://github.com/example-org/openprocessor/issues/1)
+for the plan to genericize and open-source it. Logic and UX patterns
+derive from the legacy v7 plan at
 `~/.claude/plans/we-need-a-full-compressed-manatee.md`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and
+[SECURITY.md](SECURITY.md) for reporting vulnerabilities.

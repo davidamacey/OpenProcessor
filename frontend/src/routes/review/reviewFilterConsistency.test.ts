@@ -26,7 +26,9 @@ describe('review page: rank-scope + blur controls are tab-agnostic (no PRIMARY_T
   });
 
   it('does not import PRIMARY_TABS from reviewTabs', () => {
-    expect(src).not.toMatch(/import\s*\{[^}]*PRIMARY_TABS[^}]*\}\s*from\s*['"]\$lib\/reviewTabs['"]/);
+    expect(src).not.toMatch(
+      /import\s*\{[^}]*PRIMARY_TABS[^}]*\}\s*from\s*['"]\$lib\/reviewTabs['"]/,
+    );
   });
 
   it('renders SubjectScopeToggle with no #if wrapper gating it to specific tabs', () => {
@@ -63,6 +65,8 @@ describe('review page: rank-scope + blur controls are tab-agnostic (no PRIMARY_T
   it('applies min_blur_ratio whenever minBlurRatio is set, regardless of tab', () => {
     const filterFnStart = src.indexOf('function _filter()');
     const filterFnBody = src.slice(filterFnStart, src.indexOf('\n  }\n', filterFnStart));
-    expect(filterFnBody).toMatch(/if \(minBlurRatio != null\) f\.min_blur_ratio = minBlurRatio;/);
+    expect(filterFnBody).toMatch(
+      /if \(minBlurRatio != null\) f\.min_blur_ratio = minBlurRatio;/,
+    );
   });
 });

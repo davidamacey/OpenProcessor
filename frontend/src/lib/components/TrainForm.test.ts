@@ -25,7 +25,9 @@ const src = readFileSync(path.resolve(here, './TrainForm.svelte'), 'utf-8');
 
 describe('TrainForm.svelte GPU picker', () => {
   it('imports GPU_OPTIONS from the shared, unit-tested module instead of an inline array', () => {
-    expect(src).toMatch(/import\s*\{[^}]*GPU_OPTIONS[^}]*\}\s*from\s*['"]\$lib\/trainGpuOptions['"]/);
+    expect(src).toMatch(
+      /import\s*\{[^}]*GPU_OPTIONS[^}]*\}\s*from\s*['"]\$lib\/trainGpuOptions['"]/,
+    );
   });
 
   it('does not redeclare its own inline GPU_OPTIONS constant (single source of truth)', () => {

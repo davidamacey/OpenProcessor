@@ -28,14 +28,18 @@ export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
  *   serving live traffic.
  * - `normal`: rendered, single confirmation, `force=false`.
  */
-export function unloadButtonState(model: Pick<OpModel, 'kind' | 'is_lpr' | 'requires_force_to_unload'>): UnloadButtonState {
+export function unloadButtonState(
+  model: Pick<OpModel, 'kind' | 'is_lpr' | 'requires_force_to_unload'>,
+): UnloadButtonState {
   if (model.kind !== 'triton') return 'hidden';
   if (model.is_lpr) return 'hidden';
   if (model.requires_force_to_unload) return 'force-required';
   return 'normal';
 }
 
-export function unloadConfirmMessage(model: Pick<OpModel, 'name' | 'requires_force_to_unload'>): string {
+export function unloadConfirmMessage(
+  model: Pick<OpModel, 'name' | 'requires_force_to_unload'>,
+): string {
   if (model.requires_force_to_unload) {
     return (
       `${model.name} is currently serving live traffic (the active vehicle model, or another ` +

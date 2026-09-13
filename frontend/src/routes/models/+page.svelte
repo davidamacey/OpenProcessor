@@ -258,8 +258,9 @@
             <div class="mt-3 flex justify-end border-t border-zinc-800 pt-3">
               <button
                 type="button"
-                class="rounded border px-2 py-1 text-xs transition {unloadButtonState(m) ===
-                'force-required'
+                class="rounded border px-2 py-1 text-xs transition {unloadButtonState(
+                  m,
+                ) === 'force-required'
                   ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-900/40'
                   : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-red-500 hover:text-red-300'}"
                 onclick={() => handleUnload(m)}

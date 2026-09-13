@@ -275,10 +275,7 @@
     {#if sortOptions.length > 1}
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-500">sort</span>
-        <select
-          bind:value={bar.sort}
-          class="select-sm"
-        >
+        <select bind:value={bar.sort} class="select-sm">
           {#each sortOptions as opt (opt.id)}
             <option value={opt.id}>
               {opt.label}{opt.status === 'experimental' ? ' · beta' : ''}
