@@ -13,6 +13,7 @@ system colors, keyboard-first UX matching the legacy_sorter manual mode.
 ![Demo](docs/screenshots/demo.gif)
 
 Full walkthrough of every route with explanations: **[docs/FEATURES.md](docs/FEATURES.md)**
+(full doc index, including design/research docs: **[docs/README.md](docs/README.md)**)
 
 ## Quick start
 
