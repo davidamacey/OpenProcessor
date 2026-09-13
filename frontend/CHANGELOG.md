@@ -65,6 +65,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   server-rendered plate overlay) so a future non-plate slot can use its
   own ring color. No behavior change; verified live (edit-bbox mode on
   `/review`'s Plates tab renders and drags correctly).
+- `DetectorChip.svelte` renamed to `ProvenanceChip.svelte` (P2.2) —
+  its hand-written 20-arm label `switch` and 10-branch palette
+  if-chain are deleted in favor of the config-driven
+  `legacyDetectorRegistry` (`src/lib/annotations/`) built in Phase 1,
+  proven equivalent by a 23-case snapshot test before the old functions
+  were removed. All 4 consumer files updated. No behavior change;
+  verified live against the real backend — LPR/Gemma/⚠-shape chips
+  render with identical colors to before the migration.
 
 ### Fixed
 

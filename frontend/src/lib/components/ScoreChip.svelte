@@ -3,7 +3,7 @@
    * Small badge for a per-crop curation score (curation-strategy plan
    * §4/§5 — docs/curation-strategy-plan-2026-09.md), e.g. `mistakenness`.
    *
-   * Closest existing analog is `DetectorChip.svelte` — same rounded
+   * Closest existing analog is `ProvenanceChip.svelte` — same rounded
    * border/bg/text triple, same font-mono + title-tooltip convention —
    * but scores get their own color family (fuchsia) so they read as a
    * distinct kind of provenance from detector chips (which colors by
@@ -12,7 +12,7 @@
    * The value is rendered as a percentage (every score in the plan is
    * normalized to [0,1] — mistakenness, uniqueness, representativeness).
    * `method`/`version` show on hover via the `title` attribute, matching
-   * DetectorChip's `version` convention, so the chip strip stays compact
+   * ProvenanceChip's `version` convention, so the chip strip stays compact
    * even with several scores side by side.
    */
 

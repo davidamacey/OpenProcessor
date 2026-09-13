@@ -10,7 +10,7 @@
    * an operator can see which build to ship (FP16 ONNX is the default).
    */
   import { type BakeoffMatrix } from '$lib/api';
-  import DetectorChip from '$components/DetectorChip.svelte';
+  import ProvenanceChip from '$components/ProvenanceChip.svelte';
 
   interface Props {
     matrix: BakeoffMatrix;
@@ -128,7 +128,7 @@
             <tr class="border-t border-zinc-800 hover:bg-zinc-800/40">
               <td class="px-3 py-2 font-mono text-xs">{PREC_LABEL[v.precision]}</td>
               <td class="px-2 py-2">
-                <DetectorChip detector={v.detector} size="sm" />
+                <ProvenanceChip detector={v.detector} size="sm" />
                 <span class="ml-1 text-[10px] text-zinc-500"
                   >{TARGET_LABEL[v.target]}</span
                 >

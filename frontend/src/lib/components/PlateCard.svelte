@@ -11,7 +11,7 @@
    * the bbox shape envelope fails. Clicking the card emits an
    * `onclick` event so the parent can navigate to the review queue.
    */
-  import DetectorChip from './DetectorChip.svelte';
+  import ProvenanceChip from './ProvenanceChip.svelte';
   import { getPlateThumbUrl, resolveApiUrl, type PlateBrowseItem } from '$lib/api';
   import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
 
@@ -165,9 +165,9 @@
       </span>
     </div>
     <div class="flex flex-wrap items-center gap-1">
-      <DetectorChip detector={crop.plate_detector} size="sm" />
+      <ProvenanceChip detector={crop.plate_detector} size="sm" />
       {#if crop.plate_verifier}
-        <DetectorChip detector={crop.plate_verifier} tag="verify" size="sm" />
+        <ProvenanceChip detector={crop.plate_verifier} tag="verify" size="sm" />
       {/if}
       {#if crop.class_name}
         <span
@@ -180,7 +180,7 @@
     {#if !compact && crop.plate_detector_chain && crop.plate_detector_chain.length > 0}
       <div class="flex flex-wrap gap-0.5">
         {#each crop.plate_detector_chain as entry (entry)}
-          <DetectorChip raw={entry} size="sm" />
+          <ProvenanceChip raw={entry} size="sm" />
         {/each}
       </div>
     {/if}

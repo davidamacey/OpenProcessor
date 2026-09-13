@@ -15,7 +15,7 @@
     type PlateMetaPatch,
   } from '$lib/api';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
-  import DetectorChip from '$lib/components/DetectorChip.svelte';
+  import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import BboxCanvas from '$lib/components/BboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
@@ -1637,12 +1637,12 @@
             <span class="text-zinc-500">Detector</span>
             <span class="flex flex-wrap items-center gap-1.5">
               {#if current.plate_detector}
-                <DetectorChip
+                <ProvenanceChip
                   detector={current.plate_detector}
                   version={current.plate_detector_version}
                 />
                 {#if current.plate_verifier}
-                  <DetectorChip
+                  <ProvenanceChip
                     detector={current.plate_verifier}
                     tag="verify"
                     version={current.plate_verifier_version}
@@ -1684,7 +1684,7 @@
               <span class="text-zinc-500">Cascade</span>
               <span class="flex flex-wrap items-center gap-1">
                 {#each current.plate_detector_chain as entry (entry)}
-                  <DetectorChip raw={entry} size="sm" />
+                  <ProvenanceChip raw={entry} size="sm" />
                 {/each}
               </span>
             {/if}
@@ -1706,7 +1706,7 @@
                 class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
               />
               {#if current.plate_text_source}
-                <DetectorChip detector={current.plate_text_source} size="sm" />
+                <ProvenanceChip detector={current.plate_text_source} size="sm" />
               {/if}
               {#if current.plate_text_confidence != null}
                 <span class="text-[10px] text-zinc-500">
