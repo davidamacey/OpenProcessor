@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import ClassSidebar from '$components/ClassSidebar.svelte';
+  import { slotForClassName } from '$lib/annotations/registeredSlots';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
@@ -90,14 +91,15 @@
       // instead of filtering the current page. Behaves the same on /classes
       // since /clusters/{id} is the canonical view.
       if (cls) {
-        // license_plate is not a cluster — plates are sub-bboxes on
-        // vehicle crops (plate_bbox_norm). Route to the gallery branch
-        // backed by /curation/plates so the operator sees every plate-bearing
-        // crop, not just the 1-2 rows whose PRIMARY class is license_plate.
-        const lpClass = classesStore.classes.find(
-          (c) => (c.name ?? '').toLowerCase() === 'license_plate',
-        );
-        if (lpClass && cls.id === lpClass.id) {
+        // A class bound to a slot (e.g. license_plate) isn't a cluster —
+        // plates are sub-bboxes on vehicle crops (plate_bbox_norm). Route
+        // to the gallery branch backed by /curation/plates so the operator sees
+        // every slot-bearing crop, not just the 1-2 rows whose PRIMARY
+        // class matches the slot's bound class name. Driven by
+        // registeredSlots (P2.10) instead of a hardcoded license_plate
+        // string literal so a new registered slot gets this routing for free.
+        const clsName = classesStore.classes.find((c) => c.id === cls.id)?.name;
+        if (slotForClassName(clsName) != null) {
           void goto(`/clusters?class=${cls.id}`, {
             replaceState: false,
             keepFocus: true,

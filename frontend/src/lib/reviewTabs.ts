@@ -1,4 +1,4 @@
-import { licensePlateSlot } from './annotations/profiles/licensePlate';
+import { registeredSlots } from './annotations/registeredSlots';
 import type { SlotSpec } from './annotations/types';
 import type { ReviewTab } from './types';
 
@@ -79,6 +79,12 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
  * `review/+page.svelte` and the `getReviewQueue`/`selectDiverse` params
  * that forward the tab value to the backend — that wider rename is
  * real, separate follow-up work, deliberately not bundled in here.
+ *
+ * REVIEW_TABS below builds from `registeredSlots`
+ * (`./annotations/registeredSlots.ts`, P2.10) — the one deployment-
+ * config file listing which slots are actually live — rather than a
+ * literal `[licensePlateSlot]` here, so registering a new live slot
+ * there is the only edit needed to also get its review tab.
  */
 export function buildReviewTabs(slots: SlotSpec[]): ReviewTabDef[] {
   return slots
@@ -97,7 +103,7 @@ export function buildReviewTabs(slots: SlotSpec[]): ReviewTabDef[] {
 
 export const REVIEW_TABS: ReviewTabDef[] = [
   ...CORE_REVIEW_TABS,
-  ...buildReviewTabs([licensePlateSlot]),
+  ...buildReviewTabs(registeredSlots),
 ];
 
 /** True for any tab backed by a slot's queue capability rather than a

@@ -148,6 +148,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   No other behavior change; verified live — the Plates tab still
   activates correctly via nav click, and the status dropdown shows the
   correct 4 derived options.
+- P2.10: `src/lib/annotations/registeredSlots.ts` — the one deployment-
+  config file listing which slots are actually live in this app (today
+  just `[licensePlateSlot]`). Every remaining hardcoded
+  `class === 'license_plate'` / `'license_plate'` string comparison
+  outside `profiles/` now goes through `slotForClassName()`/
+  `registeredSlots` instead: `clusters/+page.svelte`'s
+  `isLicensePlateFilter`, `loadLicensePlateCard`, the synthetic pinned
+  card's `dominant_class_name` (now `lp.name`, not a literal), and its
+  click-through routing; `+layout.svelte`'s sidebar-click routing;
+  `reviewTabs.ts`'s `REVIEW_TABS` (built from `buildReviewTabs(registeredSlots)`
+  instead of a hardcoded `[licensePlateSlot]` array). This closes the
+  plan's Phase 3 ship-gate to its honest form: registering a new live
+  slot (a real domain becoming pluggable via config, not route-code
+  edits) is exactly "add one entry to `registeredSlots.ts`" — verified
+  by temporarily adding `aircraft_tail_number` and `defect_code` to that
+  array, confirming `REVIEW_TABS` and `slotForClassName` picked them up
+  with zero other file changes (check/build green), then reverting the
+  registry back to just `licensePlateSlot` (those two profiles stay as
+  proof-of-genericity in `profiles/` + `profiles.falsification.test.ts`,
+  not enabled in the live app — enabling either for real would also
+  need backend wire-field/endpoint support this deployment doesn't
+  have). `registeredSlots.ts` living outside `profiles/` is expected and
+  correct — it's the one-line-per-slot registration point the plan's
+  "zero diffs outside profiles/" bar was always going to need; the
+  honest gate is "zero diffs outside `profiles/` + `registeredSlots.ts`".
+  `plateReviewCharacterization.test.ts`'s pinned pre-migration
+  characterization test (asserting `clusters/+page.svelte` still
+  hardcoded >= 4 `'license_plate'` literals) was updated in place to its
+  post-migration form (asserting 0 such literals and a
+  `slotForClassName(` call site), per that test's own documented intent
+  to flip red — not be deleted — the moment this migration landed.
+  Verified live: `/clusters` sidebar click on `license_plate` still
+  routes to `/clusters?class={id}` and renders the plate gallery; the
+  `/review` Plates tab still renders identically; `npm run
+check`/`test`/`lint`/`build` all green.
 
 ### Fixed
 

@@ -13,6 +13,7 @@
     resolveApiUrl,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import { slotForClassName } from '$lib/annotations/registeredSlots';
   import { createPager } from '$lib/pager.svelte';
   import { createPlateGalleryController } from './plateGalleryController.svelte';
   import { createSelection } from '$lib/selection.svelte';
@@ -111,15 +112,16 @@
 
   // The legacy ensemble stores plates as a *sub-bbox* on each vehicle
   // crop (`plate_bbox_norm`), NOT as standalone docs in the cluster
-  // index. So filtering this page by the `license_plate` class always
-  // returns 0 / unlabeled clusters — confusing operators who expect to
-  // see plate clusters here. Detect that case and route the user to the
-  // plates review queue instead, which is the actual home for plate
-  // labeling.
+  // index. So filtering this page by a slot-bound class (e.g.
+  // license_plate) always returns 0 / unlabeled clusters — confusing
+  // operators who expect to see plate clusters here. Detect that case
+  // and route the user to the slot's browse gallery instead, which is
+  // the actual home for that slot's labeling. Driven by registeredSlots
+  // (P2.10) instead of a hardcoded license_plate string literal.
   const isLicensePlateFilter = $derived.by<boolean>(() => {
     if (classFilter == null) return false;
     const cls = classesStore.classes.find((c) => c.id === classFilter);
-    return (cls?.name ?? '').toLowerCase() === 'license_plate';
+    return slotForClassName(cls?.name) != null;
   });
 
   // ---------------- global dataset-wide search ----------------
@@ -384,9 +386,7 @@
   // null until this resolves; the grid renders it as the first item
   // when the unfiltered view is active.
   async function loadLicensePlateCard(): Promise<void> {
-    const lp = classesStore.classes.find(
-      (c) => (c.name ?? '').toLowerCase() === 'license_plate',
-    );
+    const lp = classesStore.classes.find((c) => slotForClassName(c.name) != null);
     if (!lp) {
       lpCard = null;
       return;
@@ -405,7 +405,7 @@
         // Purity badge is meaningless for a non-cluster — leave null.
         purity: null,
         dominant_class_id: lp.id,
-        dominant_class_name: 'license_plate',
+        dominant_class_name: lp.name,
         dominant_pct: null,
         sub_clusters: 0,
         has_subclusters: false,
@@ -540,19 +540,18 @@
   }
 
   function open(c: OpCluster): void {
-    // Special-case: clicking a cluster whose dominant class is
-    // 'license_plate' should jump to the plate browse view (which
-    // surfaces every crop with a plate_bbox_norm), not the single-
-    // cluster crop grid. Plates live as sub-bboxes on vehicle crops
-    // so the "license_plate" cluster only contains the rare crops
-    // that were labeled with license_plate as their PRIMARY class —
-    // usually 1-2 mis-labels. The operator's intent is "show me all
-    // the plate items", so route them to the plates inventory.
-    const dom = (c.dominant_class_name ?? '').toLowerCase();
-    if (dom === 'license_plate') {
-      const cls = classesStore.classes.find(
-        (k) => (k.name ?? '').toLowerCase() === 'license_plate',
-      );
+    // Special-case: clicking a cluster whose dominant class is bound to
+    // a registered slot (e.g. license_plate) should jump to that slot's
+    // browse view (which surfaces every crop with the slot's sub-bbox),
+    // not the single-cluster crop grid. Slot sub-bboxes live on vehicle
+    // crops so that class's cluster only contains the rare crops that
+    // were labeled with it as their PRIMARY class — usually 1-2
+    // mis-labels. The operator's intent is "show me all the slot's
+    // items", so route them to that inventory instead. Driven by
+    // registeredSlots (P2.10) instead of a hardcoded license_plate
+    // string literal.
+    if (slotForClassName(c.dominant_class_name) != null) {
+      const cls = classesStore.classes.find((k) => slotForClassName(k.name) != null);
       if (cls) {
         void goto(`/clusters?class=${cls.id}`);
         return;

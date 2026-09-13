@@ -132,16 +132,18 @@ describe("T7-adjacent: today's review-tab id/url shape, pinned before reviewTabs
   });
 });
 
-describe("today's license_plate literals in clusters/+page.svelte (pre-Phase-2 baseline)", () => {
-  it('still hardcodes the license_plate class-name string at the documented sites', () => {
-    // Finding B's six sites (docs/genericization-plan-2026-09-13.md §1):
-    // isLicensePlateFilter, loadLicensePlateCard, the synthetic pinned
-    // card's dominant_class_name, and card-click routing. Pinned here so
-    // a future SlotGallery extraction (P2.6/P2.7) has a concrete "these
-    // literals must all move to slotRegistry lookups" checklist, and so
-    // this test goes red the moment that migration starts (a reminder to
-    // update it, not evidence of a regression).
+describe('P2.10: clusters/+page.svelte routes via registeredSlots, not a license_plate literal', () => {
+  it('no longer hardcodes the license_plate class-name string as a routing condition', () => {
+    // Finding B's four routing sites (docs/genericization-plan-2026-09-13.md
+    // §1: isLicensePlateFilter, loadLicensePlateCard, the synthetic pinned
+    // card's dominant_class_name, and card-click routing) now all resolve
+    // via slotForClassName()/registeredSlots (P2.10) instead of comparing
+    // against the literal string 'license_plate'. This test intentionally
+    // flipped red the moment that migration landed -- see the prior
+    // baseline version of this test (before this commit) for the pinned
+    // "must still be >= 4" pre-migration checklist it replaces.
+    expect(clustersPageSrc).toMatch(/slotForClassName\(/);
     const occurrences = (clustersPageSrc.match(/'license_plate'/g) ?? []).length;
-    expect(occurrences).toBeGreaterThanOrEqual(4);
+    expect(occurrences).toBe(0);
   });
 });
