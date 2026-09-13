@@ -1291,7 +1291,7 @@
           aria-label="Choose ignore reason"
           onclick={() => (ignoreMenuOpen = !ignoreMenuOpen)}
         >
-          <ChevronDownIcon size={13} />
+          <ChevronDownIcon size={18} />
         </button>
         {#if ignoreMenuOpen}
           <div

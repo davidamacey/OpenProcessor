@@ -269,7 +269,7 @@
           beta
         </span>
       {/if}
-      <span class="text-zinc-500"><ChevronDownIcon size={11} /></span>
+      <span class="text-zinc-500"><ChevronDownIcon size={15} /></span>
     </button>
   {:else}
     {#if sortOptions.length > 1}
