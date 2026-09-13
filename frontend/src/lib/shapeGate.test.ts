@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluateShapeGate, describeEnvelope, PLATE_SHAPE_ENVELOPE } from './shapeGate';
 
 // Case table shared by both former call sites (api.ts's `_platesShapeWarning`
-// and PlateCard.svelte's inline `shapeWarning()`), which used to disagree on
+// and SlotCard.svelte's inline `shapeWarning()`), which used to disagree on
 // non-finite input — see docs/genericization-plan-2026-09-13.md Finding C.1.
 // Parent (vehicle) box is a unit square at various sizes; child (plate) box
 // is expressed in the same absolute frame.

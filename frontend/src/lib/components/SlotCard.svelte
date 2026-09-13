@@ -1,6 +1,13 @@
 <script lang="ts">
   /**
-   * Compact card for one plate detection.
+   * Compact card for one slot detection. Renamed from PlateCard.svelte
+   * (P2.4, docs/genericization-plan-2026-09-13.md §3.1) — still reads
+   * `PlateBrowseItem`'s hardcoded `plate_*` fields directly rather than
+   * a generic `slots[key]` lookup, since that requires `getPlates`/
+   * `PlateBrowseItem` to route through the slot adapter (`readSlot`),
+   * which hasn't happened yet (tracked alongside the SlotGallery
+   * extraction). This rename + the shape-gate dedup are what's real
+   * today; full field parameterization is follow-up work.
    *
    * Used on the /clusters page when class=license_plate, and on the
    * /train page's training-cohort sanity preview.
@@ -18,7 +25,7 @@
   interface Props {
     crop: PlateBrowseItem;
     onclick?: (crop: PlateBrowseItem, e: MouseEvent) => void;
-    /** Edit affordance (✎): parent opens PlateEditor for this plate. */
+    /** Edit affordance (✎): parent opens the sub-bbox editor for this plate. */
     onedit?: (crop: PlateBrowseItem) => void;
     /** Quick false-positive (✗): parent marks this plate false_positive. */
     onmarkfp?: (crop: PlateBrowseItem) => void;

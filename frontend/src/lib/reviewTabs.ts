@@ -37,7 +37,7 @@ export const REVIEW_TABS: ReviewTabDef[] = [
   // missed entirely. Genuinely distinct failure mode from the rest.
   { id: 'coco_blind_spots', label: 'COCO Blind Spots' },
   // Plate-detection review: crops with an LPR/SAM3+Gemma-verified plate
-  // bbox waiting for human confirmation in PlateEditor. Entirely separate
+  // bbox waiting for human confirmation in SlotBboxEditor. Entirely separate
   // workflow/object type from vehicle-class review.
   { id: 'plates', label: 'Plates' },
 ];

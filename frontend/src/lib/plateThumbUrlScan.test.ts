@@ -47,7 +47,7 @@ describe('no raw plate_thumbnail URL construction outside the api.ts helpers', (
 
   it('scans at least the known call-site files (sanity check the walk works)', () => {
     const rels = files.map((f) => path.relative(srcRoot, f));
-    expect(rels).toContain(path.join('lib', 'components', 'PlateCard.svelte'));
+    expect(rels).toContain(path.join('lib', 'components', 'SlotCard.svelte'));
     expect(rels.some((r) => r.includes('clusters') && r.endsWith('+page.svelte'))).toBe(
       true,
     );
@@ -62,8 +62,8 @@ describe('no raw plate_thumbnail URL construction outside the api.ts helpers', (
   }
 });
 
-describe('PlateCard.svelte uses the shared helpers, not a bare fallback string', () => {
-  const src = readFileSync(path.resolve(libRoot, 'components/PlateCard.svelte'), 'utf-8');
+describe('SlotCard.svelte uses the shared helpers, not a bare fallback string', () => {
+  const src = readFileSync(path.resolve(libRoot, 'components/SlotCard.svelte'), 'utf-8');
 
   it('imports getPlateThumbUrl and resolveApiUrl from $lib/api', () => {
     expect(src).toMatch(/getPlateThumbUrl/);

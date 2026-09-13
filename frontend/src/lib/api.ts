@@ -999,7 +999,7 @@ type RawCrop = {
 // the crop frame, regardless of whether the server-side gate caught it.
 //
 // Implementation lives in `shapeGate.ts` and is shared with
-// `PlateCard.svelte`, which used to carry its own inline copy that
+// `SlotCard.svelte`, which used to carry its own inline copy that
 // disagreed on non-finite input (see docs/genericization-plan-2026-09-13.md
 // Finding C.1 and shapeGate.ts's doc comment).
 function _platesShapeWarning(
@@ -1434,7 +1434,7 @@ export async function getReviewQueue(
   // The /curation/review API ships bbox_norm + plate_bbox_norm as
   // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends OpCrop where
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
-  // mapRawCrop so PlateEditor + getThumbUrl + confirmPlate all see the
+  // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmPlate all see the
   // same shape regardless of the endpoint that produced the item.
   type RawReviewItem = RawCrop & {
     reason?: string;
@@ -1931,7 +1931,7 @@ export function getSourceImageUrl(cropId: string): string {
  * Source image with bbox overlay, downscaled to ~1280px on the longest
  * side. The review page only needs the bbox to be readable, not pixel-
  * perfect — full resolution would push 2+ MB per cursor change. Callers
- * that need a pixel-accurate frame (e.g. PlateEditor) should hit
+ * that need a pixel-accurate frame (e.g. SlotBboxEditor) should hit
  * ``getSourceImageFull`` so the bbox lines up with the editor canvas.
  */
 export function getSourceImageWithBbox(
@@ -1949,7 +1949,7 @@ export function getSourceImageWithBbox(
   return cacheKey ? `${base}&v=${encodeURIComponent(cacheKey)}` : base;
 }
 
-/** Full-resolution source image; used by PlateEditor where pixel accuracy matters. */
+/** Full-resolution source image; used by SlotBboxEditor where pixel accuracy matters. */
 export function getSourceImageFull(cropId: string): string {
   return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image`;
 }

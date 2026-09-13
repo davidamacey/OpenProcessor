@@ -11,7 +11,7 @@
  * docs/genericization-plan-2026-09-13.md: `api.ts`'s
  * `_platePlausibleEnvelope` guarded on `Number.isFinite` and returned
  * warning=true for non-finite/degenerate input, while
- * `PlateCard.svelte`'s inline `shapeWarning()` had no such guard, so a
+ * `SlotCard.svelte`'s inline `shapeWarning()` had no such guard, so a
  * NaN width/height compared `false` against every bound and silently
  * returned warning=false. A corrupt row rendered a warning in /review
  * but not in /clusters. This module is now the single implementation
@@ -48,7 +48,7 @@ export const PLATE_SHAPE_ENVELOPE: ShapeEnvelope = {
  *
  * Returns `true` (warn) for any non-finite or degenerate input — a
  * corrupt/missing box is treated as implausible, not silently passed.
- * This is the behavior `api.ts` already had; `PlateCard.svelte` is the
+ * This is the behavior `api.ts` already had; `SlotCard.svelte` is the
  * one that changes (see Finding C.1 / CHANGELOG).
  */
 export function evaluateShapeGate(

@@ -1,7 +1,7 @@
 /**
  * The legacy license_plate slot — the one fully-working configured
  * instance of the annotation-slot mechanism. Decomposes the ~30
- * `plate_*` fields currently hardcoded across api.ts / PlateCard.svelte /
+ * `plate_*` fields currently hardcoded across api.ts / SlotCard.svelte /
  * PlateEditor.svelte / review/+page.svelte / clusters/+page.svelte into
  * the five independent capability blocks (§2.1 of the plan).
  *

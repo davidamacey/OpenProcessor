@@ -38,8 +38,8 @@
   import CropDetailModal from '$lib/components/CropDetailModal.svelte';
   import CropResultGrid from '$lib/components/CropResultGrid.svelte';
   import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
-  import PlateCard from '$lib/components/PlateCard.svelte';
-  import PlateEditor from '$lib/components/PlateEditor.svelte';
+  import SlotCard from '$lib/components/SlotCard.svelte';
+  import SlotBboxEditor from '$lib/components/SlotBboxEditor.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import type { ClusterFilter, OpClass, OpCluster, OpCrop, UndoEntry } from '$lib/types';
@@ -1503,7 +1503,7 @@
               class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
             >
               {#each g.items as p (p.crop_id)}
-                <PlateCard
+                <SlotCard
                   crop={p}
                   selected={plateSel.has(p.crop_id)}
                   onclick={togglePlateSelect}
@@ -1635,7 +1635,7 @@
 </div>
 
 {#if editPlateCrop}
-  <PlateEditor
+  <SlotBboxEditor
     crop={editPlateCrop}
     onsave={savePlateBbox}
     onclose={() => (editPlateCrop = null)}

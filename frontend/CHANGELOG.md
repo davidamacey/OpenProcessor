@@ -73,6 +73,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   were removed. All 4 consumer files updated. No behavior change;
   verified live against the real backend — LPR/Gemma/⚠-shape chips
   render with identical colors to before the migration.
+- `PlateEditor.svelte` renamed to `SlotBboxEditor.svelte` and
+  `PlateCard.svelte` renamed to `SlotCard.svelte` (P2.3/P2.4). Both are
+  renames only — `SlotBboxEditor` keeps its direct `setCropPlate` call
+  rather than the plan's ideal injected-`onsave`-performs-the-write
+  contract (that changes both call sites' behavior and was judged out
+  of scope for this pass), and `SlotCard` keeps reading
+  `PlateBrowseItem`'s hardcoded `plate_*` fields rather than a generic
+  `slots[key]` lookup (that needs `getPlates`/`PlateBrowseItem` routed
+  through the slot adapter, not done yet). Both deviations are
+  documented in the files' doc comments as follow-up work.
+  `plateThumbUrlScan.test.ts`'s hardcoded `PlateCard.svelte` path
+  (flagged by the plan as a rename hazard) updated in the same commit.
+  No behavior change; verified live — the `/clusters?class=license_plate`
+  SlotCard gallery and the SlotBboxEditor edit-bbox modal both render
+  and interact identically to before.
 
 ### Fixed
 

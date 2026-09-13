@@ -42,7 +42,7 @@
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
-  import PlateCard from '$components/PlateCard.svelte';
+  import SlotCard from '$components/SlotCard.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
   import TrainForm from '$components/TrainForm.svelte';
   import TrainProgress from '$components/TrainProgress.svelte';
@@ -888,7 +888,7 @@
             class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
           >
             {#each plateCohortPreview as p (p.crop_id)}
-              <PlateCard crop={p} onclick={openPlateInReview} compact />
+              <SlotCard crop={p} onclick={openPlateInReview} compact />
             {/each}
           </div>
         {/if}

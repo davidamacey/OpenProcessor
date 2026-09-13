@@ -16,7 +16,7 @@
    *
    * Operates in **crop-local frame** ([0, 1]^4 normalized inside the
    * parent bbox). Used both by:
-   *   - PlateEditor (modal, with Save/Clear/Cancel chrome)
+   *   - SlotBboxEditor (modal, with Save/Clear/Cancel chrome)
    *   - /review?tab=plates (inline, parent owns Confirm)
    *
    * Parent passes `bbox` (BBoxNorm | null) and gets `bbox` back via
@@ -126,7 +126,7 @@
   //   containerFrac = (baseDisp.offset - viewBox.tl * scale) + imgFrac * scale
   //                    where scale = baseDisp.size / viewBox.size
   // When viewBox is null we fall straight through to baseDisp so the
-  // existing non-zoomed callers (PlateEditor modal) are unaffected.
+  // existing non-zoomed callers (SlotBboxEditor modal) are unaffected.
   const dispRect = $derived.by(() => {
     if (!viewBox || viewBox.w <= 0 || viewBox.h <= 0) return baseDisp;
     const vx1 = viewBox.cx - viewBox.w / 2;

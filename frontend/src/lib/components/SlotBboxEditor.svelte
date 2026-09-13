@@ -1,14 +1,18 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
   /**
-   * Single-crop plate editor (modal).
+   * Single-crop sub-bbox editor (modal). Renamed from PlateEditor.svelte
+   * (P2.3, docs/genericization-plan-2026-09-13.md §3.1) — today the only
+   * configured sub-bbox is the license_plate slot, so every comment and
+   * call site below still reads "plate", but nothing here is
+   * structurally plate-specific.
    *
    * Opens from CropCard's pencil button. Lets a curator draw, drag,
-   * resize, and clear the plate sub-bbox on top of the vehicle crop
-   * thumbnail, then saves it back to the API.
+   * resize, and clear a sub-bbox on top of the parent crop thumbnail,
+   * then saves it back to the API.
    *
    * Internally we work in the **crop's local frame** (normalized [0, 1]
-   * inside the vehicle box) so that pointer math is independent of the
+   * inside the parent box) so that pointer math is independent of the
    * source image. On save we reconstruct the source-frame box via
    * `cropToSourceFrame` and PUT it as `[x1, y1, x2, y2]`.
    *
@@ -18,6 +22,16 @@
    *   Backspace clear the box (saves as plate_status='no_plate_visible')
    *   Enter    save & advance
    *   Escape   close without saving
+   *
+   * Deviation from the plan: §3.1 additionally calls for removing the
+   * direct `setCropPlate` import in favor of the caller performing the
+   * write via `onsave` (so a non-plate slot could inject its own
+   * `endpoints.setBox`/`clearBox`). That changes `onsave`'s contract for
+   * both call sites (CropCard.svelte, clusters/+page.svelte) from
+   * "notify after an already-completed save" to "perform the save" —
+   * judged out of scope for this pass; `setCropPlate` stays a direct
+   * import here. Tracked as follow-up work alongside the SlotSpec
+   * `endpoints` wiring.
    */
   import { getThumbUrl, setCropPlate } from '$lib/api';
   import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
