@@ -52,10 +52,24 @@
     onQueryChange,
   }: Props = $props();
 
+  // Last-result bookkeeping for the "Showing X of Y results for '…'" line —
+  // `createSemanticSearchBox` only ever hands `{items, total}` up to the
+  // host via `onResults`/`onClear`; it doesn't retain them itself, so this
+  // component tracks just enough of its own last search to render the
+  // count without duplicating the host's actual result state.
+  let lastShown = $state(0);
+  let lastTotal = $state(0);
+  let lastQuery = $state('');
+
   const box = createSemanticSearchBox({
     debounceMs: 300,
     search: (q, signal) => searchCrops(q, 1, pageSize, filter, signal),
-    onResults: (res) => onResults?.(res),
+    onResults: (res) => {
+      lastShown = res.items.length;
+      lastTotal = res.total;
+      lastQuery = box.query.trim();
+      onResults?.(res);
+    },
     onClear: () => onClear?.(),
   });
 
@@ -68,8 +82,25 @@
   });
 </script>
 
-<div class="inline-flex flex-1 items-center gap-1.5 text-xs">
-  <div class="relative flex-1">
+<div class="inline-flex items-center gap-2 text-xs">
+  <div class="relative w-72 shrink-0">
+    <span
+      class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500"
+      aria-hidden="true"
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+      >
+        <circle cx="6.75" cy="6.75" r="5" />
+        <line x1="10.5" y1="10.5" x2="14.5" y2="14.5" />
+      </svg>
+    </span>
     <input
       type="text"
       value={box.query}
@@ -86,12 +117,12 @@
       }}
       {placeholder}
       spellcheck="false"
-      class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 pr-7 text-zinc-100 placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
+      class="w-full rounded-full border border-zinc-700 bg-zinc-900 py-1.5 pl-8 pr-7 text-zinc-100 placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
     />
     {#if box.query}
       <button
         type="button"
-        class="absolute right-1 top-1/2 -translate-y-1/2 rounded px-1 text-zinc-500 hover:text-zinc-200"
+        class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
         onclick={() => {
           box.clear();
           onQueryChange?.('');
@@ -105,10 +136,13 @@
 
   {#if box.loading}
     <span class="text-zinc-500">searching…</span>
-  {/if}
-  {#if box.error}
+  {:else if box.error}
     <span class="rounded border border-red-500/50 bg-red-500/10 px-1.5 py-0.5 text-red-200">
       {box.error}
+    </span>
+  {:else if box.active}
+    <span class="text-zinc-400">
+      Showing {lastShown} of {lastTotal} result{lastTotal === 1 ? '' : 's'} for “{lastQuery}”
     </span>
   {/if}
 </div>

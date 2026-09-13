@@ -1184,7 +1184,7 @@
 
     <span class="grow"></span>
 
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <button class="btn" type="button" onclick={selectAllPage} title="A">
         Select page
       </button>
@@ -1345,6 +1345,27 @@
   <div
     class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-1.5 text-xs"
   >
+    <!-- Cluster-scoped semantic search — left-aligned, first control in
+         the row, so it reads as the primary way in rather than a control
+         squeezed wherever there happens to be leftover flex space. -->
+    {#if semanticSearchAvailable}
+      <SemanticSearchBox
+        filter={{ cluster_id: clusterId }}
+        pageSize={60}
+        onResults={(res) => {
+          searchModeActive = true;
+          searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+          cropPager.items = res.items;
+          cropPager.total = res.total;
+        }}
+        onClear={() => {
+          searchModeActive = false;
+          searchScores = new Map();
+          void cropPager.loadFirst();
+        }}
+      />
+    {/if}
+
     <SubjectScopeToggle
       bind:value={subjectScope}
       labels={['All', 'Largest', 'Largest + 2nd']}
@@ -1392,24 +1413,6 @@
       diverseKDefault={pageSize}
       diverseMeta={orderMeta}
     />
-
-    {#if semanticSearchAvailable}
-      <SemanticSearchBox
-        filter={{ cluster_id: clusterId }}
-        pageSize={60}
-        onResults={(res) => {
-          searchModeActive = true;
-          searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
-          cropPager.items = res.items;
-          cropPager.total = res.total;
-        }}
-        onClear={() => {
-          searchModeActive = false;
-          searchScores = new Map();
-          void cropPager.loadFirst();
-        }}
-      />
-    {/if}
 
     {#if subjectScope !== 0 || minBlurRatio !== null || !strategyBar.isDefault}
       <button

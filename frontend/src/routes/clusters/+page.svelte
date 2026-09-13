@@ -986,6 +986,36 @@
       </span>
     {/if}
 
+    <!-- Dataset-wide semantic search — left-aligned, first control after
+         the title, so it reads as the primary way in rather than a
+         control squeezed between unrelated toggles. Deliberately no
+         cluster_id/tab scope in `filter` — unscoped-across-the-whole-dataset
+         is the entire point of this control, unlike the cluster_id-scoped
+         SemanticSearchBox on /clusters/[id]. -->
+    {#if semanticSearchAvailable && !isLicensePlateFilter}
+      <SemanticSearchBox
+        pageSize={60}
+        filter={classFilter != null ? { class_id: classFilter } : {}}
+        initialQuery={page.url.searchParams.get('q')}
+        onQueryChange={(q) => (searchQuery = q)}
+        onResults={(res) => {
+          searchModeActive = true;
+          searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+          searchResults = res.items;
+          searchTotal = res.total;
+          syncSearchUrl(searchQuery);
+          void ensureClusterMeta(
+            [
+              ...new Set(
+                res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
+              ),
+            ],
+          );
+        }}
+        onClear={exitSearchMode}
+      />
+    {/if}
+
     <span class="grow"></span>
 
     <!-- Color legend for the card border. The cluster grid uses border
@@ -1050,36 +1080,6 @@
       >
         {showEmbeddingViz ? '✓ ' : ''}Embedding plot
       </button>
-    {/if}
-
-    <!-- Dataset-wide semantic search. Deliberately no cluster_id/tab
-         scope in `filter` — unscoped-across-the-whole-dataset is the
-         entire point of this control, unlike the cluster_id-scoped
-         SemanticSearchBox on /clusters/[id]. -->
-    {#if semanticSearchAvailable && !isLicensePlateFilter}
-      <div class="min-w-[16rem]">
-        <SemanticSearchBox
-          pageSize={60}
-          filter={classFilter != null ? { class_id: classFilter } : {}}
-          initialQuery={page.url.searchParams.get('q')}
-          onQueryChange={(q) => (searchQuery = q)}
-          onResults={(res) => {
-            searchModeActive = true;
-            searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
-            searchResults = res.items;
-            searchTotal = res.total;
-            syncSearchUrl(searchQuery);
-            void ensureClusterMeta(
-              [
-                ...new Set(
-                  res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
-                ),
-              ],
-            );
-          }}
-          onClear={exitSearchMode}
-        />
-      </div>
     {/if}
 
     <label class="flex items-center gap-2 text-xs text-zinc-400">
