@@ -88,6 +88,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   No behavior change; verified live — the `/clusters?class=license_plate`
   SlotCard gallery and the SlotBboxEditor edit-bbox modal both render
   and interact identically to before.
+- `src/lib/review/plateKeymap.ts`, `slotTabGuard.ts`, and `viewBox.ts` —
+  the real Phase 0 seams for the pieces P2.8 (`reviewTabs.ts`
+  data-driving) most directly needs, extracted from
+  `review/+page.svelte`'s inline keymap `$effect`, the class-drop tab
+  guard, and the frozen-viewport zoom math, each with its own unit-test
+  suite. `review/+page.svelte` now delegates to all three; no behavior
+  change. Verified live: Skip (`n`), entering edit mode (`e`), and
+  canceling edit (`Escape`) all still work through the extracted
+  keymap table, and the frozen zoom still renders correctly in edit
+  mode.
 
 ### Fixed
 

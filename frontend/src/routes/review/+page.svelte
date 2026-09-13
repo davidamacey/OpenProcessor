@@ -24,6 +24,9 @@
   import { describeEnvelope, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
   import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
   import { AbortRegistry } from '$lib/review/abortRegistry';
+  import { buildPlateKeymap } from '$lib/review/plateKeymap';
+  import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
+  import { computeViewBox } from '$lib/review/viewBox';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
   import {
@@ -388,7 +391,7 @@
   // different flow (confirming a bbox, not a class) so we no-op there
   // and leave the letters free for plate actions.
   $effect(() => {
-    if (tab === 'plates') return;
+    if (isSlotSuppressedTab(tab)) return;
     const off = dropOnClassStore.register(async (cls: OpClass) => {
       if (!current) {
         toastStore.info('No item to label.');
@@ -796,23 +799,10 @@
   const PLATE_VIEW_PADDING = 2.5;
   let plateViewBox = $state<BBoxNorm | null>(null);
   function _seedViewBox(): void {
-    if (!editedPlateLocal) {
-      plateViewBox = null;
-      return;
-    }
-    const w0 = editedPlateLocal.w;
-    const h0 = editedPlateLocal.h;
-    if (w0 <= 0 || h0 <= 0) {
-      plateViewBox = null;
-      return;
-    }
-    // Expand by padding, then square the viewport (canvas is aspect-
-    // square; non-square viewBox would re-introduce letterboxing).
-    const side = Math.min(1, Math.max(w0, h0) * PLATE_VIEW_PADDING);
-    const half = side / 2;
-    const cx = Math.min(1 - half, Math.max(half, editedPlateLocal.cx));
-    const cy = Math.min(1 - half, Math.max(half, editedPlateLocal.cy));
-    plateViewBox = { cx, cy, w: side, h: side };
+    // Padding/squaring/clamping math lives in viewBox.ts (Phase 0 seam),
+    // with its own unit tests; the untrack()-wrapped call site (below)
+    // is what actually makes this "frozen" and has to stay here.
+    plateViewBox = computeViewBox(editedPlateLocal, PLATE_VIEW_PADDING);
   }
 
   // Reseed whenever the cursor changes (advancing to next crop) or the
@@ -1118,26 +1108,22 @@
       offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
 
     if (tab === 'plates') {
-      if (editMode) {
-        reg('enter', saveBboxAndExit, 'Save bbox & exit edit');
-        reg('escape', toggleEdit, 'Cancel edit');
-      } else {
-        reg('enter', confirmPlate, 'Confirm plate & advance');
-        reg('d', rejectPlate, 'Reject (no plate visible)');
-        reg('f', markFalsePositive, 'False positive (keep box)');
-        reg('e', toggleEdit, 'Edit bbox');
-        // Back: re-insert the most-recently-confirmed plate so the operator
-        // can correct mistakes without scrolling back through the queue.
-        reg('arrowleft', plateBack, 'Back to last confirmed plate');
-        reg('b', plateBack, 'Back (alias)');
-        reg(
-          'arrowright',
-          () => {
-            cursor = Math.min(queue.items.length - 1, cursor + 1);
-            maybePrefetch();
-          },
-          'Next item',
-        );
+      // Table built by the extracted plateKeymap module (Phase 0 seam
+      // ahead of P2.8's reviewTabs.ts data-driving) so the combo set is
+      // asserted by plateKeymap.test.ts rather than only readable here.
+      for (const entry of buildPlateKeymap(editMode, {
+        confirmPlate,
+        rejectPlate,
+        markFalsePositive,
+        toggleEdit,
+        plateBack,
+        advance: () => {
+          cursor = Math.min(queue.items.length - 1, cursor + 1);
+          maybePrefetch();
+        },
+        saveBboxAndExit,
+      })) {
+        reg(entry.combo, entry.fn, entry.description);
       }
     } else {
       reg(

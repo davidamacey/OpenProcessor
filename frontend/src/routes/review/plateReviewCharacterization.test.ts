@@ -6,18 +6,22 @@
  *
  * This repo has no `@testing-library/svelte` harness (see
  * `plateThumbUrlScan.test.ts`'s doc comment). The plan's P0.1/P0.3 call
- * for extracting the pure undo-stack/abort-map logic into testable
- * modules FIRST — that extraction has landed
- * (`src/lib/review/slotQueueOps.ts`, `src/lib/review/abortRegistry.ts`,
- * each with its own executable unit-test suite), and `review/+page.svelte`
- * now delegates to them. The remaining pieces here (the keymap, the
- * class-drop tab guard, the frozen-viewport `untrack()` seed, and today's
- * `REVIEW_TABS`/`license_plate` baseline) are still genuinely inline
- * Svelte state/effects with no extraction seam, so they stay pinned via
- * the static source-scan convention this repo already uses
- * (`EmbeddingPlot.test.ts` / `StrategyBar.test.ts` /
+ * for extracting the pure logic into testable modules FIRST, and that
+ * has now landed for every piece that had a real extraction seam:
+ * `src/lib/review/slotQueueOps.ts` + `abortRegistry.ts` (undo stack +
+ * per-crop abort map), `plateKeymap.ts` (the scan/edit-mode keymap
+ * table), `slotTabGuard.ts` (the class-drop suppression predicate
+ * behind Finding C.2), and `viewBox.ts` (the frozen-viewport
+ * padding/squaring/clamping math) — each with its own executable
+ * unit-test suite that supersedes the corresponding assertions below as
+ * the real behavior pin. `review/+page.svelte` delegates to all of
+ * them. What's left genuinely inline (the `untrack()` wrapping itself —
+ * a Svelte-reactivity concern, not extractable math — and today's
+ * `REVIEW_TABS`/`license_plate` baseline in `clusters/+page.svelte`)
+ * stays pinned via the static source-scan convention this repo already
+ * uses (`EmbeddingPlot.test.ts` / `StrategyBar.test.ts` /
  * `plateThumbUrlScan.test.ts`) until Phase 2's `reviewTabs.ts`
- * data-driving and keymap parameterization give them one.
+ * data-driving and the SlotGallery extraction give them one.
  */
 
 import { readFileSync } from 'node:fs';
@@ -39,27 +43,25 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
     // via keyboardStore.register() call sites, not exhaustive parsing — a
     // real extraction should replace this with an executable keymap
     // table (QueueCapability.keymap once Phase 2 wires it up).
-    for (const marker of [
-      "reg('enter', confirmPlate,",
-      "reg('d', rejectPlate,",
-      "reg('f', markFalsePositive,",
-      "reg('e', toggleEdit,",
-      "reg('arrowleft', plateBack,",
-      "reg('b', plateBack,",
-      "'arrowright',",
-      "reg('n', skip,",
-    ]) {
-      expect(reviewPageSrc).toContain(marker);
-    }
+    //
+    // UPDATE: the real extraction landed (src/lib/review/plateKeymap.ts,
+    // its own plateKeymap.test.ts asserts the exact combo set/wiring per
+    // mode). What's pinned here now is just that the page delegates to
+    // it rather than re-inlining the table.
+    expect(reviewPageSrc).toMatch(/buildPlateKeymap\(editMode, \{/);
   });
 
   it('class-drop registration early-returns on the plates tab (the invariant behind Finding C.2)', () => {
     // dropOnClassStore's handler is never registered while tab==='plates',
     // which is why f/e/b can be bound as plates actions without colliding
     // with a class hotkey today, even though RESERVED_HOTKEY_LETTERS
-    // doesn't list them (next assertion). This is a `return` statement in
-    // a 1950-line file — exactly the fragile invariant Finding C.2 flags.
-    expect(reviewPageSrc).toMatch(/if \(tab === 'plates'\) return;/);
+    // doesn't list them (next assertion).
+    //
+    // UPDATE: the invariant is now the extracted isSlotSuppressedTab()
+    // predicate (src/lib/review/slotTabGuard.ts, its own
+    // slotTabGuard.test.ts), not a bare `if (tab === 'plates') return;`
+    // in a 1950-line file.
+    expect(reviewPageSrc).toMatch(/if \(isSlotSuppressedTab\(tab\)\) return;/);
   });
 
   it(
