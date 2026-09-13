@@ -127,6 +127,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   verified live — the `/clusters?class=license_plate` gallery renders
   pixel-identically (detector chips, scores, plate text, shape warnings,
   false-positive badges) through the new adapter-driven read path.
+- `src/lib/reviewTabs.ts` data-driving (P2.8) — `REVIEW_TABS` is now
+  `CORE_REVIEW_TABS` (the 4 core cohorts) plus `buildReviewTabs(slots)`,
+  which derives a tab from each queue-capable slot's `QueueCapability`
+  instead of a hand-maintained `{ id: 'plates', label: 'Plates' }`
+  literal — a new deployment configuring a second queue-capable slot
+  gets a real `/review` tab with zero `reviewTabs.ts` edits. Adds
+  `isSlotTab`/`endpointForTab` per the plan's §3.3. Scoped down from the
+  plan's full design: the internal tab id stays `'plates'` (not
+  `slot:license_plate`) since widening it would require touching 11+
+  `tab === 'plates'` call sites plus `getReviewQueue`'s and
+  `selectDiverse`'s tab-forwarding params, for zero behavior gain while
+  only one queue-capable slot exists — tracked as real, separate
+  follow-up work rather than bundled in under time pressure.
+  `review/+page.svelte`'s `PLATE_STATUS_OPTIONS` (Finding C.4's second
+  hand-copy of the human-writable status whitelist) is now derived from
+  `licensePlateSlot.capabilities.lifecycle.states` instead of a
+  hand-copied array — same 4 values, minor reordering (now matches the
+  profile's state order rather than the old array's hand-picked order).
+  No other behavior change; verified live — the Plates tab still
+  activates correctly via nav click, and the status dropdown shows the
+  correct 4 derived options.
 
 ### Fixed
 

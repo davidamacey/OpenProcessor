@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getReviewQueue } from './api';
+import { licensePlateSlot } from './annotations/profiles/licensePlate';
 import {
+  buildReviewTabs,
+  CORE_REVIEW_TABS,
+  endpointForTab,
+  isSlotTab,
   REVIEW_PRESETS,
   REVIEW_TABS,
   resolveEffectiveTab,
@@ -32,6 +37,61 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
     for (const id of collapsed) {
       expect(REVIEW_TABS.some((t) => t.id === id)).toBe(false);
     }
+  });
+});
+
+describe('buildReviewTabs (P2.8 data-driving)', () => {
+  it('derives a tab from a queue-capable slot, matching its urlId/endpointId/label', () => {
+    const tabs = buildReviewTabs([licensePlateSlot]);
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].id).toBe('plates');
+    expect(tabs[0].urlId).toBe('plates');
+    expect(tabs[0].endpointId).toBe('plates');
+    expect(tabs[0].label).toBe('Plates');
+    expect(tabs[0].slot).toBe(licensePlateSlot);
+  });
+
+  it('skips a slot with no queue capability', () => {
+    const noQueueSlot = {
+      ...licensePlateSlot,
+      capabilities: { text: licensePlateSlot.capabilities.text },
+    };
+    expect(buildReviewTabs([noQueueSlot])).toEqual([]);
+  });
+
+  it('REVIEW_TABS is CORE_REVIEW_TABS plus the derived slot tabs, in that order', () => {
+    expect(REVIEW_TABS).toEqual([
+      ...CORE_REVIEW_TABS,
+      ...buildReviewTabs([licensePlateSlot]),
+    ]);
+  });
+});
+
+describe('isSlotTab', () => {
+  it('is true for the plates tab (backed by a slot queue)', () => {
+    expect(isSlotTab('plates')).toBe(true);
+  });
+
+  it('is false for every core tab', () => {
+    for (const t of CORE_REVIEW_TABS) expect(isSlotTab(t.id)).toBe(false);
+  });
+
+  it('is false for a preset id (not a real tab)', () => {
+    expect(isSlotTab('mismatches')).toBe(false);
+  });
+});
+
+describe('endpointForTab', () => {
+  it('resolves a core tab to its own id', () => {
+    expect(endpointForTab('uncertainty')).toBe('uncertainty');
+  });
+
+  it('resolves the plates tab to its endpointId (identical today, but a distinct lookup)', () => {
+    expect(endpointForTab('plates')).toBe('plates');
+  });
+
+  it('falls through to the raw id for anything not in REVIEW_TABS (e.g. a preset id)', () => {
+    expect(endpointForTab('mismatches')).toBe('mismatches');
   });
 });
 

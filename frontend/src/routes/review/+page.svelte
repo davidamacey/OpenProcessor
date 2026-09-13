@@ -27,6 +27,7 @@
   import { buildPlateKeymap } from '$lib/review/plateKeymap';
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
   import { computeViewBox } from '$lib/review/viewBox';
+  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
   import {
@@ -707,16 +708,18 @@
   let editedPlateText = $state<string>('');
   let editedPlateStatus = $state<string>('');
   let editedRejectionReason = $state<string>('');
-  // Status values an operator is allowed to write; mirrors
-  // HUMAN_PLATE_STATUS_VALUES in openprocessor legacy.py. Kept inline
-  // since it's a tiny set and adding a $lib/constants file for three
-  // strings is overkill.
-  const PLATE_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
-    { value: 'detected', label: 'detected (plate visible)' },
-    { value: 'no_plate_visible', label: 'no plate visible' },
-    { value: 'verify_rejected', label: 'rejected (bad detection)' },
-    { value: 'false_positive', label: 'false positive (keep box)' },
-  ];
+  // Status values an operator is allowed to write. Derived from the
+  // license_plate slot's lifecycle capability (P2.8, closes Finding
+  // C.4's second hand-copy of HUMAN_PLATE_STATUS_VALUES — the first was
+  // api.ts:1365's inline union, the third is openprocessor's
+  // _common.py:324, the fourth is a codegen'd file with zero importers).
+  // Order matches `licensePlateSlot.capabilities.lifecycle.states`, not
+  // the hand-picked order the old inline array happened to use.
+  const PLATE_STATUS_OPTIONS: Array<{ value: string; label: string }> = (
+    licensePlateSlot.capabilities.lifecycle?.states ?? []
+  )
+    .filter((s) => s.humanWritable)
+    .map((s) => ({ value: s.value, label: s.label }));
 
   // Undo stack for plate confirm/reject. Each entry holds the previously
   // confirmed plate so "Back" can re-insert the crop into the queue and
