@@ -1193,10 +1193,7 @@
       </button>
       <span class="font-mono text-xs text-zinc-500">{sel.size} selected</span>
 
-      <select
-        bind:value={confirmClassId}
-        class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm"
-      >
+      <select bind:value={confirmClassId} class="select">
         <option value={null}>— class —</option>
         {#each classesStore.classes.filter(isAssignableClass) as cls (cls.id)}
           <option value={cls.id}>{cls.name}</option>
