@@ -1140,6 +1140,9 @@
   <!-- Toolbar — title + summary + bulk-action buttons + class assignment.
        Drag-and-drop onto the left ClassSidebar is the alternative path. -->
   <div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
+    <a href="/clusters" class="btn shrink-0" title="Back to all clusters">
+      ← All clusters
+    </a>
     <h1 class="flex items-baseline gap-2 text-lg font-semibold">
       {#if clusterName}
         <span class="capitalize text-zinc-100">{clusterName}</span>
