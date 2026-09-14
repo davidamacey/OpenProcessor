@@ -5,6 +5,7 @@ import { slotIsPresent } from './types';
 import { licensePlateSlot } from './profiles/licensePlate';
 import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
 import { defectCodeSlot } from './profiles/defectCode';
+import { cohortsForClass, derivedCohorts } from './cohorts';
 import type { XYXY } from './types';
 
 /**
@@ -100,5 +101,52 @@ describe('capability-model falsification: three independently-configured slots',
       (s) => s.bind.className,
     );
     expect(new Set(classNames).size).toBe(3);
+  });
+});
+
+/**
+ * P3.5 (docs/genericization-plan-2026-09-13.md §9.7/§9.9): extends the
+ * falsification test to the cohort layer, added by the §9.2 addendum.
+ * Derivation is pure and runs against the same three profiles — no
+ * per-slot special-casing in cohorts.ts, registry.ts, or this file. If
+ * either example needed a code change outside `profiles/` or
+ * `licensePlateSlot`'s own capability declarations, that would be the
+ * signal the cohort layer is wrong, exactly like the capability model
+ * itself.
+ */
+describe('P3.5 — cohort-layer falsification: derivation generalizes with zero per-slot code', () => {
+  it('aircraft_tail_number derives exactly blind_spots + low_conf + disagreement, never false_positives (no falsePositiveState)', () => {
+    const ids = derivedCohorts(aircraftTailNumberSlot)
+      .map((c) => c.id)
+      .sort();
+    expect(ids).toEqual(['blind_spots', 'disagreement', 'low_conf'].sort());
+    expect(ids).not.toContain('false_positives');
+  });
+
+  it('defect_code derives no geometry cohort at all (no subBox) and no disagreement cohort (no chainField)', () => {
+    const ids = derivedCohorts(defectCodeSlot).map((c) => c.id);
+    expect(ids).toEqual([]);
+  });
+
+  it('a text-only slot (defect_code) is never silently required to have a box: cohortsForClass returns core cohorts only', () => {
+    const { registry } = resolveSlotRegistry({ builtins: [defectCodeSlot] });
+    const classesById = new Map([[11, 'part_surface']]);
+    const cohorts = cohortsForClass(11, 'part_surface', registry, classesById, true);
+    expect(cohorts.every((c) => c.rowKind !== 'slot')).toBe(true);
+  });
+
+  it("licensePlateSlot's declared cohorts replace the derived ids of the same name; the derived-only ids (blind_spots/low_conf) never leak through alongside them", () => {
+    const { registry } = resolveSlotRegistry({ builtins: [licensePlateSlot] });
+    const classesById = new Map([[3, 'license_plate']]);
+    const cohorts = cohortsForClass(3, 'license_plate', registry, classesById, true);
+    const ids = cohorts.map((c) => c.id);
+    expect(ids).toContain('disagreement');
+    expect(ids).toContain('false_positives');
+    expect(ids).not.toContain('blind_spots');
+    expect(ids).not.toContain('low_conf');
+    // The declared 'disagreement'/'false_positives' are tier-1 endpoint
+    // calls, not the derived tier-2 predicate — "declared is the ceiling."
+    expect(cohorts.find((c) => c.id === 'disagreement')!.query.kind).toBe('endpoint');
+    expect(cohorts.find((c) => c.id === 'false_positives')!.query.kind).toBe('endpoint');
   });
 });
