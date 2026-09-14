@@ -38,18 +38,18 @@ except `/` and `/clusters/[id]`, which are reached via the logo / a cluster
 card respectively. The MVP/post-MVP split from the original design doc is
 gone — every route in this table exists and works; nothing here is a stub.
 
-| Route                        | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/` (legacy, logo link only) | Older stats + recent-crops + quick Gemma-cluster-run page. Superseded by `/dashboard` for nav purposes but still reachable; not deleted since it's a working page, just not the primary entry point.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `/dashboard`                 | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `/clusters`                  | Cluster grid view, sidebar filter, **strategy bar** (cluster-method picker + review-sort dropdown + score chips, see below). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to `/review?tab=plates`). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below).                                                                                                                                                                                           |
-| `/clusters/[id]`             | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `/review`                    | 5 top-level review tabs (2026-09 consolidation, down from 9 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / **Plates**, each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. The All tab additionally offers a row of **quick-filter preset chips** (Gemma mismatches / Gemma low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Plates tab carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings. |
-| `/classes`                   | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `/export`                    | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `/curation/export/registry/{artifact}`)                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `/models`                    | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `/train`                     | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Plate training cohorts picker** (4 modes: lpr_blind_spots / lpr_low_conf_correct / disagreement / human_corrected)                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `/bakeoff`                   | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `legacy-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Route                        | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/` (legacy, logo link only) | Older stats + recent-crops + quick Gemma-cluster-run page. Superseded by `/dashboard` for nav purposes but still reachable; not deleted since it's a working page, just not the primary entry point.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/dashboard`                 | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/clusters`                  | Cluster grid view, sidebar filter, **strategy bar** (cluster-method picker + review-sort dropdown + score chips, see below). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to the license_plate slot's review tab). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below).                                                                                                                                                                                                                                                                                                                                                                                             |
+| `/clusters/[id]`             | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `/review`                    | 5 top-level review tabs (2026-09 consolidation, down from 9 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / one tab per registered queue-capable slot (today: **Plates**, for `license_plate`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. The All tab additionally offers a row of **quick-filter preset chips** (Gemma mismatches / Gemma low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. A slot tab (Plates today) carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings, driven by the active slot's capabilities rather than a hardcoded `'plates'` check (see "Slot-generic review tabs" below). |
+| `/classes`                   | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `/export`                    | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `/curation/export/registry/{artifact}`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `/models`                    | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `/train`                     | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + `license_plate`'s 5 hand-tuned server-side modes — see "Training cohorts" below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/bakeoff`                   | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `legacy-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## `/review` tab consolidation (2026-09)
 
@@ -149,6 +149,46 @@ the **Model Disagreements** tab on `/review` surfaces validated crops
 where the new model and the human label diverge — high-signal candidates
 for the next training cycle.
 
+### Training cohorts (P2.12-P2.14, docs/genericization-plan-2026-09-13.md §9.2/§9.3)
+
+The former "Plate training cohorts" panel (hardcoded to `license_plate`'s
+4 backend modes) is now a generic **Training cohorts** section, grouped
+by class. Mechanism lives in `src/lib/annotations/cohorts.ts`:
+
+- **`CORE_COHORTS`** — 4 class-agnostic cohorts (`validated` /
+  `needs_labeling` / `low_confidence` / `model_disagreements`) every
+  class gets for free, riding entirely on the already class-agnostic
+  `GET /curation/crops` and `GET /curation/review/model_disagreements` — zero
+  backend change.
+- **`SlotSpec.capabilities.trainingCohorts`** (optional) — a slot's own
+  hand-declared cohorts, which replace any derived id of the same name.
+  `licensePlateSlot` declares its 5 backend `/curation/plates/
+training_candidates` modes here (`lpr_blind_spots` /
+  `lpr_low_conf_correct` / `disagreement` / `human_corrected` /
+  `false_positives` — the 5th mode was previously typed but
+  unreachable from the UI; it's live now).
+- **`derivedCohorts()`** — capability ⇒ cohort rules (subBox ⇒
+  `blind_spots`, subBox+scoreField ⇒ `low_conf`, provenance.chainField
+  ⇒ `disagreement`, lifecycle.falsePositiveState ⇒ `false_positives`).
+  Tier-2 `predicate` queries, gated behind a `predicateCohortsAvailable`
+  flag that is hardcoded `false` today (no backend support exists yet —
+  see H5 in the plan's §9.4) — so only `CORE_COHORTS` + a slot's own
+  declared cohorts ever render in this deployment.
+- `/train/+page.svelte`'s `runCohortQuery()` dispatches a cohort's
+  compiled tier-1 endpoint query to whichever existing `api.ts`
+  function already answers it (`getTrainingCandidates` /
+  `getCrops` / `getReviewQueue`) — no new endpoint, no new response
+  shape. The preview grid is `rowKind`-aware (`SlotCard` for a slot
+  cohort, `CropCard` for a class-agnostic one). Counts load lazily
+  per class group (`IntersectionObserver`) rather than firing an
+  N-classes × M-cohorts request storm on mount.
+- Cohorts default to **all non-deprecated classes** rather than syncing
+  to `TrainForm`'s own class-subset selection — that tighter coupling
+  (lifting `selectedClasses` into the page) is not done; the cohort
+  picker is a curation-preview surface only and never filters the
+  actual training run (`TrainJobSpec.include_classes`/`single_cls` are
+  untouched, and no cohort id is ever sent to `/curation/train/start`).
+
 ## Keyboard shortcuts
 
 Class assignment is per-class `hotkey_letter`, configured on `/classes` (or in
@@ -159,9 +199,18 @@ here?" friction. On `/clusters/[id]` a class letter labels the current
 selection (or the just-dragged set); on `/review` it labels the current item.
 
 Reserved single-char action keys (`g n d z x u a m /`) cannot be bound to a
-class — `setClassHotkey` (`src/lib/classHotkey.ts`) rejects them. Both window
-keydown listeners fire on the same keypress, so a class bound to `d` would be
-assigned _and_ the selection discarded.
+class — `setClassHotkey` (`src/lib/classHotkey.ts`) rejects them, validating
+against `reservedHotkeyLetters()` rather than the bare `RESERVED_HOTKEY_LETTERS`
+constant. `reservedHotkeyLetters(registry)` is that constant **∪ every
+single-character combo any registered queue-capable slot's
+`QueueCapability.keymap` declares** (P2.8c, closing Finding C.2
+structurally) — today that adds `d`/`f`/`e`/`b` from `license_plate`'s
+keymap (`d` was already reserved). A slot tab already suppresses class-drop
+registration entirely (`isSlotSuppressedTab`/`isSlotTab`), so this is
+defense in depth, not a fix for a live collision — it's what keeps a
+_second_ capable slot's letters safe without a human re-auditing every
+class hotkey. Both window keydown listeners fire on the same keypress, so
+a class bound to `d` would be assigned _and_ the selection discarded.
 
 Global:
 
@@ -202,6 +251,28 @@ Global:
 | `F`             | Plates tab: mark false positive (box kept)                                                                                            |
 | `E`             | Plates tab: enter bbox edit mode                                                                                                      |
 | `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                                                        |
+
+### Slot-generic review tabs (P2.8b/P2.8c, docs/genericization-plan-2026-09-13.md §9.5)
+
+The ~12 `tab === 'plates'` call sites that used to gate the Plates-tab-only
+behavior above are gone. `review/+page.svelte` derives one value,
+`activeSlot` (`REVIEW_TABS.find((t) => t.id === tab)?.slot`), and every
+site above reads from its capabilities instead: the keymap comes from
+`buildSlotKeymap(activeSlot, editMode, handlers)` (`src/lib/review/
+slotKeymap.ts`, reading `activeSlot.capabilities.queue.keymap` — no
+second hand-maintained copy), the bbox canvas mounts when
+`activeSlot.capabilities.subBox` exists, the false-positive action/hotkey
+only renders when `activeSlot.capabilities.lifecycle?.falsePositiveState`
+is set, and the text-filter input reads its label/placeholder from
+`activeSlot.capabilities.queue.textFilter`. The internal tab id is the
+structural `slot:${key}` template (`ReviewTab` = `CoreReviewTab |
+SlotReviewTab`), not `'plates'` — `'plates'` survives only as the
+`license_plate` slot's `urlId` bookmark value (`tabFromUrlId('plates')`
+→ `'slot:license_plate'`, in `src/lib/reviewTabs.ts`). A second
+queue-capable slot registered in `registeredSlots.ts` gets a fully
+working review tab (keymap, hint strip, inline review panel gating)
+with zero further edits to `review/+page.svelte` — proved by
+`src/lib/annotations/secondSlotIntegration.test.ts`.
 
 The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over
 every non-deprecated class — the top-10 quick-assign row under the crop
