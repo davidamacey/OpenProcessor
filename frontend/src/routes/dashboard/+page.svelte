@@ -176,66 +176,64 @@
 
   <DatasetStats />
 
-  <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-    <!-- Class balance -->
-    <section class="surface p-4 lg:col-span-2">
-      <header class="mb-3 flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-zinc-300">Class balance (validated)</h2>
-        <span class="text-xs text-zinc-500">
-          green ≥500 · orange 100–499 · red &lt;100
-        </span>
-      </header>
+  <!-- Class balance -->
+  <section class="surface p-4">
+    <header class="mb-3 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-zinc-300">Class balance (validated)</h2>
+      <span class="text-xs text-zinc-500">
+        green ≥500 · orange 100–499 · red &lt;100
+      </span>
+    </header>
 
-      {#if !legacyStats}
-        <p class="text-sm text-zinc-500">Loading...</p>
-      {:else if balance.length === 0}
-        <p class="text-sm text-zinc-500">No classes yet.</p>
-      {:else}
-        <ul class="space-y-1.5">
-          {#each balance as row (row.class_id)}
-            <li class="flex items-center gap-3 text-xs">
-              <span class="w-32 shrink-0 truncate text-zinc-300" title={row.class_name}>
-                {row.class_name}
-              </span>
-              <div class="relative h-4 grow overflow-hidden rounded bg-zinc-900">
-                <div class="h-full {tierBg(row.tier)}" style:width="{row.pct}%"></div>
-              </div>
-              <span class="w-16 shrink-0 text-right font-mono text-zinc-400">
-                {row.validated_count}
-              </span>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </section>
+    {#if !legacyStats}
+      <p class="text-sm text-zinc-500">Loading...</p>
+    {:else if balance.length === 0}
+      <p class="text-sm text-zinc-500">No classes yet.</p>
+    {:else}
+      <ul class="space-y-1.5">
+        {#each balance as row (row.class_id)}
+          <li class="flex items-center gap-3 text-xs">
+            <span class="w-32 shrink-0 truncate text-zinc-300" title={row.class_name}>
+              {row.class_name}
+            </span>
+            <div class="relative h-4 grow overflow-hidden rounded bg-zinc-900">
+              <div class="h-full {tierBg(row.tier)}" style:width="{row.pct}%"></div>
+            </div>
+            <span class="w-16 shrink-0 text-right font-mono text-zinc-400">
+              {row.validated_count}
+            </span>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 
-    <!-- Recent activity -->
-    <section class="surface p-4">
-      <h2 class="mb-3 text-sm font-semibold text-zinc-300">Recent labels (last 20)</h2>
-      {#if recent.length === 0}
-        <p class="text-sm text-zinc-500">No recent labels.</p>
-      {:else}
-        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {#each recent as crop (crop.id)}
-            <li class="rounded-md border border-zinc-800 bg-zinc-900">
-              <img
-                src={getThumbUrl(crop.id)}
-                alt="crop"
-                loading="lazy"
-                class="aspect-square w-full rounded-t-md object-contain"
-              />
-              <div
-                class="truncate px-1.5 py-1 text-[10px] text-zinc-300"
-                title={crop.class_name ?? ''}
-              >
-                {crop.class_name ?? '—'}
-              </div>
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </section>
-  </div>
+  <!-- Recent activity -->
+  <section class="surface p-4">
+    <h2 class="mb-3 text-sm font-semibold text-zinc-300">Recent labels (last 20)</h2>
+    {#if recent.length === 0}
+      <p class="text-sm text-zinc-500">No recent labels.</p>
+    {:else}
+      <ul class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">
+        {#each recent as crop (crop.id)}
+          <li class="rounded-md border border-zinc-800 bg-zinc-900">
+            <img
+              src={getThumbUrl(crop.id)}
+              alt="crop"
+              loading="lazy"
+              class="aspect-square w-full rounded-t-md object-contain"
+            />
+            <div
+              class="truncate px-1.5 py-1 text-[10px] text-zinc-300"
+              title={crop.class_name ?? ''}
+            >
+              {crop.class_name ?? '—'}
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </section>
 </div>
 
 {#if gemmaOpen}

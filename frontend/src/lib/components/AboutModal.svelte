@@ -24,7 +24,7 @@
     onkeydown={(e) => e.key === 'Escape' && onclose()}
   >
     <div
-      class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
     >
       <div class="mb-3 flex items-center gap-2">
         <svg
@@ -56,6 +56,184 @@
         detection, OCR/text fields, detector provenance, and review-queue lifecycle — so
         the same app works across domains, not just one dataset.
       </p>
+
+      <div class="mb-4 rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
+        <p class="mb-2 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+          The dataset cycle
+        </p>
+        <svg
+          viewBox="0 0 400 210"
+          class="w-full"
+          role="img"
+          aria-label="Dataset lifecycle: ingest, cluster, label and sort, train, evaluate and promote, looping back to ingest"
+        >
+          <defs>
+            <marker
+              id="about-arrow"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M0 0 L10 5 L0 10 z" fill="#71717a" />
+            </marker>
+          </defs>
+
+          <!-- top row: Ingest -> Cluster -> Label & Sort -->
+          <g font-family="inherit">
+            <rect
+              x="8"
+              y="20"
+              width="88"
+              height="40"
+              rx="7"
+              fill="#18181b"
+              stroke="#3f3f46"
+            />
+            <text x="52" y="45" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >Ingest</text
+            >
+
+            <line
+              x1="96"
+              y1="40"
+              x2="150"
+              y2="40"
+              stroke="#71717a"
+              stroke-width="1.5"
+              marker-end="url(#about-arrow)"
+            />
+
+            <rect
+              x="152"
+              y="20"
+              width="96"
+              height="40"
+              rx="7"
+              fill="#18181b"
+              stroke="#3f3f46"
+            />
+            <text x="200" y="45" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >Cluster</text
+            >
+
+            <line
+              x1="248"
+              y1="40"
+              x2="302"
+              y2="40"
+              stroke="#71717a"
+              stroke-width="1.5"
+              marker-end="url(#about-arrow)"
+            />
+
+            <rect
+              x="304"
+              y="20"
+              width="90"
+              height="40"
+              rx="7"
+              fill="#18181b"
+              stroke="#60a5fa"
+            />
+            <text x="349" y="40" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >Label</text
+            >
+            <text x="349" y="53" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >&amp; Sort</text
+            >
+
+            <!-- down from Label & Sort to Train -->
+            <line
+              x1="349"
+              y1="60"
+              x2="349"
+              y2="120"
+              stroke="#71717a"
+              stroke-width="1.5"
+              marker-end="url(#about-arrow)"
+            />
+
+            <!-- bottom row: Promote/Best model <- Evaluate <- Train -->
+            <rect
+              x="304"
+              y="122"
+              width="90"
+              height="40"
+              rx="7"
+              fill="#18181b"
+              stroke="#f59e0b"
+            />
+            <text x="349" y="147" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >Train</text
+            >
+
+            <line
+              x1="304"
+              y1="142"
+              x2="250"
+              y2="142"
+              stroke="#71717a"
+              stroke-width="1.5"
+              marker-end="url(#about-arrow)"
+            />
+
+            <rect
+              x="152"
+              y="122"
+              width="96"
+              height="40"
+              rx="7"
+              fill="#18181b"
+              stroke="#3f3f46"
+            />
+            <text x="200" y="147" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >Evaluate</text
+            >
+
+            <line
+              x1="150"
+              y1="142"
+              x2="96"
+              y2="142"
+              stroke="#71717a"
+              stroke-width="1.5"
+              marker-end="url(#about-arrow)"
+            />
+
+            <rect
+              x="8"
+              y="122"
+              width="88"
+              height="40"
+              rx="7"
+              fill="#18181b"
+              stroke="#34d399"
+            />
+            <text x="52" y="140" text-anchor="middle" font-size="12" fill="#e4e4e7"
+              >Promote</text
+            >
+            <text x="52" y="153" text-anchor="middle" font-size="11" fill="#a1a1aa"
+              >best model</text
+            >
+
+            <!-- loop back up to Ingest, routed left of the diagram -->
+            <path
+              d="M 40 122 L 40 100 Q 40 90 30 90 L 20 90 Q 10 90 10 80 L 10 60"
+              fill="none"
+              stroke="#71717a"
+              stroke-width="1.5"
+              stroke-dasharray="3 3"
+              marker-end="url(#about-arrow)"
+            />
+            <text x="200" y="188" text-anchor="middle" font-size="10.5" fill="#71717a">
+              new model re-scores the dataset — disagreements feed the next label pass
+            </text>
+          </g>
+        </svg>
+      </div>
 
       <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-zinc-400">
         <dt class="text-zinc-500">License</dt>
