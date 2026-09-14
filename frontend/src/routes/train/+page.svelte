@@ -595,7 +595,7 @@
 </script>
 
 <svelte:head>
-  <title>Train · legacy Labeler</title>
+  <title>Train · Cropwright</title>
 </svelte:head>
 
 <div class="mx-auto max-w-6xl space-y-4 px-4 py-6">

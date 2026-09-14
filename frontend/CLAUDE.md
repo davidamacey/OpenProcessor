@@ -1,8 +1,18 @@
-# legacy-labeler — CLAUDE.md
+# Cropwright — CLAUDE.md
 
-SvelteKit + TypeScript labeling web app for legacy v7 vehicle dataset
-construction. Sister project to `legacy_sorter` (v2 Tauri app for the actual
-sort UX) and `openprocessor` (server-side inference + OpenSearch + clustering).
+SvelteKit + TypeScript image-crop annotation web app (product name
+**Cropwright**, package name `cropwright`; repo directory is still
+`legacy-labeler` pending a physical rename). Generalized via a
+capability-model / annotation-slot mechanism (see
+`docs/genericization-plan-2026-09-13.md`) so it is no longer
+hardcoded to vehicles or license plates — this deployment is
+currently configured for legacy v7 vehicle dataset construction via
+`src/lib/annotations/registeredSlots.ts` and `profiles/licensePlate.ts`,
+but a new domain is added by registering a new slot profile, not by
+editing app code. Sister project to `legacy_sorter` (v2 Tauri app for
+the actual sort UX) and `openprocessor` (server-side inference + OpenSearch
+
+- clustering).
 
 ## Purpose
 
@@ -237,15 +247,20 @@ render via the shared chip components.
 - `plate_shape_warning` — client-side computed via the same envelope
   as `is_plausible_plate_bbox` in `plate_detect.py`
 
-**New shared components:**
+**New shared components** (renamed off the license-plate-specific names
+during the genericization pass — see `docs/genericization-plan-2026-09-13.md`):
 
-- `src/lib/components/DetectorChip.svelte` — color-coded chip
-  (LPR=blue, SAM3=purple, Paddle=amber, Human=green, Gemma=teal,
-  v6=rose, YOLO11=sky). Accepts a `raw="lpr_nanov11_640:miss"`
+- `src/lib/components/ProvenanceChip.svelte` (formerly `DetectorChip.svelte`)
+  — color-coded chip (LPR=blue, SAM3=purple, Paddle=amber, Human=green,
+  Gemma=teal, v6=rose, YOLO11=sky). Accepts a `raw="lpr_nanov11_640:miss"`
   chain entry directly. Miss/reject tags get a muted variant.
-- `src/lib/components/PlateCard.svelte` — 128px plate thumbnail
-  (via `/curation/crops/{id}/plate_thumbnail`), parent class chip, score,
-  detector chip strip, plate text inline, ⚠ shape warning.
+- `src/lib/components/SlotCard.svelte` (formerly `PlateCard.svelte`) —
+  128px annotation-slot thumbnail (via `/curation/crops/{id}/plate_thumbnail`),
+  parent class chip, score, provenance chip strip, slot text inline,
+  ⚠ shape warning. Parameterized via `readSlot` (`src/lib/annotations/
+readSlot.ts`) against a `SlotSpec` (`registeredSlots.ts`) rather than
+  hardcoded plate fields, so a second registered slot renders through
+  the same component.
 
 **New API helpers:**
 

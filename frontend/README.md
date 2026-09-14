@@ -1,7 +1,11 @@
-# legacy-labeler
+# Cropwright
 
-Web-based labeling app for the legacy v7 vehicle dataset. Companion
-to `openprocessor` (server-side inference, OpenSearch, clustering) and
+Web-based, domain-agnostic image-crop annotation app. In this
+deployment it's configured for the legacy v7 vehicle dataset, driven
+entirely by data (classes, annotation-slot profiles) rather than
+hardcoded assumptions — see `docs/genericization-plan-2026-09-13.md`
+for the capability model that makes that possible. Companion to
+`openprocessor` (server-side inference, OpenSearch, clustering) and
 `legacy_sorter` v2 (the desktop sort UX).
 
 Built with **SvelteKit 2 + Svelte 5 runes + TypeScript strict + Tailwind v4**.
@@ -242,10 +246,11 @@ end-to-end pipeline.
 
 ## License & attribution
 
-[AGPL-3.0-or-later](LICENSE). The repository is currently **private**
-(not yet publicly released) — see
+[AGPL-3.0-or-later](LICENSE). Renamed to **Cropwright** and being
+generalized toward open-source release — see
 [GH issue #1](https://github.com/example-org/openprocessor/issues/1)
-for the plan to genericize and open-source it. Logic and UX patterns
+for the genericization plan and `docs/genericization-plan-2026-09-13.md`
+for how the mechanism work landed. Logic and UX patterns originally
 derive from the legacy v7 plan at
 `~/.claude/plans/we-need-a-full-compressed-manatee.md`.
 

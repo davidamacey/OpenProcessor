@@ -1,5 +1,5 @@
 {
-  "name": "legacy-labeler",
+  "name": "cropwright",
   "private": true,
   "version": "0.1.0",
   "description": "Cluster-based, keyboard-first web app for labeling image crops at scale — companion frontend to openprocessor.",

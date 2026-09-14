@@ -18,6 +18,13 @@
   }
   let { children, data }: Props = $props();
 
+  // Wordmark/badge are env-configurable so a rebrand (or a white-label
+  // deployment) doesn't require another hardcoded string — same
+  // PUBLIC_* convention as PUBLIC_TRITON_API_URL in src/lib/api.ts.
+  const appName =
+    (import.meta.env?.PUBLIC_APP_NAME as string | undefined) || 'Cropwright';
+  const appBadge = (import.meta.env?.PUBLIC_APP_BADGE as string | undefined) || 'CW';
+
   // Acquire singleton-store subscriptions for the lifetime of the layout.
   $effect(() => {
     const releaseHealth = healthStore.acquire();
@@ -150,9 +157,9 @@
   >
     <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
       <span class="rounded bg-blue-600 px-1.5 py-0.5 font-mono text-xs text-white"
-        >KB</span
+        >{appBadge}</span
       >
-      legacy Labeler
+      {appName}
     </a>
 
     <nav class="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
