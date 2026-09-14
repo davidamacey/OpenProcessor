@@ -25,13 +25,14 @@
   import { describeEnvelope, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
   import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
   import { AbortRegistry } from '$lib/review/abortRegistry';
-  import { buildPlateKeymap } from '$lib/review/plateKeymap';
+  import { buildSlotKeymap } from '$lib/review/slotKeymap';
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
   import { computeViewBox } from '$lib/review/viewBox';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
   import {
+    isSlotTab,
     REVIEW_PRESETS,
     REVIEW_TABS,
     resolveEffectiveTab,
@@ -67,6 +68,11 @@
   // diagnosing where uncertainty came from — each is a real, distinct
   // signal, not a rebrand of "everything."
   let tab = $state<ReviewTab>('all');
+  // The slot backing the current tab, if any — the single derived value
+  // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
+  // hangs every former `tab === 'plates'` call site off, instead of a
+  // hand-maintained literal per site.
+  const activeSlot = $derived(REVIEW_TABS.find((t) => t.id === tab)?.slot ?? null);
   // Active quick-filter preset chip on the All tab (null = plain All).
   // Only ever meaningful while tab === 'all' — resolveEffectiveTab drops
   // it for every other tab, and switching tabs clears it outright.
@@ -325,7 +331,8 @@
     if (classFilter != null) f.class_id = classFilter;
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
-    if (tab === 'plates' && plateTextQuery) f.text = plateTextQuery;
+    const textFilter = activeSlot?.capabilities.queue?.textFilter;
+    if (textFilter && plateTextQuery) f[textFilter.param] = plateTextQuery;
     // max_rank / min_blur_ratio apply across every tab and preset — the
     // backend's own op_review.py comment says so explicitly ("Both apply
     // across tabs"). These used to be gated to only primary_low_conf /
@@ -545,7 +552,7 @@
   });
 
   function openPicker(): void {
-    if (tab === 'plates' || !current) return;
+    if (isSlotTab(tab) || !current) return;
     pickerOpen = true;
     pickerQuery = '';
     pickerIndex = 0;
@@ -1111,21 +1118,22 @@
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
 
-    if (tab === 'plates') {
-      // Table built by the extracted plateKeymap module (Phase 0 seam
-      // ahead of P2.8's reviewTabs.ts data-driving) so the combo set is
-      // asserted by plateKeymap.test.ts rather than only readable here.
-      for (const entry of buildPlateKeymap(editMode, {
-        confirmPlate,
-        rejectPlate,
+    if (activeSlot) {
+      // Table built by the slot-generic slotKeymap module (P2.8c), reading
+      // activeSlot.capabilities.queue.keymap instead of a second
+      // hand-maintained copy — asserted by slotKeymap.test.ts rather than
+      // only readable here.
+      for (const entry of buildSlotKeymap(activeSlot, editMode, {
+        confirm: confirmPlate,
+        reject: rejectPlate,
         markFalsePositive,
         toggleEdit,
-        plateBack,
+        back: plateBack,
         advance: () => {
           cursor = Math.min(queue.items.length - 1, cursor + 1);
           maybePrefetch();
         },
-        saveBboxAndExit,
+        saveAndExit: saveBboxAndExit,
       })) {
         reg(entry.combo, entry.fn, entry.description);
       }
@@ -1148,10 +1156,10 @@
     reg('z', undoLast, 'Undo last');
 
     let canvasKey: ((e: KeyboardEvent) => void) | null = null;
-    if (tab === 'plates' && editMode) {
+    if (activeSlot?.capabilities.subBox != null && editMode) {
       // Edit mode only: forward bbox-fine-tune keys (arrows, [ / ],
-      // Backspace) into the plate canvas. Outside edit mode arrows page
-      // the queue like every other tab.
+      // Backspace) into the slot's bbox canvas. Outside edit mode arrows
+      // page the queue like every other tab.
       canvasKey = (e: KeyboardEvent) => {
         if (!plateCanvas) return;
         const target = e.target as HTMLElement | null;
@@ -1159,8 +1167,8 @@
         if (plateCanvas.handleKey(e)) e.preventDefault();
       };
       window.addEventListener('keydown', canvasKey);
-    } else if (tab !== 'plates') {
-      // On non-plate tabs arrow keys navigate the queue.
+    } else if (!isSlotTab(tab)) {
+      // On non-slot tabs arrow keys navigate the queue.
       reg(
         'arrowleft',
         () => {
@@ -1353,18 +1361,19 @@
       />
     </label>
 
-    {#if tab === 'plates'}
+    {#if activeSlot?.capabilities.queue?.textFilter}
       <label
         class="flex shrink-0 items-center gap-1.5"
         class:opacity-40={diverseMode}
         title={diverseMode ? 'not applied to diverse selection' : undefined}
       >
-        <span class="text-zinc-400">Plate text</span>
+        <span class="text-zinc-400">{activeSlot.capabilities.queue.textFilter.label}</span
+        >
         <input
           type="text"
           bind:value={plateTextQuery}
           disabled={diverseMode}
-          placeholder="e.g. S14"
+          placeholder={activeSlot.capabilities.queue.textFilter.placeholder}
           class="input-sm w-28"
         />
       </label>
@@ -1435,12 +1444,18 @@
     <span class="grow"></span>
 
     <span class="hidden text-[11px] text-zinc-500 md:inline">
-      {#if tab === 'plates' && editMode}
+      {#if activeSlot?.capabilities.subBox && editMode}
         <kbd>↑↓←→</kbd> nudge · <kbd>[ ]</kbd> right edge · <kbd>Enter</kbd> save ·
         <kbd>Esc</kbd> cancel
-      {:else if tab === 'plates'}
-        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject · <kbd>F</kbd> false-pos ·
-        <kbd>E</kbd> edit · <kbd>N</kbd> skip · <kbd>←</kbd> back
+      {:else if activeSlot}
+        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject
+        {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
+          · <kbd>F</kbd> false-pos
+        {/if}
+        {#if activeSlot.capabilities.subBox}
+          · <kbd>E</kbd> edit
+        {/if}
+        · <kbd>N</kbd> skip · <kbd>←</kbd> back
       {:else}
         per-class letter assigns · <kbd>/</kbd> search all classes ·
         <kbd>Enter</kbd> confirm · <kbd>N</kbd> skip · <kbd>D</kbd> discard ·
@@ -1494,7 +1509,7 @@
           <span class="font-mono">{current.id.slice(0, 12)}…</span>
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
-          {#if tab === 'plates' && editMode}
+          {#if activeSlot?.capabilities.subBox && editMode}
             <!-- Edit mode — drag/resize the proposal directly, then hit
                  Enter to save. Square aspect keeps the canvas math
                  stable; the read-only default below shows the crop at
@@ -1507,7 +1522,7 @@
               busy={plateSaving}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
-          {:else if tab === 'plates'}
+          {:else if activeSlot?.capabilities.subBox}
             <!-- Read-only default: same <img> layout as every other tab,
                  with a thin yellow ring overlay on the proposed bbox.
                  No grabbable handles, no pointer capture — the bbox is
@@ -1599,7 +1614,7 @@
           {/if}
         </dl>
 
-        {#if tab === 'plates'}
+        {#if activeSlot}
           <!-- Plate-detection inline review. The canvas above is live —
                drag/resize the proposal in place and hit Enter to confirm.
                The Reject button (or D) marks no_plate_visible. The whole
@@ -1808,7 +1823,7 @@
              classes the user has explicitly bound (otherwise the strip is
              still clickable, just no kbd hint). The class strip is hidden
              on the plates tab; class assignment isn't relevant there. -->
-        {#if tab !== 'plates'}
+        {#if !isSlotTab(tab)}
           <div class="mt-3 flex flex-wrap gap-1.5">
             {#each topClasses as cls (cls.id)}
               <button

@@ -9,8 +9,9 @@
  * for extracting the pure logic into testable modules FIRST, and that
  * has now landed for every piece that had a real extraction seam:
  * `src/lib/review/slotQueueOps.ts` + `abortRegistry.ts` (undo stack +
- * per-crop abort map), `plateKeymap.ts` (the scan/edit-mode keymap
- * table), `slotTabGuard.ts` (the class-drop suppression predicate
+ * per-crop abort map), `slotKeymap.ts` (the scan/edit-mode keymap
+ * table, generalized off `licensePlateSlot` by P2.8c), `slotTabGuard.ts`
+ * (the class-drop suppression predicate
  * behind Finding C.2), and `viewBox.ts` (the frozen-viewport
  * padding/squaring/clamping math) — each with its own executable
  * unit-test suite that supersedes the corresponding assertions below as
@@ -44,11 +45,14 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
     // real extraction should replace this with an executable keymap
     // table (QueueCapability.keymap once Phase 2 wires it up).
     //
-    // UPDATE: the real extraction landed (src/lib/review/plateKeymap.ts,
-    // its own plateKeymap.test.ts asserts the exact combo set/wiring per
-    // mode). What's pinned here now is just that the page delegates to
-    // it rather than re-inlining the table.
-    expect(reviewPageSrc).toMatch(/buildPlateKeymap\(editMode, \{/);
+    // UPDATE (P2.8c): the extraction is now slot-generic —
+    // src/lib/review/slotKeymap.ts's buildSlotKeymap(spec, editMode, …),
+    // its own slotKeymap.test.ts asserts the exact combo set/wiring per
+    // mode for both licensePlateSlot (byte-identical to the old
+    // buildPlateKeymap) and a second slot. What's pinned here now is
+    // just that the page delegates to it rather than re-inlining the
+    // table.
+    expect(reviewPageSrc).toMatch(/buildSlotKeymap\(activeSlot, editMode, \{/);
   });
 
   it('class-drop registration early-returns on the plates tab (the invariant behind Finding C.2)', () => {
@@ -65,18 +69,23 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
   });
 
   it(
-    'RESERVED_HOTKEY_LETTERS does NOT yet include f/e/b — documents Finding C.2 as still open ' +
-      '(turns green when P1.6 derives the reserved set from configured slot keymaps)',
+    'RESERVED_HOTKEY_LETTERS (the base constant) still does NOT include f/e/b — ' +
+      'reservedHotkeyLetters() is the derived superset that closes Finding C.2 (P2.8c)',
     async () => {
-      const { RESERVED_HOTKEY_LETTERS } = await import('../../lib/classHotkey');
+      const { RESERVED_HOTKEY_LETTERS, reservedHotkeyLetters } =
+        await import('../../lib/classHotkey');
       for (const letter of ['f', 'e', 'b']) {
         expect(RESERVED_HOTKEY_LETTERS.has(letter)).toBe(false);
       }
-      // The letters ARE bound as plates actions today (previous test) —
-      // the only reason this doesn't collide is the tab-guard invariant.
-      // A class hotkey audit UI or future slot config could reintroduce a
-      // real collision if that guard is ever removed without deriving the
-      // reserved set from the same keymaps.
+      // The base constant deliberately stays narrow — action keys that
+      // are never bound to a keyboardStore combo don't belong in it.
+      // reservedHotkeyLetters(), reading every registered queue-capable
+      // slot's QueueCapability.keymap, is what actually prevents a new
+      // class hotkey from colliding with a slot's letters.
+      const derived = reservedHotkeyLetters();
+      for (const letter of ['f', 'e', 'b', 'd']) {
+        expect(derived.has(letter)).toBe(true);
+      }
     },
   );
 });
@@ -120,15 +129,15 @@ describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', (
   });
 });
 
-describe("T7-adjacent: today's review-tab id/url shape, pinned before reviewTabs.ts is data-driven", () => {
-  it('the Plates tab is still a literal, closed id — not yet slot-derived', async () => {
-    const { REVIEW_TABS } = await import('../../lib/reviewTabs');
+describe('T7 (adapted, P2.8b): the Plates tab id is slot-derived, urlId keeps the bookmark contract', () => {
+  it('the Plates tab is slot:license_plate internally, with urlId "plates" preserved', async () => {
+    const { REVIEW_TABS, tabFromUrlId } = await import('../../lib/reviewTabs');
     const ids = REVIEW_TABS.map((t: { id: string }) => t.id);
-    expect(ids).toContain('plates');
-    // Once Phase 2 (P2.8) lands, this becomes `slot:license_plate` with
-    // `urlId === 'plates'` preserved for the bookmark contract — this
-    // test should be updated at that point, not deleted, per the plan's
-    // T7 "how it adapts" note.
+    expect(ids).toContain('slot:license_plate');
+    expect(ids).not.toContain('plates');
+    const plates = REVIEW_TABS.find((t: { id: string }) => t.id === 'slot:license_plate');
+    expect(plates?.urlId).toBe('plates');
+    expect(tabFromUrlId('plates')).toBe('slot:license_plate');
   });
 });
 

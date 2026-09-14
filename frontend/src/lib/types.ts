@@ -345,15 +345,23 @@ export interface OpHealth {
 // 'primary_low_conf' are no longer top-level UI tabs but still real
 // values here — they're driven by the All-tab preset chips instead (see
 // $lib/reviewTabs.ts's resolveEffectiveTab).
-export type ReviewTab =
+// P2.8b (docs/genericization-plan-2026-09-13.md §9.5): 'plates' left this
+// union — a queue-capable slot's tab id is now the structural
+// `slot:${SlotKey}` template (SlotReviewTab) instead of a hand-maintained
+// literal per slot. 'plates' survives only as the `urlId` bookmark value
+// (see `$lib/reviewTabs.ts`'s `tabFromUrlId`), not as an internal id.
+export type SlotReviewTab = `slot:${string}`;
+
+export type CoreReviewTab =
   | 'all'
   | 'mismatches'
   | 'gemma_low_conf'
   | 'uncertainty'
   | 'model_disagreements'
-  | 'plates'
   | 'primary_low_conf'
   | 'coco_blind_spots';
+
+export type ReviewTab = CoreReviewTab | SlotReviewTab;
 
 export interface ReviewItem extends OpCrop {
   reason: string;

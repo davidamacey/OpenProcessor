@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { isSlotSuppressedTab } from './slotTabGuard';
 
 describe('isSlotSuppressedTab', () => {
-  it('suppresses the plates tab', () => {
-    expect(isSlotSuppressedTab('plates')).toBe(true);
+  it('suppresses the license_plate slot tab', () => {
+    expect(isSlotSuppressedTab('slot:license_plate')).toBe(true);
+  });
+
+  it('suppresses a second, unrelated slot tab (structural, not a lookup)', () => {
+    expect(isSlotSuppressedTab('slot:aircraft_tail_number')).toBe(true);
   });
 
   it('does not suppress core review tabs', () => {

@@ -7,6 +7,8 @@
 
 import { renameClass } from '$lib/api';
 import { isPickerHiddenClass } from '$lib/classVisibility';
+import { slotRegistry } from '$lib/annotations/registeredSlots';
+import type { SlotRegistry } from '$lib/annotations/registry';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type { OpClass } from '$lib/types';
@@ -39,6 +41,33 @@ export const RESERVED_HOTKEY_LETTERS = new Set([
 ]);
 
 /**
+ * `RESERVED_HOTKEY_LETTERS` above ∪ every single-character combo any
+ * queue-capable slot's `QueueCapability.keymap` declares — closes Finding
+ * C.2 structurally (docs/genericization-plan-2026-09-13.md §9.5/P2.8c):
+ * a class can no longer be bound to a letter a slot's review-tab keymap
+ * owns, without anyone having to remember to extend a hand-maintained
+ * list when a new slot ships. For `license_plate` today this adds
+ * `d`/`f`/`e`/`b` on top of the base set (`d` was already reserved).
+ * Class letters are already inert while a slot tab is active
+ * (`isSlotSuppressedTab`) so this is defense in depth, not a fix for a
+ * live collision — but it is what makes a *second* capable slot safe
+ * without a human re-auditing every letter it uses.
+ */
+export function reservedHotkeyLetters(
+  registry: SlotRegistry = slotRegistry,
+): Set<string> {
+  const out = new Set(RESERVED_HOTKEY_LETTERS);
+  for (const spec of registry.queues) {
+    for (const combos of Object.values(spec.capabilities.queue?.keymap ?? {})) {
+      for (const combo of combos ?? []) {
+        if (combo.length === 1) out.add(combo);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Validate and persist a class's hotkey letter. Empty string clears it.
  *
  * Toasts on both success and rejection; never throws. Callers own their own
@@ -53,7 +82,7 @@ export async function setClassHotkey(cls: OpClass, raw: string): Promise<void> {
     return;
   }
   if (next) {
-    if (RESERVED_HOTKEY_LETTERS.has(next)) {
+    if (reservedHotkeyLetters().has(next)) {
       toastStore.error(
         `'${next}' is reserved for a labeling action — pick another letter.`,
       );

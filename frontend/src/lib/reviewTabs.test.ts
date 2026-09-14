@@ -9,6 +9,8 @@ import {
   REVIEW_PRESETS,
   REVIEW_TABS,
   resolveEffectiveTab,
+  slotTabId,
+  tabFromUrlId,
   type ReviewPresetId,
 } from './reviewTabs';
 
@@ -17,14 +19,16 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
     expect(REVIEW_TABS).toHaveLength(5);
   });
 
-  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / plates', () => {
+  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / slot:license_plate', () => {
     expect(REVIEW_TABS.map((t) => t.id)).toEqual([
       'all',
       'uncertainty',
       'model_disagreements',
       'coco_blind_spots',
-      'plates',
+      'slot:license_plate',
     ]);
+    // urlId is the bookmark contract — 'plates' stays alive there.
+    expect(REVIEW_TABS.find((t) => t.id === 'slot:license_plate')?.urlId).toBe('plates');
   });
 
   it('never renders Outliers as a tab', () => {
@@ -44,7 +48,7 @@ describe('buildReviewTabs (P2.8 data-driving)', () => {
   it('derives a tab from a queue-capable slot, matching its urlId/endpointId/label', () => {
     const tabs = buildReviewTabs([licensePlateSlot]);
     expect(tabs).toHaveLength(1);
-    expect(tabs[0].id).toBe('plates');
+    expect(tabs[0].id).toBe('slot:license_plate');
     expect(tabs[0].urlId).toBe('plates');
     expect(tabs[0].endpointId).toBe('plates');
     expect(tabs[0].label).toBe('Plates');
@@ -68,8 +72,12 @@ describe('buildReviewTabs (P2.8 data-driving)', () => {
 });
 
 describe('isSlotTab', () => {
-  it('is true for the plates tab (backed by a slot queue)', () => {
-    expect(isSlotTab('plates')).toBe(true);
+  it('is true for the license_plate slot tab (backed by a slot queue)', () => {
+    expect(isSlotTab('slot:license_plate')).toBe(true);
+  });
+
+  it('is structurally true for any slot: id, even an unregistered one', () => {
+    expect(isSlotTab(slotTabId('some_future_slot'))).toBe(true);
   });
 
   it('is false for every core tab', () => {
@@ -86,12 +94,26 @@ describe('endpointForTab', () => {
     expect(endpointForTab('uncertainty')).toBe('uncertainty');
   });
 
-  it('resolves the plates tab to its endpointId (identical today, but a distinct lookup)', () => {
-    expect(endpointForTab('plates')).toBe('plates');
+  it("resolves the license_plate slot tab to its endpointId ('plates', identical today)", () => {
+    expect(endpointForTab('slot:license_plate')).toBe('plates');
   });
 
   it('falls through to the raw id for anything not in REVIEW_TABS (e.g. a preset id)', () => {
     expect(endpointForTab('mismatches')).toBe('mismatches');
+  });
+});
+
+describe('tabFromUrlId (bookmark contract)', () => {
+  it('resolves "plates" to slot:license_plate', () => {
+    expect(tabFromUrlId('plates')).toBe('slot:license_plate');
+  });
+
+  it('resolves a core tab urlId to itself', () => {
+    expect(tabFromUrlId('uncertainty')).toBe('uncertainty');
+  });
+
+  it('returns undefined for an unknown urlId', () => {
+    expect(tabFromUrlId('nope')).toBeUndefined();
   });
 });
 
@@ -112,7 +134,9 @@ describe('REVIEW_PRESETS (All-tab quick-filter chips)', () => {
 describe('resolveEffectiveTab', () => {
   it('passes non-all tabs straight through, ignoring any stale preset', () => {
     expect(resolveEffectiveTab('uncertainty', null)).toBe('uncertainty');
-    expect(resolveEffectiveTab('plates', 'mismatches')).toBe('plates');
+    expect(resolveEffectiveTab('slot:license_plate', 'mismatches')).toBe(
+      'slot:license_plate',
+    );
     expect(resolveEffectiveTab('coco_blind_spots', 'gemma_low_conf')).toBe(
       'coco_blind_spots',
     );

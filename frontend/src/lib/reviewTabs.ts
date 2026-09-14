@@ -1,6 +1,6 @@
 import { registeredSlots } from './annotations/registeredSlots';
-import type { SlotSpec } from './annotations/types';
-import type { ReviewTab } from './types';
+import type { SlotKey, SlotSpec } from './annotations/types';
+import type { ReviewTab, SlotReviewTab } from './types';
 
 export interface ReviewTabDef {
   id: ReviewTab;
@@ -68,17 +68,14 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
 
 /**
  * Slot tabs — derived from each queue-capable slot's `QueueCapability`
- * (docs/genericization-plan-2026-09-13.md §3.3/P2.8) instead of a
- * hand-maintained literal. Today `license_plate` is the only queue-
- * capable slot, and its `urlId`/`endpointId` are both `'plates'` — the
- * same value `ReviewTab`'s `'plates'` member already carries — so this
- * is a genuine data-driving of the tab LIST (a new deployment
- * configuring a second queue-capable slot gets a real tab with zero
- * `reviewTabs.ts` edits) without also widening the internal id to
- * `slot:${key}` and re-touching every `tab === 'plates'` call site in
- * `review/+page.svelte` and the `getReviewQueue`/`selectDiverse` params
- * that forward the tab value to the backend — that wider rename is
- * real, separate follow-up work, deliberately not bundled in here.
+ * (docs/genericization-plan-2026-09-13.md §3.3/P2.8, finished by the
+ * §9.5 addendum) instead of a hand-maintained literal. The internal tab
+ * id is the structural `slot:${key}` template (`slotTabId`) — NOT the
+ * slot's `urlId` — so a second queue-capable slot gets a real,
+ * independent tab with zero `reviewTabs.ts` edits and zero risk of
+ * colliding with another slot's `urlId`. The `urlId` (`'plates'` for
+ * `license_plate`) is kept alive purely as the bookmark contract via
+ * `tabFromUrlId()` below.
  *
  * REVIEW_TABS below builds from `registeredSlots`
  * (`./annotations/registeredSlots.ts`, P2.10) — the one deployment-
@@ -86,13 +83,17 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
  * literal `[licensePlateSlot]` here, so registering a new live slot
  * there is the only edit needed to also get its review tab.
  */
+export function slotTabId(key: SlotKey): SlotReviewTab {
+  return `slot:${key}`;
+}
+
 export function buildReviewTabs(slots: SlotSpec[]): ReviewTabDef[] {
   return slots
     .filter((s) => s.capabilities.queue)
     .map((s) => {
       const q = s.capabilities.queue!;
       return {
-        id: q.urlId as ReviewTab,
+        id: slotTabId(s.key),
         label: q.tabLabel,
         urlId: q.urlId,
         endpointId: q.endpointId,
@@ -107,10 +108,23 @@ export const REVIEW_TABS: ReviewTabDef[] = [
 ];
 
 /** True for any tab backed by a slot's queue capability rather than a
- *  core review cohort. Today only `'plates'` — see `buildReviewTabs`'s
- *  doc comment for why the id isn't `slot:${key}` yet. */
-export function isSlotTab(id: ReviewTab): boolean {
-  return REVIEW_TABS.some((t) => t.id === id && t.slot != null);
+ *  core review cohort — structural, not a registry lookup, so it stays
+ *  correct even for a tab id that used to resolve to a slot that has
+ *  since been unregistered. */
+export function isSlotTab(id: ReviewTab): id is SlotReviewTab {
+  return id.startsWith('slot:');
+}
+
+/** Resolves a `?tab=` URL value (a `QueueCapability.urlId`, or a core
+ *  tab's own id) to the internal `ReviewTab`. Existing bookmarks using
+ *  `?tab=plates` keep resolving to `slot:license_plate` forever, even
+ *  though that string no longer appears anywhere as an internal id. */
+export function tabFromUrlId(urlId: string): ReviewTab | undefined {
+  const slotMatch = REVIEW_TABS.find((t) => t.slot != null && t.urlId === urlId);
+  if (slotMatch) return slotMatch.id;
+  const coreMatch = CORE_REVIEW_TABS.find((t) => t.urlId === urlId);
+  if (coreMatch) return coreMatch.id;
+  return undefined;
 }
 
 /** `{API_PREFIX}/review/{endpointId}` — what `getReviewQueue` should
