@@ -155,10 +155,31 @@
   <header
     class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
   >
-    <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
-      <span class="rounded bg-blue-600 px-1.5 py-0.5 font-mono text-xs text-white"
-        >{appBadge}</span
+    <a
+      href="/"
+      class="flex items-center gap-2 text-sm font-semibold tracking-tight"
+      aria-label={appName}
+    >
+      <svg
+        viewBox="0 0 128 128"
+        class="h-6 w-6 shrink-0"
+        role="img"
+        aria-label={appBadge}
       >
+        <rect width="128" height="128" rx="24" fill="#09090b" />
+        <rect x="26" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
+        <rect x="60" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
+        <rect x="26" y="34" width="30" height="30" rx="5" fill="#60a5fa" />
+        <rect x="60" y="34" width="30" height="30" rx="5" fill="#f59e0b" />
+        <path
+          d="M33 49 l6 6 l12 -12"
+          fill="none"
+          stroke="#09090b"
+          stroke-width="4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
       {appName}
     </a>
 
