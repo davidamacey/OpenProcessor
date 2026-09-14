@@ -18,6 +18,7 @@
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import BboxCanvas from '$lib/components/BboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
+  import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
@@ -1215,6 +1216,7 @@
       {queue.items.length > 0 ? `${cursor + 1} / ${queue.items.length}` : '—'} loaded · {queue.total}
       total
     </span>
+    <span class="shrink-0 pl-2"><ShortcutsButton /></span>
     {#if liveNewCount > 0}
       <button
         type="button"

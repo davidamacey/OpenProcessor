@@ -29,6 +29,7 @@
   import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
   import SlotGallery from '$lib/components/slots/SlotGallery.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
+  import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import type { ClusterFilter, OpClass, OpCluster, OpCrop, UndoEntry } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
@@ -567,6 +568,7 @@
   <!-- Toolbar -->
   <div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
     <h1 class="text-lg font-semibold">Clusters</h1>
+    <ShortcutsButton />
 
     {#if classFilter != null}
       <span
