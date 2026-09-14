@@ -14,6 +14,7 @@
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
+  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { createPager } from '$lib/pager.svelte';
   import { createPlateGalleryController } from './plateGalleryController.svelte';
   import { createSelection } from '$lib/selection.svelte';
@@ -386,8 +387,22 @@
   // and use the first 4 plate-bearing crops as thumbnails. Card is
   // null until this resolves; the grid renders it as the first item
   // when the unfiltered view is active.
+  //
+  // Deliberately keyed to `licensePlateSlot` specifically, NOT "the
+  // first slot-bound class" (P2.11, docs/genericization-plan-2026-09-13.md
+  // §9.1 finding): every line below calls the plate-specific
+  // getPlates()/getPlateThumbUrl() endpoints, so silently aliasing to
+  // whichever slot-bound class happened to be first would build a
+  // plate card labeled with a DIFFERENT slot's class the moment a
+  // second capable slot is registered. A generic per-slot synthetic
+  // card is P2.7's SlotGallery parameterization (already scheduled,
+  // not re-planned here) — until that lands, a slot with no
+  // plate-shaped browse endpoint correctly gets no pinned card at all,
+  // rather than an incorrect one.
   async function loadLicensePlateCard(): Promise<void> {
-    const lp = classesStore.classes.find((c) => slotForClassName(c.name) != null);
+    const lp = classesStore.classes.find(
+      (c) => c.name.toLowerCase() === licensePlateSlot.bind.className?.toLowerCase(),
+    );
     if (!lp) {
       lpCard = null;
       return;
@@ -551,8 +566,14 @@
     // items", so route them to that inventory instead. Driven by
     // registeredSlots (P2.10) instead of a hardcoded license_plate
     // string literal.
+    //
+    // P2.11 fix: resolve the CLICKED cluster's own dominant class, not
+    // "the first slot-bound class" — the latter silently routed every
+    // slot-bound cluster to the first registered slot's class filter,
+    // which breaks the instant a second capable slot exists.
     if (slotForClassName(c.dominant_class_name) != null) {
-      const cls = classesStore.classes.find((k) => slotForClassName(k.name) != null);
+      const target = (c.dominant_class_name ?? '').toLowerCase();
+      const cls = classesStore.classes.find((k) => k.name.toLowerCase() === target);
       if (cls) {
         void goto(`/clusters?class=${cls.id}`);
         return;
