@@ -975,28 +975,28 @@
         use:lazyLoadGroupCounts={group}
       >
         <h3 class="mb-2 text-xs font-semibold text-zinc-300">{group.className}</h3>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="flex flex-wrap gap-1.5">
           {#each group.cohorts as cohort (cohort.id)}
             {@const key = cohortKey(group.classId, cohort)}
             {@const count = cohortCounts[key]}
             {@const selected = selectedCohortKey === key}
             <button
               type="button"
-              class="flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-xs transition-colors
+              class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors
                      {selected
                 ? 'border-blue-500 bg-blue-500/10 text-blue-100'
                 : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-blue-500/50'}"
               onclick={() => void loadCohortPreview(group, cohort)}
+              title={cohort.description}
             >
-              <span class="font-semibold">{cohort.label}</span>
+              <span class="font-medium">{cohort.label}</span>
               <span
-                class="font-mono text-[11px] {selected
+                class="font-mono text-[10px] {selected
                   ? 'text-blue-200'
-                  : 'text-zinc-400'}"
+                  : 'text-zinc-500'}"
               >
-                {count == null ? '…' : count.toLocaleString()} rows
+                {count == null ? '…' : count.toLocaleString()}
               </span>
-              <span class="text-[10px] text-zinc-500">{cohort.description}</span>
             </button>
           {/each}
         </div>
