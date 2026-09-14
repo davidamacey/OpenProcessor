@@ -21,6 +21,9 @@ import {
   evaluateShapeGate,
   describeEnvelope as describeShapeEnvelope,
 } from '../shapeGate';
+// Type-only — erased at compile time, so this doesn't create a real
+// runtime cycle with cohorts.ts importing SlotSpec from this module.
+import type { TrainingCohortsCapability } from './cohorts';
 
 /* ------------------------------------------------------------------ */
 /* Primitives                                                          */
@@ -244,6 +247,10 @@ export interface SlotSpec {
     provenance?: ProvenanceCapability;
     lifecycle?: LifecycleCapability;
     queue?: QueueCapability;
+    /** Optional — see `../cohorts.ts` (§9.2 of the plan's addendum).
+     *  Declared here rather than in `cohorts.ts` to avoid a cycle
+     *  (`cohorts.ts` imports `SlotSpec`, not the reverse). */
+    trainingCohorts?: TrainingCohortsCapability;
   };
   endpoints: SlotEndpoints;
   stats?: {

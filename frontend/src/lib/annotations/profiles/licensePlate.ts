@@ -141,6 +141,131 @@ export const licensePlateSlot: SlotSpec = {
       textFilter: { param: 'text', label: 'Text', placeholder: 'e.g. S14' },
       alwaysVisible: true,
     },
+
+    // P2.13 (docs/genericization-plan-2026-09-13.md §9.2.3): the five
+    // LPR training-candidate modes, moved here verbatim from the old
+    // train/+page.svelte:535-557 PLATE_COHORTS literal. Every `id`
+    // equals the existing backend `mode` string and every query is the
+    // same GET with the same params, so the compiled URL is
+    // byte-identical to what getTrainingCandidates(mode, {class_id})
+    // produced — proven in cohorts.test.ts. `false_positives` is the
+    // 5th mode: implemented server-side (op_plates.py:266-283), typed
+    // in the old TrainingCohortMode, and unreachable from the UI until
+    // this registration (§9.1's live defect #1).
+    trainingCohorts: {
+      // license_plate's own hand-tuned lpr_blind_spots/lpr_low_conf_correct
+      // are strictly better than the generic derived blind_spots/low_conf
+      // (they additionally require Gemma verification / a specific
+      // detector-chain tag neither of which is derivable from capability
+      // shape alone) — suppress the generic ones outright rather than
+      // showing both under different ids for the same underlying slot.
+      suppressDerived: ['blind_spots', 'low_conf'],
+      cohorts: [
+        {
+          id: 'lpr_blind_spots',
+          label: 'LPR blind spots',
+          description:
+            'SAM3 found the plate, Gemma confirmed, LPR missed — high-signal training examples',
+          query: {
+            kind: 'endpoint',
+            path: '/plates/training_candidates',
+            params: { mode: 'lpr_blind_spots', class_id: '{classId}' },
+          },
+          rowKind: 'slot',
+          reviewTarget: 'slotQueue',
+        },
+        {
+          id: 'lpr_low_conf_correct',
+          label: 'LPR low confidence',
+          description: 'LPR + Gemma agreed but LPR score < 0.6 — high-loss training rows',
+          query: {
+            kind: 'endpoint',
+            path: '/plates/training_candidates',
+            params: { mode: 'lpr_low_conf_correct', class_id: '{classId}' },
+          },
+          rowKind: 'slot',
+          reviewTarget: 'slotQueue',
+        },
+        {
+          id: 'disagreement',
+          label: 'Model disagreements',
+          description: 'LPR + SAM3 both fired; review for IoU disagreement',
+          query: {
+            kind: 'endpoint',
+            path: '/plates/training_candidates',
+            params: { mode: 'disagreement', class_id: '{classId}' },
+          },
+          rowKind: 'slot',
+          reviewTarget: 'slotQueue',
+        },
+        {
+          id: 'human_corrected',
+          label: 'Human corrected',
+          description: 'Human reviewed and corrected a model output — gold standard',
+          query: {
+            kind: 'endpoint',
+            path: '/plates/training_candidates',
+            params: { mode: 'human_corrected', class_id: '{classId}' },
+          },
+          rowKind: 'slot',
+          reviewTarget: 'slotQueue',
+        },
+        {
+          id: 'false_positives',
+          label: 'False positives',
+          description: 'Human marked a detector box as a false positive (box retained)',
+          query: {
+            kind: 'endpoint',
+            path: '/plates/training_candidates',
+            params: { mode: 'false_positives', class_id: '{classId}' },
+          },
+          rowKind: 'slot',
+          reviewTarget: 'slotQueue',
+        },
+      ],
+    },
+  },
+
+  // P2.13 / §9.6: the LPR export panel's strings, moved here per §3.9's
+  // (never-implemented-until-now) prescription. Distinct from cohorts —
+  // export is a genuine non-goal (openprocessor classifies
+  // legacy_lpr_export.py Bucket B, never ported), so this stays a
+  // profile-private escape hatch, not a generalized capability. Not yet
+  // consumed by /train (P2.15).
+  extras: {
+    datasetExport: {
+      kind: 'lpr',
+      label: 'LPR plate dataset',
+      buildPath: '/export/lpr',
+      statusPath: '/export/lpr/status',
+      datasetKind: 'lpr',
+      singleClass: true,
+      blurb:
+        'Single-class plate dataset (positives + human FP hard-negatives + a sample of plate-free backgrounds).',
+      options: [
+        {
+          key: 'image_mode',
+          label: 'image mode',
+          kind: 'select',
+          choices: ['whole_frame', 'vehicle_crop'],
+          default: 'whole_frame',
+        },
+        {
+          key: 'img_max_side',
+          label: 'image size',
+          kind: 'select',
+          choices: [640, 1280],
+          default: 1280,
+        },
+        { key: 'max_positive_images', label: 'sample N positives', kind: 'number' },
+        {
+          key: 'dedup_threshold',
+          label: 'dedup near-dup frames',
+          kind: 'toggle',
+          onValue: 0.98,
+        },
+      ],
+    },
   },
 
   endpoints: {
