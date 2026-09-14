@@ -24,6 +24,8 @@
     exportLpr,
     exportLprStatus,
     exportStatus,
+    getCrops,
+    getReviewQueue,
     getTrainingCandidates,
     getTrainManifest,
     getTrainPresets,
@@ -43,13 +45,16 @@
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
   import SlotCard from '$components/SlotCard.svelte';
+  import CropCard from '$components/CropCard.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
   import TrainForm from '$components/TrainForm.svelte';
   import TrainProgress from '$components/TrainProgress.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
-  import type { OpDataset } from '$lib/types';
+  import { slotRegistry } from '$lib/annotations/registeredSlots';
+  import { cohortsForClass, type CohortSpec } from '$lib/annotations/cohorts';
+  import type { OpCrop, OpDataset, ReviewItem } from '$lib/types';
   import type {
     ClassSubsetPreset,
     PreflightReport,
@@ -479,7 +484,10 @@
       refreshDataset(),
       refreshLprStatus(),
       refreshRuns(),
-      refreshPlateCohortCounts(),
+      // Deliberately NOT auto-fetched here: with N classes each carrying
+      // ~4 cohorts, an eager fetch-on-mount is an N×4+ parallel-request
+      // storm against the backend (§9.10's flagged risk). Counts load
+      // lazily, only for the class group actually scrolled into view.
     ]);
   });
 
@@ -518,79 +526,188 @@
     return 'yolo26';
   }
 
-  // -- Plate training-cohort picker (Wave 2c E4) -------------------------
+  // -- Training-cohort picker (P2.14, docs/genericization-plan-2026-09-13.md
+  // §9.3) --------------------------------------------------------------
   //
-  // Backed by /curation/plates/training_candidates. Counts for each mode are
-  // fetched in parallel on mount, then again whenever the operator hits
-  // 'Refresh'. Selecting a cohort fetches a 24-card preview so the
-  // operator can sanity-check the cohort before committing to a training
-  // run targeted at it.
+  // Generalized off the old plate-only "Wave 2c E4" panel: cohorts are
+  // now derived per class via cohortsForClass() (§9.2) instead of a
+  // hardcoded 4-mode PLATE_COHORTS literal. `license_plate` still gets
+  // its 5 hand-tuned server-side modes (declared on the slot profile,
+  // P2.13) — including the previously-unreachable 5th mode,
+  // `false_positives` — every other class gets the 4 class-agnostic
+  // CORE_COHORTS for free. `predicateCohortsAvailable` is hardcoded
+  // false: no backend (H5, §9.4) exists yet to answer a tier-2
+  // predicate cohort, so only tier-1 endpoint cohorts ever render —
+  // exactly today's request shapes, nothing new sent over the wire.
+  //
+  // Scope note: cohorts are computed for every non-deprecated class
+  // (the "default to all classes" recommendation, §9.11) rather than
+  // synced to TrainForm's own class-subset selection — that tighter
+  // coupling (lifting `selectedClasses` into this page) is P2.14's
+  // step 1/2 in the plan and is deliberately NOT done here to keep this
+  // change additive-and-reviewable; TrainForm's selection continues to
+  // drive the actual training run unchanged.
+  const classesById = $derived(new Map(classesStore.classes.map((c) => [c.id, c.name])));
 
-  interface PlateCohortInfo {
-    mode: TrainingCohortMode;
-    label: string;
-    description: string;
+  interface CohortGroup {
+    classId: number;
+    className: string;
+    cohorts: CohortSpec[];
   }
 
-  const PLATE_COHORTS: PlateCohortInfo[] = [
-    {
-      mode: 'lpr_blind_spots',
-      label: 'LPR blind spots',
-      description:
-        'SAM3 found the plate, Gemma confirmed, LPR missed — high-signal training examples',
-    },
-    {
-      mode: 'lpr_low_conf_correct',
-      label: 'LPR low confidence',
-      description: 'LPR + Gemma agreed but LPR score < 0.6 — high-loss training rows',
-    },
-    {
-      mode: 'disagreement',
-      label: 'Model disagreements',
-      description: 'LPR + SAM3 both fired; review for IoU disagreement',
-    },
-    {
-      mode: 'human_corrected',
-      label: 'Human corrected',
-      description: 'Human reviewed and corrected a model output — gold standard',
-    },
-  ];
+  const cohortGroups = $derived.by<CohortGroup[]>(() =>
+    classesStore.classes
+      .filter((c) => !c.deprecated)
+      .map((c) => ({
+        classId: c.id,
+        className: c.name,
+        cohorts: cohortsForClass(c.id, c.name, slotRegistry, classesById, false),
+      }))
+      .filter((g) => g.cohorts.length > 0),
+  );
 
-  let plateCohortCounts = $state<Record<string, number | null>>({});
-  let plateCohortMode = $state<TrainingCohortMode | null>(null);
-  let plateCohortPreview = $state<PlateBrowseItem[]>([]);
-  let plateCohortPreviewLoading = $state<boolean>(false);
-  let plateCohortPreviewError = $state<string | null>(null);
+  let cohortCounts = $state<Record<string, number | null>>({});
+  let selectedCohortKey = $state<string | null>(null);
+  let cohortPreview = $state<Array<PlateBrowseItem | OpCrop | ReviewItem>>([]);
+  let cohortPreviewLoading = $state<boolean>(false);
+  let cohortPreviewError = $state<string | null>(null);
 
-  async function refreshPlateCohortCounts(): Promise<void> {
-    const results = await Promise.allSettled(
-      PLATE_COHORTS.map((c) => getTrainingCandidates(c.mode, { page_size: 1 })),
+  /** Stable key across (class, cohort) pairs — a cohort id alone isn't
+   *  unique once multiple classes are shown (e.g. every class has a
+   *  'validated' core cohort). */
+  function cohortKey(classId: number, cohort: CohortSpec): string {
+    return `${classId}:${cohort.id}`;
+  }
+
+  /** Dispatches a compiled tier-1 endpoint query to the one existing
+   *  api.ts function that already answers it — the three shapes every
+   *  CORE_COHORTS/licensePlateSlot cohort compiles to today (§9.1's
+   *  mode table + §9.2.2's CORE_COHORTS). Anything else (a future
+   *  slot's endpoint cohort naming a path none of these three
+   *  recognize) fails closed to an empty/null result rather than
+   *  guessing at an endpoint shape. */
+  async function runCohortQuery(
+    cohort: CohortSpec,
+    pageSize: number,
+  ): Promise<{ total: number; items: Array<PlateBrowseItem | OpCrop | ReviewItem> }> {
+    if (cohort.query.kind !== 'endpoint') return { total: 0, items: [] };
+    const { path, params } = cohort.query;
+    const classId =
+      typeof params.class_id === 'string' ? Number(params.class_id) : undefined;
+
+    if (path === '/plates/training_candidates') {
+      const mode = params.mode as TrainingCohortMode;
+      const res = await getTrainingCandidates(mode, {
+        page_size: pageSize,
+        class_id: classId,
+      });
+      return { total: res.total, items: res.items };
+    }
+    if (path === '/crops') {
+      const res = await getCrops({
+        class_id: classId,
+        label_validated:
+          typeof params.label_validated === 'boolean'
+            ? params.label_validated
+            : undefined,
+        v6_conf_lt: typeof params.v6_conf_lt === 'number' ? params.v6_conf_lt : undefined,
+        limit: pageSize,
+      });
+      return { total: res.total, items: res.items };
+    }
+    if (path === '/review/model_disagreements') {
+      const res = await getReviewQueue('model_disagreements', 1, pageSize, {
+        class_id: classId,
+      });
+      return { total: res.total, items: res.items };
+    }
+    return { total: 0, items: [] };
+  }
+
+  // Lazy per-group counts (§9.10's mitigation for the N-classes ×
+  // M-cohorts count-fetch storm): a group's counts load once, the first
+  // time its header scrolls into the viewport, instead of every group
+  // firing 4 requests on mount.
+  const groupCountsLoaded = new Set<number>();
+  function lazyLoadGroupCounts(node: HTMLElement, group: CohortGroup) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some((e) => e.isIntersecting) &&
+          !groupCountsLoaded.has(group.classId)
+        ) {
+          groupCountsLoaded.add(group.classId);
+          void loadGroupCounts(group);
+        }
+      },
+      { rootMargin: '200px' },
     );
-    const next: Record<string, number | null> = {};
-    PLATE_COHORTS.forEach((c, i) => {
-      const r = results[i];
-      next[c.mode] = r?.status === 'fulfilled' ? r.value.total : null;
-    });
-    plateCohortCounts = next;
+    observer.observe(node);
+    return { destroy: () => observer.disconnect() };
   }
 
-  async function loadPlateCohortPreview(mode: TrainingCohortMode): Promise<void> {
-    plateCohortMode = mode;
-    plateCohortPreviewLoading = true;
-    plateCohortPreviewError = null;
-    plateCohortPreview = [];
+  async function loadGroupCounts(group: CohortGroup): Promise<void> {
+    const results = await Promise.allSettled(
+      group.cohorts.map((c) => runCohortQuery(c, 1)),
+    );
+    const next: Record<string, number | null> = { ...cohortCounts };
+    group.cohorts.forEach((cohort, i) => {
+      const r = results[i];
+      next[cohortKey(group.classId, cohort)] =
+        r?.status === 'fulfilled' ? r.value.total : null;
+    });
+    cohortCounts = next;
+  }
+
+  async function refreshCohortCounts(): Promise<void> {
+    const all = cohortGroups.flatMap((g) =>
+      g.cohorts.map((c) => ({ group: g, cohort: c })),
+    );
+    const results = await Promise.allSettled(
+      all.map(({ cohort }) => runCohortQuery(cohort, 1)),
+    );
+    const next: Record<string, number | null> = { ...cohortCounts };
+    all.forEach(({ group, cohort }, i) => {
+      const r = results[i];
+      next[cohortKey(group.classId, cohort)] =
+        r?.status === 'fulfilled' ? r.value.total : null;
+    });
+    cohortCounts = next;
+  }
+
+  async function loadCohortPreview(
+    group: CohortGroup,
+    cohort: CohortSpec,
+  ): Promise<void> {
+    selectedCohortKey = cohortKey(group.classId, cohort);
+    cohortPreviewLoading = true;
+    cohortPreviewError = null;
+    cohortPreview = [];
     try {
-      const res = await getTrainingCandidates(mode, { page_size: 24 });
-      plateCohortPreview = res.items;
+      const res = await runCohortQuery(cohort, 24);
+      cohortPreview = res.items;
     } catch (e) {
-      plateCohortPreviewError = (e as Error).message;
+      cohortPreviewError = (e as Error).message;
     } finally {
-      plateCohortPreviewLoading = false;
+      cohortPreviewLoading = false;
     }
   }
 
-  function openPlateInReview(p: PlateBrowseItem): void {
-    void goto(`/review?tab=plates&crop_id=${encodeURIComponent(p.crop_id)}`);
+  /** Click target from `reviewTarget` (§9.3 step 7) — kills the last
+   *  hardcoded `?tab=plates` literal on this route. */
+  function openCohortItem(
+    group: CohortGroup,
+    cohort: CohortSpec,
+    item: PlateBrowseItem | OpCrop | ReviewItem,
+  ): void {
+    const cropId = 'crop_id' in item ? item.crop_id : item.id;
+    if (cohort.reviewTarget === 'slotQueue') {
+      const slot = slotRegistry.forClass(group.classId, classesById)[0];
+      const urlId = slot?.capabilities.queue?.urlId ?? 'all';
+      void goto(`/review?tab=${urlId}&crop_id=${encodeURIComponent(cropId)}`);
+      return;
+    }
+    void goto(`/review?tab=all&crop_id=${encodeURIComponent(cropId)}`);
   }
 </script>
 
@@ -826,69 +943,96 @@
     />
   {/if}
 
-  <!-- Plate training cohorts — surfaces the 4 modes from
-       /curation/plates/training_candidates so the next LPR training cycle can
-       be built from "where did LPR miss but SAM3 + Gemma agree" cohorts.
-       Selecting a mode loads a 24-card sanity-preview grid. -->
+  <!-- Training cohorts (P2.14, formerly "Plate training cohorts") —
+       cohortsForClass() (§9.2) surfaces license_plate's 5 hand-tuned
+       server-side modes AND every other class's 4 class-agnostic core
+       cohorts. Grouped by class so "pick the classes you want to train
+       and it goes" reads directly off the screen. Selecting a chip
+       loads a 24-card sanity-preview grid. -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900">
     <header
       class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2"
     >
       <div class="flex flex-col">
-        <h2 class="text-sm font-semibold text-zinc-100">Plate training cohorts</h2>
+        <h2 class="text-sm font-semibold text-zinc-100">Training cohorts</h2>
         <p class="text-[11px] text-zinc-500">
-          Provenance-derived slices for the next LPR training cycle. Pick a mode to
-          preview a sanity grid before committing.
+          Curation-preview slices for the next training cycle, grouped by class. Pick a
+          chip to preview a sanity grid before committing.
         </p>
       </div>
       <button
         type="button"
         class="btn"
-        onclick={() => void refreshPlateCohortCounts()}
+        onclick={() => void refreshCohortCounts()}
         title="Refresh cohort counts"
       >
         Refresh
       </button>
     </header>
-    <div class="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
-      {#each PLATE_COHORTS as c (c.mode)}
-        {@const count = plateCohortCounts[c.mode]}
-        {@const selected = plateCohortMode === c.mode}
-        <button
-          type="button"
-          class="flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-xs transition-colors
-                 {selected
-            ? 'border-blue-500 bg-blue-500/10 text-blue-100'
-            : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-blue-500/50'}"
-          onclick={() => void loadPlateCohortPreview(c.mode)}
-        >
-          <span class="font-semibold">{c.label}</span>
-          <span
-            class="font-mono text-[11px] {selected ? 'text-blue-200' : 'text-zinc-400'}"
-          >
-            {count == null ? '…' : count.toLocaleString()} rows
-          </span>
-          <span class="text-[10px] text-zinc-500">{c.description}</span>
-        </button>
-      {/each}
-    </div>
-    {#if plateCohortMode}
+    {#each cohortGroups as group (group.classId)}
+      <div
+        class="border-b border-zinc-800 p-3 last:border-b-0"
+        use:lazyLoadGroupCounts={group}
+      >
+        <h3 class="mb-2 text-xs font-semibold text-zinc-300">{group.className}</h3>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {#each group.cohorts as cohort (cohort.id)}
+            {@const key = cohortKey(group.classId, cohort)}
+            {@const count = cohortCounts[key]}
+            {@const selected = selectedCohortKey === key}
+            <button
+              type="button"
+              class="flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-xs transition-colors
+                     {selected
+                ? 'border-blue-500 bg-blue-500/10 text-blue-100'
+                : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-blue-500/50'}"
+              onclick={() => void loadCohortPreview(group, cohort)}
+            >
+              <span class="font-semibold">{cohort.label}</span>
+              <span
+                class="font-mono text-[11px] {selected
+                  ? 'text-blue-200'
+                  : 'text-zinc-400'}"
+              >
+                {count == null ? '…' : count.toLocaleString()} rows
+              </span>
+              <span class="text-[10px] text-zinc-500">{cohort.description}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/each}
+    {#if selectedCohortKey}
+      {@const activeCohort = cohortGroups
+        .flatMap((g) => g.cohorts.map((c) => ({ g, c })))
+        .find(({ g, c }) => cohortKey(g.classId, c) === selectedCohortKey)}
       <div class="border-t border-zinc-800 px-3 py-3">
-        {#if plateCohortPreviewError}
-          <p class="text-xs text-red-300">Preview failed: {plateCohortPreviewError}</p>
-        {:else if plateCohortPreviewLoading && plateCohortPreview.length === 0}
+        {#if cohortPreviewError}
+          <p class="text-xs text-red-300">Preview failed: {cohortPreviewError}</p>
+        {:else if cohortPreviewLoading && cohortPreview.length === 0}
           <p class="text-xs text-zinc-500">Loading preview…</p>
-        {:else if plateCohortPreview.length === 0}
+        {:else if cohortPreview.length === 0}
           <p class="text-xs text-zinc-500">
             No rows match this cohort yet — the re-detection drain may still be populating
             provenance. Check back as the queue drains.
           </p>
-        {:else}
+        {:else if activeCohort}
           <div
             class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
           >
-            {#each plateCohortPreview as p (p.crop_id)}
-              <SlotCard crop={p} onclick={openPlateInReview} compact />
+            {#each cohortPreview as item ('crop_id' in item ? item.crop_id : item.id)}
+              {#if activeCohort.c.rowKind === 'slot'}
+                <SlotCard
+                  crop={item as PlateBrowseItem}
+                  onclick={(p) => openCohortItem(activeCohort.g, activeCohort.c, p)}
+                  compact
+                />
+              {:else}
+                <CropCard
+                  crop={item as OpCrop}
+                  onclick={(c) => openCohortItem(activeCohort.g, activeCohort.c, c)}
+                />
+              {/if}
             {/each}
           </div>
         {/if}

@@ -32,6 +32,7 @@
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
   import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
   import {
+    endpointForTab,
     isSlotTab,
     REVIEW_PRESETS,
     REVIEW_TABS,
@@ -137,7 +138,7 @@
     diverseJobStatus = null;
     const k = strategyBar.k ?? DIVERSE_K_DEFAULT;
     const res = await selectDiverse(
-      { review_tab: effectiveTab, filters: termFilters() },
+      { review_tab: endpointForTab(effectiveTab), filters: termFilters() },
       k,
     );
     if (res.kind === 'disabled') {
@@ -251,7 +252,16 @@
   const queue = createPager<ReviewItem>({
     fetchPage: async (page) => {
       if (diverseMode) return fetchDiversePage(page);
-      const res = await getReviewQueue(effectiveTab, page, pageSize, _filter());
+      // effectiveTab is an internal id (slot:${key} for a slot tab,
+      // per P2.8b) — the backend still expects the endpointId
+      // (e.g. 'plates'), so this resolves through endpointForTab()
+      // rather than forwarding the internal id directly.
+      const res = await getReviewQueue(
+        endpointForTab(effectiveTab) as ReviewTab,
+        page,
+        pageSize,
+        _filter(),
+      );
       sortFallbackReason = res.sort_fallback_reason ?? null;
       return res;
     },
@@ -1246,7 +1256,7 @@
          bar. -->
     {#if semanticSearchAvailable}
       <SemanticSearchBox
-        filter={{ tab: effectiveTab, ..._filter() }}
+        filter={{ tab: endpointForTab(effectiveTab), ..._filter() }}
         pageSize={200}
         onResults={(res) => {
           searchModeActive = true;
