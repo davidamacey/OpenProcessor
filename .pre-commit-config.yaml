@@ -131,6 +131,15 @@ repos:
               src/routers/search\.py
           )
 
+      - id: check-no-literal-region-fields
+        name: Ban 'plate_...' literals in ported curation code
+        entry: python3 scripts/codegen/check_no_literal_region_fields.py
+        language: system
+        files: ^(src|scripts|tests)/.*\.py$
+        # Allowlist of already-ported paths lives inside the script
+        # (PORTED_PATHS) — starts empty in Chunk 0; each later wave
+        # appends its newly-ported paths there in the same commit.
+
   # Commit message linting (conventional commits)
   # Note: Disabled for now - requires separate hook installation with:
   # pre-commit install --hook-type commit-msg
