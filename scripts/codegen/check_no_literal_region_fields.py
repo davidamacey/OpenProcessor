@@ -142,6 +142,11 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_train_router.py',
     'tests/curation/test_gpu_arbiter.py',
     'tests/curation/test_gpu_arbiter_config.py',
+    'src/routers/curation/bakeoff.py',
+    'scripts/curation/bakeoff/dedup_sweep.py',
+    'scripts/curation/bakeoff/lean_candidates.py',
+    'scripts/curation/bakeoff/deskew_prototype.py',
+    'tests/curation/test_bakeoff_router.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
