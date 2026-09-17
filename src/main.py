@@ -263,6 +263,33 @@ def create_app() -> FastAPI:
         default_response_class=ORJSONResponse,
     )
 
+    # CORS — allow a labeler/curation frontend and any LAN client to reach
+    # the API. In production a reverse proxy usually handles routing so
+    # cross-origin calls are rare, but this covers: dev mode (vite/webpack
+    # dev servers on a different port), direct API access from LAN IPs, and
+    # any other internal network clients. Ported from the reference
+    # implementation's CORS block (triton-api's src/main.py) — dropped
+    # during the initial OSS port, which broke any frontend dev server
+    # talking to this API cross-origin (browser fetch fails with
+    # "Failed to fetch"/no CORS headers, even though the server itself
+    # processes and logs the request as 200).
+    from fastapi.middleware.cors import CORSMiddleware
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=(
+            r'^https?://(localhost|127\.0\.0\.1|host\.docker\.internal'
+            r'|192\.168\.\d+\.\d+'  # RFC-1918 class C
+            r'|10\.\d+\.\d+\.\d+'  # RFC-1918 class A
+            r'|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+'  # RFC-1918 class B
+            r')(:\d+)?$'
+        ),
+        allow_credentials=True,
+        allow_methods=['*'],
+        allow_headers=['*'],
+        expose_headers=['X-Request-ID', 'X-Process-Time'],
+    )
+
     # Performance Middleware (defined first, runs second in LIFO order)
     @application.middleware('http')
     async def performance_middleware(request: Request, call_next):
