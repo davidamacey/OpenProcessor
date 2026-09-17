@@ -48,6 +48,7 @@ from src.routers import (
     search_router,
     v1_router,
 )
+from src.routers.curation import router as curation_router
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -158,6 +159,18 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     )
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
+
+    # Best-effort: pre-create curation indexes. Wrapped so a missing /
+    # not-yet-up OpenSearch instance doesn't block startup; the curation
+    # router retries the create on first /curation/* request.
+    try:
+        from src.clients.curation_opensearch import create_curation_indexes
+
+        os_client = await OpenSearchClientFactory.get_client()
+        await create_curation_indexes(os_client.client, force_recreate=False)
+        logger.info('curation_indexes_bootstrapped')
+    except Exception as exc:
+        logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
 
     logger.info(
         'service_ready',
@@ -410,6 +423,7 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
+    application.include_router(curation_router)  # /curation/* - Curation/labeling pipeline
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API
