@@ -7,10 +7,11 @@ Production-grade architecture for high-performance visual AI inference at scale.
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Production Deployment Patterns](#production-deployment-patterns)
-3. [Thread Safety and Concurrency](#thread-safety-and-concurrency)
-4. [Best Practices](#best-practices)
-5. [Scaling Strategies](#scaling-strategies)
+2. [Curation Subsystem](#curation-subsystem)
+3. [Production Deployment Patterns](#production-deployment-patterns)
+4. [Thread Safety and Concurrency](#thread-safety-and-concurrency)
+5. [Best Practices](#best-practices)
+6. [Scaling Strategies](#scaling-strategies)
 
 ---
 
@@ -73,6 +74,77 @@ The system uses Docker Compose to orchestrate three core services:
    - OpenSearch 3.0+ with k-NN plugin
    - Port: **4607** (REST API)
    - Indexes: images, faces, objects, ocr
+
+---
+
+## Curation Subsystem
+
+A generic active-learning curation and labeling stack, mounted under a
+single configurable prefix (`CurationConfig.api_prefix`, default
+`/curation`) alongside the core detection/face/embed/OCR routers. It
+was genericized out of a private, domain-specific reference
+implementation (vehicle/license-plate curation) via
+[`docs/design/oss_genericization_phase2_plan.md`](design/oss_genericization_phase2_plan.md);
+the wire contract with an existing labeler frontend is documented in
+[`docs/design/labeler_api_contract.md`](design/labeler_api_contract.md).
+
+### Design principles
+
+- **Config-driven genericity, not a rewrite.** Three dataclasses carry
+  everything that was previously hardcoded for one domain:
+  - `CurationConfig` (`src/config/curation.py`) — OpenSearch index
+    names, filesystem roots, API prefix, embedding dimensions.
+  - `RegionFields` (`src/config/region_fields.py`) — the OpenSearch
+    document field names for a per-item "region of interest"
+    sub-annotation (e.g. a license plate on a vehicle crop). Defaults
+    to `region_*` names; an existing deployment with data under
+    different names constructs its own instance — a rename is a config
+    flip, never a reindex.
+  - `DetectionProfile` (`src/config/detection_profile.py`) — detector
+    model names, aspect/area heuristics, and OCR wiring for one
+    detectable region type. A deployment with a different region type
+    constructs its own profile instead of forking the cascade code.
+- **HTTP wire contract is independent of backend storage field names.**
+  Pydantic request/response model attribute names (e.g.
+  `ItemDoc.plate_bbox_norm`) are frozen and never renamed by this
+  genericization; only the *OpenSearch field* a handler reads/writes
+  internally is routed through `RegionFields`. See
+  `labeler_api_contract.md` for the full frozen-vs-configurable split.
+- **Services before routers, leaves before trunks.** The service layer
+  (`src/services/curation/`, `src/services/detection/`,
+  `src/services/labeling/`, `src/services/training/`) has no FastAPI
+  dependency and is independently testable; routers under
+  `src/routers/curation/` are thin HTTP adapters over it.
+
+### Component map
+
+| Area | Path | Responsibility |
+|---|---|---|
+| Config | `src/config/{curation,region_fields,detection_profile}.py` | Deployment-specific names/roots/thresholds as data |
+| OpenSearch client | `src/clients/curation_opensearch.py` | Index bodies, class registry, per-item CRUD helpers |
+| OCC | `src/clients/occ.py` | Optimistic-concurrency update/bulk helpers shared by every writer; human-label preservation on ingest |
+| Clustering | `src/services/curation/clustering/` | FAISS/IVF + AHC/HDBSCAN residual clustering, auto-promote, embedding reduction |
+| Scoring + selection | `src/services/curation/item_scores/`, `selection/` | Mistakenness/uniqueness/near-dup scores; k-center-greedy diverse sampling |
+| Review | `src/services/curation/{review_queries,review_sorts,holdout}.py` | `/review` tab query construction, sort strategies, frozen test-holdout |
+| Semantic search | `src/services/curation/semantic_search.py` | PE-Core kNN text→image search over the items index |
+| Auto-label pipeline | `src/services/curation/autolabel/` | File-backed job dispatch to the long-lived auto-label worker |
+| Export | `src/services/curation/export.py` | Generic YOLO-format dataset export (deterministic split, manifest checksum) |
+| Detection cascade | `src/services/detection/` | Crop quality, frame dedup, PE preprocessing, ensemble NMS, region lean, FP store, cascade orchestration |
+| VLM labeling | `src/services/labeling/{vlm_client,vlm_labeler,vlm_prompts}.py` | VLM transport/retry, class-resolution + region-verify orchestration, prompt/vocabulary packs |
+| Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote, bakeoff harness |
+| Routers | `src/routers/curation/` (21 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `labeler_api_contract.md` for the full route table |
+| Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,sam_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
+
+### What's intentionally thinner than the reference
+
+The reference implementation's domain-specific bulk-ingest, label-import
+and single-class dataset-export services are Bucket B — proprietary
+dataset-family logic the genericization plan declines to extract. `POST /curation/ingest/image`, `/ingest/batch`,
+`/import_labels*` and `/export/lpr` therefore have no generic
+equivalent; `ingest.py`/`export.py` only carry the parts that were
+already backend-agnostic (status/backlog introspection, path lookup,
+the generic multi-class YOLO exporter). This is a known, accepted gap
+— the most likely first follow-up after this subsystem ships.
 
 ---
 
