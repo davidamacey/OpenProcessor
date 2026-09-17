@@ -48,14 +48,18 @@ from pathlib import Path
 # yet). Each later wave appends its newly-ported paths here in the same
 # commit that ports them — see §3.2 "Per-chunk enforcement guard".
 #
-# Chunk 1 (foundations), commit (a): the OpenSearch client and its
-# tests. Note: `test_region_fields_mapping_coverage.py` is deliberately
-# NOT listed here — like `test_region_fields.py`, it legitimately
-# constructs a `plate_*`-named RegionFields instance to prove
-# overridability (§3.2).
+# Chunk 1 (foundations). Note: `test_region_fields_mapping_
+# coverage.py` is deliberately NOT listed here — like
+# `test_region_fields.py`, it legitimately constructs a `plate_*`-named
+# RegionFields instance to prove overridability (§3.2).
 PORTED_PATHS: tuple[str, ...] = (
+    # commit (a) — OpenSearch client
     'src/clients/curation_opensearch.py',
     'tests/curation/test_curation_opensearch.py',
+    # commit (b) — router `_common` foundations
+    'src/routers/curation/_common.py',
+    'src/routers/curation/__init__.py',
+    'tests/curation/test_ensure_indexes.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
