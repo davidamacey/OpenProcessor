@@ -68,6 +68,12 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_curation_images.py',
     'tests/curation/test_history.py',
     'tests/curation/test_source_image_cache.py',
+    # Chunk 4 commit (a) — clustering methods + backend primitives
+    'src/services/curation/clustering/backend.py',
+    'src/services/curation/clustering/id_normalize.py',
+    'src/services/curation/clustering/outliers.py',
+    'src/services/curation/clustering/methods/',
+    'tests/curation/test_cluster_id_normalize.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
