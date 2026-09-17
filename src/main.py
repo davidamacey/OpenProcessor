@@ -53,6 +53,7 @@ from src.routers.curation_images import (
     crops_router as curation_crops_router,
     router as curation_images_router,
 )
+from src.routers.curation_train import router as curation_train_router
 from src.routers.curation_umap import router as curation_umap_router
 
 
@@ -434,6 +435,7 @@ def create_app() -> FastAPI:
         curation_crops_router
     )  # /curation/crops/* - Crop thumbnails/overlays
     application.include_router(curation_umap_router)  # /curation/cluster/* - UMAP residual reducer
+    application.include_router(curation_train_router)  # /curation/train/* - Training pipeline
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API
