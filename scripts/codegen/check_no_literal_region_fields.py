@@ -125,6 +125,23 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_methods_router.py',
     'tests/curation/test_test_holdout_freeze.py',
     'tests/curation/test_backfill_scores_cli.py',
+    # Chunk 6 — training pipeline (services, router, bakeoff harness)
+    'src/services/training/jobs.py',
+    'src/services/training/preflight_scan.py',
+    'src/services/training/profiles.py',
+    'src/services/training/triton_promote.py',
+    'src/services/training/yolo_triton_config.py',
+    'src/services/training/gpu_arbiter.py',
+    'src/config/gpu_arbiter.py',
+    'src/routers/curation_train.py',
+    'tests/curation/test_train_jobs.py',
+    'tests/curation/test_train_preflight_scan.py',
+    'tests/curation/test_yolo26_triton_config.py',
+    'tests/curation/test_triton_promote.py',
+    'tests/curation/test_promote_registry_pin.py',
+    'tests/curation/test_train_router.py',
+    'tests/curation/test_gpu_arbiter.py',
+    'tests/curation/test_gpu_arbiter_config.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.

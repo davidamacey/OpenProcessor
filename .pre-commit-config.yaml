@@ -135,7 +135,10 @@ repos:
               src/routers/ingest\.py|
               src/routers/search\.py|
               src/clients/curation_opensearch\.py|
-              src/services/curation/clustering/orchestrator\.py
+              src/services/curation/clustering/orchestrator\.py|
+              src/services/training/triton_promote\.py|
+              src/routers/curation_train\.py|
+              src/services/training/jobs\.py
           )
         # src/services/curation/clustering/orchestrator.py (Chunk 4, see
         # docs/design/oss_genericization_phase2_plan.md §0.5) lands at
@@ -143,6 +146,17 @@ repos:
         # grab-bag; splitting it during the port would make the diff
         # unreviewable per §5 Chunk 4's R11 import-cycle note. Follow-up
         # split tracked by that plan, not silently ignored.
+        # src/services/training/triton_promote.py (803 LOC) and
+        # src/routers/curation_train.py (1460 LOC) — Chunk 6, same §0.5
+        # pre-approval. Grandfathered on arrival from the curation port;
+        # follow-up split tracked by that plan, not silently ignored.
+        # src/services/training/jobs.py (925 LOC) — Chunk 6. NOT in §0.5's
+        # original five-file list (that audit undercounted this chunk: it
+        # flagged only curation_train.py, missing that the reference
+        # train_jobs.py is also over cap). Grandfathered here for the same
+        # reason as the rest of this chunk's oversize files — splitting a
+        # freshly-ported file mid-port makes the diff unreviewable (R8).
+        # Follow-up split tracked alongside the other Chunk 6 entries.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code
