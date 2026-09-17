@@ -134,8 +134,15 @@ repos:
               src/services/duplicate_detection\.py|
               src/routers/ingest\.py|
               src/routers/search\.py|
-              src/clients/curation_opensearch\.py
+              src/clients/curation_opensearch\.py|
+              src/services/curation/clustering/orchestrator\.py
           )
+        # src/services/curation/clustering/orchestrator.py (Chunk 4, see
+        # docs/design/oss_genericization_phase2_plan.md §0.5) lands at
+        # ~1770 LOC on arrival — a genuine cohesive orchestrator, not a
+        # grab-bag; splitting it during the port would make the diff
+        # unreviewable per §5 Chunk 4's R11 import-cycle note. Follow-up
+        # split tracked by that plan, not silently ignored.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code

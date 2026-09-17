@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from src.services.curation.history import (
@@ -217,6 +219,102 @@ class TestAppendPlateChainEntry:
         assert len(result) == MAX_PLATE_CHAIN_ENTRIES
         # Newest at tail.
         assert result[-1].startswith('secondary_detector:1:hit@')
+
+
+# =============================================================================
+# auto_promote_clusters missing-writer regression (Chunk 4 deferral note —
+# ported alongside orchestrator.py/auto_promote.py per the plan's Chunk 4
+# section rather than with the rest of the reference line's missing-writer
+# test suite's cases, which depend on modules not yet ported — the
+# region-detection worker's bulk writer, the class-merge writer, and the
+# proprietary-dataset label-import writer — and land in later waves).
+# =============================================================================
+
+
+class _FakeAutoPromoteOS:
+    """Enough of the AsyncOpenSearch surface for auto_promote_clusters:
+    one aggregation search, one scroll-init search, one scroll page,
+    then per-doc OCC get/update via occ_skip_on_conflict_bulk."""
+
+    def __init__(self) -> None:
+        self.update_calls: list[dict[str, Any]] = []
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        if 'aggs' in body:
+            return {
+                'aggregations': {
+                    'clusters': {
+                        'buckets': [
+                            {
+                                'key': 1,
+                                'doc_count': 5,
+                                'top_class': {
+                                    'buckets': [{'key': 'honda', 'doc_count': 5}],
+                                },
+                            },
+                        ],
+                    },
+                },
+            }
+        # Scroll-init search for doc ids matching the promote query.
+        return {
+            '_scroll_id': 'scroll-1',
+            'hits': {'hits': [{'_id': 'crop-a'}]},
+        }
+
+    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
+
+    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {}
+
+    async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
+        from curation.occ_fakes import make_mget_response
+
+        source = {
+            'class_id': 7,
+            'class_name': 'honda',
+            'class_source': 'v6_model',
+            'class_validated': False,
+            'test_holdout': False,
+        }
+        found = {d['_id']: source for d in body['docs']}
+        return make_mget_response(found)
+
+    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        from curation.occ_fakes import make_bulk_response, make_bulk_update_item
+
+        items = []
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            doc_id = action['update']['_id']
+            self.update_calls.append(doc['doc'])
+            items.append(make_bulk_update_item(doc_id, status=200))
+        return make_bulk_response(items)
+
+
+async def _run_auto_promote_case() -> list[dict[str, Any]]:
+    # Import via orchestrator's re-export, matching every real caller
+    # (the pipeline router, the clusters router) — importing
+    # auto_promote directly as the first cluster-related module in the
+    # process can hit the pre-existing orchestrator<->auto_promote
+    # circular import (R11 — see
+    # docs/design/oss_genericization_phase2_plan.md §7).
+    from src.services.curation.clustering.orchestrator import auto_promote_clusters
+
+    fake_os = _FakeAutoPromoteOS()
+    result = await auto_promote_clusters(fake_os, min_purity=0.85, min_members=4, dry_run=False)
+    assert result['promoted'] == 1
+    assert len(fake_os.update_calls) == 1
+    return fake_os.update_calls[0].get('class_id_history') or []
+
+
+@pytest.mark.asyncio
+async def test_auto_promote_appends_history() -> None:
+    history = await _run_auto_promote_case()
+    assert history, 'auto_promote: no class_id_history entry was written'
+    assert history[-1]['writer'] == 'auto_promote'
+    assert history[-1]['class_id'] == 7
+    assert history[-1]['class_source'] == 'v6_model'
 
 
 if __name__ == '__main__':
