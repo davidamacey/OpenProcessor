@@ -147,6 +147,14 @@ PORTED_PATHS: tuple[str, ...] = (
     'scripts/curation/bakeoff/lean_candidates.py',
     'scripts/curation/bakeoff/deskew_prototype.py',
     'tests/curation/test_bakeoff_router.py',
+    # Chunk 7 commit (a) — VLM client (transport) + PromptPack (prompt
+    # data). `vlm_prompts.py` carries no `RegionFields`-governed literals
+    # of its own (its neutral pack's wire-key strings match
+    # `RegionFields` defaults already, e.g. `region_visible`) but is
+    # listed for completeness since it's part of the same port.
+    'src/services/labeling/vlm_client.py',
+    'src/services/labeling/vlm_prompts.py',
+    'tests/curation/test_prompt_pack.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
