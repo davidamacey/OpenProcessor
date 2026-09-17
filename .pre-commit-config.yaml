@@ -120,6 +120,11 @@ repos:
         files: ^(src|scripts)/.*\.py$
         # Ratchet: modules already over the cap are grandfathered until
         # they get split. Do NOT add new entries here — split the module.
+        # Exception: docs/design/oss_genericization_phase2_plan.md §0.5
+        # pre-approves five specific curation-port files that arrive over
+        # the cap on day one (porting them pre-split would make the diffs
+        # unreviewable); each is grandfathered on arrival with a follow-up
+        # split tracked by that plan, not silently ignored.
         exclude: |
           (?x)^(
               src/ultralytics_patches/|
@@ -128,7 +133,8 @@ repos:
               src/services/face_identity\.py|
               src/services/duplicate_detection\.py|
               src/routers/ingest\.py|
-              src/routers/search\.py
+              src/routers/search\.py|
+              src/clients/curation_opensearch\.py
           )
 
       - id: check-no-literal-region-fields
