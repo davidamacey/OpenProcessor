@@ -49,6 +49,10 @@ from src.routers import (
     v1_router,
 )
 from src.routers.curation import router as curation_router
+from src.routers.curation_images import (
+    crops_router as curation_crops_router,
+    router as curation_images_router,
+)
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -424,6 +428,10 @@ def create_app() -> FastAPI:
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
     application.include_router(curation_router)  # /curation/* - Curation/labeling pipeline
+    application.include_router(curation_images_router)  # /curation/images/* - Source image serving
+    application.include_router(
+        curation_crops_router
+    )  # /curation/crops/* - Crop thumbnails/overlays
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API

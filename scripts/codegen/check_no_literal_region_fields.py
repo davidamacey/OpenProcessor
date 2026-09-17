@@ -60,6 +60,14 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/routers/curation/_common.py',
     'src/routers/curation/__init__.py',
     'tests/curation/test_ensure_indexes.py',
+    # Chunk 2 — image serving, history, source-image cache
+    'src/services/curation/image_serving.py',
+    'src/services/curation/history.py',
+    'src/services/curation/source_image_cache.py',
+    'src/routers/curation_images.py',
+    'tests/curation/test_curation_images.py',
+    'tests/curation/test_history.py',
+    'tests/curation/test_source_image_cache.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
