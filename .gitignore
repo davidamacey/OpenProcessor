@@ -67,6 +67,10 @@ outputs/
 
 # Triton Python backends (created by Docker at runtime)
 backends/
+# ...except the bake-off harness's `backends/` subpackage (source code,
+# not a runtime-generated dir) -- see docs/design/oss_genericization_
+# phase2_plan.md Chunk 6.
+!scripts/curation/bakeoff/backends/
 
 # FAISS index files (generated during training)
 faiss_indexes/

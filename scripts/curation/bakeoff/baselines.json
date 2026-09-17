@@ -1,0 +1,74 @@
+{
+  "_comment": "Public/commercial baseline detectors + our quantization variants for the LPR bake-off. To add a model, append an entry here (no code change). Paths must be readable by the bake-off evaluator container (it mounts your dataset root, a scratch/output dir, /runs, and the training-data root, incl. the quant/ output dir). 'mode' may be full|crop|both. The ours_*_onnx variants are produced by export/quantize.py; FP16 ONNX is the primary NVIDIA deliverable, INT8 QDQ ONNX is the lighter/faster edge+paper datapoint.",
+  "baselines": [
+    {
+      "name": "lpr_nanov11_640",
+      "backend": "ultralytics",
+      "weights": "/mnt/nvm/photos_license/lpr-nanov11-640.pt",
+      "imgsz": 640,
+      "device": "cuda",
+      "training_data": "andrewmvd Kaggle"
+    },
+    {
+      "name": "open-image-models-yolov9t",
+      "backend": "open-image-models",
+      "imgsz": 1280,
+      "device": "cuda",
+      "training_data": "open plate datasets"
+    },
+    {
+      "name": "ml-debi-yolov8",
+      "backend": "ultralytics",
+      "weights": "/mnt/nvm/datasets/models/ml-debi_yolov8_lpd/best.onnx",
+      "imgsz": 640,
+      "device": "cuda",
+      "training_data": "undocumented"
+    },
+    {
+      "name": "morsetechlab-yolo11s",
+      "backend": "ultralytics",
+      "weights": "/mnt/nvm/datasets/models/morsetechlab_yolov11_lpd/license-plate-finetune-v1s.pt",
+      "imgsz": 640,
+      "device": "cuda",
+      "training_data": "Roboflow ALPR"
+    },
+    {
+      "name": "lpdnet-usa",
+      "backend": "lpdnet",
+      "weights": "/mnt/nvm/datasets/models/lpdnet_pruned_v2.2.1/lpdnet_pruned_v2.2.1/LPDNet_usa_pruned_tao5.onnx",
+      "lpdnet_variant": "usa",
+      "device": "cuda",
+      "training_data": "NVIDIA TAO (US)"
+    },
+    {
+      "name": "ours_fp32_onnx",
+      "backend": "onnxruntime",
+      "weights": "/mnt/nvm/curation_train_data/quant/ours_yolo26n/fp32.onnx",
+      "imgsz": 640,
+      "device": "cuda",
+      "coords_normalized": false,
+      "ort_providers": "CUDAExecutionProvider,CPUExecutionProvider",
+      "training_data": "curated YOLO26 (FP32 ONNX baseline)"
+    },
+    {
+      "name": "ours_fp16_onnx",
+      "backend": "onnxruntime",
+      "weights": "/mnt/nvm/curation_train_data/quant/ours_yolo26n/fp16.onnx",
+      "imgsz": 640,
+      "device": "cuda",
+      "coords_normalized": false,
+      "ort_providers": "CUDAExecutionProvider,CPUExecutionProvider",
+      "training_data": "curated YOLO26 (FP16 ONNX — primary NVIDIA deliverable)"
+    },
+    {
+      "name": "ours_int8_onnx",
+      "backend": "onnxruntime",
+      "weights": "/mnt/nvm/curation_train_data/quant/ours_yolo26n/int8_qdq.onnx",
+      "imgsz": 640,
+      "device": "cuda",
+      "coords_normalized": false,
+      "ort_providers": "TensorrtExecutionProvider,CUDAExecutionProvider,CPUExecutionProvider",
+      "training_data": "curated YOLO26 (INT8 QDQ ONNX — lighter/faster)"
+    }
+  ]
+}
