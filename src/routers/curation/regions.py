@@ -24,6 +24,7 @@ from src.routers.curation._common import (
     OpenSearchDep,
     _ensure_indexes,
     _now_iso,
+    config,
     logger,
     router,
 )
@@ -75,8 +76,8 @@ def _region_item(src: dict[str, Any], crop_id: str) -> dict[str, Any]:
         'plate_cluster_subid': src.get(F.cluster_subid),
         'plate_cluster_distance': src.get(F.cluster_distance),
         'updated_at': src.get('updated_at', ''),
-        'thumbnail_url': f'/kb/crops/{crop_id}/thumbnail',
-        'plate_thumbnail_url': f'/kb/crops/{crop_id}/plate_thumbnail',
+        'thumbnail_url': f'{config.api_prefix}/crops/{crop_id}/thumbnail',
+        'plate_thumbnail_url': f'{config.api_prefix}/crops/{crop_id}/plate_thumbnail',
     }
 
 

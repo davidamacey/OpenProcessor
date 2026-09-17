@@ -242,9 +242,12 @@ _LITERAL_RE = re.compile(r"""['"](plate_[a-z_]+)['"]""")
 _PYDANTIC_ATTR_RE = re.compile(r'^\s*plate_[a-z_]+\s*:')
 # Wire-response dict key whose value is visibly RegionFields-routed, a
 # Pydantic wire-model attribute, or a URL path literal — see the module
-# docstring's "two line-level skips" note.
+# docstring's "two line-level skips" note. The URL-literal form covers
+# both a literal leading slash (``f'/...'``) and a leading f-string
+# interpolation (``f'{config.api_prefix}/...'``) — both are still just
+# URL construction, never an OpenSearch field reference.
 _WIRE_KEY_RE = re.compile(
-    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(src\.get\(F\.|payload\.|\w+\[F\.|f?['"]/)"""
+    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(src\.get\(F\.|payload\.|\w+\[F\.|f['"](/|\{))"""
 )
 # Membership check against a wire model's own `model_fields_set`.
 _FIELDS_SET_RE = re.compile(r"""['"]plate_[a-z_]+['"]\s+in\s+fields_set""")
