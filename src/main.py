@@ -122,7 +122,7 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan API contract
+async def lifespan(app: FastAPI):
     """
     Application lifecycle manager.
 
@@ -177,6 +177,19 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
         logger.info('curation_indexes_bootstrapped')
     except Exception as exc:
         logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
+
+    # Best-effort: warm the PE-Core text encoder for GET /curation/search/text.
+    # Non-fatal if torch/perception_models isn't installed or the checkpoint
+    # isn't available — the search endpoint surfaces a 503 in that case
+    # rather than the whole service failing to start.
+    from src.clients.pe_encoder import PEEncoder
+
+    app.state.pe_encoder = PEEncoder(triton_pool=AppResources.async_triton_pool)
+    try:
+        app.state.pe_encoder.warm_text_encoder()
+        logger.info('pe_text_encoder_warmed')
+    except Exception as exc:
+        logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
     logger.info(
         'service_ready',
