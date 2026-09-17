@@ -5,7 +5,7 @@ Never fits a real UMAP here — ``fit_projection`` (the only
 function in ``embedding_viz.py`` that imports ``umap``) is monkeypatched
 wholesale in every test that exercises the job lifecycle, same convention
 ``test_kb_clustering.py``'s ``_patch_umap_passthrough`` and
-``test_kb_scores_router.py``'s ``run_scoring_job`` monkeypatch both use.
+``test_scores_router.py``'s ``run_scoring_job`` monkeypatch both use.
 """
 
 from __future__ import annotations
@@ -348,7 +348,7 @@ async def test_get_cached_projection_applies_cluster_and_class_filters(
 # =============================================================================
 # Regression guard — never writes cluster fields (plan §8 non-goal #3),
 # mirrors test_crop_scores.py::test_no_scorer_writes_cluster_fields /
-# test_kb_select_router.py's structural source-scan guard.
+# test_select_router.py's structural source-scan guard.
 # =============================================================================
 
 _FORBIDDEN_CLUSTER_FIELDS = frozenset({'cluster_id', 'cluster_subid', 'cluster_distance'})
