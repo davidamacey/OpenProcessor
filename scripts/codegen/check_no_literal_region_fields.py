@@ -161,6 +161,12 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_vlm_labeler.py',
     'tests/curation/test_vlm_combined.py',
     'tests/curation/test_class_synonyms.py',
+    # Chunk 8 commit (a) — detection cascade, parameterized by
+    # DetectionProfile and renamed to region terms.
+    'src/services/detection/cascade_detect.py',
+    'tests/curation/test_cascade_detect.py',
+    'tests/curation/test_plate_sanity.py',
+    'tests/curation/test_detection_profile_second_profile.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
