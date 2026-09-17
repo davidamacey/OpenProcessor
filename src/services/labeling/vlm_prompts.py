@@ -1,16 +1,16 @@
 """``PromptPack`` — the domain half of the VLM labeler split (§3.4).
 
-The reference ``gemma_labeler.py`` hardcodes ~180 lines of reference vehicle
-/ plate prompt prose (system + user templates, a vehicle-class
+The reference ``gemma_labeler.py`` hardcodes ~180 lines of vehicle /
+plate prompt prose (system + user templates, a vehicle-class
 description table, a synonym table) as module constants. That prose is
 domain content for a proprietary dataset family and is **not** shipped
 here — only the generic *shape* (this dataclass) plus one small, neutral
 example instance so the OSS product works out of the box and has test
 coverage.
 
-A future reference-specific pack (e.g. ``VEHICLE_PROMPT_PACK`` in a
-``src/config/reference_profile.py`` overlay, see Appendix A of the plan)
-would carry the same field set with the real vehicle/plate prose.
+A future deployment-specific pack (e.g. a ``VEHICLE_PROMPT_PACK`` in a
+proprietary-dataset config overlay, see Appendix A of the plan) would
+carry the same field set with the real vehicle/plate prose.
 
 Field-naming note: the *wire* keys a pack's prompts ask the VLM to
 return for the region-of-interest sub-annotation (``region_visible``,
