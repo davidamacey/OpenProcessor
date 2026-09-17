@@ -91,6 +91,7 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
         label_source='plate_label_source',
         source='plate_source',
         pairing='plate_pairing',
+        skip_verify='plate_skip_gemma_verify',
         bbox_norm_legacy='plate_bbox_norm_legacy',
         score_legacy='plate_score_legacy',
         status_legacy='plate_status_legacy',

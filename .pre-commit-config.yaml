@@ -140,7 +140,8 @@ repos:
               src/routers/curation_train\.py|
               src/services/training/jobs\.py|
               src/services/labeling/vlm_labeler\.py|
-              src/services/detection/cascade_detect\.py
+              src/services/detection/cascade_detect\.py|
+              scripts/curation/worker/runner\.py
           )
         # src/services/curation/clustering/orchestrator.py (Chunk 4, see
         # docs/design/oss_genericization_phase2_plan.md §0.5) lands at
@@ -178,6 +179,11 @@ repos:
         # would make the diff unreviewable (R8); grandfathered here for
         # the same reason as the rest of this chunk's oversize files.
         # Follow-up split tracked alongside the other oversize entries.
+        # scripts/curation/worker/runner.py (~1300 LOC) — Chunk 8, per
+        # plan section 5's explicit call-out: "runner.py is 1264 LOC ->
+        # ratchet exclude entry ... §0.5" and R8 ("explicitly
+        # grandfathered ... do NOT attempt that split inside Chunk 8").
+        # Separate follow-up split, not tracked as a gap.
 
       - id: check-no-literal-region-fields
         name: Ban 'plate_...' literals in ported curation code
