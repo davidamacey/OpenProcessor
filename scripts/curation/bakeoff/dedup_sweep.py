@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Recompute the whole-frame near-duplicate threshold sweep for the paper.
 
-Pulls the ``legacy_images.pe_embedding`` vector for every confirmed-plate frame
-(the region-status field set to 'detected') and reports, per cosine threshold, the number of
-near-duplicate groups, frames dropped (each group collapses to one
-representative), the drop fraction, and the largest group. This is the data
-behind ``tab:dedup`` in ``docs/paper/lpr_bakeoff.tex`` and the justification for
-the adopted tau=0.98 cut. Re-run whenever the confirmed-plate pool changes::
+Pulls the images index's ``pe_embedding`` vector for every confirmed-plate
+frame (the region-status field set to 'detected') and reports, per cosine
+threshold, the number of near-duplicate groups, frames dropped (each group
+collapses to one representative), the drop fraction, and the largest group.
+This is the data behind ``tab:dedup`` in ``docs/paper/lpr_bakeoff.tex`` and
+the justification for the adopted tau=0.98 cut. Re-run whenever the
+confirmed-plate pool changes::
 
     .venv/bin/python scripts/curation/bakeoff/dedup_sweep.py
 
@@ -21,7 +22,7 @@ import logging
 import numpy as np
 import requests
 
-from src.config import get_region_fields
+from src.config import get_curation_config, get_region_fields
 from src.services.detection.frame_dedup import near_dup_groups
 
 
@@ -29,8 +30,9 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger('dedup_sweep')
 
 OS_URL = 'http://localhost:4607'
-CROPS_INDEX = 'legacy_vehicle_crops'
-IMAGES_INDEX = 'legacy_images'
+_cfg = get_curation_config()
+CROPS_INDEX = _cfg.items_index
+IMAGES_INDEX = _cfg.images_index
 THRESHOLDS = (0.960, 0.970, 0.980, 0.990, 0.995)
 
 

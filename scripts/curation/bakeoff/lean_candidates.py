@@ -25,7 +25,7 @@ import cv2
 import numpy as np
 import requests
 
-from src.config import get_region_fields
+from src.config import get_curation_config, get_region_fields
 
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -33,6 +33,7 @@ logger = logging.getLogger('lean_candidates')
 
 OS_URL = 'http://localhost:4607'
 OUT = Path('/tmp/lean')
+CROPS_INDEX = get_curation_config().items_index
 
 
 def sample_crops(n: int, vclass: str, seed: int) -> list[dict]:
@@ -56,7 +57,7 @@ def sample_crops(n: int, vclass: str, seed: int) -> list[dict]:
             }
         },
     }
-    resp = requests.post(f'{OS_URL}/legacy_vehicle_crops/_search', json=body, timeout=90).json()
+    resp = requests.post(f'{OS_URL}/{CROPS_INDEX}/_search', json=body, timeout=90).json()
     return [{**h['_source'], '_id': h['_id']} for h in resp.get('hits', {}).get('hits', [])]
 
 
