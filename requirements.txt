@@ -49,6 +49,7 @@ pyyaml
 
 # Structured Logging
 structlog>=24.1.0  # Structured logging with context and JSON output
+tenacity>=8.2  # Retry/backoff for src/services/labeling/vlm_client.py (VLM HTTP calls)
 
 # Metrics
 prometheus-client>=0.20  # /metrics exposition + HTTP latency histogram
