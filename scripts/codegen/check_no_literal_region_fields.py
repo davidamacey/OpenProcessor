@@ -181,6 +181,13 @@ PORTED_PATHS: tuple[str, ...] = (
     # Chunk 8 commit (b) — region + region-fp routers.
     'src/routers/curation/regions.py',
     'src/routers/curation/regions_fp.py',
+    # Chunk 8 commit (c) — curation detection worker package.
+    'scripts/curation/worker/',
+    'scripts/curation/sam_worker_main.py',
+    'tests/curation/test_sam_worker.py',
+    'tests/curation/test_label_combined_wireup.py',
+    'tests/curation/test_sam3_telemetry.py',
+    'tests/integration/test_sam3_circuit_breaker.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.

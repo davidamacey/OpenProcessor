@@ -83,6 +83,14 @@ class RegionFields:
     label_source: str = 'region_label_source'
     source: str = 'region_source'
     pairing: str = 'region_pairing'
+    # Internal cascade flag: set when a detector's confidence was high
+    # enough to skip the VLM verify round-trip entirely (see
+    # DetectionProfile / the curation worker's fast-path). Not part of
+    # the original 37-attribute count in the reference audit (docs/design/
+    # oss_genericization_phase2_plan.md §3.2) -- added while porting
+    # Chunk 8's worker, per that section's own instruction: "if you hit
+    # a literal with no matching attribute, add the attribute."
+    skip_verify: str = 'region_skip_verify'
 
     # Legacy-suffixed columns kept for rollback (e.g. plate_*_legacy).
     bbox_norm_legacy: str = 'region_bbox_norm_legacy'

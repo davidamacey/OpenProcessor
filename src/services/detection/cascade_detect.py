@@ -71,6 +71,10 @@ DEFAULT_PROFILE = DetectionProfile(
     ocr_rec_model='paddleocr_rec',
     ocr_rec_version='1',
     ocr_pipeline_model='ocr_pipeline',
+    # Crop classes routed straight to the secondary segmenter, skipping
+    # the primary detector — the reference LPR model is known weak on
+    # motorcycle plates (near-square, off-axis mounting).
+    secondary_shape_groups=frozenset({'sportbikes', 'cruisers', 'dirtbikes'}),
 )
 
 # The lpr_nanov11_640-shaped TRT engine is exported with a fixed
