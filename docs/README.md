@@ -41,6 +41,13 @@ Technical documentation for the Visual AI API.
 |----------|-------------|
 | [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch index design |
 
+### Curation / Labeling
+
+| Document | Description |
+|----------|-------------|
+| [design/oss_genericization_phase2_plan.md](design/oss_genericization_phase2_plan.md) | The plan that built the generic `curation` subsystem (config, clustering, scoring, training, VLM labeling, detection cascade) |
+| [design/labeler_api_contract.md](design/labeler_api_contract.md) | `/curation` HTTP wire contract — Pydantic model field names, frozen vs. configurable |
+
 ---
 
 ## API Reference
@@ -59,6 +66,7 @@ The API provides these endpoint groups (all on port 4603):
 | `/clusters` | FAISS clustering | train, stats, albums |
 | `/query` | Data retrieval | image, stats, duplicates |
 | `/health` | Monitoring | Service health, model status |
+| `/curation` | Curation + active-learning labeling subsystem | classes, crops, regions, clusters, review, scores, select, VLM labeling, training, export, pipeline — see [labeler_api_contract.md](design/labeler_api_contract.md) |
 
 ---
 
@@ -84,11 +92,21 @@ OpenProcessor/
 │   │   ├── analyze.py        # /analyze endpoints
 │   │   ├── clusters.py       # /clusters endpoints
 │   │   ├── query.py          # /query endpoints
-│   │   └── health.py         # /health endpoints
+│   │   ├── health.py         # /health endpoints
+│   │   └── curation/         # /curation endpoints (classes, crops, regions,
+│   │                         #   clusters, review, scores, select, vlm, ...)
 │   ├── services/             # Business logic
+│   │   ├── curation/         # Curation subsystem services (clustering, scoring,
+│   │   │                     #   selection, event hub, semantic search, export)
+│   │   ├── detection/         # Detection cascade primitives
+│   │   ├── labeling/          # VLM client/labeler/prompts
+│   │   └── training/          # Training pipeline (jobs, profiles, promote)
 │   ├── clients/              # Triton and OpenSearch clients
 │   └── schemas/              # Pydantic models
 │
+├── scripts/curation/         # Curation worker entry points (vlm_worker.py,
+│                             #   auto_label_worker.py, cluster_refresh_daemon.py,
+│                             #   detection worker package)
 ├── export/                   # Model export scripts
 ├── models/                   # Triton model repository
 ├── benchmarks/               # Performance testing

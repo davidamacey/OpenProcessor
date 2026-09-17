@@ -167,3 +167,80 @@ when the corresponding backend OpenSearch field is renamed via
 - A proposed `annotation_slots` field on `GET /legacy/classes` was raised by
   the frontend team but has not yet been received/approved by the
   backend as of this writing; it is not reflected above.
+
+---
+
+## Chunk 9 update — the generic `/curation` implementation now exists
+
+Everything above this line was written in Chunk 0 from the read-only
+reference tree, before `origin/main` had any implementation at all. As
+of Chunk 9 (the final content wave of
+`docs/design/oss_genericization_phase2_plan.md`), the generic port is
+complete and mounted under `CurationConfig.api_prefix` (default
+`/curation`). This section is the update the frontend team asked for:
+does the frozen-attribute-names statement above still hold against the
+*real* implementation, and what does the full route list actually look
+like.
+
+**The frozen-attribute-names statement holds.** Every Pydantic
+wire model referenced above (`CropDoc` → `ItemDoc`, `CropBatchStatusRequest`,
+`CropPlateMetaRequest`, etc. — see `src/routers/curation/_common.py`)
+kept its `plate_*` attribute names verbatim through the port, exactly as
+promised: `ItemDoc.plate_bbox_norm`, `ItemDoc.plate_score`,
+`CropBatchStatusRequest.plate_status`, `_PublishEvent.plate_status`, and
+so on are unchanged Python identifiers on the response/request models.
+Only the *OpenSearch document field* each handler reads/writes
+internally moved onto `RegionFields` (defaulting to `region_*` names);
+the JSON a client sends/receives is byte-for-byte what this doc already
+described. `scripts/codegen/check_no_literal_region_fields.py`'s ratchet
+is the enforcement mechanism — a `'plate_...'` string literal in a
+ported module (as an OpenSearch field reference) fails pre-commit, while
+the same string as a Pydantic attribute declaration
+(`^\s*plate_[a-z_]+\s*:`) is explicitly exempted for exactly this reason.
+
+**Full route list (103 routes under `/curation` as of this wave).**
+Grouped by router module; every path is relative to the configured
+`api_prefix`:
+
+| Router module | Routes |
+|---|---|
+| `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
+| `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
+| `regions.py` / `regions_fp.py` | `GET /plates`, `PUT /crops/{crop_id}/plate`, `PUT /crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `POST /plates/batch_status`, `POST /plates/cluster`, `GET /plates/cluster/status`, `GET /plates/clusters`, `POST /plates/clusters/refine/{cluster_id}`, `POST /plates/fp_centroids/build`, `GET /plates/fp_centroids/status`, `GET /plates/suspected_false_positives`, `GET /plates/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
+| `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
+| `ingest.py` | `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
+| `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
+| `search.py` | `GET /search/text` |
+| `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
+| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `GET /pipeline/events` |
+| `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
+| `review.py` / `scores.py` / `select.py` / `methods.py` | `GET /review/{tab}`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods` |
+| `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
+| `bakeoff.py` | `GET,POST /bakeoff/*` |
+| `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
+
+The exact, always-current list is produced by the plan's own §6.0
+verification snippet:
+
+```python
+from src.main import app
+routes = sorted(r.path for r in app.routes if r.path.startswith('/curation'))
+print(len(routes)); print('\n'.join(routes))
+```
+
+**What changed vs. the Chunk 0 description above, and why it's not a
+wire-contract break:** the reference's `/legacy/import_labels`,
+`/legacy/import_labels/batch`, `/legacy/ingest` (single + batch) and
+`/legacy/export/lpr` have no equivalent under `/curation` — their only real
+implementation lives in Bucket B services (proprietary bulk-ingest,
+label-import, and single-class dataset-export logic) that this plan
+never ports anywhere (§1, §7 R5). This is a scope gap in
+the generic offering, not a contract change to any route that *does*
+exist — every route this doc documents above is present and unchanged
+on the wire. `POST /export/yolo` is backed by a new generic
+`GenericYoloExportService` (`src/services/curation/export.py`) rather
+than the reference's domain-specific exporter, but its request/response
+JSON shape (`ExportYoloRequest` in, the same `status/export_dir/
+version_tag/manifest_path/dataset_sha/split_counts/...` envelope out)
+is unchanged.
