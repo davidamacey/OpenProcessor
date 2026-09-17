@@ -32,15 +32,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
-from src.services.curation.clustering.auto_promote import auto_promote_clusters
+from src.services.curation.clustering import orchestrator as _orchestrator
+
 
 # Import order matters here (R11): orchestrator.py's bottom-of-file
 # import of auto_promote.py only resolves cleanly if orchestrator is
 # the FIRST of the two modules loaded in this process — see
-# docs/design/oss_genericization_phase2_plan.md §7 R11. Importing
-# ITEMS_INDEX from orchestrator first (before auto_promote_clusters)
-# guarantees that ordering regardless of pytest's collection order.
-from src.services.curation.clustering.orchestrator import ITEMS_INDEX
+# docs/design/oss_genericization_phase2_plan.md §7 R11. The assignment
+# below (rather than a plain `from orchestrator import ITEMS_INDEX`)
+# is deliberate: it's a real statement that breaks ruff/isort's import
+# block so it can't silently re-alphabetize auto_promote's import back
+# above orchestrator's, which reintroduces the ImportError this file
+# exists to avoid.
+ITEMS_INDEX = _orchestrator.ITEMS_INDEX
+
+from src.services.curation.clustering.auto_promote import auto_promote_clusters  # noqa: E402
 
 
 # =============================================================================

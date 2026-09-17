@@ -24,6 +24,13 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
 from src.core.logging import get_logger
+
+# Import order matters here — see orchestrator.py's bottom-of-file import
+# and plan §7 R11. orchestrator.py imports auto_promote_clusters from this
+# module at the bottom of its file, forming an intentional, preserved
+# circular import: importing this module first (in isolation) fails, but
+# the app always imports orchestrator first, so this resolves fine in
+# practice. Do not "fix" this cycle.
 from src.services.curation.clustering.orchestrator import ITEMS_INDEX
 from src.services.curation.history import record_class_history
 
