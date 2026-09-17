@@ -215,6 +215,19 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_export_router.py',
     'tests/curation/test_search_router.py',
     'tests/curation/test_search_no_legacy_tokens.py',
+    'tests/curation/test_classes_router.py',
+    'tests/curation/test_stats_router.py',
+    'tests/integration/test_stats_router.py',
+    'tests/curation/test_router_wireup.py',
+    'tests/curation/test_models_unload.py',
+    'tests/curation/test_write_guards.py',
+    'tests/curation/test_occ.py',
+    'tests/integration/test_ingest_occ.py',
+    'tests/integration/test_auto_label_class_name_fix.py',
+    'tests/integration/test_request_id_propagation.py',
+    # Chunk 9 commit (c) — pipeline router.
+    'src/routers/curation/pipeline.py',
+    'tests/curation/test_pipeline.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
