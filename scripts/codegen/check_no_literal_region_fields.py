@@ -155,6 +155,12 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/labeling/vlm_client.py',
     'src/services/labeling/vlm_prompts.py',
     'tests/curation/test_prompt_pack.py',
+    # Chunk 7 commit (b) — VLM labeler (orchestration) + router.
+    'src/services/labeling/vlm_labeler.py',
+    'src/routers/curation/vlm.py',
+    'tests/curation/test_vlm_labeler.py',
+    'tests/curation/test_vlm_combined.py',
+    'tests/curation/test_class_synonyms.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
