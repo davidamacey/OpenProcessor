@@ -16,6 +16,10 @@ module.
 from __future__ import annotations
 
 import src.routers.curation.clusters
+import src.routers.curation.methods
+import src.routers.curation.review
+import src.routers.curation.scores
+import src.routers.curation.select
 import src.routers.curation.viz  # noqa: F401 - side-effect import
 from src.clients.curation_opensearch import get_class_registry
 
@@ -28,12 +32,15 @@ from src.clients.curation_opensearch import get_class_registry
 # shared `router`); the UMAP-rebuild operator router
 # (`src/routers/curation_umap.py`) lives outside this package like
 # curation_images, and is registered directly in src/main.py.
-from src.routers.curation._common import _ensure_indexes, router
+# Chunk 5 adds `review`, `scores`, `select` and `methods` (all register
+# on this package's shared `router`).
+from src.routers.curation._common import _ensure_indexes, _raw_opensearch_dep, router
 from src.routers.curation_images import crops_router as images_crops_router, router as images_router
 
 
 __all__ = [
     '_ensure_indexes',
+    '_raw_opensearch_dep',
     'get_class_registry',
     'images_crops_router',
     'images_router',

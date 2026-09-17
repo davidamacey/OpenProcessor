@@ -102,6 +102,29 @@ PORTED_PATHS: tuple[str, ...] = (
     # but the function itself uncallable.
     'src/clients/occ.py',
     'tests/curation/occ_fakes.py',
+    # Chunk 5 — scoring, selection and review services + routers
+    'src/services/curation/item_scores/',
+    'src/services/curation/selection/',
+    'src/services/curation/review_queries.py',
+    'src/services/curation/review_sorts.py',
+    'src/services/curation/holdout.py',
+    'src/services/curation/strategy_registry.py',
+    'src/routers/curation/review.py',
+    'src/routers/curation/scores.py',
+    'src/routers/curation/select.py',
+    'src/routers/curation/methods.py',
+    'scripts/curation/backfill_scores.py',
+    'tests/curation/test_crop_scores.py',
+    'tests/curation/test_mistakenness.py',
+    'tests/curation/test_kcenter_greedy.py',
+    'tests/curation/test_select_router.py',
+    'tests/curation/test_review_router.py',
+    'tests/curation/test_review_sorts.py',
+    'tests/curation/test_review_disagreements.py',
+    'tests/curation/test_scores_router.py',
+    'tests/curation/test_methods_router.py',
+    'tests/curation/test_test_holdout_freeze.py',
+    'tests/curation/test_backfill_scores_cli.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
