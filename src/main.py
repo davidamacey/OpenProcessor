@@ -428,6 +428,13 @@ def create_app() -> FastAPI:
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API
 
+    # The curation metric registry (src.services.curation.metrics) registers
+    # Counter/Histogram objects on the prometheus_client default REGISTRY at
+    # import time; import it here so its module-level side effects run even
+    # if no curation route has been hit yet — the existing /metrics endpoint
+    # (src.routers.health) picks them up automatically via generate_latest().
+    import src.services.curation.metrics  # noqa: F401
+
     return application
 
 
