@@ -136,3 +136,20 @@ def index_name(cfg: CurationConfig, role: IndexRole) -> str:
     is deployment-overridable.
     """
     return getattr(cfg, _INDEX_ROLE_ATTR[role])
+
+
+_default_curation_config: CurationConfig | None = None
+
+
+def get_curation_config() -> CurationConfig:
+    """Module-level default ``CurationConfig`` instance.
+
+    Callers that need a deployment-specific instance (e.g. a future
+    overlay for an existing deployment) should construct and inject
+    their own rather than relying on this default — mirrors
+    :func:`src.config.region_fields.get_region_fields`.
+    """
+    global _default_curation_config  # noqa: PLW0603 - lazily-built module singleton
+    if _default_curation_config is None:
+        _default_curation_config = CurationConfig()
+    return _default_curation_config
