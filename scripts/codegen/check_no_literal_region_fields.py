@@ -74,6 +74,34 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/curation/clustering/outliers.py',
     'src/services/curation/clustering/methods/',
     'tests/curation/test_cluster_id_normalize.py',
+    # Chunk 4 commit (b) — clustering orchestrator + cluster/umap/viz routers
+    'src/services/curation/clustering/orchestrator.py',
+    'src/services/curation/clustering/auto_promote.py',
+    'src/services/curation/clustering/embedding_reduce.py',
+    'src/services/curation/embedding_viz.py',
+    'src/routers/curation/clusters.py',
+    'src/routers/curation_umap.py',
+    'src/routers/curation/viz.py',
+    'tests/curation/test_clustering_orchestrator.py',
+    'tests/curation/test_clustering_orchestrator_extra.py',
+    'tests/curation/test_cluster_backend_nonblocking.py',
+    'tests/curation/test_ivf_idspace.py',
+    'tests/curation/test_embedding_viz.py',
+    'tests/curation/test_curation_viz_router.py',
+    'tests/curation/test_cluster_representatives_router.py',
+    # The reference line's clustering-wave regression-guards test file
+    # is deliberately NOT ported — it exercises four reference-line-only
+    # pre-commit guard scripts (label-validated, prototype, legacy-search,
+    # mobileclip guards) that plan section 0.6 already resolved as "not
+    # applicable" / "not inherited" on the working branch, independent
+    # of this chunk.
+    # Chunk 4 commit (b), continued — src.clients.occ ported ahead of its
+    # originally-scheduled wave (see the port's commit message / plan
+    # deviation note): a genuine, plan-missed hard dependency of
+    # auto_promote.py that would otherwise leave `import src.main` clean
+    # but the function itself uncallable.
+    'src/clients/occ.py',
+    'tests/curation/occ_fakes.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
