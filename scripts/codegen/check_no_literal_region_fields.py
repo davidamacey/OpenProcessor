@@ -47,7 +47,16 @@ from pathlib import Path
 # literals. Starts empty in Chunk 0 (scaffolding only, nothing ported
 # yet). Each later wave appends its newly-ported paths here in the same
 # commit that ports them — see §3.2 "Per-chunk enforcement guard".
-PORTED_PATHS: tuple[str, ...] = ()
+#
+# Chunk 1 (foundations), commit (a): the OpenSearch client and its
+# tests. Note: `test_region_fields_mapping_coverage.py` is deliberately
+# NOT listed here — like `test_region_fields.py`, it legitimately
+# constructs a `plate_*`-named RegionFields instance to prove
+# overridability (§3.2).
+PORTED_PATHS: tuple[str, ...] = (
+    'src/clients/curation_opensearch.py',
+    'tests/curation/test_curation_opensearch.py',
+)
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
 _FULLY_EXEMPT_FILES = frozenset(

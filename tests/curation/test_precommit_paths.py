@@ -86,11 +86,12 @@ def test_check_no_literal_region_fields_allowlist_paths_exist_on_disk() -> None:
     )
 
 
-def test_check_no_literal_region_fields_allowlist_starts_empty() -> None:
-    """Chunk 0 pin: no curation files are ported yet, so the allowlist
-    must start empty. Later chunks are expected to grow it — this test
-    documents the Chunk-0 starting state, not a permanent invariant.
-    """
+def test_check_no_literal_region_fields_allowlist_only_grows_with_real_ports() -> None:
+    """Chunk 1 onward: the allowlist is expected to grow monotonically as
+    each wave ports files — see `test_...allowlist_paths_exist_on_disk`
+    above for the standing invariant. This test only pins that entries
+    are unique (a duplicate entry would be a copy-paste mistake, not a
+    real new port)."""
     from scripts.codegen.check_no_literal_region_fields import PORTED_PATHS
 
-    assert PORTED_PATHS == ()
+    assert len(PORTED_PATHS) == len(set(PORTED_PATHS)), 'duplicate PORTED_PATHS entry'
