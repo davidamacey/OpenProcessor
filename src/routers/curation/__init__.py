@@ -21,7 +21,8 @@ import src.routers.curation.methods
 import src.routers.curation.review
 import src.routers.curation.scores
 import src.routers.curation.select
-import src.routers.curation.viz  # noqa: F401 - side-effect import
+import src.routers.curation.viz
+import src.routers.curation.vlm  # noqa: F401 - side-effect import
 from src.clients.curation_opensearch import get_class_registry
 
 # Side-effect imports: each module registers its endpoints on `router`.
@@ -38,13 +39,18 @@ from src.clients.curation_opensearch import get_class_registry
 # on this package's shared `router`; the training router,
 # `src/routers/curation_train.py`, lives outside this package like
 # curation_images/curation_umap and is registered directly in
-# src/main.py).
+# src/main.py). Chunk 7 adds `vlm` (registers on this package's shared
+# `router`; re-exports `_get_vlm_labeler` because the ported tests
+# patch it by string, mirroring the reference package's
+# `_get_gemma_labeler` re-export).
 from src.routers.curation._common import _ensure_indexes, _raw_opensearch_dep, router
+from src.routers.curation.vlm import _get_vlm_labeler
 from src.routers.curation_images import crops_router as images_crops_router, router as images_router
 
 
 __all__ = [
     '_ensure_indexes',
+    '_get_vlm_labeler',
     '_raw_opensearch_dep',
     'get_class_registry',
     'images_crops_router',
