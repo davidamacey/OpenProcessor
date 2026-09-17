@@ -317,5 +317,75 @@ async def test_auto_promote_appends_history() -> None:
     assert history[-1]['class_source'] == 'v6_model'
 
 
+# =============================================================================
+# Curation worker combined-VLM path (bulk_writer.py's OCC merger)
+#
+# Deferred here from Chunk 2 (docs/design/oss_genericization_phase2_plan.md
+# §6.1 "test_history_writers.py" — one case of that reference file) since
+# it exercises scripts/curation/worker/bulk_writer.py, which lands in
+# Chunk 8. Extends this file rather than porting a second one — the
+# reference test file covers three other class-writer cases (auto_promote,
+# a class-merge router endpoint, and a label-import script) alongside this
+# one; those are out of this chunk's scope and stay unported for now.
+# =============================================================================
+
+
+async def _run_curation_worker_case() -> list[dict[str, Any]]:
+    from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
+    from scripts.curation.worker.bulk_writer import _bulk_update
+    from scripts.curation.worker.state import _ItemTask
+    from src.config import get_region_fields
+
+    F = get_region_fields()
+    t = _ItemTask(
+        crop_id='crop-1',
+        image_path='/dev/null/never-read',
+        vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        plate_status='pending',
+        class_name='audi',
+        group='cars',
+    )
+    t.update_doc = {
+        'class_id': 9,
+        'class_name': 'camaro',
+        'class_source': 'gemma',
+        'label_source': 'gemma',
+        'class_validated': False,
+        F.status: 'detected',
+        F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
+    }
+
+    source = {
+        'class_id': 5,
+        'class_name': 'honda',
+        'class_source': 'v6_model',
+        'class_validated': False,
+    }
+
+    from unittest.mock import AsyncMock
+
+    opensearch = AsyncMock()
+    opensearch.mget = AsyncMock(return_value=make_mget_response({'crop-1': source}))
+    opensearch.bulk = AsyncMock(
+        return_value=make_bulk_response([make_bulk_update_item('crop-1', status=200)])
+    )
+
+    n_written, _n_skipped = await _bulk_update(opensearch, [t])
+    assert n_written == 1
+    assert opensearch.bulk.await_args is not None
+    bulk_body = opensearch.bulk.await_args.kwargs['body']
+    written_doc = bulk_body[1]['doc']
+    return written_doc.get('class_id_history') or []
+
+
+@pytest.mark.asyncio
+async def test_curation_worker_appends_history() -> None:
+    history = await _run_curation_worker_case()
+    assert history, 'curation worker: no class_id_history entry was written'
+    assert history[-1]['writer'] == 'sam_worker'
+    assert history[-1]['class_id'] == 5
+    assert history[-1]['class_source'] == 'v6_model'
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
