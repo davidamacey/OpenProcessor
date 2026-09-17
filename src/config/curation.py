@@ -146,6 +146,12 @@ _default_curation_config: CurationConfig | None = None
 def get_curation_config() -> CurationConfig:
     """Module-level default ``CurationConfig`` instance.
 
+    Built via :meth:`CurationConfig.from_env` so the ``OP_*`` env vars
+    documented on that classmethod (e.g. ``OP_API_PREFIX``) actually take
+    effect for the process-wide default — this was previously
+    constructing a bare ``CurationConfig()`` and silently ignoring every
+    ``OP_*`` override.
+
     Callers that need a deployment-specific instance (e.g. a future
     overlay for an existing deployment) should construct and inject
     their own rather than relying on this default — mirrors
@@ -153,5 +159,5 @@ def get_curation_config() -> CurationConfig:
     """
     global _default_curation_config  # noqa: PLW0603 - lazily-built module singleton
     if _default_curation_config is None:
-        _default_curation_config = CurationConfig()
+        _default_curation_config = CurationConfig.from_env()
     return _default_curation_config
