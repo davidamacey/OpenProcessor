@@ -24,11 +24,22 @@ Two hardcoded exemptions (never driven by ``PORTED_PATHS``):
 - ``tests/curation/test_region_fields.py`` — the overridability fixture
   legitimately constructs a `plate_*`-named instance.
 
-Plus a line-level skip for Pydantic attribute declarations of the shape
-``plate_foo: ...`` (matching ``^\\s*plate_[a-z_]+\\s*:``) — those are
-the frozen HTTP wire contract with the labeler frontend (see
-``docs/design/labeler_api_contract.md``), not an OpenSearch field
-reference, and are explicitly out of ``RegionFields``' scope.
+Plus two line-level skips for the frozen HTTP wire contract with the
+labeler frontend (see ``docs/design/labeler_api_contract.md``) — never
+an OpenSearch field reference, and explicitly out of ``RegionFields``'
+scope:
+
+- Pydantic attribute declarations of the shape ``plate_foo: ...``
+  (matching ``^\\s*plate_[a-z_]+\\s*:``).
+- Wire-response dict-literal keys whose *value* is visibly routed
+  through ``RegionFields`` (``F.foo`` / ``doc[F.foo]``), a Pydantic
+  model attribute (``payload.foo``), or a URL path literal (``f'/...'``)
+  — e.g. ``'plate_status': src.get(F.status)`` in a router's
+  OpenSearch-doc -> wire-JSON serializer, or ``'plate_text' in
+  fields_set`` checking membership against a wire model's own frozen
+  field-set. The **left-hand** key is the wire contract (frozen); the
+  right-hand side is what this guard actually polices, and it's already
+  clean by construction here.
 
 Run manually: `python3 scripts/codegen/check_no_literal_region_fields.py <files...>`
 """
@@ -167,6 +178,9 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_cascade_detect.py',
     'tests/curation/test_plate_sanity.py',
     'tests/curation/test_detection_profile_second_profile.py',
+    # Chunk 8 commit (b) — region + region-fp routers.
+    'src/routers/curation/regions.py',
+    'src/routers/curation/regions_fp.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
@@ -179,6 +193,14 @@ _FULLY_EXEMPT_FILES = frozenset(
 
 _LITERAL_RE = re.compile(r"""['"](plate_[a-z_]+)['"]""")
 _PYDANTIC_ATTR_RE = re.compile(r'^\s*plate_[a-z_]+\s*:')
+# Wire-response dict key whose value is visibly RegionFields-routed, a
+# Pydantic wire-model attribute, or a URL path literal — see the module
+# docstring's "two line-level skips" note.
+_WIRE_KEY_RE = re.compile(
+    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(src\.get\(F\.|payload\.|\w+\[F\.|f?['"]/)"""
+)
+# Membership check against a wire model's own `model_fields_set`.
+_FIELDS_SET_RE = re.compile(r"""['"]plate_[a-z_]+['"]\s+in\s+fields_set""")
 
 
 def _is_ported(rel_posix: str) -> bool:
@@ -202,6 +224,8 @@ def _scan_file(path: Path) -> list[tuple[int, str]]:
         return violations
     for lineno, line in enumerate(text.splitlines(), start=1):
         if _PYDANTIC_ATTR_RE.match(line):
+            continue
+        if _WIRE_KEY_RE.match(line) or _FIELDS_SET_RE.search(line):
             continue
         if _LITERAL_RE.search(line):
             violations.append((lineno, line.strip()))
