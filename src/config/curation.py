@@ -62,6 +62,7 @@ class CurationConfig:
 
     class_registry_path: Path = Path('./data/class_registry.json')
     source_root: Path = Path('./data/images')
+    export_root: Path = Path('./data/exports')
     source_path_aliases: Mapping[str, Path] = field(default_factory=dict)
     state_dir: Path = Path('/var/lib/openprocessor')
     crop_cache_dir: Path = Path('/dev/shm/openprocessor_crops')  # nosec B108 — intentional tmpfs cache
@@ -107,6 +108,7 @@ class CurationConfig:
             clusters_index=_str('CLUSTERS_INDEX', defaults.clusters_index),
             class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
             source_root=_path('SOURCE_ROOT', defaults.source_root),
+            export_root=_path('EXPORT_ROOT', defaults.export_root),
             source_path_aliases=defaults.source_path_aliases,
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
