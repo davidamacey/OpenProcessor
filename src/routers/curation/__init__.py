@@ -18,6 +18,8 @@ from __future__ import annotations
 import src.routers.curation.bakeoff
 import src.routers.curation.clusters
 import src.routers.curation.methods
+import src.routers.curation.regions
+import src.routers.curation.regions_fp
 import src.routers.curation.review
 import src.routers.curation.scores
 import src.routers.curation.select
@@ -42,7 +44,11 @@ from src.clients.curation_opensearch import get_class_registry
 # src/main.py). Chunk 7 adds `vlm` (registers on this package's shared
 # `router`; re-exports `_get_vlm_labeler` because the ported tests
 # patch it by string, mirroring the reference package's
-# `_get_gemma_labeler` re-export).
+# `_get_gemma_labeler` re-export). Chunk 8 adds `regions` and
+# `regions_fp` (both register on this package's shared `router`);
+# `regions_fp` imports helpers from `regions` directly (not through
+# this package's `__init__`), so there is no import-order requirement
+# between the two side-effect imports above.
 from src.routers.curation._common import _ensure_indexes, _raw_opensearch_dep, router
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.routers.curation_images import crops_router as images_crops_router, router as images_router
