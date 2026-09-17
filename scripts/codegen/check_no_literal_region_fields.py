@@ -188,6 +188,16 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_label_combined_wireup.py',
     'tests/curation/test_sam3_telemetry.py',
     'tests/integration/test_sam3_circuit_breaker.py',
+    # Chunk 9 commit (a) — remaining services.
+    'src/services/curation/semantic_search.py',
+    'src/services/curation/event_hub.py',
+    'src/services/curation/probe_predictions.py',
+    'src/services/curation/export.py',
+    'src/services/curation/autolabel/job.py',
+    'src/services/curation/autolabel/cli.py',
+    'tests/curation/test_semantic_search.py',
+    'tests/curation/test_probe_predictions.py',
+    'tests/curation/test_export_service.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
