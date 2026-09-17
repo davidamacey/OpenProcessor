@@ -18,14 +18,18 @@ from __future__ import annotations
 from src.clients.curation_opensearch import get_class_registry
 
 # Side-effect imports: each module registers its endpoints on `router`.
-# Empty for now — Chunk 1 ports only `_common` (no endpoint sub-modules
-# yet); later waves add one import per router here in the same commit
-# that ports it.
+# Chunk 1 ports only `_common` (no endpoint sub-modules yet); later
+# waves add one import per router here in the same commit that ports
+# it. Chunk 2 adds curation_images (two routers: `router`, `crops_router`
+# — both live outside this package, mirroring the reference layout).
 from src.routers.curation._common import _ensure_indexes, router
+from src.routers.curation_images import crops_router as images_crops_router, router as images_router
 
 
 __all__ = [
     '_ensure_indexes',
     'get_class_registry',
+    'images_crops_router',
+    'images_router',
     'router',
 ]
