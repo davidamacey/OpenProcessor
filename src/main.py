@@ -48,6 +48,13 @@ from src.routers import (
     search_router,
     v1_router,
 )
+from src.routers.curation import router as curation_router
+from src.routers.curation_images import (
+    crops_router as curation_crops_router,
+    router as curation_images_router,
+)
+from src.routers.curation_train import router as curation_train_router
+from src.routers.curation_umap import router as curation_umap_router
 
 
 # Request correlation IDs (request_id_ctx / get_request_id) live in
@@ -115,7 +122,7 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan API contract
+async def lifespan(app: FastAPI):
     """
     Application lifecycle manager.
 
@@ -158,6 +165,31 @@ async def lifespan(app: FastAPI):  # noqa: ARG001 - Required by FastAPI lifespan
     )
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
+
+    # Best-effort: pre-create curation indexes. Wrapped so a missing /
+    # not-yet-up OpenSearch instance doesn't block startup; the curation
+    # router retries the create on first /curation/* request.
+    try:
+        from src.clients.curation_opensearch import create_curation_indexes
+
+        os_client = await OpenSearchClientFactory.get_client()
+        await create_curation_indexes(os_client.client, force_recreate=False)
+        logger.info('curation_indexes_bootstrapped')
+    except Exception as exc:
+        logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
+
+    # Best-effort: warm the PE-Core text encoder for GET /curation/search/text.
+    # Non-fatal if torch/perception_models isn't installed or the checkpoint
+    # isn't available — the search endpoint surfaces a 503 in that case
+    # rather than the whole service failing to start.
+    from src.clients.pe_encoder import PEEncoder
+
+    app.state.pe_encoder = PEEncoder(triton_pool=AppResources.async_triton_pool)
+    try:
+        app.state.pe_encoder.warm_text_encoder()
+        logger.info('pe_text_encoder_warmed')
+    except Exception as exc:
+        logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
     logger.info(
         'service_ready',
@@ -229,6 +261,33 @@ def create_app() -> FastAPI:
         version=_read_version(),
         lifespan=lifespan,
         default_response_class=ORJSONResponse,
+    )
+
+    # CORS — allow a labeler/curation frontend and any LAN client to reach
+    # the API. In production a reverse proxy usually handles routing so
+    # cross-origin calls are rare, but this covers: dev mode (vite/webpack
+    # dev servers on a different port), direct API access from LAN IPs, and
+    # any other internal network clients. Ported from the reference
+    # implementation's CORS block (triton-api's src/main.py) — dropped
+    # during the initial OSS port, which broke any frontend dev server
+    # talking to this API cross-origin (browser fetch fails with
+    # "Failed to fetch"/no CORS headers, even though the server itself
+    # processes and logs the request as 200).
+    from fastapi.middleware.cors import CORSMiddleware
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=(
+            r'^https?://(localhost|127\.0\.0\.1|host\.docker\.internal'
+            r'|192\.168\.\d+\.\d+'  # RFC-1918 class C
+            r'|10\.\d+\.\d+\.\d+'  # RFC-1918 class A
+            r'|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+'  # RFC-1918 class B
+            r')(:\d+)?$'
+        ),
+        allow_credentials=True,
+        allow_methods=['*'],
+        allow_headers=['*'],
+        expose_headers=['X-Request-ID', 'X-Process-Time'],
     )
 
     # Performance Middleware (defined first, runs second in LIFO order)
@@ -410,9 +469,23 @@ def create_app() -> FastAPI:
     application.include_router(query_router)  # /query - Data retrieval
     application.include_router(ocr_router)  # /ocr - Text extraction
     application.include_router(models_router)  # /models - Model management
+    application.include_router(curation_router)  # /curation/* - Curation/labeling pipeline
+    application.include_router(curation_images_router)  # /curation/images/* - Source image serving
+    application.include_router(
+        curation_crops_router
+    )  # /curation/crops/* - Crop thumbnails/overlays
+    application.include_router(curation_umap_router)  # /curation/cluster/* - UMAP residual reducer
+    application.include_router(curation_train_router)  # /curation/train/* - Training pipeline
 
     # Versioned API - All endpoints also available under /v1
     application.include_router(v1_router)  # /v1/* - Versioned API
+
+    # The curation metric registry (src.services.curation.metrics) registers
+    # Counter/Histogram objects on the prometheus_client default REGISTRY at
+    # import time; import it here so its module-level side effects run even
+    # if no curation route has been hit yet — the existing /metrics endpoint
+    # (src.routers.health) picks them up automatically via generate_latest().
+    import src.services.curation.metrics  # noqa: F401
 
     return application
 
