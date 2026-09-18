@@ -40,3 +40,13 @@ def test_unmatched_path_uses_low_cardinality_fallback(client: TestClient) -> Non
     # Only the first two path segments may appear — never the random tail.
     assert 'route="/v1/nonexistent"' in body
     assert 'abc123' not in body
+
+
+def test_curation_metric_namespace_is_exposed(client: TestClient) -> None:
+    """src.main imports src.services.curation.metrics for its module-level
+    side effects (Counter/Histogram registration) — see
+    docs/design/oss_genericization_phase2_plan.md Chunk 1. Confirms those
+    collectors actually reach the same /metrics endpoint as the generic
+    HTTP histogram, without a second scrape target."""
+    body = client.get('/metrics').text
+    assert 'legacy_occ_retry_count' in body

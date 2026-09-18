@@ -1,0 +1,599 @@
+"""Shared curation router foundations.
+
+Holds the `router` object, dependency adapters, Pydantic request/response
+models, index-name constants, and the `_ensure_indexes` bootstrap. All
+sub-modules import from here. _common.py MUST NOT import from sub-modules.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import ORJSONResponse
+from pydantic import BaseModel, Field
+
+from src.clients.curation_opensearch import (
+    ClassRegistry,
+    create_curation_indexes,
+    ensure_items_gemma_raw_label_fields,
+    ensure_items_history_fields,
+    ensure_items_label_cluster_fields,
+    ensure_items_pe_v6_embedding_fields,
+    ensure_items_probe_fields,
+    ensure_items_provenance_fields,
+    ensure_items_quality_fields,
+    ensure_items_region_embedding,
+    ensure_items_request_id_field,
+    ensure_items_score_fields,
+    ensure_items_validation_split_fields,
+    ensure_items_viz_fields,
+)
+from src.config import IndexRole, get_curation_config, index_name
+from src.core.dependencies import get_opensearch
+from src.core.logging import get_logger
+
+
+def get_class_registry() -> ClassRegistry:
+    """Indirection wrapper so tests patching
+    ``src.routers.curation.get_class_registry`` reach every sub-module
+    call site. The submodules import this wrapper rather than the
+    upstream symbol so the mock applied in ``__init__``'s namespace
+    propagates here at call-time.
+    """
+    from src.routers import curation as _pkg
+
+    return _pkg.get_class_registry()
+
+
+logger = get_logger(__name__)
+
+config = get_curation_config()
+
+
+router = APIRouter(
+    prefix=config.api_prefix,
+    tags=[config.api_tag],
+    default_response_class=ORJSONResponse,
+)
+
+
+CURATION_IMAGES_INDEX = index_name(config, IndexRole.IMAGES)
+CURATION_ITEMS_INDEX = index_name(config, IndexRole.ITEMS)
+CURATION_LABELS_CONFIRMED_INDEX = index_name(config, IndexRole.LABELS_CONFIRMED)
+CURATION_CLASSES_INDEX = index_name(config, IndexRole.CLASSES)
+
+
+_INDEXES_BOOTSTRAPPED = False
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _registry_dep() -> ClassRegistry:
+    return get_class_registry()
+
+
+RegistryDep = Annotated[ClassRegistry, Depends(_registry_dep)]
+
+
+async def _raw_opensearch_dep() -> Any:
+    """Return the raw AsyncOpenSearch instead of the project's
+    ``OpenSearchClient`` wrapper."""
+    wrapper = await get_opensearch()
+    return getattr(wrapper, 'client', wrapper)
+
+
+OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
+
+
+async def _ensure_indexes(opensearch: Any) -> None:
+    """Create curation indexes on first request (idempotent)."""
+    global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag
+    if _INDEXES_BOOTSTRAPPED:
+        return
+    try:
+        await create_curation_indexes(opensearch, force_recreate=False)
+        try:
+            await ensure_items_gemma_raw_label_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_gemma_raw_label_migration_failed', error=str(exc))
+        try:
+            await ensure_items_label_cluster_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_label_cluster_migration_failed', error=str(exc))
+        try:
+            await ensure_items_provenance_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_provenance_migration_failed', error=str(exc))
+        try:
+            await ensure_items_request_id_field(opensearch)
+        except Exception as exc:
+            logger.warning('curation_request_id_migration_failed', error=str(exc))
+        # ensure_items_class_name_keyword is NOT called here: the generic
+        # `class_name` field is mapped `keyword` directly (not `text`), so
+        # this migration's PUT mapping always fails with "cannot be changed
+        # from type [keyword] to [text]". All aggregations/scripts query
+        # `class_name` directly instead of a `.keyword` subfield that can
+        # never exist here. The function itself is left in place for any
+        # legacy index that genuinely still maps `class_name` as `text`.
+        try:
+            await ensure_items_quality_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_quality_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_region_embedding(opensearch)
+        except Exception as exc:
+            logger.warning('curation_region_embedding_migration_failed', error=str(exc))
+        try:
+            await ensure_items_score_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_score_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_probe_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_probe_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_viz_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_viz_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_history_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_history_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_validation_split_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_validation_split_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_pe_v6_embedding_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_pe_v6_embedding_fields_migration_failed', error=str(exc))
+        # Self-heal the classes index: if a clean OS wipe left it empty,
+        # repopulate from the on-disk class registry so labeling works
+        # out of the box. Without this, labeler PUTs fail with
+        # "unknown class_id <id>" until an operator manually calls
+        # the classes sync endpoint.
+        try:
+            count_resp = await opensearch.count(index=CURATION_CLASSES_INDEX)
+            if (count_resp.get('count') or 0) == 0:
+                synced = await get_class_registry().sync_to_opensearch(opensearch)
+                logger.info('curation_classes_autosynced', upserted=synced.get('upserted'))
+        except Exception as exc:
+            logger.warning('curation_classes_autosync_failed', error=str(exc))
+        _INDEXES_BOOTSTRAPPED = True
+    except Exception as exc:
+        logger.warning('curation_index_bootstrap_failed', error=str(exc))
+
+
+# =============================================================================
+# Pydantic models (all request/response models for the curation router live
+# here so sub-modules can import them without forming cycles).
+# =============================================================================
+
+
+class IngestImageRequest(BaseModel):
+    path: str = Field(..., description='Absolute path to a JPEG on a mounted volume')
+    source: str = Field(default='unknown', description='Source tag (e.g. hdd01, dataset_a)')
+
+
+class IngestImageResponse(BaseModel):
+    status: Literal['success', 'duplicate', 'failed']
+    image_id: str = ''
+    image_path: str
+    imohash: str = ''
+    n_crops: int = 0
+    n_plates: int = 0
+    error: str | None = None
+
+
+class BatchIngestSummaryResponse(BaseModel):
+    successful: int = 0
+    duplicates: int = 0
+    failed: int = 0
+    mismatches: int = 0
+    labels_imported: int = 0
+    crops_indexed: int = 0
+
+
+class BatchIngestResponse(BaseModel):
+    status: Literal['success', 'partial', 'error']
+    summary: BatchIngestSummaryResponse
+    results: list[IngestImageResponse] = Field(default_factory=list)
+
+
+class ImportLabelsRequest(BaseModel):
+    image_path: str
+    label_txt_path: str
+    label_source: str = 'v6_original_label'
+
+
+class ImportLabelsBatchRequest(BaseModel):
+    items: list[ImportLabelsRequest]
+
+
+class ItemDoc(BaseModel):
+    crop_id: str
+    image_id: str = ''
+    image_path: str = ''
+    bbox_norm: list[float] = Field(default_factory=list)
+    class_id: int | None = None
+    class_name: str | None = ''
+    class_source: str | None = ''
+    confidence: float = 0.0
+    cluster_id: int | None = None
+    cluster_distance: float | None = None
+    # AHC sub-cluster id (e.g. "47a"). Populated only after refine ran.
+    # Cleared whenever cluster_id changes (move / batch_label / merge /
+    # residual recluster) because subid is cluster-local.
+    cluster_subid: str | None = None
+    label_validated: bool = False
+    # label_source is nullable: VLM writers + the revert script set it
+    # to None when overwriting a prior validation tag (e.g. clearing a
+    # stale auto_promote 'cluster_v6_majority_agreement' string).
+    label_source: str | None = ''
+    # Frozen HTTP wire-model attribute names — see
+    # docs/design/labeler_api_contract.md and the RegionFields scope
+    # table (docs/design/oss_genericization_phase2_plan.md §3.2). These
+    # are the JSON contract with the labeler frontend and are NOT
+    # indirected through RegionFields (that governs OpenSearch document
+    # keys only).
+    plate_bbox_norm: list[float] | None = None
+    plate_score: float | None = None
+    test_holdout: bool = False
+    # Primary-subject rank (1 = largest crop in its photo) + blur quality.
+    # Drive the "largest / 2nd-largest" toggle and clarity slider in the UI.
+    crop_rank_in_image: int | None = None
+    crop_area_norm: float | None = None
+    blur_lap_ratio: float | None = None
+    coco_proposal_name: str | None = None
+    thumbnail_url: str = ''
+
+
+class CropsPageResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    crops: list[ItemDoc]
+    # Only set for a pool-scale overlay ordering (order='outliers' /
+    # 'diverse') — the operator-facing "from N crops in scope" caption
+    # needs to know it's looking at a ranked overlay rather than the
+    # default newest-first sort. Absent (None) for every other ordering.
+    method: str | None = None
+    version: str | None = None
+    n_pool: int | None = None
+
+
+class CropLabelRequest(BaseModel):
+    class_id: int
+    label_source: str = 'human'
+
+
+class CropBatchLabelRequest(BaseModel):
+    crop_ids: list[str]
+    class_id: int
+    label_source: str = 'human'
+
+
+class CropMoveRequest(BaseModel):
+    crop_ids: list[str]
+    cluster_id: int
+
+
+class CropExcludeRequest(BaseModel):
+    """Exclude crops from training + clustering (reversible).
+
+    Blurry / unidentifiable / partial crops the human doesn't want in
+    the training set. ``reason`` defaults to ``'ignore'``; the UI can
+    pass a more specific tag (``'blurry'``, ``'unidentifiable'``,
+    ``'not_a_vehicle'``, ``'partial_crop'``) when the operator wants to
+    record why (e.g. a whole cluster of blurry cruisers).
+    """
+
+    crop_ids: list[str]
+    reason: str = 'ignore'
+
+
+class CropUnexcludeRequest(BaseModel):
+    """Reverse an exclusion (the labeler's Undo path for Ignore)."""
+
+    crop_ids: list[str]
+
+
+class ItemRegionRequest(BaseModel):
+    """Set or clear the region-of-interest sub-bbox on a single item.
+
+    ``bbox_norm`` is in the **source-image** coordinate frame; the
+    labeler is responsible for converting from crop-frame to
+    source-frame before POSTing. ``None`` clears the box and marks the
+    item as ``plate_status='no_plate_visible'`` (a deliberate human
+    decision, distinct from "not yet detected").
+    """
+
+    bbox_norm: tuple[float, float, float, float] | None
+    label_source: str = 'human'
+
+
+class ItemBatchRegionRequest(BaseModel):
+    """Bulk variant of ItemRegionRequest (e.g. "mark these N items as no
+    region present")."""
+
+    crop_ids: list[str]
+    bbox_norm: tuple[float, float, float, float] | None
+    label_source: str = 'human'
+
+
+# Whitelist of plate_status values an operator is allowed to write from
+# the labeler. The detector / verify pipeline writes additional values
+# ('pending_detection', 'pending_verification', 'detection_failed') that
+# represent transient pipeline state — humans never set those by hand.
+HUMAN_REGION_STATUS_VALUES = frozenset(
+    {'detected', 'no_plate_visible', 'verify_rejected', 'false_positive'}
+)
+
+
+class CropBatchStatusRequest(BaseModel):
+    """Bulk-set ``plate_status`` over many items (the cluster-view triage op).
+
+    Lets an operator select an outlier sub-cluster and mark every region
+    ``false_positive`` / ``no_plate_visible`` in one call, or bulk-confirm
+    good regions (``plate_status='detected'`` + ``plate_verified=True``).
+    ``plate_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
+    """
+
+    crop_ids: list[str]
+    plate_status: str
+    plate_verified: bool | None = None
+    label_source: str = 'human'
+
+
+class ItemRegionMetaRequest(BaseModel):
+    """Patch the region metadata fields without touching ``plate_bbox_norm``.
+
+    Use this for operator corrections like fixing an OCR'd region text or
+    changing the status to ``verify_rejected``. To set or clear the bbox
+    itself, use ``PUT /crops/{crop_id}/plate`` — that endpoint owns the
+    geometry contract.
+
+    Every field is optional; only the provided ones are written. ``None``
+    on ``plate_text`` clears the text, on ``plate_rejection_reason``
+    clears the reason. ``plate_status`` must be one of
+    ``HUMAN_REGION_STATUS_VALUES`` when present.
+    """
+
+    plate_text: str | None = None
+    plate_status: str | None = None
+    plate_rejection_reason: str | None = None
+    label_source: str = 'human'
+
+    # Pydantic v2: explicit fields that were *set* in the request, so we
+    # can distinguish ``plate_text=None`` (clear) from "not in payload".
+    model_config = {'extra': 'forbid'}
+
+
+class ClassEntry(BaseModel):
+    class_id: int
+    class_name: str
+    group: str = ''
+    sample_count: int = 0
+    validated_count: int = 0
+    # FAISS-cluster bucket size: crops whose cluster_id == this class_id.
+    # Includes unlabeled candidates that landed near the cluster — i.e.
+    # everything visible on /clusters/{id}. The sidebar chip shows this
+    # so the operator's eyes match what they'll see when they click in.
+    cluster_size: int = 0
+    deprecated: bool = False
+    # Optional single-character keyboard shortcut. Persisted in the class
+    # registry so user customizations survive across sessions and devices.
+    # Validated server-side: must be one ASCII char, unique across active
+    # classes, not collide with reserved shortcuts.
+    hotkey_letter: str | None = None
+
+
+class ClassListResponse(BaseModel):
+    classes: list[ClassEntry]
+
+
+class ClassCreateRequest(BaseModel):
+    name: str
+    group: str = 'unknown'
+    notes: str = ''
+
+
+class ClassUpdateRequest(BaseModel):
+    name: str | None = None
+    group: str | None = None
+    # ``""`` clears the binding; ``None`` leaves it unchanged. Single ASCII
+    # char only; uniqueness checked server-side at write time.
+    hotkey_letter: str | None = None
+
+
+class ClassMergeRequest(BaseModel):
+    source_id: int
+    target_id: int
+
+
+class VlmLabelBatchRequest(BaseModel):
+    crop_ids: list[str]
+
+
+class VlmVerifyRegionsRequest(BaseModel):
+    crop_ids: list[str]
+
+
+class VlmVerifyRegionBatchItem(BaseModel):
+    """One item in a batched region-verify request.
+
+    Mirrors the single-crop verify-region shape. The caller is
+    responsible for cropping the region out of its source crop and
+    base64-encoding the JPEG bytes — the API does not re-derive the
+    region JPEG from OpenSearch on this path so the batch endpoint can
+    serve callers (workers, training scripts) that already hold the
+    JPEG in memory.
+    """
+
+    crop_id: str
+    plate_image_b64: str = Field(
+        ...,
+        description='Base64-encoded JPEG of the region-of-interest crop (no data: prefix).',
+    )
+    candidate_text: str | None = Field(
+        default=None,
+        description=(
+            'Optional OCR-decoded region text from the upstream detector. '
+            'Surfaced back in the response so callers can correlate without '
+            'a second lookup; not currently used in the prompt.'
+        ),
+    )
+
+
+class VlmVerifyRegionBatchRequest(BaseModel):
+    """Request body for the batched region-verify endpoint."""
+
+    items: list[VlmVerifyRegionBatchItem]
+
+
+class VlmVerifyRegionBatchResult(BaseModel):
+    """One ordered result in the region-verify-batch response."""
+
+    crop_id: str
+    is_plate: bool
+    confidence: str
+    reason: str = ''
+    candidate_text: str | None = None
+
+
+class VlmVerifyRegionBatchResponse(BaseModel):
+    results: list[VlmVerifyRegionBatchResult]
+
+
+class VlmRegionVisibleBatchItem(BaseModel):
+    crop_id: str
+    image_b64: str = Field(
+        ...,
+        description='Base64-encoded JPEG of the item crop (no data: prefix).',
+    )
+
+
+class VlmRegionVisibleBatchRequest(BaseModel):
+    """Request body for the batched region-visibility endpoint."""
+
+    items: list[VlmRegionVisibleBatchItem]
+
+
+class VlmRegionVisibleBatchResponse(BaseModel):
+    """``{crop_id: bool}`` mapping — True means a region is visible."""
+
+    visible: dict[str, bool]
+
+
+class TestHoldoutFreezeRequest(BaseModel):
+    percent: int = Field(default=10, ge=1, le=50)
+    # No longer used: selection is deterministic (SHA1-of-crop_id per
+    # class, see src/services/curation/test_holdout.py) — a seeded RNG
+    # can't guarantee a min-5-per-class floor or reproduce without
+    # recording the seed. Kept accepted-but-ignored for backward
+    # compatibility with existing callers.
+    seed: int = 42
+
+
+class TestHoldoutFreezeResponse(BaseModel):
+    n_frozen: int
+    n_classes_covered: int
+    test_holdout_sha: str
+    per_class_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class HealthResponse(BaseModel):
+    status: Literal['ok', 'degraded', 'down']
+    triton: dict[str, Any]
+    opensearch: dict[str, Any]
+    gemma: dict[str, Any]
+    registry: dict[str, Any]
+
+
+class ExportYoloRequest(BaseModel):
+    export_dir: str | None = None
+    # Free-form version tag (e.g. 'v7.0a'). Recorded in manifest.json only.
+    version_tag: str = ''
+    # RNG seed for the stratified split. Recording it in the manifest is what
+    # makes an export re-derivable.
+    seed: int = 42
+    # Cap distinct source frames collected (representative sample for pipeline
+    # tests). None = full export.
+    max_images: int | None = None
+    # Optional whole-frame near-dup cut (cosine on the images index's
+    # secondary embedding). e.g. 0.98 collapses near-identical bursts to
+    # one frame; None disables.
+    dedup_threshold: float | None = None
+
+
+class ExportRegionDatasetRequest(BaseModel):
+    """Body for the standalone single-class region-of-interest export
+    (e.g. LPR).
+
+    All ``detected`` positives and all human ``false_positive`` hard
+    negatives are kept in full. ``empty_bg_ratio`` adds a small sample of
+    genuine region-free (``no_plate_visible``) frames as a fraction of
+    positives so the detector still sees some no-region images.
+    """
+
+    export_dir: str | None = None
+    version_tag: str = ''
+    skip_test_split: bool = False
+    # Fraction of positives to add as region-free frames (0.1 == 1 per 10).
+    empty_bg_ratio: float = 0.1
+    # Sample at most this many positive (region-bearing) frames; None == all.
+    max_positive_images: int | None = None
+    # Optional whole-frame near-dup cut (cosine on the images index's
+    # secondary embedding). e.g. 0.98 collapses near-identical bursts to
+    # one frame; None disables.
+    dedup_threshold: float | None = None
+    # 'whole_frame' (full source frame) or 'vehicle_crop' (parent item crop
+    # with the region re-projected) — for whole-image vs crop training A/B.
+    image_mode: str = 'whole_frame'
+    # Longest output side in px: 640 for rapid iteration, 1280 for the full run.
+    img_max_side: int = 1280
+
+
+class StatusResponse(BaseModel):
+    status: str
+    detail: str | None = None
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class _PathLookupRequest(BaseModel):
+    """Bulk path-existence check input. Capped client-side to 10k paths."""
+
+    image_paths: list[str] = Field(..., max_length=10_000)
+
+
+class _PathLookupResponse(BaseModel):
+    """Maps known image_path -> existing image_id. Missing paths absent."""
+
+    known_paths: dict[str, str]
+
+
+class CropFlagNewClassRequest(BaseModel):
+    """Marks crops as needing a class that doesn't exist in the registry
+    yet — for batch curator review (typically weekly)."""
+
+    crop_ids: list[str]
+    note: str = ''
+
+
+class _PublishEvent(BaseModel):
+    """Event-publish payload — used by out-of-process workers."""
+
+    type: str
+    crop_id: str | None = None
+    class_id: int | None = None
+    class_name: str | None = None
+    class_source: str | None = None
+    plate_status: str | None = None
+    plate_text: str | None = None
+    image_path: str | None = None
+    topic: str | None = None
+    extra: dict[str, Any] | None = None

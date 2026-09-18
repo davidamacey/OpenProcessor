@@ -218,6 +218,35 @@ curl http://localhost:4603/health | jq '{version, api_version}'
 | POST | `/models/{name}/export` | Export model to TensorRT |
 | GET | `/models/{name}/status` | Get model loading status |
 
+### /curation - Curation and Active-Learning Labeling
+
+Mounted under `CurationConfig.api_prefix` (default `/curation`; 103 routes
+across 21 router modules under `src/routers/curation/`). See
+[`docs/design/labeler_api_contract.md`](docs/design/labeler_api_contract.md)
+for the full route table and wire-model field names, and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#curation-subsystem) for the
+component map. Built from
+[`docs/design/oss_genericization_phase2_plan.md`](docs/design/oss_genericization_phase2_plan.md),
+which genericized a private vehicle/license-plate curation stack behind
+three config dataclasses (`CurationConfig`, `RegionFields`,
+`DetectionProfile`) — a different domain constructs its own instances
+rather than forking the code.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET, POST | `/curation/classes`, `/curation/classes/merge` | Class registry CRUD + merge |
+| GET, PUT, DELETE | `/curation/crops`, `/curation/crops/{id}/label` | Item browse/label/move/exclude |
+| GET, PUT, PATCH | `/curation/plates`, `/curation/crops/{id}/plate*` | Region-of-interest detect/verify/metadata |
+| GET | `/curation/clusters`, `/curation/clusters/representatives` | Cluster cards + representatives |
+| GET | `/curation/review/{tab}` | Active-learning review queue |
+| POST, GET | `/curation/scores/*`, `/curation/select/*` | Mistakenness/uniqueness scoring, diverse selection |
+| GET | `/curation/search/text` | Semantic (PE-Core kNN) text-to-image search |
+| POST | `/curation/vlm/label_batch`, `/curation/vlm/verify_region*` | VLM class labeling + region verification |
+| POST, GET | `/curation/train/*` | Training job lifecycle (preflight, start, status, promote) |
+| POST, GET | `/curation/pipeline/auto_label*` | Auto-label job dispatch + SSE progress |
+| POST, GET | `/curation/export/*` | Dataset export (YOLO format) + status |
+| GET | `/curation/models/status`, `/curation/health` | Curation-scoped model/health status |
+
 ## Response Formats
 
 ### Detection Response
