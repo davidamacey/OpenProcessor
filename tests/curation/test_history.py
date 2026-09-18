@@ -1,0 +1,391 @@
+"""Tests for the class/region history helpers."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from src.services.curation.history import (
+    MAX_HISTORY_ENTRIES,
+    MAX_PLATE_CHAIN_ENTRIES,
+    append_plate_chain_entry,
+    record_class_history,
+)
+
+
+class TestRecordClassHistory:
+    def test_no_class_id_returns_existing_unchanged(self):
+        # First labeling of a brand-new crop: nothing to preserve.
+        src: dict[str, object] = {}
+        result = record_class_history(src, writer='ingest')
+        assert result == []
+
+    def test_no_class_id_preserves_existing_history(self):
+        # Edge case: somehow history exists but class_id was cleared.
+        # Don't lose history; just don't append.
+        src = {
+            'class_id': None,
+            'class_id_history': [{'class_id': 5, 'writer': 'vlm'}],
+        }
+        result = record_class_history(src, writer='ingest')
+        assert result == [{'class_id': 5, 'writer': 'vlm'}]
+
+    def test_appends_entry_with_current_state(self):
+        src = {
+            'class_id': 47,
+            'class_name': 'pickup_truck',
+            'class_source': 'v6_model',
+            'label_source': '',
+            'confidence': 0.91,
+        }
+        result = record_class_history(src, writer='ingest', now='2026-05-15T00:00:00+00:00')
+        assert len(result) == 1
+        entry = result[0]
+        assert entry['class_id'] == 47
+        assert entry['class_name'] == 'pickup_truck'
+        assert entry['class_source'] == 'v6_model'
+        assert entry['confidence'] == 0.91
+        assert entry['writer'] == 'ingest'
+        assert entry['at'] == '2026-05-15T00:00:00+00:00'
+
+    def test_appends_to_existing_history(self):
+        src = {
+            'class_id': 47,
+            'class_name': 'pickup_truck',
+            'class_source': 'vlm',
+            'class_id_history': [
+                {'class_id': 47, 'class_source': 'v6_model', 'writer': 'ingest'},
+            ],
+        }
+        result = record_class_history(src, writer='vlm_pipeline')
+        assert len(result) == 2
+        assert result[0]['class_source'] == 'v6_model'
+        assert result[1]['class_source'] == 'vlm'
+        assert result[1]['writer'] == 'vlm_pipeline'
+
+    def test_caps_at_max_entries(self):
+        # Pre-populate at the cap, then append one more.
+        history = [
+            {'class_id': i, 'class_source': 'vlm', 'writer': f'w{i}'}
+            for i in range(MAX_HISTORY_ENTRIES)
+        ]
+        src = {
+            'class_id': 99,
+            'class_source': 'human',
+            'class_id_history': history,
+        }
+        result = record_class_history(src, writer='human')
+        assert len(result) == MAX_HISTORY_ENTRIES
+        # Newest entry is at the tail.
+        assert result[-1]['class_id'] == 99
+        # Oldest dropped (since no seed_backfill stub).
+        assert result[0]['class_id'] == 1
+
+    def test_caps_preserves_seed_backfill_origin(self):
+        history = [{'class_id': -1, 'writer': 'seed_backfill'}]
+        history += [
+            {'class_id': i, 'class_source': 'vlm', 'writer': f'w{i}'}
+            for i in range(MAX_HISTORY_ENTRIES)
+        ]
+        src = {
+            'class_id': 99,
+            'class_source': 'human',
+            'class_id_history': history,
+        }
+        result = record_class_history(src, writer='human')
+        assert len(result) == MAX_HISTORY_ENTRIES
+        # Seed stays at index 0.
+        assert result[0]['writer'] == 'seed_backfill'
+        # Newest is at the tail.
+        assert result[-1]['class_id'] == 99
+
+    # =========================================================================
+    # Dedupe — skip the append when class_id AND class_source are both
+    # unchanged from the last recorded entry.
+    # =========================================================================
+
+    def test_no_append_when_class_unchanged(self):
+        # Call twice with the same class_id/class_source. Before the fix,
+        # the second call always appends, producing length 2.
+        src = {'class_id': 47, 'class_source': 'v6_model', 'class_id_history': []}
+        history_after_first = record_class_history(src, writer='ingest')
+        assert len(history_after_first) == 1
+
+        src_second_call = dict(src)
+        src_second_call['class_id_history'] = history_after_first
+        history_after_second = record_class_history(src_second_call, writer='ingest')
+        assert len(history_after_second) == 1
+        assert history_after_second == history_after_first
+
+    def test_append_when_source_changes_but_class_does_not(self):
+        # The inverse of test_no_append_when_class_unchanged: class_id is
+        # the same but class_source changed — must still append.
+        src = {'class_id': 47, 'class_source': 'v6_model', 'class_id_history': []}
+        history_after_first = record_class_history(src, writer='ingest')
+        assert len(history_after_first) == 1
+
+        src_second_call = dict(src)
+        src_second_call['class_source'] = 'vlm'
+        src_second_call['class_id_history'] = history_after_first
+        history_after_second = record_class_history(src_second_call, writer='vlm_pipeline')
+        assert len(history_after_second) == 2
+        assert history_after_second[0]['class_source'] == 'v6_model'
+        assert history_after_second[1]['class_source'] == 'vlm'
+
+    def test_append_when_class_changes_but_source_does_not(self):
+        # Same class_source, different class_id — must still append.
+        src = {'class_id': 47, 'class_source': 'human', 'class_id_history': []}
+        history_after_first = record_class_history(src, writer='human:label_crop')
+        src_second_call = dict(src)
+        src_second_call['class_id'] = 12
+        src_second_call['class_id_history'] = history_after_first
+        history_after_second = record_class_history(src_second_call, writer='human:label_crop')
+        assert len(history_after_second) == 2
+        assert history_after_second[0]['class_id'] == 47
+        assert history_after_second[1]['class_id'] == 12
+
+    # =========================================================================
+    # No cap once class_validated=true.
+    # =========================================================================
+
+    def test_validated_crop_history_is_not_truncated_at_32(self):
+        history = [
+            {'class_id': i, 'class_source': 'vlm', 'writer': f'w{i}'}
+            for i in range(MAX_HISTORY_ENTRIES)
+        ]
+        src = {
+            'class_id': 99,
+            'class_source': 'human',
+            'class_validated': True,
+            'class_id_history': history,
+        }
+        result = record_class_history(src, writer='human:label_crop')
+        # Uncapped: MAX_HISTORY_ENTRIES existing entries + 1 new one.
+        assert len(result) == MAX_HISTORY_ENTRIES + 1
+        assert result[0]['class_id'] == 0
+        assert result[-1]['class_id'] == 99
+
+    def test_unvalidated_crop_history_still_capped(self):
+        # Non-regression: the cap still applies when class_validated is
+        # falsy/absent — only the validated cohort is exempt.
+        history = [
+            {'class_id': i, 'class_source': 'vlm', 'writer': f'w{i}'}
+            for i in range(MAX_HISTORY_ENTRIES)
+        ]
+        src = {
+            'class_id': 99,
+            'class_source': 'vlm',
+            'class_validated': False,
+            'class_id_history': history,
+        }
+        result = record_class_history(src, writer='vlm_pipeline')
+        assert len(result) == MAX_HISTORY_ENTRIES
+
+
+class TestAppendPlateChainEntry:
+    def test_appends_to_empty(self):
+        result = append_plate_chain_entry(
+            None,
+            detector='primary_detector',
+            detector_version='1',
+            outcome='hit',
+        )
+        assert len(result) == 1
+        assert result[0].startswith('primary_detector:1:hit@')
+
+    def test_appends_to_existing(self):
+        chain = ['primary_detector:1:miss@2026-05-15T00:00:00+00:00']
+        result = append_plate_chain_entry(
+            chain,
+            detector='secondary_detector',
+            detector_version='2',
+            outcome='hit',
+        )
+        assert len(result) == 2
+        assert result[-1].startswith('secondary_detector:2:hit@')
+
+    def test_caps_at_max(self):
+        chain = [
+            f'primary_detector:{i}:hit@2026-05-15T00:00:00+00:00'
+            for i in range(MAX_PLATE_CHAIN_ENTRIES)
+        ]
+        result = append_plate_chain_entry(
+            chain,
+            detector='secondary_detector',
+            detector_version='1',
+            outcome='hit',
+        )
+        assert len(result) == MAX_PLATE_CHAIN_ENTRIES
+        # Newest at tail.
+        assert result[-1].startswith('secondary_detector:1:hit@')
+
+
+# =============================================================================
+# auto_promote_clusters missing-writer regression (Chunk 4 deferral note —
+# ported alongside orchestrator.py/auto_promote.py per the plan's Chunk 4
+# section rather than with the rest of the reference line's missing-writer
+# test suite's cases, which depend on modules not yet ported — the
+# region-detection worker's bulk writer, the class-merge writer, and the
+# proprietary-dataset label-import writer — and land in later waves).
+# =============================================================================
+
+
+class _FakeAutoPromoteOS:
+    """Enough of the AsyncOpenSearch surface for auto_promote_clusters:
+    one aggregation search, one scroll-init search, one scroll page,
+    then per-doc OCC get/update via occ_skip_on_conflict_bulk."""
+
+    def __init__(self) -> None:
+        self.update_calls: list[dict[str, Any]] = []
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        if 'aggs' in body:
+            return {
+                'aggregations': {
+                    'clusters': {
+                        'buckets': [
+                            {
+                                'key': 1,
+                                'doc_count': 5,
+                                'top_class': {
+                                    'buckets': [{'key': 'honda', 'doc_count': 5}],
+                                },
+                            },
+                        ],
+                    },
+                },
+            }
+        # Scroll-init search for doc ids matching the promote query.
+        return {
+            '_scroll_id': 'scroll-1',
+            'hits': {'hits': [{'_id': 'crop-a'}]},
+        }
+
+    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
+
+    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {}
+
+    async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
+        from curation.occ_fakes import make_mget_response
+
+        source = {
+            'class_id': 7,
+            'class_name': 'honda',
+            'class_source': 'v6_model',
+            'class_validated': False,
+            'test_holdout': False,
+        }
+        found = {d['_id']: source for d in body['docs']}
+        return make_mget_response(found)
+
+    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        from curation.occ_fakes import make_bulk_response, make_bulk_update_item
+
+        items = []
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            doc_id = action['update']['_id']
+            self.update_calls.append(doc['doc'])
+            items.append(make_bulk_update_item(doc_id, status=200))
+        return make_bulk_response(items)
+
+
+async def _run_auto_promote_case() -> list[dict[str, Any]]:
+    # Import via orchestrator's re-export, matching every real caller
+    # (the pipeline router, the clusters router) — importing
+    # auto_promote directly as the first cluster-related module in the
+    # process can hit the pre-existing orchestrator<->auto_promote
+    # circular import (R11 — see
+    # docs/design/oss_genericization_phase2_plan.md §7).
+    from src.services.curation.clustering.orchestrator import auto_promote_clusters
+
+    fake_os = _FakeAutoPromoteOS()
+    result = await auto_promote_clusters(fake_os, min_purity=0.85, min_members=4, dry_run=False)
+    assert result['promoted'] == 1
+    assert len(fake_os.update_calls) == 1
+    return fake_os.update_calls[0].get('class_id_history') or []
+
+
+@pytest.mark.asyncio
+async def test_auto_promote_appends_history() -> None:
+    history = await _run_auto_promote_case()
+    assert history, 'auto_promote: no class_id_history entry was written'
+    assert history[-1]['writer'] == 'auto_promote'
+    assert history[-1]['class_id'] == 7
+    assert history[-1]['class_source'] == 'v6_model'
+
+
+# =============================================================================
+# Curation worker combined-VLM path (bulk_writer.py's OCC merger)
+#
+# Deferred here from Chunk 2 (docs/design/oss_genericization_phase2_plan.md
+# §6.1 "test_history_writers.py" — one case of that reference file) since
+# it exercises scripts/curation/worker/bulk_writer.py, which lands in
+# Chunk 8. Extends this file rather than porting a second one — the
+# reference test file covers three other class-writer cases (auto_promote,
+# a class-merge router endpoint, and a label-import script) alongside this
+# one; those are out of this chunk's scope and stay unported for now.
+# =============================================================================
+
+
+async def _run_curation_worker_case() -> list[dict[str, Any]]:
+    from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
+    from scripts.curation.worker.bulk_writer import _bulk_update
+    from scripts.curation.worker.state import _ItemTask
+    from src.config import get_region_fields
+
+    F = get_region_fields()
+    t = _ItemTask(
+        crop_id='crop-1',
+        image_path='/dev/null/never-read',
+        vehicle_bbox_norm=(0.1, 0.1, 0.5, 0.5),
+        plate_status='pending',
+        class_name='audi',
+        group='cars',
+    )
+    t.update_doc = {
+        'class_id': 9,
+        'class_name': 'camaro',
+        'class_source': 'gemma',
+        'label_source': 'gemma',
+        'class_validated': False,
+        F.status: 'detected',
+        F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
+    }
+
+    source = {
+        'class_id': 5,
+        'class_name': 'honda',
+        'class_source': 'v6_model',
+        'class_validated': False,
+    }
+
+    from unittest.mock import AsyncMock
+
+    opensearch = AsyncMock()
+    opensearch.mget = AsyncMock(return_value=make_mget_response({'crop-1': source}))
+    opensearch.bulk = AsyncMock(
+        return_value=make_bulk_response([make_bulk_update_item('crop-1', status=200)])
+    )
+
+    n_written, _n_skipped = await _bulk_update(opensearch, [t])
+    assert n_written == 1
+    assert opensearch.bulk.await_args is not None
+    bulk_body = opensearch.bulk.await_args.kwargs['body']
+    written_doc = bulk_body[1]['doc']
+    return written_doc.get('class_id_history') or []
+
+
+@pytest.mark.asyncio
+async def test_curation_worker_appends_history() -> None:
+    history = await _run_curation_worker_case()
+    assert history, 'curation worker: no class_id_history entry was written'
+    assert history[-1]['writer'] == 'sam_worker'
+    assert history[-1]['class_id'] == 5
+    assert history[-1]['class_source'] == 'v6_model'
+
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])
