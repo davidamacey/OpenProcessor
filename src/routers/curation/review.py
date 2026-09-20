@@ -463,7 +463,7 @@ async def freeze_test_holdout(
     Refuses (422) to freeze zero rows — a freeze that freezes nothing is
     never a success, and silently returning 200 with ``sha256('')`` hid
     that this endpoint has never actually frozen anything. Persists a
-    durable freeze record under ``LEGACY_STATE_DIR/test_holdout/`` so a bad
+    durable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad
     freeze can be diagnosed and reverted from the recorded crop-id list.
     """
     await _ensure_indexes(opensearch)

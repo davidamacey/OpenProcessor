@@ -17,7 +17,7 @@ responsibilities in one place and makes testing trivial -- the entire
 protocol is a tmpdir + JSON.
 
 Environment:
-    LEGACY_TRAIN_JOBS_DIR
+    OP_TRAIN_JOBS_DIR
         Override the ``/jobs/`` mount point (test fixtures use a
         ``tmp_path``). Default: ``/jobs``.
 
@@ -59,9 +59,9 @@ def _resolve_jobs_dir() -> Path:
     """Resolve the ``/jobs/`` directory each time it's needed.
 
     Done lazily (rather than module-level constant) so tests can override
-    ``LEGACY_TRAIN_JOBS_DIR`` with monkeypatch / env-var without re-importing.
+    ``OP_TRAIN_JOBS_DIR`` with monkeypatch / env-var without re-importing.
     """
-    return Path(os.environ.get('LEGACY_TRAIN_JOBS_DIR', '/jobs'))
+    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 
 # Public for callers that want the default without the env override.

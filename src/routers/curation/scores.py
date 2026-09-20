@@ -6,7 +6,7 @@
 pre-commit ceiling). Side-effect import: registers ``@router`` handlers on
 the shared ``_common.router``.
 
-Every scorer this endpoint can run is gated by ``LEGACY_SCORES_ENABLED``
+Every scorer this endpoint can run is gated by ``OP_SCORES_ENABLED``
 (default off — nothing behaviorally changes for an operator who doesn't
 touch it). Read-only endpoints (``status``, ``coverage``) work regardless,
 so an operator can always see the current state even with the flag off.
@@ -24,7 +24,7 @@ from src.routers.curation._common import OpenSearchDep, _ensure_indexes, router
 
 
 def _scores_enabled() -> bool:
-    return os.environ.get('LEGACY_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return os.environ.get('OP_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 class ScoresComputeRequest(BaseModel):
@@ -42,7 +42,7 @@ async def scores_compute(
     if not _scores_enabled():
         raise HTTPException(
             status_code=400,
-            detail='curation scoring is disabled (set LEGACY_SCORES_ENABLED=1 to enable)',
+            detail='curation scoring is disabled (set OP_SCORES_ENABLED=1 to enable)',
         )
     await _ensure_indexes(opensearch)
 

@@ -41,14 +41,14 @@ DEFAULT_NPROBE = 12
 
 def _knn_k() -> int:
     try:
-        return max(1, int(os.environ.get('LEGACY_SCORES_KNN_K', str(DEFAULT_KNN_K))))
+        return max(1, int(os.environ.get('OP_SCORES_KNN_K', str(DEFAULT_KNN_K))))
     except ValueError:
         return DEFAULT_KNN_K
 
 
 def _nprobe() -> int:
     try:
-        return max(1, int(os.environ.get('LEGACY_SCORES_NPROBE', str(DEFAULT_NPROBE))))
+        return max(1, int(os.environ.get('OP_SCORES_NPROBE', str(DEFAULT_NPROBE))))
     except ValueError:
         return DEFAULT_NPROBE
 

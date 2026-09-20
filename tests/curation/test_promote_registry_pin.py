@@ -48,7 +48,7 @@ def app_client(
     tmp_path: Any,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv('LEGACY_TRAIN_JOBS_DIR', str(tmp_path))
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation_train import router as curation_train_router

@@ -49,7 +49,7 @@ def app_client(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Build a minimal FastAPI app with just the train router."""
-    monkeypatch.setenv('LEGACY_TRAIN_JOBS_DIR', str(tmp_path))
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
     # Stub the registry so preflight class-resolution doesn't blow up.
     class _Reg:

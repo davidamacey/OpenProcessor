@@ -9,7 +9,7 @@ not a new container; the job runs as an ``asyncio`` background task inside
 the yolo-api process itself, started by the router handler and polled via
 the same state-file pattern the labeler already knows how to render).
 
-Directory resolved lazily via ``LEGACY_SCORES_STATE_DIR`` (default ``/jobs/scores``)
+Directory resolved lazily via ``OP_SCORES_STATE_DIR`` (default ``/jobs/scores``)
 so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
 reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
 
@@ -59,7 +59,7 @@ _active_task: asyncio.Task[None] | None = None
 
 def _state_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch."""
-    return Path(os.environ.get('LEGACY_SCORES_STATE_DIR', '/jobs/scores'))
+    return Path(os.environ.get('OP_SCORES_STATE_DIR', '/jobs/scores'))
 
 
 def _state_file() -> Path:

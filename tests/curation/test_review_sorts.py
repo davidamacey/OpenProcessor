@@ -126,8 +126,8 @@ def test_unknown_sort_id_raises() -> None:
 
 
 def test_mistakenness_disabled_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv('LEGACY_SCORES_ENABLED', raising=False)
-    monkeypatch.delenv('LEGACY_SCORES_SHADOW', raising=False)
+    monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
     registry = review_sorts.get_review_sorts()
     assert registry['mistakenness'].status == 'disabled'
     with pytest.raises(ValueError, match='not selectable'):
@@ -139,8 +139,8 @@ def test_mistakenness_promoted_to_experimental_when_enabled_and_shadow(
 ) -> None:
     """Mirrors strategy_registry.VALIDATED_SCORERS's live promotion — this
     status must NEVER be hardcoded in review_sorts.py, only computed."""
-    monkeypatch.setenv('LEGACY_SCORES_ENABLED', '1')
-    monkeypatch.setenv('LEGACY_SCORES_SHADOW', '1')
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.setenv('OP_SCORES_SHADOW', '1')
     registry = review_sorts.get_review_sorts()
     assert registry['mistakenness'].status == 'experimental'
     clause, applied_id, fallback_reason = review_sorts.build_sort('mistakenness', tab='all')
@@ -154,8 +154,8 @@ def test_mistakenness_promoted_to_experimental_when_enabled_and_shadow(
 def test_mistakenness_experimental_when_enabled_not_shadow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv('LEGACY_SCORES_ENABLED', '1')
-    monkeypatch.delenv('LEGACY_SCORES_SHADOW', raising=False)
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
     registry = review_sorts.get_review_sorts()
     assert registry['mistakenness'].status == 'experimental'
     review_sorts.build_sort('mistakenness', tab='all')  # must not raise

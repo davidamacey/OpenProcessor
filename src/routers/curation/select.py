@@ -17,9 +17,9 @@ unblocked writing this module. The **full gate** (a real training A/B via
 ``/curation/bakeoff``, mAP50-95 >= +1.0pt) has NOT run. Per plan §6/§10.2 this
 means ``diverse`` stays ``experimental`` at most in ``strategy_registry.py``
 — never promotable to ``stable`` by this module or by flipping
-``LEGACY_SELECT_DIVERSE_ENABLED`` alone.
+``OP_SELECT_DIVERSE_ENABLED`` alone.
 
-Gated end-to-end by ``LEGACY_SELECT_DIVERSE_ENABLED`` (default off, inline
+Gated end-to-end by ``OP_SELECT_DIVERSE_ENABLED`` (default off, inline
 ``os.getenv`` per house convention):
 
 * ``GET /curation/crops?order=diverse`` with the flag off behaves exactly like
@@ -42,9 +42,9 @@ different budgets:
    pool** (exactly like ``compute_outlier_order``, so any page can be
    sliced out of one stable order) — i.e. ``k == n``, which makes the cost
    O(n^2*d). This is quadratic, not linear, so it needs a much smaller
-   inline pool cap than ``LEGACY_SELECT_MAX_N`` (20,000, the *fetch* cap that
+   inline pool cap than ``OP_SELECT_MAX_N`` (20,000, the *fetch* cap that
    mirrors ``cluster_outliers._MAX_MEMBERS``'s precedent). Solving
-   ``n^2 <= LEGACY_SELECT_SYNC_MAX_OPS`` for ``n`` gives the GET-only inline
+   ``n^2 <= OP_SELECT_SYNC_MAX_OPS`` for ``n`` gives the GET-only inline
    cap (``_get_diverse_inline_max()`` below) — at the 3,000,000-op default
    that's ~1,732 crops, comfortably "a few thousand" and a couple of
    seconds of BLAS matvecs on CPU. Above that cap, the endpoint returns
@@ -55,20 +55,20 @@ different budgets:
    k, not quadratic) — this is the "give me 1,000 diverse crops out of a
    30,000-crop cluster" pool-scale case the plan's own compute budget
    flags as ~1-2 min CPU at n~128k/k~1000, i.e. too slow to block an HTTP
-   request. ``LEGACY_SELECT_SYNC_MAX_OPS`` (default 3,000,000 — derived from
+   request. ``OP_SELECT_SYNC_MAX_OPS`` (default 3,000,000 — derived from
    the real 93.6s-at-n*k=1.5e8 k-center-greedy benchmark in
    ``docs/design/curation_scores.md`` §6, budgeting for a ~2s wall-clock
    ceiling on an inline request: 1.5e8 selections / 93.6s ~= 1.6e6
    selections/sec => 2s budget ~= 3.2e6) decides sync vs. job: if
-   ``n_pool * k <= LEGACY_SELECT_SYNC_MAX_OPS`` (and the pool itself fit under
-   ``LEGACY_SELECT_MAX_N``, the fetch cap), answer inline with the documented
+   ``n_pool * k <= OP_SELECT_SYNC_MAX_OPS`` (and the pool itself fit under
+   ``OP_SELECT_MAX_N``, the fetch cap), answer inline with the documented
    ``{crop_ids, method, version, n_pool}`` body. Otherwise this starts a
    background job (:mod:`src.services.curation.selection.job`, mirroring
    ``crop_scores.job``'s singleton state.json/heartbeat/cancel.flag
    pattern) and returns ``202`` with ``{job_id, status: 'running', ...}``;
    poll ``GET /curation/select/status`` for the result. The job path fetches the
-   pool uncapped by ``LEGACY_SELECT_MAX_N`` (bounded only by the much larger
-   ``LEGACY_SELECT_JOB_MAX_N``, default 200,000 — a generous safety ceiling
+   pool uncapped by ``OP_SELECT_MAX_N`` (bounded only by the much larger
+   ``OP_SELECT_JOB_MAX_N``, default 200,000 — a generous safety ceiling
    above the largest real pool this repo has ever seen, ~347,837 total /
    ~124,920 residual per ``docs/design/curation_scores.md`` §0, chosen so
    a background job can actually answer the "whole residual pool" use
@@ -76,11 +76,11 @@ different budgets:
    sync cap would otherwise make impossible to ever service).
 
 Judgment call, not spelled out verbatim in the plan: the plan's §3 flag
-table lists a single ``LEGACY_SELECT_MAX_N=20000``. This module treats that
+table lists a single ``OP_SELECT_MAX_N=20000``. This module treats that
 value as *the sync-path fetch cap* (matching its literal
 ``cluster_outliers._MAX_MEMBERS`` precedent, used by both the GET path and
 as the "is this small enough to even consider answering inline" gate for
-POST) and introduces ``LEGACY_SELECT_SYNC_MAX_OPS``/``LEGACY_SELECT_JOB_MAX_N`` as
+POST) and introduces ``OP_SELECT_SYNC_MAX_OPS``/``OP_SELECT_JOB_MAX_N`` as
 two new, undocumented-in-the-plan constants to resolve the tension between
 "20,000 is the sync cap" and "the plan's own POST example asks for
 diversity over a 30,000-crop cluster" — see module docstring above.
@@ -123,7 +123,7 @@ def _diverse_enabled() -> bool:
     every other feature flag in this codebase (e.g.
     ``strategy_registry._scores_enabled``): tests ``monkeypatch.setenv``
     without reimporting."""
-    return os.environ.get('LEGACY_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -133,21 +133,21 @@ def _diverse_enabled() -> bool:
 
 def _max_n() -> int:
     try:
-        return max(1, int(os.environ.get('LEGACY_SELECT_MAX_N', str(DEFAULT_MAX_N))))
+        return max(1, int(os.environ.get('OP_SELECT_MAX_N', str(DEFAULT_MAX_N))))
     except ValueError:
         return DEFAULT_MAX_N
 
 
 def _sync_max_ops() -> int:
     try:
-        return max(1, int(os.environ.get('LEGACY_SELECT_SYNC_MAX_OPS', str(DEFAULT_SYNC_MAX_OPS))))
+        return max(1, int(os.environ.get('OP_SELECT_SYNC_MAX_OPS', str(DEFAULT_SYNC_MAX_OPS))))
     except ValueError:
         return DEFAULT_SYNC_MAX_OPS
 
 
 def _job_max_n() -> int:
     try:
-        return max(1, int(os.environ.get('LEGACY_SELECT_JOB_MAX_N', str(DEFAULT_JOB_MAX_N))))
+        return max(1, int(os.environ.get('OP_SELECT_JOB_MAX_N', str(DEFAULT_JOB_MAX_N))))
     except ValueError:
         return DEFAULT_JOB_MAX_N
 
@@ -166,7 +166,7 @@ def _get_diverse_inline_max() -> int:
 
 
 _ORDER_CACHE: dict[str, dict[str, Any]] = {}
-_CACHE_TTL_S = float(os.getenv('LEGACY_SELECT_CACHE_TTL_S', '600'))
+_CACHE_TTL_S = float(os.getenv('OP_SELECT_CACHE_TTL_S', '600'))
 
 
 def _cache_key(index: str, query: dict[str, Any]) -> str:
@@ -289,7 +289,7 @@ async def select_diverse(
     in one ``GET /curation/crops`` page.
 
     Answers inline (``200``, ``{crop_ids, method, version, n_pool}``) when
-    the scoped pool is small enough per ``LEGACY_SELECT_SYNC_MAX_OPS``;
+    the scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;
     otherwise starts a background job and returns ``202`` with
     ``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.
     Never writes anything to OpenSearch (read-only selection, plan §8
@@ -298,7 +298,7 @@ async def select_diverse(
     if not _diverse_enabled():
         raise HTTPException(
             status_code=400,
-            detail='diversity selection is disabled (set LEGACY_SELECT_DIVERSE_ENABLED=1 to enable)',
+            detail='diversity selection is disabled (set OP_SELECT_DIVERSE_ENABLED=1 to enable)',
         )
     await _ensure_indexes(opensearch)
 

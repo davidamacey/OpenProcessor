@@ -59,7 +59,7 @@ class ReviewSort:
 
 def _mistakenness_status() -> StrategyStatus:
     """``mistakenness``'s status must reflect whatever
-    ``strategy_registry.py``'s live ``LEGACY_SCORES_ENABLED``/``LEGACY_SCORES_SHADOW``
+    ``strategy_registry.py``'s live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``
     + ``VALIDATED_SCORERS`` promotion currently computes — NOT a hardcoded
     ``'experimental'`` literal, even though that promotion is real today
     (docs/design/curation_scores.md §3: synthetic label-flip gate passed
@@ -202,7 +202,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                 '(rho=0.384 >= 0.25 bar) but the real gate — a blind 200-vs-200 '
                 'operator A/B — has not run (docs/design/curation_scores.md §2). '
                 'Stays shadow (never selectable via ?sort) until that gate clears; '
-                'unlike mistakenness this is NOT tied to LEGACY_SCORES_ENABLED/SHADOW '
+                'unlike mistakenness this is NOT tied to OP_SCORES_ENABLED/SHADOW '
                 '— the validation gap is the reason, not the feature flag.'
             ),
         ),
@@ -296,7 +296,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
 REVIEW_SORTS: dict[str, ReviewSort] = _build_review_sorts()
 """Import-time snapshot — fine for introspection/docs, but ``build_sort``
 calls :func:`get_review_sorts` internally so ``mistakenness``'s status is
-never stale relative to live ``LEGACY_SCORES_ENABLED``/``LEGACY_SCORES_SHADOW``."""
+never stale relative to live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``."""
 
 
 def get_review_sorts() -> dict[str, ReviewSort]:

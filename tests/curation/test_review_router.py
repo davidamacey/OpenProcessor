@@ -71,8 +71,8 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
-    monkeypatch.delenv('LEGACY_SCORES_ENABLED', raising=False)
-    monkeypatch.delenv('LEGACY_SCORES_SHADOW', raising=False)
+    monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
 
     app = FastAPI()
     app.include_router(legacy_router)
@@ -147,8 +147,8 @@ def test_disabled_sort_returns_400_when_scores_disabled(app_client: TestClient) 
 def test_mistakenness_sort_selectable_when_promoted(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv('LEGACY_SCORES_ENABLED', '1')
-    monkeypatch.setenv('LEGACY_SCORES_SHADOW', '1')
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.setenv('OP_SCORES_SHADOW', '1')
     r = app_client.get('/curation/review/all?sort=mistakenness')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]

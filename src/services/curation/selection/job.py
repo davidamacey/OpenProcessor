@@ -11,12 +11,12 @@ own compute budget says k-center-greedy at pool scale (n≈128k, k≈1000) is
 documented sync-ops budget runs here as a backgrounded ``asyncio`` task
 instead (no separate worker container, same as ``crop_scores.job``).
 
-Directory resolved lazily via ``LEGACY_SELECT_JOBS_DIR`` (default
+Directory resolved lazily via ``OP_SELECT_JOBS_DIR`` (default
 ``/jobs/select``) so tests can override with ``monkeypatch.setenv`` +
 ``tmp_path`` without reimporting.
 
 Read-only with respect to crop documents: this job only ever *reads*
-embeddings and writes its own job-state file under ``LEGACY_SELECT_JOBS_DIR``
+embeddings and writes its own job-state file under ``OP_SELECT_JOBS_DIR``
 — it never issues an OpenSearch ``update``/``bulk`` write (plan §8
 non-goal #3 / the "never writes a crop field" hard constraint for the
 whole selection overlay).
@@ -54,7 +54,7 @@ _active_task: asyncio.Task[None] | None = None
 
 
 def _jobs_dir() -> Path:
-    return Path(os.environ.get('LEGACY_SELECT_JOBS_DIR', '/jobs/select'))
+    return Path(os.environ.get('OP_SELECT_JOBS_DIR', '/jobs/select'))
 
 
 def _state_file() -> Path:
@@ -198,7 +198,7 @@ async def run_selection_job(
     max_n: int,
 ) -> None:
     """Actual compute body: one pool fetch (uncapped by the sync-path
-    ``LEGACY_SELECT_MAX_N``, only by the generous job-path ``max_n`` ceiling),
+    ``OP_SELECT_MAX_N``, only by the generous job-path ``max_n`` ceiling),
     one ``k_center_greedy`` call, done. A dedicated (non-underscore) symbol
     so tests can monkeypatch it wholesale for deterministic job-lifecycle
     testing without racing a real background task against synchronous

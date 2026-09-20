@@ -10,9 +10,9 @@ making a "double-start returns 409" assertion flaky). This is deliberate
 test-side control, not a production behavior change — ``job.py``'s own
 docstring documents the monkeypatch seam.
 
-Every test redirects ``LEGACY_SCORES_STATE_DIR`` to a per-test ``tmp_path`` so
+Every test redirects ``OP_SCORES_STATE_DIR`` to a per-test ``tmp_path`` so
 nothing touches the real ``/jobs/scores`` volume (mirrors
-``test_train_jobs.py``'s ``LEGACY_TRAIN_JOBS_DIR`` convention).
+``test_train_jobs.py``'s ``OP_TRAIN_JOBS_DIR`` convention).
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from fastapi.testclient import TestClient
 def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as legacy_router
 
-    monkeypatch.setenv('LEGACY_SCORES_STATE_DIR', str(tmp_path / 'scores'))
-    monkeypatch.setenv('LEGACY_SCORES_ENABLED', '1')
+    monkeypatch.setenv('OP_SCORES_STATE_DIR', str(tmp_path / 'scores'))
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
 
     fake_os = AsyncMock()
@@ -122,7 +122,7 @@ def test_unknown_scorer_400(app_client: TestClient) -> None:
 def test_disabled_when_flag_off_400(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv('LEGACY_SCORES_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
     r = app_client.post('/curation/scores/compute', json={'scorers': ['uniqueness']})
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']

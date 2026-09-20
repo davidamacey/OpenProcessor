@@ -8,8 +8,8 @@ constant does NOT move, see plan §8 non-goal #1).
 
 Phase 1 adds placeholder entries for the new ``crop_scores/`` scorers
 (``uniqueness`` / ``mistakenness`` / ``near_dup``). Their ``status`` tracks
-the ``LEGACY_SCORES_ENABLED`` feature flag: ``'disabled'`` until an operator
-opts in, ``'shadow'`` (computed + logged, not selectable — ``LEGACY_SCORES_SHADOW``)
+the ``OP_SCORES_ENABLED`` feature flag: ``'disabled'`` until an operator
+opts in, ``'shadow'`` (computed + logged, not selectable — ``OP_SCORES_SHADOW``)
 once enabled-but-shadow, ``'experimental'`` once out of shadow. The frontend
 renders only ``stable``/``experimental`` entries (plan §3, "capability-
 discovery linchpin"); ``shadow``/``disabled`` entries are never offered as a
@@ -21,7 +21,7 @@ go/no-go validation protocol against the real ~350k-crop pool (see
 ``VALIDATED_SCORERS`` below promotes the scorers whose *complete* gate
 passed (no human-in-the-loop or GPU-training step left unexecuted) one
 notch above the flag-driven status computed for the rest — i.e. from
-``shadow`` to ``experimental`` while ``LEGACY_SCORES_SHADOW`` is still set.
+``shadow`` to ``experimental`` while ``OP_SCORES_SHADOW`` is still set.
 Only ``mistakenness`` qualifies today: its full gate (synthetic 5%
 label-flip AUROC >= 0.80 *and* precision@100 >= 0.50) is a pure synthetic
 check with no human/GPU step, and both bars passed. ``uniqueness`` and
@@ -31,7 +31,7 @@ threshold sweep) but each method's plan-table gate also requires a step
 this validation pass could not execute (a blind operator A/B for
 uniqueness; 50 manually-judged pairs per threshold for near_dup) — they
 stay at whatever the flag-driven status says (``shadow``/``disabled``)
-until that step runs. This never overrides ``LEGACY_SCORES_ENABLED=false``
+until that step runs. This never overrides ``OP_SCORES_ENABLED=false``
 (disabled stays disabled regardless of validation history — the flag is
 a master kill switch, not a per-method opt-in).
 
@@ -59,18 +59,18 @@ def _scores_enabled() -> bool:
     """Read fresh each call (not a module constant) so tests can
     ``monkeypatch.setenv`` without reimporting — matches the
     ``train_jobs._resolve_jobs_dir`` convention in this repo."""
-    return os.environ.get('LEGACY_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return os.environ.get('OP_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _scores_shadow() -> bool:
-    return os.environ.get('LEGACY_SCORES_SHADOW', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return os.environ.get('OP_SCORES_SHADOW', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _select_diverse_enabled() -> bool:
     """Mirrors ``legacy_select.py``'s own flag check — kept independent (not
     imported from there) so this dependency-light module never needs to
     import a router module just to read one env var."""
-    return os.environ.get('LEGACY_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -142,9 +142,9 @@ above together, never independently."""
 
 
 def _score_strategy_status() -> StrategyStatus:
-    """Phase 1 scorers are 'disabled' until LEGACY_SCORES_ENABLED, then
+    """Phase 1 scorers are 'disabled' until OP_SCORES_ENABLED, then
     'shadow' (computed but not selectable as a sort) until an operator
-    also clears LEGACY_SCORES_SHADOW, then 'experimental'."""
+    also clears OP_SCORES_SHADOW, then 'experimental'."""
     if not _scores_enabled():
         return 'disabled'
     if _scores_shadow():
@@ -156,7 +156,7 @@ VALIDATED_SCORERS: frozenset[str] = frozenset({'mistakenness'})
 """Scorer ids whose Phase 2 validation (curation-strategy plan §6) passed
 the *complete* gate in ``docs/design/curation_scores.md`` -- promoted one
 notch above the flag-driven status (``shadow`` -> ``experimental``) so an
-operator running with ``LEGACY_SCORES_SHADOW=1`` still sees it as selectable.
+operator running with ``OP_SCORES_SHADOW=1`` still sees it as selectable.
 Deliberately NOT ``uniqueness``/``near_dup``: their pre-screens passed on
 real data but the plan's full gate for each needs a step this validation
 pass couldn't execute (human blind A/B; manually-judged near-dup pairs) --
@@ -182,7 +182,7 @@ def _cluster_strategies() -> list[dict[str, Any]]:
 
 def effective_scorer_status(scorer_id: str) -> StrategyStatus:
     """Current status for one ``crop_scores`` scorer id, applying the same
-    ``LEGACY_SCORES_ENABLED``/``LEGACY_SCORES_SHADOW``/``VALIDATED_SCORERS``
+    ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``/``VALIDATED_SCORERS``
     promotion rule ``_score_strategies()`` uses for ``GET /curation/methods``.
 
     Extracted so other Phase-3 modules (``review_sorts.py``) can ask "what
@@ -192,7 +192,7 @@ def effective_scorer_status(scorer_id: str) -> StrategyStatus:
     caller should cache this across a request boundary."""
     status = _score_strategy_status()
     # Promote a validated scorer one notch (shadow -> experimental)
-    # without ever bypassing the LEGACY_SCORES_ENABLED master switch.
+    # without ever bypassing the OP_SCORES_ENABLED master switch.
     if status == 'shadow' and scorer_id in VALIDATED_SCORERS:
         return 'experimental'
     return status
@@ -270,7 +270,7 @@ def _sort_strategies() -> list[dict[str, Any]]:
 def _overlay_strategies() -> list[dict[str, Any]]:
     """Phase 4 ``selection/`` overlays (curation-strategy plan §2.6/§3.4).
     One entry today: ``diverse`` (k-center-greedy). Status tracks
-    ``LEGACY_SELECT_DIVERSE_ENABLED`` the same live-read pattern
+    ``OP_SELECT_DIVERSE_ENABLED`` the same live-read pattern
     ``effective_scorer_status`` uses for the score axis, but capped at
     ``experimental`` — never ``stable`` — regardless of the flag, because
     only the cheap pre-screen has passed
@@ -389,7 +389,7 @@ def _export_strategies() -> list[dict[str, Any]]:
 
 _COVERAGE_CACHE: dict[str, int | None] | None = None
 _COVERAGE_CACHE_AT = 0.0
-_COVERAGE_TTL_S = float(os.environ.get('LEGACY_FIELD_COVERAGE_TTL_S', '60'))
+_COVERAGE_TTL_S = float(os.environ.get('OP_FIELD_COVERAGE_TTL_S', '60'))
 _COVERAGE_TOTAL_KEY = '__total__'
 """Sentinel key the pool-size count is cached under, alongside the
 per-field exists counts, in the same dict -- avoids a second cache
