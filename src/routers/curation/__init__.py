@@ -4,7 +4,8 @@ Aggregates endpoints split across many sub-modules onto a single
 `router` object owned by `_common`. The submodule imports below are
 side-effect imports — each registers `@router.<verb>(...)` handlers.
 This list grows one entry per router as later chunks port them (see
-docs/design/oss_genericization_phase2_plan.md §2.4 step 3).
+docs/design/curation_design_rationale.md for the genericization
+approach these chunks follow).
 
 Re-exports only the symbols ported tests actually patch by string
 (`src.routers.curation.<symbol>`) — unlike the reference package's

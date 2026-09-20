@@ -2,12 +2,13 @@
 renamed out from under it and nobody notices. This test converts that
 into a loud test failure instead of a silent no-op.
 
-Scope (see ``docs/design/oss_genericization_phase2_plan.md`` §7 R12):
-the hooks this plan actually authors/extends for curation-path
-ratcheting — the ``max-file-size`` exclude list (§0.5, five oversize
-ports get an entry each, in the commit that adds the file) and
-``check_no_literal_region_fields.py``'s ``PORTED_PATHS`` allowlist
-(§3.2). The repo's pre-existing top-level ``exclude:`` block (cache
+Scope (see ``docs/design/curation_design_rationale.md`` §5 for the
+ratchet-exemption rationale): the hooks this repo actually
+authors/extends for curation-path ratcheting — the ``max-file-size``
+exclude list (oversize ports get an entry each, in the commit that adds
+the file) and ``check_no_literal_region_fields.py``'s ``PORTED_PATHS``
+allowlist (see the same doc's §4). The repo's pre-existing top-level
+``exclude:`` block (cache
 dirs, ``.venv/``, etc.) is intentionally out of scope — those name
 runtime artifacts that legitimately don't exist in a fresh checkout,
 so "must exist on disk" is the wrong assertion for them.

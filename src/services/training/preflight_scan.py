@@ -19,15 +19,16 @@ hash, since exports are immutable once written) and compute:
 NOTE (oss port): this module's parent/child-box pairing check is scoped
 to the reference dataset's ``license_plate`` vocabulary
 (``_license_plate_export_id`` / ``ScanResult.plate_boxes`` /
-``unpaired_plate_boxes``). That is a real domain-specific leftover -- see
-plan §5 Chunk 6 / R5 -- kept as-is rather than renamed here because
+``unpaired_plate_boxes``). That is a real domain-specific leftover --
+kept as-is rather than renamed here because
 ``src/routers/curation_train.py`` (ported in a separate, parallel unit of
 this same chunk) reads these exact field names and check semantics; the
-scope table in ``docs/design/oss_genericization_phase2_plan.md`` §3.2
-governs OpenSearch document *field names* (RegionFields), not dataclass
-attribute names or class-vocabulary strings like this, so there is no
-leak-scan or RegionFields requirement forcing a rename. Flagged as a
-follow-up genericization opportunity, not done in this port.
+``RegionFields`` scope described in
+``docs/design/curation_design_rationale.md`` §4 governs OpenSearch
+document *field names*, not dataclass attribute names or
+class-vocabulary strings like this, so there is no leak-scan or
+RegionFields requirement forcing a rename. Flagged as a follow-up
+genericization opportunity, not done in this port.
 
 Vehicle-only. LPR (single-class plate exports) is handled entirely by the
 router's own additive ``dataset_kind == 'lpr_single_class'`` branch -- this

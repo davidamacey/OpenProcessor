@@ -70,8 +70,9 @@ VEHICLES_CLUSTER_INDEX: ClusterIndex = ClusterIndex.VEHICLES
 
 Deliberately reuses the pre-existing, unrelated visual-search
 ``ClusterIndex.VEHICLES`` role rather than adding a curation-specific
-member to ``src/services/clustering.py`` — see
-``docs/design/oss_genericization_phase2_plan.md`` §0.11.
+member to ``src/services/clustering.py`` — a naming leftover from the
+reference deployment, tracked as a documented gap in
+``docs/design/curation_design_rationale.md`` §6.
 """
 
 ITEMS_INDEX = get_curation_config().items_index

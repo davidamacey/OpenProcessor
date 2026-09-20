@@ -1,8 +1,8 @@
 """Training-job control protocol (file-based).
 
 Ported from a private reference vehicle/license-plate curation stack's
-training pipeline — see ``docs/design/oss_genericization_phase2_plan.md``
-Chunk 6. This module encapsulates the API <-> trainer protocol:
+training pipeline — see ``docs/design/curation_design_rationale.md``
+for the genericization rationale. This module encapsulates the API <-> trainer protocol:
 
 - The API writes ``<job_id>.job.json`` into the shared ``/jobs/`` volume
   to start a run. The trainer container watches the directory.

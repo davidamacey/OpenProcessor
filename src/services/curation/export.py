@@ -1,14 +1,14 @@
 """Generic YOLO-format dataset export service.
 
 The reference implementation this was ported from
-(``docs/design/oss_genericization_phase2_plan.md`` §3.5's row for
-``legacy_export.py``) splits into two halves: artifact filenames, class
+(see ``docs/design/curation_design_rationale.md`` for the genericization
+approach) splits into two halves: artifact filenames, class
 lists and split ratios are deployment data (an ``ExportProfile``, extracted
 here), while the YOLO-format writer, split logic and manifest/checksum
 mechanism are generic algorithm code that stays code. The bespoke
 letterbox-resize / whole-frame-vs-crop / near-dup-collapsing features of
-the reference exporter (a 1143-LOC domain-specific service, never ported
-— see plan §1's Bucket B list) are intentionally NOT reproduced here; a
+the reference exporter (a 1143-LOC domain-specific service, never
+ported) are intentionally NOT reproduced here; a
 deployment-specific overlay can extend :class:`GenericYoloExportService`
 directly if it needs them (plan §7 R5 — the generic curation stack ships
 with a thinner export path than the reference by design, tracked as the

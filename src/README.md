@@ -470,7 +470,6 @@ uvicorn src.main:app \
 
 - [../README.md](../README.md) - Project overview and API reference
 - [../CLAUDE.md](../CLAUDE.md) - Development instructions for AI assistants
-- [../PROJECT_STATUS.md](../PROJECT_STATUS.md) - Current status and test results
 - [utils/README.md](utils/README.md) - Utilities documentation
 - [../docs/README.md](../docs/README.md) - Technical documentation index
 

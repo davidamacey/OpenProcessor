@@ -2,8 +2,8 @@
 
 Ported from a private reference vehicle/license-plate curation stack's
 training pipeline (confirmed generic including the hyperparameter
-*values* -- see ``docs/design/oss_genericization_phase2_plan.md`` §8
-decision 2). This module is the **single source of truth** for the
+*values* -- see ``docs/design/curation_design_rationale.md`` for the
+genericization approach). This module is the **single source of truth** for the
 hyperparameter-profile table that a frontend renders on the train form
 and the trainer container consumes via ``job.json``. Keeping it on the
 backend means a profile tweak ships in one place, and the frontend

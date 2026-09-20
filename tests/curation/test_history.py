@@ -297,8 +297,8 @@ async def _run_auto_promote_case() -> list[dict[str, Any]]:
     # (the pipeline router, the clusters router) — importing
     # auto_promote directly as the first cluster-related module in the
     # process can hit the pre-existing orchestrator<->auto_promote
-    # circular import (R11 — see
-    # docs/design/oss_genericization_phase2_plan.md §7).
+    # circular import (see docs/design/curation_design_rationale.md §5
+    # for why orchestrator.py is a large, ratchet-exempt file).
     from src.services.curation.clustering.orchestrator import auto_promote_clusters
 
     fake_os = _FakeAutoPromoteOS()
@@ -320,9 +320,9 @@ async def test_auto_promote_appends_history() -> None:
 # =============================================================================
 # Curation worker combined-VLM path (bulk_writer.py's OCC merger)
 #
-# Deferred here from Chunk 2 (docs/design/oss_genericization_phase2_plan.md
-# §6.1 "test_history_writers.py" — one case of that reference file) since
-# it exercises scripts/curation/worker/bulk_writer.py, which lands in
+# Deferred here from Chunk 2 (one case of the reference implementation's
+# "test_history_writers.py") since it exercises
+# scripts/curation/worker/bulk_writer.py, which lands in
 # Chunk 8. Extends this file rather than porting a second one — the
 # reference test file covers three other class-writer cases (auto_promote,
 # a class-merge router endpoint, and a label-import script) alongside this
