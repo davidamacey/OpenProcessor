@@ -178,6 +178,36 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
 
+    # Reconcile job state.json files left at status='running' by a process
+    # that was killed mid-job — see docs/design/curation_design_rationale.md
+    # and each module's reconcile_orphaned_jobs() docstring. Best-effort and
+    # isolated per module so one misconfigured state dir can't block startup
+    # or the other three checks.
+    from src.services.curation import embedding_viz
+    from src.services.curation.autolabel import job as autolabel_job
+    from src.services.curation.item_scores import job as item_scores_job
+    from src.services.curation.selection import job as selection_job
+
+    for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job):
+        try:
+            if _module.reconcile_orphaned_jobs():
+                logger.warning('orphaned_job_reconciled', module=_module.__name__)
+        except Exception as exc:
+            logger.warning(
+                'orphaned_job_reconcile_skipped', module=_module.__name__, error=str(exc)
+            )
+
+    # Gap 2 (model export): same idea, different shape — see
+    # src.services.model_export's module docstring.
+    try:
+        from src.services.model_export import reconcile_orphaned_export_tasks
+
+        n_reconciled = reconcile_orphaned_export_tasks()
+        if n_reconciled:
+            logger.warning('orphaned_export_tasks_reconciled', count=n_reconciled)
+    except Exception as exc:
+        logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
+
     # Best-effort: warm the PE-Core text encoder for GET /curation/search/text.
     # Non-fatal if torch/perception_models isn't installed or the checkpoint
     # isn't available — the search endpoint surfaces a 503 in that case
