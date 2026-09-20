@@ -52,7 +52,7 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 StrategyStatus = Literal['stable', 'experimental', 'shadow', 'disabled']
-StrategyAxis = Literal['cluster', 'score', 'sort', 'overlay', 'export']
+StrategyAxis = Literal['cluster', 'score', 'sort', 'overlay', 'export', 'detection_profile']
 
 
 def _scores_enabled() -> bool:
@@ -387,6 +387,37 @@ def _export_strategies() -> list[dict[str, Any]]:
     ]
 
 
+def _detection_profile_strategies() -> list[dict[str, Any]]:
+    """Configured sub-region ``DetectionProfile`` axis (labeling-assist
+    plan task (b)).
+
+    Reads :mod:`src.services.detection.profile_registry` -- a real,
+    process-lifetime registry a deployment can add more than one profile
+    to (e.g. a license-plate profile AND a shipping-label profile) --
+    rather than hardcoding the single ``DEFAULT_PROFILE`` here. Today
+    exactly one profile is ever registered (importing
+    ``src.services.detection.cascade_detect`` registers its own
+    ``DEFAULT_PROFILE`` as the default), so this axis lists exactly one
+    entry, but the mechanism is not limited to one.
+    """
+    # Import triggers cascade_detect's module-level `register_profile`
+    # call if it hasn't run yet in this process.
+    from src.services.detection import cascade_detect  # noqa: F401
+    from src.services.detection.profile_registry import get_default_profile_name, get_profiles
+
+    default_name = get_default_profile_name()
+    return [
+        {
+            'id': profile.name,
+            'axis': 'detection_profile',
+            'label': profile.name,
+            'status': 'stable',
+            'default': profile.name == default_name,
+        }
+        for profile in get_profiles().values()
+    ]
+
+
 _COVERAGE_CACHE: dict[str, int | None] | None = None
 _COVERAGE_CACHE_AT = 0.0
 _COVERAGE_TTL_S = float(os.environ.get('OP_FIELD_COVERAGE_TTL_S', '60'))
@@ -486,6 +517,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
         *_score_strategies(),
         *_overlay_strategies(),
         *_export_strategies(),
+        *_detection_profile_strategies(),
     ]
 
     fields = frozenset(e['requires_field'] for e in strategies if e.get('requires_field'))

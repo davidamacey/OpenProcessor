@@ -32,6 +32,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.config import DetectionProfile, get_region_fields
+from src.services.detection.profile_registry import register_profile
 
 
 if TYPE_CHECKING:
@@ -77,6 +78,12 @@ DEFAULT_PROFILE = DetectionProfile(
     # motorcycle plates (near-square, off-axis mounting).
     secondary_shape_groups=frozenset({'sportbikes', 'cruisers', 'dirtbikes'}),
 )
+
+# Register as the default so GET /curation/methods' detection_profile axis
+# (src.services.curation.strategy_registry) and any future multi-profile
+# deployment have a real registry to read from — see
+# src.services.detection.profile_registry.
+register_profile(DEFAULT_PROFILE, default=True)
 
 # The lpr_nanov11_640-shaped TRT engine is exported with a fixed
 # [1, 3, N, N] input — Triton's dynamic batching layers multiple
