@@ -1,16 +1,21 @@
 <script lang="ts">
   import '../app.css';
   import type { Snippet } from 'svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import AboutModal from '$components/AboutModal.svelte';
   import ClassSidebar from '$components/ClassSidebar.svelte';
-  import { slotForClassName } from '$lib/annotations/registeredSlots';
+  import {
+    slotForClassName,
+    slotRegistryWarnings,
+  } from '$lib/annotations/registeredSlots';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { healthStore } from '$stores/health.svelte';
+  import { toastStore } from '$stores/toast.svelte';
 
   interface Props {
     children?: Snippet;
@@ -34,6 +39,32 @@
       releaseHealth();
       releaseClasses();
     };
+  });
+
+  // Tier-2 deployment-profile problems are the operator's to fix and are
+  // invisible otherwise — the app has already degraded silently to the
+  // built-in slots by the time this runs. One toast, not one per warning:
+  // a broken file typically produces several and they are all the same
+  // action item ("go fix annotation-profiles.json"). Full detail is on the
+  // console via loadDeploymentProfiles().
+  //
+  // MUST be wrapped in `untrack()`: `toastStore.error()` reads
+  // `this.toasts` (to spread it) before writing it
+  // (`src/lib/stores/toast.svelte.ts`'s `push()`), and `slotRegistryWarnings`
+  // is a plain, non-reactive `let` this effect otherwise reads with no
+  // tracked dependency at all. Without `untrack`, the read of
+  // `toastStore.toasts` inside `push()` makes THIS effect depend on
+  // `toastStore.toasts` — so the very toast this effect pushes
+  // immediately re-triggers it, which pushes another toast, forever.
+  // `untrack` keeps the intended "runs exactly once, on mount" semantics
+  // this effect's own doc comment (and the tier-2 plan's §4.6) describe.
+  $effect(() => {
+    if (slotRegistryWarnings.length === 0) return;
+    untrack(() => {
+      toastStore.error(
+        `Deployment annotation profile: ${slotRegistryWarnings.length} problem(s) — see the browser console. Using built-in slots.`,
+      );
+    });
   });
 
   // Global hotkey listener — class.hotkey_letter bindings are honored

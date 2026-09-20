@@ -1,4 +1,4 @@
-import { registeredSlots } from './annotations/registeredSlots';
+import { registeredSlots, onRegisteredSlotsChanged } from './annotations/registeredSlots';
 import type { SlotKey, SlotSpec } from './annotations/types';
 import type { ReviewTab, SlotReviewTab } from './types';
 
@@ -102,10 +102,19 @@ export function buildReviewTabs(slots: SlotSpec[]): ReviewTabDef[] {
     });
 }
 
-export const REVIEW_TABS: ReviewTabDef[] = [
+/** `let`, not `const` — rebuilt in place when a tier-2 deployment
+ *  profile installs additional slots, before first render. See
+ *  `annotations/registeredSlots.ts`'s note on live bindings. Every
+ *  consumer (`{#each REVIEW_TABS}`, `tabFromUrlId`, `endpointForTab`'s
+ *  default parameter) reads it at use time and needs no change. */
+export let REVIEW_TABS: ReviewTabDef[] = [
   ...CORE_REVIEW_TABS,
   ...buildReviewTabs(registeredSlots),
 ];
+
+onRegisteredSlotsChanged(() => {
+  REVIEW_TABS = [...CORE_REVIEW_TABS, ...buildReviewTabs(registeredSlots)];
+});
 
 /** True for any tab backed by a slot's queue capability rather than a
  *  core review cohort — structural, not a registry lookup, so it stays
