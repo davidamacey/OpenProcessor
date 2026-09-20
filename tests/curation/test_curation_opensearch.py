@@ -220,7 +220,10 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
     assert len(create_calls) == 4
     seen = {call.kwargs['index'] for call in create_calls}
     assert seen == {'op_images', 'op_items', 'op_labels_confirmed', 'op_classes'}
-    # And each body matches the canonical schema dict.
+    # Each index name got the body for its OWN role, not a mismatched one
+    # (catches a role<->index swap bug) — comparing against INDEX_BODIES
+    # itself only proves wiring, not content, so also pin one body's
+    # actual shape against literal expected values below.
     by_name = {call.kwargs['index']: call.kwargs['body'] for call in create_calls}
     from src.config import index_name
 
@@ -228,6 +231,17 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         assert by_name[index_name(config, role)] == INDEX_BODIES[role]
     # No deletes (we did not force-recreate).
     assert client.indices.delete.await_count == 0
+
+    # Literal pin (not re-derived from INDEX_BODIES) on the images index
+    # body actually sent over the wire — would catch a content bug that a
+    # comparison against INDEX_BODIES itself never could.
+    images_body = by_name[index_name(config, IndexRole.IMAGES)]
+    images_props = images_body['mappings']['properties']
+    assert images_props['image_id'] == {'type': 'keyword'}
+    assert images_props['width'] == {'type': 'integer'}
+    assert images_props['height'] == {'type': 'integer'}
+    assert images_props['indexed_at'] == {'type': 'date'}
+    assert images_props['non_jpeg_format_skipped'] == {'type': 'boolean'}
 
 
 @pytest.mark.asyncio

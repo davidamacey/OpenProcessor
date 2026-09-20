@@ -23,6 +23,7 @@ import numpy as np
 import requests
 
 from src.config import get_curation_config, get_region_fields
+from src.config.region_state import RegionStatus
 from src.services.detection.frame_dedup import near_dup_groups
 
 
@@ -41,7 +42,7 @@ def detected_frame_ids() -> list[str]:
     body = {
         'size': 1000,
         '_source': ['image_id'],
-        'query': {'term': {f'{get_region_fields().status}.keyword': 'detected'}},
+        'query': {'term': {f'{get_region_fields().status}.keyword': RegionStatus.DETECTED}},
     }
     resp = requests.post(f'{OS_URL}/{CROPS_INDEX}/_search?scroll=3m', json=body, timeout=60).json()
     ids: set[str] = set()

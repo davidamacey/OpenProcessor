@@ -23,7 +23,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from src.config import DetectionProfile, get_region_fields
+from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.routers.curation._common import (
     CURATION_IMAGES_INDEX,
     CURATION_ITEMS_INDEX,
@@ -286,9 +286,9 @@ async def ingest_sam_drain(opensearch: OpenSearchDep) -> dict[str, int]:
     for bucket in (resp.get('aggregations') or {}).get('by_status', {}).get('buckets', []):
         raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))
     pending_legacy = raw.get('pending', 0)
-    pending_new = raw.get('pending_detection', 0)
+    pending_new = raw.get(RegionStatus.PENDING_DETECTION, 0)
     verify_legacy = raw.get('pending_verify', 0)
-    verify_new = raw.get('pending_verification', 0)
+    verify_new = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
     return {
         'pending': pending_legacy,
         'pending_detection': pending_new + pending_legacy,

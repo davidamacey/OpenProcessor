@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from src.config import get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.metrics import (
     KB_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS,
@@ -433,7 +434,7 @@ async def run(args: argparse.Namespace) -> int:
                     )
                 if t.crop_jpeg is None:
                     F = get_region_fields()
-                    t.update_doc = {F.status: 'no_plate_box'}
+                    t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
                     await out_q.put(t)
                     in_q.task_done()
                     continue
@@ -624,7 +625,7 @@ async def run(args: argparse.Namespace) -> int:
                     structlog.contextvars.bind_contextvars(request_id=t.request_id)
                     try:
                         if i in bad_indices:
-                            t.update_doc = {F.status: 'no_plate_box'}
+                            t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
                             await out_q.put(t)
                             continue
                         # Default True (fail-open) when the crop is
@@ -638,7 +639,7 @@ async def run(args: argparse.Namespace) -> int:
                             metrics['gemma_visible_skipped'] += 1
                             t.detection_trace.append('gemma_visible:no')
                             t.update_doc = {
-                                F.status: 'no_plate_visible',
+                                F.status: RegionStatus.NO_PLATE_VISIBLE,
                                 F.detector_chain: list(t.detection_trace),
                             }
                             await out_q.put(t)
@@ -668,7 +669,7 @@ async def run(args: argparse.Namespace) -> int:
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
                 if t.crop_jpeg is None:
-                    t.update_doc = {F.status: 'no_plate_box'}
+                    t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
                     await out_q.put(t)
                     sam_q.task_done()
                     continue
@@ -794,7 +795,7 @@ async def run(args: argparse.Namespace) -> int:
 
                 # Nothing found by any detector → no_plate_box.
                 t.update_doc = {
-                    F.status: 'no_plate_box',
+                    F.status: RegionStatus.NO_PLATE_BOX,
                     F.detector_chain: list(t.detection_trace),
                 }
                 await out_q.put(t)
@@ -916,7 +917,7 @@ async def run(args: argparse.Namespace) -> int:
                     try:
                         if i in bad_indices:
                             # Defensive — Stage A should always set these.
-                            t.update_doc = {F.status: 'no_plate_box'}
+                            t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
                             await out_q.put(t)
                             continue
                         reply = replies_by_id.get(t.crop_id)
@@ -959,7 +960,7 @@ async def run(args: argparse.Namespace) -> int:
                                     f'{t.candidate_source or "unknown"}:sanity_reject:{gate_reason}'
                                 )
                                 t.update_doc = {
-                                    F.status: 'verify_rejected',
+                                    F.status: RegionStatus.VERIFY_REJECTED,
                                     F.detector_chain: list(t.detection_trace),
                                     **_combined_class_update(
                                         reply, effective_class_names, name_to_id=name_to_id
@@ -1047,7 +1048,7 @@ async def run(args: argparse.Namespace) -> int:
                                 'combined_verify_reject:plate_visible_elsewhere'
                             )
                             t.update_doc = {
-                                F.status: 'verify_rejected',
+                                F.status: RegionStatus.VERIFY_REJECTED,
                                 F.detector_chain: list(t.detection_trace),
                                 **_combined_class_update(
                                     reply, effective_class_names, name_to_id=name_to_id
@@ -1060,7 +1061,7 @@ async def run(args: argparse.Namespace) -> int:
                                 f'{t.candidate_source or "unknown"}:combined_no_plate_visible'
                             )
                             t.update_doc = {
-                                F.status: 'no_plate_visible',
+                                F.status: RegionStatus.NO_PLATE_VISIBLE,
                                 F.detector_chain: list(t.detection_trace),
                                 **_combined_class_update(
                                     reply, effective_class_names, name_to_id=name_to_id
