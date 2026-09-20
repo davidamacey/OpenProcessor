@@ -226,6 +226,20 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
     assert entry['requires_banner'] is False
 
 
+def test_export_axis_advertises_yolo_stable_and_omits_lpr(app_client: TestClient) -> None:
+    """cropwright_backend_integration_plan.md §4.3/T-C2: the frontend gates
+    its LPR export panel on this axis rather than probing the write
+    endpoint. ``lpr`` (proprietary, never ported -- Bucket B) must not
+    appear at all, not even as a disabled entry."""
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    export_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
+    assert set(export_entries) == {'yolo'}
+    assert export_entries['yolo']['status'] == 'stable'
+    assert 'lpr' not in export_entries
+
+
 def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
     forbidden = {'cluster_id', 'cluster_subid', 'cluster_distance'}
     r = app_client.get('/curation/methods')
