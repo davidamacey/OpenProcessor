@@ -18,7 +18,7 @@ still accepted for back-compat::
         'job_id': '2026-05-25T10-00',
         'datasets': [
             {'name': 'curated', 'path': '/data/lpr_exports/<run>'},
-            {'name': 'andrewmvd', 'path': '/mnt/nvm/datasets/plates/andrewmvd_car_plate'},
+            {'name': 'andrewmvd', 'path': './data/bakeoff_eval/public/andrewmvd_car_plate'},
         ],
         'verify_frozen': true,
         'out_dir': '/data/bakeoff/<job_id>',

@@ -77,6 +77,15 @@ class CurationConfig:
     hnsw_ef_construction: int = 512
     hnsw_m: int = 16
 
+    # Bake-off harness (src/routers/curation/bakeoff.py,
+    # scripts/curation/bakeoff/). Previously hardcoded to owner-private
+    # absolute paths (CFG-6) -- one of which named the location of a
+    # licensed proprietary image corpus and must never appear in this repo
+    # as a literal string. jobs/out mirror the state_dir/training_staging
+    # precedent below; eval_root is a data root, so it mirrors
+    # source_root/export_root instead.
+    bakeoff_eval_root: Path = Path('./data/bakeoff_eval')
+
     @classmethod
     def from_env(cls, prefix: str = 'OP_') -> CurationConfig:
         """Build a :class:`CurationConfig` from ``{prefix}*`` env vars.
@@ -112,6 +121,7 @@ class CurationConfig:
             source_path_aliases=defaults.source_path_aliases,
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
+            bakeoff_eval_root=_path('BAKEOFF_EVAL_ROOT', defaults.bakeoff_eval_root),
             api_prefix=_str('API_PREFIX', defaults.api_prefix),
             api_tag=_str('API_TAG', defaults.api_tag),
             embedding_dim=_int('EMBEDDING_DIM', defaults.embedding_dim),
