@@ -1412,7 +1412,11 @@ export async function runGemmaOnCluster(
   clusterId: number,
   signal?: AbortSignal,
 ): Promise<{ predicted: number; updated: number; new_class_proposals?: unknown[] }> {
-  // /curation/gemma/label_batch takes {crop_ids: [...]} (max 64). Fetch the
+  // {API_PREFIX}/vlm/label_batch takes {crop_ids: [...]} (max 64) — the
+  // backend renamed the path segment gemma → vlm when it swapped Gemma
+  // for a pluggable VLM abstraction. The JSON field names (gemma_*) and
+  // the gemma_low_conf review-tab id are frozen wire contract and did
+  // NOT move. Fetch the
   // unvalidated crops in this cluster first, then POST in chunks of 64.
   type CropPage = { crops: Array<{ crop_id: string }> };
   const page = await apiFetch<CropPage>(
@@ -1432,7 +1436,7 @@ export async function runGemmaOnCluster(
       updated: number;
       new_class_proposals?: unknown[];
     }>(
-      `${API_PREFIX}/gemma/label_batch`,
+      `${API_PREFIX}/vlm/label_batch`,
       { method: 'POST', body: JSON.stringify({ crop_ids: chunk }) },
       signal,
     );
