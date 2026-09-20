@@ -119,6 +119,19 @@ class Settings(BaseSettings):
     api_version: str = Field(default_factory=_read_version, description='API version')
 
     # ==========================================================================
+    # Model Export Configuration
+    # ==========================================================================
+    # Predates the curation subsystem and isn't curation-specific (it backs
+    # the standalone TensorRT model-export/upload feature), so it lives on
+    # the base Settings rather than CurationConfig. One JSON file per task
+    # id, written the same atomic temp+rename way as the curation job
+    # modules — see src.services.model_export.
+    export_task_dir: Path = Field(
+        default=Path('/jobs/model_export'),
+        description='Directory for durable model-export task state (one <task_id>.json file each)',
+    )
+
+    # ==========================================================================
     # Logging Configuration
     # ==========================================================================
     log_level: str = Field(

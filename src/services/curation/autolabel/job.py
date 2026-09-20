@@ -209,6 +209,38 @@ def _reap_stale_artifacts() -> None:
         _HEARTBEAT_FILE.unlink()
 
 
+def reconcile_orphaned_jobs() -> bool:
+    """Startup-only repair, called from ``src.main``'s lifespan.
+
+    Unlike the other three job modules in this package, the auto-label
+    pipeline runs in a *separate* long-lived worker container
+    (``curation-auto-label-worker``) with its own restart lifecycle —
+    restarting yolo-api does not kill that worker, so most of the time
+    there is nothing to reconcile here. This still matters for the case
+    where yolo-api itself was down (and so never got to run this check)
+    while the worker died mid-run: without this, nothing repairs
+    ``state.json`` until the next status poll. A pending, not-yet-claimed
+    trigger is left alone — the worker container may simply not have
+    gotten to it yet, which is not an orphaned run.
+
+    Uses ``'interrupted'`` (via the shared helper) rather than this
+    module's own lazy ``get_state()`` repair status (``'failed'``) so the
+    two repair paths are distinguishable; since this runs first in the
+    lifespan, 'interrupted' is what a caller normally observes for a
+    heartbeat-stale run recovered at startup.
+    """
+    if _TRIGGER_FILE.exists():
+        return False
+    from src.services.curation.job_reconcile import reconcile_stale_running
+
+    return reconcile_stale_running(
+        _STATE_FILE,
+        _HEARTBEAT_FILE,
+        stale_s=_HEARTBEAT_STALE_S,
+        error_prefix='auto_label worker',
+    )
+
+
 def get_state() -> dict[str, Any]:
     """Read-only snapshot from the on-disk state file.
 
