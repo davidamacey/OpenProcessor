@@ -240,6 +240,56 @@ def test_export_axis_advertises_yolo_stable_and_omits_lpr(app_client: TestClient
     assert 'lpr' not in export_entries
 
 
+def test_detection_profile_axis_advertises_the_registered_default(
+    app_client: TestClient,
+) -> None:
+    """Labeling-assist plan task (b): today exactly one ``DetectionProfile``
+    is ever constructed (``cascade_detect.DEFAULT_PROFILE``, registered as
+    the default the moment that module is imported -- see
+    ``src.services.detection.profile_registry``). This axis must list it,
+    keyed by the profile's own ``name`` field, as the sole stable/default
+    entry."""
+    from src.services.detection.cascade_detect import DEFAULT_PROFILE
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
+    assert set(profile_entries) == {DEFAULT_PROFILE.name}
+    entry = profile_entries[DEFAULT_PROFILE.name]
+    assert entry['status'] == 'stable'
+    assert entry['default'] is True
+
+
+def test_detection_profile_registry_supports_more_than_one_profile() -> None:
+    """The mechanism itself must not be hardcoded to a single entry --
+    registering a second profile must surface both, with only the
+    explicitly-default one flagged."""
+    from src.config import DetectionProfile
+    from src.services.detection import profile_registry
+
+    saved = profile_registry.get_profiles()
+    saved_default = profile_registry.get_default_profile_name()
+    try:
+        profile_registry._reset_registry_for_tests()
+        first = DetectionProfile(name='license_plate')
+        second = DetectionProfile(name='shipping_label')
+        profile_registry.register_profile(first, default=True)
+        profile_registry.register_profile(second)
+
+        from src.services.curation.strategy_registry import _detection_profile_strategies
+
+        entries = {e['id']: e for e in _detection_profile_strategies()}
+        assert set(entries) == {'license_plate', 'shipping_label'}
+        assert entries['license_plate']['default'] is True
+        assert entries['shipping_label']['default'] is False
+        assert all(e['axis'] == 'detection_profile' for e in entries.values())
+    finally:
+        profile_registry._reset_registry_for_tests()
+        for profile in saved.values():
+            profile_registry.register_profile(profile, default=profile.name == saved_default)
+
+
 def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
     forbidden = {'cluster_id', 'cluster_subid', 'cluster_distance'}
     r = app_client.get('/curation/methods')
