@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
@@ -235,6 +236,98 @@ def test_export_axis_advertises_yolo_stable_and_omits_lpr(app_client: TestClient
     assert set(export_entries) == {'yolo'}
     assert export_entries['yolo']['status'] == 'stable'
     assert 'lpr' not in export_entries
+
+
+def test_detection_profile_axis_advertises_the_registered_default(
+    app_client: TestClient,
+) -> None:
+    """Labeling-assist plan task (b): today exactly one ``DetectionProfile``
+    is ever constructed (``cascade_detect.DEFAULT_PROFILE``, registered as
+    the default the moment that module is imported -- see
+    ``src.services.detection.profile_registry``). This axis must list it,
+    keyed by the profile's own ``name`` field, as the sole stable/default
+    entry."""
+    from src.services.detection.cascade_detect import DEFAULT_PROFILE
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
+    assert set(profile_entries) == {DEFAULT_PROFILE.name}
+    entry = profile_entries[DEFAULT_PROFILE.name]
+    assert entry['status'] == 'stable'
+    assert entry['default'] is True
+
+
+def test_detection_profile_registry_supports_more_than_one_profile() -> None:
+    """The mechanism itself must not be hardcoded to a single entry --
+    registering a second profile must surface both, with only the
+    explicitly-default one flagged."""
+    from src.config import DetectionProfile
+    from src.services.detection import profile_registry
+
+    saved = profile_registry.get_profiles()
+    saved_default = profile_registry.get_default_profile_name()
+    try:
+        profile_registry._reset_registry_for_tests()
+        first = DetectionProfile(name='license_plate')
+        second = DetectionProfile(name='shipping_label')
+        profile_registry.register_profile(first, default=True)
+        profile_registry.register_profile(second)
+
+        from src.services.curation.strategy_registry import _detection_profile_strategies
+
+        entries = {e['id']: e for e in _detection_profile_strategies()}
+        assert set(entries) == {'license_plate', 'shipping_label'}
+        assert entries['license_plate']['default'] is True
+        assert entries['shipping_label']['default'] is False
+        assert all(e['axis'] == 'detection_profile' for e in entries.values())
+    finally:
+        profile_registry._reset_registry_for_tests()
+        for profile in saved.values():
+            profile_registry.register_profile(profile, default=profile.name == saved_default)
+
+
+def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -> None:
+    """Labeling-assist plan task (c): with no ``OP_PROMPT_PACK_PATH``
+    configured, the axis must advertise the built-in generic pack by its
+    own ``name`` field."""
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
+    assert set(pack_entries) == {GENERIC_ITEM_PACK.name}
+    entry = pack_entries[GENERIC_ITEM_PACK.name]
+    assert entry['status'] == 'stable'
+    assert entry['default'] is True
+
+
+def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
+    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deployment pointing ``OP_PROMPT_PACK_PATH`` at its own pack file
+    (task a) sees that pack's name on the axis instead of the generic
+    fallback."""
+    import json
+
+    from src.config.curation import CurationConfig
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    custom = GENERIC_ITEM_PACK.to_dict()
+    custom['name'] = 'pallet_v1'
+    pack_path = tmp_path / 'pack.json'
+    pack_path.write_text(json.dumps(custom))
+
+    custom_cfg = CurationConfig(prompt_pack_path=pack_path)
+    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
+    assert set(pack_entries) == {'pallet_v1'}
 
 
 def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:

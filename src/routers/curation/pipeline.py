@@ -30,6 +30,16 @@ _AUTO_PROMOTE_DESC = (
     'Opt-in only after a confidence-gated rewrite.'
 )
 
+# Same "shared description, same reason" precedent as _AUTO_PROMOTE_DESC.
+_REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip retrain.'
+
+# Labeling-assist item selection (task d): scope a run to one registry class.
+_CLASS_ID_DESC = (
+    'Scope this run to a single registry class (labeling-assist item '
+    'selection). Unset runs the full unvalidated cohort, unchanged from '
+    'before this parameter existed.'
+)
+
 
 @router.post('/pipeline/auto_label/start')
 async def pipeline_auto_label_start(
@@ -53,14 +63,12 @@ async def pipeline_auto_label_start(
     ),
     recluster_unvalidated: bool = Query(False, description='Merge candidate clusters mode.'),
     run_auto_promote: bool = Query(False, description=_AUTO_PROMOTE_DESC),
-    reassign_only: bool = Query(
-        False,
-        description='IVF: stream-assign residuals vs persisted centroids; skip retrain.',
-    ),
+    reassign_only: bool = Query(False, description=_REASSIGN_ONLY_DESC),
     # Cluster scope (primary-subject gate) — see /pipeline/auto_label/start.
     gate_max_rank: int | None = Query(None, ge=1),
     gate_min_blur_ratio: float | None = Query(None, ge=0.0),
     n_clusters: int | None = Query(None, ge=2, le=4096),
+    class_id: int | None = Query(None, description=_CLASS_ID_DESC),
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -90,6 +98,7 @@ async def pipeline_auto_label_start(
                 'gate_max_rank': gate_max_rank,
                 'gate_min_blur_ratio': gate_min_blur_ratio,
                 'n_clusters': n_clusters,
+                'class_id': class_id,
             },
         )
     except RuntimeError as exc:
@@ -132,15 +141,13 @@ async def pipeline_auto_label(
     ),
     run_gemma: bool = Query(False, description='Run the VLM stage. See /start.'),
     recluster_unvalidated: bool = Query(False, description='Merge candidate clusters.'),
-    reassign_only: bool = Query(
-        False,
-        description='IVF: stream-assign residuals vs persisted centroids; skip retrain.',
-    ),
+    reassign_only: bool = Query(False, description=_REASSIGN_ONLY_DESC),
     run_auto_promote: bool = Query(False, description=_AUTO_PROMOTE_DESC),
     # Cluster scope (primary-subject gate) — see /pipeline/auto_label/start.
     gate_max_rank: int | None = Query(None, ge=1),
     gate_min_blur_ratio: float | None = Query(None, ge=0.0),
     n_clusters: int | None = Query(None, ge=2, le=4096),
+    class_id: int | None = Query(None, description=_CLASS_ID_DESC),
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -162,7 +169,7 @@ async def pipeline_auto_label(
     from src.services.curation.image_serving import THUMBNAIL_CACHE
     from src.services.labeling.vlm_labeler import ItemCrop
 
-    summary: dict[str, Any] = {'stages': {}}
+    summary: dict[str, Any] = {'stages': {}, 'class_id': class_id}
 
     # Snapshot counts at entry for a real before/after.
     summary['baseline'] = await pipeline_health_snapshot(opensearch)
@@ -272,10 +279,11 @@ async def pipeline_auto_label(
             progress.start_stage('gemma', total=0)
             progress.start_stage('finalize')
         try:
-            cnt = await opensearch.count(
-                index=CURATION_ITEMS_INDEX,
-                body={'query': {'bool': {'must_not': [{'term': {'class_validated': True}}]}}},
-            )
+            bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
+            if class_id is not None:
+                bool_q['must'] = [{'term': {'class_id': class_id}}]
+            body = {'query': {'bool': bool_q}}
+            cnt = await opensearch.count(index=CURATION_ITEMS_INDEX, body=body)
             summary['unvalidated_remaining'] = int(cnt.get('count', 0))
         except Exception:
             summary['unvalidated_remaining'] = -1
@@ -334,6 +342,9 @@ async def pipeline_auto_label(
             ],
         },
     }
+    if class_id is not None:
+        # Task d: a positive filter, not another must_not exclusion.
+        unvalidated_query['bool'].setdefault('must', []).append({'term': {'class_id': class_id}})
     initial_body = {
         'size': SCROLL_PAGE,
         '_source': ['crop_id', 'image_path', 'bbox_norm', 'embedding'],
@@ -385,7 +396,7 @@ async def pipeline_auto_label(
         format_class_catalog,
         resolve_class_name as _resolve_class_name_fn,
     )
-    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     reg = get_class_registry().load()
     class_names = [c.class_name for c in reg.classes if not c.deprecated]
@@ -399,7 +410,7 @@ async def pipeline_auto_label(
         for c in reg.classes
         if not c.deprecated
     ]
-    class_catalog = format_class_catalog(class_dicts, GENERIC_ITEM_PACK)
+    class_catalog = format_class_catalog(class_dicts, resolve_prompt_pack())
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
