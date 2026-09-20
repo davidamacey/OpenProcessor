@@ -332,16 +332,24 @@ def default_sort_for_tab(tab: str) -> str:
         raise ValueError(f'no default review sort registered for tab {tab!r}') from exc
 
 
-def build_sort(sort_id: str | None, *, tab: str) -> tuple[list[dict[str, Any]], str, str | None]:
+async def build_sort(
+    sort_id: str | None, *, tab: str, opensearch: Any | None = None
+) -> tuple[list[dict[str, Any]], str, str | None]:
     """Resolve a ``?sort=`` query value for ``tab`` into an OpenSearch sort
     clause.
 
     Returns ``(clause, applied_id, fallback_reason)``:
 
-    * ``sort_id`` is ``None`` or ``'default'`` → resolves via
-      :func:`default_sort_for_tab`; always succeeds; ``fallback_reason`` is
-      ``None``. This is the byte-identical-to-legacy path every existing
-      tab must hit when a client doesn't pass ``?sort`` at all.
+    * ``sort_id`` is ``None`` or ``'default'`` → resolves to a
+      shared-settings override for the ``'sort'`` axis if one is set (see
+      ``src.services.curation.strategy_registry.resolve_effective_default``)
+      and still selectable, otherwise :func:`default_sort_for_tab`; always
+      succeeds; ``fallback_reason`` is ``None``. With no override configured
+      (``opensearch=None``, or nothing has ever been ``PUT`` to
+      ``/curation/settings``) this is the byte-identical-to-legacy path
+      every existing tab hit before the shared-settings feature existed —
+      a global override is strictly additive on top of the untouched
+      per-tab defaults, never a replacement for them.
     * ``sort_id`` names a ``'stable'``/``'experimental'`` entry → that
       entry's clause is used; ``fallback_reason`` is ``None``.
     * ``sort_id`` is unknown, or names a ``'shadow'``/``'disabled'`` entry →
@@ -358,11 +366,25 @@ def build_sort(sort_id: str | None, *, tab: str) -> tuple[list[dict[str, Any]], 
     graceful degradation for an unbackfilled field is the frontend's job
     (plan §0/§5: only offer a sort once ``/curation/scores/coverage`` reports
     nonzero for its ``requires_field``), not a backend fallback path.
+
+    ``opensearch``, when given, is threaded into
+    :func:`~src.services.curation.strategy_registry.resolve_effective_default`
+    so a request that omits ``?sort`` picks up a live shared-settings
+    override. ``None`` (the default) skips the lookup entirely, same as
+    every other ``resolve_effective_default`` caller with no client handy.
     """
     registry = get_review_sorts()
 
     if sort_id is None or sort_id == 'default':
-        applied_id = default_sort_for_tab(tab)
+        applied_id = None
+        if opensearch is not None:
+            from src.services.curation.strategy_registry import resolve_effective_default
+
+            override_id = await resolve_effective_default('sort', opensearch)
+            if override_id is not None:
+                applied_id = override_id
+        if applied_id is None:
+            applied_id = default_sort_for_tab(tab)
         return list(registry[applied_id].clause), applied_id, None
 
     rs = registry.get(sort_id)
