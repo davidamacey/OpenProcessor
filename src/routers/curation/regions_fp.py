@@ -24,6 +24,7 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.config import get_region_fields
+from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -173,11 +174,11 @@ async def list_plate_clusters(
         clusters.append(
             {
                 'id': int(b['key']),
-                'cluster_kind': 'false_positive' if is_fp else 'candidate',
+                'cluster_kind': RegionStatus.FALSE_POSITIVE if is_fp else 'candidate',
                 'size': int(b['doc_count']),
                 'validated_count': int((b.get('validated') or {}).get('doc_count', 0)),
                 'dominant_class_id': None,
-                'dominant_class_name': 'false_positive' if is_fp else 'license_plate',
+                'dominant_class_name': RegionStatus.FALSE_POSITIVE if is_fp else 'license_plate',
                 'dominant_pct': None,
                 'purity': None,
                 'is_unlabeled': True,
@@ -191,7 +192,7 @@ async def list_plate_clusters(
             }
         )
     # Pin the permanent FP card first, then largest buckets.
-    clusters.sort(key=lambda c: (c['cluster_kind'] != 'false_positive', -c['size']))
+    clusters.sort(key=lambda c: (c['cluster_kind'] != RegionStatus.FALSE_POSITIVE, -c['size']))
     return {'clusters': clusters, 'count': len(clusters)}
 
 

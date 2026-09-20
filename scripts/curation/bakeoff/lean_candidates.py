@@ -26,6 +26,7 @@ import numpy as np
 import requests
 
 from src.config import get_curation_config, get_region_fields
+from src.config.region_state import RegionStatus
 
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -48,7 +49,7 @@ def sample_crops(n: int, vclass: str, seed: int) -> list[dict]:
                     'bool': {
                         'must': [
                             {'term': {'class_name.keyword': vclass}},
-                            {'term': {f'{F.status}.keyword': 'detected'}},
+                            {'term': {f'{F.status}.keyword': RegionStatus.DETECTED}},
                             {'exists': {'field': F.bbox_norm}},
                         ]
                     }

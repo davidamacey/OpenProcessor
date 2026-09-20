@@ -14,6 +14,7 @@ from fastapi import HTTPException, Query
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import DetectionProfile, get_region_fields
+from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     HUMAN_REGION_STATUS_VALUES,
@@ -97,7 +98,7 @@ def _fp_cluster_fields(region_status: str | None) -> dict[str, Any]:
     from src.services.curation.clustering.orchestrator import FALSE_POSITIVE_REGION_CLUSTER_ID
 
     F = get_region_fields()
-    if region_status == 'false_positive':
+    if region_status == RegionStatus.FALSE_POSITIVE:
         return {
             F.cluster_id: FALSE_POSITIVE_REGION_CLUSTER_ID,
             F.cluster_subid: None,
@@ -295,7 +296,7 @@ def _training_candidate_query(
             {
                 'bool': {
                     'must': [
-                        {'term': {f'{F.status}.keyword': 'false_positive'}},
+                        {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
                         {'exists': {'field': F.bbox_norm}},
                     ],
                     'must_not': [{'term': {'test_holdout': True}}],
@@ -389,7 +390,7 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
             'doc': {
                 F.bbox_norm: None,
                 F.score: None,
-                F.status: 'no_plate_visible',
+                F.status: RegionStatus.NO_PLATE_VISIBLE,
                 F.label_source: payload.label_source,
                 F.detector: DEFAULT_PROFILE.human_detector_name,
                 F.detector_version: DEFAULT_PROFILE.human_detector_version,
@@ -412,7 +413,7 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
         'doc': {
             F.bbox_norm: list(payload.bbox_norm),
             F.score: 1.0,  # human-set boxes are ground truth
-            F.status: 'detected',
+            F.status: RegionStatus.DETECTED,
             F.label_source: payload.label_source,
             F.verified: True,
             # Human confirmation is terminal — region signal only.

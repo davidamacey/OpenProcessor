@@ -7,6 +7,8 @@ stubbed PEEncoder, same stubbing style ``test_pe_encoder.py`` uses.
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
@@ -205,23 +207,43 @@ async def test_semantic_text_search_empty_query_short_circuits():
 
 
 @pytest.mark.asyncio
-async def test_semantic_text_search_offloads_encode_text_never_called_inline():
+async def test_semantic_text_search_actually_offloads_to_the_given_executor():
+    """Not just "encode_text was called with the right args" (that would
+    pass identically whether it ran inline or offloaded) — captures the
+    real event loop's ``run_in_executor`` call and asserts it was handed
+    the caller-supplied executor and ``encode_text`` itself, proving the
+    call genuinely went through the offload path rather than being
+    invoked directly on the event loop."""
     encoder = _fake_encoder()
     fake_os = _fake_os([])
-    await semantic_search.semantic_text_search(
-        opensearch=fake_os,
-        pe_encoder=encoder,
-        executor=None,
-        query='blue sedan',
-        page=1,
-        page_size=10,
-    )
-    # encode_text is a plain (non-async) callable — it must have been run
-    # via run_in_executor, but from the test's perspective what we can
-    # actually assert is that it *was* called with the right args (the
-    # offload itself is exercised for real by asyncio.get_running_loop().
-    # run_in_executor under the hood).
-    encoder.encode_text.assert_called_once_with(['blue sedan'])
+    real_executor = ThreadPoolExecutor(max_workers=1)
+    loop = asyncio.get_running_loop()
+    captured: list[tuple[object, object, tuple]] = []
+    original_run_in_executor = loop.run_in_executor
+
+    def _spy_run_in_executor(executor, fn, *args):
+        captured.append((executor, fn, args))
+        return original_run_in_executor(executor, fn, *args)
+
+    loop.run_in_executor = _spy_run_in_executor  # type: ignore[method-assign,assignment]
+    try:
+        await semantic_search.semantic_text_search(
+            opensearch=fake_os,
+            pe_encoder=encoder,
+            executor=real_executor,
+            query='blue sedan',
+            page=1,
+            page_size=10,
+        )
+    finally:
+        loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+        real_executor.shutdown(wait=True)
+
+    assert len(captured) == 1
+    executor_arg, fn_arg, call_args = captured[0]
+    assert executor_arg is real_executor
+    assert fn_arg is encoder.encode_text
+    assert call_args == (['blue sedan'],)
 
 
 @pytest.mark.asyncio

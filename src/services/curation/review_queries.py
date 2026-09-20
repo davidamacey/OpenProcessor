@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from src.config.region_fields import get_region_fields
+from src.config.region_state import RegionStatus
 
 
 KNOWN_TABS: tuple[str, ...] = (
@@ -146,12 +147,12 @@ def build_tab_query(
         # surfaced here — they are the LPR-training cohort.
         must_not.append({'term': {fields.validated: True}})
         must_not.append({'term': {'class_validated': True}})
-        must_not.append({'term': {f'{fields.status}.keyword': 'no_plate_visible'}})
-        must_not.append({'term': {f'{fields.status}.keyword': 'verify_rejected'}})
+        must_not.append({'term': {f'{fields.status}.keyword': RegionStatus.NO_PLATE_VISIBLE}})
+        must_not.append({'term': {f'{fields.status}.keyword': RegionStatus.VERIFY_REJECTED}})
         # Human already marked the detection a false positive (box kept
         # for FP analysis / LPR hard-negative training) — terminal, must
         # not re-enter the human queue.
-        must_not.append({'term': {f'{fields.status}.keyword': 'false_positive'}})
+        must_not.append({'term': {f'{fields.status}.keyword': RegionStatus.FALSE_POSITIVE}})
         # F5 — let the labeler search by region text on the review queue.
         # region text is a keyword field so a case-insensitive substring
         # search uses wildcard on the uppercase form (the worker stores

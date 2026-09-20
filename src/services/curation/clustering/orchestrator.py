@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.config import get_curation_config, get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
 from src.services.curation.clustering.id_normalize import run_update_by_query_polled
@@ -1082,7 +1083,7 @@ async def cluster_region_residuals(
     query = {
         'bool': {
             'must': must,
-            'must_not': [{'term': {f'{F.status}.keyword': 'false_positive'}}],
+            'must_not': [{'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}}],
         }
     }
 
@@ -1309,7 +1310,7 @@ async def _count_false_positives(client: AsyncOpenSearch) -> int:
     try:
         resp = await client.count(
             index=ITEMS_INDEX,
-            body={'query': {'term': {f'{F.status}.keyword': 'false_positive'}}},
+            body={'query': {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}}},
         )
         return int(resp.get('count', 0))
     except Exception as exc:
@@ -1446,7 +1447,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     query = {
         'bool': {
             'must': [
-                {'term': {f'{F.status}.keyword': 'false_positive'}},
+                {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
                 {'exists': {'field': F.embedding}},
             ]
         }
@@ -1546,7 +1547,7 @@ def fp_candidate_must_not() -> list[dict[str, Any]]:
     not shield a real false positive. Only a human's decision is final.
     """
     return [
-        {'term': {f'{F.status}.keyword': 'false_positive'}},
+        {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
         {'term': {'test_holdout': True}},
         {'term': {f'{F.label_source}.keyword': 'human'}},
         {'term': {F.verifier: 'human'}},
@@ -1616,7 +1617,7 @@ async def auto_assign_fp_from_centroids(
         bulk.append(
             {
                 'doc': {
-                    F.status: 'false_positive',
+                    F.status: RegionStatus.FALSE_POSITIVE,
                     F.label_source: 'auto_fp_centroid',
                     F.cluster_id: FALSE_POSITIVE_REGION_CLUSTER_ID,
                     F.cluster_subid: sub,

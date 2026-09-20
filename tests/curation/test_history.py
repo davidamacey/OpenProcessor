@@ -387,5 +387,103 @@ async def test_curation_worker_appends_history() -> None:
     assert history[-1]['class_source'] == 'v6_model'
 
 
+# =============================================================================
+# classes.py::merge_class (the writer originally deferred alongside the
+# curation worker case above — its subject now exists on this tree, see
+# plan Wave 5 W5.a).
+# =============================================================================
+
+
+class _FakeMergeOS:
+    """Enough of the AsyncOpenSearch surface for merge_class: a holdout
+    count (0 — merge is allowed to proceed), an update_by_query against
+    the confirmed-labels index, a scroll over matching items, and the
+    per-doc OCC get/update via occ_skip_on_conflict_bulk."""
+
+    def __init__(self) -> None:
+        self.update_calls: list[dict[str, Any]] = []
+
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {'count': 0}
+
+    async def update_by_query(
+        self,
+        *,
+        index: str,  # noqa: ARG002
+        body: dict[str, Any],  # noqa: ARG002
+        **kw: Any,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        return {'updated': 1}
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {
+            '_scroll_id': 'scroll-merge-1',
+            'hits': {'hits': [{'_id': 'crop-b'}]},
+        }
+
+    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
+
+    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {}
+
+    async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
+        from curation.occ_fakes import make_mget_response
+
+        source = {
+            'class_id': 3,
+            'class_name': 'sedan',
+            'class_source': 'v6_model',
+            'class_validated': False,
+            'test_holdout': False,
+        }
+        found = {d['_id']: source for d in body['docs']}
+        return make_mget_response(found)
+
+    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        from curation.occ_fakes import make_bulk_response, make_bulk_update_item
+
+        items = []
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            doc_id = action['update']['_id']
+            self.update_calls.append(doc['doc'])
+            items.append(make_bulk_update_item(doc_id, status=200))
+        return make_bulk_response(items)
+
+
+async def _run_class_merge_case(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    from types import SimpleNamespace
+
+    import src.routers.curation.classes as classes_mod
+    from src.routers.curation._common import ClassMergeRequest
+
+    fake_reg = SimpleNamespace(
+        merge_class=lambda source_id, target_id: {
+            'source_id': source_id,
+            'target_id': target_id,
+            'deprecated': True,
+            'source_name': 'sedan',
+            'target_name': 'coupe',
+        },
+        get=lambda class_id: SimpleNamespace(class_name='coupe'),  # noqa: ARG005
+    )
+    monkeypatch.setattr(classes_mod, 'get_class_registry', lambda: fake_reg)
+
+    fake_os = _FakeMergeOS()
+    result = await classes_mod.merge_class(ClassMergeRequest(source_id=3, target_id=6), fake_os)
+    assert result['deprecated'] is True
+    assert len(fake_os.update_calls) == 1
+    return fake_os.update_calls[0].get('class_id_history') or []
+
+
+@pytest.mark.asyncio
+async def test_merge_class_appends_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    history = await _run_class_merge_case(monkeypatch)
+    assert history, 'class_merge: no class_id_history entry was written'
+    assert history[-1]['writer'] == 'class_merge'
+    assert history[-1]['class_id'] == 3
+    assert history[-1]['class_source'] == 'v6_model'
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
