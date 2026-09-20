@@ -28,8 +28,11 @@
 #   /export/lpr                    -- proprietary LPR export, never ported
 #   /export/lpr/status             -- ditto
 #   /gemma/label_batch             -- frontend hasn't renamed to /vlm/label_batch yet (T-C1)
-#   /crops/{param}/plate_thumbnail -- frontend's getPlateThumbUrl() fallback hasn't
-#                                      picked up the region_thumbnail rename yet (T-B2)
+#
+# /crops/{param}/plate_thumbnail was excluded here for the same reason until
+# T-B2 landed on the frontend (getRegionThumbUrl now builds .../region_thumbnail).
+# That exclusion is removed and /crops/{param}/region_thumbnail is a real
+# fixture entry below.
 
 /bakeoff/baseline_models
 /bakeoff/eval_datasets
@@ -56,6 +59,7 @@
 /crops/{param}/label
 /crops/{param}/plate
 /crops/{param}/plate_meta
+/crops/{param}/region_thumbnail
 /crops/{param}/review_dismiss
 /crops/{param}/thumbnail
 /events
