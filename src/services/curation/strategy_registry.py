@@ -52,7 +52,7 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 StrategyStatus = Literal['stable', 'experimental', 'shadow', 'disabled']
-StrategyAxis = Literal['cluster', 'score', 'sort', 'overlay']
+StrategyAxis = Literal['cluster', 'score', 'sort', 'overlay', 'export']
 
 
 def _scores_enabled() -> bool:
@@ -359,6 +359,34 @@ def _viz_projection_strategy() -> list[dict[str, Any]]:
     ]
 
 
+def _export_strategies() -> list[dict[str, Any]]:
+    """Dataset-export capability axis (cropwright_backend_integration_plan.md
+    §4.3/T-C2).
+
+    Advertises which export *kinds* ``POST {prefix}/export/{kind}`` can
+    actually produce on this deployment, so a consumer gates an export UI
+    on capability rather than probing a write endpoint (``POST
+    /export/lpr`` would kick off a real dataset build) with a throwaway
+    request just to see whether it 404s.
+
+    ``lpr`` — the reference implementation's proprietary single-class
+    license-plate export (Bucket B, out of scope — never ported) — is
+    deliberately absent from this list rather than listed with
+    ``status='disabled'``: a status implies "not yet, but this deployment
+    could serve it later", which isn't true for a proprietary overlay this
+    repo doesn't contain.
+    """
+    return [
+        {
+            'id': 'yolo',
+            'axis': 'export',
+            'label': 'YOLO detection dataset export',
+            'status': 'stable',
+            'default': True,
+        }
+    ]
+
+
 _COVERAGE_CACHE: dict[str, int | None] | None = None
 _COVERAGE_CACHE_AT = 0.0
 _COVERAGE_TTL_S = float(os.environ.get('KB_FIELD_COVERAGE_TTL_S', '60'))
@@ -457,6 +485,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
         *_sort_strategies(),
         *_score_strategies(),
         *_overlay_strategies(),
+        *_export_strategies(),
     ]
 
     fields = frozenset(e['requires_field'] for e in strategies if e.get('requires_field'))
