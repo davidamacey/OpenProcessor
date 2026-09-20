@@ -52,7 +52,9 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 StrategyStatus = Literal['stable', 'experimental', 'shadow', 'disabled']
-StrategyAxis = Literal['cluster', 'score', 'sort', 'overlay', 'export', 'detection_profile']
+StrategyAxis = Literal[
+    'cluster', 'score', 'sort', 'overlay', 'export', 'detection_profile', 'prompt_pack'
+]
 
 
 def _scores_enabled() -> bool:
@@ -418,6 +420,29 @@ def _detection_profile_strategies() -> list[dict[str, Any]]:
     ]
 
 
+def _prompt_pack_strategies() -> list[dict[str, Any]]:
+    """Configured VLM ``PromptPack`` axis (labeling-assist plan task (c)).
+
+    Lists whatever pack :func:`~src.services.labeling.vlm_prompts.
+    resolve_prompt_pack` actually resolves for this process -- a
+    deployment-supplied pack via ``OP_PROMPT_PACK_PATH``, or the built-in
+    generic pack when unset/missing. Always exactly one entry (there is
+    only ever one active pack per process), always ``default=True``.
+    """
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+    pack = resolve_prompt_pack()
+    return [
+        {
+            'id': pack.name,
+            'axis': 'prompt_pack',
+            'label': pack.name,
+            'status': 'stable',
+            'default': True,
+        }
+    ]
+
+
 _COVERAGE_CACHE: dict[str, int | None] | None = None
 _COVERAGE_CACHE_AT = 0.0
 _COVERAGE_TTL_S = float(os.environ.get('OP_FIELD_COVERAGE_TTL_S', '60'))
@@ -518,6 +543,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
         *_overlay_strategies(),
         *_export_strategies(),
         *_detection_profile_strategies(),
+        *_prompt_pack_strategies(),
     ]
 
     fields = frozenset(e['requires_field'] for e in strategies if e.get('requires_field'))
