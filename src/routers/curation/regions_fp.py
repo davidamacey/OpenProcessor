@@ -183,7 +183,7 @@ async def list_plate_clusters(
                 'is_unlabeled': True,
                 'representative_crop_ids': rep_ids,
                 'representative_thumb_urls': [
-                    f'{config.api_prefix}/crops/{cid}/plate_thumbnail' for cid in rep_ids
+                    f'{config.api_prefix}/crops/{cid}/region_thumbnail' for cid in rep_ids
                 ],
                 'has_subclusters': n_sub > 0,
                 'n_subclusters': n_sub,
