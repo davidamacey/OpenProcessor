@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Curation subsystem**: a generic active-learning curation and
+  labeling stack — class registry, item browse/label/move/exclude,
+  clustering (AHC refinement + auto-promote), VLM-assisted region
+  labeling/verification, review/active-learning queues, YOLO dataset
+  export, and a training-job control API — mounted under
+  `CurationConfig.api_prefix` (default `/curation`, 103 routes).
+  Genericized out of a private, domain-specific (vehicle/license-plate)
+  reference implementation behind three configuration dataclasses
+  (`CurationConfig`, `RegionFields`, `DetectionProfile`); see
+  `docs/design/curation_design_rationale.md` for the rationale and
+  `docs/design/curation_api_contract.md` for the HTTP wire contract.
+
 ## [0.2.1] - 2026-07-04
 
 ### Fixed

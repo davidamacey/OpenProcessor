@@ -11,13 +11,13 @@ nothing here names that model) to:
   on a product photo; a license plate on a vehicle crop) is real, and
   read any text on it
 
-Split out of the reference ``gemma_labeler.py`` per §3.4 of
-``docs/design/oss_genericization_phase2_plan.md`` (a 3-way split: this
+Split out of the reference ``gemma_labeler.py`` (a 3-way split: this
 module is the orchestration half — transport lives in
 ``vlm_client.py``, prompt/vocabulary data lives in ``vlm_prompts.py``).
 This module lands over the 700-LOC pre-commit ratchet cap on arrival;
-that is expected (§0.5) — the follow-up split of ``VlmLabeler``'s class
-body is out of scope for this port.
+that is expected (see ``docs/design/curation_design_rationale.md`` §5)
+— the follow-up split of ``VlmLabeler``'s class body is out of scope
+for this port.
 
 Design notes
 ------------

@@ -1,7 +1,8 @@
 """Generic sub-region detection cascade — LPR-style detector + PaddleOCR.
 
 Ported from the reference license-plate (LPR) detector (see
-``docs/design/oss_genericization_phase2_plan.md`` §3.3 / §5 Chunk 8).
+``docs/design/curation_design_rationale.md`` §2.3 / §5 — Chunk 8; this
+is one of the ratchet-exempt oversize files).
 Wraps a YOLO-style Triton detector to produce sub-region bounding boxes
 in the **item crop's** coordinate frame (normalized to ``[0, 1]``), plus
 a PaddleOCR-based text detector/recognizer used as a last-resort

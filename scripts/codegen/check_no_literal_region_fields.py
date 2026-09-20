@@ -3,7 +3,7 @@
 
 ``RegionFields`` (``src/config/region_fields.py``) is the single source
 of truth for OpenSearch region field names — see
-``docs/design/oss_genericization_phase2_plan.md`` §3.2. On the working
+``docs/design/curation_design_rationale.md`` §4. On the working
 branch a ``'plate_...'``/``"plate_..."`` string literal is *always* a
 mistake: it means a file was copied across from the reference tree
 without being genericized to read fields via ``RegionFields``.
@@ -13,10 +13,11 @@ passes every changed ``*.py`` file under ``src/``, ``scripts/`` and
 ``tests/`` as a positional argument (same wiring style as
 ``check_file_size.py``). Of those, this script only actually checks
 files that fall under ``PORTED_PATHS`` — a growing allowlist of
-already-ported paths (§3.2 "Per-chunk enforcement guard"). It starts
-empty in Chunk 0; each later wave appends its newly-ported paths in the
-same commit that ports them. This gives a ratchet: once a module is
-ported, it can never regress to hardcoding a `plate_*` literal again.
+already-ported paths (see the same doc's §4 "Per-chunk enforcement
+guard"). It starts empty in Chunk 0; each later wave appends its
+newly-ported paths in the same commit that ports them. This gives a
+ratchet: once a module is ported, it can never regress to hardcoding a
+`plate_*` literal again.
 
 Two hardcoded exemptions (never driven by ``PORTED_PATHS``):
 - ``src/config/region_fields.py`` — its docstrings legitimately name
@@ -311,7 +312,7 @@ def main() -> int:
             "\nERROR: 'plate_...' literal(s) found in ported curation "
             'code. Route field access through a RegionFields instance '
             'instead (src/config/region_fields.py). See '
-            'docs/design/oss_genericization_phase2_plan.md §3.2.\n'
+            'docs/design/curation_design_rationale.md §4.\n'
         )
     return exit_code
 

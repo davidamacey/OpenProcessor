@@ -83,9 +83,11 @@ A generic active-learning curation and labeling stack, mounted under a
 single configurable prefix (`CurationConfig.api_prefix`, default
 `/curation`) alongside the core detection/face/embed/OCR routers. It
 was genericized out of a private, domain-specific reference
-implementation (vehicle/license-plate curation) via
-[`docs/design/oss_genericization_phase2_plan.md`](design/oss_genericization_phase2_plan.md);
-the generic wire contract (Cropwright's labeler frontend is one
+implementation (vehicle/license-plate curation); the design rationale
+(the config dataclasses, the storage/wire-contract split, the
+pre-commit ratchet exemptions, and known gaps) is documented in
+[`docs/design/curation_design_rationale.md`](design/curation_design_rationale.md).
+The generic wire contract (Cropwright's labeler frontend is one
 consumer among anticipated others) is documented in
 [`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
 

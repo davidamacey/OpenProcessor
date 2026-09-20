@@ -1,7 +1,9 @@
 """Transport layer for an OpenAI-compatible vision-language-model endpoint.
 
-Split out of the reference ``gemma_labeler.py`` (§3.4 of
-``docs/design/oss_genericization_phase2_plan.md``) — this half owns
+Split out of the reference ``gemma_labeler.py`` (see
+``docs/design/curation_design_rationale.md`` §5 for why this split
+exists — vlm_labeler.py is one of the ratchet-exempt oversize files)
+— this half owns
 "how do I reliably POST to a ``/chat/completions`` endpoint", not "what
 do I ask it". Generic: works against any OpenAI-shaped vision chat API
 (the reference deployment happens to be ``vllm-gemma4-e4b`` behind

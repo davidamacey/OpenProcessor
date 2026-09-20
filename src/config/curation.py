@@ -3,7 +3,7 @@
 Holds index names, filesystem roots and API-surface constants for the
 `curation` namespace (OpenProcessor's generic port of a private
 reference vehicle/license-plate curation stack — see
-``docs/design/oss_genericization_phase2_plan.md``).
+``docs/design/curation_design_rationale.md`` §2.1).
 
 ``CurationConfig`` replaces the module-level constants and the
 ``KbIndex`` string enum that the reference implementation hardcoded.
@@ -49,8 +49,8 @@ class CurationConfig:
 
     Defaults are the generic OSS names. A deployment with existing data
     under different names (e.g. a proprietary-dataset overlay)
-    constructs its own instance — see the illustrative example in
-    ``docs/design/oss_genericization_phase2_plan.md`` §3.1. That overlay
+    constructs its own instance — see the design rationale in
+    ``docs/design/curation_design_rationale.md`` §2.1. That overlay
     is not part of this generic module.
     """
 
