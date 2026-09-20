@@ -1,0 +1,103 @@
+{
+  "_comment": "Worked example class_registry.json for a generic (non-vehicle) domain -- a small warehouse/retail inventory set. Copy this to ./data/class_registry.json (or wherever OP_REGISTRY_PATH points) and edit `classes` for your own domain. Schema: src.clients.curation_opensearch.ClassRegistryFile / RegistryClassEntry.",
+  "version": 1,
+  "updated_at": "2026-01-01T00:00:00+00:00",
+  "classes": [
+    {
+      "id": 0,
+      "name": "cardboard_box",
+      "group": "packaging",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "Generic corrugated shipping box, any size.",
+      "merged_into": null,
+      "hotkey_letter": "b"
+    },
+    {
+      "id": 1,
+      "name": "wooden_pallet",
+      "group": "packaging",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "Standard 48x40in shipping pallet.",
+      "merged_into": null,
+      "hotkey_letter": "p"
+    },
+    {
+      "id": 2,
+      "name": "forklift",
+      "group": "equipment",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "Warehouse forklift, any orientation.",
+      "merged_into": null,
+      "hotkey_letter": "f"
+    },
+    {
+      "id": 3,
+      "name": "hand_cart",
+      "group": "equipment",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "Manual hand truck / dolly.",
+      "merged_into": null,
+      "hotkey_letter": "c"
+    },
+    {
+      "id": 4,
+      "name": "safety_vest",
+      "group": "ppe",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "High-visibility safety vest worn by warehouse staff.",
+      "merged_into": null,
+      "hotkey_letter": "v"
+    },
+    {
+      "id": 5,
+      "name": "shelf_unit",
+      "group": "fixtures",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "Metal shelving / racking unit.",
+      "merged_into": null,
+      "hotkey_letter": "s"
+    },
+    {
+      "id": 6,
+      "name": "handheld_scanner",
+      "group": "equipment",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": false,
+      "notes": "Barcode/RFID handheld scanner.",
+      "merged_into": null,
+      "hotkey_letter": "h"
+    },
+    {
+      "id": 7,
+      "name": "old_bin_label",
+      "group": "packaging",
+      "sample_count": 0,
+      "validated_count": 0,
+      "added_at": "2026-01-01T00:00:00+00:00",
+      "deprecated": true,
+      "notes": "Deprecated: superseded by per-SKU labels; kept for historical data only.",
+      "merged_into": 0,
+      "hotkey_letter": null
+    }
+  ]
+}

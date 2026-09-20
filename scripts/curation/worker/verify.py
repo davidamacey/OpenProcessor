@@ -279,7 +279,7 @@ def _combined_class_update(
         update['gemma_vehicle_make'] = reply.make
     if reply.model:
         update['gemma_vehicle_model'] = reply.model
-    update['gemma_plate_visible'] = bool(reply.plate_visible)
+    update[get_region_fields().visible] = bool(reply.plate_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream
     # pipeline stages read this to skip a redundant class call.
