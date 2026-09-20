@@ -54,8 +54,8 @@ formally closed as **WONTFIX**.
 
 ## Route surface
 
-Full route list (107 routes under `/curation` as of this wave — Wave 2
-added the four generic ingest/label-import write routes below), grouped
+Full route list (109 routes under `/curation` as of this wave — the
+curation deployment-settings plan added `GET,PUT /settings`), grouped
 by router module; every path is relative to the configured
 `api_prefix`:
 
@@ -72,7 +72,7 @@ by router module; every path is relative to the configured
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
 | `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
-| `review.py` / `scores.py` / `select.py` / `methods.py` | `GET /review/{tab}`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods` |
+| `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
 | `bakeoff.py` | `GET,POST /bakeoff/*` |
 | `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
@@ -164,6 +164,11 @@ shape changed for an existing caller other than the path it POSTs to.
 - `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
 - `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`
 
+### Shared curation-strategy defaults
+
+- `CurationSettingsResponse` (`GET,PUT /settings`): `defaults` (`dict[str, str]`, open map keyed by axis id), `updated_at` (ISO 8601 or `null`), `updated_by` (always `null` today — no user-account system)
+- `CurationSettingsUpdateRequest` (`PUT /settings` body): `defaults` (`dict[str, str]`, partial — only the axes being changed)
+
 ### Health / status
 
 - `HealthResponse`: `status` (`ok`/`degraded`/`down`), `triton`, `opensearch`, `gemma`, `registry` — the `gemma` key name is itself frozen wire naming (predates the VLM generalization) and reports the configured VLM backend's reachability regardless of which model it actually is.
@@ -200,6 +205,84 @@ a status implies "not yet, but this deployment could serve it later,"
 which isn't true for a proprietary overlay this repo doesn't contain. A
 consumer should hide any LPR export UI when `lpr` is absent from this
 axis, not when a request to `POST /export/lpr` 404s.
+
+### Shared curation-strategy defaults — `GET,PUT /settings`
+
+Cropwright's StrategyBar/AssistScopeBar (cluster method, sort order,
+detection profile, prompt pack dropdowns) previously reset to a
+hardcoded client default on every reload. There is no user-account
+system (single shared instance), so the shared default per axis is now
+stored once, backend-side, instead of per-browser.
+
+`GET {prefix}/settings`:
+
+```json
+{"defaults": {"cluster": "ivf"}, "updated_at": "2026-09-20T12:00:00+00:00", "updated_by": null}
+```
+
+`defaults` is an **open map** keyed by axis id — deliberately not a
+fixed set of named fields (`cluster`/`sort`/`detection_profile`/
+`prompt_pack`) — so a future axis never requires a wire-format change.
+A missing key means "no shared override for that axis." No document has
+ever been written yet (nothing has been `PUT`) is not an error: this
+still returns `200` with `defaults: {}`, `updated_at: null`,
+`updated_by: null`. `updated_by` is always `null` today (no
+user-account system); the field exists on the wire for when one does.
+
+`PUT {prefix}/settings` (partial body — only the axes being changed):
+
+```json
+{"defaults": {"cluster": "ahc"}}
+```
+
+Merges into the stored document; axes already set and not mentioned in
+the body are left untouched. Returns the full updated record, same
+shape as the `GET`. Each `axis` key must be one of
+`src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`
+(`cluster` / `sort` / `detection_profile` / `prompt_pack` today —
+`score`/`overlay`/`export` have no single-selectable-id "default"
+concept a shared override could apply to, so they 422 rather than
+silently accepting a value nothing will ever honor), and each `id` must
+be a currently-advertised id for that axis per `GET /methods` — either
+violation returns `422` with a message listing the valid axes/ids.
+
+**The consistency guarantee (the actual point of this endpoint):**
+`GET /methods`'s per-axis `default: true/false` flag is *derived* from
+this settings document via
+`src.services.curation.strategy_defaults.resolve_effective_default(axis)`
+— it looks up `defaults.get(axis)`; if present and still a
+currently-advertised id for that axis, that id is the effective
+default; otherwise it falls back to the axis's pre-existing hardcoded
+default constant (`DEFAULT_METHOD` for `cluster`,
+`get_default_profile_name()` for `detection_profile`,
+`resolve_prompt_pack().name` for `prompt_pack`; `sort` has no single
+hardcoded default — only a per-tab mapping,
+`review_sorts.default_sort_for_tab` — so a `sort` override is an
+*additional*, opt-in global choice layered on top of the untouched
+per-tab defaults, not a replacement for them). This exact function is
+also called by every real endpoint that applies a hardcoded default
+when a request omits that axis's param, so setting a shared default
+changes actual server behavior, not just what `GET /methods` displays:
+
+| Axis | Real endpoint call site |
+|---|---|
+| `cluster` | `src.services.curation.clustering.orchestrator.cluster_residuals` — resolves the effective cluster method when `?clustering_method` is omitted (feeds `POST /pipeline/auto_label*` and `POST /clusters/*`'s residual-clustering stage). |
+| `sort` | `src.services.curation.review_sorts.build_sort` — when `GET /review/{tab}`'s `?sort` is omitted or `'default'`, a valid shared override is tried before falling back to that tab's own hardcoded default. |
+| `detection_profile` | No per-request selection param exists yet (exactly one `DetectionProfile` is ever active per process, chosen via `OP_PROMPT_PACK_PATH`-style config, not per-request) — the resolver only affects `GET /methods`'s `default` flag today. Recorded here as a known, deliberate gap rather than an oversight: the mechanism (`profile_registry`) already supports more than one registered profile, but no endpoint yet lets a caller pick among them per request. |
+| `prompt_pack` | Same as `detection_profile` — one active pack per process via `OP_PROMPT_PACK_PATH`, no per-request selection endpoint yet. |
+
+Storage: a single OpenSearch document (not a full index of many rows),
+in its own small index (`IndexRole.SETTINGS`, default `op_curation_settings`,
+override via `OP_SETTINGS_INDEX`) addressed by the fixed doc id
+`CURATION_SETTINGS_DOC_ID = 'default'` — following the exact same
+`IndexRole` + `INDEX_BODIES` convention every other curation index uses
+(`src/clients/curation_opensearch.py`), wired into the same
+`create_curation_indexes` startup bootstrap automatically. The
+`defaults` field is mapped `{'type': 'object', 'enabled': False}` (never
+queried, so never indexed) — OpenSearch's partial-update `doc` merge
+still recursively merges into it regardless of `enabled`, which is what
+lets a partial `PUT` avoid clobbering other axes without a
+read-modify-write round trip in application code.
 
 ### Internal / worker-facing
 
