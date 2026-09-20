@@ -1,0 +1,271 @@
+# OpenProcessor `/curation` API contract
+
+Status: **living reference doc**, owned by this backend. Originated
+alongside the generic `curation` subsystem's initial port; rescoped by
+`docs/design/cropwright_backend_integration_plan.md` §0.1/T-E1. It
+documents the *currently shipped* `/curation` route surface (mounted
+under `CurationConfig.api_prefix`, default `/curation` — landed on
+`main` in commit `1079933`) and the Pydantic wire-model field names it
+serves, and states explicitly which parts of that contract are frozen.
+
+**This is OpenProcessor's generic curation/labeling API contract, not
+"the labeler's API."** Cropwright (a SvelteKit active-learning labeling
+frontend) is **one consumer** of this API — the first one, and the one
+this contract was originally drafted against. Other services are
+anticipated on the same backend: querying,
+visualizing, and searching the same indexed dataset. None of them exist
+yet, and none of them should have to learn Cropwright's historical URL
+vocabulary to consume this API. Every recommendation and naming choice
+in this doc follows from that: the canonical surface is the generic one
+(`/curation`, `vlm`, `region_thumbnail`, `RegionFields`-backed storage),
+and it does not move to accommodate any one consumer.
+
+**No `/kb` or `/gemma` compatibility alias exists in this backend, and
+none ever will.** Where a historical consumer's naming differs from the
+generic one, the consumer migrates. See
+`docs/design/cropwright_backend_integration_plan.md` §0.1 and §11
+acceptance criterion 8. A transitional `/kb` prefix may appear
+*temporarily, on the frontend side only*, as a deployment convenience
+during that migration (same doc, §2) — it is never a supported backend
+default and never dual-mounted.
+
+## The key invariant: HTTP JSON field names are independent of backend storage field names
+
+`RegionFields` (`src/config/region_fields.py`) lets the *backend*
+read/write its OpenSearch documents under configurable field names
+(defaulting to generic `region_*` names; a deployment with pre-existing
+data under other names, e.g. `plate_*`, constructs its own instance —
+no reindex). This is purely a backend/OpenSearch storage concern and
+does **not** touch the HTTP JSON contract documented below. Pydantic
+model attribute names (`ItemDoc.plate_bbox_norm`,
+`CropBatchStatusRequest.plate_status`, etc.) are class-level static
+declarations that define the wire format every consumer speaks. They
+are **frozen**: no field is renamed, has its meaning changed, or is
+removed on the wire, regardless of what OpenSearch field name the
+backend reads or writes internally to satisfy that JSON key.
+
+Concretely: a router handler may read `doc[region_fields.status]`
+internally while the Pydantic response model it returns keeps the
+literal attribute name `plate_status`. A consumer sees zero change
+either way. See the `RegionFields` module docstring
+(`src/config/region_fields.py`) for the full design rationale, and H4
+below for why a matching rename of the wire names themselves was
+formally closed as **WONTFIX**.
+
+## Route surface
+
+Full route list (103 routes under `/curation` as of this wave), grouped
+by router module; every path is relative to the configured
+`api_prefix`:
+
+| Router module | Routes |
+|---|---|
+| `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
+| `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
+| `regions.py` / `regions_fp.py` | `GET /plates`, `PUT /crops/{crop_id}/plate`, `PUT /crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `POST /plates/batch_status`, `POST /plates/cluster`, `GET /plates/cluster/status`, `GET /plates/clusters`, `POST /plates/clusters/refine/{cluster_id}`, `POST /plates/fp_centroids/build`, `GET /plates/fp_centroids/status`, `GET /plates/suspected_false_positives`, `GET /plates/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
+| `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
+| `ingest.py` | `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
+| `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
+| `search.py` | `GET /search/text` |
+| `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
+| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `GET /pipeline/events` |
+| `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
+| `review.py` / `scores.py` / `select.py` / `methods.py` | `GET /review/{tab}`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods` |
+| `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
+| `bakeoff.py` | `GET,POST /bakeoff/*` |
+| `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
+
+The exact, always-current list is produced by:
+
+```python
+from src.main import app
+routes = sorted(r.path for r in app.routes if r.path.startswith('/curation'))
+print(len(routes)); print('\n'.join(routes))
+```
+
+Note the URL segment is `vlm`, not `gemma` — `gemma_labeler.py` was
+generalized into a pluggable `vlm_client`/`vlm_labeler`/`vlm_prompts`
+abstraction (a deployment need not run Google's Gemma at all). No
+`/gemma/*` route is registered, and none will be added; see the VLM
+section below.
+
+## Frozen Pydantic wire models (attribute names are the JSON contract)
+
+Field names below are **frozen** — do not rename, even when the
+corresponding backend OpenSearch field is renamed via `RegionFields`.
+Model class names reflect `src/routers/curation/_common.py` as of this
+writing; per D3 below, this table is hand-maintained today and can
+drift from the source — treat `_common.py` as authoritative if the two
+disagree, and see D3 for the plan to close that gap.
+
+### Ingest
+
+- `IngestImageRequest`: `path`, `source`
+- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_plates`, `error`
+- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `labels_imported`, `crops_indexed`
+- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`
+- `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source`
+- `ImportLabelsBatchRequest`: `items`
+
+### Crops
+
+- `ItemDoc`: `crop_id`, `image_id`, `image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `label_validated`, `label_source`, `plate_bbox_norm`, `plate_score`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `thumbnail_url`
+- `CropsPageResponse`: `total`, `page`, `page_size`, `crops`, `method`, `version`, `n_pool`
+- `CropLabelRequest`: `class_id`, `label_source`
+- `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source`
+- `CropMoveRequest`: `crop_ids`, `cluster_id`
+- `CropExcludeRequest`: `crop_ids`, `reason`
+- `CropUnexcludeRequest`: `crop_ids`
+- `CropPlateRequest`: `bbox_norm` (source-image frame), `label_source`
+- `CropBatchPlateRequest`: `crop_ids`, `bbox_norm`, `label_source`
+- `CropBatchStatusRequest`: `crop_ids`, `plate_status`, `plate_verified`, `label_source` — `plate_status` must be one of `HUMAN_PLATE_STATUS_VALUES` = `{'detected', 'no_plate_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
+- `CropPlateMetaRequest`: `plate_text`, `plate_status`, `plate_rejection_reason`, `label_source` (all optional; only provided fields are written; `extra='forbid'`)
+- `CropFlagNewClassRequest`: `crop_ids`, `note`
+- **Region thumbnail URLs**: `ItemDoc`/`/plates` responses carry `thumbnail_url` and `plate_thumbnail_url` fields whose *values* point at `GET {prefix}/crops/{crop_id}/region_thumbnail` — the JSON key `plate_thumbnail_url` is frozen (do not rename), but the URL path segment it contains is the generic `region_thumbnail`, not `plate_thumbnail` (no such route is registered; see `cropwright_backend_integration_plan.md` §1.3 for the bug this fixed).
+
+### Classes
+
+- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`
+- `ClassListResponse`: `classes`
+- `ClassCreateRequest`: `name`, `group`, `notes`
+- `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
+- `ClassMergeRequest`: `source_id`, `target_id`
+
+### VLM labeling/verification
+
+Registered at `POST {prefix}/vlm/*` (`src/routers/curation/vlm.py`).
+The vendor-neutral name is the URL segment and the Python model/class
+names; the frontend's local review-tab ids and OpenSearch field names
+(`gemma_suggested_class_id`, `gemma_low_conf`, `by_gemma`,
+`class_source='gemma'`, etc.) are a separate, frozen wire/storage
+naming that predates this generalization and is untouched here — see
+the key-invariant section above.
+
+- `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`
+- `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`
+- `VlmVerifyRegionBatchItem`: `crop_id`, `plate_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
+- `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
+- `VlmVerifyRegionBatchResult`: `crop_id`, `is_plate`, `confidence`, `reason`, `candidate_text`
+- `VlmVerifyRegionBatchResponse`: `results`
+- `VlmRegionVisibleBatchItem`: `crop_id`, `image_b64`
+- `VlmRegionVisibleBatchRequest` (`POST /vlm/region_visible_batch`): `items`
+- `VlmRegionVisibleBatchResponse`: `visible` (`dict[str, bool]`, keyed by `crop_id`)
+
+Note `plate_image_b64` / `is_plate` are themselves frozen wire field
+names carried over unchanged from the reference implementation — only
+the URL segment (`gemma` → `vlm`) and the Python class prefix
+(`Gemma*` → `Vlm*`) changed. Nothing about the request/response JSON
+shape changed for an existing caller other than the path it POSTs to.
+
+### Review / holdout
+
+- `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
+- `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`
+
+### Health / status
+
+- `HealthResponse`: `status` (`ok`/`degraded`/`down`), `triton`, `opensearch`, `gemma`, `registry` — the `gemma` key name is itself frozen wire naming (predates the VLM generalization) and reports the configured VLM backend's reachability regardless of which model it actually is.
+- `StatusResponse`: `status`, `detail`, `extra`
+
+### Export
+
+- `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`
+
+`ExportLprRequest` (single-class license-plate dataset export) is
+**not implemented** — see the export-capability axis below.
+
+### Capability discovery — `GET /methods`
+
+`GET {prefix}/methods` (`src/routers/curation/methods.py`) is the
+capability-discovery endpoint every consumer should gate optional UI on
+instead of feature-probing a write endpoint with a throwaway request.
+It returns `{'strategies': [...], 'flags': {...}}`; each `strategies`
+entry carries an `axis` of `cluster` / `score` / `sort` / `overlay` /
+**`export`** (added by T-C2, cropwright_backend_integration_plan.md
+§4.3).
+
+**`export` axis** — which dataset-export *kinds*
+`POST {prefix}/export/{kind}` can actually produce on this deployment:
+
+| `id` | `status` | Notes |
+|---|---|---|
+| `yolo` | `stable` | Backed by `GenericYoloExportService`; always advertised. |
+
+`lpr` (the reference implementation's proprietary single-class
+license-plate export) is **deliberately absent** — never ported
+(Bucket B, out of scope) — rather than listed with `status='disabled'`:
+a status implies "not yet, but this deployment could serve it later,"
+which isn't true for a proprietary overlay this repo doesn't contain. A
+consumer should hide any LPR export UI when `lpr` is absent from this
+axis, not when a request to `POST /export/lpr` 404s.
+
+### Internal / worker-facing
+
+- `_PathLookupRequest`: `image_paths` (max 10,000)
+- `_PathLookupResponse`: `known_paths` (`dict[image_path, image_id]`)
+- `_PublishEvent` (`POST /events/publish`, used by the SAM worker): `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `plate_status`, `plate_text`, `image_path`, `topic`, `extra`
+
+## What is explicitly NOT frozen
+
+- **Backend OpenSearch field names** (`plate_status`, `plate_bbox_norm`,
+  etc. as document keys) — governed by `RegionFields`
+  (`src/config/region_fields.py`), overridable per deployment via
+  `OP_REGION_FIELD_*` (see `env.template`).
+- **`PlateStatus` enum values** in `src/config/plate_state.py` — these
+  are values, not field names. See D2 below for the codegen contract's
+  status.
+- **The `/curation` URL prefix itself** — a config field
+  (`CurationConfig.api_prefix`, env override `OP_API_PREFIX`) that
+  defaults to `/curation`. A deployment may run behind a different
+  prefix; consumers should not hardcode `/curation` any more than they
+  should hardcode `/kb`.
+
+## H3/H4 — cross-repo decisions (cropwright_backend_integration_plan.md §6/§7)
+
+**H4 — `plate_*` → generic storage-field rename: formally closed as
+WONTFIX.** Agreed by both the backend and Cropwright independently. The
+wire contract above is already fully decoupled from OpenSearch storage
+field names via `RegionFields`; a storage rename is invisible to any
+consumer by construction, so its cost (a 347k-document reindex against
+a live deployment) would buy nothing a client can observe. See
+`cropwright_backend_integration_plan.md` §7 for the full rationale,
+including the caveat (now fixed) that `get_region_fields()` previously
+ignored `OP_REGION_FIELD_*` overrides.
+
+**H3 — not yet ruled; recorded here as open, per
+`cropwright_backend_integration_plan.md` §6:**
+
+- **D1** (`annotation_slots` on `GET /classes`): not added. The
+  frontend's tier-2 static-profile loading isn't wired yet; adding a
+  server field with zero consumers would freeze a wire commitment
+  before the design is exercised. Publish the frontend's slot-spec
+  draft first.
+- **D2** (`plate_state.py` / `plateStatus.ts` codegen ownership):
+  recommendation is to retire the codegen (its `DEFAULT_TARGET` points
+  at a renamed sibling repo by absolute path and has zero importers)
+  and let the frontend's slot profile be the source of truth. Not yet
+  actioned.
+- **D3** (field-mapping table ownership): this doc's per-model field
+  lists above are hand-maintained and can drift from
+  `src/routers/curation/_common.py` (see the caveat at the top of the
+  Pydantic-models section). Recommendation is a generated,
+  test-enforced table here rather than a hand-written one. Not yet
+  built.
+- **D4** (`POST /train/candidates`, H5): concur with not scheduling it
+  — tier-1 cohorts cover the current deployment; only a second capable
+  slot would justify it. No action planned.
+
+## Coordination notes for consumers
+
+- This doc is the shared source of truth for the `/curation` API. Point
+  any consumer's docs here instead of duplicating the field list.
+- The JSON contract above is frozen: a consumer-side field-mapping
+  adapter is a convenience, not a prerequisite — no wire-format changes
+  ship without a corresponding update to this doc.
+- Cropwright is migrating onto this contract per
+  `docs/design/cropwright_backend_integration_plan.md` — see that doc
+  for the prefix-migration sequencing (`/kb` → `/curation`, frontend-side
+  only) and the route-parity CI guard
+  (`tests/integration/test_labeler_route_parity.py`) that keeps this
+  doc's route table honest against `app.routes`.

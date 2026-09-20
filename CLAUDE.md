@@ -222,7 +222,7 @@ curl http://localhost:4603/health | jq '{version, api_version}'
 
 Mounted under `CurationConfig.api_prefix` (default `/curation`; 103 routes
 across 21 router modules under `src/routers/curation/`). See
-[`docs/design/labeler_api_contract.md`](docs/design/labeler_api_contract.md)
+[`docs/design/curation_api_contract.md`](docs/design/curation_api_contract.md)
 for the full route table and wire-model field names, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#curation-subsystem) for the
 component map. Built from
