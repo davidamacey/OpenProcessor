@@ -4,6 +4,7 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 ENV PUBLIC_TRITON_API_URL=__RUNTIME__
+ENV PUBLIC_API_PREFIX=__API_PREFIX__
 RUN npm run build
 
 FROM nginx:1.27-alpine
