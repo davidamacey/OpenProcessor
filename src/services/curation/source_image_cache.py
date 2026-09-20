@@ -1,17 +1,25 @@
-"""NAS/NVM prefetch / release helpers for source image bytes.
+"""Source-image page-cache hints, plus the tmpfs item-crop cache.
 
-Generic, dataset-agnostic wrappers around :func:`os.posix_fadvise` that let
-callers hint the kernel page cache:
+Two independent things share this module because both sit between the
+ingest path and a downstream reader of the same bytes:
 
-* :func:`prefetch_paths` issues ``POSIX_FADV_WILLNEED`` for a bounded queue
-  of paths. The kernel keeps the willneed hint after the fd is closed, so
-  callers don't need to manage fd lifetime themselves.
-* :func:`release_after_decode` issues ``POSIX_FADV_DONTNEED`` once the
-  caller has finished decoding a file, freeing the bytes from the page
-  cache so large ingest sweeps don't evict hotter pages.
+* :func:`prefetch_paths` / :func:`release_after_decode` — generic,
+  dataset-agnostic wrappers around :func:`os.posix_fadvise` that let
+  callers hint the kernel page cache for *source* images on NAS/NVM
+  storage.
+* :func:`write_crop_cache` — the write side of the tmpfs item-crop
+  cache (``CurationConfig.crop_cache_dir``). The curation ingest
+  service writes each item's JPEG bytes here at ingest time; downstream
+  readers (the detection worker, the VLM router) read
+  ``<crop_cache_dir>/<crop_id>.jpg`` before falling back to re-cropping
+  from the source image. Before this, the cache had readers and no
+  writer (100% miss rate out of the box).
 
-Both helpers tolerate missing files (logged at DEBUG, skipped) and are
-safe to call from any thread.
+``prefetch_paths`` / ``release_after_decode`` tolerate missing files
+(logged at DEBUG, skipped) and are safe to call from any thread.
+``write_crop_cache`` is best-effort: a write failure is logged and
+swallowed, never raised, since a cache miss just costs a downstream
+re-crop rather than losing data.
 """
 
 from __future__ import annotations
@@ -20,11 +28,17 @@ import contextlib
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_QUEUE_DEPTH = 32
+DEFAULT_CROP_CACHE_QUALITY = 90
 
 PathOrFd = Path | str | int
 
@@ -101,3 +115,38 @@ def release_after_decode(path_or_fd: PathOrFd) -> None:
     finally:
         with contextlib.suppress(OSError):
             os.close(fd)
+
+
+def write_crop_cache(
+    crop_id: str,
+    crop: Image.Image,
+    cache_dir: str | Path,
+    *,
+    quality: int = DEFAULT_CROP_CACHE_QUALITY,
+) -> None:
+    """Write one item crop's JPEG bytes to the tmpfs crop cache.
+
+    Best-effort: a write failure is logged and swallowed, not raised —
+    a downstream reader falls back to re-cropping from the source image
+    on a miss, so a cache-write failure never blocks ingest.
+
+    Args:
+        crop_id: The item's stable id; the cache key is ``<crop_id>.jpg``.
+        crop: A decoded PIL crop, already in the desired orientation.
+        cache_dir: Root cache directory (``CurationConfig.crop_cache_dir``).
+            A falsy value disables the cache entirely (no-op).
+        quality: JPEG encode quality.
+    """
+    if not cache_dir:
+        return
+    try:
+        cache_root = Path(cache_dir)
+        cache_root.mkdir(parents=True, exist_ok=True)
+        out = cache_root / f'{crop_id}.jpg'
+        # Atomic write: tmp + rename so a partial write is never visible
+        # to a concurrent reader.
+        tmp = cache_root / f'{crop_id}.jpg.tmp.{os.getpid()}'
+        crop.save(tmp, format='JPEG', quality=quality)
+        tmp.replace(out)
+    except Exception as exc:
+        logger.warning('write_crop_cache failed for crop_id=%s: %s', crop_id, exc)
