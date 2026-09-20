@@ -170,8 +170,13 @@ _ALLOWLIST = {
     # sys.path-injects a vendored external YOLOv5 fork (location
     # configurable via DETECTION_YOLOV5_FORK) and imports its `utils`
     # package. The module raises RuntimeError at import time if the fork
-    # isn't present, and nothing on the src.main import path imports this
-    # module today (see the completion plan's ensemble_nms provenance note).
+    # isn't present. src.services.curation.ingest.CurationIngestService
+    # is its first production caller (Wave 2), but only inside a lazy,
+    # try/except-guarded import on the optional two-detector ensemble
+    # path -- nothing on the plain src.main import path imports it
+    # unconditionally, so a deployment without the fork vendored still
+    # imports cleanly (see the completion plan's ensemble_nms
+    # provenance note).
     'utils': 'vendored external fork path, not a pip package (ensemble_nms.py)',
     # GPU-accelerated clustering overlay (see docker-compose.gpu-clustering.yml
     # / `make cluster-gpu`): src/services/curation/clustering/backend.py's
