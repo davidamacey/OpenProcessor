@@ -7,6 +7,13 @@
  * static scan (the convention `EmbeddingPlot.test.ts` and
  * `StrategyBar.test.ts` already use for this kind of "never do X again"
  * guard) is the only mount-free way to pin the call sites.
+ *
+ * Sibling guard: `apiPrefixScan.test.ts` ratchets URL *composition*
+ * (everything goes through `API_PREFIX`). This file ratchets the
+ * region-thumbnail path *segment*. Neither subsumes the other, and
+ * their exclusion lists are deliberately opposite — this one skips
+ * `lib/annotations/profiles/` (profiles declare prefix-relative
+ * templates by design); that one scans them.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
