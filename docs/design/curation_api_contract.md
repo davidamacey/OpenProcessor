@@ -54,7 +54,8 @@ formally closed as **WONTFIX**.
 
 ## Route surface
 
-Full route list (103 routes under `/curation` as of this wave), grouped
+Full route list (107 routes under `/curation` as of this wave — Wave 2
+added the four generic ingest/label-import write routes below), grouped
 by router module; every path is relative to the configured
 `api_prefix`:
 
@@ -65,7 +66,7 @@ by router module; every path is relative to the configured
 | `regions.py` / `regions_fp.py` | `GET /plates`, `PUT /crops/{crop_id}/plate`, `PUT /crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `POST /plates/batch_status`, `POST /plates/cluster`, `GET /plates/cluster/status`, `GET /plates/clusters`, `POST /plates/clusters/refine/{cluster_id}`, `POST /plates/fp_centroids/build`, `GET /plates/fp_centroids/status`, `GET /plates/suspected_false_positives`, `GET /plates/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
-| `ingest.py` | `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
+| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
