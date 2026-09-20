@@ -69,7 +69,7 @@ DEFAULT_PROFILE = DetectionProfile(
     ocr_det_version='1',
     ocr_det_input_size=640,
     ocr_det_prob_floor=0.30,
-    ocr_rec_model='paddleocr_rec',
+    ocr_rec_model='paddleocr_rec_trt',
     ocr_rec_version='1',
     ocr_pipeline_model='ocr_pipeline',
     # Crop classes routed straight to the secondary segmenter, skipping

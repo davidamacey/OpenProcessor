@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.clients.curation_opensearch import mget_crops
+from src.config import get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -497,7 +498,7 @@ async def pipeline_auto_label(
             if p.model:
                 _vlm_extras['gemma_vehicle_model'] = p.model
             if p.plate_visible is not None:
-                _vlm_extras['gemma_plate_visible'] = p.plate_visible
+                _vlm_extras[get_region_fields().visible] = p.plate_visible
 
             if p.class_name == '__new__' and p.proposed_class:
                 proposed_resolved = _resolve_class_name(p.proposed_class, confidence=p.confidence)

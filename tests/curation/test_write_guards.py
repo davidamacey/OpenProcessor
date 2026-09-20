@@ -31,6 +31,7 @@ from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_m
 from scripts.curation.worker.runner import _should_classify
 from scripts.curation.worker.state import _ItemTask
 from scripts.curation.worker.verify import _combined_class_update
+from src.config import get_region_fields
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
@@ -158,7 +159,7 @@ class TestCombinedClassUpdateResetsProvenance:
             model='CBR',
         )
         update = _combined_class_update(reply, None)
-        assert update['gemma_plate_visible'] is True
+        assert update[get_region_fields().visible] is True
         assert update['gemma_vehicle_make'] == 'Honda'
         assert update['gemma_vehicle_model'] == 'CBR'
         assert 'class_source' not in update
