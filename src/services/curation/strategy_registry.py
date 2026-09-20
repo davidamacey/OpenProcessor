@@ -165,10 +165,27 @@ pass couldn't execute (human blind A/B; manually-judged near-dup pairs) --
 see the doc for exact numbers before adding anything here."""
 
 
-def _cluster_strategies() -> list[dict[str, Any]]:
+# Shared-settings default resolution lives in its own module
+# (strategy_defaults.py) -- this file grew past the pre-commit 700-LOC
+# ratchet once that logic landed, and "resolve the effective default id
+# for an axis" is a genuinely separate concern from "build the full
+# GET /methods payload." Re-exported here (see __all__ below) so every
+# existing import of ``strategy_registry.resolve_effective_default`` /
+# ``strategy_registry.SETTABLE_DEFAULT_AXES`` keeps working unchanged.
+from src.services.curation.strategy_defaults import (  # noqa: E402
+    SETTABLE_DEFAULT_AXES,
+    resolve_effective_default,
+)
+
+
+def _cluster_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Reflect the real ``cluster_methods`` registry — never hand-duplicated
-    names, so this can't drift from ``get_method``/``available_methods``."""
-    from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
+    names, so this can't drift from ``get_method``/``available_methods``.
+    ``default_id`` is :func:`resolve_effective_default`'s answer for the
+    ``'cluster'`` axis, resolved once by the caller (``get_registry``) so
+    every axis's default resolution happens against the same settings-doc
+    snapshot within one request."""
+    from src.services.curation.clustering.methods import available_methods
 
     return [
         {
@@ -176,7 +193,7 @@ def _cluster_strategies() -> list[dict[str, Any]]:
             'axis': 'cluster',
             'label': name.upper() if name in {'ivf', 'ahc'} else name.replace('_', ' ').title(),
             'status': 'stable',
-            'default': name == DEFAULT_METHOD,
+            'default': name == default_id,
         }
         for name in available_methods()
     ]
@@ -229,7 +246,7 @@ def _score_strategies() -> list[dict[str, Any]]:
     return entries
 
 
-def _sort_strategies() -> list[dict[str, Any]]:
+def _sort_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Phase 3 ``review_sorts.py`` registry entries (curation-strategy plan
     §3.2) — the ``'sort'`` axis this module's ``StrategyAxis`` type has
     declared since Phase 3 but ``get_registry()`` never actually populated
@@ -246,7 +263,13 @@ def _sort_strategies() -> list[dict[str, Any]]:
     independently-selectable sort — ``default_sort_for_tab`` resolves it
     differently per review tab (plan §3.2) — so surfacing it here would
     just be a confusing, always-present duplicate of whichever tab-specific
-    entry is actually in effect for the tab currently open."""
+    entry is actually in effect for the tab currently open.
+
+    ``default_id`` (curation deployment-settings plan) is
+    :func:`resolve_effective_default`'s answer for the ``'sort'`` axis —
+    an *additional*, opt-in global default an operator can set via ``PUT
+    /curation/settings`` on top of the untouched per-tab defaults; ``None``
+    when no override is set (the pre-existing, always-``False`` behavior)."""
     try:
         from src.services.curation.review_sorts import get_review_sorts
     except ImportError:
@@ -262,7 +285,7 @@ def _sort_strategies() -> list[dict[str, Any]]:
                 'axis': 'sort',
                 'label': sort.label,
                 'status': sort.status,
-                'default': False,
+                'default': sort.id == default_id,
                 'requires_field': sort.requires_field,
             }
         )
@@ -389,7 +412,7 @@ def _export_strategies() -> list[dict[str, Any]]:
     ]
 
 
-def _detection_profile_strategies() -> list[dict[str, Any]]:
+def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Configured sub-region ``DetectionProfile`` axis (labeling-assist
     plan task (b)).
 
@@ -401,33 +424,41 @@ def _detection_profile_strategies() -> list[dict[str, Any]]:
     ``src.services.detection.cascade_detect`` registers its own
     ``DEFAULT_PROFILE`` as the default), so this axis lists exactly one
     entry, but the mechanism is not limited to one.
-    """
+
+    ``default_id`` is :func:`resolve_effective_default`'s answer for the
+    ``'detection_profile'`` axis (falls back to
+    ``get_default_profile_name()`` with no shared-settings override)."""
     # Import triggers cascade_detect's module-level `register_profile`
     # call if it hasn't run yet in this process.
     from src.services.detection import cascade_detect  # noqa: F401
-    from src.services.detection.profile_registry import get_default_profile_name, get_profiles
+    from src.services.detection.profile_registry import get_profiles
 
-    default_name = get_default_profile_name()
     return [
         {
             'id': profile.name,
             'axis': 'detection_profile',
             'label': profile.name,
             'status': 'stable',
-            'default': profile.name == default_name,
+            'default': profile.name == default_id,
         }
         for profile in get_profiles().values()
     ]
 
 
-def _prompt_pack_strategies() -> list[dict[str, Any]]:
+def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Configured VLM ``PromptPack`` axis (labeling-assist plan task (c)).
 
     Lists whatever pack :func:`~src.services.labeling.vlm_prompts.
     resolve_prompt_pack` actually resolves for this process -- a
     deployment-supplied pack via ``OP_PROMPT_PACK_PATH``, or the built-in
     generic pack when unset/missing. Always exactly one entry (there is
-    only ever one active pack per process), always ``default=True``.
+    only ever one active pack per process). ``default_id`` is
+    :func:`resolve_effective_default`'s answer for the ``'prompt_pack'``
+    axis; since a shared-settings override is only ever honored when it
+    names a currently-advertised id (:func:`_advertised_ids_for_axis`
+    returns exactly ``{pack.name}`` here), this entry's ``default`` is
+    always ``True`` in practice -- there is nothing else it could resolve
+    to today.
     """
     from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
@@ -438,7 +469,7 @@ def _prompt_pack_strategies() -> list[dict[str, Any]]:
             'axis': 'prompt_pack',
             'label': pack.name,
             'status': 'stable',
-            'default': True,
+            'default': pack.name == default_id,
         }
     ]
 
@@ -536,14 +567,35 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     sorts) always carry ``field_coverage: None`` -- coverage doesn't apply
     to a field every crop always has.
     """
+    # Fetched at most once per request (None if opensearch is None) so
+    # every axis's 'default' flag below reflects a single consistent
+    # settings-doc snapshot, and this endpoint issues one settings lookup
+    # total rather than one per axis.
+    settings_doc: dict[str, Any] | None = None
+    if opensearch is not None:
+        try:
+            from src.clients.curation_opensearch import get_curation_settings
+
+            settings_doc = await get_curation_settings(opensearch)
+        except Exception as exc:
+            logger.warning('kb_methods_settings_lookup_failed', error=str(exc))
+            settings_doc = None
+
+    cluster_default = await resolve_effective_default('cluster', settings_doc=settings_doc)
+    sort_default = await resolve_effective_default('sort', settings_doc=settings_doc)
+    detection_profile_default = await resolve_effective_default(
+        'detection_profile', settings_doc=settings_doc
+    )
+    prompt_pack_default = await resolve_effective_default('prompt_pack', settings_doc=settings_doc)
+
     strategies = [
-        *_cluster_strategies(),
-        *_sort_strategies(),
+        *_cluster_strategies(cluster_default),
+        *_sort_strategies(sort_default),
         *_score_strategies(),
         *_overlay_strategies(),
         *_export_strategies(),
-        *_detection_profile_strategies(),
-        *_prompt_pack_strategies(),
+        *_detection_profile_strategies(detection_profile_default),
+        *_prompt_pack_strategies(prompt_pack_default),
     ]
 
     fields = frozenset(e['requires_field'] for e in strategies if e.get('requires_field'))
@@ -585,6 +637,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
 
 
 __all__ = [
+    'SETTABLE_DEFAULT_AXES',
     'VALIDATED_SCORERS',
     'VIZ_PROJECTION_PURITY',
     'VIZ_PROJECTION_REQUIRES_BANNER',
@@ -593,4 +646,5 @@ __all__ = [
     'StrategyStatus',
     'effective_scorer_status',
     'get_registry',
+    'resolve_effective_default',
 ]

@@ -721,8 +721,17 @@ async def cluster_residuals(
     from src.services.curation.clustering import embedding_reduce
     from src.services.curation.clustering.backend import detect_cluster_backend
     from src.services.curation.clustering.methods import DEFAULT_METHOD, get_method
+    from src.services.curation.strategy_registry import resolve_effective_default
 
-    method_name = (clustering_method or DEFAULT_METHOD).lower()
+    # DEFAULT_METHOD stays the ultimate fallback (resolve_effective_default
+    # falls back to it internally too) -- an explicit ?clustering_method
+    # always wins over any shared-settings override, same precedence every
+    # other real endpoint's omitted-param resolution uses.
+    if clustering_method:
+        method_name = clustering_method.lower()
+    else:
+        resolved_default = await resolve_effective_default('cluster', client)
+        method_name = (resolved_default or DEFAULT_METHOD).lower()
     mode_label = 'recluster_unvalidated' if recluster_unvalidated else 'strict_residuals'
 
     # Primary-subject clustering gate (optional). When set, train + assign
