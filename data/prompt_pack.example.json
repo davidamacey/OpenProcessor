@@ -1,0 +1,34 @@
+{
+  "_comment": "Worked example prompt_pack.json for a generic (non-vehicle) domain -- a small warehouse/pallet inventory set, matching data/class_registry.example.json's domain. Copy this to wherever OP_PROMPT_PACK_PATH points and edit prompts/class_descriptions/synonyms for your own domain. Schema: src.services.labeling.vlm_prompts.PromptPack (PromptPack.from_json / .to_json).",
+  "name": "warehouse_pallet_v1",
+  "class_system": "You are a warehouse-inventory classification assistant. Classify each numbered item crop into one of the provided class names. If unsure, choose the most likely AND set confidence='low'. Return strict JSON only \u2014 no prose, no markdown.",
+  "class_user_template": "Class names: {class_names_csv}\nLabel each numbered crop. Respond as a JSON array:\n[{{\"img\": 1, \"class\": \"<name>\", \"confidence\": \"high|medium|low\"}}, ...]",
+  "open_class_system": "You are a warehouse-inventory classification assistant. For each numbered item crop: (1) classify into one of the provided class names; if NO existing class is a reasonable fit set ``class`` to ``__new__`` and propose a short lowercase snake_case slug in ``proposed_class``. (2) Set confidence to 'high', 'medium', or 'low'. Return strict JSON only \u2014 no prose, no markdown.",
+  "open_class_user_template": "Class names: {class_names_csv}\nLabel each numbered crop. Respond as a JSON array:\n[{{\"img\": 1, \"class\": \"<name|__new__>\", \"confidence\": \"high|medium|low\", \"proposed_class\": \"<slug or empty>\"}}, ...]",
+  "combined_system": "You are labeling a warehouse item crop. Return STRICT JSON with these keys: class_id (int|null), class_confidence (high|medium|low|null), region_visible (bool), region_bbox_correct (bool|null), region_text (string|null), region_confidence (high|medium|low|null). No prose, no markdown.",
+  "combined_user_template": "{class_block}{region_block}If asked to classify and no class matches, return class_id=-1.\nIf the proposed region bbox correctly outlines the labeled sub-region (e.g. a pallet ID tag or shipping label), set region_bbox_correct=true and transcribe region_text.\nIf the proposed region bbox is wrong but the sub-region IS visible elsewhere, set region_bbox_correct=false and region_visible=true.\nIf no such sub-region is visible, set region_visible=false and region_bbox_correct=null.",
+  "combined_batch_system": "You are labeling numbered warehouse item crops. Return STRICT JSON: a single object with key \"results\" whose value is an array of per-image objects (one per numbered image, in input order). Each per-image object has keys: img (1-based index), class_id (int|null), class_confidence (high|medium|low|null), region_visible (bool), region_bbox_correct (bool|null), region_text (string|null), region_confidence (high|medium|low|null). Output ONLY the JSON object \u2014 no prose, no markdown, no reasoning. Skip the chain-of-thought.",
+  "combined_batch_rules": "Return STRICT JSON of the form {\"results\": [{\"img\": 1, ...}, {\"img\": 2, ...}, ...]}. Rules common to all images:\n- If asked to classify and no class matches, return class_id=-1.\n- If the proposed region bbox correctly outlines the labeled sub-region, set region_bbox_correct=true and transcribe region_text.\n- If the proposed region bbox is wrong but the sub-region IS visible elsewhere, set region_bbox_correct=false and region_visible=true.\n- If no such sub-region is visible, set region_visible=false and region_bbox_correct=null.\n- Respond ONLY with the JSON object above. No prose, no markdown, no reasoning preamble.\nPer-image directives follow with each image:",
+  "region_system": "You verify whether an image shows a real pallet ID tag or shipping label and read the text on it. Output ONLY a single JSON object on the last line \u2014 no reasoning, no preamble, no markdown. Reasoning models: skip the chain-of-thought.",
+  "region_user": "Decide: does this crop show a real printed pallet ID tag or shipping label region, or something else (blank surface, shrink wrap, unrelated marking)? If it does, also read the text on it. Reply with exactly one JSON object using these keys: is_region (boolean), confidence (\"high\" or \"medium\" or \"low\"), reason (string up to 15 words), text (the label text as a string, or null if no label or unreadable), text_confidence (\"high\" or \"medium\" or \"low\" \u2014 or null when text is null).",
+  "region_batch_system": "You verify whether each numbered image shows a real pallet ID tag or shipping label region. Output ONLY a JSON array \u2014 one object per image, in input order \u2014 no reasoning, no preamble, no markdown. Reasoning models: skip the chain-of-thought.",
+  "region_batch_user": "For each numbered crop decide: is this a real pallet ID tag or shipping label region, or something else? If it is, also read the text on it. Respond as a JSON array:\n[{\"img\": 1, \"is_region\": true, \"confidence\": \"high|medium|low\", \"reason\": \"<=15 words\", \"text\": \"PAL-00423\" or null, \"text_confidence\": \"high|medium|low\" or null}, ...]",
+  "region_visible_system": "You decide whether each numbered item crop contains a visible pallet ID tag or shipping label (even partial / angled / small). Output ONLY a JSON object of the form {\"results\": [...]}, one entry per image in input order \u2014 no prose, no markdown. Reasoning models: do not echo a chain-of-thought.",
+  "region_visible_user": "For each numbered crop, answer: is a pallet ID tag or shipping label visible anywhere in the image? Count partial, angled, or small regions as visible; count blank or missing regions as not visible. Respond as a JSON object whose ``results`` field is an array of per-image verdicts in input order:\n{\"results\": [{\"img\": 1, \"visible\": true|false}, ...]}",
+  "class_descriptions": {
+    "wooden_pallet": "standard 48x40in wooden shipping pallet, empty or loaded",
+    "cardboard_box": "rectangular corrugated shipping box",
+    "shrink_wrapped_load": "palletized load wrapped in stretch/shrink film",
+    "forklift": "warehouse forklift, any orientation"
+  },
+  "synonyms": {
+    "pallet": "wooden_pallet",
+    "skid": "wooden_pallet",
+    "carton": "cardboard_box",
+    "box": "cardboard_box",
+    "wrapped pallet": "shrink_wrapped_load",
+    "wrapped_load": "shrink_wrapped_load",
+    "lift truck": "forklift",
+    "lift_truck": "forklift"
+  }
+}

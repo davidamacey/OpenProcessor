@@ -54,11 +54,19 @@ _F = get_region_fields()
 
 def _get_vlm_labeler() -> Any:
     """Lazy VlmLabeler singleton — imported so VLM routes don't pull
-    httpx for the whole router on cold start."""
+    httpx for the whole router on cold start.
+
+    The pack is resolved once, at singleton construction, via
+    :func:`~src.services.labeling.vlm_prompts.resolve_prompt_pack` — a
+    deployment-supplied ``OP_PROMPT_PACK_PATH`` pack, or the built-in
+    generic pack when unset/missing (see
+    ``docs/design/curation_design_rationale.md``).
+    """
     from src.services.labeling.vlm_labeler import VlmLabeler
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     if not hasattr(_get_vlm_labeler, '_inst'):
-        _get_vlm_labeler._inst = VlmLabeler()  # type: ignore[attr-defined]
+        _get_vlm_labeler._inst = VlmLabeler(pack=resolve_prompt_pack())  # type: ignore[attr-defined]
     return _get_vlm_labeler._inst  # type: ignore[attr-defined]
 
 
