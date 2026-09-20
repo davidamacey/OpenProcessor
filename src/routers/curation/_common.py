@@ -235,11 +235,11 @@ class ItemDoc(BaseModel):
     # stale auto_promote 'cluster_v6_majority_agreement' string).
     label_source: str | None = ''
     # Frozen HTTP wire-model attribute names — see
-    # docs/design/labeler_api_contract.md and the RegionFields scope
+    # docs/design/curation_api_contract.md and the RegionFields scope
     # table (docs/design/oss_genericization_phase2_plan.md §3.2). These
-    # are the JSON contract with the labeler frontend and are NOT
-    # indirected through RegionFields (that governs OpenSearch document
-    # keys only).
+    # are the generic curation API's JSON contract (Cropwright is one
+    # consumer among anticipated others) and are NOT indirected through
+    # RegionFields (that governs OpenSearch document keys only).
     plate_bbox_norm: list[float] | None = None
     plate_score: float | None = None
     test_holdout: bool = False
