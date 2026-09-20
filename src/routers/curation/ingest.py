@@ -1,35 +1,206 @@
-"""Curation router sub-module — ingest status + lookup helpers.
+"""Curation router sub-module — ingest, label import, and status/lookup helpers.
 
-The reference implementation this was ported from also carries
-``POST /kb/ingest/image``, ``POST /kb/ingest/batch``,
-``POST /kb/ingest/import_labels`` and ``POST /kb/ingest/import_labels_batch``
-handlers backed by a domain-specific ingest service / label-import
-module pair (plan §1's Bucket B — proprietary dataset-family logic,
-never ported anywhere in this plan). Those four
-endpoints are intentionally NOT ported here: their only real
-implementation lives in code this plan declines to extract (plan §7 R5
-— the generic curation stack ships with a thinner ingest path than the
-reference by design, tracked as the most likely first follow-up after
-merge). What *is* generic — status/backlog introspection and a path
-existence lookup, both pure OpenSearch queries with no Bucket-B
-dependency — is ported below unchanged.
+``POST /ingest/image``, ``POST /ingest/batch``, ``POST /import_labels``
+and ``POST /import_labels/batch`` are the generic curation ingest front
+door: they create ``images`` + ``items`` documents (and, for label
+import, ``labels_confirmed`` documents), backed by
+:class:`~src.services.curation.ingest.CurationIngestService` and
+:mod:`src.services.curation.label_import`. Everything else in this
+module (status/backlog introspection, the path-existence lookup) is
+unchanged pure-OpenSearch read queries.
+
+The ingest endpoints require a detector to be configured — a
+``DetectionProfile`` naming a Triton model that already serves item
+proposals for this deployment. Bring your own trained detector; this
+module ships no domain-specific class taxonomy or detector weights.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from src.config.region_fields import get_region_fields
+from fastapi import HTTPException
+from pydantic import BaseModel, Field
+
+from src.config import DetectionProfile, get_region_fields
 from src.routers.curation._common import (
     CURATION_IMAGES_INDEX,
     CURATION_ITEMS_INDEX,
+    BatchIngestResponse as _BatchIngestResponse,
+    BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
+    ImportLabelsBatchRequest,
+    ImportLabelsRequest,
+    IngestImageRequest,
+    IngestImageResponse,
     OpenSearchDep,
+    RegistryDep,
     _ensure_indexes,
     _PathLookupRequest,
     _PathLookupResponse,
     logger,
     router,
 )
+from src.services.curation.ingest import CurationIngestService
+from src.services.curation.label_import import (
+    DEFAULT_LABEL_SOURCE,
+    import_labels_batch,
+    import_yolo_labels,
+)
+
+
+class IngestBatchRequest(BaseModel):
+    items: list[IngestImageRequest] = Field(default_factory=list)
+
+
+def _get_detection_profile() -> DetectionProfile:
+    """The primary-detector profile for the ingest pipeline.
+
+    Env-configurable via ``OP_DETECTION_*`` (see
+    ``DetectionProfile.from_env``) — a deployment brings its own
+    detector by setting ``OP_DETECTION_DETECTOR_MODEL`` at minimum.
+    """
+    return DetectionProfile.from_env(name='item')
+
+
+async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
+    from src.main import app, get_async_triton_pool
+
+    pe_encoder = getattr(app.state, 'pe_encoder', None)
+    if pe_encoder is None:
+        raise HTTPException(
+            status_code=503,
+            detail='PE encoder not initialized; ingest is unavailable until app startup completes',
+        )
+    profile = _get_detection_profile()
+    if not profile.detector_model:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                'No detector configured for ingest — set OP_DETECTION_DETECTOR_MODEL to a '
+                'Triton model name that serves item proposals for this deployment'
+            ),
+        )
+    return CurationIngestService(
+        opensearch=opensearch,
+        triton_pool=get_async_triton_pool(),
+        registry=registry,
+        profile=profile,
+        pe_encoder=pe_encoder,
+    )
+
+
+@router.post('/ingest/image', response_model=IngestImageResponse)
+async def curation_ingest_image(
+    body: IngestImageRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+) -> IngestImageResponse:
+    """Ingest a single image from a path already reachable inside the container."""
+    await _ensure_indexes(opensearch)
+    path = Path(body.path)
+    try:
+        image_bytes = path.read_bytes()
+    except OSError as exc:
+        raise HTTPException(status_code=404, detail=f'cannot read {body.path}: {exc}') from None
+
+    service = await _get_ingest_service(opensearch, registry)
+    result = await service.ingest_one(image_bytes, body.path, source=body.source)
+    return IngestImageResponse(
+        status=result.status,
+        image_id=result.image_id,
+        image_path=result.image_path,
+        imohash=result.imohash,
+        n_crops=result.n_crops,
+        error=result.error,
+    )
+
+
+@router.post('/ingest/batch', response_model=_BatchIngestResponse)
+async def curation_ingest_batch(
+    body: IngestBatchRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+) -> _BatchIngestResponse:
+    """Ingest a batch of images from paths already reachable inside the container.
+
+    Every item shares its ``source`` tag independently; a per-item read
+    failure is reported as a ``failed`` result rather than aborting the
+    whole batch.
+    """
+    await _ensure_indexes(opensearch)
+    service = await _get_ingest_service(opensearch, registry)
+
+    images: list[bytes] = []
+    paths: list[str] = []
+    failed_early: list[IngestImageResponse] = []
+    for item in body.items:
+        try:
+            images.append(Path(item.path).read_bytes())
+            paths.append(item.path)
+        except OSError as exc:
+            failed_early.append(
+                IngestImageResponse(status='failed', image_path=item.path, error=str(exc))
+            )
+
+    batch_result = await service.ingest_batch(images, paths) if images else None
+    results = list(failed_early)
+    summary = _BatchIngestSummaryResponse(failed=len(failed_early))
+    if batch_result is not None:
+        results.extend(
+            IngestImageResponse(
+                status=r.status,
+                image_id=r.image_id,
+                image_path=r.image_path,
+                imohash=r.imohash,
+                n_crops=r.n_crops,
+                error=r.error,
+            )
+            for r in batch_result.results
+        )
+        summary.successful += batch_result.summary.successful
+        summary.duplicates += batch_result.summary.duplicates
+        summary.failed += batch_result.summary.failed
+        summary.crops_indexed += batch_result.summary.crops_indexed
+
+    if summary.failed == 0:
+        status: Any = 'success'
+    elif summary.successful == 0:
+        status = 'error'
+    else:
+        status = 'partial'
+    return _BatchIngestResponse(status=status, summary=summary, results=results)
+
+
+@router.post('/import_labels')
+async def curation_import_labels(
+    body: ImportLabelsRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+) -> dict[str, int]:
+    """Import a single YOLO ``.txt`` label file against an already-ingested image."""
+    await _ensure_indexes(opensearch)
+    n = await import_yolo_labels(
+        Path(body.image_path),
+        Path(body.label_txt_path),
+        registry,
+        opensearch,
+        label_source=body.label_source or DEFAULT_LABEL_SOURCE,
+    )
+    return {'labels_imported': n}
+
+
+@router.post('/import_labels/batch')
+async def curation_import_labels_batch(
+    body: ImportLabelsBatchRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+) -> dict[str, int]:
+    """Batch-import YOLO ``.txt`` label files against already-ingested images."""
+    await _ensure_indexes(opensearch)
+    pairs = [(Path(i.image_path), Path(i.label_txt_path)) for i in body.items]
+    label_source = body.items[0].label_source if body.items else DEFAULT_LABEL_SOURCE
+    return await import_labels_batch(pairs, registry, opensearch, label_source=label_source)
 
 
 @router.get('/ingest/status')
