@@ -1,0 +1,69 @@
+# CPU-installable subset sufficient to run `pytest tests/ -m 'not live'` on a
+# GPU-less CI runner. Traced from `import src.main`'s real import graph plus
+# every top-level (non-lazy) third-party import reachable from `tests/`.
+#
+# NOT included here because nothing in the base ("not live") suite imports
+# them at module scope -- verified by tracing every top-level import under
+# src/ and tests/, not assumed: faiss, tensorrt, onnx*, nvidia-modelopt,
+# aiohttp, pandas, matplotlib, seaborn, open-clip-torch, ftfy, timm,
+# huggingface_hub, imohash, umap-learn, hdbscan, joblib (all lazy-imported
+# inside functions -- see requirements.txt for their call sites).
+#
+# torch/torchvision need the CPU wheel index, which pip requirements files
+# cannot mix inline with the default PyPI index. Install this file in two
+# passes:
+#
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   pip install -r requirements-test.txt
+#
+# (or use `pip install -r requirements-test.txt --extra-index-url
+# https://download.pytorch.org/whl/cpu`, which also resolves torch/torchvision
+# to CPU wheels because PyPI has no matching CUDA-free version for this pin).
+
+# Web framework (src/main.py)
+fastapi
+uvicorn[standard]
+python-multipart
+orjson
+pydantic-settings
+
+# torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
+torch
+torchvision
+ultralytics>=8.4.82,<8.5
+
+# transformers import site: src/utils/cache.py (CLIP tokenizer)
+transformers>=4.30.0
+
+# cv2 import sites: src/clients/triton_client.py, fast_face_client.py,
+# src/utils/face_align.py, image_processing.py, src/services/cpu_preprocess.py,
+# src/services/detection/{region_lean,pe_preprocess,crop_quality}.py
+opencv-python
+
+numpy
+scipy
+pyyaml
+requests
+
+# src/core/logging.py (imported by src/main.py)
+structlog>=24.1.0
+
+# src/clients/opensearch.py (imported transitively via src/clients/__init__.py
+# and src/core/dependencies.py, both on the src.main import path)
+opensearch-py>=2.3.0
+
+# src/core/metrics.py / src/services/curation/metrics.py
+prometheus-client>=0.20
+
+# src/services/labeling/vlm_client.py -- reached via curation router imports
+tenacity>=8.2
+httpx
+
+# tests/curation/test_mistakenness.py imports sklearn.metrics directly (not
+# marked live) -- this is the one non-lazy scikit-learn use in the base suite
+scikit-learn
+
+# Test runner
+pytest>=8.0.0
+pytest-cov>=5.0.0
+pytest-asyncio>=0.24.0
