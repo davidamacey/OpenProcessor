@@ -10,8 +10,9 @@
  * field (see `strategy_registry.py`'s `StrategyAxis`), NOT four separate
  * top-level arrays as this file originally assumed from the plan doc's
  * illustrative example. `parseKbMethodsResponse` below reshapes the flat
- * list into the five buckets (`cluster_methods`/`review_sorts`/`overlays`/
- * `scores`/`dataset_exports`) client-side by grouping on `axis`, so every downstream consumer
+ * list into the seven buckets (`cluster_methods`/`review_sorts`/`overlays`/
+ * `scores`/`dataset_exports`/`detection_profiles`/`prompt_packs`) client-side
+ * by grouping on `axis`, so every downstream consumer
  * (`isDiverseOverlayAvailable`, `StrategyBar`, etc.) keeps working against
  * the original four-array `OpMethodsResponse` shape unchanged — only this
  * parse function needed to change once the real contract was confirmed.
@@ -152,6 +153,38 @@ export interface DatasetExportInfo extends MethodInfoBase {
   default?: boolean;
 }
 
+/**
+ * One vision-detection profile (model + config) an assisted auto-label
+ * run can be pointed at (`axis: 'detection_profile'`, agreed with the
+ * OpenProcessor session 2026-09-20,
+ * docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §1.3).
+ *
+ * **Not yet live on any backend.** The axis is absent from every
+ * `/methods` response that exists today, which — per the same
+ * "absence is the signal, not a status" rule the `export` axis
+ * documents above — means every consumer must render nothing at all.
+ * `FALLBACK_METHODS.detection_profiles` is `[]` for the same reason.
+ *
+ * Deliberately carries no `requires_field`/`field_coverage`: a
+ * detection profile is a model/config selection, not a backfilled
+ * OpenSearch field, so `hasFieldCoverage` does not apply to it and
+ * must not be wired in.
+ */
+export interface DetectionProfileInfo extends MethodInfoBase {
+  /** True on the profile the backend runs when none is requested. */
+  default?: boolean;
+}
+
+/**
+ * One VLM prompt / vocabulary set an assisted auto-label run can use
+ * (`axis: 'prompt_pack'`). Same contract, same absence rule, same
+ * no-field-coverage note as `DetectionProfileInfo` above.
+ */
+export interface PromptPackInfo extends MethodInfoBase {
+  /** True on the pack the backend uses when none is requested. */
+  default?: boolean;
+}
+
 export interface OpMethodsResponse {
   cluster_methods: ClusterMethodInfo[];
   review_sorts: ReviewSortInfo[];
@@ -163,6 +196,15 @@ export interface OpMethodsResponse {
    * `cluster_methods` and `sort` → `review_sorts` already are.
    */
   dataset_exports: DatasetExportInfo[];
+  /**
+   * `axis: 'detection_profile'` entries. Named as a descriptive plural
+   * noun phrase like every other bucket (`cluster` → `cluster_methods`,
+   * `sort` → `review_sorts`, `export` → `dataset_exports`), not a
+   * mechanical pluralization of the axis string.
+   */
+  detection_profiles: DetectionProfileInfo[];
+  /** `axis: 'prompt_pack'` entries. */
+  prompt_packs: PromptPackInfo[];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -203,7 +245,7 @@ function normalizeBase(raw: unknown): MethodInfoBase | null {
 /**
  * Group the real wire shape's flat `strategies` array by its `axis` field,
  * normalizing each entry through `extra`. An entry whose `axis` isn't one
- * of the four this build knows how to route (a future server's new axis)
+ * of the axes this build knows how to route (a future server's new axis)
  * or whose `id`/`label` aren't usable strings is dropped rather than
  * taking the whole parse down — same forward-tolerant contract as every
  * other malformed-entry case in this file.
@@ -227,7 +269,7 @@ function normalizeAxis<T extends MethodInfoBase>(
 /**
  * Parse+normalize a raw `/curation/methods` payload. Never throws — any
  * unrecognized shape (missing `strategies` key, a non-array value, garbage
- * entries, an entry whose `axis` isn't one of the five known ones) degrades
+ * entries, an entry whose `axis` isn't one of the axes this build knows) degrades
  * to empty lists for the affected bucket rather than propagating an
  * exception into the api/store layer. Unknown `id`s are carried through
  * as-is (nothing here validates ids against a fixed enum, by design —
@@ -283,6 +325,18 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
         default: optBool(e.default),
       }),
     ),
+    detection_profiles: normalizeAxis<DetectionProfileInfo>(
+      strategies,
+      'detection_profile',
+      (base, e) => ({
+        ...base,
+        default: optBool(e.default),
+      }),
+    ),
+    prompt_packs: normalizeAxis<PromptPackInfo>(strategies, 'prompt_pack', (base, e) => ({
+      ...base,
+      default: optBool(e.default),
+    })),
   };
 }
 
@@ -401,6 +455,72 @@ export function isDatasetExportAvailable(
 }
 
 /**
+ * The entries of an axis a UI may actually offer: `stable` or
+ * `experimental` only. `shadow` (mid-validation) and `disabled`
+ * (explicitly killed) must never be selectable — the same bar every
+ * `isXAvailable` gate in this file already applies, hoisted into one
+ * place because the two assist axes are rendered as *lists* of options,
+ * not looked up by a single known id.
+ *
+ * Without this, `AssistScopeBar.svelte` would re-derive the status
+ * predicate inline to build its `<option>` list — which is exactly the
+ * failure `hasFieldCoverage` exists to prevent (a second, divergent copy
+ * of a gate; see that function's doc comment and Phase 6's P1-2/P1-3).
+ * One filter, unit-tested once, used by both the gate and the renderer.
+ */
+export function selectableAxisEntries<T extends MethodInfoBase>(entries: T[]): T[] {
+  return entries.filter((e) => e.status === 'stable' || e.status === 'experimental');
+}
+
+/**
+ * Whether `{API_PREFIX}/methods` advertises at least one usable
+ * detection profile. Mirrors `isDiverseOverlayAvailable` /
+ * `isEmbeddingVizAvailable` / `isSemanticSearchAvailable` /
+ * `isDatasetExportAvailable`: same stable/experimental-only bar, same
+ * "absent / shadow / disabled never renders" contract.
+ *
+ * Differs from those four in one respect only: they ask about a single
+ * known id, this asks "does this axis have anything to offer at all,"
+ * because the operator picks from a server-supplied list rather than
+ * toggling one known feature.
+ */
+export function isDetectionProfileAvailable(profiles: DetectionProfileInfo[]): boolean {
+  return selectableAxisEntries(profiles).length > 0;
+}
+
+/** Prompt-pack analog of `isDetectionProfileAvailable`. Same bar, same
+ *  absence contract. */
+export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
+  return selectableAxisEntries(packs).length > 0;
+}
+
+/**
+ * Whether this deployment supports **scoped** VLM-assisted auto-labeling
+ * at all — the single gate `AutoLabelPanel` uses to decide whether the
+ * scope bar exists (absent, not disabled).
+ *
+ * Composed from the two assist axes on purpose. The agreed contract
+ * (this plan §1.3) adds `class_id` to
+ * `POST {API_PREFIX}/pipeline/auto_label/start` **in the same backend
+ * change** that adds these axes, and supplies no separate capability
+ * signal for the param itself. An unknown query param is silently
+ * ignored by FastAPI, so an un-gated class picker on today's backend
+ * would start a full-pool, hours-long run while the UI claimed it was
+ * scoped — strictly worse than the 404 the `export` axis gate exists to
+ * prevent, because nothing surfaces the mistake. Hiding the whole
+ * control until the server affirmatively advertises the feature is the
+ * only safe default. See §2.6 of the plan, and Q2 in §1.4/§10.
+ */
+export function isScopedAssistAvailable(
+  methods: Pick<OpMethodsResponse, 'detection_profiles' | 'prompt_packs'>,
+): boolean {
+  return (
+    isDetectionProfileAvailable(methods.detection_profiles) ||
+    isPromptPackAvailable(methods.prompt_packs)
+  );
+}
+
+/**
  * Whether an entry's `field_coverage` should be treated as "has real data,
  * safe to offer" (audit-remediation plan Phase 6, P1-2/P1-3). This is the
  * single place the null-vs-zero distinction lives — every caller (the sort
@@ -481,4 +601,13 @@ export const FALLBACK_METHODS: OpMethodsResponse = {
   // where we have no information at all. Same reasoning as
   // `overlays`/`scores` being empty above.
   dataset_exports: [],
+  // Both empty, and for the same reason `dataset_exports` is: this is the
+  // 404/network-failure path, neither axis exists on any backend that
+  // ships today, and the whole point of an optional scoping control is
+  // that it stays invisible unless the server affirmatively says it
+  // works. Guessing a profile/pack id here would make the dashboard
+  // offer a scope the pipeline silently ignores — the exact failure
+  // isScopedAssistAvailable exists to prevent.
+  detection_profiles: [],
+  prompt_packs: [],
 };

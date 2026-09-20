@@ -9,7 +9,51 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { strategiesStore } from './strategies.svelte';
-import { FALLBACK_METHODS } from '$lib/strategies';
+import { FALLBACK_METHODS, isScopedAssistAvailable } from '$lib/strategies';
+
+// Same METHODS_TODAY / METHODS_WITH_ASSIST_AXES fixtures as
+// strategies.test.ts (this plan §6) — inlined rather than cross-imported
+// from a sibling *.test.ts file, which isn't a pattern this repo uses.
+const METHODS_TODAY = {
+  strategies: [
+    {
+      id: 'ivf',
+      axis: 'cluster',
+      label: 'FAISS IVF-512 (production)',
+      status: 'stable',
+      default: true,
+    },
+    {
+      id: 'default',
+      axis: 'sort',
+      label: 'Recent first',
+      status: 'stable',
+      default: true,
+    },
+  ],
+  flags: {},
+};
+
+const METHODS_WITH_ASSIST_AXES = {
+  strategies: [
+    ...METHODS_TODAY.strategies,
+    {
+      id: 'grounding_v2',
+      axis: 'detection_profile',
+      label: 'Grounding detector v2',
+      status: 'stable',
+      default: true,
+    },
+    {
+      id: 'warehouse_v1',
+      axis: 'prompt_pack',
+      label: 'Warehouse vocabulary',
+      status: 'stable',
+      default: true,
+    },
+  ],
+  flags: {},
+};
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -145,5 +189,32 @@ describe('strategiesStore', () => {
     strategiesStore.reset();
     expect(strategiesStore.loaded).toBe(false);
     expect(strategiesStore.methods).toEqual(FALLBACK_METHODS);
+  });
+
+  it('loads the assist axes and flips isScopedAssistAvailable true once /curation/methods advertises them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(METHODS_WITH_ASSIST_AXES)),
+    );
+
+    await strategiesStore.init();
+
+    expect(strategiesStore.methods.detection_profiles.map((p) => p.id)).toEqual([
+      'grounding_v2',
+    ]);
+    expect(strategiesStore.methods.prompt_packs.map((p) => p.id)).toEqual([
+      'warehouse_v1',
+    ]);
+    expect(isScopedAssistAvailable(strategiesStore.methods)).toBe(true);
+  });
+
+  it("keeps isScopedAssistAvailable false against today's real /curation/methods shape (no assist axes)", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(METHODS_TODAY)));
+
+    await strategiesStore.init();
+
+    expect(strategiesStore.methods.detection_profiles).toEqual([]);
+    expect(strategiesStore.methods.prompt_packs).toEqual([]);
+    expect(isScopedAssistAvailable(strategiesStore.methods)).toBe(false);
   });
 });

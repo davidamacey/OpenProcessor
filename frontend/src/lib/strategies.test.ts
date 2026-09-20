@@ -3,14 +3,105 @@ import {
   FALLBACK_METHODS,
   hasFieldCoverage,
   isDatasetExportAvailable,
+  isDetectionProfileAvailable,
   isDiverseOverlayAvailable,
   isEmbeddingVizAvailable,
   isEmbeddingVizBannerRequired,
+  isPromptPackAvailable,
+  isScopedAssistAvailable,
   isSemanticSearchAvailable,
   normalizeMethodStatus,
   parseKbMethodsResponse,
+  selectableAxisEntries,
 } from './strategies';
-import type { DatasetExportInfo, OverlayInfo, ReviewSortInfo } from './strategies';
+import type {
+  DatasetExportInfo,
+  DetectionProfileInfo,
+  OverlayInfo,
+  PromptPackInfo,
+  ReviewSortInfo,
+} from './strategies';
+
+// Two fixtures backing the mock-backed verification for the whole scoped-
+// assist feature (docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md
+// §6). Kept in sync by eye with the JSON stubbed in
+// scripts/playwright_assist_scope.py.
+
+/** Today's real `/methods` shape — no assist axes at all. */
+export const METHODS_TODAY = {
+  strategies: [
+    {
+      id: 'ivf',
+      axis: 'cluster',
+      label: 'FAISS IVF-512 (production)',
+      status: 'stable',
+      default: true,
+    },
+    {
+      id: 'default',
+      axis: 'sort',
+      label: 'Recent first',
+      status: 'stable',
+      default: true,
+    },
+    {
+      id: 'representativeness',
+      axis: 'sort',
+      label: 'Representativeness',
+      status: 'stable',
+    },
+    {
+      id: 'yolo',
+      axis: 'export',
+      label: 'YOLO detection dataset export',
+      status: 'stable',
+      default: true,
+    },
+  ],
+  flags: {},
+};
+
+/** Same payload as `METHODS_TODAY` plus the two assist axes — one usable
+ *  entry each, plus one deliberately-shadow profile and one
+ *  deliberately-disabled pack to exercise the status filter. */
+export const METHODS_WITH_ASSIST_AXES = {
+  strategies: [
+    ...METHODS_TODAY.strategies,
+    {
+      id: 'grounding_v2',
+      axis: 'detection_profile',
+      label: 'Grounding detector v2',
+      status: 'stable',
+      default: true,
+    },
+    {
+      id: 'sam3_dense',
+      axis: 'detection_profile',
+      label: 'SAM3 dense proposals',
+      status: 'experimental',
+    },
+    {
+      id: 'legacy_profile',
+      axis: 'detection_profile',
+      label: 'Legacy profile (mid-validation)',
+      status: 'shadow',
+    },
+    {
+      id: 'warehouse_v1',
+      axis: 'prompt_pack',
+      label: 'Warehouse vocabulary',
+      status: 'stable',
+      default: true,
+    },
+    {
+      id: 'retired_pack',
+      axis: 'prompt_pack',
+      label: 'Retired prompt pack',
+      status: 'disabled',
+    },
+  ],
+  flags: {},
+};
 
 describe('normalizeMethodStatus', () => {
   it('passes through every known status value', () => {
@@ -155,6 +246,8 @@ describe('parseKbMethodsResponse', () => {
         overlays: [],
         scores: [],
         dataset_exports: [],
+        detection_profiles: [],
+        prompt_packs: [],
       });
     }
   });
@@ -168,6 +261,8 @@ describe('parseKbMethodsResponse', () => {
         overlays: [],
         scores: [],
         dataset_exports: [],
+        detection_profiles: [],
+        prompt_packs: [],
       });
     }
   });
@@ -199,6 +294,65 @@ describe('parseKbMethodsResponse', () => {
     expect(parsed.review_sorts).toEqual([]);
     expect(parsed.overlays).toEqual([]);
     expect(parsed.scores).toEqual([]);
+  });
+
+  it("routes axis:'detection_profile' and axis:'prompt_pack' entries into their own buckets", () => {
+    // The agreed-but-not-yet-live wire shape (this plan §1.3): one new
+    // `axis` value per entry in the same flat `strategies` array, no new
+    // response envelope.
+    const parsed = parseKbMethodsResponse({
+      strategies: [
+        {
+          id: 'grounding_v2',
+          axis: 'detection_profile',
+          label: 'Grounding detector v2',
+          status: 'stable',
+          default: true,
+        },
+        {
+          id: 'sam3_dense',
+          axis: 'detection_profile',
+          label: 'SAM3 dense proposals',
+          status: 'experimental',
+        },
+        {
+          id: 'warehouse_v1',
+          axis: 'prompt_pack',
+          label: 'Warehouse vocabulary',
+          status: 'stable',
+          default: true,
+        },
+      ],
+      flags: {},
+    });
+    expect(parsed.detection_profiles).toEqual([
+      {
+        id: 'grounding_v2',
+        label: 'Grounding detector v2',
+        status: 'stable',
+        default: true,
+      },
+      {
+        id: 'sam3_dense',
+        label: 'SAM3 dense proposals',
+        status: 'experimental',
+        default: undefined,
+      },
+    ]);
+    expect(parsed.prompt_packs).toEqual([
+      {
+        id: 'warehouse_v1',
+        label: 'Warehouse vocabulary',
+        status: 'stable',
+        default: true,
+      },
+    ]);
+    // Neither axis leaks into any pre-existing bucket.
+    expect(parsed.cluster_methods).toEqual([]);
+    expect(parsed.review_sorts).toEqual([]);
+    expect(parsed.overlays).toEqual([]);
+    expect(parsed.scores).toEqual([]);
+    expect(parsed.dataset_exports).toEqual([]);
   });
 
   it('drops entries missing a usable id or label, or an unrecognized axis, instead of crashing the whole parse', () => {
@@ -699,6 +853,8 @@ describe('FALLBACK_METHODS', () => {
     expect(FALLBACK_METHODS.overlays).toEqual([]);
     expect(FALLBACK_METHODS.scores).toEqual([]);
     expect(FALLBACK_METHODS.dataset_exports).toEqual([]);
+    expect(FALLBACK_METHODS.detection_profiles).toEqual([]);
+    expect(FALLBACK_METHODS.prompt_packs).toEqual([]);
   });
 
   it('never contains an experimental/shadow/disabled entry', () => {
@@ -708,6 +864,8 @@ describe('FALLBACK_METHODS', () => {
       ...FALLBACK_METHODS.overlays,
       ...FALLBACK_METHODS.scores,
       ...FALLBACK_METHODS.dataset_exports,
+      ...FALLBACK_METHODS.detection_profiles,
+      ...FALLBACK_METHODS.prompt_packs,
     ];
     expect(all.every((m) => m.status === 'stable')).toBe(true);
   });
@@ -719,4 +877,176 @@ describe('FALLBACK_METHODS', () => {
   // never fed back through the parser in real usage (api.ts's getMethods
   // returns it directly on a fetch failure), so there is no round-trip
   // invariant to assert here anymore.
+});
+
+describe('selectableAxisEntries', () => {
+  it('keeps a stable entry', () => {
+    const entries: DetectionProfileInfo[] = [{ id: 'a', label: 'A', status: 'stable' }];
+    expect(selectableAxisEntries(entries)).toEqual(entries);
+  });
+
+  it('keeps an experimental entry', () => {
+    const entries: DetectionProfileInfo[] = [
+      { id: 'a', label: 'A', status: 'experimental' },
+    ];
+    expect(selectableAxisEntries(entries)).toEqual(entries);
+  });
+
+  it('drops a shadow entry', () => {
+    expect(
+      selectableAxisEntries([
+        { id: 'a', label: 'A', status: 'shadow' },
+      ] as DetectionProfileInfo[]),
+    ).toEqual([]);
+  });
+
+  it('drops a disabled entry', () => {
+    expect(
+      selectableAxisEntries([
+        { id: 'a', label: 'A', status: 'disabled' },
+      ] as DetectionProfileInfo[]),
+    ).toEqual([]);
+  });
+
+  it('is empty in, empty out', () => {
+    expect(selectableAxisEntries([])).toEqual([]);
+  });
+
+  it('preserves input order', () => {
+    const entries: DetectionProfileInfo[] = [
+      { id: 'b', label: 'B', status: 'experimental' },
+      { id: 'a', label: 'A', status: 'stable' },
+    ];
+    expect(selectableAxisEntries(entries).map((e) => e.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('isDetectionProfileAvailable', () => {
+  it('is false for an empty list', () => {
+    expect(isDetectionProfileAvailable([])).toBe(false);
+  });
+
+  it('is true with one stable entry', () => {
+    expect(isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'stable' }])).toBe(
+      true,
+    );
+  });
+
+  it('is true with one experimental entry', () => {
+    expect(
+      isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'experimental' }]),
+    ).toBe(true);
+  });
+
+  it('is false with only shadow entries', () => {
+    expect(isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'shadow' }])).toBe(
+      false,
+    );
+  });
+
+  it('is false with only disabled entries', () => {
+    expect(
+      isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'disabled' }]),
+    ).toBe(false);
+  });
+
+  it('is true for a mixed list with at least one usable entry', () => {
+    expect(
+      isDetectionProfileAvailable([
+        { id: 'a', label: 'A', status: 'shadow' },
+        { id: 'b', label: 'B', status: 'stable' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('is false for FALLBACK_METHODS.detection_profiles', () => {
+    expect(isDetectionProfileAvailable(FALLBACK_METHODS.detection_profiles)).toBe(false);
+  });
+});
+
+describe('isPromptPackAvailable', () => {
+  it('is false for an empty list', () => {
+    expect(isPromptPackAvailable([])).toBe(false);
+  });
+
+  it('is true with one stable entry', () => {
+    expect(isPromptPackAvailable([{ id: 'a', label: 'A', status: 'stable' }])).toBe(true);
+  });
+
+  it('is true with one experimental entry', () => {
+    expect(isPromptPackAvailable([{ id: 'a', label: 'A', status: 'experimental' }])).toBe(
+      true,
+    );
+  });
+
+  it('is false with only shadow entries', () => {
+    expect(isPromptPackAvailable([{ id: 'a', label: 'A', status: 'shadow' }])).toBe(
+      false,
+    );
+  });
+
+  it('is false with only disabled entries', () => {
+    expect(isPromptPackAvailable([{ id: 'a', label: 'A', status: 'disabled' }])).toBe(
+      false,
+    );
+  });
+
+  it('is true for a mixed list with at least one usable entry', () => {
+    expect(
+      isPromptPackAvailable([
+        { id: 'a', label: 'A', status: 'disabled' },
+        { id: 'b', label: 'B', status: 'experimental' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('is false for FALLBACK_METHODS.prompt_packs', () => {
+    expect(isPromptPackAvailable(FALLBACK_METHODS.prompt_packs)).toBe(false);
+  });
+});
+
+/**
+ * The gate that matters most: whether `AutoLabelPanel` renders
+ * `<AssistScopeBar>` at all. Written against the two real fixtures
+ * (§6 of the plan) rather than synthetic entries, because the
+ * "must degrade to fully invisible against today's real backend" case
+ * is the regression guard for the whole feature.
+ */
+describe('isScopedAssistAvailable', () => {
+  it('is false for FALLBACK_METHODS (the /methods-404 path)', () => {
+    expect(isScopedAssistAvailable(FALLBACK_METHODS)).toBe(false);
+  });
+
+  it("is false for today's real backend shape (METHODS_TODAY) — must degrade to fully invisible", () => {
+    const parsed = parseKbMethodsResponse(METHODS_TODAY);
+    expect(isScopedAssistAvailable(parsed)).toBe(false);
+  });
+
+  it('is true once the backend advertises the assist axes (METHODS_WITH_ASSIST_AXES)', () => {
+    const parsed = parseKbMethodsResponse(METHODS_WITH_ASSIST_AXES);
+    expect(isScopedAssistAvailable(parsed)).toBe(true);
+  });
+
+  it('is false when detection profiles are all shadow and packs are empty', () => {
+    const profiles: DetectionProfileInfo[] = [
+      { id: 'legacy', label: 'Legacy', status: 'shadow' },
+    ];
+    const packs: PromptPackInfo[] = [];
+    expect(
+      isScopedAssistAvailable({ detection_profiles: profiles, prompt_packs: packs }),
+    ).toBe(false);
+  });
+
+  // "Absence is the signal, not a status" (§2.6 / the `export` axis
+  // comment above): either axis being usable is sufficient — the two
+  // controls are independent, not a package deal.
+  it('is true when only prompt_packs is usable (either axis is sufficient)', () => {
+    const profiles: DetectionProfileInfo[] = [];
+    const packs: PromptPackInfo[] = [
+      { id: 'warehouse_v1', label: 'Warehouse', status: 'stable' },
+    ];
+    expect(
+      isScopedAssistAvailable({ detection_profiles: profiles, prompt_packs: packs }),
+    ).toBe(true);
+  });
 });

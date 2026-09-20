@@ -177,6 +177,8 @@ describe('getMethods', () => {
       overlays: [],
       scores: [],
       dataset_exports: [],
+      detection_profiles: [],
+      prompt_packs: [],
     });
   });
 
