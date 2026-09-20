@@ -33,10 +33,16 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.core.logging import get_logger
+from src.services.detection.pe_preprocess import normalize_chw, resize_crop_rgb, whole_frame_chw
 
 
 if TYPE_CHECKING:
     from src.clients.triton_pool import AsyncTritonPool
+
+# Chunk size for embed_crops -- respects the PE Triton model's configured
+# max_batch_size on typical deployments (see docs/design/curation_design_rationale.md
+# §2.1 for the reference throughput note this mirrors).
+PE_CROP_MAX_BATCH = 32
 
 
 logger = get_logger(__name__)
@@ -111,6 +117,62 @@ class PEEncoder:
         result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
         embeddings = np.asarray(result.as_numpy('image_embeddings'), dtype=np.float32)
         return _l2_normalize(embeddings)
+
+    async def embed_crops(
+        self,
+        crops: list[np.ndarray],
+        max_batch: int = PE_CROP_MAX_BATCH,
+    ) -> np.ndarray:
+        """Preprocess + encode a list of HWC-uint8 RGB item crops.
+
+        Applies the canonical PE preprocessing (resize-shorter-edge,
+        center-crop, ImageNet normalize — see
+        :mod:`src.services.detection.pe_preprocess`) to each crop, then
+        chunks at ``max_batch`` to respect the encoder's configured Triton
+        max batch size. :meth:`encode_images` already L2-normalizes its
+        output, so the returned rows are unit-norm.
+
+        Args:
+            crops: HWC uint8 RGB arrays, any size (including degenerate /
+                zero-size, which :func:`resize_crop_rgb` maps to zeros).
+            max_batch: Max crops per Triton call.
+
+        Returns:
+            ``(len(crops), 1024)`` L2-normalized float32. Empty input ->
+            ``(0, 1024)``.
+        """
+        if not crops:
+            return np.zeros((0, PE_EMBEDDING_DIM), dtype=np.float32)
+
+        chws = np.stack(
+            [normalize_chw(resize_crop_rgb(crop)) for crop in crops],
+            axis=0,
+        ).astype(np.float32, copy=False)
+
+        rows: list[np.ndarray] = []
+        for start in range(0, chws.shape[0], max_batch):
+            chunk = chws[start : start + max_batch]
+            rows.append(await self.encode_images(chunk))
+        return np.concatenate(rows, axis=0)
+
+    async def embed_whole_frame(self, path: str) -> np.ndarray | None:
+        """PE-Core whole-frame embedding for a source image on disk.
+
+        Goes through :func:`src.services.detection.pe_preprocess.whole_frame_chw`
+        (cv2 1/8 decode + resize-shorter-edge + center-crop + ImageNet
+        normalize) so the vector lands in the same space as any other
+        whole-frame caller (e.g. a backfill script), then runs it through
+        the same Triton image encoder as :meth:`embed_crops`.
+
+        Returns ``None`` on a decode failure — callers should treat a
+        missing whole-frame embedding as non-fatal.
+        """
+        chw = whole_frame_chw(path)
+        if chw is None:
+            return None
+        batch = chw[None, ...].astype(np.float32, copy=False)
+        embedding = await self.encode_images(batch)
+        return embedding[0]
 
     # ------------------------------------------------------------------
     # Text path — in-process PyTorch CPU, with LRU cache
