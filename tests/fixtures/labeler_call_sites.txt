@@ -27,12 +27,10 @@
 # the matching KNOWN_GAPS entry):
 #   /export/lpr                    -- proprietary LPR export, never ported
 #   /export/lpr/status             -- ditto
-#   /gemma/label_batch             -- frontend hasn't renamed to /vlm/label_batch yet (T-C1)
 #
-# /crops/{param}/plate_thumbnail was excluded here for the same reason until
-# T-B2 landed on the frontend (getRegionThumbUrl now builds .../region_thumbnail).
-# That exclusion is removed and /crops/{param}/region_thumbnail is a real
-# fixture entry below.
+# Two more exclusions were removed once their paired frontend fixes landed:
+# /crops/{param}/plate_thumbnail (T-B2, now /crops/{param}/region_thumbnail
+# below) and /gemma/label_batch (T-C1, now /vlm/label_batch below).
 
 /bakeoff/baseline_models
 /bakeoff/eval_datasets
@@ -109,5 +107,6 @@
 /train/start_campaign
 /train/status
 /train/status/{param}
+/vlm/label_batch
 /viz/projection
 /viz/projection/rebuild
