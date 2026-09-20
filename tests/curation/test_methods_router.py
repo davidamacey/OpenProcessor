@@ -212,17 +212,14 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
     pass, not a placeholder) plus the frontend-facing banner flag --
     ``requires_banner`` is False because the measured purity landed in the
     plan §6 "ship plain" tier (>=0.30), not the 0.15-0.30 banner tier."""
-    from src.services.curation.strategy_registry import (
-        VIZ_PROJECTION_PURITY,
-        VIZ_PROJECTION_REQUIRES_BANNER,
-    )
-
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
-    assert entry['purity'] == VIZ_PROJECTION_PURITY
+    # Literal expected values (not re-imported from the module under
+    # test) — a change to either would be a real, dashboard-visible
+    # behavior change this test must catch.
+    assert entry['purity'] == pytest.approx(0.472)
     assert entry['purity'] >= 0.30
-    assert entry['requires_banner'] == VIZ_PROJECTION_REQUIRES_BANNER
     assert entry['requires_banner'] is False
 
 
