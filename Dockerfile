@@ -64,10 +64,14 @@ LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
 
 # Runtime-only system packages (no build tools); upgrade first for
 # Debian point-release security fixes.
+# procps -> pgrep, used by the curation worker services' healthchecks
+# (docker-compose.yml `profiles: [curation]`) — this image is shared
+# between yolo-api and those long-running worker processes.
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    procps \
     libgl1 \
     libglib2.0-0t64 \
     libgomp1 \
