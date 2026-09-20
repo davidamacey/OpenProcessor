@@ -66,9 +66,9 @@ function fromXYXY(b: XYXY): BBoxNorm {
  */
 export function sourceToCropFrame(
   plateBbox: BBoxNorm,
-  vehicleBbox: BBoxNorm,
+  parentBbox: BBoxNorm,
 ): BBoxNorm | null {
-  const v = toXYXY(vehicleBbox);
+  const v = toXYXY(parentBbox);
   const vw = v.x2 - v.x1;
   const vh = v.y2 - v.y1;
   if (vw <= EPS || vh <= EPS) return null;
@@ -88,9 +88,9 @@ export function sourceToCropFrame(
  */
 export function cropToSourceFrame(
   plateBboxInCrop: BBoxNorm,
-  vehicleBbox: BBoxNorm,
+  parentBbox: BBoxNorm,
 ): BBoxNorm {
-  const v = toXYXY(vehicleBbox);
+  const v = toXYXY(parentBbox);
   const vw = v.x2 - v.x1;
   const vh = v.y2 - v.y1;
   const p = toXYXY(plateBboxInCrop);

@@ -22,6 +22,7 @@
   import ScoreChip from '$components/ScoreChip.svelte';
   import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import SemanticSearchBox from '$components/SemanticSearchBox.svelte';
+  import ShortcutsButton from '$components/ShortcutsButton.svelte';
   import StrategyBar from '$components/StrategyBar.svelte';
   import SubjectScopeToggle from '$components/SubjectScopeToggle.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -1155,6 +1156,7 @@
         <span class="text-zinc-100">Cluster #{clusterIdParam}</span>
       {/if}
     </h1>
+    <ShortcutsButton />
     {#if cluster}
       <span class="text-xs text-zinc-400">
         size {cluster.size.toLocaleString()} · dominant

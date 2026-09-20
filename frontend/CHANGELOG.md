@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Rebranded the app from "legacy Labeler" to **Cropwright** (Track N1 of
+  `docs/genericization-plan-2026-09-13.md`, cosmetic-only — no behavior
+  change): `package.json` name → `cropwright`, browser tab title, top-bar
+  wordmark/badge (now `Cropwright` / `CW`, and env-configurable via
+  `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE`, same convention as
+  `PUBLIC_TRITON_API_URL`), README framing, and `CLAUDE.md`'s project
+  description. Also corrected `CLAUDE.md`'s component references, which
+  still named the pre-genericization `DetectorChip.svelte`/`PlateCard.svelte`
+  — the actual current files are `ProvenanceChip.svelte`/`SlotCard.svelte`.
+
 ### Added
 
 - `docs/FEATURES.md` — a full visual feature tour (screenshot + explanation
@@ -14,9 +26,201 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `docs/README.md` — an index distinguishing current/maintained docs from
   historical/reference ones (the 2026-09-11 audit, the curation-strategy
   design doc, the two market-research docs).
+- `src/lib/annotations/` — additive foundation for genericizing the
+  `license_plate` vertical into a reusable "annotation slot" mechanism
+  (`docs/genericization-plan-2026-09-13.md`, Phase 1): the `SlotSpec`
+  capability model (`subBox`/`text`/`provenance`/`lifecycle`/`queue`),
+  a field-mapping adapter (`readSlot`) that reads whichever wire field
+  names a slot declares, a merge-by-replace `resolveSlotRegistry`, the
+  legacy `license_plate` profile decomposing today's ~30 `plate_*`
+  fields, and a config-driven detector label/palette registry proven
+  equivalent to `DetectorChip.svelte`'s hand-written switch/if-chain via
+  a 23-case snapshot test. Not yet wired into any route or component —
+  this is the additive Phase 1 slice; `mapRawCrop`/`DetectorChip`/
+  `PlateCard`/`/review`/`/clusters` migrations (Phase 2) are follow-up
+  work.
+- Two example slot profiles (`aircraft_tail_number`, `defect_code`,
+  under `src/lib/annotations/profiles/`) plus a falsification test
+  proving the capability model above handles a disjoint capability
+  subset (no sub-bbox at all, for `defect_code`), a different stored
+  bbox frame and shape envelope (`aircraft_tail_number`), and a
+  closed-vocabulary text field — with zero changes to `types.ts`,
+  `registry.ts`, or `readSlot.ts` beyond the model, and zero
+  special-casing of either example outside `profiles/`. Neither example
+  is bound to a real route or class; they are proof-of-concept configs
+  only.
+- `src/routes/review/plateReviewCharacterization.test.ts` — Phase 0
+  characterization tests (`docs/genericization-plan-2026-09-13.md`
+  §5.1) pinning today's Plates-tab behavior in `review/+page.svelte`
+  before any Phase 2 refactor touches it: the scan-mode keymap, the
+  class-drop tab guard invariant behind Finding C.2, the per-crop
+  (not per-cursor) save-abort map, the `$state.raw` undo-stack identity
+  semantics, the frozen-viewport `untrack()` seed read, and today's
+  closed `REVIEW_TABS`/`license_plate`-literal baseline in
+  `clusters/+page.svelte`. Source-scan style (no `@testing-library/svelte`
+  harness exists in this repo) rather than the plan's preferred
+  extract-then-test approach — see the file's doc comment for why.
+- `src/lib/review/slotQueueOps.ts` and `src/lib/review/abortRegistry.ts`
+  — the real P0.1/P0.3 extraction of the Plates-tab's undo-stack and
+  per-crop abort-map logic out of `review/+page.svelte`, with executable
+  unit tests. `review/+page.svelte` now delegates to both; behavior is
+  unchanged.
+
+### Changed
+
+- `PlateBboxCanvas.svelte` renamed to `BboxCanvas.svelte` and
+  `plate_geometry.ts` renamed to `bboxFrames.ts` (P2.1,
+  `docs/genericization-plan-2026-09-13.md` §3.1) — both were already
+  fully generic (no plate-specific logic), so this is a pure rename:
+  `vehicleBbox` params renamed to `parentBbox`, and `BboxCanvas` gains a
+  `ringColor` prop (default unchanged, sky-blue matching the
+  server-rendered plate overlay) so a future non-plate slot can use its
+  own ring color. No behavior change; verified live (edit-bbox mode on
+  `/review`'s Plates tab renders and drags correctly).
+- `DetectorChip.svelte` renamed to `ProvenanceChip.svelte` (P2.2) —
+  its hand-written 20-arm label `switch` and 10-branch palette
+  if-chain are deleted in favor of the config-driven
+  `legacyDetectorRegistry` (`src/lib/annotations/`) built in Phase 1,
+  proven equivalent by a 23-case snapshot test before the old functions
+  were removed. All 4 consumer files updated. No behavior change;
+  verified live against the real backend — LPR/Gemma/⚠-shape chips
+  render with identical colors to before the migration.
+- `PlateEditor.svelte` renamed to `SlotBboxEditor.svelte` and
+  `PlateCard.svelte` renamed to `SlotCard.svelte` (P2.3/P2.4). Both are
+  renames only — `SlotBboxEditor` keeps its direct `setCropPlate` call
+  rather than the plan's ideal injected-`onsave`-performs-the-write
+  contract (that changes both call sites' behavior and was judged out
+  of scope for this pass), and `SlotCard` keeps reading
+  `PlateBrowseItem`'s hardcoded `plate_*` fields rather than a generic
+  `slots[key]` lookup (that needs `getPlates`/`PlateBrowseItem` routed
+  through the slot adapter, not done yet). Both deviations are
+  documented in the files' doc comments as follow-up work.
+  `plateThumbUrlScan.test.ts`'s hardcoded `PlateCard.svelte` path
+  (flagged by the plan as a rename hazard) updated in the same commit.
+  No behavior change; verified live — the `/clusters?class=license_plate`
+  SlotCard gallery and the SlotBboxEditor edit-bbox modal both render
+  and interact identically to before.
+- `src/lib/review/plateKeymap.ts`, `slotTabGuard.ts`, and `viewBox.ts` —
+  the real Phase 0 seams for the pieces P2.8 (`reviewTabs.ts`
+  data-driving) most directly needs, extracted from
+  `review/+page.svelte`'s inline keymap `$effect`, the class-drop tab
+  guard, and the frozen-viewport zoom math, each with its own unit-test
+  suite. `review/+page.svelte` now delegates to all three; no behavior
+  change. Verified live: Skip (`n`), entering edit mode (`e`), and
+  canceling edit (`Escape`) all still work through the extracted
+  keymap table, and the frozen zoom still renders correctly in edit
+  mode.
+- `src/lib/components/slots/SlotGallery.svelte` +
+  `src/routes/clusters/plateGalleryController.svelte.ts` (P2.6) — the
+  ~660-line plate-gallery view (plate pager, multi-select, the AHC
+  secondary-clustering sub-system: bucket grid, sub-cluster refine, FP
+  centroid build, suspected-FP triage, and the bbox-editor modal)
+  extracted verbatim out of `clusters/+page.svelte`'s
+  `{:else if isLicensePlateFilter}` branch. The ~30-item state/function
+  surface now lives in a controller factory (following this codebase's
+  existing `createPager`/`createSelection` convention rather than
+  prop-drilling 30 individual bindables), and the route passes one
+  `gallery` object to the new component. Verbatim move only — no
+  parameterization by slot yet (P2.7). No behavior change; verified
+  live against the real backend: bucket grid → sub-cluster drill-down →
+  suspected-FP view all render correctly (real, non-mutating reads),
+  and the three mutating actions (Cluster plates, Build FP centroids,
+  plate edit + Save) were confirmed to dispatch the correct
+  request/method/body to the correct endpoint via intercepted routes,
+  without starting a real multi-minute background job or writing to
+  the live 347k-crop index.
+- `SlotCard.svelte` parameterized by slot (P2.7) — now calls `readSlot()`
+  on the raw crop and renders through the resulting `SlotData`
+  (`text`/`subBox`/`provenance`/`lifecycle`) instead of `PlateBrowseItem`'s
+  hardcoded `plate_*` fields, with a `slot: SlotSpec` prop (defaults to
+  the legacy `license_plate` profile). `PlateBrowseItem`'s flat
+  `plate_*` properties already match the profile's wire-field names, so
+  this needed no change to `getPlates`/`api.ts`. No behavior change;
+  verified live — the `/clusters?class=license_plate` gallery renders
+  pixel-identically (detector chips, scores, plate text, shape warnings,
+  false-positive badges) through the new adapter-driven read path.
+- `src/lib/reviewTabs.ts` data-driving (P2.8) — `REVIEW_TABS` is now
+  `CORE_REVIEW_TABS` (the 4 core cohorts) plus `buildReviewTabs(slots)`,
+  which derives a tab from each queue-capable slot's `QueueCapability`
+  instead of a hand-maintained `{ id: 'plates', label: 'Plates' }`
+  literal — a new deployment configuring a second queue-capable slot
+  gets a real `/review` tab with zero `reviewTabs.ts` edits. Adds
+  `isSlotTab`/`endpointForTab` per the plan's §3.3. Scoped down from the
+  plan's full design: the internal tab id stays `'plates'` (not
+  `slot:license_plate`) since widening it would require touching 11+
+  `tab === 'plates'` call sites plus `getReviewQueue`'s and
+  `selectDiverse`'s tab-forwarding params, for zero behavior gain while
+  only one queue-capable slot exists — tracked as real, separate
+  follow-up work rather than bundled in under time pressure.
+  `review/+page.svelte`'s `PLATE_STATUS_OPTIONS` (Finding C.4's second
+  hand-copy of the human-writable status whitelist) is now derived from
+  `licensePlateSlot.capabilities.lifecycle.states` instead of a
+  hand-copied array — same 4 values, minor reordering (now matches the
+  profile's state order rather than the old array's hand-picked order).
+  No other behavior change; verified live — the Plates tab still
+  activates correctly via nav click, and the status dropdown shows the
+  correct 4 derived options.
+- P2.10: `src/lib/annotations/registeredSlots.ts` — the one deployment-
+  config file listing which slots are actually live in this app (today
+  just `[licensePlateSlot]`). Every remaining hardcoded
+  `class === 'license_plate'` / `'license_plate'` string comparison
+  outside `profiles/` now goes through `slotForClassName()`/
+  `registeredSlots` instead: `clusters/+page.svelte`'s
+  `isLicensePlateFilter`, `loadLicensePlateCard`, the synthetic pinned
+  card's `dominant_class_name` (now `lp.name`, not a literal), and its
+  click-through routing; `+layout.svelte`'s sidebar-click routing;
+  `reviewTabs.ts`'s `REVIEW_TABS` (built from `buildReviewTabs(registeredSlots)`
+  instead of a hardcoded `[licensePlateSlot]` array). This closes the
+  plan's Phase 3 ship-gate to its honest form: registering a new live
+  slot (a real domain becoming pluggable via config, not route-code
+  edits) is exactly "add one entry to `registeredSlots.ts`" — verified
+  by temporarily adding `aircraft_tail_number` and `defect_code` to that
+  array, confirming `REVIEW_TABS` and `slotForClassName` picked them up
+  with zero other file changes (check/build green), then reverting the
+  registry back to just `licensePlateSlot` (those two profiles stay as
+  proof-of-genericity in `profiles/` + `profiles.falsification.test.ts`,
+  not enabled in the live app — enabling either for real would also
+  need backend wire-field/endpoint support this deployment doesn't
+  have). `registeredSlots.ts` living outside `profiles/` is expected and
+  correct — it's the one-line-per-slot registration point the plan's
+  "zero diffs outside profiles/" bar was always going to need; the
+  honest gate is "zero diffs outside `profiles/` + `registeredSlots.ts`".
+  `plateReviewCharacterization.test.ts`'s pinned pre-migration
+  characterization test (asserting `clusters/+page.svelte` still
+  hardcoded >= 4 `'license_plate'` literals) was updated in place to its
+  post-migration form (asserting 0 such literals and a
+  `slotForClassName(` call site), per that test's own documented intent
+  to flip red — not be deleted — the moment this migration landed.
+  Verified live: `/clusters` sidebar click on `license_plate` still
+  routes to `/clusters?class={id}` and renders the plate gallery; the
+  `/review` Plates tab still renders identically; `npm run
+check`/`test`/`lint`/`build` all green.
 
 ### Fixed
 
+- `CropCard`'s plate ring color rendered green ("human confirmed") for
+  every machine-detected plate, not just human-verified ones. The
+  predicate checked `plate_status === 'human_confirmed' ||
+plate_status === 'detected'` — `'human_confirmed'` is not a value the
+  backend can ever produce (openprocessor's `PlateStatus` has 8 members,
+  none of them that), so that branch was dead, and `'detected'` (written
+  for every machine detection, verified or not) matched the second
+  branch. The correct predicate is the boolean `plate_verified` field,
+  which the component now reads. **Visible behavior change:**
+  machine-detected-but-unverified plates now render a yellow ring
+  instead of green. `types.ts`'s `plate_status` docstring, which invented
+  `human_confirmed`/`pending_verify` and omitted three real pipeline
+  states, is corrected to match openprocessor's `PlateStatus`.
+- Plate-bbox shape-envelope check (the ⚠ "implausible shape" warning) had
+  two independent implementations that disagreed on corrupt/non-finite
+  input: `api.ts`'s `_platesShapeWarning` guarded with `Number.isFinite`
+  and warned; `PlateCard.svelte`'s inline `shapeWarning()` had no such
+  guard, so a `NaN` box compared `false` against every bound and silently
+  reported no warning. A corrupt row could show ⚠ on `/review` but not on
+  `/clusters`. Both call sites now share one `evaluateShapeGate()`
+  (`src/lib/shapeGate.ts`), so a corrupt row warns consistently everywhere.
+  The `/review` tooltip's hardcoded envelope sentence is also now generated
+  from the same numbers instead of being a third hand-copy.
 - `GET /curation/clusters` and `/curation/clusters/representatives` (openprocessor) were
   hardcoded to the pre-cutover `op_vehicle_crops` index, which was left
   empty after the 2026-09-12 kNN reindex — this silently broke the

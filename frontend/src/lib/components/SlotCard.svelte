@@ -1,23 +1,43 @@
 <script lang="ts">
   /**
-   * Compact card for one plate detection.
+   * Compact card for one slot detection. Renamed from PlateCard.svelte
+   * (P2.4) and parameterized (P2.7,
+   * docs/genericization-plan-2026-09-13.md §3.1/§5a) to read through the
+   * `readSlot` adapter instead of `PlateBrowseItem`'s hardcoded `plate_*`
+   * fields directly. Rather than routing `getPlates`/`PlateBrowseItem`
+   * through the adapter server-side (a bigger, riskier change to
+   * api.ts's untested mapping path), this card calls `readSlot()` itself
+   * on the raw crop object — `PlateBrowseItem`'s flat `plate_*`
+   * properties already match `licensePlateSlot`'s wire-field names
+   * exactly, so this is a safe, local parameterization: swap the `slot`
+   * prop and the card renders a completely different capability set
+   * (see `docs/genericization-plan-2026-09-13.md`'s §5.4 example slots)
+   * with zero further code change.
    *
    * Used on the /clusters page when class=license_plate, and on the
    * /train page's training-cohort sanity preview.
    *
-   * Renders a plate thumbnail (cropped server-side to the
-   * plate_bbox_norm region) with the parent vehicle class, plate
-   * score, detector provenance chip, and a ⚠ shape warning when
-   * the bbox shape envelope fails. Clicking the card emits an
-   * `onclick` event so the parent can navigate to the review queue.
+   * Renders a sub-bbox thumbnail (cropped server-side to the child
+   * bbox region) with the parent vehicle class, detector score, a
+   * provenance chip strip, and a ⚠ shape warning when the bbox shape
+   * envelope fails. Clicking the card emits an `onclick` event so the
+   * parent can navigate to the review queue.
    */
-  import DetectorChip from './DetectorChip.svelte';
+  import ProvenanceChip from './ProvenanceChip.svelte';
   import { getPlateThumbUrl, resolveApiUrl, type PlateBrowseItem } from '$lib/api';
+  import { readSlot } from '$lib/annotations/readSlot';
+  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+  import type { SlotSpec, XYXY } from '$lib/annotations/types';
 
   interface Props {
     crop: PlateBrowseItem;
+    /** Which slot's capabilities to render this card with. Defaults to
+     *  the legacy license_plate profile — the only configured
+     *  instance today — but any `SlotSpec` whose wire field names
+     *  match this crop's properties works unchanged. */
+    slot?: SlotSpec;
     onclick?: (crop: PlateBrowseItem, e: MouseEvent) => void;
-    /** Edit affordance (✎): parent opens PlateEditor for this plate. */
+    /** Edit affordance (✎): parent opens the sub-bbox editor for this plate. */
     onedit?: (crop: PlateBrowseItem) => void;
     /** Quick false-positive (✗): parent marks this plate false_positive. */
     onmarkfp?: (crop: PlateBrowseItem) => void;
@@ -29,6 +49,7 @@
 
   let {
     crop,
+    slot = licensePlateSlot,
     onclick,
     onedit,
     onmarkfp,
@@ -36,32 +57,28 @@
     compact = false,
   }: Props = $props();
 
+  // Single adapter read drives every field below — swap `slot` and every
+  // derived value here follows, with no other line in this file changing.
+  const data = $derived(
+    readSlot(
+      crop as unknown as Record<string, unknown>,
+      slot,
+      (crop.bbox_norm ?? [0, 0, 0, 0]) as XYXY,
+    ),
+  );
+
   // false_positive plates stay visible (kept as hard negatives) but are
   // dimmed + badged so the operator sees the triage state at a glance.
-  const isFalsePositive = $derived(crop.plate_status === 'false_positive');
+  const isFalsePositive = $derived(
+    slot.capabilities.lifecycle?.falsePositiveState != null &&
+      data.lifecycle?.status === slot.capabilities.lifecycle.falsePositiveState,
+  );
 
-  // Client-side shape envelope check — mirrors the server-side
-  // is_plausible_plate_bbox in openprocessor so a row that slips past
-  // the worker's gate still gets a UI warning chip.
-  function shapeWarning(): boolean {
-    if (!crop.plate_bbox_norm || crop.plate_bbox_norm.length !== 4) return false;
-    if (!crop.bbox_norm || crop.bbox_norm.length !== 4) return false;
-    const [vx1 = 0, vy1 = 0, vx2 = 0, vy2 = 0] = crop.bbox_norm;
-    const vw = vx2 - vx1;
-    const vh = vy2 - vy1;
-    if (vw <= 1e-9 || vh <= 1e-9) return false;
-    const [px1 = 0, py1 = 0, px2 = 0, py2 = 0] = crop.plate_bbox_norm;
-    const w = (px2 - px1) / vw;
-    const h = (py2 - py1) / vh;
-    if (w <= 0 || h <= 0) return true;
-    const aspect = w / h;
-    if (aspect < 1.2 || aspect > 8.0) return true;
-    if (w > 0.5) return true;
-    if (w * h > 0.15) return true;
-    return false;
-  }
+  // Shape envelope check — delegates to the shared evaluateShapeGate via
+  // readSlot, so this agrees with the /review surface on non-finite
+  // input (Finding C.1).
+  const warn = $derived(data.subBox?.shapeWarning ?? false);
 
-  const warn = $derived(shapeWarning());
   const thumbUrl = $derived(
     crop.plate_thumbnail_url
       ? resolveApiUrl(crop.plate_thumbnail_url)
@@ -169,16 +186,16 @@
   <div class="flex flex-col gap-1 p-2 text-[11px]">
     <div class="flex items-center justify-between gap-1 font-mono">
       <span class="truncate text-zinc-300">
-        {crop.plate_text ?? '—'}
+        {data.text?.value ?? '—'}
       </span>
       <span class="text-zinc-500">
-        {crop.plate_score != null ? `${(crop.plate_score * 100).toFixed(0)}%` : '—'}
+        {data.subBox?.score != null ? `${(data.subBox.score * 100).toFixed(0)}%` : '—'}
       </span>
     </div>
     <div class="flex flex-wrap items-center gap-1">
-      <DetectorChip detector={crop.plate_detector} size="sm" />
-      {#if crop.plate_verifier}
-        <DetectorChip detector={crop.plate_verifier} tag="verify" size="sm" />
+      <ProvenanceChip detector={data.provenance?.detector ?? null} size="sm" />
+      {#if data.provenance?.verifier}
+        <ProvenanceChip detector={data.provenance.verifier} tag="verify" size="sm" />
       {/if}
       {#if crop.class_name}
         <span
@@ -188,10 +205,10 @@
         </span>
       {/if}
     </div>
-    {#if !compact && crop.plate_detector_chain && crop.plate_detector_chain.length > 0}
+    {#if !compact && slot.capabilities.provenance?.showChainOnCard && data.provenance?.chain && data.provenance.chain.length > 0}
       <div class="flex flex-wrap gap-0.5">
-        {#each crop.plate_detector_chain as entry (entry)}
-          <DetectorChip raw={entry} size="sm" />
+        {#each data.provenance.chain as entry (entry)}
+          <ProvenanceChip raw={entry} size="sm" />
         {/each}
       </div>
     {/if}

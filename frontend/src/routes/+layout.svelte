@@ -2,20 +2,29 @@
   import '../app.css';
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
+  import AboutModal from '$components/AboutModal.svelte';
   import ClassSidebar from '$components/ClassSidebar.svelte';
+  import { slotForClassName } from '$lib/annotations/registeredSlots';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { healthStore } from '$stores/health.svelte';
-  import { keyboardStore } from '$stores/keyboard.svelte';
 
   interface Props {
     children?: Snippet;
     data: { apiBase: string };
   }
   let { children, data }: Props = $props();
+
+  // Wordmark/badge are env-configurable so a rebrand (or a white-label
+  // deployment) doesn't require another hardcoded string — same
+  // PUBLIC_* convention as PUBLIC_TRITON_API_URL in src/lib/api.ts.
+  const appName =
+    (import.meta.env?.PUBLIC_APP_NAME as string | undefined) || 'Cropwright';
+  const appBadge = (import.meta.env?.PUBLIC_APP_BADGE as string | undefined) || 'CW';
+  let aboutOpen = $state<boolean>(false);
 
   // Acquire singleton-store subscriptions for the lifetime of the layout.
   $effect(() => {
@@ -90,14 +99,15 @@
       // instead of filtering the current page. Behaves the same on /classes
       // since /clusters/{id} is the canonical view.
       if (cls) {
-        // license_plate is not a cluster — plates are sub-bboxes on
-        // vehicle crops (plate_bbox_norm). Route to the gallery branch
-        // backed by /curation/plates so the operator sees every plate-bearing
-        // crop, not just the 1-2 rows whose PRIMARY class is license_plate.
-        const lpClass = classesStore.classes.find(
-          (c) => (c.name ?? '').toLowerCase() === 'license_plate',
-        );
-        if (lpClass && cls.id === lpClass.id) {
+        // A class bound to a slot (e.g. license_plate) isn't a cluster —
+        // plates are sub-bboxes on vehicle crops (plate_bbox_norm). Route
+        // to the gallery branch backed by /curation/plates so the operator sees
+        // every slot-bearing crop, not just the 1-2 rows whose PRIMARY
+        // class matches the slot's bound class name. Driven by
+        // registeredSlots (P2.10) instead of a hardcoded license_plate
+        // string literal so a new registered slot gets this routing for free.
+        const clsName = classesStore.classes.find((c) => c.id === cls.id)?.name;
+        if (slotForClassName(clsName) != null) {
           void goto(`/clusters?class=${cls.id}`, {
             replaceState: false,
             keepFocus: true,
@@ -123,8 +133,13 @@
   // Build crumbs from the path.
   const crumbs = $derived.by(() => {
     const parts = path.split('/').filter(Boolean);
-    if (parts.length === 0) return [{ label: 'Dashboard', href: '/' }];
-    const out: Array<{ label: string; href: string }> = [{ label: 'Home', href: '/' }];
+    // No crumb at all on the root or /dashboard routes — both are "home",
+    // already labeled by the title/nav; a redundant lowercase "dashboard"
+    // breadcrumb next to them added nothing.
+    if (parts.length === 0 || path === '/dashboard') return [];
+    // No leading "Home" crumb either — the top-right nav's own
+    // "Dashboard" link already covers that, and having both was redundant.
+    const out: Array<{ label: string; href: string }> = [];
     let acc = '';
     for (const p of parts) {
       acc += '/' + p;
@@ -136,8 +151,8 @@
   const dotClass = $derived(healthStore.ok ? 'bg-green-500' : 'bg-red-500');
   const dotTitle = $derived(
     healthStore.ok
-      ? `openprocessor OK (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
-      : `openprocessor unavailable: ${healthStore.error ?? 'no response'}`,
+      ? `openprocessor OK at ${data.apiBase} (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
+      : `openprocessor unavailable at ${data.apiBase}: ${healthStore.error ?? 'no response'}`,
   );
 </script>
 
@@ -146,12 +161,34 @@
   <header
     class="flex h-12 shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 px-4"
   >
-    <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight">
-      <span class="rounded bg-blue-600 px-1.5 py-0.5 font-mono text-xs text-white"
-        >KB</span
+    <div class="flex items-center gap-2 text-sm font-semibold tracking-tight">
+      <button
+        type="button"
+        class="flex shrink-0 items-center justify-center rounded border border-zinc-700 transition-transform duration-150 hover:scale-110 hover:border-zinc-500"
+        onclick={() => (aboutOpen = true)}
+        aria-label="About {appName}"
+        title="About {appName}"
       >
-      legacy Labeler
-    </a>
+        <svg viewBox="0 0 128 128" class="h-6 w-6" role="img" aria-label={appBadge}>
+          <rect width="128" height="128" rx="24" fill="#09090b" />
+          <rect x="26" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
+          <rect x="60" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
+          <rect x="26" y="34" width="30" height="30" rx="5" fill="#60a5fa" />
+          <rect x="60" y="34" width="30" height="30" rx="5" fill="#f59e0b" />
+          <path
+            d="M33 49 l6 6 l12 -12"
+            fill="none"
+            stroke="#09090b"
+            stroke-width="4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+      <a href="/dashboard" class="hover:text-white">{appName}</a>
+    </div>
+
+    <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
 
     <nav class="flex items-center gap-1 text-sm" aria-label="Breadcrumb">
       {#each crumbs as c, i (c.href)}
@@ -181,16 +218,6 @@
       <a href="/bakeoff" class="hover:text-white">Bake-off</a>
     </nav>
 
-    <button
-      type="button"
-      class="btn-sm gap-1.5 border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-      onclick={() => keyboardStore.toggleOverlay()}
-      title="Keyboard shortcuts (~)"
-    >
-      <span class="font-mono">?</span>
-      <span class="hidden sm:inline">shortcuts</span>
-    </button>
-
     <span
       class="chip gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
       title={dotTitle}
@@ -198,8 +225,6 @@
       <span class="h-2 w-2 rounded-full {dotClass}"></span>
       <span class="font-mono">{healthStore.ok ? 'API OK' : 'API down'}</span>
     </span>
-
-    <span class="font-mono text-xs text-zinc-500">{data.apiBase}</span>
   </header>
 
   <!-- Content -->

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { OpCrop } from '$lib/types';
-  import DetectorChip from './DetectorChip.svelte';
+  import ProvenanceChip from './ProvenanceChip.svelte';
 
   interface Props {
     crop: OpCrop;
@@ -88,7 +88,7 @@
   {#if crop.class_detector}
     <dt class="text-zinc-500">Class detector</dt>
     <dd>
-      <DetectorChip
+      <ProvenanceChip
         detector={crop.class_detector}
         version={crop.class_detector_version}
       />
@@ -124,13 +124,13 @@
         <dt class="text-zinc-500">Detector</dt>
         <dd class="flex flex-wrap items-center gap-1.5">
           {#if crop.plate_detector}
-            <DetectorChip
+            <ProvenanceChip
               detector={crop.plate_detector}
               version={crop.plate_detector_version}
             />
           {/if}
           {#if crop.plate_verifier}
-            <DetectorChip
+            <ProvenanceChip
               detector={crop.plate_verifier}
               tag="verify"
               version={crop.plate_verifier_version}
@@ -144,7 +144,7 @@
         <dt class="text-zinc-500">Cascade</dt>
         <dd class="flex flex-wrap items-center gap-1">
           {#each crop.plate_detector_chain as entry (entry)}
-            <DetectorChip raw={entry} size="sm" />
+            <ProvenanceChip raw={entry} size="sm" />
           {/each}
         </dd>
       {/if}
@@ -158,7 +158,7 @@
             {crop.plate_text || '∅'}
           </span>
           {#if crop.plate_text_source}
-            <DetectorChip detector={crop.plate_text_source} size="sm" />
+            <ProvenanceChip detector={crop.plate_text_source} size="sm" />
           {/if}
           {#if crop.plate_text_confidence != null}
             <span class="font-mono text-[10px] text-zinc-500">

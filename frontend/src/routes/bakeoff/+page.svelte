@@ -242,7 +242,7 @@
   onDestroy(stopPolling);
 </script>
 
-<svelte:head><title>Bake-off · legacy Labeler</title></svelte:head>
+<svelte:head><title>Bake-off · Cropwright</title></svelte:head>
 
 <div class="mx-auto max-w-6xl p-6 text-zinc-200">
   <h1 class="mb-1 text-2xl font-semibold">LPR Model × Dataset Bake-off</h1>
