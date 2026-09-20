@@ -31,3 +31,45 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a CHANGELOG.md entry when src/ or scripts/ change
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            RANGE="$BASE_SHA...$HEAD_SHA"
+          elif git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            RANGE="$BEFORE_SHA...$AFTER_SHA"
+          else
+            # First push of a new branch, or before-SHA not reachable
+            # (force-push, shallow history): nothing safe to diff against.
+            echo "No usable base SHA to diff against; skipping."
+            exit 0
+          fi
+
+          CHANGED="$(git diff --name-only $RANGE)"
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          LAST_MSG="$(git log -1 --format=%B "$AFTER_SHA")"
+          if echo "$LAST_MSG" | grep -qF '[skip-changelog]'; then
+            echo "Last commit message contains [skip-changelog]; skipping."
+            exit 0
+          fi
+
+          if echo "$CHANGED" | grep -qE '^(src|scripts)/' \
+             && ! echo "$CHANGED" | grep -qx 'CHANGELOG.md'; then
+            echo "::error::This push/PR changes src/ or scripts/ but does not update CHANGELOG.md. Add an entry under ## [Unreleased] (see CLAUDE.md's 'Documentation & changelog discipline'), or add [skip-changelog] to the last commit message if this truly has no user-facing/architectural effect."
+            exit 1
+          fi

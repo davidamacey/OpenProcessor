@@ -374,6 +374,33 @@ one place. Image URLs look like `${PUBLIC_TRITON_API_URL}/curation/crops/{id}/th
 - No emoji. No gradients. Apple system colors.
 - Tailwind `bg-zinc-950` base, accent via CSS variables for easy retheme.
 
+## Documentation & changelog discipline
+
+This is enforced (CI, see `.github/workflows/ci.yml`'s `changelog` job), not
+just a convention — don't rely on remembering it:
+
+- **Every push/PR that changes `src/` or `scripts/` must also touch
+  `CHANGELOG.md`.** Add the entry under `## [Unreleased]` in Keep a
+  Changelog format. For a multi-commit batch of work, one consolidated
+  entry in the batch's last commit is fine — CI checks the whole
+  push/PR diff, not each commit individually.
+- **Escape hatch:** if a change genuinely has no user-facing or
+  architectural effect (a pure test-only fixture tweak, a typo fix),
+  include `[skip-changelog]` anywhere in the last commit message of the
+  push. Don't reach for this to avoid writing a real entry — it's for
+  the rare case where "what changed" truly isn't answerable in
+  changelog terms.
+- **Architecture-level changes** (a new route, a renamed core
+  mechanism, a capability added to the slot model, a cross-repo contract
+  change) should also update this file (`CLAUDE.md`) in the same
+  push/PR — CI does not check this one mechanically, it's a human
+  (or agent) judgment call, but it's the reason this file has stayed
+  accurate through several large refactors instead of rotting.
+- Planning passes for non-trivial work leave a dated plan doc behind in
+  `docs/design/` (see existing files there for the naming convention) —
+  this is how the reasoning behind a change stays discoverable after
+  the fact, not just the diff.
+
 ## Known constraints
 
 - HTML5 DnD doesn't work reliably across all browsers/webviews. Use
