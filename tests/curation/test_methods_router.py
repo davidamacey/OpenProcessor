@@ -6,7 +6,7 @@ established pattern — see test_review_disagreements.py). Verifies:
 
 * Every real cluster method (ivf/ahc/hdbscan) is reported stable, ivf is
   the sole default (mirrors DEFAULT_METHOD — plan §8 non-goal #1).
-* Score-axis entries reflect KB_SCORES_ENABLED / KB_SCORES_SHADOW.
+* Score-axis entries reflect OP_SCORES_ENABLED / OP_SCORES_SHADOW.
 * Disabled entries are never marked default; every advertised id resolves
   via the real registries (cluster_methods.get_method /
   crop_scores.get_scorer).
@@ -47,9 +47,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = AsyncMock()
     fake_os.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
-    monkeypatch.delenv('KB_SCORES_ENABLED', raising=False)
-    monkeypatch.delenv('KB_SCORES_SHADOW', raising=False)
-    monkeypatch.delenv('KB_SELECT_DIVERSE_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
+    monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
     monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
 
@@ -102,8 +102,8 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     ``shadow`` here."""
     from src.services.curation.strategy_registry import VALIDATED_SCORERS
 
-    monkeypatch.setenv('KB_SCORES_ENABLED', '1')
-    monkeypatch.setenv('KB_SCORES_SHADOW', '1')
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.setenv('OP_SCORES_SHADOW', '1')
     r = app_client.get('/curation/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
@@ -113,7 +113,7 @@ def test_score_entries_shadow_when_enabled_and_shadow(
             f'{scorer_id}: expected {expected}, got {entry["status"]}'
         )
     assert VALIDATED_SCORERS  # sanity: at least one scorer has been validated
-    # Phase 4/5/P2-14 additive flags (KB_SELECT_DIVERSE_ENABLED,
+    # Phase 4/5/P2-14 additive flags (OP_SELECT_DIVERSE_ENABLED,
     # OP_VIZ_PROJECTION_ENABLED, OP_SEMANTIC_SEARCH_ENABLED) joined this
     # envelope; unset here so this test's env matches its own setup above.
     assert body['flags'] == {
@@ -128,8 +128,8 @@ def test_score_entries_shadow_when_enabled_and_shadow(
 def test_score_entries_experimental_when_enabled_not_shadow(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv('KB_SCORES_ENABLED', '1')
-    monkeypatch.delenv('KB_SCORES_SHADOW', raising=False)
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
     r = app_client.get('/curation/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
@@ -168,8 +168,8 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     """Curation-strategy plan §6/§10.2: only diversity's cheap pre-screen
     passed (docs/design/curation_scores.md §6); the full training A/B gate
     has not run, so this overlay must never advertise 'stable' regardless
-    of KB_SELECT_DIVERSE_ENABLED."""
-    monkeypatch.setenv('KB_SELECT_DIVERSE_ENABLED', '1')
+    of OP_SELECT_DIVERSE_ENABLED."""
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'diverse')
