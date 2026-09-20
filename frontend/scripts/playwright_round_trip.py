@@ -3,14 +3,24 @@
 
 Loads /clusters/{id} for a cluster with gemma_unmatched crops, asserts
 thumbnails actually render (naturalWidth > 0), triggers the validate
-action via the same PUT /curation/crops/{id}/label endpoint the UI calls,
-re-fetches the crop, and confirms label_validated=true plus
+action via the same PUT {prefix}/crops/{id}/label endpoint the UI
+calls, re-fetches the crop, and confirms label_validated=true plus
 label_source / class_id_history were written.
 
-Run via the openprocessor venv (ships playwright):
+Needs a Python env with Playwright installed; this repo has none of
+its own (pure SvelteKit/TS). Call the interpreter directly -- do not
+`source` an activate script, and note that an env-var prefix cannot be
+applied to a shell builtin, which is why the previous form here was
+never valid shell:
 
-    DISPLAY=:11 source /data/repos/openprocessor/.venv/bin/activate
-    python /data/repos/legacy-labeler/scripts/playwright_round_trip.py [--url URL] [--out DIR]
+    cd <repo root>
+    DISPLAY=:11 /path/to/venv/bin/python scripts/playwright_round_trip.py \\
+        [--url URL] [--api URL] [--api-prefix PREFIX] [--out DIR]
+
+e.g. /data/repos/openprocessor/.venv/bin/python -- any venv with
+playwright works. No absolute path to this repo: the directory is
+slated to be renamed to `cropwright`, and worktrees check it out
+elsewhere.
 
 Exit code 0 = PASS, 1 = FAIL.
 """
@@ -18,12 +28,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 from playwright.sync_api import sync_playwright
+
+TRANSITIONAL_DEFAULT = "/curation"  # mirrors src/lib/api.ts:107 (normalizeApiPrefix); flips at T-E2
+
+
+def normalize_api_prefix(raw: str) -> str:
+    """Python mirror of normalizeApiPrefix() in src/lib/api.ts.
+
+    Duplicated (rather than imported) from
+    playwright_backend_integration.py: importing across scripts/ proved
+    fragile under different runners' cwd. Keep both copies byte-for-byte
+    equivalent -- see that module's copy for the full rationale.
+    """
+    trimmed = raw.strip()
+    if not trimmed or trimmed.startswith("__"):
+        return TRANSITIONAL_DEFAULT
+    leading = trimmed if trimmed.startswith("/") else f"/{trimmed}"
+    return leading.rstrip("/")
 
 
 def http_get(url: str) -> dict[str, Any]:
@@ -43,14 +71,24 @@ def http_put(url: str, body: dict[str, Any]) -> dict[str, Any]:
         return json.load(r)
 
 
-def pick_target(api_base: str) -> tuple[int, dict[str, Any]]:
-    """Find a cluster with at least one unvalidated gemma-sourced crop."""
-    stats = http_get(f"{api_base}/clusters/stats/op_vehicles")
-    clusters = stats.get("opensearch_clusters", [])
+def pick_target(api_base: str, prefix: str) -> tuple[int, dict[str, Any]]:
+    """Find a cluster with at least one unvalidated gemma-sourced crop.
+
+    NOT /clusters/stats/{index}: that is a legacy un-prefixed router
+    whose only valid index values are global|vehicles|people|faces
+    (backend src/routers/clusters.py:163-171) -- 'op_vehicles' 400s --
+    and the labeler's nginx stopped proxying it once T-B3 dropped the
+    dead location block. Use GET {prefix}/clusters instead, which is
+    what /clusters itself calls (src/lib/api.ts:947-963). Only the
+    cluster ENUMERATION changes; the two-pass gemma-preferred-else-any
+    selection logic below is unchanged.
+    """
+    clusters_page = http_get(f"{api_base}{prefix}/clusters?per_cluster=1&max_clusters=2000")
+    clusters = clusters_page.get("items", [])
     for c in clusters:
         cid = c["cluster_id"]
         page = http_get(
-            f"{api_base}/curation/crops?cluster_id={cid}&page_size=20&label_validated=false"
+            f"{api_base}{prefix}/crops?cluster_id={cid}&page_size=20&label_validated=false"
         )
         for crop in page.get("crops", []):
             src = (crop.get("class_source") or "").lower()
@@ -60,7 +98,7 @@ def pick_target(api_base: str) -> tuple[int, dict[str, Any]]:
     for c in clusters:
         cid = c["cluster_id"]
         page = http_get(
-            f"{api_base}/curation/crops?cluster_id={cid}&page_size=5&label_validated=false"
+            f"{api_base}{prefix}/crops?cluster_id={cid}&page_size=5&label_validated=false"
         )
         if page.get("crops"):
             return cid, page["crops"][0]
@@ -73,9 +111,14 @@ def main() -> int:
                    help="Labeler frontend URL")
     p.add_argument("--api", default="http://localhost:4603",
                    help="openprocessor URL (for fetch + PUT)")
+    p.add_argument("--api-prefix", default=os.environ.get("PUBLIC_API_PREFIX", ""),
+                   help="Backend path prefix. Normalized exactly like "
+                        "normalizeApiPrefix() in src/lib/api.ts.")
     p.add_argument("--out", default="/tmp/labeler_round_trip")
     p.add_argument("--headless", action="store_true")
     args = p.parse_args()
+
+    prefix = normalize_api_prefix(args.api_prefix)
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -83,7 +126,7 @@ def main() -> int:
     errors: list[str] = []
     summary: dict[str, Any] = {}
 
-    cluster_id, crop = pick_target(args.api)
+    cluster_id, crop = pick_target(args.api, prefix)
     crop_id = crop["crop_id"]
     target_class = crop.get("class_id") or 0
     summary["target"] = {
@@ -160,7 +203,7 @@ def main() -> int:
 
         # Trigger validate via the API the UI calls. This is the same
         # endpoint putCropLabel hits in src/lib/api.ts.
-        put_url = f"{args.api}/curation/crops/{crop_id}/label"
+        put_url = f"{args.api}{prefix}/crops/{crop_id}/label"
         try:
             put_result = http_put(
                 put_url, {"class_id": int(target_class), "validated": True}
@@ -173,7 +216,7 @@ def main() -> int:
 
         # Re-fetch and assert
         try:
-            refetched = http_get(f"{args.api}/curation/crops/{crop_id}")
+            refetched = http_get(f"{args.api}{prefix}/crops/{crop_id}")
             summary["refetched"] = {
                 k: refetched.get(k)
                 for k in (
