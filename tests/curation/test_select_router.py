@@ -10,12 +10,11 @@ deterministically instead of racing a real ``asyncio.create_task``
 against synchronous ``TestClient`` calls.
 
 The three ``GET /curation/crops?order=diverse`` full-router-integration
-tests below (``test_get_crops_order_diverse_*``) are skipped on this
-branch: ``src/routers/curation/crops.py`` (the ``GET /crops`` endpoint
-``compute_diverse_order`` plugs into) has not been ported yet — it lands
-in a later wave (plan §5 Chunk 9). The ``compute_diverse_order`` helper
-itself is fully covered above by the unit-level tests that call it
-directly without a router.
+tests below (``test_get_crops_order_diverse_*``) exercise
+``src/routers/curation/crops.py``'s ``GET /crops`` endpoint, which
+``compute_diverse_order`` plugs into. The ``compute_diverse_order``
+helper itself is fully covered above by the unit-level tests that call
+it directly without a router.
 """
 
 from __future__ import annotations
@@ -184,7 +183,7 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 
 
 # =============================================================================
-# GET /curation/crops?order=diverse — full router integration (skipped -- crops.py not ported yet)
+# GET /curation/crops?order=diverse — full router integration
 # =============================================================================
 
 
@@ -229,18 +228,16 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return client
 
 
-@pytest.mark.skip(reason='GET /crops (src/routers/curation/crops.py) not ported yet -- Chunk 9')
 def test_get_crops_order_diverse_flag_off_behaves_like_default(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('KB_SELECT_DIVERSE_ENABLED', raising=False)
-    r_default = crops_app_client.get('/kb/crops', params={'order': 'default'})
-    r_diverse = crops_app_client.get('/kb/crops', params={'order': 'diverse'})
+    r_default = crops_app_client.get('/curation/crops', params={'order': 'default'})
+    r_diverse = crops_app_client.get('/curation/crops', params={'order': 'diverse'})
     assert r_default.status_code == r_diverse.status_code == 200
     assert r_default.json() == r_diverse.json()
 
 
-@pytest.mark.skip(reason='GET /crops (src/routers/curation/crops.py) not ported yet -- Chunk 9')
 def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -248,14 +245,13 @@ def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
         'src.routers.curation.select.compute_diverse_order',
         AsyncMock(return_value=['crop-b', 'crop-a']),
     )
-    r = crops_app_client.get('/kb/crops', params={'order': 'diverse', 'page_size': 50})
+    r = crops_app_client.get('/curation/crops', params={'order': 'diverse', 'page_size': 50})
     assert r.status_code == 200
     body = r.json()
     assert body['total'] == 2
     assert [c['crop_id'] for c in body['crops']] == ['crop-b', 'crop-a']
 
 
-@pytest.mark.skip(reason='GET /crops (src/routers/curation/crops.py) not ported yet -- Chunk 9')
 def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -263,8 +259,8 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
         'src.routers.curation.select.compute_diverse_order',
         AsyncMock(return_value=None),
     )
-    r_default = crops_app_client.get('/kb/crops', params={'order': 'default'})
-    r_diverse = crops_app_client.get('/kb/crops', params={'order': 'diverse'})
+    r_default = crops_app_client.get('/curation/crops', params={'order': 'default'})
+    r_diverse = crops_app_client.get('/curation/crops', params={'order': 'diverse'})
     assert r_diverse.json() == r_default.json()
 
 
