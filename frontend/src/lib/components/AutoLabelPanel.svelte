@@ -14,14 +14,28 @@
    * labeling stage was removed because a single mean centroid couldn't
    * represent visually diverse classes and produced confident mis-labels
    * that Gemma was then prevented from reviewing.
+   *
+   * Since 2026-09 the run can optionally be scoped: <AssistScopeBar>
+   * picks one class (and, when the backend advertises them, a detection
+   * profile and a prompt pack) and contributes `class_id` /
+   * `detection_profile` / `prompt_pack` to the start call. The bar is
+   * absent entirely unless `/methods` advertises the assist axes, and
+   * contributes nothing when the operator leaves it alone — an unscoped
+   * "Recluster now" is the same one-click, whole-dataset run it has
+   * always been.
    */
   import { onMount, onDestroy } from 'svelte';
+  import AssistScopeBar from './AssistScopeBar.svelte';
   import {
     cancelAutoLabel,
     getAutoLabelStatus,
     startAutoLabel,
     type AutoLabelJobState,
   } from '$lib/api';
+  import { createAssistScope } from '$lib/assistScope.svelte';
+  import { isScopedAssistAvailable } from '$lib/strategies';
+  import { classesStore } from '$stores/classes.svelte';
+  import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
   let job: AutoLabelJobState | null = $state(null);
@@ -42,6 +56,36 @@
   let clusterScope: 0 | 1 | 2 = $state(0);
   let clusterBlur: number = $state(0);
   let nClusters: number | null = $state(null);
+
+  // -- VLM-assist scoping (this plan §4) ---------------------------------
+  // The scope bar is absent, not disabled, until /methods advertises the
+  // assist axes. `class_id` has no capability signal of its own and an
+  // unknown query param is silently dropped server-side, so an ungated
+  // picker would start an unscoped hours-long run while claiming it was
+  // scoped — see isScopedAssistAvailable's doc comment.
+  const scope = createAssistScope();
+
+  // Idempotent, never-rejecting, cached one-shot (degrades to
+  // FALLBACK_METHODS on any failure) — same call StrategyBar and /train
+  // make. `scopeAvailable` is false for the first frames after mount;
+  // that is correct (hide, then reveal) and must not be "fixed" with a
+  // spinner or an await.
+  $effect(() => {
+    void strategiesStore.init();
+  });
+  const scopeAvailable = $derived(isScopedAssistAvailable(strategiesStore.methods));
+
+  const scopeClassName = $derived(
+    scope.classId == null
+      ? null
+      : (classesStore.byId(scope.classId)?.name ?? `class ${scope.classId}`),
+  );
+
+  // This component deliberately does not take its own subscription on
+  // classesStore — src/routes/+layout.svelte already holds one for the
+  // whole app lifetime, so classesStore.classes is populated and
+  // refreshing on every route. A second ref-count here would be
+  // redundant with no benefit.
 
   // Human-readable label per stage. Order matters — pipeline stages move
   // forward through this list. The percent indicator only renders for
@@ -108,8 +152,15 @@
         gate_max_rank: clusterScope === 0 ? null : clusterScope,
         gate_min_blur_ratio: clusterBlur > 0 ? clusterBlur : null,
         n_clusters: nClusters && nClusters >= 2 ? nClusters : null,
+        // `{}` whenever nothing is scoped, so the composed URL stays
+        // byte-identical to every request this panel has ever sent.
+        ...scope.toStartParams(),
       });
-      toastStore.success('Recluster started.');
+      toastStore.success(
+        scopeClassName
+          ? `Recluster started — ${scopeClassName} only.`
+          : 'Recluster started.',
+      );
       schedule();
     } catch (e) {
       const msg = (e as Error).message;
@@ -254,6 +305,9 @@
     {/if}
     <div class="flex items-center gap-3">
       {#if !isRunning}
+        {#if scopeAvailable}
+          <AssistScopeBar {scope} classes={classesStore.classes} disabled={busy} />
+        {/if}
         <label
           class="flex items-center gap-1.5 text-xs text-zinc-300"
           title="Re-pool items already in candidate clusters so smaller candidates can merge into bigger ones."
@@ -273,7 +327,7 @@
         </button>
       {:else}
         <button class="btn btn-primary" type="button" onclick={start} disabled={busy}>
-          Recluster now
+          {scopeClassName ? `Recluster · ${scopeClassName}` : 'Recluster now'}
         </button>
       {/if}
     </div>
