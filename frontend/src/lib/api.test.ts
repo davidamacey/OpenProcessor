@@ -8,6 +8,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   apiBase,
+  API_PREFIX,
   ApiError,
   cancelSelect,
   getCluster,
@@ -18,13 +19,14 @@ import {
   getReviewQueue,
   getSelectStatus,
   getVizProjection,
+  normalizeApiPrefix,
   rebuildVizProjection,
   searchCrops,
   selectDiverse,
 } from './api';
 import { FALLBACK_METHODS } from './strategies';
 
-const URL = 'http://localhost:4603/op/crops/batch_label';
+const URL = `http://localhost:4603${API_PREFIX}/crops/batch_label`;
 
 describe('ApiError', () => {
   it("appends a FastAPI 'detail' string to the message", () => {
@@ -340,7 +342,7 @@ describe('searchCrops', () => {
     await searchCrops('red sedan', 1, 30);
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
-    expect(url).toContain('/curation/search/text');
+    expect(url).toContain(`${API_PREFIX}/search/text`);
     expect(url).toContain('q=red+sedan');
     expect(url).toContain('page=1');
     expect(url).toContain('page_size=30');
@@ -512,7 +514,7 @@ describe('getCluster order param', () => {
 
   it('forwards an arbitrary order id to /curation/crops without special-casing it client-side', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/curation/crops')) {
+      if (url.startsWith(`${API_PREFIX}/crops`)) {
         return Promise.resolve(
           jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
         );
@@ -525,13 +527,13 @@ describe('getCluster order param', () => {
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
-      .find((u) => u.startsWith('/curation/crops'));
+      .find((u) => u.startsWith(`${API_PREFIX}/crops`));
     expect(cropsUrl).toContain('order=mistakenness');
   });
 
   it('omits order entirely when null (unchanged default behavior)', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/curation/crops')) {
+      if (url.startsWith(`${API_PREFIX}/crops`)) {
         return Promise.resolve(
           jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
         );
@@ -544,7 +546,7 @@ describe('getCluster order param', () => {
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
-      .find((u) => u.startsWith('/curation/crops'));
+      .find((u) => u.startsWith(`${API_PREFIX}/crops`));
     expect(cropsUrl).not.toContain('order');
   });
 });
@@ -569,7 +571,8 @@ describe('getCluster k param', () => {
 
   function stubCrops(body: unknown) {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (url.startsWith('/curation/crops')) return Promise.resolve(jsonResponse(body));
+      if (url.startsWith(`${API_PREFIX}/crops`))
+        return Promise.resolve(jsonResponse(body));
       return Promise.resolve(jsonResponse({ items: [] }));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -583,7 +586,7 @@ describe('getCluster k param', () => {
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
-      .find((u) => u.startsWith('/curation/crops'));
+      .find((u) => u.startsWith(`${API_PREFIX}/crops`));
     expect(cropsUrl).toContain('order=diverse');
     expect(cropsUrl).toContain('k=120');
   });
@@ -595,14 +598,14 @@ describe('getCluster k param', () => {
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
-      .find((u) => u.startsWith('/curation/crops'));
+      .find((u) => u.startsWith(`${API_PREFIX}/crops`));
     expect(cropsUrl).not.toContain('k=');
 
     fetchMock.mockClear();
     await getCluster(42, 1, 60, undefined, {});
     const cropsUrl2 = fetchMock.mock.calls
       .map((c) => c[0] as string)
-      .find((u) => u.startsWith('/curation/crops'));
+      .find((u) => u.startsWith(`${API_PREFIX}/crops`));
     expect(cropsUrl2).not.toContain('k=');
   });
 
@@ -710,7 +713,7 @@ describe('getVizProjection', () => {
     expect(res.stale).toBe(false);
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
-    expect(url).toContain('/curation/viz/projection');
+    expect(url).toContain(`${API_PREFIX}/viz/projection`);
     expect(url).toContain('max_points=100');
   });
 
@@ -854,7 +857,7 @@ describe('rebuildVizProjection', () => {
     expect(res.status).toBe('running');
     expect(res.job_id).toBe('viz-rebuild-1');
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('/curation/viz/projection/rebuild');
+    expect(url).toContain(`${API_PREFIX}/viz/projection/rebuild`);
     expect(init.method).toBe('POST');
   });
 
@@ -880,16 +883,18 @@ describe('rebuildVizProjection', () => {
 describe('registry download URL builders', () => {
   it('getClassRegistryUrl() points at the real class_registry.json filename', () => {
     expect(getClassRegistryUrl()).toBe(
-      `${apiBase}/curation/export/registry/class_registry.json`,
+      `${apiBase}${API_PREFIX}/export/registry/class_registry.json`,
     );
   });
 
   it('getDataYamlUrl() points at the real data.yaml filename (not data_v7.yaml)', () => {
-    expect(getDataYamlUrl()).toBe(`${apiBase}/curation/export/registry/data.yaml`);
+    expect(getDataYamlUrl()).toBe(`${apiBase}${API_PREFIX}/export/registry/data.yaml`);
   });
 
   it('getManifestUrl() points at the real manifest.json filename', () => {
-    expect(getManifestUrl()).toBe(`${apiBase}/curation/export/registry/manifest.json`);
+    expect(getManifestUrl()).toBe(
+      `${apiBase}${API_PREFIX}/export/registry/manifest.json`,
+    );
   });
 });
 
@@ -931,7 +936,7 @@ describe('selectDiverse', () => {
       },
     });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('/curation/select/diverse');
+    expect(url).toContain(`${API_PREFIX}/select/diverse`);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
       scope: { review_tab: 'all' },
@@ -1081,7 +1086,30 @@ describe('getSelectStatus / cancelSelect', () => {
 
     await cancelSelect();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('/curation/select/cancel');
+    expect(url).toContain(`${API_PREFIX}/select/cancel`);
     expect(init.method).toBe('POST');
+  });
+});
+
+describe('API_PREFIX', () => {
+  // The whole point of T-B1: with PUBLIC_API_PREFIX unset (as it is in
+  // dev, in CI and here), every composed URL must be byte-identical to
+  // the hardcoded `/curation` strings this refactor replaced. This assertion
+  // is deleted/flipped at T-E2, when the default becomes '/curation'.
+  it('defaults to the transitional /curation prefix when PUBLIC_API_PREFIX is unset', () => {
+    expect(API_PREFIX).toBe('/curation');
+  });
+
+  it('treats empty, whitespace and an unsubstituted placeholder as unset', () => {
+    expect(normalizeApiPrefix('')).toBe('/curation');
+    expect(normalizeApiPrefix('   ')).toBe('/curation');
+    expect(normalizeApiPrefix('__API_PREFIX__')).toBe('/curation');
+  });
+
+  it('normalizes a configured prefix to a leading slash and no trailing slash', () => {
+    expect(normalizeApiPrefix('/curation')).toBe('/curation');
+    expect(normalizeApiPrefix('curation')).toBe('/curation');
+    expect(normalizeApiPrefix('/curation/')).toBe('/curation');
+    expect(normalizeApiPrefix('/curation///')).toBe('/curation');
   });
 });

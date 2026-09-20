@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getReviewQueue } from './api';
+import { API_PREFIX, getReviewQueue } from './api';
 import { licensePlateSlot } from './annotations/profiles/licensePlate';
 import {
   buildReviewTabs,
@@ -188,8 +188,8 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
       const res = await getReviewQueue(effectiveTab, 1, 30, {});
 
       const url = fetchMock.mock.calls[0]?.[0] as string;
-      expect(url).toContain(`/curation/review/${presetId}`);
-      expect(url).not.toContain('/curation/review/all');
+      expect(url).toContain(`${API_PREFIX}/review/${presetId}`);
+      expect(url).not.toContain(`${API_PREFIX}/review/all`);
       expect(res.total).toBe(42);
     },
   );
@@ -206,7 +206,7 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
     const res = await getReviewQueue(effectiveTab, 1, 30, {});
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
-    expect(url).toContain('/curation/review/all');
+    expect(url).toContain(`${API_PREFIX}/review/all`);
     expect(res.total).toBe(56797);
   });
 });

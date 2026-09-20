@@ -18,7 +18,20 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const libRoot = here;
 const srcRoot = path.resolve(here, '..');
 
-const RAW_PLATE_THUMB_PATTERN = /['"`]\/curation\/crops\/.*?plate_thumbnail/;
+/**
+ * Matches a hand-built region-thumbnail URL: anything that opens a string
+ * literal or closes a `${…}` expression and then walks a
+ * `/crops/…/plate_thumbnail` path, with or without a literal prefix
+ * segment in between.
+ *
+ * Deliberately prefix-agnostic. Before `API_PREFIX` a rogue call site
+ * looked like `'/curation/crops/…'`; after it, like
+ * `` `${apiBase}${API_PREFIX}/crops/…` ``. A `/curation`-literal regex catches
+ * the first and silently misses the second, which is the exact way this
+ * kind of guard rots.
+ */
+const RAW_PLATE_THUMB_PATTERN =
+  /(?:['"`]|\})(?:\/[a-z_]+)?\/crops\/[^'"`]*?plate_thumbnail/;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -36,6 +49,11 @@ function walk(dir: string, out: string[] = []): string[] {
 function isExcluded(file: string): boolean {
   const rel = path.relative(srcRoot, file);
   if (rel === path.join('lib', 'api.ts')) return true;
+  // Slot profiles declare prefix-RELATIVE path templates by design
+  // (`/crops/{id}/plate_thumbnail`, joined with API_PREFIX at the call
+  // site — see annotations/cohorts.ts:36). That is the sanctioned
+  // declaration point, not a hand-rolled fetch URL.
+  if (rel.startsWith(path.join('lib', 'annotations', 'profiles') + path.sep)) return true;
   if (rel.endsWith('.test.ts') || rel.endsWith('.svelte-kit')) return true;
   return false;
 }
