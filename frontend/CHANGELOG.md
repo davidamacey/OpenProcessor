@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `docs/annotation-slots-contract-draft.md` — the P4.2 wire contract draft
+  for server-declared annotation slots (H3 opening offer; proposal only,
+  nothing implemented on either side).
 - `docs/FEATURES.md` — a full visual feature tour (screenshot + explanation
   for every route), and a `docs/screenshots/demo.gif` slideshow now leading
   the README instead of a static image grid.
@@ -56,6 +59,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Every backend URL is now composed from a single exported `API_PREFIX`
+  (`src/lib/api.ts`) instead of 92 hardcoded `/curation/…` literals across
+  `api.ts`, `sse.ts` and `/export`. Default is transitionally `/curation`, so
+  traffic is unchanged; the prefix is now settable at build time via
+  `PUBLIC_API_PREFIX` and at container start via the `__API_PREFIX__`
+  entrypoint substitution (bundle **and** `nginx.conf`'s proxy `location`).
 - **The `genericization-wip` line of work landed on `master`** (2026-09-20,
   merge of 26 commits implementing Phases 0-4 of
   `docs/genericization-plan-2026-09-13.md`; see
@@ -204,6 +213,10 @@ check`/`test`/`lint`/`build` all green.
 
 ### Fixed
 
+- Cluster VLM labeling called `/gemma/label_batch`, a route the backend
+  does not register; it is `{prefix}/vlm/label_batch`. The `gemma_*`
+  payload fields and the `gemma_low_conf` review-tab id are unchanged —
+  only the URL path segment moved.
 - `CropCard`'s plate ring color rendered green ("human confirmed") for
   every machine-detected plate, not just human-verified ones. The
   predicate checked `plate_status === 'human_confirmed' ||
@@ -237,6 +250,9 @@ plate_status === 'detected'` — `'human_confirmed'` is not a value the
 
 ### Removed
 
+- The dead `location ~ ^/clusters/(train|assign|stats)/` nginx proxy
+  block. No frontend code has called those legacy FAISS endpoints
+  through the labeler's nginx.
 - `docs/audit-2026-09-11/` (old audit screenshot set, superseded by
   `docs/screenshots/` + `docs/FEATURES.md`) and two untracked stray
   directories (`frontend/`, empty; `diagnostics/plate_bbox_audit/`, old
