@@ -254,12 +254,12 @@ def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
     almost always has plenty of headroom regardless of whether the real
     training volume is anywhere near full. Prefer the export dir itself
     (guaranteed to be on the real volume once a job names one) and fall
-    back to ``KB_TRAIN_STAGING`` (the same env var the trainer/API compose
+    back to ``OP_TRAIN_STAGING`` (the same env var the trainer/API compose
     services already use for the training-data root).
     """
     if spec.dataset_export_dir and Path(spec.dataset_export_dir).exists():
         return str(spec.dataset_export_dir)
-    return os.environ.get('KB_TRAIN_STAGING', str(config.state_dir / 'training_staging'))
+    return os.environ.get('OP_TRAIN_STAGING', str(config.state_dir / 'training_staging'))
 
 
 def _training_volume_mount_sane(path: str) -> bool:

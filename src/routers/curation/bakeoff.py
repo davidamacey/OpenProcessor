@@ -43,28 +43,28 @@ logger = get_logger(__name__)
 
 # Both yolo-api and the bake-off evaluator container mount the training-data
 # root at the same absolute path, so these are shared between the two
-# containers. `KB_BAKEOFF_*` env var names are unchanged from the reference
-# implementation (established precedent elsewhere in this port — only the
-# hardcoded default *values* are genericized).
+# containers. `OP_BAKEOFF_*` env var names match the reference
+# implementation's naming convention (post-rename, see the env-var-prefix
+# unification commit); only the hardcoded default *values* are genericized.
 #
 # JOBS_DIR defaults to GpuArbiterConfig.bakeoff_jobs_dir when configured, so
 # gpu_arbiter.bakeoff_active() (the reconcile loop's "is a bake-off queued or
 # running" check) watches the SAME directory this router writes job.json
-# into, without requiring the operator to set the KB_BAKEOFF_JOBS_DIR env var
+# into, without requiring the operator to set the OP_BAKEOFF_JOBS_DIR env var
 # and the GpuArbiterConfig field to the same value independently.
 _configured_jobs_dir = get_gpu_arbiter_config().bakeoff_jobs_dir
 JOBS_DIR = Path(
     os.environ.get(
-        'KB_BAKEOFF_JOBS_DIR',
+        'OP_BAKEOFF_JOBS_DIR',
         _configured_jobs_dir or '/mnt/nvm/curation_train_data/bakeoff_jobs',
     )
 )
-OUT_DIR = Path(os.environ.get('KB_BAKEOFF_OUT_DIR', '/mnt/nvm/curation_train_data/bakeoff'))
+OUT_DIR = Path(os.environ.get('OP_BAKEOFF_OUT_DIR', '/mnt/nvm/curation_train_data/bakeoff'))
 # Training runs land here. The trainer records checkpoint_path as a /runs/...
 # container path; the evaluator container mounts the same dir at /runs (ro),
 # so a bake-off can load best.pt by that exact path. yolo-api sees the same
 # files under this host root for existence checks.
-RUNS_HOST_ROOT = Path(os.environ.get('KB_TRAIN_RUNS_ROOT', '/mnt/nvm/curation_train_data/runs'))
+RUNS_HOST_ROOT = Path(os.environ.get('OP_TRAIN_RUNS_ROOT', '/mnt/nvm/curation_train_data/runs'))
 # Roots scanned for frozen evaluation datasets (any dir with TEST_FROZEN.json).
 # Adding a dataset = freeze a dir under one of these; no code change needed.
 EVAL_DATASET_ROOTS: list[tuple[str, Path]] = [

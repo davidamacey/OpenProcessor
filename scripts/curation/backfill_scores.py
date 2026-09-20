@@ -20,7 +20,7 @@ truncated pool is not representative of the full one).
     python3 scripts/curation/backfill_scores.py --dry-run
     python3 scripts/curation/backfill_scores.py --apply --scorers uniqueness,near_dup
 
-Requires ``KB_SCORES_ENABLED=1`` (or ``--force``) — same feature-flag gate
+Requires ``OP_SCORES_ENABLED=1`` (or ``--force``) — same feature-flag gate
 as the API path, so an operator can't accidentally backfill scores the
 frontend has no way to consume yet.
 """
@@ -55,7 +55,7 @@ logger = logging.getLogger('curation_backfill_scores')
 
 
 def _scores_enabled() -> bool:
-    return os.environ.get('KB_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return os.environ.get('OP_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 async def _async_main(args: argparse.Namespace) -> int:
@@ -67,7 +67,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         return 1
 
     if not _scores_enabled() and not args.force:
-        logger.error('KB_SCORES_ENABLED is not set — pass --force to backfill anyway')
+        logger.error('OP_SCORES_ENABLED is not set — pass --force to backfill anyway')
         return 1
 
     if args.dry_run:
@@ -122,7 +122,7 @@ def main() -> int:
     p.add_argument(
         '--force',
         action='store_true',
-        help='Backfill even if KB_SCORES_ENABLED is unset.',
+        help='Backfill even if OP_SCORES_ENABLED is unset.',
     )
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', action='store_true', default=True)

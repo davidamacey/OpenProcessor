@@ -53,7 +53,7 @@ SPLITS = ('train', 'val', 'test')
 # Past this many label files, a full per-line scan risks hanging preflight
 # for a very large export. Report 'unknown' instead of blocking the request
 # indefinitely. Override via env for hosts with a larger/faster disk.
-DEFAULT_SCAN_CAP = int(os.environ.get('KB_PREFLIGHT_SCAN_CAP', '200000'))
+DEFAULT_SCAN_CAP = int(os.environ.get('OP_PREFLIGHT_SCAN_CAP', '200000'))
 
 # Small in-process cache: exports are immutable once written, so a repeat
 # preflight call for the same export dir (same manifest content) never
