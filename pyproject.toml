@@ -293,8 +293,10 @@ addopts = [
     "--strict-markers",
     "--tb=short",
     "--cov=src",
+    "--cov=scripts",
     "--cov-report=term-missing",
     "--cov-report=html",
+    "--cov-fail-under=51",
 ]
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
@@ -305,7 +307,7 @@ markers = [
 # =============================================================================
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "scripts"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
