@@ -50,8 +50,8 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.delenv('LEGACY_SCORES_ENABLED', raising=False)
     monkeypatch.delenv('LEGACY_SCORES_SHADOW', raising=False)
     monkeypatch.delenv('LEGACY_SELECT_DIVERSE_ENABLED', raising=False)
-    monkeypatch.delenv('LEGACY_VIZ_PROJECTION_ENABLED', raising=False)
-    monkeypatch.delenv('LEGACY_SEMANTIC_SEARCH_ENABLED', raising=False)
+    monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
 
     app = FastAPI()
     app.include_router(legacy_router)
@@ -114,7 +114,7 @@ def test_score_entries_shadow_when_enabled_and_shadow(
         )
     assert VALIDATED_SCORERS  # sanity: at least one scorer has been validated
     # Phase 4/5/P2-14 additive flags (LEGACY_SELECT_DIVERSE_ENABLED,
-    # LEGACY_VIZ_PROJECTION_ENABLED, LEGACY_SEMANTIC_SEARCH_ENABLED) joined this
+    # OP_VIZ_PROJECTION_ENABLED, OP_SEMANTIC_SEARCH_ENABLED) joined this
     # envelope; unset here so this test's env matches its own setup above.
     assert body['flags'] == {
         'legacy_scores_enabled': True,
@@ -198,7 +198,7 @@ def test_viz_projection_experimental_when_flag_on_but_never_stable(
     section), but the interactive-perf half is a frontend check this
     backend-only pass never ran -- same "capped at experimental" reasoning
     ``diverse`` uses for its own still-outstanding gate half."""
-    monkeypatch.setenv('LEGACY_VIZ_PROJECTION_ENABLED', '1')
+    monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')

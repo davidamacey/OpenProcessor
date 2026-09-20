@@ -23,7 +23,6 @@ from __future__ import annotations
 import base64
 import binascii
 import io
-import os
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
-from src.config import get_region_fields
+from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -185,7 +184,11 @@ async def vlm_label_batch(
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
     from src.services.labeling.vlm_labeler import ItemCrop
 
-    crop_cache_dir = os.environ.get('GEMMA_CROP_CACHE_DIR', '/dev/shm/curation_crops')  # nosec B108 — intentional tmpfs cache
+    # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
+    # (scripts/curation/worker/state.py) writes into -- this used to read a
+    # different env var with a different default (GEMMA_CROP_CACHE_DIR),
+    # which meant a 100% cache miss out of the box (CFG-2).
+    crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
     def _vlm_jpeg_for(crop_id: str, image_path: str, bbox: tuple) -> bytes | None:
         # Phase A: prefer the RAM crop cache populated by ingest, if any.

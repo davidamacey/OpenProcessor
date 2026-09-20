@@ -82,7 +82,7 @@ def _semantic_search_enabled() -> bool:
     """Mirrors ``legacy_semantic.py``'s own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
-    return os.environ.get('LEGACY_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -94,7 +94,7 @@ def _viz_projection_enabled() -> bool:
     """Mirrors ``legacy_viz.py``'s own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``."""
-    return os.environ.get('LEGACY_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -317,7 +317,7 @@ def _semantic_search_strategy() -> list[dict[str, Any]]:
 
 def _viz_projection_status() -> StrategyStatus:
     """``do_not_ship`` is a hard kill switch — stays ``disabled`` even if
-    an operator sets ``LEGACY_VIZ_PROJECTION_ENABLED=1`` (same "flag can only
+    an operator sets ``OP_VIZ_PROJECTION_ENABLED=1`` (same "flag can only
     turn a validated thing on, never revive a failed one" rule
     ``VALIDATED_SCORERS`` enforces for the score axis). Otherwise tracks
     the flag, capped at ``experimental`` — never ``stable`` — because the
