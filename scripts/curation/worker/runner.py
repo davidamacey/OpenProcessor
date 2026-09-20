@@ -188,6 +188,11 @@ async def run(args: argparse.Namespace) -> int:
     # region bbox source (it's too loose; produced visibly-oversized
     # regions).
     ocr_recognizer = PaddleOcrTextRecognizer(pool)
+    # D5: the segmenter leg is optional. An empty ``--sam3-url``/``SAM3_URL``
+    # constructs a disabled Sam3Client — segment_plate() then always
+    # returns None (the same "no candidate" result callers already
+    # handle) without attempting any HTTP call. A deployment with no
+    # segmentation service of its own leaves this unset.
     sam3 = _wkr.Sam3Client(args.sam3_url)
     gemma = _wkr.VlmLabeler(base_url=args.gemma_url) if args.gemma_url else _wkr.VlmLabeler()
     # B-PR5: populate class_names so ``label_combined`` callers (the
