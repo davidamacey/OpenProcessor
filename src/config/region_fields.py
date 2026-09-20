@@ -18,7 +18,7 @@ names — a rename becomes a config flip, not a code change.
 - Pydantic attribute names on HTTP wire models (the generic curation
   API's JSON contract) — NO, frozen independently. See
   ``docs/design/curation_api_contract.md``.
-- Enum *values* in ``src/config/plate_state.py`` — NO, values not field
+- Enum *values* in ``src/config/region_state.py`` — NO, values not field
   names, untouched in Phase 2.
 - Metric names — NO, deferred to a later phase.
 

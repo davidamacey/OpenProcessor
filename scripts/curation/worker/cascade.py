@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from PIL import Image
 
 from src.config import get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
     DEFAULT_PROFILE,
@@ -85,9 +86,9 @@ def _build_pending_query() -> dict[str, Any]:
                     'terms': {
                         F.status: [
                             'pending',
-                            'pending_detection',
+                            RegionStatus.PENDING_DETECTION,
                             'pending_verify',
-                            'pending_verification',
+                            RegionStatus.PENDING_VERIFICATION,
                         ]
                     }
                 },
