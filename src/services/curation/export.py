@@ -21,6 +21,17 @@ per-item split assignments anywhere. Items already carrying a frozen
 ``test_holdout`` flag always land in the ``test`` split regardless of the
 hash, honoring whatever holdout freeze a deployment has already committed
 to (see ``src.services.curation.holdout``).
+
+Dense export ids (``class_registry.json:export_id_map``) are resolved from
+the live :class:`~src.clients.curation_opensearch.ClassRegistry` at export
+time and frozen into the export directory, so a subset-training request's
+``include_classes`` (always expressed in REGISTRY ids) can be translated to
+the dense ids that actually appear in the written label files — see
+``src/services/training/preflight_scan.py`` and
+``src/routers/curation_train.py``, both of which read this file back. This
+closes a real bug: ``export_dataset`` previously never wrote
+``class_registry.json`` at all, so both readers' ``include_classes``
+filtering was silently inert on every export this codebase produced.
 """
 
 from __future__ import annotations
@@ -30,10 +41,15 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
+
+
+if TYPE_CHECKING:
+    from src.clients.curation_opensearch import RegistryClassEntry
 
 
 logger = get_logger(__name__)
@@ -90,6 +106,19 @@ class ExportResult:
     current_symlink: str
 
 
+@dataclass
+class _ExportRow:
+    """One label row scrolled off the items index, en route to a label file."""
+
+    item_id: str
+    image_path: str
+    bbox_norm: list[float]
+    class_id: int
+    class_name: str
+    has_test_crop: bool = False
+    export_class_id: int = -1
+
+
 def hash_split(key: str, seed: int, train_ratio: float, val_ratio: float) -> str:
     """Deterministic ``(seed, key)`` -> ``{'train','val','test'}`` bucket.
 
@@ -109,6 +138,42 @@ def hash_split(key: str, seed: int, train_ratio: float, val_ratio: float) -> str
 def dataset_checksum(item_ids: list[str]) -> str:
     """Checksum over the sorted set of item ids that went into an export."""
     return hashlib.sha256('\n'.join(sorted(item_ids)).encode()).hexdigest()
+
+
+def _build_export_id_map(classes: list[RegistryClassEntry]) -> dict[int, int]:
+    """Registry ``class_id`` -> contiguous dense export id (0-indexed).
+
+    Deprecated classes are skipped entirely — they never occupy a dense
+    slot. Order is ascending registry ``class_id``, so the mapping only
+    changes when the live registry's set of non-deprecated classes
+    changes, not on export-to-export scroll-order noise (the previous
+    behavior assigned dense ids in first-seen scroll order, which was
+    silently non-deterministic).
+    """
+    live_ids = sorted(c.class_id for c in classes if not c.deprecated)
+    return {registry_id: dense_id for dense_id, registry_id in enumerate(live_ids)}
+
+
+def _remap_rows_to_export_ids(rows: list[_ExportRow], id_map: dict[int, int]) -> list[_ExportRow]:
+    """Apply ``id_map`` to every row's ``class_id``, in place.
+
+    Rows whose ``class_id`` has no entry in ``id_map`` (deprecated or
+    otherwise not in the live registry) are dropped — there is no valid
+    dense id to write into a label file for them.
+    """
+    kept: list[_ExportRow] = []
+    for row in rows:
+        dense = id_map.get(row.class_id)
+        if dense is None:
+            logger.warning(
+                'export_row_dropped_unmapped_class',
+                item_id=row.item_id,
+                class_id=row.class_id,
+            )
+            continue
+        row.export_class_id = dense
+        kept.append(row)
+    return kept
 
 
 def _write_yolo_label(path: Path, class_id: int, bbox_norm: list[float]) -> None:
@@ -137,11 +202,13 @@ def resolve_current_export_dir(config: CurationConfig | None = None) -> Path:
 class GenericYoloExportService:
     """Builds a YOLO-format detection dataset from the curation items index.
 
-    Writes one label ``.txt`` per exported item (class id + normalized
-    cx/cy/w/h), a ``data.yaml`` class map, a ``label_stats.json`` per-class
-    count, and a ``manifest.json`` reproducibility envelope (dataset
-    checksum, split counts, seed, timestamps). Deliberately narrower than
-    the reference exporter — see module docstring.
+    Writes one label ``.txt`` per exported item (dense export class id +
+    normalized cx/cy/w/h), a ``data.yaml`` class map, a
+    ``class_registry.json`` snapshot + dense ``export_id_map``, a
+    ``label_stats.json`` per-class count, and a ``manifest.json``
+    reproducibility envelope (dataset checksum, split counts, seed,
+    timestamps). Deliberately narrower than the reference exporter — see
+    module docstring.
     """
 
     def __init__(
@@ -150,10 +217,12 @@ class GenericYoloExportService:
         *,
         config: CurationConfig | None = None,
         profile: ExportProfile | None = None,
+        registry: ClassRegistry | None = None,
     ) -> None:
         self.opensearch = opensearch
         self.config = config or get_curation_config()
         self.profile = profile or ExportProfile()
+        self.registry = registry or get_class_registry()
 
     async def _scroll_items(self, query: dict[str, Any]) -> list[dict[str, Any]]:
         body: dict[str, Any] = {
@@ -186,6 +255,27 @@ class GenericYoloExportService:
                     logger.warning('export_clear_scroll_failed', err=str(exc))
         return out
 
+    def _hits_to_rows(self, hits: list[dict[str, Any]]) -> list[_ExportRow]:
+        rows: list[_ExportRow] = []
+        for hit in hits:
+            src = hit.get('_source') or {}
+            item_id = src.get('crop_id') or hit.get('_id')
+            bbox = src.get('bbox_norm')
+            class_id = src.get('class_id')
+            if not item_id or bbox is None or len(bbox) != 4 or class_id is None:
+                continue
+            rows.append(
+                _ExportRow(
+                    item_id=str(item_id),
+                    image_path=str(src.get('image_path') or ''),
+                    bbox_norm=list(bbox),
+                    class_id=int(class_id),
+                    class_name=str(src.get('class_name') or class_id),
+                    has_test_crop=bool(src.get('test_holdout')),
+                )
+            )
+        return rows
+
     async def export_dataset(
         self,
         *,
@@ -194,14 +284,19 @@ class GenericYoloExportService:
         seed: int = 42,
         max_images: int | None = None,
         dedup_threshold: float | None = None,  # noqa: ARG002 - call-site compat; near-dup collapsing is an overlay hook, not implemented generically here
-        class_names: list[str] | None = None,
     ) -> ExportResult:
         """Export every validated, non-dismissed item as a multi-class YOLO
         detection dataset.
 
         Honors a frozen ``test_holdout`` flag for the test split; every
         other item's split is a deterministic ``(seed, item_id)`` hash
-        bucket (:func:`hash_split`).
+        bucket (:func:`hash_split`). Class ids written to the label files
+        are DENSE export ids resolved from the live
+        :class:`~src.clients.curation_opensearch.ClassRegistry` at export
+        time (see :func:`_build_export_id_map`) — the ``class_registry.json``
+        artifact this writes is what lets a subset-training request's
+        ``include_classes`` (expressed in registry ids) translate to those
+        dense ids.
         """
         started_at = datetime.now(UTC).isoformat()
         query = {
@@ -214,6 +309,17 @@ class GenericYoloExportService:
         if max_images is not None:
             hits = hits[:max_images]
 
+        rows = self._hits_to_rows(hits)
+
+        registry_file = self.registry.load()
+        id_map = _build_export_id_map(registry_file.classes)
+        rows = _remap_rows_to_export_ids(rows, id_map)
+
+        name_by_registry_id = {c.class_id: c.class_name for c in registry_file.classes}
+        names: list[str] = [''] * len(id_map)
+        for registry_id, dense_id in id_map.items():
+            names[dense_id] = name_by_registry_id.get(registry_id, str(registry_id))
+
         resolved_export_dir = (
             Path(export_dir)
             if export_dir
@@ -225,33 +331,19 @@ class GenericYoloExportService:
             (images_root / split).mkdir(parents=True, exist_ok=True)
             (labels_root / split).mkdir(parents=True, exist_ok=True)
 
-        names: list[str] = list(class_names) if class_names is not None else []
         counts = SplitCounts()
         item_ids: list[str] = []
 
-        for hit in hits:
-            src = hit.get('_source') or {}
-            item_id = src.get('crop_id') or hit.get('_id')
-            bbox = src.get('bbox_norm')
-            class_id = src.get('class_id')
-            if not item_id or bbox is None or len(bbox) != 4 or class_id is None:
-                continue
-            class_name = src.get('class_name') or str(class_id)
-            if class_name not in names:
-                names.append(class_name)
-            resolved_class_id = names.index(class_name)
-
+        for row in rows:
             split = (
                 'test'
-                if src.get('test_holdout')
-                else hash_split(
-                    str(item_id), seed, self.profile.train_ratio, self.profile.val_ratio
-                )
+                if row.has_test_crop
+                else hash_split(row.item_id, seed, self.profile.train_ratio, self.profile.val_ratio)
             )
-            label_path = labels_root / split / f'{item_id}.txt'
-            _write_yolo_label(label_path, resolved_class_id, bbox)
+            label_path = labels_root / split / f'{row.item_id}.txt'
+            _write_yolo_label(label_path, row.export_class_id, row.bbox_norm)
             setattr(counts, split, getattr(counts, split) + 1)
-            item_ids.append(str(item_id))
+            item_ids.append(row.item_id)
 
         checksum = dataset_checksum(item_ids)
         finished_at = datetime.now(UTC).isoformat()
@@ -274,6 +366,22 @@ class GenericYoloExportService:
         (resolved_export_dir / ARTIFACT_FILENAMES['label_stats']).write_text(
             json.dumps(label_stats, indent=2)
         )
+
+        class_registry_payload = {
+            'version': 1,
+            'exported_at': finished_at,
+            'classes': [
+                {
+                    'class_id': c.class_id,
+                    'class_name': c.class_name,
+                    'deprecated': c.deprecated,
+                }
+                for c in registry_file.classes
+            ],
+            'export_id_map': {str(k): v for k, v in id_map.items()},
+        }
+        class_registry_path = resolved_export_dir / ARTIFACT_FILENAMES['class_registry']
+        class_registry_path.write_text(json.dumps(class_registry_payload, indent=2))
 
         manifest = {
             'version_tag': version_tag,
