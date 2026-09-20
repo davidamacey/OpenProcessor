@@ -8,6 +8,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Deployment operators can now register their own annotation slot —
+  without forking the repo or touching a single line of application
+  code — by dropping an `annotation-profiles.json` file next to the
+  built app: in `static/` before a build, or bind-mounted over
+  `/usr/share/nginx/html/annotation-profiles.json` in a running
+  container. The file is fetched once in the root layout's `load()` and
+  validated by a new hardened parser
+  (`src/lib/annotations/config/parseSlotConfig.ts`) against the schema
+  already published in `docs/annotation-slots-contract-draft.md`,
+  treating the file as untrusted operator input rather than reviewed
+  source: template paths are prefix-relative only and their placeholders
+  are drawn from a closed allow-list, regex patterns reject the `g`/`y`
+  flags and a conservative ReDoS shape, Tailwind ring classes must come
+  from a pre-declared preset or allow-list (a runtime-mounted class
+  string is invisible to Tailwind's JIT scan regardless), keymaps cannot
+  claim a hotkey the review page already owns, and any object carrying a
+  `__proto__`/`constructor`/`prototype` key is rejected outright. A
+  missing or malformed file degrades silently to this deployment's
+  built-in `license_plate` slot — a console warning plus one toast
+  surface a broken config, but the app never crashes and the currently
+  running legacy deployment's behavior is completely unchanged, since
+  it ships no live `annotation-profiles.json`. A worked example
+  (`static/annotation-profiles.example.json`, a pallet-shipping-label
+  slot) is shipped and covered by an integration test proving it renders
+  a real review tab with zero further code changes. Tier 3
+  (server-declared slots) remains deliberately unbuilt — this closes
+  steps 1 and 2 of the sequencing `docs/annotation-slots-contract-draft.md`
+  §9 already committed to.
 - The dashboard's auto-label run can be scoped to a single class — "just
   help me with pallets right now" — instead of always sweeping the whole
   pool. A collapsed-by-default `<AssistScopeBar>` on `/dashboard` picks

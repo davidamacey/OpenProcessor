@@ -75,6 +75,25 @@ The app is a pure SPA consumer of `openprocessor` — there is **no** local
 database. State is reconstructed from API calls; `localStorage` only
 caches transient UI state (sidebar collapse, last-seen cluster ID).
 
+### Configuring annotation slots for your own dataset (no code change)
+
+Cropwright ships configured for one domain (legacy's vehicle/license-plate
+dataset), but a deployment can register its own annotation slot — a
+sub-bbox, a text field, a review queue, whatever your class needs — by
+dropping an `annotation-profiles.json` file next to the built app, with
+no fork and no rebuild required to iterate on it:
+
+- **Before a build**: place the file at `static/annotation-profiles.json`
+  in the checkout, then `npm run build` / `docker build` as usual.
+- **Against a running container, no rebuild**: bind-mount the file over
+  `/usr/share/nginx/html/annotation-profiles.json`.
+
+See `static/annotation-profiles.example.json` for a fully worked example
+(a pallet-shipping-label slot) and
+`docs/annotation-slots-contract-draft.md` for the schema. A missing or
+invalid file is always silently ignored — the app falls back to its
+built-in slots and never crashes on a bad config.
+
 ## Data integrity
 
 - Every label change is an immediate API call with optimistic UI.

@@ -56,7 +56,13 @@ of which only tier 1 is wired today:
    into the app — `src/lib/annotations/profiles/licensePlate.ts` is the
    sole real, deployed instance today.
 2. **Deployment override**, loaded from `static/annotation-profiles.json`
-   (tier 2, **not wired** — no fetch exists yet).
+   (tier 2, **wired as of 2026-09-20** —
+   `src/lib/annotations/deploymentProfiles.ts` fetches it in the root
+   layout's `load()` and `src/lib/annotations/config/parseSlotConfig.ts`
+   is the hardened §4/§5 validator that feeds `resolveSlotRegistry`'s
+   `deployment` param. See
+   `docs/design/tier2-annotation-profile-config-plan-2026-09-20.md` for
+   the full design and §9 below for what this closes).
 3. **Server-declared**, `OpClass.annotation_slots` on the class registry
    response (tier 3, **not wired** — the field does not exist on either
    side).
@@ -200,13 +206,24 @@ mirrors.
           }
         },
         "ring": {
-          "type": "object",
-          "required": ["confirmed", "proposed", "rejected"],
-          "properties": {
-            "confirmed": { "type": "string" },
-            "proposed": { "type": "string" },
-            "rejected": { "type": "string" }
-          }
+          "description": "Amended 2026-09-20 (docs/design/tier2-annotation-profile-config-plan-2026-09-20.md §2.3): a JSON config may supply EITHER a named preset string OR the explicit three-string object — never a third, ad hoc shape.",
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["default", "neutral"],
+              "description": "A name from src/lib/annotations/config/allowLists.ts's RING_PRESETS."
+            },
+            {
+              "type": "object",
+              "required": ["confirmed", "proposed", "rejected"],
+              "properties": {
+                "confirmed": { "type": "string" },
+                "proposed": { "type": "string" },
+                "rejected": { "type": "string" }
+              },
+              "description": "Every one of the three values must additionally be a member of RING_CLASS_ALLOWLIST — see §5.4."
+            }
+          ]
         },
         "editor": {
           "type": "object",
@@ -495,6 +512,21 @@ values must therefore be complete, literal class strings, exactly as
 composed from parts (e.g. not `{color}-400` for a server-supplied
 `color`).
 
+**Implemented 2026-09-20 (tier 2):** the object form is additionally
+constrained to a closed allow-list, not merely "any literal string" —
+`src/lib/annotations/config/allowLists.ts`'s `RING_CLASS_ALLOWLIST`,
+derived from the same `RING_PRESETS` a config may reference by name (§4.1's
+amendment). This is stricter than the paragraph above technically
+requires (a literal string that happened not to be pre-declared would
+still satisfy Tailwind's JIT scan, since it's written literally
+somewhere in `allowLists.ts`) — but a config's object-form ring is
+validated against a vocabulary the parser controls, not "any string that
+looks like a Tailwind class," because there is no way for the parser to
+confirm a class name it has never seen is even valid Tailwind syntax,
+let alone one Tailwind's build-time scan will find. Reusing the named
+presets' own literal values as the allow-list is what keeps the two from
+drifting.
+
 ### 5.5 `QueueCapability.keymap` can silently steal a hotkey
 
 `keymap`'s letters feed the reserved-hotkey set computed in
@@ -513,6 +545,28 @@ slot's keymap letters) and a server-declared slot whose keymap collides
 with an already-reserved letter must be rejected (skipped, with a
 warning — see §2's degrade-not-throw rule) rather than silently
 overriding a global action.
+
+**Implemented 2026-09-20 (tier 2), the exact rule:**
+`src/lib/annotations/config/allowLists.ts`'s `FORBIDDEN_SLOT_COMBOS` —
+`n` (skip) and `z` (undo last) are registered by `/review` unconditionally,
+including while a slot tab is active
+(`src/routes/review/+page.svelte:1165-1166`, outside the `if (activeSlot)`
+branch), so a slot may never claim either. `enter` and `arrowright` are
+emitted unconditionally by `buildSlotKeymap`
+(`src/lib/review/slotKeymap.ts:65,91`) — re-declaring either would
+double-register the same combo. `escape` is edit-mode cancel, likewise
+unconditional. `confirm` is a special case, not merely forbidden:
+`buildSlotKeymap` hardcodes it to `enter` and never reads
+`keymap.confirm` at all, so a config declaring anything other than
+exactly `['enter']` for `confirm` is a silent no-op rather than an
+override — the parser rejects it outright instead of accepting-and-
+ignoring, so the operator sees why their `confirm` binding "didn't do
+anything" instead of discovering it by trial and error. Cross-slot: two
+resolved slots may bind the SAME letter to the SAME action (e.g. both
+declaring `markFalsePositive: ['f']`) — they never run concurrently, so
+this is not a real collision — but binding the same letter to two
+DIFFERENT actions across two slots rejects the second slot's keymap
+entry.
 
 ---
 
@@ -758,6 +812,37 @@ Sequencing:
    it into the same `deployment` param is close to a one-line change on
    this side.
 
+**Steps 1 and 2: done, 2026-09-20.** See
+`docs/design/tier2-annotation-profile-config-plan-2026-09-20.md` for the
+full design.
+
+- Step 1's evidence: `src/lib/annotations/deploymentProfiles.ts` fetches
+  `/annotation-profiles.json` in the root layout's `load()` (bounded at
+  2 s, absent-or-malformed degrades silently to tier 1) and feeds the
+  parsed result into `resolveSlotRegistry`'s existing `deployment` param
+  via `installDeploymentSlots()` (`registeredSlots.ts`) — `registry.ts`
+  itself received zero edits, exactly as this document's original
+  sequencing intended.
+- Step 2's evidence: `static/annotation-profiles.example.json` ships a
+  second real slot (`pallet_label`, bound to `wooden_pallet`) that
+  exercises every capability in §4's schema, proven end to end
+  (registry merge, review tab, keymap, reserved hotkeys, training
+  cohorts, `readSlot()`) by
+  `src/lib/annotations/config/exampleProfile.test.ts`. Separately,
+  `src/lib/annotations/config/roundTrip.test.ts` serializes the existing
+  `aircraftTailNumberSlot` to JSON
+  (`config/__fixtures__/aircraftTailNumber.profile.json`) and asserts the
+  reparsed spec is structurally and behaviorally identical to the
+  hand-written TypeScript — **no schema change was needed**; the JSON
+  Schema in §4 (as amended by §4.1's `ring` `oneOf` above) round-trips
+  losslessly, aside from the pre-existing, already-documented §5
+  serialization caveats (functions → template strings, `RegExp` →
+  `{source, flags}`).
+- **Tier 3 is now legitimately askable** — the parser tier 3 will need
+  (`src/lib/annotations/config/parseSlotConfig.ts`) already exists and
+  already accepts the bare-array document shape
+  `OpClass.annotation_slots` will hand it, unchanged.
+
 ---
 
 ## 10. Open questions for the backend
@@ -779,6 +864,23 @@ Numbered for inline reply:
    the placeholder vocabulary (`{cropId}`, `{size}`, …) once, shared by
    both `SlotEndpoints`/`thumbnail.path` here and `CohortTemplate` in
    `cohorts.ts`, or does each capability define its own closed set?
+
+   **Cropwright's own answer, decided 2026-09-20 for tier 2 (this is a
+   frontend-only decision until the backend weighs in — happy to
+   reconsider):** one shared registry, per-site subsets.
+   `src/lib/annotations/config/allowLists.ts` is the single place a
+   placeholder name is declared, but it exports two distinct constant
+   sets rather than one flat vocabulary — `PATH_PLACEHOLDERS`
+   (`cropId`, `size`) for `SlotEndpoints`/`thumbnail.path`, and
+   `COHORT_PLACEHOLDERS` (`classId`, `slotKey`) for a training cohort's
+   `query.path`/`query.params`, mirroring `cohorts.ts`'s existing
+   `CohortTemplate` comment ("no arbitrary expressions, no field
+   access"). The two sets are deliberately disjoint today — a path
+   template never needs `{classId}` and a cohort query never needs
+   `{cropId}` — so `validatePathTemplate()` takes the applicable set as
+   a parameter rather than exposing one placeholder namespace a
+   capability could accidentally use out of context.
+
 6. Timeline expectation for H2 (backend publishes its new route
    prefix/index names)? This repo's `API_PREFIX` (Phase B,
    `docs/design/backend-integration-phase-b-plan-2026-09-20.md`) is

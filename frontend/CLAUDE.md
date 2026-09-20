@@ -358,6 +358,32 @@ readSlot.ts`) against a `SlotSpec` (`registeredSlots.ts`) rather than
 - `getTrainingCandidates(mode, params)` — `/curation/plates/training_candidates`
   with 4 cohort modes.
 
+## Deployment annotation profiles (tier 2, 2026-09-20)
+
+A deployment configures its own annotation slots by placing
+`annotation-profiles.json` next to the built `index.html` — either in
+`static/` before a build, or bind-mounted over
+`/usr/share/nginx/html/annotation-profiles.json` in the running
+container. It is fetched once, in the root layout's `load()`, parsed by
+`src/lib/annotations/config/parseSlotConfig.ts`, and merged over the
+built-in profiles per-key REPLACE. **Absent or malformed ⇒ built-in
+slots only, with a console warning and one toast — never a crash.** The
+file is untrusted operator input: template paths, Tailwind ring classes,
+regex flags and hotkeys all validate against closed allow-lists in
+`src/lib/annotations/config/allowLists.ts`. See
+`static/annotation-profiles.example.json` for a worked example and
+`docs/annotation-slots-contract-draft.md` §4 for the schema, and
+`docs/design/tier2-annotation-profile-config-plan-2026-09-20.md` for the
+full design.
+
+`registeredSlots.ts` (referenced earlier in this file, and by
+`docs/genericization-plan-2026-09-13.md`) is the **tier-1**, build-time
+registration point — "register a new domain by adding a line there" is
+still true for a developer with a checkout. It is no longer the _only_
+registration point: a deployment operator with no checkout at all
+registers a domain via the JSON file above instead, through the same
+`resolveSlotRegistry`/merge-by-replace mechanism.
+
 ## Development
 
 ```bash
