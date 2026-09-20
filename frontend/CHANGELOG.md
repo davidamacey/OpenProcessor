@@ -6,18 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- Rebranded the app from "legacy Labeler" to **Cropwright** (Track N1 of
-  `docs/genericization-plan-2026-09-13.md`, cosmetic-only — no behavior
-  change): `package.json` name → `cropwright`, browser tab title, top-bar
-  wordmark/badge (now `Cropwright` / `CW`, and env-configurable via
-  `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE`, same convention as
-  `PUBLIC_TRITON_API_URL`), README framing, and `CLAUDE.md`'s project
-  description. Also corrected `CLAUDE.md`'s component references, which
-  still named the pre-genericization `DetectorChip.svelte`/`PlateCard.svelte`
-  — the actual current files are `ProvenanceChip.svelte`/`SlotCard.svelte`.
-
 ### Added
 
 - `docs/FEATURES.md` — a full visual feature tour (screenshot + explanation
@@ -68,6 +56,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **The `genericization-wip` line of work landed on `master`** (2026-09-20,
+  merge of 26 commits implementing Phases 0-4 of
+  `docs/genericization-plan-2026-09-13.md`; see
+  `docs/design/genericization-wip-merge-plan-2026-09-20.md` for the merge
+  record). Everything under this heading and the Added/Fixed entries below
+  that reference `src/lib/annotations/` arrived together in that merge. No
+  backend change was required for any of it — the whole mechanism reads
+  through the frontend-side field-mapping adapter (`readSlot`), so
+  openprocessor's wire format is untouched.
+- Rebranded the app from "legacy Labeler" to **Cropwright** (Track N1 of
+  `docs/genericization-plan-2026-09-13.md`, cosmetic-only — no behavior
+  change): `package.json` name → `cropwright`, browser tab title, top-bar
+  wordmark/badge (now `Cropwright` / `CW`, and env-configurable via
+  `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE`, same convention as
+  `PUBLIC_TRITON_API_URL`), README framing, and `CLAUDE.md`'s project
+  description. Also corrected `CLAUDE.md`'s component references, which
+  still named the pre-genericization `DetectorChip.svelte`/`PlateCard.svelte`
+  — the actual current files are `ProvenanceChip.svelte`/`SlotCard.svelte`.
 - `PlateBboxCanvas.svelte` renamed to `BboxCanvas.svelte` and
   `plate_geometry.ts` renamed to `bboxFrames.ts` (P2.1,
   `docs/genericization-plan-2026-09-13.md` §3.1) — both were already
