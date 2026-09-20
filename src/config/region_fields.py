@@ -119,11 +119,18 @@ _default_region_fields: RegionFields | None = None
 def get_region_fields() -> RegionFields:
     """Module-level default ``RegionFields`` instance.
 
+    Built via :meth:`RegionFields.from_env` so the ``OP_REGION_FIELD_*``
+    env vars documented on that classmethod actually take effect for the
+    process-wide default — this was previously constructing a bare
+    ``RegionFields()`` and silently ignoring every ``OP_REGION_FIELD_*``
+    override.
+
     Callers that need a deployment-specific instance (e.g. a future
     overlay for an existing deployment) should construct and inject
-    their own rather than relying on this default.
+    their own rather than relying on this default — mirrors
+    :func:`src.config.curation.get_curation_config`.
     """
     global _default_region_fields  # noqa: PLW0603 - lazily-built module singleton
     if _default_region_fields is None:
-        _default_region_fields = RegionFields()
+        _default_region_fields = RegionFields.from_env()
     return _default_region_fields
