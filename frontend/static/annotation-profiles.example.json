@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "slots": [
+    {
+      "key": "pallet_label",
+      "bind": { "className": "wooden_pallet" },
+      "label": {
+        "singular": "pallet label",
+        "plural": "pallet labels",
+        "title": "Pallet label"
+      },
+      "capabilities": {
+        "subBox": {
+          "bboxField": "label_bbox_norm",
+          "storedFrame": "source",
+          "frameField": "label_bbox_frame",
+          "scoreField": "label_score",
+          "visibleField": "label_visible",
+          "envelope": {
+            "aspectMin": 0.5,
+            "aspectMax": 2.5,
+            "maxWidthFrac": 0.7,
+            "maxHeightFrac": 0.7,
+            "maxAreaFrac": 0.35
+          },
+          "thumbnail": {
+            "path": "/crops/{cropId}/region_thumbnail?size={size}",
+            "aspect": "1 / 1",
+            "defaultSize": 160
+          },
+          "ring": "default",
+          "editor": { "thumbSize": 512, "viewPadding": 2.0, "nudgeStep": 0.001953125 }
+        },
+        "text": {
+          "valueField": "label_text",
+          "rawField": "label_text_raw",
+          "sourceField": "label_text_source",
+          "confidenceField": "label_text_confidence",
+          "label": "SSCC code",
+          "placeholder": "000123456700000000",
+          "transform": "uppercase",
+          "monospace": true,
+          "pattern": { "source": "^[0-9]{18}$", "flags": "" },
+          "maxLength": 18
+        },
+        "provenance": {
+          "detectorField": "label_detector",
+          "detectorVersionField": "label_detector_version",
+          "chainField": "label_detector_chain",
+          "verifierField": "label_verifier",
+          "verifiedAtField": "label_verified_at",
+          "showChainOnCard": true
+        },
+        "lifecycle": {
+          "statusField": "label_status",
+          "verifiedField": "label_verified",
+          "rejectionReasonField": "label_rejection_reason",
+          "states": [
+            {
+              "value": "pending_detection",
+              "label": "pending detection",
+              "humanWritable": false,
+              "role": "pending"
+            },
+            {
+              "value": "detected",
+              "label": "detected (label visible)",
+              "humanWritable": true,
+              "role": "proposed"
+            },
+            {
+              "value": "no_label_visible",
+              "label": "no label visible",
+              "humanWritable": true,
+              "role": "absent"
+            },
+            {
+              "value": "unreadable",
+              "label": "unreadable / damaged",
+              "humanWritable": true,
+              "role": "rejected"
+            },
+            {
+              "value": "false_positive",
+              "label": "false positive (keep box)",
+              "humanWritable": true,
+              "role": "falsePositive",
+              "dim": true,
+              "badge": "false pos"
+            }
+          ],
+          "confirmState": "detected",
+          "rejectState": "no_label_visible",
+          "falsePositiveState": "false_positive"
+        },
+        "queue": {
+          "endpointId": "pallet_labels",
+          "urlId": "pallet_labels",
+          "tabLabel": "Pallet labels",
+          "browsePath": "/pallet_labels",
+          "keymap": {
+            "confirm": ["enter"],
+            "reject": ["r"],
+            "markFalsePositive": ["f"],
+            "editBox": ["e"],
+            "back": ["arrowleft", "b"]
+          },
+          "textFilter": {
+            "param": "text",
+            "label": "SSCC",
+            "placeholder": "e.g. 0001234"
+          },
+          "alwaysVisible": true
+        },
+        "trainingCohorts": {
+          "cohorts": [
+            {
+              "id": "validated_labels",
+              "label": "Validated pallet labels",
+              "description": "Human-confirmed label boxes for this class",
+              "query": {
+                "kind": "endpoint",
+                "path": "/crops",
+                "params": { "class_id": "{classId}", "label_validated": true }
+              },
+              "rowKind": "crop",
+              "reviewTarget": "all"
+            }
+          ]
+        }
+      },
+      "endpoints": {
+        "setBox": "/crops/{cropId}/region",
+        "clearBox": "/crops/{cropId}/region",
+        "patchMeta": "/crops/{cropId}/region_meta",
+        "batchStatus": "/pallet_labels/batch_status"
+      },
+      "stats": {
+        "key": "pallet_labels",
+        "panelTitle": "Pallet-label detections",
+        "coverageTitle": "Pallet-label coverage"
+      }
+    }
+  ]
+}

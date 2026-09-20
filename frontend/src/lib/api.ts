@@ -2212,7 +2212,7 @@ export interface AutoLabelStartParams {
   // -- VLM-assisted scoping (2026-09-20 contract, this plan §1.3) --------
   /**
    * Scope the run to a single class instead of the whole pool — "just
-   * help me with pallets right now". Same `class_id` filter convention
+   * help me with forklifts right now". Same `class_id` filter convention
    * as `getCrops`/`getClusters`/`/select/diverse` elsewhere in this
    * file. `null`/omitted = today's unscoped, whole-dataset behavior, and
    * `qs()` drops it entirely so an unscoped request stays byte-identical

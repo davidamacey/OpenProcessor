@@ -23,3 +23,8 @@ diagnostics/**/*.jpg
 diagnostics/**/*.png
 diagnostics/**/sample_docs.json
 lpr-error-disaply-review.png
+
+# Deployment-local annotation-slot configuration (tier 2). The real file
+# is supplied per-deployment; only the .example.json is tracked, exactly
+# like .env / .env.example above.
+static/annotation-profiles.json
