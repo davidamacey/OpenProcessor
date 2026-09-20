@@ -398,12 +398,109 @@ def _classes_body() -> dict[str, Any]:
     }
 
 
+def _settings_body() -> dict[str, Any]:
+    """Curation-strategy shared-defaults document (one row, doc id
+    :data:`CURATION_SETTINGS_DOC_ID`) -- backs ``GET/PUT /curation/settings``
+    and :func:`~src.services.curation.strategy_registry.resolve_effective_default`.
+
+    ``defaults`` is deliberately ``enabled: false`` (stored, never
+    indexed/searchable) rather than a strict per-axis mapping: it is an
+    OPEN map keyed by axis id (a future axis must not require a mapping
+    change / reindex), and nothing ever queries into it -- every read is
+    a single ``GET`` by the fixed doc id, never a search. OpenSearch's
+    partial ``update`` API still does its normal recursive object merge
+    against `_source` regardless of ``enabled``, which is exactly what a
+    partial ``PUT /curation/settings`` needs (merge one axis in without
+    clobbering the others).
+    """
+    return {
+        'settings': _plain_settings(),
+        'mappings': {
+            'properties': {
+                'defaults': {'type': 'object', 'enabled': False},
+                'updated_at': {'type': 'date'},
+                'updated_by': {'type': 'keyword'},
+            }
+        },
+    }
+
+
 INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.IMAGES: _images_body(),
     IndexRole.ITEMS: _items_body(),
     IndexRole.LABELS_CONFIRMED: _labels_confirmed_body(),
     IndexRole.CLASSES: _classes_body(),
+    IndexRole.SETTINGS: _settings_body(),
 }
+
+
+CURATION_SETTINGS_DOC_ID = 'default'
+"""Fixed OpenSearch doc id the settings index always addresses -- this is a
+single shared-defaults document, not a full index of many settings rows
+(curation_design_rationale.md's config-dataclass philosophy: one small,
+explicit piece of deployment/runtime state, not a generic key-value
+store). ``'default'`` (not e.g. ``'singleton'``) because it reads naturally
+alongside the field it stores (\"the defaults doc\"), and because a future
+per-tenant settings doc (if this ever stops being a single shared
+instance) would key by tenant id with this same literal as the
+single-tenant fallback."""
+
+
+async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) -> dict[str, Any]:
+    """Fetch the shared curation-settings document.
+
+    Get-or-default-empty: a missing document (nothing has ever been PUT)
+    is not an error -- it means "no shared override for any axis yet" --
+    so this always returns the full envelope shape with ``defaults: {}``
+    rather than raising or returning ``None``.
+    """
+    active_cfg = cfg or config
+    index = index_name(active_cfg, IndexRole.SETTINGS)
+    source: dict[str, Any] = {}
+    try:
+        resp = await client.get(index=index, id=CURATION_SETTINGS_DOC_ID)
+        source = resp.get('_source') or {} if isinstance(resp, dict) else {}
+    except Exception as exc:
+        # Mirrors image_serving.fetch_crop_source's duck-typed not-found
+        # check -- avoids a hard opensearchpy import just to catch
+        # NotFoundError, so a plain test mock with a raising `.get` works
+        # the same way the real client does.
+        msg = str(exc).lower()
+        if not ('notfound' in msg or 'not found' in msg or '404' in msg):
+            logger.warning('curation_settings_get_failed', error=str(exc))
+    return {
+        'defaults': dict(source.get('defaults') or {}),
+        'updated_at': source.get('updated_at'),
+        'updated_by': source.get('updated_by'),
+    }
+
+
+async def update_curation_settings(
+    client: Any, defaults: dict[str, str], cfg: CurationConfig | None = None
+) -> dict[str, Any]:
+    """Partially merge ``defaults`` into the single shared settings doc.
+
+    Uses OpenSearch's partial-update ``doc`` merge (recursive for object
+    fields, per the update API's documented semantics) so axes not
+    mentioned in this call are left untouched -- callers never need to
+    read-modify-write the whole document themselves. ``doc_as_upsert``
+    creates the document on the very first write. ``updated_by`` stays
+    ``None`` -- there is no user-account system yet (single shared
+    instance) -- but the field is written on every call so the schema
+    already carries it for when one exists.
+    """
+    active_cfg = cfg or config
+    index = index_name(active_cfg, IndexRole.SETTINGS)
+    body = {
+        'doc': {
+            'defaults': defaults,
+            'updated_at': datetime.now(UTC).isoformat(),
+            'updated_by': None,
+        },
+        'doc_as_upsert': True,
+    }
+    await client.update(index=index, id=CURATION_SETTINGS_DOC_ID, body=body, refresh=True)
+    return await get_curation_settings(client, cfg=active_cfg)
 
 
 async def get_curation_index_settings() -> dict[str, dict[str, Any]]:
@@ -1520,6 +1617,7 @@ def get_class_registry() -> ClassRegistry:
 
 
 __all__ = [
+    'CURATION_SETTINGS_DOC_ID',
     'INDEX_BODIES',
     'ClassRegistry',
     'ClassRegistryError',
@@ -1541,5 +1639,7 @@ __all__ = [
     'ensure_items_viz_fields',
     'get_class_registry',
     'get_curation_index_settings',
+    'get_curation_settings',
     'mget_crops',
+    'update_curation_settings',
 ]

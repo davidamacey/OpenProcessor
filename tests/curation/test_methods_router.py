@@ -277,7 +277,13 @@ def test_detection_profile_registry_supports_more_than_one_profile() -> None:
 
         from src.services.curation.strategy_registry import _detection_profile_strategies
 
-        entries = {e['id']: e for e in _detection_profile_strategies()}
+        # No shared-settings override configured for this test -- pass the
+        # registry's own hardcoded default straight through, same as
+        # resolve_effective_default('detection_profile', opensearch=None).
+        entries = {
+            e['id']: e
+            for e in _detection_profile_strategies(profile_registry.get_default_profile_name())
+        }
         assert set(entries) == {'license_plate', 'shipping_label'}
         assert entries['license_plate']['default'] is True
         assert entries['shipping_label']['default'] is False

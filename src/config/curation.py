@@ -41,6 +41,7 @@ class IndexRole(str, Enum):
     ITEMS = 'items'
     LABELS_CONFIRMED = 'labels_confirmed'
     CLASSES = 'classes'
+    SETTINGS = 'settings'
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,11 @@ class CurationConfig:
     labels_confirmed_index: str = 'op_labels_confirmed'
     classes_index: str = 'op_classes'
     clusters_index: str = 'op_clusters'
+    # Single shared-defaults document (curation-strategy settings) — one
+    # doc, not a full index of many rows. See
+    # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
+    # fixed doc id this index always addresses.
+    settings_index: str = 'op_curation_settings'
 
     class_registry_path: Path = Path('./data/class_registry.json')
     # Optional deployment-supplied VLM PromptPack (see
@@ -126,6 +132,7 @@ class CurationConfig:
             labels_confirmed_index=_str('LABELS_CONFIRMED_INDEX', defaults.labels_confirmed_index),
             classes_index=_str('CLASSES_INDEX', defaults.classes_index),
             clusters_index=_str('CLUSTERS_INDEX', defaults.clusters_index),
+            settings_index=_str('SETTINGS_INDEX', defaults.settings_index),
             class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
             source_root=_path('SOURCE_ROOT', defaults.source_root),
@@ -149,6 +156,7 @@ _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.ITEMS: 'items_index',
     IndexRole.LABELS_CONFIRMED: 'labels_confirmed_index',
     IndexRole.CLASSES: 'classes_index',
+    IndexRole.SETTINGS: 'settings_index',
 }
 
 
