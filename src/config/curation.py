@@ -61,6 +61,13 @@ class CurationConfig:
     clusters_index: str = 'op_clusters'
 
     class_registry_path: Path = Path('./data/class_registry.json')
+    # Optional deployment-supplied VLM PromptPack (see
+    # ``src.services.labeling.vlm_prompts.PromptPack.from_json`` and
+    # ``docs/design/curation_design_rationale.md``'s PromptPack section).
+    # ``None`` (the default) means "use the generic built-in pack" —
+    # unlike the other paths on this dataclass there is no on-disk
+    # default to fall back to, since most deployments never need one.
+    prompt_pack_path: Path | None = None
     source_root: Path = Path('./data/images')
     export_root: Path = Path('./data/exports')
     source_path_aliases: Mapping[str, Path] = field(default_factory=dict)
@@ -105,6 +112,10 @@ class CurationConfig:
             value = os.environ.get(f'{prefix}{name}')
             return Path(value) if value else default
 
+        def _optional_path(name: str, default: Path | None) -> Path | None:
+            value = os.environ.get(f'{prefix}{name}')
+            return Path(value) if value else default
+
         def _int(name: str, default: int) -> int:
             value = os.environ.get(f'{prefix}{name}')
             return int(value) if value else default
@@ -116,6 +127,7 @@ class CurationConfig:
             classes_index=_str('CLASSES_INDEX', defaults.classes_index),
             clusters_index=_str('CLUSTERS_INDEX', defaults.clusters_index),
             class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
+            prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
             source_root=_path('SOURCE_ROOT', defaults.source_root),
             export_root=_path('EXPORT_ROOT', defaults.export_root),
             source_path_aliases=defaults.source_path_aliases,

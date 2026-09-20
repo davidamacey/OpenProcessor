@@ -87,3 +87,23 @@ def test_from_env_overrides_bakeoff_eval_root(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv('OP_BAKEOFF_EVAL_ROOT', '/tmp/my_bakeoff_eval')
     cfg = CurationConfig.from_env()
     assert cfg.bakeoff_eval_root == Path('/tmp/my_bakeoff_eval')
+
+
+def test_prompt_pack_path_defaults_to_none() -> None:
+    """Unlike the other path fields, there is no generic on-disk default --
+    most deployments never need a custom PromptPack (labeling-assist plan
+    task a)."""
+    cfg = CurationConfig()
+    assert cfg.prompt_pack_path is None
+
+
+def test_from_env_overrides_prompt_pack_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_PROMPT_PACK_PATH', '/tmp/my_pack.json')
+    cfg = CurationConfig.from_env()
+    assert cfg.prompt_pack_path == Path('/tmp/my_pack.json')
+
+
+def test_from_env_prompt_pack_path_unset_stays_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_PROMPT_PACK_PATH', raising=False)
+    cfg = CurationConfig.from_env()
+    assert cfg.prompt_pack_path is None
