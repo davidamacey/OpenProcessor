@@ -308,7 +308,9 @@ async def review_queue(
         )
 
     try:
-        sort_clause, sort_applied, sort_fallback_reason = review_sorts.build_sort(sort, tab=tab)
+        sort_clause, sort_applied, sort_fallback_reason = await review_sorts.build_sort(
+            sort, tab=tab, opensearch=opensearch
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
