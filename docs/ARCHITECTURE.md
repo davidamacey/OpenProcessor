@@ -85,8 +85,9 @@ single configurable prefix (`CurationConfig.api_prefix`, default
 was genericized out of a private, domain-specific reference
 implementation (vehicle/license-plate curation) via
 [`docs/design/oss_genericization_phase2_plan.md`](design/oss_genericization_phase2_plan.md);
-the wire contract with an existing labeler frontend is documented in
-[`docs/design/labeler_api_contract.md`](design/labeler_api_contract.md).
+the generic wire contract (Cropwright's labeler frontend is one
+consumer among anticipated others) is documented in
+[`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
 
 ### Design principles
 
@@ -109,7 +110,7 @@ the wire contract with an existing labeler frontend is documented in
   `ItemDoc.plate_bbox_norm`) are frozen and never renamed by this
   genericization; only the *OpenSearch field* a handler reads/writes
   internally is routed through `RegionFields`. See
-  `labeler_api_contract.md` for the full frozen-vs-configurable split.
+  `curation_api_contract.md` for the full frozen-vs-configurable split.
 - **Services before routers, leaves before trunks.** The service layer
   (`src/services/curation/`, `src/services/detection/`,
   `src/services/labeling/`, `src/services/training/`) has no FastAPI
@@ -132,7 +133,7 @@ the wire contract with an existing labeler frontend is documented in
 | Detection cascade | `src/services/detection/` | Crop quality, frame dedup, PE preprocessing, ensemble NMS, region lean, FP store, cascade orchestration |
 | VLM labeling | `src/services/labeling/{vlm_client,vlm_labeler,vlm_prompts}.py` | VLM transport/retry, class-resolution + region-verify orchestration, prompt/vocabulary packs |
 | Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote, bakeoff harness |
-| Routers | `src/routers/curation/` (21 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `labeler_api_contract.md` for the full route table |
+| Routers | `src/routers/curation/` (21 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `curation_api_contract.md` for the full route table |
 | Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,sam_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
 
 ### What's intentionally thinner than the reference

@@ -15,9 +15,9 @@ names — a rename becomes a config flip, not a code change.
 
 - OpenSearch query bodies, ``_source`` lists, bulk update docs, painless
   scripts, and index mapping bodies — YES, governed by ``RegionFields``.
-- Pydantic attribute names on HTTP wire models (the labeler frontend's
-  JSON contract) — NO, frozen independently. See
-  ``docs/design/labeler_api_contract.md``.
+- Pydantic attribute names on HTTP wire models (the generic curation
+  API's JSON contract) — NO, frozen independently. See
+  ``docs/design/curation_api_contract.md``.
 - Enum *values* in ``src/config/plate_state.py`` — NO, values not field
   names, untouched in Phase 2.
 - Metric names — NO, deferred to a later phase.

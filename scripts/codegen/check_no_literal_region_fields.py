@@ -24,10 +24,10 @@ Two hardcoded exemptions (never driven by ``PORTED_PATHS``):
 - ``tests/curation/test_region_fields.py`` — the overridability fixture
   legitimately constructs a `plate_*`-named instance.
 
-Plus two line-level skips for the frozen HTTP wire contract with the
-labeler frontend (see ``docs/design/labeler_api_contract.md``) — never
-an OpenSearch field reference, and explicitly out of ``RegionFields``'
-scope:
+Plus two line-level skips for the frozen HTTP wire contract of the
+generic curation API (see ``docs/design/curation_api_contract.md``) —
+never an OpenSearch field reference, and explicitly out of
+``RegionFields``' scope:
 
 - Pydantic attribute declarations of the shape ``plate_foo: ...``
   (matching ``^\\s*plate_[a-z_]+\\s*:``).

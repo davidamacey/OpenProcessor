@@ -45,8 +45,7 @@ Technical documentation for the Visual AI API.
 
 | Document | Description |
 |----------|-------------|
-| [design/oss_genericization_phase2_plan.md](design/oss_genericization_phase2_plan.md) | The plan that built the generic `curation` subsystem (config, clustering, scoring, training, VLM labeling, detection cascade) |
-| [design/labeler_api_contract.md](design/labeler_api_contract.md) | `/curation` HTTP wire contract — Pydantic model field names, frozen vs. configurable |
+| [design/curation_api_contract.md](design/curation_api_contract.md) | `/curation` HTTP wire contract — Pydantic model field names, frozen vs. configurable, capability discovery (`/methods`) |
 
 ---
 
@@ -66,7 +65,7 @@ The API provides these endpoint groups (all on port 4603):
 | `/clusters` | FAISS clustering | train, stats, albums |
 | `/query` | Data retrieval | image, stats, duplicates |
 | `/health` | Monitoring | Service health, model status |
-| `/curation` | Curation + active-learning labeling subsystem | classes, crops, regions, clusters, review, scores, select, VLM labeling, training, export, pipeline — see [labeler_api_contract.md](design/labeler_api_contract.md) |
+| `/curation` | Curation + active-learning labeling subsystem | classes, crops, regions, clusters, review, scores, select, VLM labeling, training, export, pipeline — see [curation_api_contract.md](design/curation_api_contract.md) |
 
 ---
 
