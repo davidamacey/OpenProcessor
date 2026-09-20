@@ -45,8 +45,9 @@
     ) => void | Promise<void>;
     /** When true, gray out the form (a run is active). */
     disabled?: boolean;
-    /** True when the selected dataset is the single-class LPR export. */
-    lpr?: boolean;
+    /** True when the selected dataset is a single-class export (trains
+     *  with `single_cls`, no class subset). */
+    singleClassExport?: boolean;
   }
 
   let {
@@ -60,7 +61,7 @@
     onStart,
     onStartCampaign,
     disabled = false,
-    lpr = false,
+    singleClassExport = false,
   }: Props = $props();
 
   // ---- Form state -------------------------------------------------------
@@ -133,7 +134,7 @@
   // The LPR export is single-class (nc=1, license_plate). Collapse to one
   // class so the run never depends on the multi-class registry.
   $effect(() => {
-    if (lpr) singleCls = true;
+    if (singleClassExport) singleCls = true;
   });
 
   // First time profiles arrive, seed the defaults.
@@ -177,8 +178,8 @@
       // The LPR export is already a single-class (class 0) dataset, so never
       // filter it by the multi-class registry ids (e.g. license_plate=80) —
       // that drops every label. Send no class subset for LPR runs.
-      include_classes: lpr ? null : selectedClasses,
-      single_cls: lpr ? true : singleCls,
+      include_classes: singleClassExport ? null : selectedClasses,
+      single_cls: singleClassExport ? true : singleCls,
       hyperparameters: buildHyperparameters(),
       augmentation: augmentation && augmentation.enabled ? augmentation : null,
       auto_quantize_bakeoff: autoQuantizeBakeoff,
@@ -200,8 +201,8 @@
         : null;
     return {
       dataset_export_dir: datasetExportDir,
-      include_classes: lpr ? null : selectedClasses,
-      single_cls: lpr ? true : singleCls,
+      include_classes: singleClassExport ? null : selectedClasses,
+      single_cls: singleClassExport ? true : singleCls,
       cuda_visible_devices: cudaDevices,
       augmentation: augmentation && augmentation.enabled ? augmentation : null,
       runs,

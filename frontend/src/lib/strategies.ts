@@ -10,8 +10,8 @@
  * field (see `strategy_registry.py`'s `StrategyAxis`), NOT four separate
  * top-level arrays as this file originally assumed from the plan doc's
  * illustrative example. `parseKbMethodsResponse` below reshapes the flat
- * list into the four buckets (`cluster_methods`/`review_sorts`/`overlays`/
- * `scores`) client-side by grouping on `axis`, so every downstream consumer
+ * list into the five buckets (`cluster_methods`/`review_sorts`/`overlays`/
+ * `scores`/`dataset_exports`) client-side by grouping on `axis`, so every downstream consumer
  * (`isDiverseOverlayAvailable`, `StrategyBar`, etc.) keeps working against
  * the original four-array `OpMethodsResponse` shape unchanged — only this
  * parse function needed to change once the real contract was confirmed.
@@ -129,11 +129,40 @@ export interface ScoreInfo extends MethodInfoBase {
   version?: string | null;
 }
 
+/**
+ * One dataset-export *kind* that `POST {API_PREFIX}/export/{id}` can
+ * actually produce on this deployment (backend
+ * `strategy_registry.py`'s `_export_strategies()`, `axis: 'export'`,
+ * added by T-C2 of `cropwright_backend_integration_plan.md` §4.3).
+ *
+ * CONFIRMED against the backend @ `3ab36ec`: today the axis holds
+ * exactly one entry, `{id: 'yolo', axis: 'export', label: 'YOLO
+ * detection dataset export', status: 'stable', default: true}`.
+ *
+ * **Absence is the signal, not a status.** OpenProcessor omits `lpr`
+ * entirely rather than advertising it `disabled`, because a status
+ * implies "not yet, but this deployment could serve it later" — untrue
+ * for a proprietary overlay the repo does not contain
+ * (`curation_api_contract.md`, the `export` axis section). So a consumer
+ * must treat "no entry" and "entry at shadow/disabled" identically:
+ * hide the UI.
+ */
+export interface DatasetExportInfo extends MethodInfoBase {
+  /** True on the kind the backend treats as its primary export. */
+  default?: boolean;
+}
+
 export interface OpMethodsResponse {
   cluster_methods: ClusterMethodInfo[];
   review_sorts: ReviewSortInfo[];
   overlays: OverlayInfo[];
   scores: ScoreInfo[];
+  /**
+   * `axis: 'export'` entries. Named for what they are rather than by
+   * mechanically pluralizing the axis, the same way `cluster` →
+   * `cluster_methods` and `sort` → `review_sorts` already are.
+   */
+  dataset_exports: DatasetExportInfo[];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -198,7 +227,7 @@ function normalizeAxis<T extends MethodInfoBase>(
 /**
  * Parse+normalize a raw `/curation/methods` payload. Never throws — any
  * unrecognized shape (missing `strategies` key, a non-array value, garbage
- * entries, an entry whose `axis` isn't one of the four known ones) degrades
+ * entries, an entry whose `axis` isn't one of the five known ones) degrades
  * to empty lists for the affected bucket rather than propagating an
  * exception into the api/store layer. Unknown `id`s are carried through
  * as-is (nothing here validates ids against a fixed enum, by design —
@@ -210,7 +239,7 @@ function normalizeAxis<T extends MethodInfoBase>(
  * `axis` field per entry (confirmed live 2026-09-10 — see this file's
  * header comment), not four separate top-level arrays. This function is
  * the sole place that reshapes it; everything downstream still sees the
- * original four-bucket `OpMethodsResponse` shape.
+ * original bucketed `OpMethodsResponse` shape.
  */
 export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
   const rec = isRecord(raw) ? raw : {};
@@ -246,6 +275,14 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
       field_coverage_total: optNumber(e.field_coverage_total),
       version: optString(e.version),
     })),
+    dataset_exports: normalizeAxis<DatasetExportInfo>(
+      strategies,
+      'export',
+      (base, e) => ({
+        ...base,
+        default: optBool(e.default),
+      }),
+    ),
   };
 }
 
@@ -338,6 +375,32 @@ export function isSemanticSearchAvailable(overlays: OverlayInfo[]): boolean {
 }
 
 /**
+ * Whether `{API_PREFIX}/methods` currently advertises the dataset-export
+ * `kind` (`'yolo'`, `'lpr'`, …) as something this deployment can
+ * actually produce. Mirrors `isDiverseOverlayAvailable` /
+ * `isEmbeddingVizAvailable` / `isSemanticSearchAvailable` exactly: same
+ * `stable`/`experimental`-only bar, same "absent / shadow / disabled
+ * never renders" contract.
+ *
+ * This is the single gate `/train` uses to decide whether the optional
+ * single-class export panel exists at all — absent, not disabled, and
+ * with no status request fired behind it. It must never be replaced by
+ * probing `POST {API_PREFIX}/export/{kind}` for a 404: that endpoint is
+ * a *write* that kicks off a real dataset build, and probing
+ * `/export/{kind}/status` instead conflates "export unsupported" with
+ * "no export has run yet" (`cropwright_backend_integration_plan.md`
+ * §4.3; `curation_api_contract.md`'s `export` axis section).
+ */
+export function isDatasetExportAvailable(
+  datasetExports: DatasetExportInfo[],
+  kind: string,
+): boolean {
+  return datasetExports.some(
+    (e) => e.id === kind && (e.status === 'stable' || e.status === 'experimental'),
+  );
+}
+
+/**
  * Whether an entry's `field_coverage` should be treated as "has real data,
  * safe to offer" (audit-remediation plan Phase 6, P1-2/P1-3). This is the
  * single place the null-vs-zero distinction lives — every caller (the sort
@@ -410,4 +473,12 @@ export const FALLBACK_METHODS: OpMethodsResponse = {
   ],
   overlays: [],
   scores: [],
+  // Empty, NOT `[{id: 'yolo', …}]`. This is the 404/network-failure path,
+  // and the entire point of the export axis is that an optional export
+  // panel stays hidden unless the server affirmatively says it works.
+  // Guessing a kind here would re-introduce exactly the "render a button
+  // that 404s" failure the gate exists to prevent, on the one code path
+  // where we have no information at all. Same reasoning as
+  // `overlays`/`scores` being empty above.
+  dataset_exports: [],
 };

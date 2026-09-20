@@ -63,4 +63,9 @@ describe('TrainForm.svelte GPU picker', () => {
   it('renders the shared gpuAdvisory(...) text instead of a one-off inline conditional', () => {
     expect(src).toMatch(/gpuAdvisory\(cudaDevices\)/);
   });
+
+  it('takes the generic singleClassExport prop, not the domain-specific lpr one', () => {
+    expect(src).toMatch(/singleClassExport\?:\s*boolean/);
+    expect(src).not.toMatch(/\blpr\b/);
+  });
 });

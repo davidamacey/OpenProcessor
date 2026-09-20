@@ -52,8 +52,11 @@
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
-  import { slotRegistry } from '$lib/annotations/registeredSlots';
+  import { slotRegistry, registeredSlots } from '$lib/annotations/registeredSlots';
   import { cohortsForClass, type CohortSpec } from '$lib/annotations/cohorts';
+  import { datasetExportForSlot } from '$lib/annotations/datasetExport';
+  import { isDatasetExportAvailable } from '$lib/strategies';
+  import { strategiesStore } from '$stores/strategies.svelte';
   import type { OpCrop, OpDataset, ReviewItem } from '$lib/types';
   import type {
     ClassSubsetPreset,
@@ -79,6 +82,45 @@
   // ---- Reference data --------------------------------------------------
   let profiles = $state<Profile[]>([]);
   let presets = $state<ClassSubsetPreset[]>([]);
+
+  /**
+   * The one registered slot that declares a dataset export. Today that is
+   * `license_plate` and only `license_plate` — but reading it off
+   * `registeredSlots` rather than importing `licensePlateSlot` directly
+   * keeps `/train` on the same "register a new domain in exactly one
+   * file" rule every other slot-aware route follows (see
+   * `registeredSlots.ts`'s header). `undefined` when no registered slot
+   * declares one, in which case the panel never renders at all.
+   */
+  const datasetExportSpec = registeredSlots
+    .map(datasetExportForSlot)
+    .find((s) => s !== undefined);
+
+  // Capability discovery is a cached, never-rejecting one-shot
+  // (strategiesStore.init() is idempotent; getMethods() degrades to
+  // FALLBACK_METHODS on any failure), so calling it from an $effect is
+  // the same pattern /clusters uses for the embedding-plot toggle.
+  $effect(() => {
+    void strategiesStore.init();
+  });
+
+  /**
+   * Whether the backend advertises this export kind on
+   * `GET {API_PREFIX}/methods`'s `export` axis. Absent ⇒ the panel and
+   * the dataset-kind toggle that selects it are not rendered at all —
+   * absent, not disabled — and `refreshLprStatus()` is never called, so
+   * a deployment that never ported the LPR exporter produces zero 404s
+   * on this route. Never probe the export endpoint to find out; see
+   * `isDatasetExportAvailable`.
+   */
+  const datasetExportAvailable = $derived(
+    datasetExportSpec != null &&
+      isDatasetExportAvailable(
+        strategiesStore.methods.dataset_exports,
+        datasetExportSpec.kind,
+      ),
+  );
+
   // Which frozen export the training run targets: the multi-class vehicle
   // dataset (current) or the single-class LPR dataset (lpr_current).
   let datasetKind = $state<'vehicles' | 'lpr'>('vehicles');
@@ -93,7 +135,8 @@
   let selectedExportDir = $state<string>('');
   const kindDatasets = $derived(datasets.filter((d) => d.kind === datasetKind));
   let datasetExportDir = $derived(
-    selectedExportDir || (datasetKind === 'lpr' ? lprExportDir : vehiclesDir),
+    selectedExportDir ||
+      (datasetKind === datasetExportSpec?.datasetKind ? lprExportDir : vehiclesDir),
   );
   let datasetMessage = $state<string | null>(null);
   let refreshing = $state<boolean>(false);
@@ -102,6 +145,17 @@
     datasetKind = kind;
     selectedExportDir = ''; // reset to the current export of the new kind
   }
+
+  // `/methods` resolves after mount, so the LPR toggle can disappear
+  // while its kind is selected. Fall back to the always-present vehicles
+  // dataset rather than leaving the picker pointed at a kind with no UI
+  // behind it — same "force the stale selection off" pattern
+  // /clusters uses for the embedding-plot toggle.
+  $effect(() => {
+    if (!datasetExportAvailable && datasetKind !== 'vehicles') {
+      selectDatasetKind('vehicles');
+    }
+  });
 
   async function refreshDataset(): Promise<void> {
     refreshing = true;
@@ -156,6 +210,21 @@
       // Non-fatal — the LPR export just hasn't run yet.
     }
   }
+
+  // Only ask for export status once the capability gate says the route
+  // exists. Firing it unconditionally on mount is precisely the "never
+  // 404" violation this task removes: on OpenProcessor,
+  // `GET {API_PREFIX}/export/lpr/status` is not a registered route, and
+  // refreshLprStatus()'s bare `catch {}` made that invisible outside the
+  // network tab. Plain `let`, not `$state` — writing it must not
+  // re-trigger this effect.
+  let lprStatusRequested = false;
+  $effect(() => {
+    if (datasetExportAvailable && !lprStatusRequested) {
+      lprStatusRequested = true;
+      void refreshLprStatus();
+    }
+  });
 
   async function runLprExport(): Promise<void> {
     lprExporting = true;
@@ -482,7 +551,6 @@
         }
       })(),
       refreshDataset(),
-      refreshLprStatus(),
       refreshRuns(),
       // Deliberately NOT auto-fetched here: with N classes each carrying
       // ~4 cohorts, an eager fetch-on-mount is an N×4+ parallel-request
@@ -754,15 +822,18 @@
         >
           Multi-class vehicles
         </button>
-        <button
-          type="button"
-          class="rounded border px-2 py-0.5 {datasetKind === 'lpr'
-            ? 'border-blue-500 bg-blue-950 text-blue-200'
-            : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
-          onclick={() => selectDatasetKind('lpr')}
-        >
-          LPR plates (single-class)
-        </button>
+        {#if datasetExportAvailable}
+          <button
+            type="button"
+            class="rounded border px-2 py-0.5 {datasetKind ===
+            datasetExportSpec?.datasetKind
+              ? 'border-blue-500 bg-blue-950 text-blue-200'
+              : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
+            onclick={() => selectDatasetKind(datasetExportSpec!.datasetKind as 'lpr')}
+          >
+            LPR plates (single-class)
+          </button>
+        {/if}
       </div>
     </div>
     {#if kindDatasets.length > 0}
@@ -776,7 +847,9 @@
           class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
         >
           <option value="">
-            current ({datasetKind === 'lpr' ? 'lpr_current' : 'current'} symlink — latest)
+            current ({datasetKind === datasetExportSpec?.datasetKind
+              ? 'lpr_current'
+              : 'current'} symlink — latest)
           </option>
           {#each kindDatasets as d (d.export_dir)}
             <option value={d.export_dir}>{datasetLabel(d)}</option>
@@ -786,7 +859,7 @@
     {/if}
     {#if datasetExportDir}
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{datasetExportDir}</p>
-      {#if datasetKind === 'lpr'}
+      {#if datasetKind === datasetExportSpec?.datasetKind}
         <p class="mt-2 text-xs text-zinc-400">
           Single-class <span class="font-mono">license_plate</span> dataset (positives + FP
           hard-negatives + plate-free backgrounds), cluster-stratified.
@@ -807,84 +880,88 @@
       {/if}
     {:else}
       <p class="mt-1 text-sm text-zinc-300">
-        {datasetKind === 'lpr'
+        {datasetKind === datasetExportSpec?.datasetKind
           ? 'No LPR export yet — build one below.'
           : (datasetMessage ?? 'Loading…')}
       </p>
     {/if}
   </section>
 
-  <!-- LPR (license-plate) export — standalone single-class dataset -->
-  <section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
-    <div class="flex items-center justify-between gap-3">
-      <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">LPR plate dataset</h2>
-      <button
-        type="button"
-        class="rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-        onclick={runLprExport}
-        disabled={lprExporting}
-      >
-        {lprExporting ? 'Exporting…' : 'Build LPR export'}
-      </button>
-    </div>
-    <div class="mt-3 flex flex-wrap items-end gap-4">
-      <label class="block">
-        <span class="mb-1 block text-xs text-zinc-400">image mode</span>
-        <select
-          bind:value={lprImageMode}
+  {#if datasetExportAvailable && datasetExportSpec}
+    <!-- Single-class dataset export, gated on the /methods `export` axis -->
+    <section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-[11px] uppercase tracking-wide text-zinc-500">
+          {datasetExportSpec.label}
+        </h2>
+        <button
+          type="button"
+          class="rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+          onclick={runLprExport}
           disabled={lprExporting}
-          class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
         >
-          <option value="whole_frame">whole frame</option>
-          <option value="vehicle_crop">vehicle crop</option>
-        </select>
-      </label>
-      <label class="block">
-        <span class="mb-1 block text-xs text-zinc-400">image size</span>
-        <select
-          bind:value={lprImgSize}
-          disabled={lprExporting}
-          class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-        >
-          <option value={640}>640 (fast)</option>
-          <option value={1280}>1280 (full)</option>
-        </select>
-      </label>
-      <label class="block">
-        <span class="mb-1 block text-xs text-zinc-400"
-          >sample N positives (blank = all)</span
-        >
-        <input
-          type="number"
-          min="0"
-          step="500"
-          placeholder="all"
-          bind:value={lprMaxPositives}
-          disabled={lprExporting}
-          class="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-        />
-      </label>
-      <label class="flex items-center gap-2 pb-1.5">
-        <input type="checkbox" bind:checked={lprDedup} disabled={lprExporting} />
-        <span class="text-xs text-zinc-400">dedup near-dup frames (cos ≥ 0.98)</span>
-      </label>
-    </div>
-    <p class="mt-2 text-[11px] text-zinc-500">
-      N samples positives spread <em>evenly across plate clusters</em> — build a small set first,
-      then a larger one from the same labeled pool for progressive training.
-    </p>
-    {#if lprExportDir}
-      <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>
-    {/if}
-    {#if lprMessage}
-      <p class="mt-2 text-xs text-zinc-400">{lprMessage}</p>
-    {:else}
-      <p class="mt-2 text-xs text-zinc-500">
-        Single-class plate dataset (positives + human FP hard-negatives + a sample of
-        plate-free backgrounds). Train it as a YOLO26 LPR detector.
+          {lprExporting ? 'Exporting…' : 'Build LPR export'}
+        </button>
+      </div>
+      <div class="mt-3 flex flex-wrap items-end gap-4">
+        <label class="block">
+          <span class="mb-1 block text-xs text-zinc-400">image mode</span>
+          <select
+            bind:value={lprImageMode}
+            disabled={lprExporting}
+            class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          >
+            <option value="whole_frame">whole frame</option>
+            <option value="vehicle_crop">vehicle crop</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-xs text-zinc-400">image size</span>
+          <select
+            bind:value={lprImgSize}
+            disabled={lprExporting}
+            class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          >
+            <option value={640}>640 (fast)</option>
+            <option value={1280}>1280 (full)</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-xs text-zinc-400"
+            >sample N positives (blank = all)</span
+          >
+          <input
+            type="number"
+            min="0"
+            step="500"
+            placeholder="all"
+            bind:value={lprMaxPositives}
+            disabled={lprExporting}
+            class="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          />
+        </label>
+        <label class="flex items-center gap-2 pb-1.5">
+          <input type="checkbox" bind:checked={lprDedup} disabled={lprExporting} />
+          <span class="text-xs text-zinc-400">dedup near-dup frames (cos ≥ 0.98)</span>
+        </label>
+      </div>
+      <p class="mt-2 text-[11px] text-zinc-500">
+        N samples positives spread <em>evenly across plate clusters</em> — build a small set
+        first, then a larger one from the same labeled pool for progressive training.
       </p>
-    {/if}
-  </section>
+      {#if lprExportDir}
+        <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>
+      {/if}
+      {#if lprMessage}
+        <p class="mt-2 text-xs text-zinc-400">{lprMessage}</p>
+      {:else}
+        <p class="mt-2 text-xs text-zinc-500">
+          Single-class plate dataset (positives + human FP hard-negatives + a sample of
+          plate-free backgrounds). Train it as a YOLO26 LPR detector.
+        </p>
+      {/if}
+    </section>
+  {/if}
 
   <!-- Active run + log (only while actually running) -->
   {#if activeStatus && isActive}
@@ -939,7 +1016,9 @@
       onStart={startSingle}
       onStartCampaign={startCampaign}
       disabled={isActive}
-      lpr={datasetKind === 'lpr'}
+      singleClassExport={datasetExportSpec != null &&
+        datasetKind === datasetExportSpec.datasetKind &&
+        datasetExportSpec.singleClass}
     />
   {/if}
 

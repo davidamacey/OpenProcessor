@@ -1727,6 +1727,8 @@ export function exportStatus(signal?: AbortSignal): Promise<OpExportStatus> {
 /**
  * Build a standalone single-class LPR (license-plate) YOLO dataset.
  * Synchronous on the server; returns the export dir + counts when done.
+ * Only ever called behind `isDatasetExportAvailable(…, 'lpr')` — see
+ * `/train`'s `datasetExportAvailable` gate.
  */
 export function exportLpr(
   opts: {
@@ -1756,7 +1758,11 @@ export function exportLpr(
   );
 }
 
-/** Last LPR-export status (reads the LPR `current` symlink + manifest). */
+/**
+ * Last LPR-export status (reads the LPR `current` symlink + manifest).
+ * Only ever called behind `isDatasetExportAvailable(…, 'lpr')` — see
+ * `/train`'s `datasetExportAvailable` gate.
+ */
 export function exportLprStatus(signal?: AbortSignal): Promise<OpLprExportStatus> {
   return apiFetch<OpLprExportStatus>(`${API_PREFIX}/export/lpr/status`, {}, signal);
 }

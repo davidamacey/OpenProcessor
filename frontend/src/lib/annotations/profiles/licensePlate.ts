@@ -230,8 +230,9 @@ export const licensePlateSlot: SlotSpec = {
   // (never-implemented-until-now) prescription. Distinct from cohorts —
   // export is a genuine non-goal (openprocessor classifies
   // legacy_lpr_export.py Bucket B, never ported), so this stays a
-  // profile-private escape hatch, not a generalized capability. Not yet
-  // consumed by /train (P2.15).
+  // profile-private escape hatch, not a generalized capability. Consumed
+  // by /train's capability gate (P2.15); options[] is still rendered as
+  // bound controls rather than a generic form — follow-up.
   extras: {
     datasetExport: {
       kind: 'lpr',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FALLBACK_METHODS,
   hasFieldCoverage,
+  isDatasetExportAvailable,
   isDiverseOverlayAvailable,
   isEmbeddingVizAvailable,
   isEmbeddingVizBannerRequired,
@@ -9,7 +10,7 @@ import {
   normalizeMethodStatus,
   parseKbMethodsResponse,
 } from './strategies';
-import type { OverlayInfo, ReviewSortInfo } from './strategies';
+import type { DatasetExportInfo, OverlayInfo, ReviewSortInfo } from './strategies';
 
 describe('normalizeMethodStatus', () => {
   it('passes through every known status value', () => {
@@ -153,6 +154,7 @@ describe('parseKbMethodsResponse', () => {
         review_sorts: [],
         overlays: [],
         scores: [],
+        dataset_exports: [],
       });
     }
   });
@@ -165,8 +167,38 @@ describe('parseKbMethodsResponse', () => {
         review_sorts: [],
         overlays: [],
         scores: [],
+        dataset_exports: [],
       });
     }
+  });
+
+  it("routes axis:'export' entries into dataset_exports (real T-C2 wire shape)", () => {
+    // Verbatim from strategy_registry.py's _export_strategies() @ 3ab36ec.
+    const parsed = parseKbMethodsResponse({
+      strategies: [
+        {
+          id: 'yolo',
+          axis: 'export',
+          label: 'YOLO detection dataset export',
+          status: 'stable',
+          default: true,
+        },
+      ],
+      flags: {},
+    });
+    expect(parsed.dataset_exports).toEqual([
+      {
+        id: 'yolo',
+        label: 'YOLO detection dataset export',
+        status: 'stable',
+        default: true,
+      },
+    ]);
+    // An export entry must not leak into any other bucket.
+    expect(parsed.cluster_methods).toEqual([]);
+    expect(parsed.review_sorts).toEqual([]);
+    expect(parsed.overlays).toEqual([]);
+    expect(parsed.scores).toEqual([]);
   });
 
   it('drops entries missing a usable id or label, or an unrecognized axis, instead of crashing the whole parse', () => {
@@ -414,6 +446,68 @@ describe('isSemanticSearchAvailable', () => {
   });
 });
 
+/**
+ * isDatasetExportAvailable is the T-C3 analog of isDiverseOverlayAvailable/
+ * isSemanticSearchAvailable — the single gate `/train` uses to decide
+ * whether the optional single-class export panel exists at all.
+ */
+describe('isDatasetExportAvailable', () => {
+  it('is false when dataset_exports is empty', () => {
+    expect(isDatasetExportAvailable([], 'lpr')).toBe(false);
+  });
+
+  it('is true when the kind is reported stable', () => {
+    const exports: DatasetExportInfo[] = [
+      { id: 'yolo', label: 'YOLO detection dataset export', status: 'stable' },
+    ];
+    expect(isDatasetExportAvailable(exports, 'yolo')).toBe(true);
+  });
+
+  it('is true when the kind is reported experimental', () => {
+    const exports: DatasetExportInfo[] = [
+      { id: 'lpr', label: 'LPR plate dataset', status: 'experimental' },
+    ];
+    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(true);
+  });
+
+  it('is false when the kind is reported but shadow (mid-validation, never selectable)', () => {
+    const exports: DatasetExportInfo[] = [
+      { id: 'lpr', label: 'LPR plate dataset', status: 'shadow' },
+    ];
+    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(false);
+  });
+
+  it('is false when the kind is reported but disabled', () => {
+    const exports: DatasetExportInfo[] = [
+      { id: 'lpr', label: 'LPR plate dataset', status: 'disabled' },
+    ];
+    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(false);
+  });
+
+  // Absence, not a status. OpenProcessor omits `lpr` entirely from the
+  // export axis rather than advertising it disabled, because a proprietary
+  // overlay the repo doesn't contain isn't "not yet, but could be later"
+  // (curation_api_contract.md's `export` axis section). A consumer must
+  // treat "no entry" identically to "entry at shadow/disabled".
+  it('is false when the kind is absent entirely (the real lpr-on-OpenProcessor case)', () => {
+    const exports: DatasetExportInfo[] = [
+      { id: 'yolo', label: 'YOLO detection dataset export', status: 'stable' },
+    ];
+    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(false);
+  });
+
+  it('is false when a different kind is present', () => {
+    const exports: DatasetExportInfo[] = [
+      { id: 'yolo', label: 'YOLO detection dataset export', status: 'stable' },
+    ];
+    expect(isDatasetExportAvailable(exports, 'coco')).toBe(false);
+  });
+
+  it('never throws on FALLBACK_METHODS.dataset_exports (empty today)', () => {
+    expect(isDatasetExportAvailable(FALLBACK_METHODS.dataset_exports, 'lpr')).toBe(false);
+  });
+});
+
 describe('isEmbeddingVizBannerRequired', () => {
   it('is false when the overlay is not available at all (empty/absent/shadow/disabled)', () => {
     expect(isEmbeddingVizBannerRequired([])).toBe(false);
@@ -604,6 +698,7 @@ describe('FALLBACK_METHODS', () => {
     ]);
     expect(FALLBACK_METHODS.overlays).toEqual([]);
     expect(FALLBACK_METHODS.scores).toEqual([]);
+    expect(FALLBACK_METHODS.dataset_exports).toEqual([]);
   });
 
   it('never contains an experimental/shadow/disabled entry', () => {
@@ -612,6 +707,7 @@ describe('FALLBACK_METHODS', () => {
       ...FALLBACK_METHODS.review_sorts,
       ...FALLBACK_METHODS.overlays,
       ...FALLBACK_METHODS.scores,
+      ...FALLBACK_METHODS.dataset_exports,
     ];
     expect(all.every((m) => m.status === 'stable')).toBe(true);
   });

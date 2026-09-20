@@ -176,6 +176,7 @@ describe('getMethods', () => {
       review_sorts: [],
       overlays: [],
       scores: [],
+      dataset_exports: [],
     });
   });
 
