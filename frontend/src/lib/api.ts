@@ -2209,6 +2209,34 @@ export interface AutoLabelStartParams {
   gate_min_blur_ratio?: number | null;
   /** IVF fixed centroid count (default 512). Sweep down with the gate on. */
   n_clusters?: number | null;
+  // -- VLM-assisted scoping (2026-09-20 contract, this plan §1.3) --------
+  /**
+   * Scope the run to a single class instead of the whole pool — "just
+   * help me with pallets right now". Same `class_id` filter convention
+   * as `getCrops`/`getClusters`/`/select/diverse` elsewhere in this
+   * file. `null`/omitted = today's unscoped, whole-dataset behavior, and
+   * `qs()` drops it entirely so an unscoped request stays byte-identical
+   * to every request this app has ever sent.
+   *
+   * **Not live yet.** No running backend accepts this. The UI never
+   * sends it unless `/methods` advertises the assist axes — see
+   * `isScopedAssistAvailable` in `$lib/strategies`.
+   */
+  class_id?: number | null;
+  /**
+   * PROVISIONAL WIRE NAME (Q1, this plan §1.4). The two assist axes are
+   * agreed as `/methods` *discovery*; the query-param names that carry a
+   * selection back to `/auto_label/start` are not yet confirmed with the
+   * peer session. Both are produced in exactly one place
+   * (`createAssistScope().toStartParams()` in `$lib/assistScope.svelte`),
+   * so a rename is one edit there plus one assertion in
+   * `assistScope.svelte.test.ts`. Never sent unless the matching axis is
+   * advertised, so an unconfirmed name cannot reach a backend that
+   * doesn't understand it.
+   */
+  detection_profile?: string | null;
+  /** See `detection_profile` — same provisional-name caveat. */
+  prompt_pack?: string | null;
 }
 
 export type AutoLabelStatus = 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';

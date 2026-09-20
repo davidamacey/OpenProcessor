@@ -23,6 +23,7 @@ import {
   rebuildVizProjection,
   searchCrops,
   selectDiverse,
+  startAutoLabel,
 } from './api';
 import { FALLBACK_METHODS } from './strategies';
 
@@ -1091,6 +1092,95 @@ describe('getSelectStatus / cancelSelect', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain(`${API_PREFIX}/select/cancel`);
     expect(init.method).toBe('POST');
+  });
+});
+
+/**
+ * Scoped VLM-assisted labeling (2026-09-20 contract, not yet live on any
+ * backend — docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md
+ * §1.3/§5.3). `class_id`/`detection_profile`/`prompt_pack` are optional
+ * query params on the existing start call; `qs()` drops null/undefined so
+ * an unscoped call must be byte-identical to the pre-scope request.
+ */
+describe('startAutoLabel', () => {
+  const jobResponse = () =>
+    new Response(
+      JSON.stringify({
+        job_id: 'job-1',
+        status: 'idle',
+        stage: '',
+        processed: 0,
+        total: 0,
+        started_at: 0,
+        finished_at: 0,
+        error: null,
+        result: {},
+        args: {},
+        eta_seconds: null,
+        elapsed_seconds: 0,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends no scoping params when the scope is untouched (byte-identical to the pre-scope request)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ train_clusters: true, gemma_concurrency: 16 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('class_id');
+    expect(url).not.toContain('detection_profile');
+    expect(url).not.toContain('prompt_pack');
+  });
+
+  it('forwards class_id when the run is scoped to one class', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ class_id: 7 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('class_id=7');
+  });
+
+  it('drops an explicitly null class_id rather than sending class_id=null', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ class_id: null });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('class_id');
+    expect(url).not.toContain('null');
+  });
+
+  it('forwards detection_profile and prompt_pack when selected', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({
+      detection_profile: 'grounding_v2',
+      prompt_pack: 'warehouse_v1',
+    });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('detection_profile=grounding_v2');
+    expect(url).toContain('prompt_pack=warehouse_v1');
+  });
+
+  it('composes the path from API_PREFIX', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({});
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain(`${API_PREFIX}/pipeline/auto_label/start`);
   });
 });
 
