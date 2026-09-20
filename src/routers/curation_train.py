@@ -38,6 +38,7 @@ from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import IndexRole, get_curation_config, get_region_fields, index_name
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
@@ -200,8 +201,8 @@ async def _count_pending_ingest(opensearch: Any) -> int:
         'query': {
             'terms': {
                 F.status: [
-                    'pending_detection',
-                    'pending_verification',
+                    RegionStatus.PENDING_DETECTION,
+                    RegionStatus.PENDING_VERIFICATION,
                     'pending',
                     'pending_verify',
                 ]

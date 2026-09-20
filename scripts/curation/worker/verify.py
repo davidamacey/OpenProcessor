@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.config import get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
     DEFAULT_PROFILE,
@@ -125,7 +126,7 @@ def _region_write_doc(
     detector: str,
     detector_version: str,
     chain: list[str],
-    plate_status: str = 'detected',
+    plate_status: str = RegionStatus.DETECTED,
     plate_verified: bool = True,
     plate_validated: bool = False,
     verifier: str | None = 'gemma-4-e4b',
@@ -186,7 +187,7 @@ def _region_reject_doc(
     """
     F = get_region_fields()
     doc: dict[str, Any] = {
-        F.status: 'detection_failed',
+        F.status: RegionStatus.DETECTION_FAILED,
         F.rejection_reason: reason,
     }
     doc.update(

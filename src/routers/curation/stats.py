@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from src.config.region_fields import RegionFields, get_region_fields
+from src.config.region_state import RegionStatus
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -387,10 +388,10 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         region_status_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
 
     pending_detection = region_status_buckets.get(
-        'pending_detection', 0
+        RegionStatus.PENDING_DETECTION, 0
     ) + region_status_buckets.get('pending', 0)
     pending_verification = region_status_buckets.get(
-        'pending_verification', 0
+        RegionStatus.PENDING_VERIFICATION, 0
     ) + region_status_buckets.get('pending_verify', 0)
     sam_drain_total_unfinished = pending_detection + pending_verification
 
@@ -437,7 +438,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             # rejected/failed attempts, so it overstates real regions —
             # kept for back-compat but no longer the headline number.
             'boxed': int((aggs.get('region_boxed') or {}).get('doc_count', 0)),
-            'confirmed': region_status_buckets.get('detected', 0),
+            'confirmed': region_status_buckets.get(RegionStatus.DETECTED, 0),
             'total_detected': region_total_detected,
             'by_lpr': regions_by_lpr,
             'by_sam3': regions_by_sam3,

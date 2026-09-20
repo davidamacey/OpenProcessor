@@ -31,6 +31,7 @@ from src.clients.curation_opensearch import (
     ensure_items_viz_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
+from src.config.region_state import RegionStatus
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
 
@@ -330,7 +331,12 @@ class ItemBatchRegionRequest(BaseModel):
 # ('pending_detection', 'pending_verification', 'detection_failed') that
 # represent transient pipeline state — humans never set those by hand.
 HUMAN_REGION_STATUS_VALUES = frozenset(
-    {'detected', 'no_plate_visible', 'verify_rejected', 'false_positive'}
+    {
+        RegionStatus.DETECTED,
+        RegionStatus.NO_PLATE_VISIBLE,
+        RegionStatus.VERIFY_REJECTED,
+        RegionStatus.FALSE_POSITIVE,
+    }
 )
 
 
