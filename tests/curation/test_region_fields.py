@@ -1,6 +1,6 @@
 """Pins for ``RegionFields`` (Chunk 0).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` §3.2. Chunk 0
+See ``docs/design/curation_design_rationale.md`` §4. Chunk 0
 covers defaults + overridability only — the mapping/query agreement
 property (the index-mapping builder produces the same key set as a
 ``RegionFields`` instance) is deferred to Chunk 1, when

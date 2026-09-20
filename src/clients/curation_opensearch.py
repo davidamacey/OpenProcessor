@@ -2,8 +2,9 @@
 Generic curation OpenSearch client.
 
 Defines the four OpenSearch indexes used by the generic curation /
-labeling subsystem (see ``docs/design/oss_genericization_phase2_plan.md``
-for the porting provenance of this module), plus a ``ClassRegistry``
+labeling subsystem (see ``docs/design/curation_design_rationale.md``
+for the genericization rationale — this module is one of the
+ratchet-exempt oversize files, §5), plus a ``ClassRegistry``
 helper backed by an on-disk ``class_registry.json``.
 
 Indexes (logical roles resolved via :func:`src.config.index_name`

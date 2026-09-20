@@ -15,8 +15,8 @@ Endpoints:
     GET  /bakeoff/results/{id}   ranked comparison rows for the UI
 
 Ported from a private reference vehicle/license-plate curation stack's
-bake-off router (see ``docs/design/oss_genericization_phase2_plan.md``
-Chunk 6). The bake-off harness itself lives at
+bake-off router (see ``docs/design/curation_design_rationale.md`` for
+the genericization rationale). The bake-off harness itself lives at
 ``scripts/curation/bakeoff/`` (not under ``src/`` — see that package's
 module docstring for why).
 """

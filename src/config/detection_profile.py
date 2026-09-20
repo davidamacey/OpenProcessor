@@ -2,8 +2,9 @@
 
 Replaces hardcoded per-domain constants in the reference license-plate
 detection cascade and verification modules (see
-``docs/design/oss_genericization_phase2_plan.md`` §3.3 for exact
-reference file/line provenance). A ``DetectionProfile`` instance
+``docs/design/curation_design_rationale.md`` §2.3 for the design
+rationale, including known gaps in how generic the shipped defaults
+are today). A ``DetectionProfile`` instance
 describes one detectable "region of interest" type (e.g. a license
 plate on a vehicle); a deployment with a different region type (a box,
 a tractor, …) constructs its own instance instead of forking the

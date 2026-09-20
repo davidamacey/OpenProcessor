@@ -1,6 +1,6 @@
 """Pins for ``CurationConfig`` / ``IndexRole`` / ``index_name`` (Chunk 0).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` §3.1.
+See ``docs/design/curation_design_rationale.md`` §2.1.
 """
 
 from __future__ import annotations

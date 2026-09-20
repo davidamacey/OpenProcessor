@@ -1,6 +1,6 @@
 """Pins for ``DetectionProfile`` (Chunk 0).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` §3.3.
+See ``docs/design/curation_design_rationale.md`` §2.3.
 """
 
 from __future__ import annotations

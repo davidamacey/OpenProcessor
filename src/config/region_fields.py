@@ -1,7 +1,7 @@
 """OpenSearch field-name indirection for the per-item "region of interest".
 
-This is the settled design from
-``docs/design/oss_genericization_phase2_plan.md`` §3.2 / §8 decision 1: an
+This is the settled design documented in
+``docs/design/curation_design_rationale.md`` §4: an
 existing deployment's live OpenSearch field names (e.g. ``plate_status``,
 ``plate_bbox_norm``, …) are NOT renamed — there is zero data migration and
 zero reindex risk. Instead, code stops hardcoding those literal strings and
@@ -86,10 +86,10 @@ class RegionFields:
     # Internal cascade flag: set when a detector's confidence was high
     # enough to skip the VLM verify round-trip entirely (see
     # DetectionProfile / the curation worker's fast-path). Not part of
-    # the original 37-attribute count in the reference audit (docs/design/
-    # oss_genericization_phase2_plan.md §3.2) -- added while porting
-    # Chunk 8's worker, per that section's own instruction: "if you hit
-    # a literal with no matching attribute, add the attribute."
+    # the original attribute count in the reference audit -- added while
+    # porting Chunk 8's worker, per the standing instruction: "if you hit
+    # a literal with no matching attribute, add the attribute." (See
+    # docs/design/curation_design_rationale.md §4.)
     skip_verify: str = 'region_skip_verify'
 
     # Legacy-suffixed columns kept for rollback (e.g. plate_*_legacy).

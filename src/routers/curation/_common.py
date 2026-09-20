@@ -236,7 +236,7 @@ class ItemDoc(BaseModel):
     label_source: str | None = ''
     # Frozen HTTP wire-model attribute names — see
     # docs/design/curation_api_contract.md and the RegionFields scope
-    # table (docs/design/oss_genericization_phase2_plan.md §3.2). These
+    # described in docs/design/curation_design_rationale.md §3-4. These
     # are the generic curation API's JSON contract (Cropwright is one
     # consumer among anticipated others) and are NOT indirected through
     # RegionFields (that governs OpenSearch document keys only).

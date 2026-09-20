@@ -1,12 +1,12 @@
 """Unit tests for ``src.services.labeling.vlm_labeler.VlmLabeler``.
 
-Ported from the reference ``tests/test_gemma_labeler.py`` (§5 Chunk 7 of
-``docs/design/oss_genericization_phase2_plan.md``). Mechanism only — the
-reference file used generic placeholder class names ('acura', 'bmw',
-'porsche') purely as opaque strings for the chunking/parsing tests; this
-port swaps them for equally-opaque neutral strings so nothing vehicle-
-specific survives, per the plan's "port the mechanism, not the
-vocabulary" instruction.
+Ported from the reference ``tests/test_gemma_labeler.py`` (§5 Chunk 7 —
+see ``docs/design/curation_design_rationale.md`` for the genericization
+approach). Mechanism only — the reference file used generic placeholder
+class names ('acura', 'bmw', 'porsche') purely as opaque strings for the
+chunking/parsing tests; this port swaps them for equally-opaque neutral
+strings so nothing vehicle-specific survives, per the "port the
+mechanism, not the vocabulary" principle.
 
 Tests are intentionally hermetic:
 - All upstream HTTP traffic is replaced with a fake httpx transport.

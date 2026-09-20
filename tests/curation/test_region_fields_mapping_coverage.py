@@ -1,7 +1,7 @@
-"""Mapping/query agreement pin for `RegionFields` (§3.2 property 1).
+"""Mapping/query agreement pin for `RegionFields`.
 
-Guards the silent-divergence failure mode called out in
-``docs/design/oss_genericization_phase2_plan.md`` §0.4 item 2: the
+Guards the silent-divergence failure mode described in
+``docs/design/curation_design_rationale.md`` §4: the
 items index-mapping body and any OpenSearch query/write path must
 resolve region-of-interest field names through the *same*
 ``RegionFields`` instance, never a re-typed literal. If the mapping

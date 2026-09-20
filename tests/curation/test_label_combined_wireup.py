@@ -2,8 +2,8 @@
 cohort takes the single combined VLM call path instead of the legacy
 verify + class chain.
 
-Deferred here from Chunk 7 (docs/design/oss_genericization_phase2_plan.md
-§6.1) because it exercises ``scripts.curation.sam_worker_main``'s
+Deferred here from Chunk 7 because it exercises
+``scripts.curation.sam_worker_main``'s
 ``_process_crop`` cohort-routing logic, which needs the worker package
 that lands in this chunk.
 
