@@ -139,6 +139,24 @@ def _is_busy() -> bool:
     return age is None or age <= _HEARTBEAT_STALE_S
 
 
+def reconcile_orphaned_jobs() -> bool:
+    """Startup-only repair: see :mod:`src.services.curation.job_reconcile`.
+
+    Called from ``src.main``'s lifespan before any request is served, so
+    nothing in this process can legitimately hold ``status='running'``
+    yet — a leftover 'running' state.json is necessarily orphaned by a
+    prior process. Returns True if the file was rewritten.
+    """
+    from src.services.curation.job_reconcile import reconcile_stale_running
+
+    return reconcile_stale_running(
+        _state_file(),
+        _heartbeat_file(),
+        stale_s=_HEARTBEAT_STALE_S,
+        error_prefix='scoring job',
+    )
+
+
 def get_state() -> dict[str, Any]:
     """Read-only snapshot, with stale-heartbeat repair (mirrors
     ``auto_label_job.get_state``'s liveness contract)."""
@@ -315,6 +333,7 @@ __all__ = [
     'compute_coverage',
     'get_state',
     'is_cancelled',
+    'reconcile_orphaned_jobs',
     'run_scoring_job',
     'start_job',
 ]
