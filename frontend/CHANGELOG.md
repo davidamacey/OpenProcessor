@@ -231,8 +231,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `/review` Plates tab still renders identically; `npm run
 check`/`test`/`lint`/`build` all green.
 
+- `scripts/playwright_backend_integration.py` — the manual write-path
+  integration runbook (12 steps from the cross-repo plan §5.2:
+  navigation, thumbnail render, single + batch label, cluster refine,
+  review dismiss, region write/restore, batch region status, VLM label
+  batch, both SSE channels, export gating, train read path),
+  parameterized on frontend origin / API origin / `API_PREFIX` with a
+  `--dry-run` mode that proves URL composition at both prefixes without
+  a backend. **Not run end to end** — no OpenProcessor instance is
+  available yet; D3-RUN remains open.
+- `src/lib/apiPrefixScan.test.ts` — CI ratchet: no `.ts`/`.svelte` file
+  under `src/` may compose a backend URL from a bare `/curation` or
+  `/curation` literal (comment-stripped scan, one pinned exception:
+  `normalizeApiPrefix`'s own fallback), and every `apiFetch` path plus
+  every `${apiBase}` template builder must start with `${API_PREFIX}`
+  — the second guard being prefix-name-agnostic, so it survives the
+  `/curation` flip unchanged.
+
 ### Fixed
 
+- `scripts/playwright_round_trip.py` — composes its four backend URLs
+  through a configurable `--api-prefix` instead of a hardcoded `/curation`;
+  picks its target cluster via `GET {prefix}/clusters` rather than the
+  legacy `GET /clusters/stats/op_vehicles`, which rejects that index
+  name and is no longer proxied by the labeler's nginx; and drops an
+  absolute repo path plus a `DISPLAY=:11 source …` invocation that was
+  never valid shell.
 - Region thumbnails no longer 404. `getPlateThumbUrl` is renamed
   `getRegionThumbUrl` and builds `{API_PREFIX}/crops/{id}/region_thumbnail`
   — the only region-thumbnail route OpenProcessor registers. The old
