@@ -64,6 +64,7 @@ def test_remap_rows_drops_unmapped_classes_and_sets_export_id():
     rows = [
         _ExportRow(
             item_id='a',
+            image_id='img-a',
             image_path='a.jpg',
             bbox_norm=[0, 0, 1, 1],
             class_id=0,
@@ -71,6 +72,7 @@ def test_remap_rows_drops_unmapped_classes_and_sets_export_id():
         ),
         _ExportRow(
             item_id='b',
+            image_id='img-b',
             image_path='b.jpg',
             bbox_norm=[0, 0, 1, 1],
             class_id=99,

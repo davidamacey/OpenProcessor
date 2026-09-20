@@ -6,15 +6,15 @@ approach) splits into two halves: artifact filenames, class
 lists and split ratios are deployment data (an ``ExportProfile``, extracted
 here), while the YOLO-format writer, split logic and manifest/checksum
 mechanism are generic algorithm code that stays code. The bespoke
-letterbox-resize / whole-frame-vs-crop / near-dup-collapsing features of
-the reference exporter (a 1143-LOC domain-specific service, never
-ported) are intentionally NOT reproduced here; a
-deployment-specific overlay can extend :class:`GenericYoloExportService`
-directly if it needs them (plan §7 R5 — the generic curation stack ships
-with a thinner export path than the reference by design, tracked as the
-most likely first follow-up after merge).
+whole-frame-vs-crop / near-dup-collapsing features of the reference
+exporter (a 1143-LOC domain-specific service, never ported) are
+intentionally NOT reproduced here; a deployment-specific overlay can
+extend :class:`GenericYoloExportService` directly if it needs them (plan
+§7 R5 — the generic curation stack ships with a thinner export path than
+the reference by design, tracked as the most likely first follow-up after
+merge).
 
-Split assignment is a deterministic ``sha256(seed:item_id)`` hash bucket
+Split assignment is a deterministic, **stratified** hash-order bucket
 rather than a stored crop->split mapping, so re-running an export with the
 same recorded seed reproduces the same split without needing to persist
 per-item split assignments anywhere. Items already carrying a frozen
@@ -28,28 +28,36 @@ time and frozen into the export directory, so a subset-training request's
 ``include_classes`` (always expressed in REGISTRY ids) can be translated to
 the dense ids that actually appear in the written label files — see
 ``src/services/training/preflight_scan.py`` and
-``src/routers/curation_train.py``, both of which read this file back. This
-closes a real bug: ``export_dataset`` previously never wrote
-``class_registry.json`` at all, so both readers' ``include_classes``
-filtering was silently inert on every export this codebase produced.
+``src/routers/curation_train.py``, both of which read this file back.
 """
 
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import json
+import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Literal
 
 from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
-
-
-if TYPE_CHECKING:
-    from src.clients.curation_opensearch import RegistryClassEntry
+from src.services.curation.export_support import (
+    _build_export_id_map,
+    _code_sha,
+    _copy_or_resize_one,
+    _ExportRow,
+    _remap_rows_to_export_ids,
+    _resolve_source_path,
+    dataset_checksum,
+    hash_split,
+    stratified_split,
+)
+from src.services.curation.holdout import compute_holdout_sha
+from src.services.detection.frame_dedup import dedup_rows_by_embedding
 
 
 logger = get_logger(__name__)
@@ -106,76 +114,6 @@ class ExportResult:
     current_symlink: str
 
 
-@dataclass
-class _ExportRow:
-    """One label row scrolled off the items index, en route to a label file."""
-
-    item_id: str
-    image_path: str
-    bbox_norm: list[float]
-    class_id: int
-    class_name: str
-    has_test_crop: bool = False
-    export_class_id: int = -1
-
-
-def hash_split(key: str, seed: int, train_ratio: float, val_ratio: float) -> str:
-    """Deterministic ``(seed, key)`` -> ``{'train','val','test'}`` bucket.
-
-    Stable across export re-runs with the same seed — the split is
-    re-derivable from the manifest's recorded seed rather than requiring a
-    persisted item->split mapping.
-    """
-    digest = hashlib.sha256(f'{seed}:{key}'.encode()).hexdigest()
-    frac = int(digest[:8], 16) / 0xFFFFFFFF
-    if frac < train_ratio:
-        return 'train'
-    if frac < train_ratio + val_ratio:
-        return 'val'
-    return 'test'
-
-
-def dataset_checksum(item_ids: list[str]) -> str:
-    """Checksum over the sorted set of item ids that went into an export."""
-    return hashlib.sha256('\n'.join(sorted(item_ids)).encode()).hexdigest()
-
-
-def _build_export_id_map(classes: list[RegistryClassEntry]) -> dict[int, int]:
-    """Registry ``class_id`` -> contiguous dense export id (0-indexed).
-
-    Deprecated classes are skipped entirely — they never occupy a dense
-    slot. Order is ascending registry ``class_id``, so the mapping only
-    changes when the live registry's set of non-deprecated classes
-    changes, not on export-to-export scroll-order noise (the previous
-    behavior assigned dense ids in first-seen scroll order, which was
-    silently non-deterministic).
-    """
-    live_ids = sorted(c.class_id for c in classes if not c.deprecated)
-    return {registry_id: dense_id for dense_id, registry_id in enumerate(live_ids)}
-
-
-def _remap_rows_to_export_ids(rows: list[_ExportRow], id_map: dict[int, int]) -> list[_ExportRow]:
-    """Apply ``id_map`` to every row's ``class_id``, in place.
-
-    Rows whose ``class_id`` has no entry in ``id_map`` (deprecated or
-    otherwise not in the live registry) are dropped — there is no valid
-    dense id to write into a label file for them.
-    """
-    kept: list[_ExportRow] = []
-    for row in rows:
-        dense = id_map.get(row.class_id)
-        if dense is None:
-            logger.warning(
-                'export_row_dropped_unmapped_class',
-                item_id=row.item_id,
-                class_id=row.class_id,
-            )
-            continue
-        row.export_class_id = dense
-        kept.append(row)
-    return kept
-
-
 def _write_yolo_label(path: Path, class_id: int, bbox_norm: list[float]) -> None:
     x1, y1, x2, y2 = bbox_norm
     cx = (x1 + x2) / 2.0
@@ -203,12 +141,13 @@ class GenericYoloExportService:
     """Builds a YOLO-format detection dataset from the curation items index.
 
     Writes one label ``.txt`` per exported item (dense export class id +
-    normalized cx/cy/w/h), a ``data.yaml`` class map, a
+    normalized cx/cy/w/h), copies (optionally resizing) the source pixels
+    into ``images/<split>/``, a ``data.yaml`` class map, a
     ``class_registry.json`` snapshot + dense ``export_id_map``, a
     ``label_stats.json`` per-class count, and a ``manifest.json``
-    reproducibility envelope (dataset checksum, split counts, seed,
-    timestamps). Deliberately narrower than the reference exporter — see
-    module docstring.
+    reproducibility envelope (dataset checksum, split counts, seed, code
+    sha, frozen-holdout sha, timestamps). Deliberately narrower than the
+    reference exporter — see module docstring.
     """
 
     def __init__(
@@ -230,11 +169,13 @@ class GenericYoloExportService:
             'query': query,
             '_source': [
                 'crop_id',
+                'image_id',
                 'image_path',
                 'bbox_norm',
                 'class_id',
                 'class_name',
                 'test_holdout',
+                'cluster_id',
             ],
         }
         resp = await self.opensearch.search(index=self.config.items_index, body=body, scroll='5m')
@@ -267,14 +208,55 @@ class GenericYoloExportService:
             rows.append(
                 _ExportRow(
                     item_id=str(item_id),
+                    image_id=str(src.get('image_id') or ''),
                     image_path=str(src.get('image_path') or ''),
                     bbox_norm=list(bbox),
                     class_id=int(class_id),
                     class_name=str(src.get('class_name') or class_id),
                     has_test_crop=bool(src.get('test_holdout')),
+                    cluster_id=src.get('cluster_id'),
                 )
             )
         return rows
+
+    async def _apply_dedup(
+        self, rows: list[_ExportRow], dedup_threshold: float | None
+    ) -> tuple[list[_ExportRow], dict[str, Any]]:
+        if dedup_threshold is None:
+            return rows, {'enabled': False}
+        kept, stats = await dedup_rows_by_embedding(
+            self.opensearch, rows, threshold=dedup_threshold, config=self.config
+        )
+        return kept, stats
+
+    async def _copy_images(
+        self,
+        jobs: list[tuple[str, str]],
+        *,
+        resize_mode: Literal['letterbox', 'aspect'] | None,
+        image_size: int,
+        max_workers: int,
+    ) -> dict[str, Any]:
+        if not jobs:
+            return {'attempted': 0, 'copied': 0, 'failed': 0, 'errors': []}
+        loop = asyncio.get_running_loop()
+        copied = 0
+        failed = 0
+        errors: list[str] = []
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            futures = [
+                loop.run_in_executor(pool, _copy_or_resize_one, src, dest, resize_mode, image_size)
+                for src, dest in jobs
+            ]
+            for fut in asyncio.as_completed(futures):
+                _dest, ok, err = await fut
+                if ok:
+                    copied += 1
+                else:
+                    failed += 1
+                    if err:
+                        errors.append(err)
+        return {'attempted': len(jobs), 'copied': copied, 'failed': failed, 'errors': errors[:20]}
 
     async def export_dataset(
         self,
@@ -283,20 +265,31 @@ class GenericYoloExportService:
         version_tag: str = '',
         seed: int = 42,
         max_images: int | None = None,
-        dedup_threshold: float | None = None,  # noqa: ARG002 - call-site compat; near-dup collapsing is an overlay hook, not implemented generically here
+        dedup_threshold: float | None = None,
+        group_key: str | None = 'cluster_id',
+        resize_mode: Literal['letterbox', 'aspect'] | None = None,
+        image_size: int = 640,
+        copy_images: bool = True,
+        max_image_workers: int = 4,
     ) -> ExportResult:
         """Export every validated, non-dismissed item as a multi-class YOLO
         detection dataset.
 
         Honors a frozen ``test_holdout`` flag for the test split; every
-        other item's split is a deterministic ``(seed, item_id)`` hash
-        bucket (:func:`hash_split`). Class ids written to the label files
-        are DENSE export ids resolved from the live
-        :class:`~src.clients.curation_opensearch.ClassRegistry` at export
-        time (see :func:`_build_export_id_map`) — the ``class_registry.json``
-        artifact this writes is what lets a subset-training request's
-        ``include_classes`` (expressed in registry ids) translate to those
-        dense ids.
+        other item's split comes from :func:`stratified_split` — a
+        deterministic per-class, per-``group_key`` bucket assignment
+        (:func:`hash_split` still exists as the underlying single-key
+        primitive it's built from).
+
+        ``dedup_threshold`` (if given) collapses whole-frame near-duplicate
+        bursts (cosine >= threshold on the images index's secondary
+        embedding) to one representative frame before the split is
+        computed, via
+        :func:`~src.services.detection.frame_dedup.dedup_rows_by_embedding`.
+
+        ``resize_mode`` (``'letterbox'`` or ``'aspect'``, default ``None``
+        = copy as-is) controls how source pixels are resized into
+        ``images/<split>/`` when ``copy_images`` is true.
         """
         started_at = datetime.now(UTC).isoformat()
         query = {
@@ -310,6 +303,7 @@ class GenericYoloExportService:
             hits = hits[:max_images]
 
         rows = self._hits_to_rows(hits)
+        rows, dedup_stats = await self._apply_dedup(rows, dedup_threshold)
 
         registry_file = self.registry.load()
         id_map = _build_export_id_map(registry_file.classes)
@@ -331,19 +325,47 @@ class GenericYoloExportService:
             (images_root / split).mkdir(parents=True, exist_ok=True)
             (labels_root / split).mkdir(parents=True, exist_ok=True)
 
+        item_split = stratified_split(
+            rows,
+            seed=seed,
+            train_ratio=self.profile.train_ratio,
+            val_ratio=self.profile.val_ratio,
+            group_key=group_key,
+        )
+
         counts = SplitCounts()
         item_ids: list[str] = []
+        holdout_item_ids: list[str] = []
+        image_jobs: list[tuple[str, str]] = []
 
         for row in rows:
-            split = (
-                'test'
-                if row.has_test_crop
-                else hash_split(row.item_id, seed, self.profile.train_ratio, self.profile.val_ratio)
-            )
+            split = item_split[row.item_id]
             label_path = labels_root / split / f'{row.item_id}.txt'
             _write_yolo_label(label_path, row.export_class_id, row.bbox_norm)
             setattr(counts, split, getattr(counts, split) + 1)
             item_ids.append(row.item_id)
+            if row.has_test_crop:
+                holdout_item_ids.append(row.item_id)
+
+            if copy_images:
+                src_path = _resolve_source_path(row.image_path, self.config)
+                if src_path is not None:
+                    ext = src_path.suffix or '.jpg'
+                    dest = images_root / split / f'{row.item_id}{ext}'
+                    image_jobs.append((str(src_path), str(dest)))
+                else:
+                    logger.warning(
+                        'export_source_image_unresolved',
+                        item_id=row.item_id,
+                        image_path=row.image_path,
+                    )
+
+        image_copy_stats = await self._copy_images(
+            image_jobs,
+            resize_mode=resize_mode,
+            image_size=image_size,
+            max_workers=max_image_workers,
+        )
 
         checksum = dataset_checksum(item_ids)
         finished_at = datetime.now(UTC).isoformat()
@@ -386,6 +408,7 @@ class GenericYoloExportService:
         manifest = {
             'version_tag': version_tag,
             'seed': seed,
+            'group_key': group_key,
             'dataset_sha': checksum,
             'image_count': len(item_ids),
             'split_counts': counts.to_dict(),
@@ -393,15 +416,19 @@ class GenericYoloExportService:
             'started_at': started_at,
             'finished_at': finished_at,
             'exported_at': finished_at,
+            'code_sha': _code_sha(),
+            'frozen_holdout_sha': compute_holdout_sha(holdout_item_ids)
+            if holdout_item_ids
+            else None,
+            'dedup': dedup_stats,
+            'image_copy': image_copy_stats,
+            'resize_mode': resize_mode,
         }
         manifest_path = resolved_export_dir / ARTIFACT_FILENAMES['manifest']
-        manifest_path.write_text(json.dumps(manifest, indent=2))
+        self._atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
 
         current_symlink = self.config.export_root / 'current'
-        current_symlink.parent.mkdir(parents=True, exist_ok=True)
-        if current_symlink.is_symlink() or current_symlink.exists():
-            current_symlink.unlink()
-        current_symlink.symlink_to(resolved_export_dir, target_is_directory=True)
+        self._atomic_symlink_flip(current_symlink, resolved_export_dir)
 
         return ExportResult(
             export_dir=str(resolved_export_dir),
@@ -417,6 +444,32 @@ class GenericYoloExportService:
             current_symlink=str(current_symlink),
         )
 
+    @staticmethod
+    def _atomic_write_text(path: Path, payload: str) -> None:
+        """tmp-write + fsync + rename — never leaves a partially-written
+        manifest visible to a concurrent reader (e.g. preflight scan)."""
+        tmp_path = path.with_suffix(path.suffix + '.tmp')
+        with tmp_path.open('w', encoding='utf-8') as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(path)
+
+    @staticmethod
+    def _atomic_symlink_flip(symlink_path: Path, target: Path) -> None:
+        """Point ``symlink_path`` at ``target`` via a write-then-rename.
+
+        A reader that resolves ``current`` mid-flip always sees either the
+        old or the new export directory, never a missing/half-written
+        symlink.
+        """
+        symlink_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_symlink = symlink_path.with_name(f'.{symlink_path.name}.tmp.{os.getpid()}')
+        if tmp_symlink.exists() or tmp_symlink.is_symlink():
+            tmp_symlink.unlink()
+        tmp_symlink.symlink_to(target, target_is_directory=True)
+        tmp_symlink.replace(symlink_path)
+
 
 __all__ = [
     'ARTIFACT_FILENAMES',
@@ -428,4 +481,5 @@ __all__ = [
     'dataset_checksum',
     'hash_split',
     'resolve_current_export_dir',
+    'stratified_split',
 ]
