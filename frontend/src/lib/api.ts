@@ -1,5 +1,6 @@
 /**
- * Typed API client for the openprocessor `/curation/` endpoints.
+ * Typed API client for the OpenProcessor curation endpoints, mounted
+ * under `API_PREFIX` (transitionally `/curation`; canonically `/curation`).
  *
  * - Single base URL, defaulting to `''` (empty → relative paths, proxied
  *   by nginx in Docker production).
@@ -72,6 +73,43 @@ import type {
 const RAW_BASE = (import.meta.env?.PUBLIC_TRITON_API_URL as string | undefined) ?? '';
 
 export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
+
+/**
+ * Path prefix every backend endpoint hangs off, e.g. `/curation/health`.
+ *
+ * TRANSITIONAL DEFAULT. `/curation` is OpenProcessor's *historical* prefix.
+ * Its canonical, generic prefix — the one any future consumer will be
+ * written against — is `/curation`, and it already ships that as the
+ * default. `/curation` survives here only so introducing this constant is
+ * provably behavior-neutral: a 92-site URL-composition refactor and a
+ * live prefix change are two failure modes, and fusing them makes a
+ * break ambiguous between "threading bug" and "route mismatch".
+ *
+ * This default is DELETED in a later phase (T-E2 of
+ * `docs/design/backend-integration-phase-b-plan-2026-09-20.md`), when it
+ * becomes `/curation`. Do not treat `/curation` as a supported value.
+ */
+const RAW_API_PREFIX = (import.meta.env?.PUBLIC_API_PREFIX as string | undefined) ?? '';
+
+/**
+ * Empty and `__API_PREFIX__` both mean "unset", on purpose.
+ *
+ * The production image bakes the literal `__API_PREFIX__` at build time
+ * and `sed`s it at container start (`docker-entrypoint.sh`). If the env
+ * var is unset there the substitution yields `''`, and `?? '/curation'` would
+ * NOT fire — `??` only catches null/undefined — producing prefix-less
+ * URLs like `/health`. If the entrypoint is skipped entirely the
+ * placeholder leaks through verbatim. Both are total, silent failures;
+ * both are cheaper to absorb here than to debug in a container.
+ */
+export function normalizeApiPrefix(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.startsWith('__')) return '/curation';
+  const leading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return leading.replace(/\/+$/, '');
+}
+
+export const API_PREFIX: string = normalizeApiPrefix(RAW_API_PREFIX);
 
 const DETAIL_MAX_CHARS = 200;
 
@@ -224,7 +262,7 @@ function qs(params: Record<string, unknown>): string {
 // -- endpoints -----------------------------------------------------------
 
 export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
-  return apiFetch<OpHealth>('/curation/health', {}, signal);
+  return apiFetch<OpHealth>(`${API_PREFIX}/health`, {}, signal);
 }
 
 /**
@@ -245,7 +283,7 @@ export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
  */
 export async function getMethods(signal?: AbortSignal): Promise<OpMethodsResponse> {
   try {
-    const raw = await apiFetch<unknown>('/curation/methods', {}, signal);
+    const raw = await apiFetch<unknown>(`${API_PREFIX}/methods`, {}, signal);
     return parseKbMethodsResponse(raw);
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
@@ -366,7 +404,7 @@ export async function getVizProjection(
 ): Promise<VizProjectionResponse> {
   try {
     const raw = await apiFetch<unknown>(
-      `/curation/viz/projection${qs({
+      `${API_PREFIX}/viz/projection${qs({
         cluster_id: params.cluster_id ?? undefined,
         class_id: params.class_id ?? undefined,
         max_points: params.max_points ?? undefined,
@@ -426,7 +464,7 @@ export interface VizProjectionJob {
  */
 export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectionJob> {
   return apiFetch<VizProjectionJob>(
-    '/curation/viz/projection/rebuild',
+    `${API_PREFIX}/viz/projection/rebuild`,
     { method: 'POST' },
     signal,
   );
@@ -508,7 +546,7 @@ export function getPlates(
   signal?: AbortSignal,
 ): Promise<PlatesPage> {
   return apiFetch<PlatesPage>(
-    `/curation/plates${qs(params as Record<string, unknown>)}`,
+    `${API_PREFIX}/plates${qs(params as Record<string, unknown>)}`,
     {},
     signal,
   );
@@ -543,7 +581,7 @@ export function clusterPlates(
   signal?: AbortSignal,
 ): Promise<PlateClusterJob> {
   return apiFetch(
-    `/curation/plates/cluster${qs({
+    `${API_PREFIX}/plates/cluster${qs({
       max_rank: maxRank,
       force_repartition: opts.forceRepartition,
       auto_fp_threshold: opts.autoFpThreshold,
@@ -555,7 +593,7 @@ export function clusterPlates(
 
 /** Poll the background plate-clustering job. */
 export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateClusterJob> {
-  return apiFetch('/curation/plates/cluster/status', {}, signal);
+  return apiFetch(`${API_PREFIX}/plates/cluster/status`, {}, signal);
 }
 
 /** Per-bucket AHC refine over plate_pe_embedding; writes plate_cluster_subid. */
@@ -568,7 +606,11 @@ export function refinePlateCluster(
   n_subclusters: number;
   action: string;
 }> {
-  return apiFetch(`/curation/plates/clusters/refine/${clusterId}`, { method: 'POST' }, signal);
+  return apiFetch(
+    `${API_PREFIX}/plates/clusters/refine/${clusterId}`,
+    { method: 'POST' },
+    signal,
+  );
 }
 
 /** Plate cluster cards (mirrors getClusters' OpCluster shape). */
@@ -577,7 +619,7 @@ export function getPlateClusters(
   signal?: AbortSignal,
 ): Promise<{ clusters: OpCluster[]; count: number }> {
   return apiFetch(
-    `/curation/plates/clusters${qs({
+    `${API_PREFIX}/plates/clusters${qs({
       max_clusters: opts.maxClusters,
       per_cluster: opts.perCluster,
       max_rank: opts.maxRank,
@@ -603,14 +645,14 @@ export interface PlateFpCentroidJob {
 
 /** (Re)build the FP centroid store — sub-types the FP bucket (background job). */
 export function buildPlateFpCentroids(signal?: AbortSignal): Promise<PlateFpCentroidJob> {
-  return apiFetch('/curation/plates/fp_centroids/build', { method: 'POST' }, signal);
+  return apiFetch(`${API_PREFIX}/plates/fp_centroids/build`, { method: 'POST' }, signal);
 }
 
 /** Poll the FP-centroid build job + read persisted centroid metadata. */
 export function getPlateFpCentroidStatus(
   signal?: AbortSignal,
 ): Promise<PlateFpCentroidJob> {
-  return apiFetch('/curation/plates/fp_centroids/status', {}, signal);
+  return apiFetch(`${API_PREFIX}/plates/fp_centroids/status`, {}, signal);
 }
 
 export interface SuspectedFpItem extends PlateBrowseItem {
@@ -635,7 +677,7 @@ export function getSuspectedFalsePositives(
   signal?: AbortSignal,
 ): Promise<SuspectedFpPage> {
   return apiFetch(
-    `/curation/plates/suspected_false_positives${qs({
+    `${API_PREFIX}/plates/suspected_false_positives${qs({
       threshold: opts.threshold,
       page: opts.page,
       page_size: opts.pageSize,
@@ -658,14 +700,14 @@ export function getTrainingCandidates(
   signal?: AbortSignal,
 ): Promise<PlatesPage> {
   return apiFetch<PlatesPage>(
-    `/curation/plates/training_candidates${qs({ mode, ...params })}`,
+    `${API_PREFIX}/plates/training_candidates${qs({ mode, ...params })}`,
     {},
     signal,
   );
 }
 
 export function getModelsStatus(signal?: AbortSignal): Promise<OpModelsStatus> {
-  return apiFetch<OpModelsStatus>('/curation/models/status', {}, signal);
+  return apiFetch<OpModelsStatus>(`${API_PREFIX}/models/status`, {}, signal);
 }
 
 /**
@@ -681,7 +723,7 @@ export function unloadModel(
   signal?: AbortSignal,
 ): Promise<UnloadModelResponse> {
   return apiFetch<UnloadModelResponse>(
-    `/curation/models/${encodeURIComponent(modelName)}${qs({ force })}`,
+    `${API_PREFIX}/models/${encodeURIComponent(modelName)}${qs({ force })}`,
     { method: 'DELETE' },
     signal,
   );
@@ -751,7 +793,7 @@ export interface DatasetStats {
 }
 
 export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
-  return apiFetch<DatasetStats>('/curation/stats/dataset', {}, signal);
+  return apiFetch<DatasetStats>(`${API_PREFIX}/stats/dataset`, {}, signal);
 }
 
 export async function getStats(signal?: AbortSignal): Promise<OpStats> {
@@ -777,8 +819,10 @@ export async function getStats(signal?: AbortSignal): Promise<OpStats> {
     }>;
   };
   const [ds, cls] = await Promise.all([
-    apiFetch<RawDataset>('/curation/stats/dataset', {}, signal),
-    apiFetch<RawClasses>('/curation/stats/classes', {}, signal).catch(() => ({ classes: [] })),
+    apiFetch<RawDataset>(`${API_PREFIX}/stats/dataset`, {}, signal),
+    apiFetch<RawClasses>(`${API_PREFIX}/stats/classes`, {}, signal).catch(() => ({
+      classes: [],
+    })),
   ]);
   const totalImages = (ds.by_source ?? []).reduce(
     (acc, b) => acc + (b.doc_count || 0),
@@ -822,7 +866,7 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
     hotkey_letter?: string | null;
   };
   const res = await apiFetch<{ classes: RawClass[] } | RawClass[]>(
-    '/curation/classes',
+    `${API_PREFIX}/classes`,
     {},
     signal,
   );
@@ -901,7 +945,7 @@ export async function getClusters(
   // cluster_kind, and is_unlabeled. The frontend ONLY shapes the result
   // into the labeler's OpCluster type — no semantic compute here.
   const raw = await apiFetch<RawClustersResp>(
-    `/curation/clusters${qs({
+    `${API_PREFIX}/clusters${qs({
       per_cluster: 4,
       class_id: filter.class_id ?? undefined,
       // Pull enough buckets that the 512 IVF candidate clusters (+ class
@@ -1137,7 +1181,7 @@ export async function getCluster(
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
   const [cropPage, clustersResp] = await Promise.all([
-    apiFetch<CropPage>(`/curation/crops${qs(cropQuery)}`, {}, signal),
+    apiFetch<CropPage>(`${API_PREFIX}/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
       // cluster_id (not class_id!) is the correct filter for "fetch this
       // one cluster's card by its own identity" — cluster_id == class_id
@@ -1147,7 +1191,7 @@ export async function getCluster(
       // which fell back to the null-identity stub below and showed no
       // human-readable name in the header even though /curation/clusters'
       // list view has dominant_class_name for the same cluster.
-      `/curation/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
+      `${API_PREFIX}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
       {},
       signal,
     ).catch(() => null),
@@ -1192,7 +1236,7 @@ export async function getCrops(
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<OpCrop>> {
   type Raw = { total: number; page: number; page_size: number; crops: RawCrop[] };
-  const raw = await apiFetch<Raw>(`/curation/crops${qs({ ...filter })}`, {}, signal);
+  const raw = await apiFetch<Raw>(`${API_PREFIX}/crops${qs({ ...filter })}`, {}, signal);
   return {
     items: raw.crops.map(mapRawCrop),
     total: raw.total,
@@ -1207,7 +1251,7 @@ export function putCropLabel(
   signal?: AbortSignal,
 ): Promise<OpCrop> {
   return apiFetch<OpCrop>(
-    `/curation/crops/${encodeURIComponent(cropId)}/label`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label`,
     {
       method: 'PUT',
       body: JSON.stringify({ class_id: classId, validated: true }),
@@ -1223,7 +1267,7 @@ export function bulkLabel(
 ): Promise<BulkLabelResult> {
   // Backend route is PUT (matches the single-crop /label PUT shape).
   return apiFetch<BulkLabelResult>(
-    '/curation/crops/batch_label',
+    `${API_PREFIX}/crops/batch_label`,
     {
       method: 'PUT',
       body: JSON.stringify({ crop_ids: cropIds, class_id: classId, validated: true }),
@@ -1235,7 +1279,7 @@ export function bulkLabel(
 /** Undo: reset crop label back to its model-suggested value. */
 export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<void> {
   return apiFetch<void>(
-    `/curation/crops/${encodeURIComponent(cropId)}/label`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label`,
     { method: 'DELETE' },
     signal,
   );
@@ -1252,7 +1296,7 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
  */
 export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise<void> {
   return apiFetch<void>(
-    `/curation/crops/${encodeURIComponent(cropId)}/review_dismiss`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/review_dismiss`,
     { method: 'POST' },
     signal,
   );
@@ -1278,7 +1322,7 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
  */
 export async function getCrop(cropId: string, signal?: AbortSignal): Promise<OpCrop> {
   const raw = await apiFetch<RawCrop>(
-    `/curation/crops/${encodeURIComponent(cropId)}`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}`,
     {},
     signal,
   );
@@ -1291,7 +1335,7 @@ export function setCropPlate(
   signal?: AbortSignal,
 ): Promise<OpCrop> {
   return apiFetch<OpCrop>(
-    `/curation/crops/${encodeURIComponent(cropId)}/plate`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/plate`,
     {
       method: 'PUT',
       body: JSON.stringify({ bbox_norm: bbox }),
@@ -1326,7 +1370,7 @@ export function updateCropPlateMeta(
   signal?: AbortSignal,
 ): Promise<{ crop_id: string; updated_fields: string[] }> {
   return apiFetch(
-    `/curation/crops/${encodeURIComponent(cropId)}/plate_meta`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/plate_meta`,
     {
       method: 'PATCH',
       body: JSON.stringify(patch),
@@ -1350,7 +1394,7 @@ export function batchPlateStatus(
   conflicts: { crop_id: string; current_source: string | null }[];
 }> {
   return apiFetch(
-    '/curation/plates/batch_status',
+    `${API_PREFIX}/plates/batch_status`,
     {
       method: 'POST',
       body: JSON.stringify({
@@ -1372,7 +1416,7 @@ export async function runGemmaOnCluster(
   // unvalidated crops in this cluster first, then POST in chunks of 64.
   type CropPage = { crops: Array<{ crop_id: string }> };
   const page = await apiFetch<CropPage>(
-    `/curation/crops${qs({ cluster_id: clusterId, label_validated: false, page_size: 200 })}`,
+    `${API_PREFIX}/crops${qs({ cluster_id: clusterId, label_validated: false, page_size: 200 })}`,
     {},
     signal,
   );
@@ -1388,7 +1432,7 @@ export async function runGemmaOnCluster(
       updated: number;
       new_class_proposals?: unknown[];
     }>(
-      '/curation/gemma/label_batch',
+      `${API_PREFIX}/gemma/label_batch`,
       { method: 'POST', body: JSON.stringify({ crop_ids: chunk }) },
       signal,
     );
@@ -1418,7 +1462,7 @@ export function refineCluster(
   signal?: AbortSignal,
 ): Promise<RefineClusterResponse> {
   return apiFetch<RefineClusterResponse>(
-    `/curation/clusters/refine/${clusterId}`,
+    `${API_PREFIX}/clusters/refine/${clusterId}`,
     { method: 'POST' },
     signal,
   );
@@ -1456,7 +1500,7 @@ export async function getReviewQueue(
     sort_fallback_reason?: string | null;
   };
   const raw = await apiFetch<RawPage>(
-    `/curation/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
+    `${API_PREFIX}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
@@ -1533,7 +1577,7 @@ export async function selectDiverse(
 ): Promise<SelectDiverseResult> {
   try {
     const raw = await apiFetch<unknown>(
-      '/curation/select/diverse',
+      `${API_PREFIX}/select/diverse`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -1581,7 +1625,7 @@ function parseSelectJobStatus(raw: unknown): SelectJobStatus {
  *  cadence/cleanup (see `/review`'s `+page.svelte` — mirrors the
  *  `bakeoff` page's setInterval/clearInterval pattern). */
 export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobStatus> {
-  const raw = await apiFetch<unknown>('/curation/select/status', {}, signal);
+  const raw = await apiFetch<unknown>(`${API_PREFIX}/select/status`, {}, signal);
   return parseSelectJobStatus(raw);
 }
 
@@ -1590,7 +1634,7 @@ export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobSt
  *  `select_cancel`), not a bare 204 — the caller only needs to know
  *  polling can stop, so the body is discarded. */
 export async function cancelSelect(signal?: AbortSignal): Promise<void> {
-  await apiFetch<unknown>('/curation/select/cancel', { method: 'POST' }, signal);
+  await apiFetch<unknown>(`${API_PREFIX}/select/cancel`, { method: 'POST' }, signal);
 }
 
 /**
@@ -1630,7 +1674,7 @@ export async function searchCrops(
     items: RawSearchItem[];
   };
   const raw = await apiFetch<RawPage>(
-    `/curation/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
+    `${API_PREFIX}/search/text${qs({ q, page, page_size: pageSize, ...filter })}`,
     {},
     signal,
   );
@@ -1665,7 +1709,7 @@ export function exportYolo(
   const body: Record<string, unknown> = {};
   if (opts.version_tag) body.version_tag = opts.version_tag;
   return apiFetch<OpExportResult>(
-    '/curation/export/yolo',
+    `${API_PREFIX}/export/yolo`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -1673,7 +1717,7 @@ export function exportYolo(
 
 /** Poll current export state. */
 export function exportStatus(signal?: AbortSignal): Promise<OpExportStatus> {
-  return apiFetch<OpExportStatus>('/curation/export/status', {}, signal);
+  return apiFetch<OpExportStatus>(`${API_PREFIX}/export/status`, {}, signal);
 }
 
 /**
@@ -1702,7 +1746,7 @@ export function exportLpr(
   if (opts.image_mode !== undefined) body.image_mode = opts.image_mode;
   if (opts.img_max_side !== undefined) body.img_max_side = opts.img_max_side;
   return apiFetch<OpLprExportResult>(
-    '/curation/export/lpr',
+    `${API_PREFIX}/export/lpr`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -1710,7 +1754,7 @@ export function exportLpr(
 
 /** Last LPR-export status (reads the LPR `current` symlink + manifest). */
 export function exportLprStatus(signal?: AbortSignal): Promise<OpLprExportStatus> {
-  return apiFetch<OpLprExportStatus>('/curation/export/lpr/status', {}, signal);
+  return apiFetch<OpLprExportStatus>(`${API_PREFIX}/export/lpr/status`, {}, signal);
 }
 
 /**
@@ -1723,13 +1767,13 @@ export function listDatasets(
   signal?: AbortSignal,
 ): Promise<OpDatasetList> {
   const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
-  return apiFetch<OpDatasetList>(`/curation/export/datasets${qs}`, {}, signal);
+  return apiFetch<OpDatasetList>(`${API_PREFIX}/export/datasets${qs}`, {}, signal);
 }
 
 // -- classes mutators ----------------------------------------------------
 
 export function getClass(classId: number, signal?: AbortSignal): Promise<OpClass> {
-  return apiFetch<OpClass>(`/curation/classes/${classId}`, {}, signal);
+  return apiFetch<OpClass>(`${API_PREFIX}/classes/${classId}`, {}, signal);
 }
 
 export function addClass(
@@ -1737,7 +1781,7 @@ export function addClass(
   signal?: AbortSignal,
 ): Promise<{ class_id: number; class_name: string; group: string }> {
   return apiFetch<{ class_id: number; class_name: string; group: string }>(
-    '/curation/classes',
+    `${API_PREFIX}/classes`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );
@@ -1749,7 +1793,7 @@ export function renameClass(
   signal?: AbortSignal,
 ): Promise<unknown> {
   return apiFetch<unknown>(
-    `/curation/classes/${classId}`,
+    `${API_PREFIX}/classes/${classId}`,
     { method: 'PUT', body: JSON.stringify(payload) },
     signal,
   );
@@ -1772,14 +1816,18 @@ export function mergeClasses(
     deprecated: boolean;
     source_name: string;
     target_name: string;
-  }>('/curation/classes/merge', { method: 'POST', body: JSON.stringify(payload) }, signal);
+  }>(
+    `${API_PREFIX}/classes/merge`,
+    { method: 'POST', body: JSON.stringify(payload) },
+    signal,
+  );
 }
 
 export function syncClassesToOpensearch(
   signal?: AbortSignal,
 ): Promise<{ created: number; updated: number }> {
   return apiFetch<{ created: number; updated: number }>(
-    '/curation/classes/sync_to_opensearch',
+    `${API_PREFIX}/classes/sync_to_opensearch`,
     { method: 'POST' },
     signal,
   );
@@ -1796,7 +1844,7 @@ export function moveCropsToCluster(
   // /curation/crops/batch_label. Reuse the type so both call sites share the
   // conflict-handling code path.
   return apiFetch<BulkLabelResult>(
-    '/curation/crops/move',
+    `${API_PREFIX}/crops/move`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds, cluster_id: targetClusterId }),
@@ -1822,7 +1870,7 @@ export function excludeCrops(
   signal?: AbortSignal,
 ): Promise<{ excluded: number; errors: number }> {
   return apiFetch<{ excluded: number; errors: number }>(
-    '/curation/crops/batch_exclude',
+    `${API_PREFIX}/crops/batch_exclude`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds, reason }),
@@ -1836,7 +1884,7 @@ export function unexcludeCrops(
   signal?: AbortSignal,
 ): Promise<{ unexcluded: number; errors: number }> {
   return apiFetch<{ unexcluded: number; errors: number }>(
-    '/curation/crops/batch_unexclude',
+    `${API_PREFIX}/crops/batch_unexclude`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds }),
@@ -1853,7 +1901,7 @@ export function flagNeedsNewClass(
   signal?: AbortSignal,
 ): Promise<{ flagged: number; errors: number }> {
   return apiFetch<{ flagged: number; errors: number }>(
-    '/curation/crops/flag_new_class',
+    `${API_PREFIX}/crops/flag_new_class`,
     {
       method: 'POST',
       body: JSON.stringify({ crop_ids: cropIds, note }),
@@ -1869,28 +1917,28 @@ export function freezeTestHoldout(
   signal?: AbortSignal,
 ): Promise<OpTestHoldoutFreezeResult> {
   return apiFetch<OpTestHoldoutFreezeResult>(
-    '/curation/test_holdout/freeze',
+    `${API_PREFIX}/test_holdout/freeze`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );
 }
 
 export function getTestHoldoutStats(signal?: AbortSignal): Promise<OpTestHoldoutStats> {
-  return apiFetch<OpTestHoldoutStats>('/curation/test_holdout/stats', {}, signal);
+  return apiFetch<OpTestHoldoutStats>(`${API_PREFIX}/test_holdout/stats`, {}, signal);
 }
 
 // -- registry/manifest downloads (used as anchor `download` URLs) --------
 
 export function getClassRegistryUrl(): string {
-  return `${apiBase}/curation/export/registry/class_registry.json`;
+  return `${apiBase}${API_PREFIX}/export/registry/class_registry.json`;
 }
 
 export function getDataYamlUrl(): string {
-  return `${apiBase}/curation/export/registry/data.yaml`;
+  return `${apiBase}${API_PREFIX}/export/registry/data.yaml`;
 }
 
 export function getManifestUrl(): string {
-  return `${apiBase}/curation/export/registry/manifest.json`;
+  return `${apiBase}${API_PREFIX}/export/registry/manifest.json`;
 }
 
 // -- image URL helpers (no fetch — used directly in <img src=...>) -------
@@ -1905,7 +1953,7 @@ export function getManifestUrl(): string {
  * where rendering quality matters more than transfer speed.
  */
 export function getThumbUrl(cropId: string, size: number = 160): string {
-  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
+  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
 }
 
 /**
@@ -1919,12 +1967,12 @@ export function getPlateThumbUrl(
   size: number = 160,
   cacheBustKey?: string | number | null,
 ): string {
-  const base = `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/plate_thumbnail?size=${size}`;
+  const base = `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/plate_thumbnail?size=${size}`;
   return cacheBustKey != null ? `${base}&v=${encodeURIComponent(cacheBustKey)}` : base;
 }
 
 export function getSourceImageUrl(cropId: string): string {
-  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image`;
+  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image`;
 }
 
 /**
@@ -1945,13 +1993,13 @@ export function getSourceImageWithBbox(
   // the left-side preview lags the right-side canvas. Pass a key that
   // changes when the bbox changes (e.g. the bbox tuple) to bust the
   // cache on edits while still hitting the cache between cursor moves.
-  const base = `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
+  const base = `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
   return cacheKey ? `${base}&v=${encodeURIComponent(cacheKey)}` : base;
 }
 
 /** Full-resolution source image; used by SlotBboxEditor where pixel accuracy matters. */
 export function getSourceImageFull(cropId: string): string {
-  return `${apiBase}/curation/crops/${encodeURIComponent(cropId)}/image`;
+  return `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image`;
 }
 
 // -- training endpoints --------------------------------------------------
@@ -1972,7 +2020,7 @@ export function trainPreflight(
   signal?: AbortSignal,
 ): Promise<PreflightReport> {
   return apiFetch<PreflightReport>(
-    '/curation/train/preflight',
+    `${API_PREFIX}/train/preflight`,
     { method: 'POST', body: JSON.stringify(spec) },
     signal,
   );
@@ -1989,7 +2037,7 @@ export function trainStart(
   signal?: AbortSignal,
 ): Promise<StartTrainResponse> {
   return apiFetch<StartTrainResponse>(
-    `/curation/train/start${qs({ force: force ? true : undefined })}`,
+    `${API_PREFIX}/train/start${qs({ force: force ? true : undefined })}`,
     { method: 'POST', body: JSON.stringify(spec) },
     signal,
   );
@@ -2002,7 +2050,7 @@ export function trainStartCampaign(
   signal?: AbortSignal,
 ): Promise<StartCampaignResponse> {
   return apiFetch<StartCampaignResponse>(
-    `/curation/train/start_campaign${qs({ force: force ? true : undefined })}`,
+    `${API_PREFIX}/train/start_campaign${qs({ force: force ? true : undefined })}`,
     { method: 'POST', body: JSON.stringify(spec) },
     signal,
   );
@@ -2019,8 +2067,8 @@ export async function getTrainStatus(
   signal?: AbortSignal,
 ): Promise<TrainJobStatus | null> {
   const path = jobId
-    ? `/curation/train/status/${encodeURIComponent(jobId)}`
-    : '/curation/train/status';
+    ? `${API_PREFIX}/train/status/${encodeURIComponent(jobId)}`
+    : `${API_PREFIX}/train/status`;
   try {
     return await apiFetch<TrainJobStatus | null>(path, {}, signal);
   } catch (e) {
@@ -2034,7 +2082,11 @@ export function getTrainRuns(
   offset: number = 0,
   signal?: AbortSignal,
 ): Promise<RunsListResponse> {
-  return apiFetch<RunsListResponse>(`/curation/train/runs${qs({ limit, offset })}`, {}, signal);
+  return apiFetch<RunsListResponse>(
+    `${API_PREFIX}/train/runs${qs({ limit, offset })}`,
+    {},
+    signal,
+  );
 }
 
 export function tailTrainLog(
@@ -2043,7 +2095,7 @@ export function tailTrainLog(
   signal?: AbortSignal,
 ): Promise<LogTailResponse> {
   return apiFetch<LogTailResponse>(
-    `/curation/train/log/tail/${encodeURIComponent(jobId)}${qs({ lines })}`,
+    `${API_PREFIX}/train/log/tail/${encodeURIComponent(jobId)}${qs({ lines })}`,
     {},
     signal,
   );
@@ -2054,7 +2106,7 @@ export function cancelTrainJob(
   signal?: AbortSignal,
 ): Promise<CancelResponse> {
   return apiFetch<CancelResponse>(
-    `/curation/train/cancel/${encodeURIComponent(jobId)}`,
+    `${API_PREFIX}/train/cancel/${encodeURIComponent(jobId)}`,
     { method: 'POST' },
     signal,
   );
@@ -2065,18 +2117,18 @@ export function cancelTrainCampaign(
   signal?: AbortSignal,
 ): Promise<CancelResponse> {
   return apiFetch<CancelResponse>(
-    `/curation/train/cancel_campaign/${encodeURIComponent(campaignId)}`,
+    `${API_PREFIX}/train/cancel_campaign/${encodeURIComponent(campaignId)}`,
     { method: 'POST' },
     signal,
   );
 }
 
 export function getTrainProfiles(signal?: AbortSignal): Promise<ProfilesResponse> {
-  return apiFetch<ProfilesResponse>('/curation/train/profiles', {}, signal);
+  return apiFetch<ProfilesResponse>(`${API_PREFIX}/train/profiles`, {}, signal);
 }
 
 export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> {
-  return apiFetch<PresetsResponse>('/curation/train/presets', {}, signal);
+  return apiFetch<PresetsResponse>(`${API_PREFIX}/train/presets`, {}, signal);
 }
 
 export function promoteTrainJob(
@@ -2085,7 +2137,7 @@ export function promoteTrainJob(
   signal?: AbortSignal,
 ): Promise<PromoteResponse> {
   return apiFetch<PromoteResponse>(
-    `/curation/train/promote/${encodeURIComponent(jobId)}`,
+    `${API_PREFIX}/train/promote/${encodeURIComponent(jobId)}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -2101,7 +2153,7 @@ export function getTrainManifest(
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
   return apiFetch<Record<string, unknown>>(
-    `/curation/train/manifest/${encodeURIComponent(jobId)}`,
+    `${API_PREFIX}/train/manifest/${encodeURIComponent(jobId)}`,
     {},
     signal,
   );
@@ -2169,21 +2221,25 @@ export function startAutoLabel(
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState> {
   return apiFetch<AutoLabelJobState>(
-    `/curation/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
+    `${API_PREFIX}/pipeline/auto_label/start${qs(params as Record<string, unknown>)}`,
     { method: 'POST' },
     signal,
   );
 }
 
 export function getAutoLabelStatus(signal?: AbortSignal): Promise<AutoLabelJobState> {
-  return apiFetch<AutoLabelJobState>('/curation/pipeline/auto_label/status', {}, signal);
+  return apiFetch<AutoLabelJobState>(
+    `${API_PREFIX}/pipeline/auto_label/status`,
+    {},
+    signal,
+  );
 }
 
 export function cancelAutoLabel(
   signal?: AbortSignal,
 ): Promise<AutoLabelJobState & { cancelled: boolean }> {
   return apiFetch<AutoLabelJobState & { cancelled: boolean }>(
-    '/curation/pipeline/auto_label/cancel',
+    `${API_PREFIX}/pipeline/auto_label/cancel`,
     { method: 'POST' },
     signal,
   );
@@ -2254,7 +2310,7 @@ export interface BakeoffTrainedModel {
 export function bakeoffTrainedModels(
   signal?: AbortSignal,
 ): Promise<{ models: BakeoffTrainedModel[]; count: number }> {
-  return apiFetch('/curation/bakeoff/trained_models', {}, signal);
+  return apiFetch(`${API_PREFIX}/bakeoff/trained_models`, {}, signal);
 }
 
 /** A frozen evaluation dataset (a column in the bake-off matrix). */
@@ -2286,7 +2342,7 @@ export function bakeoffRun(
   signal?: AbortSignal,
 ): Promise<{ status: string; job_id: string; out_dir: string }> {
   return apiFetch(
-    '/curation/bakeoff/run',
+    `${API_PREFIX}/bakeoff/run`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
@@ -2296,14 +2352,14 @@ export function bakeoffRun(
 export function bakeoffEvalDatasets(
   signal?: AbortSignal,
 ): Promise<{ datasets: BakeoffEvalDataset[]; count: number }> {
-  return apiFetch('/curation/bakeoff/eval_datasets', {}, signal);
+  return apiFetch(`${API_PREFIX}/bakeoff/eval_datasets`, {}, signal);
 }
 
 /** Public/commercial baseline detectors from the editable registry. */
 export function bakeoffBaselineModels(
   signal?: AbortSignal,
 ): Promise<{ baselines: BakeoffModelSpec[]; count: number }> {
-  return apiFetch('/curation/bakeoff/baseline_models', {}, signal);
+  return apiFetch(`${API_PREFIX}/bakeoff/baseline_models`, {}, signal);
 }
 
 /** The model x dataset matrix for a finished matrix job. */
@@ -2311,25 +2367,37 @@ export function bakeoffMatrix(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<BakeoffMatrix> {
-  return apiFetch(`/curation/bakeoff/matrix/${encodeURIComponent(jobId)}`, {}, signal);
+  return apiFetch(
+    `${API_PREFIX}/bakeoff/matrix/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
 }
 
 export function bakeoffRuns(
   signal?: AbortSignal,
 ): Promise<{ runs: BakeoffRunSummary[] }> {
-  return apiFetch('/curation/bakeoff/runs', {}, signal);
+  return apiFetch(`${API_PREFIX}/bakeoff/runs`, {}, signal);
 }
 
 export function bakeoffStatus(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  return apiFetch(`/curation/bakeoff/status/${encodeURIComponent(jobId)}`, {}, signal);
+  return apiFetch(
+    `${API_PREFIX}/bakeoff/status/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
 }
 
 export function bakeoffResults(
   jobId: string,
   signal?: AbortSignal,
 ): Promise<BakeoffComparison> {
-  return apiFetch(`/curation/bakeoff/results/${encodeURIComponent(jobId)}`, {}, signal);
+  return apiFetch(
+    `${API_PREFIX}/bakeoff/results/${encodeURIComponent(jobId)}`,
+    {},
+    signal,
+  );
 }

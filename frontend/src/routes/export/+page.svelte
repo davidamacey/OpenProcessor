@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     apiBase,
+    API_PREFIX,
     exportStatus,
     exportYolo,
     freezeTestHoldout,
@@ -244,7 +245,9 @@
   $effect(() => {
     void (async () => {
       try {
-        const res = await fetch(`${apiBase}/curation/stats/dataset`, { method: 'GET' });
+        const res = await fetch(`${apiBase}${API_PREFIX}/stats/dataset`, {
+          method: 'GET',
+        });
         if (!res.ok) return;
         const ct = res.headers.get('content-type') ?? '';
         if (!ct.includes('application/json')) return;

@@ -14,7 +14,7 @@
  * `onEvent` callback so the page can switch on `event.type`.
  */
 
-import { apiBase } from './api';
+import { apiBase, API_PREFIX } from './api';
 
 // All event payloads share these fields; specific types add more.
 export interface OpBaseEvent {
@@ -141,10 +141,10 @@ export function subscribePipelineEvents(
   const url = (() => {
     const base =
       apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}/curation/pipeline/events`
+        ? `${apiBase}${API_PREFIX}/pipeline/events`
         : `${
             typeof window !== 'undefined' ? window.location.origin : ''
-          }${apiBase}/curation/pipeline/events`;
+          }${apiBase}${API_PREFIX}/pipeline/events`;
     return new URL(base).toString();
   })();
 
@@ -223,8 +223,8 @@ export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscri
     // hits the labeler's nginx proxy.
     const base =
       apiBase && /^https?:\/\//i.test(apiBase)
-        ? `${apiBase}/curation/events`
-        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}/curation/events`;
+        ? `${apiBase}${API_PREFIX}/events`
+        : `${typeof window !== 'undefined' ? window.location.origin : ''}${apiBase}${API_PREFIX}/events`;
     const u = new URL(base);
     if (opts.topic) u.searchParams.set('topic', opts.topic);
     if (opts.class_id != null) u.searchParams.set('class_id', String(opts.class_id));
