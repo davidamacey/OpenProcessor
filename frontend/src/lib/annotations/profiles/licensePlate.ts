@@ -30,7 +30,7 @@ export const licensePlateSlot: SlotSpec = {
       envelope: PLATE_SHAPE_ENVELOPE,
       thumbnail: {
         path: (id, size) =>
-          `/crops/${encodeURIComponent(id)}/plate_thumbnail?size=${size}`,
+          `/crops/${encodeURIComponent(id)}/region_thumbnail?size=${size}`,
         aspect: '2 / 1',
         defaultSize: 160,
       },

@@ -326,7 +326,7 @@ during the genericization pass — see `docs/genericization-plan-2026-09-13.md`)
   Gemma=teal, v6=rose, YOLO11=sky). Accepts a `raw="lpr_nanov11_640:miss"`
   chain entry directly. Miss/reject tags get a muted variant.
 - `src/lib/components/SlotCard.svelte` (formerly `PlateCard.svelte`) —
-  128px annotation-slot thumbnail (via `/curation/crops/{id}/plate_thumbnail`),
+  128px annotation-slot thumbnail (via `{API_PREFIX}/crops/{id}/region_thumbnail`),
   parent class chip, score, provenance chip strip, slot text inline,
   ⚠ shape warning. Parameterized via `readSlot` (`src/lib/annotations/
 readSlot.ts`) against a `SlotSpec` (`registeredSlots.ts`) rather than

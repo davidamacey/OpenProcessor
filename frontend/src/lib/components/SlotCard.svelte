@@ -24,7 +24,7 @@
    * parent can navigate to the review queue.
    */
   import ProvenanceChip from './ProvenanceChip.svelte';
-  import { getPlateThumbUrl, resolveApiUrl, type PlateBrowseItem } from '$lib/api';
+  import { getRegionThumbUrl, resolveApiUrl, type PlateBrowseItem } from '$lib/api';
   import { readSlot } from '$lib/annotations/readSlot';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import type { SlotSpec, XYXY } from '$lib/annotations/types';
@@ -82,7 +82,7 @@
   const thumbUrl = $derived(
     crop.plate_thumbnail_url
       ? resolveApiUrl(crop.plate_thumbnail_url)
-      : getPlateThumbUrl(crop.crop_id),
+      : getRegionThumbUrl(crop.crop_id),
   );
 
   function handleClick(e: MouseEvent): void {

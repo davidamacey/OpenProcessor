@@ -2,11 +2,11 @@
  * Regression coverage for the cross-origin plate-thumbnail 404 bug
  * (2026-09-12 report): with `PUBLIC_TRITON_API_URL` set to a remote
  * host, several call sites built plate-thumbnail `<img src>` values as
- * bare relative paths (`/curation/crops/{id}/plate_thumbnail`) instead of
+ * bare relative region-thumbnail paths instead of
  * going through `apiBase`, so the browser resolved them against the
  * frontend's OWN origin instead of the configured remote openprocessor.
  *
- * `apiBase` (and therefore `getThumbUrl`/`getPlateThumbUrl`/
+ * `apiBase` (and therefore `getThumbUrl`/`getRegionThumbUrl`/
  * `resolveApiUrl`) is computed once at module load from
  * `import.meta.env.PUBLIC_TRITON_API_URL`, so exercising the
  * non-empty-base case requires stubbing the env var, resetting the
@@ -29,50 +29,50 @@ async function loadApiWithRemoteBase() {
   return import('./api');
 }
 
-describe('getPlateThumbUrl', () => {
+describe('getRegionThumbUrl', () => {
   it('prefixes the configured remote apiBase', async () => {
-    const { getPlateThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(getPlateThumbUrl('abc')).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/plate_thumbnail?size=160`,
+    const { getRegionThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
+    expect(getRegionThumbUrl('abc')).toBe(
+      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160`,
     );
   });
 
   it('accepts a custom size', async () => {
-    const { getPlateThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(getPlateThumbUrl('abc', 320)).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/plate_thumbnail?size=320`,
+    const { getRegionThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
+    expect(getRegionThumbUrl('abc', 320)).toBe(
+      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=320`,
     );
   });
 
   it('assembles a cache-busting `v` param when a cacheBustKey is passed', async () => {
-    const { getPlateThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(getPlateThumbUrl('abc', 160, 12345)).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/plate_thumbnail?size=160&v=12345`,
+    const { getRegionThumbUrl, API_PREFIX } = await loadApiWithRemoteBase();
+    expect(getRegionThumbUrl('abc', 160, 12345)).toBe(
+      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160&v=12345`,
     );
   });
 
   it('omits the `v` param entirely when no cacheBustKey is given', async () => {
-    const { getPlateThumbUrl } = await loadApiWithRemoteBase();
-    expect(getPlateThumbUrl('abc')).not.toMatch(/v=/);
+    const { getRegionThumbUrl } = await loadApiWithRemoteBase();
+    expect(getRegionThumbUrl('abc')).not.toMatch(/v=/);
   });
 
   it('encodes the crop id', async () => {
-    const { getPlateThumbUrl } = await loadApiWithRemoteBase();
-    expect(getPlateThumbUrl('a/b')).toContain('a%2Fb');
+    const { getRegionThumbUrl } = await loadApiWithRemoteBase();
+    expect(getRegionThumbUrl('a/b')).toContain('a%2Fb');
   });
 });
 
 describe('resolveApiUrl', () => {
   it('prefixes a bare relative /curation/... path with the configured remote apiBase', async () => {
     const { resolveApiUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    expect(resolveApiUrl(`${API_PREFIX}/crops/abc/plate_thumbnail?size=160`)).toBe(
-      `${REMOTE_BASE}${API_PREFIX}/crops/abc/plate_thumbnail?size=160`,
+    expect(resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail?size=160`)).toBe(
+      `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160`,
     );
   });
 
   it('is idempotent — a no-op on an already-absolute URL, never double-prefixes', async () => {
     const { resolveApiUrl, API_PREFIX } = await loadApiWithRemoteBase();
-    const once = resolveApiUrl(`${API_PREFIX}/crops/abc/plate_thumbnail`);
+    const once = resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail`);
     const twice = resolveApiUrl(once);
     expect(twice).toBe(once);
     expect(twice.match(new RegExp(REMOTE_BASE, 'g'))).toHaveLength(1);
@@ -87,8 +87,8 @@ describe('resolveApiUrl', () => {
     vi.stubEnv('PUBLIC_TRITON_API_URL', '');
     vi.resetModules();
     const { resolveApiUrl, API_PREFIX } = await import('./api');
-    expect(resolveApiUrl(`${API_PREFIX}/crops/abc/plate_thumbnail`)).toBe(
-      `${API_PREFIX}/crops/abc/plate_thumbnail`,
+    expect(resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail`)).toBe(
+      `${API_PREFIX}/crops/abc/region_thumbnail`,
     );
   });
 });

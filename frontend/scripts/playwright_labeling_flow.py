@@ -130,7 +130,7 @@ class Stub:
 
         if "/curation/health" in path:
             return ok({"status": "ok"})
-        if "/thumbnail" in path or "/source" in path or "/plate_thumbnail" in path:
+        if "/thumbnail" in path or "/source" in path or "/region_thumbnail" in path:
             # 1x1 transparent gif — the grid only needs the <img> to resolve.
             return route.fulfill(
                 status=200,

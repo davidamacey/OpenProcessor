@@ -168,7 +168,7 @@ mirrors.
     },
     "templatePath": {
       "type": "string",
-      "description": "A path template relative to API_PREFIX, e.g. '/crops/{cropId}/plate_thumbnail?size={size}'. Placeholders are a closed allow-list — see §5.1."
+      "description": "A path template relative to API_PREFIX, e.g. '/crops/{cropId}/region_thumbnail?size={size}'. Placeholders are a closed allow-list — see §5.1."
     },
     "shapeEnvelope": {
       "type": "object",
@@ -540,7 +540,7 @@ row. This is the concrete artifact the backend can diff against
         /* PLATE_SHAPE_ENVELOPE, see src/lib/shapeGate.ts */
       },
       "thumbnail": {
-        "path": "/crops/{cropId}/plate_thumbnail?size={size}",
+        "path": "/crops/{cropId}/region_thumbnail?size={size}",
         "aspect": "2 / 1",
         "defaultSize": 160
       },

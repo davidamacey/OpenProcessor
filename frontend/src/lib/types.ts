@@ -296,7 +296,7 @@ export interface OpCluster {
   representative_crop_ids: string[]; // up to 4
   // Optional explicit thumbnail URLs (one per representative_crop_ids
   // entry, same order). Used by the synthetic license_plate card so its
-  // tiles show plate close-ups (/curation/crops/{id}/plate_thumbnail) rather
+  // tiles show plate close-ups (API_PREFIX-relative /crops/{id}/region_thumbnail) rather
   // than the default vehicle-crop thumbnail. Regular clusters leave
   // this undefined; the grid then falls back to getThumbUrl().
   representative_thumb_urls?: string[];

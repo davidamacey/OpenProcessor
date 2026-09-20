@@ -7,7 +7,7 @@
     excludeCrops,
     getClusters,
     getPlates,
-    getPlateThumbUrl,
+    getRegionThumbUrl,
     getThumbUrl,
     putCropLabel,
     resolveApiUrl,
@@ -391,7 +391,7 @@
   // Deliberately keyed to `licensePlateSlot` specifically, NOT "the
   // first slot-bound class" (P2.11, docs/genericization-plan-2026-09-13.md
   // §9.1 finding): every line below calls the plate-specific
-  // getPlates()/getPlateThumbUrl() endpoints, so silently aliasing to
+  // getPlates()/getRegionThumbUrl() endpoints, so silently aliasing to
   // whichever slot-bound class happened to be first would build a
   // plate card labeled with a DIFFERENT slot's class the moment a
   // second capable slot is registered. A generic per-slot synthetic
@@ -428,9 +428,9 @@
         representative_crop_ids: reps.map((p) => p.crop_id),
         // Show plate close-ups, not vehicle thumbnails — the whole
         // point of this card is that the operator is browsing plates.
-        // /curation/crops/{id}/plate_thumbnail returns the plate sub-bbox
-        // rendered to a 160px tile.
-        representative_thumb_urls: reps.map((p) => getPlateThumbUrl(p.crop_id, 160)),
+        // API_PREFIX-relative /crops/{id}/region_thumbnail returns the plate
+        // sub-bbox rendered to a 160px tile.
+        representative_thumb_urls: reps.map((p) => getRegionThumbUrl(p.crop_id, 160)),
         updated_at: null,
       } as OpCluster;
     } catch {

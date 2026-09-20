@@ -29,7 +29,7 @@ import {
   getPlateClusterStatus,
   getPlateFpCentroidStatus,
   getPlates,
-  getPlateThumbUrl,
+  getRegionThumbUrl,
   getSuspectedFalsePositives,
   refinePlateCluster,
   setCropPlate,
@@ -440,7 +440,7 @@ export function createPlateGalleryController() {
               ...p,
               plate_status: res.plate_status ?? p.plate_status,
               plate_bbox_norm: arr ?? null,
-              plate_thumbnail_url: getPlateThumbUrl(cropId, 160, Date.now()),
+              plate_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
             }
           : p,
       );

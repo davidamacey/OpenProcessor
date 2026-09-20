@@ -1961,17 +1961,29 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
 }
 
 /**
- * URL for a plate close-up thumbnail (the plate sub-bbox rendered to a
+ * URL for an annotation-slot sub-bbox close-up (the region rendered to a
  * tile), same construction convention as {@link getThumbUrl}. Pass
  * `cacheBustKey` (e.g. `Date.now()`) after a bbox edit so the browser
  * doesn't serve the pre-edit crop from its image cache.
+ *
+ * The segment is `region_thumbnail`, which is the ONLY region-thumbnail
+ * route the backend registers (`curation_images.py`'s
+ * `@crops_router.get('/{crop_id}/region_thumbnail')`). It used to be
+ * `plate_thumbnail`, which 404s — there is no alias and there will not
+ * be one (cropwright_backend_integration_plan.md §3.2: no compatibility
+ * surface lands on the contract-owning side).
+ *
+ * Note the deliberate asymmetry with the JSON key: `/plates` responses
+ * carry a field literally named `plate_thumbnail_url` whose *value* now
+ * points at `…/region_thumbnail`. The key is frozen wire contract; only
+ * the path inside it is generic. Do not "fix" the key to match.
  */
-export function getPlateThumbUrl(
+export function getRegionThumbUrl(
   cropId: string,
   size: number = 160,
   cacheBustKey?: string | number | null,
 ): string {
-  const base = `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/plate_thumbnail?size=${size}`;
+  const base = `${apiBase}${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region_thumbnail?size=${size}`;
   return cacheBustKey != null ? `${base}&v=${encodeURIComponent(cacheBustKey)}` : base;
 }
 
