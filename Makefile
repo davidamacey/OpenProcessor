@@ -991,6 +991,45 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 	@bash $(SCRIPTS_DIR)/clone_reference_repos.sh --repo $(REPO)
 
 # ==================================================================================
+# Curation subsystem — EXPERIMENTAL, opt-in compose profile (D7)
+# ==================================================================================
+# The curation worker services (curation-detection-worker, curation-vlm-worker,
+# curation-auto-label-worker, curation-cluster-refresh) all carry
+# `profiles: [curation]` in docker-compose.yml, so `make up`/`make down`
+# never touch them. Use the targets below instead.
+
+.PHONY: curation-up
+curation-up: ## Start the curation worker services (experimental, opt-in)
+	@echo "Starting curation subsystem (profile: curation)..."
+	$(COMPOSE) --profile curation up -d
+	@echo ""
+	@echo "Curation services starting. Check status with: make curation-status"
+
+.PHONY: curation-down
+curation-down: ## Stop the curation worker services
+	@echo "Stopping curation subsystem (profile: curation)..."
+	$(COMPOSE) --profile curation down
+
+.PHONY: curation-logs
+curation-logs: ## Follow logs from the curation worker services
+	$(COMPOSE) --profile curation logs -f \
+		curation-detection-worker curation-vlm-worker \
+		curation-auto-label-worker curation-cluster-refresh
+
+.PHONY: curation-status
+curation-status: ## Show running curation worker containers
+	$(COMPOSE) --profile curation ps \
+		curation-detection-worker curation-vlm-worker \
+		curation-auto-label-worker curation-cluster-refresh curation-evaluator
+
+.PHONY: curation-seed
+curation-seed: ## Seed a demo curation dataset (not yet implemented — Wave 6 scope)
+	@echo "curation-seed: not yet implemented."
+	@echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
+	@echo "(see docs/design/oss_main_completion_plan.md, Wave 6 — live write-path"
+	@echo "verification harness). Nothing was run."
+
+# ==================================================================================
 # Phony targets (targets that don't create files)
 # ==================================================================================
 
@@ -1016,4 +1055,5 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
         clean clean-all clean-logs clean-bench clean-exports \
         opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
         info docs \
-        clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref
+        clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
+        curation-up curation-down curation-logs curation-status curation-seed
