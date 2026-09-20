@@ -10,6 +10,7 @@ SHELL := /bin/bash
 
 # Variables
 COMPOSE := docker compose
+V := .venv/bin
 API_SERVICE := yolo-api
 TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
@@ -212,30 +213,9 @@ test-api-health: ## Test API health
 	@echo "Testing API health (port $(API_PORT))..."
 	@curl -sf http://localhost:$(API_PORT)/health && echo " OK" || echo " FAILED"
 
-.PHONY: test-inference
-test-inference: ## Test inference on all tracks (shell script)
-	@echo "Testing inference on all tracks..."
-	@bash tests/test_inference.sh
-
-.PHONY: test-integration
-test-integration: ## Run integration tests
-	@echo "Running integration tests..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/scripts/test_integration.py
-
-.PHONY: test-patch
-test-patch: ## Verify End2End TRT NMS patch is applied
-	@echo "Verifying End2End TensorRT NMS patch..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_end2end_patch.py
-
-.PHONY: test-onnx
-test-onnx: ## Test ONNX End2End model locally (bypasses Triton)
-	@echo "Testing ONNX End2End model locally..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_onnx_end2end.py
-
-.PHONY: test-shared-client
-test-shared-client: ## Test shared vs per-request client performance
-	@echo "Testing shared vs per-request client..."
-	@bash tests/test_shared_vs_per_request.sh
+.PHONY: test
+test: ## Run the pytest suite
+	$(V)/python -m pytest tests/ -q
 
 # ==================================================================================
 # Benchmarking
@@ -1017,7 +997,7 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 .PHONY: help up down restart restart-triton restart-api build rebuild \
         logs logs-triton logs-api logs-opensearch status health ps \
         test-detect test-faces test-verify test-embed test-embed-text test-embed-boxes test-ocr test-analyze test-analyze-full test-search test-ingest test-all \
-        test-api-health test-inference test-integration test-patch test-onnx test-shared-client \
+        test-api-health test \
         bench-quick bench-detect bench-faces bench-embed bench-ingest bench-search bench-results bench-python \
         models-list models-status models-reload \
         shell-api shell-triton shell-opensearch profile-api resize-images test-create-images \
