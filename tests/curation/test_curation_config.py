@@ -32,6 +32,16 @@ def test_defaults_use_path_types() -> None:
     assert isinstance(cfg.source_root, Path)
     assert isinstance(cfg.state_dir, Path)
     assert isinstance(cfg.crop_cache_dir, Path)
+    assert isinstance(cfg.bakeoff_eval_root, Path)
+
+
+def test_bakeoff_eval_root_default_is_relative_not_a_private_path() -> None:
+    """CFG-6: the bake-off harness used to default to owner-private
+    absolute paths (one of which named a licensed proprietary image
+    corpus). The default must be a repo-relative path, never an
+    absolute filesystem path baked into the source."""
+    cfg = CurationConfig()
+    assert not cfg.bakeoff_eval_root.is_absolute()
 
 
 def test_is_frozen() -> None:
@@ -71,3 +81,9 @@ def test_from_env_respects_custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv('MYAPP_CLASSES_INDEX', 'app_classes')
     cfg = CurationConfig.from_env(prefix='MYAPP_')
     assert cfg.classes_index == 'app_classes'
+
+
+def test_from_env_overrides_bakeoff_eval_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_BAKEOFF_EVAL_ROOT', '/tmp/my_bakeoff_eval')
+    cfg = CurationConfig.from_env()
+    assert cfg.bakeoff_eval_root == Path('/tmp/my_bakeoff_eval')
