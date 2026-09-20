@@ -590,6 +590,31 @@ class CropFlagNewClassRequest(BaseModel):
     note: str = ''
 
 
+class CurationSettingsResponse(BaseModel):
+    """``GET,PUT /curation/settings`` response envelope.
+
+    ``defaults`` is deliberately ``dict[str, str]`` (an OPEN map keyed by
+    axis id), not a fixed set of named fields (``cluster``/``sort``/etc.)
+    -- a future axis must not require a wire-format change. Missing key =
+    no shared override for that axis; the caller falls back to
+    ``GET /methods``'s own hardcoded-default resolution (see
+    ``src.services.curation.strategy_registry.resolve_effective_default``).
+    """
+
+    defaults: dict[str, str] = Field(default_factory=dict)
+    updated_at: str | None = None
+    updated_by: str | None = None
+
+
+class CurationSettingsUpdateRequest(BaseModel):
+    """``PUT /curation/settings`` body -- partial by design. Only the axes
+    present here are validated + merged into the stored document; axes
+    already set are left untouched (see
+    ``src.clients.curation_opensearch.update_curation_settings``)."""
+
+    defaults: dict[str, str] = Field(default_factory=dict)
+
+
 class _PublishEvent(BaseModel):
     """Event-publish payload — used by out-of-process workers."""
 
