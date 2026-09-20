@@ -385,7 +385,7 @@ async def pipeline_auto_label(
         format_class_catalog,
         resolve_class_name as _resolve_class_name_fn,
     )
-    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     reg = get_class_registry().load()
     class_names = [c.class_name for c in reg.classes if not c.deprecated]
@@ -399,7 +399,7 @@ async def pipeline_auto_label(
         for c in reg.classes
         if not c.deprecated
     ]
-    class_catalog = format_class_catalog(class_dicts, GENERIC_ITEM_PACK)
+    class_catalog = format_class_catalog(class_dicts, resolve_prompt_pack())
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
