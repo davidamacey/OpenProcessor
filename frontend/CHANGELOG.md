@@ -59,6 +59,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `/train`'s LPR export panel is now gated on server capability instead
+  of being hardcoded (P2.15). `GET {API_PREFIX}/methods` grew an `export`
+  axis listing the dataset-export kinds a deployment can actually produce;
+  `strategies.ts` parses it into a new `dataset_exports` bucket and
+  `isDatasetExportAvailable()` gates on it with the same
+  stable/experimental-only bar as the `diverse`/`viz_projection`/
+  `semantic_search` overlays. When the kind is absent — which is the
+  case on OpenProcessor, where the proprietary LPR exporter was never
+  ported — the panel and its dataset-kind toggle are _absent_, not
+  disabled, and `GET {API_PREFIX}/export/lpr/status` is never requested.
+  Capability is never probed by calling the export endpoint and reading
+  the 404: that endpoint is a write that kicks off a real dataset build.
+  The panel now reads its kind/label/paths from the `license_plate`
+  profile's `extras.datasetExport` (finally consuming what P2.13 declared)
+  and `TrainForm`'s `lpr` prop is renamed `singleClassExport`. On a
+  `/methods` failure the fallback advertises no export kinds at all, so
+  the optional panel stays hidden rather than rendering a button that
+  404s. Rendering `extras.datasetExport.options[]` as a generic form
+  (rather than the four typed bound controls `/train` still uses) remains
+  follow-up work.
 - Every backend URL is now composed from a single exported `API_PREFIX`
   (`src/lib/api.ts`) instead of 92 hardcoded `/curation/…` literals across
   `api.ts`, `sse.ts` and `/export`. Default is transitionally `/curation`, so
@@ -213,6 +233,22 @@ check`/`test`/`lint`/`build` all green.
 
 ### Fixed
 
+- Region thumbnails no longer 404. `getPlateThumbUrl` is renamed
+  `getRegionThumbUrl` and builds `{API_PREFIX}/crops/{id}/region_thumbnail`
+  — the only region-thumbnail route OpenProcessor registers. The old
+  `plate_thumbnail` segment had no route on either side and no alias will
+  ever be added (`cropwright_backend_integration_plan.md` §3.2), so every
+  client-built region thumbnail was dead: the `SlotCard` fallback, the
+  `/clusters` synthetic plate card's four tiles, and — most visibly — the
+  cache-busted URL the plate gallery substitutes after every bbox save.
+  The backend's matching fix (T-A1) makes the _server-supplied_
+  `plate_thumbnail_url` value correct; this is the client-built half.
+  The JSON key `plate_thumbnail_url` is frozen wire contract and is
+  deliberately unchanged — only the path inside its value is generic.
+  `licensePlate.ts`'s parallel (as-yet-unconsumed) slot-profile path
+  template is fixed in the same pass, and `plateThumbUrlScan.test.ts`'s
+  guard now matches both segments so a revert to the dead one is caught
+  anywhere in `src/`.
 - Cluster VLM labeling called `/gemma/label_batch`, a route the backend
   does not register; it is `{prefix}/vlm/label_batch`. The `gemma_*`
   payload fields and the `gemma_low_conf` review-tab id are unchanged —
