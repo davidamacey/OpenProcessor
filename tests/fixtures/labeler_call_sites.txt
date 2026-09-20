@@ -1,0 +1,109 @@
+# Point-in-time snapshot of Cropwright's (the labeler frontend's)
+# executable HTTP call sites, as of wt-cropwright-integration commit
+# 90baa9b on branch feat/backend-integration.
+#
+# Paths here are PREFIX-STRIPPED (the frontend's literal `/legacy/...` prefix
+# is removed -- the app-side comparison strips the backend's configured
+# `api_prefix` the same way, see test_labeler_route_parity.py) and
+# PARAM-NORMALIZED (any `${...}`-interpolated URL segment is written as
+# the literal token `{param}`). Deduplicated and sorted.
+#
+# Regenerate the raw candidate list with:
+#   rg -o "/legacy/[A-Za-z0-9_./{}$-]+" \
+#     /path/to/cropwright/src/lib/api.ts \
+#     /path/to/cropwright/src/lib/sse.ts \
+#     /path/to/cropwright/src/routes/export/+page.svelte \
+#   | sort -u
+#
+# That one-liner over-matches comments and JSDoc (rg doesn't know Cropwright's
+# comment syntax) -- hand-filter against the executable/comment-only split
+# audited in docs/design/cropwright_backend_integration_plan.md §1.2 before
+# updating this file, then strip the `/legacy` prefix, collapse `${...}`
+# interpolations to `{param}`, dedupe, and sort. Update this header's commit
+# hash when you do.
+#
+# Excluded on purpose (see KNOWN_GAPS in test_labeler_route_parity.py for
+# the authoritative list + reasons -- do not re-add these without removing
+# the matching KNOWN_GAPS entry):
+#   /export/lpr                    -- proprietary LPR export, never ported
+#   /export/lpr/status             -- ditto
+#   /gemma/label_batch             -- frontend hasn't renamed to /vlm/label_batch yet (T-C1)
+#   /crops/{param}/plate_thumbnail -- frontend's getPlateThumbUrl() fallback hasn't
+#                                      picked up the region_thumbnail rename yet (T-B2)
+
+/bakeoff/baseline_models
+/bakeoff/eval_datasets
+/bakeoff/matrix/{param}
+/bakeoff/results/{param}
+/bakeoff/run
+/bakeoff/runs
+/bakeoff/status/{param}
+/bakeoff/trained_models
+/classes
+/classes/merge
+/classes/sync_to_opensearch
+/classes/{param}
+/clusters
+/clusters/refine/{param}
+/crops
+/crops/batch_exclude
+/crops/batch_label
+/crops/batch_unexclude
+/crops/flag_new_class
+/crops/move
+/crops/{param}
+/crops/{param}/image
+/crops/{param}/label
+/crops/{param}/plate
+/crops/{param}/plate_meta
+/crops/{param}/review_dismiss
+/crops/{param}/thumbnail
+/events
+/export/datasets
+/export/registry/class_registry.json
+/export/registry/data.yaml
+/export/registry/manifest.json
+/export/status
+/export/yolo
+/health
+/methods
+/models/status
+/models/{param}
+/pipeline/auto_label/cancel
+/pipeline/auto_label/start
+/pipeline/auto_label/status
+/pipeline/events
+/plates
+/plates/batch_status
+/plates/cluster
+/plates/cluster/status
+/plates/clusters
+/plates/clusters/refine/{param}
+/plates/fp_centroids/build
+/plates/fp_centroids/status
+/plates/suspected_false_positives
+/plates/training_candidates
+/review/{param}
+/search/text
+/select/cancel
+/select/diverse
+/select/status
+/stats/classes
+/stats/dataset
+/test_holdout/freeze
+/test_holdout/stats
+/train/cancel/{param}
+/train/cancel_campaign/{param}
+/train/log/tail/{param}
+/train/manifest/{param}
+/train/preflight
+/train/presets
+/train/profiles
+/train/promote/{param}
+/train/runs
+/train/start
+/train/start_campaign
+/train/status
+/train/status/{param}
+/viz/projection
+/viz/projection/rebuild
