@@ -71,14 +71,6 @@ KNOWN_GAPS: dict[str, str] = {
         'alias exists or ever will. Frontend fix is T-C1, tracked in the '
         'wt-cropwright-integration repo, not here.'
     ),
-    '/crops/{param}/plate_thumbnail': (
-        "frontend's getPlateThumbUrl() fallback still builds the "
-        'pre-fix URL segment (plan §1.3, mismatch #3). The backend half '
-        'of this bug is fixed in this same pass (T-A1: regions.py / '
-        'regions_fp.py now emit region_thumbnail); the frontend half '
-        '(T-B2) lands in wt-cropwright-integration, not here. Remove this '
-        'exclusion once the fixture is regenerated after T-B2 ships.'
-    ),
 }
 
 
