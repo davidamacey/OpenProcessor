@@ -334,7 +334,7 @@ class TestRouting:
         # text-hint write.
         assert task.update_doc[F.detector] == 'sam3'
         chain = task.update_doc.get(F.detector_chain) or []
-        assert any('paddleocr_rec:text_hint:hit' in s for s in chain)
+        assert any('paddleocr_rec_trt:text_hint:hit' in s for s in chain)
         assert any('sam3:text_hint:gemma_verify_ok' in s for s in chain)
 
 

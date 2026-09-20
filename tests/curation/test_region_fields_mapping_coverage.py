@@ -50,6 +50,10 @@ def test_items_mapping_region_fields_match_the_module_singleton() -> None:
         'cluster_id',
         'cluster_distance',
         'cluster_subid',
+        # CFG-8: this was a domain-named, vendor-named literal
+        # ('gemma_plate_visible') baked into the mapping until it was
+        # wired through RegionFields.visible.
+        'visible',
     )
     for attr in region_attrs_declared:
         key = getattr(F, attr)
@@ -95,6 +99,7 @@ def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
         cluster_id='plate_cluster_id',
         cluster_distance='plate_cluster_distance',
         cluster_subid='plate_cluster_subid',
+        visible='plate_visible',
     )
     monkeypatch.setattr(cop, 'F', custom)
     rebuilt = cop._items_body()
@@ -108,10 +113,11 @@ def test_items_mapping_rebuilt_with_overridden_region_fields_uses_override_keys(
         'plate_detector_chain',
         'plate_pe_embedding',
         'plate_cluster_id',
+        'plate_visible',
     ):
         assert plate_key in props, f'expected override key {plate_key!r} after F swap'
 
     # The generic region_* defaults must be gone — proves the builder
     # reads through `F` rather than a cached/hardcoded literal.
-    for region_key in ('region_bbox_norm', 'region_score', 'region_verified'):
+    for region_key in ('region_bbox_norm', 'region_score', 'region_verified', 'region_visible'):
         assert region_key not in props

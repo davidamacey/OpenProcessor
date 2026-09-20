@@ -210,11 +210,18 @@ def _items_body() -> dict[str, Any]:
                 # fields have an indirection mechanism in Phase 2.
                 'gemma_raw_label': {'type': 'keyword'},
                 'gemma_raw_label_conf': {'type': 'float'},
-                # VLM-extracted make/model + region-visibility hint. Field
-                # names kept as-is for the same reason as above.
+                # VLM-extracted make/model hint. Field names kept as-is for
+                # the same reason as above (no region-of-interest concept
+                # applies to a vehicle make/model).
                 'gemma_vehicle_make': {'type': 'keyword'},
                 'gemma_vehicle_model': {'type': 'keyword'},
-                'gemma_plate_visible': {'type': 'boolean'},
+                # Region-visibility hint (CFG-8): this WAS a domain-named,
+                # vendor-named field ('gemma_plate_visible') baked into the
+                # otherwise-generic index mapping, unlike its siblings above
+                # it IS a region-of-interest concept and RegionFields
+                # already has an indirection for it -- see
+                # RegionFields.visible (default 'region_visible').
+                F.visible: {'type': 'boolean'},
                 # Hierarchical clustering of gemma_raw_label values. A
                 # background job writes back a cluster id (stable hash of the
                 # cluster name) and the human-readable cluster name so a

@@ -81,7 +81,13 @@ RUN groupadd -r appuser && \
     chown -R appuser:appuser /app && \
     mkdir -p /home/appuser/.cache/huggingface \
              /home/appuser/.cache/torch && \
-    chown -R appuser:appuser /home/appuser/.cache
+    chown -R appuser:appuser /home/appuser/.cache && \
+    # CurationConfig.state_dir default -- created + owned by appuser here so
+    # a fresh named Docker volume mounted over this path on first `up`
+    # inherits appuser ownership (Docker copies an empty named volume's
+    # ownership from the image directory it's mounted over).
+    mkdir -p /var/lib/openprocessor && \
+    chown -R appuser:appuser /var/lib/openprocessor
 
 WORKDIR /app
 

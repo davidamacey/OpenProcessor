@@ -56,6 +56,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # CFG-5: previously the ONLY var reaching this container from .env was
+    # OP_API_PREFIX (explicitly interpolated below) -- everything else in
+    # .env (see env.template) was silently unreachable. env_file loads the
+    # whole file as container env vars; explicit `environment:` entries
+    # below still take precedence over same-named .env values.
+    env_file:
+      - path: ./.env
+        required: false
     volumes:
       - ./src:/app/src
       - ./export:/app/export
@@ -66,6 +74,8 @@ services:
       - ./pytorch_models:/app/pytorch_models
       - ./test_images:/app/test_images
       - ./VERSION:/app/VERSION:ro
+      - ./data:/app/data
+      - openprocessor-state:/var/lib/openprocessor
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
     environment:
       # Triton gRPC endpoint (Docker service name)
@@ -318,3 +328,4 @@ volumes:
   loki_data:
   opensearch_data:
   opensearch_dashboards_data:
+  openprocessor-state:
