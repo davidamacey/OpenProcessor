@@ -73,6 +73,11 @@ services:
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+      # Curation/labeling API prefix (CurationConfig.api_prefix, generic
+      # default /curation — see env.template). Every curation router
+      # builds its prefix at *module import*, so this must be set before
+      # src.main is imported; it cannot change at container runtime.
+      - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
     shm_size: 8g
     stdin_open: true # Keep stdin open
     tty: true # Allocate a pseudo-TTY
