@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- The dashboard's auto-label run can be scoped to a single class — "just
+  help me with pallets right now" — instead of always sweeping the whole
+  pool. A collapsed-by-default `<AssistScopeBar>` on `/dashboard` picks
+  one class (fuzzy-searched through the same `searchClasses` ranking
+  `/review`'s class picker uses) and contributes `class_id` to
+  `POST {API_PREFIX}/pipeline/auto_label/start`; when the backend
+  advertises them, it also offers a detection-profile and a prompt-pack
+  selector, from two new `/methods` axes (`detection_profile`,
+  `prompt_pack`) parsed into `detection_profiles`/`prompt_packs` and
+  gated by `isDetectionProfileAvailable`/`isPromptPackAvailable` with the
+  same stable/experimental-only bar as every other axis. Leaving the bar
+  alone is byte-identical to the previous one-click run: `toStartParams()`
+  returns `{}` and the composed URL is unchanged. The whole bar is absent
+  — not disabled — unless `/methods` advertises at least one assist axis,
+  because `class_id` has no capability signal of its own and an unknown
+  query param is silently dropped server-side, which on an hours-long run
+  would mean an unscoped sweep while the UI claimed otherwise. Built
+  against a contract agreed with the backend session but not yet landed
+  there; verified statically, against both `/methods` fixtures, and in a
+  route-stubbed browser (`scripts/playwright_assist_scope.py`). A live
+  integration pass is still owed once the backend ships its half.
 - `docs/annotation-slots-contract-draft.md` — the P4.2 wire contract draft
   for server-declared annotation slots (H3 opening offer; proposal only,
   nothing implemented on either side).
