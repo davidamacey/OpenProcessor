@@ -239,3 +239,108 @@ ingest via direct OpenSearch writes or the label-import path, browse,
 cluster, review, label, and export — it constrains how far along the
 "turnkey for an arbitrary new deployment" spectrum the subsystem
 currently sits.
+
+## 7. Labeling-assist item selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model
+
+The frontend's labeling-assist UX lets an operator pick which items or
+classes they want assistance with — pallets, food items, license
+plates, anything — and scope a run to just that selection. Getting this
+right on the backend meant adding a fourth member to the
+`CurationConfig`/`RegionFields`/`DetectionProfile` family (§2) —
+`PromptPack`, in `src/services/labeling/vlm_prompts.py` — and making
+both it and `DetectionProfile` discoverable over the wire, without
+conflating either of them with the frontend's own concept of an
+"annotation slot."
+
+**Why `PromptPack` is a fourth, separate dataclass rather than a field
+on `CurationConfig`.** `CurationConfig` holds names and paths — small,
+uniformly-typed deployment data. A `PromptPack` is the opposite: a dozen
+multi-paragraph prompt templates plus two vocabulary tables
+(`class_descriptions`, `synonyms`), all specific to one labeling
+domain. Folding that much text onto `CurationConfig` would turn a
+lookup-table dataclass into a prompt-engineering dataclass; keeping it
+separate means a deployment can swap its *vocabulary* (`PromptPack`)
+independently of its *index names* (`CurationConfig`) or its *detection
+heuristics* (`DetectionProfile`). `CurationConfig` only holds the
+*pointer* to a pack — `prompt_pack_path` — resolved lazily by
+`resolve_prompt_pack()` so a missing/malformed file degrades to the
+built-in generic pack (logged warning) rather than crashing the VLM
+labeler at import time.
+
+**Why `PromptPack` and `DetectionProfile` are not the same concept,
+even though they correlate per-deployment.** `DetectionProfile`
+describes a Triton detection *cascade* — which detector model, what
+aspect/confidence thresholds, how OCR is wired. `PromptPack` describes a
+*VLM conversation* — what to ask a vision-language model and what
+vocabulary to expect back. A deployment adding a "pallet" domain
+configures both, and in practice they describe related things (the
+pallet `DetectionProfile`'s region type and the pallet `PromptPack`'s
+`class_descriptions` are about the same physical objects) — but nothing
+in the code ties them together structurally. One deployment could run a
+`DetectionProfile` with no VLM stage at all (pure CNN cascade, VLM
+disabled), or a `PromptPack` with no custom `DetectionProfile` (VLM
+classifies whole-item crops; no sub-region detection). Merging them
+into one dataclass would force every deployment to configure both
+whenever it only needed one.
+
+**Why neither is the frontend's "annotation slot."** The
+labeling-assist frontend reasons about
+*annotation slots* — a UI-level grouping of what a human curator sees
+and edits for one class. `PromptPack` and `DetectionProfile` are
+backend pipeline concepts: one drives an automated VLM pass, the other
+drives an automated detection cascade. They influence what shows up
+*for* a human to review, but a slot is not required to have a matching
+`DetectionProfile` or a bespoke `PromptPack` entry — the generic pack's
+open-vocabulary prompt and the default profile work across every class
+in the registry unless a deployment opts into something more
+specific. The correlation between all three is `class_id`: a
+`PromptPack`'s `class_descriptions`/`synonyms` are keyed by class name,
+a `DetectionProfile` is bound to whichever classes route to it (see
+`secondary_shape_groups` on the shipped default), and the frontend's
+labeling-assist run now scopes on `class_id` directly (`POST
+{prefix}/pipeline/auto_label/start?class_id=<id>`, below) — but the
+join is data (a shared registry class id), not a code-level dependency
+between the three dataclasses.
+
+**Discovery**: both are advertised on `GET {prefix}/methods`
+alongside the existing `cluster`/`score`/`sort`/`overlay`/`export` axes
+(`src/services/curation/strategy_registry.py`), in the same
+`{id, axis, label, status, default}` shape as the `export` axis. Each
+axis lists exactly one entry today (the one configured
+`DetectionProfile`, the one resolved `PromptPack`), always
+`status='stable'`, `default=True` — but the underlying mechanism is not
+capped at one:
+`src/services/detection/profile_registry.py` is a real, process-lifetime
+registry (`register_profile()` / `get_profiles()` /
+`get_default_profile_name()`) that a deployment wanting more than one
+detectable region type registers against, and the `prompt_pack` axis
+reads whatever `resolve_prompt_pack()` actually resolves, so pointing
+`OP_PROMPT_PACK_PATH` at a different file changes both the VLM's actual
+behavior and what `/methods` reports in the same step — the two can
+never drift out of sync because they share one resolution function.
+
+**Worked example — configuring a "pallet" labeling-assist setup
+end to end:**
+
+1. Add pallet classes to the registry (`data/class_registry.json`, or
+   wherever `OP_REGISTRY_PATH` points) — see
+   `data/class_registry.example.json` for a worked warehouse/pallet
+   registry.
+2. Define a `DetectionProfile` for the region type you want the
+   cascade to find (e.g. a pallet ID tag) and register it via
+   `src.services.detection.profile_registry.register_profile()` at
+   process startup, or construct it directly wherever the detection
+   cascade is wired for your deployment — mirror
+   `cascade_detect.DEFAULT_PROFILE`'s shape.
+3. Write a `PromptPack` JSON file describing the pallet vocabulary —
+   copy `data/prompt_pack.example.json` (a worked warehouse/pallet
+   pack) and edit its prompts/`class_descriptions`/`synonyms`.
+4. Point `OP_PROMPT_PACK_PATH` at that file. `GET {prefix}/methods`'s
+   `prompt_pack` axis now reports your pack's `name` instead of
+   `generic_item_v1`.
+5. Trigger `POST {prefix}/pipeline/auto_label/start?class_id=<pallet
+   class id>&run_gemma=true` — the run scopes its unvalidated-item
+   query to that one class (a `term` filter on `class_id`, added
+   alongside the existing `class_validated`/`gemma_verify_completed_at`
+   exclusions in `src/routers/curation/pipeline.py`) instead of
+   labeling the entire pool.
