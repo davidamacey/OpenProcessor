@@ -65,12 +65,6 @@ KNOWN_GAPS: dict[str, str] = {
         'deliberately never ported (plan §4.1).'
     ),
     '/export/lpr/status': 'status endpoint for the export above, same reason.',
-    '/gemma/label_batch': (
-        "frontend still calls the pre-rename segment; this backend's "
-        'generic route is POST /vlm/label_batch (plan §3). No /gemma/* '
-        'alias exists or ever will. Frontend fix is T-C1, tracked in the '
-        'wt-cropwright-integration repo, not here.'
-    ),
 }
 
 
