@@ -252,7 +252,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     application = FastAPI(
-        title='Visual AI API',
+        title='OpenProcessor',
         description=(
             'High-performance visual AI service providing object detection, '
             'face recognition, image embeddings, visual search, and OCR. '
@@ -268,11 +268,11 @@ def create_app() -> FastAPI:
     # cross-origin calls are rare, but this covers: dev mode (vite/webpack
     # dev servers on a different port), direct API access from LAN IPs, and
     # any other internal network clients. Ported from the reference
-    # implementation's CORS block (triton-api's src/main.py) — dropped
-    # during the initial OSS port, which broke any frontend dev server
-    # talking to this API cross-origin (browser fetch fails with
-    # "Failed to fetch"/no CORS headers, even though the server itself
-    # processes and logs the request as 200).
+    # implementation's CORS block — dropped during the initial OSS port,
+    # which broke any frontend dev server talking to this API
+    # cross-origin (browser fetch fails with "Failed to fetch"/no CORS
+    # headers, even though the server itself processes and logs the
+    # request as 200).
     from fastapi.middleware.cors import CORSMiddleware
 
     application.add_middleware(
