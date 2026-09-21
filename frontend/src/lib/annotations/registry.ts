@@ -2,11 +2,14 @@
  * Resolves the deployed set of annotation slots.
  *
  * Merge order (docs/genericization-plan-2026-09-13.md §2.3): built-ins
- * ← deployment override (`static/annotation-profiles.json`, not yet
- * wired — this ships the merge function ahead of the fetch) ← server
- * (future `OpClass.annotation_slots`, also not yet wired). Merging is
- * per-slot-key REPLACE, not deep-merge, so a partial override can't
- * silently half-apply a broken profile.
+ * ← deployment override (`static/annotation-profiles.json`, tier 2 —
+ * fetched at boot by `./deploymentProfiles.ts` and merged in via the
+ * root layout, see `docs/design/tier2-annotation-profile-config-plan-
+ * 2026-09-20.md`) ← server (tier 3, `OpClass.annotation_slots`, still
+ * not wired — deliberately deferred until tier 2 proves the schema in
+ * production, per that plan's §9 sequencing). Merging is per-slot-key
+ * REPLACE, not deep-merge, so a partial override can't silently
+ * half-apply a broken profile.
  */
 
 import type { SlotSpec, SlotKey } from './types';

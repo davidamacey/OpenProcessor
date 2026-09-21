@@ -2293,24 +2293,25 @@ export interface AutoLabelStartParams {
    * `qs()` drops it entirely so an unscoped request stays byte-identical
    * to every request this app has ever sent.
    *
-   * **Not live yet.** No running backend accepts this. The UI never
-   * sends it unless `/methods` advertises the assist axes — see
-   * `isScopedAssistAvailable` in `$lib/strategies`.
+   * **Confirmed live (2026-09-21) against a real OpenProcessor backend**
+   * — a scoped auto-label run was triggered through the actual UI
+   * against `op-live-verify`, and the composed request
+   * (`class_id`/`detection_profile`/`prompt_pack`) matched the backend's
+   * accepted contract exactly. The UI never sends it unless `/methods`
+   * advertises the assist axes — see `isScopedAssistAvailable` in
+   * `$lib/strategies`.
    */
   class_id?: number | null;
   /**
-   * PROVISIONAL WIRE NAME (Q1, this plan §1.4). The two assist axes are
-   * agreed as `/methods` *discovery*; the query-param names that carry a
-   * selection back to `/auto_label/start` are not yet confirmed with the
-   * peer session. Both are produced in exactly one place
-   * (`createAssistScope().toStartParams()` in `$lib/assistScope.svelte`),
-   * so a rename is one edit there plus one assertion in
-   * `assistScope.svelte.test.ts`. Never sent unless the matching axis is
-   * advertised, so an unconfirmed name cannot reach a backend that
-   * doesn't understand it.
+   * Query-param name confirmed with the OpenProcessor session (2026-09-21
+   * live E2E pass) — matches exactly, no rename needed. Produced in
+   * exactly one place (`createAssistScope().toStartParams()` in
+   * `$lib/assistScope.svelte`), so if it ever needs to change that's one
+   * edit there plus one assertion in `assistScope.svelte.test.ts`. Never
+   * sent unless the matching axis is advertised.
    */
   detection_profile?: string | null;
-  /** See `detection_profile` — same provisional-name caveat. */
+  /** See `detection_profile` — same confirmed-live wire name. */
   prompt_pack?: string | null;
 }
 
