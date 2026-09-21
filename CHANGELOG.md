@@ -19,6 +19,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a HuggingFace token); the leg remains optional — an empty `SAM3_URL`
   still makes it a clean no-op. See
   [`docker/segmenter/README.md`](docker/segmenter/README.md).
+- **Trainer container** (`docker/trainer/`, compose service
+  `curation-trainer` behind the new `training` profile). Until now the
+  API implemented only the control-plane half of the training file
+  protocol and the repo shipped nothing that could answer it — a
+  `/curation/train/start` had no counterparty outside the test harness's
+  shell-script fake. The image watches `/jobs/` for `job.json`, runs
+  each through Ultralytics, and writes `status.json` heartbeats,
+  `run.log`, `best.pt` + `best.onnx`, and a `manifest.json` lineage
+  envelope. Includes the subset/class-remap dataset rewrite,
+  Albumentations stage-1 augmentation, cooperative cancel, CUDA-OOM
+  batch backoff, multi-GPU AutoBatch, campaign auto-skip/auto-promote,
+  and an optional side-by-side comparison against a served Triton
+  model. Nothing domain-specific is baked in: dataset, class subset,
+  hyperparameters, augmentation preset, orientation-sensitive class
+  names and incumbent model all arrive via `job.json` or `OP_*` env.
+- **`curation-mlflow`** compose service (port 4609) for optional
+  experiment tracking of those runs.
+
+### Fixed
+- A subset-trained run now propagates its `class_remap.json` into the
+  checkpoint's `weights/` directory *and* the run manifest, and reports
+  `class_remap_copy_failed` on the job status when it cannot. This is
+  the trainer half of the promote fix already present on the API side
+  (`resolve_class_remap`): without it, promoting a subset run silently
+  wrote a `labels.txt` from the full class registry, mislabeling every
+  class the served model emits.
 
 ## [0.3.0] - 2026-09-21
 
