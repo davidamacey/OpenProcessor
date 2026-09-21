@@ -23,6 +23,7 @@ import orjson
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse, Response
 
+from src.clients.occ import OCCFinalConflictError
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
@@ -417,6 +418,36 @@ def create_app() -> FastAPI:
             )
 
         return response
+
+    @application.exception_handler(OCCFinalConflictError)
+    async def occ_final_conflict_handler(request: Request, exc: OCCFinalConflictError):
+        """Map exhausted-OCC-retry conflicts to HTTP 409.
+
+        Registered ahead of the generic ``Exception`` handler below so a
+        human-write endpoint's re-raised :class:`OCCFinalConflictError`
+        (see ``src.clients.occ`` call sites in ``routers/curation/``)
+        surfaces as a client-actionable "someone else edited this concurrently"
+        response instead of an opaque 500.
+        """
+        req_id = get_request_id()
+        logger.warning(
+            'occ_final_conflict',
+            request_id=req_id,
+            method=request.method,
+            path=request.url.path,
+            doc_id=exc.doc_id,
+            retries=exc.retries,
+        )
+        return ORJSONResponse(
+            status_code=409,
+            content={
+                'detail': 'concurrent write conflict; refresh and retry',
+                'doc_id': exc.doc_id,
+                'retries': exc.retries,
+                'request_id': req_id,
+            },
+            headers={'X-Request-ID': req_id},
+        )
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)
