@@ -59,7 +59,8 @@ repos:
       - id: python-check-blanket-type-ignore
         exclude: ^src/ultralytics_patches/
       - id: python-no-eval
-        exclude: ^(src/ultralytics_patches/|export/)  # PyTorch model.eval() is safe
+        # PyTorch model.eval() is safe; it is not the eval() builtin.
+        exclude: ^(src/ultralytics_patches/|export/|docker/segmenter/sam3_backend\.py)
       - id: python-use-type-annotations
 
   # Dockerfile linting with hadolint

@@ -229,14 +229,17 @@ unfinished in these specific ways* lives somewhere durable.
   policy tuned to one domain — those remain a future, deployment-specific
   overlay, not something this generic ingest service should hardcode.
 - **The asynchronous half of the product now has a first-party home,
-  but it is still opt-in and still needs a trainer/segmenter you
-  supply.** `docker compose --profile curation up -d` starts the
-  detection worker, VLM worker, auto-label worker, and cluster-refresh
-  daemon against this codebase. There is still no shipped trainer
-  container or segmentation-service container — `/curation/train/*`
-  and the cascade's segmenter leg talk a documented HTTP/file protocol
-  (see `docs/CURATION.md`) that a deployment implements or points at
-  its own service; nothing here starts one for you.
+  but it is still opt-in and still needs a trainer you supply.**
+  `docker compose --profile curation up -d` starts the detection
+  worker, VLM worker, auto-label worker, and cluster-refresh daemon
+  against this codebase. There is still no shipped trainer container —
+  `/curation/train/*` talks a documented file protocol (see
+  `docs/CURATION.md`) that a deployment implements; nothing here starts
+  one for you. The cascade's **segmenter** leg does now have a shipped
+  reference server (`docker/segmenter/`, SAM 3, its own `segmenter`
+  compose profile), but it stays opt-in for the same reason everything
+  else here is: it needs a GPU and model weights you provide, and with
+  `SAM3_URL` empty the leg is a documented no-op.
 - **Environment-variable and metric-name prefixes are fully
   reconciled on the `OP_`/`op_` convention** — the `LEGACY_*` env vars and
   `legacy_*` metric names from the original port have been renamed. See
