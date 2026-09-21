@@ -1,4 +1,4 @@
-"""Steady-state inference throughput benchmark for the LPR model variants.
+"""Steady-state inference throughput benchmark for detector model variants.
 
 The bake-off ``run.py`` reports per-image latency that includes disk I/O
 (``cv2.imread``), which dominates and masks the model's real speed. This tool
@@ -9,18 +9,18 @@ Run the SAME tool per backend/EP to get a fair CPU-vs-GPU speedup table:
 
     # GPU (CUDA EP)
     python -m scripts.curation.bakeoff.throughput --backend onnxruntime \
-        --weights /data/quant/ours_yolo26n/fp16.onnx --label fp16-cuda \
+        --weights /data/quant/my_model/fp16.onnx --label fp16-cuda \
         --ort-providers CUDAExecutionProvider,CPUExecutionProvider \
-        --images /data/lpr_exports/<run>/images/test --out /data/quant/throughput
+        --images /data/exports/<run>/images/test --out /data/quant/throughput
 
     # CPU EP
     python -m scripts.curation.bakeoff.throughput --backend onnxruntime \
-        --weights /data/quant/ours_yolo26n/int8_qdq.onnx --label int8-cpu \
+        --weights /data/quant/my_model/int8_qdq.onnx --label int8-cpu \
         --ort-providers CPUExecutionProvider --images ... --out ...
 
     # Apple CoreML (macOS)
     python -m scripts.curation.bakeoff.throughput --backend coreml \
-        --weights ~/lpr_quant/quant/ours_yolo26n/int8.mlpackage --label int8-ane ...
+        --weights ~/quant/my_model/int8.mlpackage --label int8-ane ...
 """
 
 from __future__ import annotations
@@ -76,9 +76,9 @@ def _build_detector(args: argparse.Namespace) -> Any:
             coords_normalized=args.coords_normalized,
         )
     if args.backend == 'triton':
-        from .backends.triton_trt import TritonLprDetector
+        from .backends.triton_trt import TritonYoloDetector
 
-        return TritonLprDetector(
+        return TritonYoloDetector(
             url=args.triton_url,
             model=args.triton_model,
             input_size=args.imgsz,
@@ -131,12 +131,14 @@ def main() -> int:
     p.add_argument('--coreml-compute-units', default='ALL')
     p.add_argument('--coords-normalized', action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--triton-url', default='localhost:4601')
-    p.add_argument('--triton-model', default='lpr_nanov11_640')
+    p.add_argument('--triton-model', help='Triton model name (required for --backend triton)')
     p.add_argument('--n-images', type=int, default=200, help='Frames pre-loaded into memory')
     p.add_argument('--warmup', type=int, default=30, help='Untimed warmup detect() calls')
     p.add_argument('--min-seconds', type=float, default=8.0, help='Minimum steady-state duration')
     p.add_argument('--out', type=Path, help='Dir to write <label>.throughput.json')
     args = p.parse_args()
+    if args.backend == 'triton' and not args.triton_model:
+        raise SystemExit('--triton-model is required for --backend triton')
 
     frames = _load_images(args.images, args.n_images)
     det = _build_detector(args)

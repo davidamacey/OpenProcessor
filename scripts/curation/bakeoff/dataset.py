@@ -1,9 +1,9 @@
 """Load a frozen YOLO test split and expose it as COCO ground truth.
 
-The bake-off scores every model against the same frozen ``test/`` split
-the LPR export produced (``images/test`` + ``labels/test``, single class
-``license_plate``). Background frames have an empty ``.txt`` (no boxes)
-and still count — a false plate on a background frame is a false positive.
+The bake-off scores every model against the same frozen ``test/`` split a
+dataset export produced (``images/test`` + ``labels/test``, single class).
+Background frames have an empty ``.txt`` (no boxes) and still count — a
+false positive on a background frame is a false positive.
 """
 
 from __future__ import annotations
@@ -36,8 +36,9 @@ class YoloTestSet:
     Args:
         images_dir: Directory of test images.
         labels_dir: Directory of matching ``<stem>.txt`` YOLO labels.
-        plate_class_id: Class id treated as ``license_plate`` in the GT
-            labels (single-class export => 0).
+        target_class_id: The class id under test (single-class export => 0).
+        target_class_name: Display name for that class in the COCO GT
+            ``categories`` block (cosmetic only, doesn't affect scoring).
         stratum_map: Optional ``{image_stem: stratum}`` for per-cluster
             breakdowns; produced alongside the export.
     """
@@ -49,12 +50,14 @@ class YoloTestSet:
         images_dir: Path,
         labels_dir: Path,
         *,
-        plate_class_id: int = 0,
+        target_class_id: int = 0,
+        target_class_name: str = 'object',
         stratum_map: dict[str, str] | None = None,
     ) -> None:
         self.images_dir = images_dir
         self.labels_dir = labels_dir
-        self.plate_class_id = plate_class_id
+        self.target_class_id = target_class_id
+        self.target_class_name = target_class_name
         self.stratum_map = stratum_map or {}
         self.images: list[GtImage] = []
         self._load()
@@ -65,7 +68,8 @@ class YoloTestSet:
         root: Path,
         *,
         split: str = 'test',
-        plate_class_id: int = 0,
+        target_class_id: int = 0,
+        target_class_name: str = 'object',
         stratum_map_path: Path | None = None,
     ) -> YoloTestSet:
         """Build from an export root containing ``images/<split>`` etc."""
@@ -75,7 +79,8 @@ class YoloTestSet:
         return cls(
             root / 'images' / split,
             root / 'labels' / split,
-            plate_class_id=plate_class_id,
+            target_class_id=target_class_id,
+            target_class_name=target_class_name,
             stratum_map=stratum_map,
         )
 
@@ -105,7 +110,7 @@ class YoloTestSet:
             if len(parts) != 5:
                 continue
             cls_id, cx, cy, bw, bh = parts
-            if int(float(cls_id)) != self.plate_class_id:
+            if int(float(cls_id)) != self.target_class_id:
                 continue
             cx_, cy_, bw_, bh_ = (float(cx) * w, float(cy) * h, float(bw) * w, float(bh) * h)
             boxes.append((cx_ - bw_ / 2, cy_ - bh_ / 2, cx_ + bw_ / 2, cy_ + bh_ / 2))
@@ -144,7 +149,7 @@ class YoloTestSet:
         return {
             'images': images,
             'annotations': annotations,
-            'categories': [{'id': 1, 'name': 'license_plate'}],
+            'categories': [{'id': 1, 'name': self.target_class_name}],
         }
 
     @property
