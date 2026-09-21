@@ -104,6 +104,12 @@
       const message = (e as Error)?.message ?? 'failed to save settings';
       saveErrors = { ...saveErrors, [spec.axis]: message };
       toastStore.error(message);
+      // Drop the rejected local pick — the control must revert to
+      // whatever is actually in effect, never keep showing the rejected
+      // value as though it had been saved.
+      const nextSelections = { ...selections };
+      delete nextSelections[spec.axis];
+      selections = nextSelections;
       // A 422 "not currently advertised" means /methods is stale (plan
       // §4.4) — re-sync both caches rather than leave a dead option
       // selectable.
