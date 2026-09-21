@@ -80,8 +80,8 @@ describe('cohortsForClass — license_plate (declared cohorts override derived)'
     expect(ids).toEqual(
       [
         ...CORE_COHORTS.map((c) => c.id),
-        'lpr_blind_spots',
-        'lpr_low_conf_correct',
+        'detector_blind_spots',
+        'low_conf_correct',
         'disagreement',
         'human_corrected',
         'false_positives',
@@ -89,16 +89,21 @@ describe('cohortsForClass — license_plate (declared cohorts override derived)'
     );
   });
 
+  // Wave 2 C13 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
+  // §8.4(iii)): the cohort `id` (render key) is split from `params.mode`
+  // (the wire value) — the two lpr_* ids above are already renamed, but
+  // the wire `mode` string is untouched until C14.
   it('every compiled tier-1 LPR cohort URL is byte-identical to getTrainingCandidates(mode, {class_id})', () => {
     const cohorts = cohortsForClass(3, 'license_plate', registry, classesById, true);
-    for (const mode of [
-      'lpr_blind_spots',
-      'lpr_low_conf_correct',
-      'disagreement',
-      'human_corrected',
-      'false_positives',
-    ]) {
-      const cohort = cohorts.find((c) => c.id === mode)!;
+    const idToMode: Record<string, string> = {
+      detector_blind_spots: 'lpr_blind_spots',
+      low_conf_correct: 'lpr_low_conf_correct',
+      disagreement: 'disagreement',
+      human_corrected: 'human_corrected',
+      false_positives: 'false_positives',
+    };
+    for (const [id, mode] of Object.entries(idToMode)) {
+      const cohort = cohorts.find((c) => c.id === id)!;
       expect(cohort.query).toEqual({
         kind: 'endpoint',
         path: '/plates/training_candidates',

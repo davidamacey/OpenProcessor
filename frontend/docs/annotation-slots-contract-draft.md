@@ -791,6 +791,19 @@ is used.
 costs nothing to leave in place, unused, until H3 formally closes this
 question.
 
+**Update, 2026-09-21 (Wave 2 C13,
+docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.3):** the
+frontend deleted `src/lib/plateStatus.ts` outright rather than
+renaming its `NO_PLATE_*` members to `NO_REGION_*` in step with
+OpenProcessor's `no_plate_box`/`no_plate_visible` ->
+`no_region_box`/`no_region_visible` rename (merged at `b3f928d`) —
+renaming a still-zero-importer generated file just produces a
+generated file that is still imported by nothing. The frontend's
+single source of truth for these values remains
+`licensePlateSlot.capabilities.lifecycle.states`. If the backend still
+runs `export_plate_status_to_ts.py`, it can be retired; it has no
+frontend consumer to write to.
+
 ---
 
 ## 9. What Cropwright is explicitly NOT asking for yet (D1b)

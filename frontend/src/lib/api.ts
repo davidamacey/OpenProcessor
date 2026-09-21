@@ -548,6 +548,19 @@ export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectio
 
 // -- plates browse / training-cohort selection ---------------------------
 
+/**
+ * Base path for the region/annotation-slot collection endpoints (the
+ * license_plate profile's "plates browse" sub-system below — cluster,
+ * FP centroids, training candidates, etc). The backend
+ * (OpenProcessor/openprocessor) renames this `/plates` -> `/regions`
+ * (merged to its `main` at `b3f928d`, 2026-09) — flipping this ONE
+ * constant is the whole lockstep change (Wave 2, C13/C14 of
+ * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md). Do not
+ * reintroduce a bare '/plates' literal in any of the sites below;
+ * `regionRouteScan.test.ts` fails the build if you do.
+ */
+const REGION_BASE = '/plates';
+
 export interface PlateBrowseItem {
   crop_id: string;
   id: string;
@@ -626,7 +639,7 @@ export async function getPlates(
   signal?: AbortSignal,
 ): Promise<PlatesPage> {
   const page = await apiFetch<PlatesPage>(
-    `${API_PREFIX}/plates${qs(params as Record<string, unknown>)}`,
+    `${API_PREFIX}${REGION_BASE}${qs(params as Record<string, unknown>)}`,
     {},
     signal,
   );
@@ -671,7 +684,7 @@ export function clusterPlates(
   signal?: AbortSignal,
 ): Promise<PlateClusterJob> {
   return apiFetch(
-    `${API_PREFIX}/plates/cluster${qs({
+    `${API_PREFIX}${REGION_BASE}/cluster${qs({
       max_rank: maxRank,
       force_repartition: opts.forceRepartition,
       auto_fp_threshold: opts.autoFpThreshold,
@@ -683,7 +696,7 @@ export function clusterPlates(
 
 /** Poll the background plate-clustering job. */
 export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateClusterJob> {
-  return apiFetch(`${API_PREFIX}/plates/cluster/status`, {}, signal);
+  return apiFetch(`${API_PREFIX}${REGION_BASE}/cluster/status`, {}, signal);
 }
 
 /** Per-bucket AHC refine over plate_pe_embedding; writes plate_cluster_subid. */
@@ -697,7 +710,7 @@ export function refinePlateCluster(
   action: string;
 }> {
   return apiFetch(
-    `${API_PREFIX}/plates/clusters/refine/${clusterId}`,
+    `${API_PREFIX}${REGION_BASE}/clusters/refine/${clusterId}`,
     { method: 'POST' },
     signal,
   );
@@ -709,7 +722,7 @@ export function getPlateClusters(
   signal?: AbortSignal,
 ): Promise<{ clusters: OpCluster[]; count: number }> {
   return apiFetch(
-    `${API_PREFIX}/plates/clusters${qs({
+    `${API_PREFIX}${REGION_BASE}/clusters${qs({
       max_clusters: opts.maxClusters,
       per_cluster: opts.perCluster,
       max_rank: opts.maxRank,
@@ -735,14 +748,18 @@ export interface PlateFpCentroidJob {
 
 /** (Re)build the FP centroid store — sub-types the FP bucket (background job). */
 export function buildPlateFpCentroids(signal?: AbortSignal): Promise<PlateFpCentroidJob> {
-  return apiFetch(`${API_PREFIX}/plates/fp_centroids/build`, { method: 'POST' }, signal);
+  return apiFetch(
+    `${API_PREFIX}${REGION_BASE}/fp_centroids/build`,
+    { method: 'POST' },
+    signal,
+  );
 }
 
 /** Poll the FP-centroid build job + read persisted centroid metadata. */
 export function getPlateFpCentroidStatus(
   signal?: AbortSignal,
 ): Promise<PlateFpCentroidJob> {
-  return apiFetch(`${API_PREFIX}/plates/fp_centroids/status`, {}, signal);
+  return apiFetch(`${API_PREFIX}${REGION_BASE}/fp_centroids/status`, {}, signal);
 }
 
 export interface SuspectedFpItem extends PlateBrowseItem {
@@ -767,7 +784,7 @@ export function getSuspectedFalsePositives(
   signal?: AbortSignal,
 ): Promise<SuspectedFpPage> {
   return apiFetch(
-    `${API_PREFIX}/plates/suspected_false_positives${qs({
+    `${API_PREFIX}${REGION_BASE}/suspected_false_positives${qs({
       threshold: opts.threshold,
       page: opts.page,
       page_size: opts.pageSize,
@@ -790,7 +807,7 @@ export function getTrainingCandidates(
   signal?: AbortSignal,
 ): Promise<PlatesPage> {
   return apiFetch<PlatesPage>(
-    `${API_PREFIX}/plates/training_candidates${qs({ mode, ...params })}`,
+    `${API_PREFIX}${REGION_BASE}/training_candidates${qs({ mode, ...params })}`,
     {},
     signal,
   );
@@ -1450,8 +1467,16 @@ export function patchSlotMeta(
  * Bulk-set plate_status over many crops. Backend: `POST /curation/plates/batch_status`.
  * The cluster-view triage op: select outlier plates → mark all false_positive,
  * or bulk-confirm good plates (status='detected' + plateVerified=true).
+ *
+ * Reads its path from `spec.endpoints.batchStatus` (Wave 2 C13,
+ * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.2 trap 2)
+ * rather than hardcoding `${REGION_BASE}/batch_status` a second time —
+ * closes the "declared but dead" gap without importing a specific
+ * profile into this generic module (falls back to the REGION_BASE path
+ * if a spec declares no batchStatus endpoint, matching today's only caller).
  */
 export function batchPlateStatus(
+  spec: SlotSpec,
   cropIds: string[],
   plateStatus: 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
   opts: { plateVerified?: boolean; labelSource?: string } = {},
@@ -1460,8 +1485,9 @@ export function batchPlateStatus(
   updated: number;
   conflicts: { crop_id: string; current_source: string | null }[];
 }> {
+  const path = spec.endpoints.batchStatus?.() ?? `${REGION_BASE}/batch_status`;
   return apiFetch(
-    `${API_PREFIX}/plates/batch_status`,
+    `${API_PREFIX}${path}`,
     {
       method: 'POST',
       body: JSON.stringify({

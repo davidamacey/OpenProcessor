@@ -406,6 +406,7 @@ export function createPlateGalleryController() {
       // the cast just satisfies batchPlateStatus's still-literal wire
       // type (that union is api.ts's Wave 2 concern, not this file's).
       const res = await batchPlateStatus(
+        licensePlateSlot,
         cropIds,
         status as 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
         { plateVerified: verified },

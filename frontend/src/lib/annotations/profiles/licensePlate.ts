@@ -144,16 +144,22 @@ export const licensePlateSlot: SlotSpec = {
 
     // P2.13 (docs/genericization-plan-2026-09-13.md §9.2.3): the five
     // LPR training-candidate modes, moved here verbatim from the old
-    // train/+page.svelte:535-557 PLATE_COHORTS literal. Every `id`
-    // equals the existing backend `mode` string and every query is the
-    // same GET with the same params, so the compiled URL is
+    // train/+page.svelte:535-557 PLATE_COHORTS literal. Every query is
+    // the same GET with the same params, so the compiled URL is
     // byte-identical to what getTrainingCandidates(mode, {class_id})
     // produced — proven in cohorts.test.ts. `false_positives` is the
     // 5th mode: implemented server-side (op_plates.py:266-283), typed
     // in the old TrainingCohortMode, and unreachable from the UI until
     // this registration (§9.1's live defect #1).
+    //
+    // Wave 2 C13/C14 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
+    // §8.4(iii)): `id` (internal — a render key + suppressDerived match
+    // target) is split from `params.mode` (the wire value the backend's
+    // ?mode= query string actually sends). They used to be the same
+    // string; the backend's rename only touches the wire value, so only
+    // `mode` moves in C14 below — the two lpr_* ids already moved here.
     trainingCohorts: {
-      // license_plate's own hand-tuned lpr_blind_spots/lpr_low_conf_correct
+      // license_plate's own hand-tuned detector_blind_spots/low_conf_correct
       // are strictly better than the generic derived blind_spots/low_conf
       // (they additionally require Gemma verification / a specific
       // detector-chain tag neither of which is derivable from capability
@@ -162,7 +168,7 @@ export const licensePlateSlot: SlotSpec = {
       suppressDerived: ['blind_spots', 'low_conf'],
       cohorts: [
         {
-          id: 'lpr_blind_spots',
+          id: 'detector_blind_spots',
           label: 'LPR blind spots',
           description:
             'SAM3 found the plate, Gemma confirmed, LPR missed — high-signal training examples',
@@ -175,7 +181,7 @@ export const licensePlateSlot: SlotSpec = {
           reviewTarget: 'slotQueue',
         },
         {
-          id: 'lpr_low_conf_correct',
+          id: 'low_conf_correct',
           label: 'LPR low confidence',
           description: 'LPR + Gemma agreed but LPR score < 0.6 — high-loss training rows',
           query: {
