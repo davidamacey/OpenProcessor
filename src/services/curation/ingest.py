@@ -36,36 +36,43 @@ Pipeline, per image:
    :func:`~src.clients.occ.occ_upsert_bulk` with human-field guards so a
    re-ingest never clobbers a human-applied label.
 
-``ingest_batch`` parallelizes dedup (msearch) and the whole-image
-detector calls (one batched Triton call per detector), then runs the
-per-image finishing work under a bounded semaphore.
+Sibling modules, split out of this one to keep each to one concern:
+
+* :mod:`src.services.curation.ingest_models` — the wire models.
+* :mod:`src.services.curation.ingest_detect` — steps 2-3, the
+  ``DetectionProfile``-driven Triton detector runners (single-image and
+  **batched**) and their tensor decoding.
+* :mod:`src.services.curation.ingest_batch` — ``ingest_batch``'s
+  implementation: one msearch dedup, one batched decode, **one batched
+  Triton call per detector per ``batch_limit`` chunk** (not one per
+  image), the results fed back into ``ingest_one`` through its
+  ``prefilled_image`` / ``prefilled_items`` / ``prefilled_secondary_raw``
+  arguments, plus optional companion-YOLO-label import.
 """
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import io
 import os
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel, ConfigDict, Field
 
 from src.config import get_curation_config
 from src.core.logging import get_logger, get_request_id
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
+from src.services.curation.ingest_detect import SECONDARY_IOU_MATCH, WholeImageDetector
+from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.item_doc import DetectedItem, build_image_doc, build_item_doc
 from src.services.curation.source_image_cache import write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import (
     bbox_norm as _bbox_norm_fn,
     crop_id as _crop_id_fn,
-    iou as _iou_fn,
-    letterbox_to_square,
-    undo_letterbox,
+    letterbox_params,
 )
 
 
@@ -88,48 +95,8 @@ logger = get_logger(__name__)
 # OP_MAX_INGEST_CONCURRENCY (no rebuild required).
 MAX_INGEST_CONCURRENCY = int(os.getenv('OP_MAX_INGEST_CONCURRENCY', '16'))
 
-# Secondary-detector confidence floor for an ensemble box to override the
-# primary detector's proposal. Kept independent of the primary profile's
-# own confidence_floor since the two detectors are calibrated differently.
-SECONDARY_IOU_MATCH = 0.3
-
 RESIDUAL_CLUSTER_ID_OFFSET = 10000
 PARKED_CLUSTER_ID = -3
-
-
-# =============================================================================
-# Pydantic I/O models
-# =============================================================================
-
-
-class IngestSummary(BaseModel):
-    successful: int = 0
-    duplicates: int = 0
-    failed: int = 0
-    labels_imported: int = 0
-    crops_indexed: int = 0
-
-
-class IngestResult(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    status: Literal['success', 'duplicate', 'failed'] = 'success'
-    image_id: str = ''
-    image_path: str = ''
-    imohash: str = ''
-    n_crops: int = 0
-    crops_created: int = 0
-    crops_updated: int = 0
-    crops_preserved_human: int = 0
-    crops_final_conflicts: int = 0
-    error: str | None = None
-    error_kind: str | None = None
-
-
-class BatchIngestResult(BaseModel):
-    status: Literal['success', 'partial', 'error'] = 'success'
-    summary: IngestSummary = Field(default_factory=IngestSummary)
-    results: list[IngestResult] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -211,6 +178,12 @@ class CurationIngestService:
         self.secondary_profile = secondary_profile
         self.pe_encoder = pe_encoder
         self.config = config or get_curation_config()
+        self.detector = WholeImageDetector(
+            triton_pool=triton_pool,
+            registry=registry,
+            profile=profile,
+            secondary_profile=secondary_profile,
+        )
 
     # ------------------------------------------------------------------
     # Dedup
@@ -261,137 +234,6 @@ class CurationIngestService:
             hits = ((sub or {}).get('hits') or {}).get('hits') or []
             out[image_hash] = (hits[0].get('_source') or {}).get('image_id') if hits else None
         return out
-
-    # ------------------------------------------------------------------
-    # Detection
-    # ------------------------------------------------------------------
-
-    async def _run_primary_detector(self, img: Image.Image) -> list[DetectedItem]:
-        """Run the primary end2end detector over the full image.
-
-        Contract: the model returns already-NMS'd detections as
-        ``num_dets`` / ``det_boxes`` (normalized ``[0, 1]`` of the network
-        input) / ``det_scores`` / ``det_classes`` — the same Ultralytics
-        TensorRT end2end export shape this repo's own ``/detect`` endpoint
-        serves from.
-        """
-        from tritonclient.grpc import InferInput, InferRequestedOutput
-
-        chw, scale, pad = letterbox_to_square(img, target=self.profile.input_size)
-        inp = InferInput('images', list(chw.shape), 'FP32')
-        inp.set_data_from_numpy(chw)
-        outs = [
-            InferRequestedOutput('num_dets'),
-            InferRequestedOutput('det_boxes'),
-            InferRequestedOutput('det_scores'),
-            InferRequestedOutput('det_classes'),
-        ]
-        result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
-        return self._decode_primary_result(result, scale, pad, self.profile.input_size)
-
-    def _decode_primary_result(
-        self,
-        result: Any,
-        scale: float,
-        pad: tuple[float, float],
-        net_size: int,
-    ) -> list[DetectedItem]:
-        num_dets = int(result.as_numpy('num_dets')[0][0])
-        boxes = result.as_numpy('det_boxes')[0][:num_dets]
-        scores = result.as_numpy('det_scores')[0][:num_dets]
-        classes = result.as_numpy('det_classes')[0][:num_dets]
-
-        out: list[DetectedItem] = []
-        for box, score, cls in zip(boxes, scores, classes, strict=False):
-            full = undo_letterbox(
-                (
-                    float(box[0]) * net_size,
-                    float(box[1]) * net_size,
-                    float(box[2]) * net_size,
-                    float(box[3]) * net_size,
-                ),
-                scale,
-                pad,
-            )
-            cls_id = int(cls)
-            conf = float(score)
-            entry = self.registry.get(cls_id)
-            class_name = entry.class_name if entry is not None else None
-            if conf >= self.profile.confidence_floor:
-                class_source = f'{self.profile.name}_model'
-            else:
-                class_source = f'{self.profile.name}_low_conf'
-            out.append(
-                DetectedItem(
-                    bbox_pixel=full,
-                    score=conf,
-                    class_id=cls_id if conf >= self.profile.confidence_floor else None,
-                    class_name=class_name if conf >= self.profile.confidence_floor else None,
-                    class_source=class_source,
-                    proposal_name=class_name,
-                )
-            )
-        return out
-
-    async def _run_secondary_detector_raw(self, img: Image.Image) -> np.ndarray | None:
-        """Run the secondary (raw-output) ensemble detector; return its raw tensor."""
-        from tritonclient.grpc import InferInput, InferRequestedOutput
-
-        assert self.secondary_profile is not None
-        chw, _scale, _pad = letterbox_to_square(img, target=self.secondary_profile.input_size)
-        inp = InferInput('images', list(chw.shape), 'FP32')
-        inp.set_data_from_numpy(chw)
-        outs = [InferRequestedOutput('output0')]
-        result = await self.triton_pool.infer(
-            self.secondary_profile.detector_model, [inp], outputs=outs
-        )
-        return result.as_numpy('output0')
-
-    def _resolve_with_secondary(
-        self,
-        items: list[DetectedItem],
-        raw_output: np.ndarray,
-        scale: float,
-        pad: tuple[float, float],
-    ) -> None:
-        """Enrich ``items`` in place using the secondary ensemble detector's NMS output.
-
-        A secondary detection above its own confidence floor overrides
-        the matched primary box's class assignment; this is how a
-        two-detector ``DetectionProfile`` pair takes
-        :func:`apply_ensemble_nms` off zero production callers.
-        """
-        from src.services.detection.ensemble_nms import apply_ensemble_nms
-
-        profile = self.secondary_profile
-        assert profile is not None
-        per_image = apply_ensemble_nms(
-            raw_output[None, ...] if raw_output.ndim == 2 else raw_output,
-            conf_thres=profile.confidence_floor,
-        )
-        detections = per_image[0] if per_image else []
-        secondary_boxes: list[tuple[tuple[float, float, float, float], float, int]] = []
-        for det in detections:
-            full = undo_letterbox(tuple(det['box']), scale, pad)
-            secondary_boxes.append((full, float(det['score']), int(det['class_id'])))
-
-        for item in items:
-            best_iou = 0.0
-            best: tuple[tuple[float, float, float, float], float, int] | None = None
-            for sec_box, sec_score, sec_cls in secondary_boxes:
-                score = _iou_fn(item.bbox_pixel, sec_box)
-                if score > best_iou:
-                    best_iou = score
-                    best = (sec_box, sec_score, sec_cls)
-            if best is None or best_iou < SECONDARY_IOU_MATCH:
-                continue
-            _, sec_score, sec_cls = best
-            entry = self.registry.get(sec_cls)
-            class_name = entry.class_name if entry is not None else None
-            item.class_id = sec_cls
-            item.class_name = class_name
-            item.class_source = f'{profile.name}_model'
-            item.score = sec_score
 
     # ------------------------------------------------------------------
     # Bulk index
@@ -450,8 +292,32 @@ class CurationIngestService:
         source: str = 'unknown',
         *,
         prefilled_image: Image.Image | None = None,
+        prefilled_items: list[DetectedItem] | None = None,
+        prefilled_secondary_raw: np.ndarray | None = None,
     ) -> IngestResult:
-        """Run the full pipeline on a single image."""
+        """Run the full pipeline on a single image.
+
+        Args:
+            image_bytes: Raw JPEG/PNG bytes. Required even when
+                ``prefilled_image`` is supplied — it is what the imohash
+                dedup fingerprint is computed from.
+            image_path: Source path, persisted verbatim on the images doc.
+            source: Free-form provenance tag.
+            prefilled_image: Already-decoded PIL image; skips the decode
+                + EXIF transpose.
+            prefilled_items: Primary-detector output from
+                :meth:`_run_primary_detector_batch`; skips this image's
+                own single-image Triton round-trip. An empty list is
+                meaningful (the detector found nothing) and is *not*
+                treated as "not prefilled".
+            prefilled_secondary_raw: Secondary-detector raw tensor from
+                :meth:`_run_secondary_detector_raw_batch`; same deal.
+
+        Every ``prefilled_*`` argument defaults to ``None``, in which
+        case this method does the work itself — so direct callers
+        (``POST /curation/ingest/image``, scripts) behave exactly as they
+        did before the batch path existed.
+        """
         if not image_bytes:
             return IngestResult(
                 status='failed',
@@ -488,22 +354,30 @@ class CurationIngestService:
                 status='duplicate', image_id=existing_id, image_path=image_path, imohash=image_hash
             )
 
-        try:
-            items = await self._run_primary_detector(img)
-        except Exception as exc:
-            logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
-            return IngestResult(
-                status='failed', image_path=image_path, error=str(exc), error_kind='detector_infer'
-            )
+        if prefilled_items is not None:
+            items = prefilled_items
+        else:
+            try:
+                items = await self.detector.run_primary(img)
+            except Exception as exc:
+                logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
+                return IngestResult(
+                    status='failed',
+                    image_path=image_path,
+                    error=str(exc),
+                    error_kind='detector_infer',
+                )
 
         if self.secondary_profile is not None and items:
             try:
-                raw = await self._run_secondary_detector_raw(img)
+                raw = prefilled_secondary_raw
+                if raw is None:
+                    raw = await self.detector.run_secondary_raw(img)
                 if raw is not None:
-                    _, sec_scale, sec_pad = letterbox_to_square(
+                    sec_scale, sec_pad = letterbox_params(
                         img, target=self.secondary_profile.input_size
                     )
-                    self._resolve_with_secondary(items, raw, sec_scale, sec_pad)
+                    self.detector.resolve_with_secondary(items, raw, sec_scale, sec_pad)
             except Exception as exc:
                 logger.warning('ingest_secondary_detector_failed', path=image_path, error=str(exc))
 
@@ -637,59 +511,55 @@ class CurationIngestService:
         self,
         images: list[bytes],
         image_paths: list[str],
+        label_paths: list[str | None] | None = None,
         source: str = 'batch',
+        label_source: str = '',
+        detect_mismatches: bool = False,
     ) -> BatchIngestResult:
-        """Batch ingest with parallel msearch dedup + bounded-concurrency finishing work."""
-        if len(images) != len(image_paths):
-            raise ValueError('images and image_paths must be same length')
+        """Batch ingest: msearch dedup, batched detector inference, per-image finish.
 
-        summary = IngestSummary()
-        hashes = [_imohash_bytes(b) for b in images]
-        hash_to_existing = await self._check_duplicates_msearch(hashes)
+        Delegates to :func:`src.services.curation.ingest_batch.run_ingest_batch`
+        — see that module's docstring for why the batch path is more than
+        ``ingest_one`` run N times concurrently.
 
-        sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
+        Args:
+            images: Raw image bytes, one per entry.
+            image_paths: Source paths, index-aligned with ``images``.
+            label_paths: Optional companion YOLO ``.txt`` paths,
+                index-aligned with ``images`` (``None`` per entry to skip
+                that image). Supplying them ingests images *and* their
+                ground-truth labels in one call, which is what a
+                re-ingest-and-verify pass over an already-labeled dataset
+                needs.
+            source: Provenance tag stamped on every document.
+            label_source: ``label_source`` recorded on the imported
+                labels; defaults to the label importer's own default.
+            detect_mismatches: Record (and count) labels whose IoU-matched
+                item carried a different detector class — the
+                model-vs-ground-truth disagreement report.
 
-        async def _one(image_bytes: bytes, image_path: str, image_hash: str) -> IngestResult:
-            existing_id = hash_to_existing.get(image_hash)
-            if existing_id:
-                return IngestResult(
-                    status='duplicate',
-                    image_id=existing_id,
-                    image_path=image_path,
-                    imohash=image_hash,
-                )
-            async with sem:
-                return await self.ingest_one(image_bytes, image_path, source=source)
+        Raises:
+            ValueError: If ``image_paths`` or ``label_paths`` is not the
+                same length as ``images``.
+        """
+        from src.services.curation.ingest_batch import run_ingest_batch
 
-        results = list(
-            await asyncio.gather(
-                *[_one(b, p, h) for b, p, h in zip(images, image_paths, hashes, strict=False)]
-            )
+        return await run_ingest_batch(
+            self,
+            images,
+            image_paths,
+            label_paths=label_paths,
+            source=source,
+            label_source=label_source,
+            detect_mismatches=detect_mismatches,
         )
-
-        for res in results:
-            if res.status == 'duplicate':
-                summary.duplicates += 1
-            elif res.status == 'success':
-                summary.successful += 1
-                summary.crops_indexed += res.n_crops
-            else:
-                summary.failed += 1
-
-        if summary.failed == 0:
-            status: Literal['success', 'partial', 'error'] = 'success'
-        elif summary.successful == 0:
-            status = 'error'
-        else:
-            status = 'partial'
-
-        return BatchIngestResult(status=status, summary=summary, results=results)
 
 
 __all__ = [
     'MAX_INGEST_CONCURRENCY',
     'PARKED_CLUSTER_ID',
     'RESIDUAL_CLUSTER_ID_OFFSET',
+    'SECONDARY_IOU_MATCH',
     'BatchIngestResult',
     'CurationIngestService',
     'IngestResult',

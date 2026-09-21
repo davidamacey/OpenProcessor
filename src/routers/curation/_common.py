@@ -34,6 +34,7 @@ from src.config import IndexRole, get_curation_config, index_name
 from src.config.region_state import RegionStatus
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
+from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_LABEL_SOURCE
 
 
 def get_class_registry() -> ClassRegistry:
@@ -208,7 +209,10 @@ class BatchIngestResponse(BaseModel):
 class ImportLabelsRequest(BaseModel):
     image_path: str
     label_txt_path: str
-    label_source: str = 'v6_original_label'
+    # Defaulted from the label importer so the public API carries no
+    # deployment-specific label-source vocabulary.
+    label_source: str = _DEFAULT_LABEL_SOURCE
+    detect_mismatches: bool = False
 
 
 class ImportLabelsBatchRequest(BaseModel):

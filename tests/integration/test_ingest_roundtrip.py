@@ -42,16 +42,27 @@ class _FakeInferResult:
 
 
 class _FakeTritonPool:
-    """One detection per image, normalized box [0.1,0.1,0.5,0.5], class 0."""
+    """One detection per image, normalized box [0.1,0.1,0.5,0.5], class 0.
+
+    Replies with one row per *requested* image so the batched ingest path
+    (``ingest_batch`` stacks N images into one call) is exercised end to
+    end rather than silently reading row 0 N times.
+    """
+
+    def __init__(self) -> None:
+        self.batch_sizes: list[int] = []
 
     async def infer(self, model_name: str, inputs: list, outputs: list) -> _FakeInferResult:  # noqa: ARG002
-        boxes = np.array([[[0.1, 0.1, 0.5, 0.5]]], dtype=np.float32)
+        batch = int(inputs[0].shape()[0])
+        self.batch_sizes.append(batch)
         return _FakeInferResult(
             {
-                'num_dets': np.array([[1]], dtype=np.int32),
-                'det_boxes': boxes,
-                'det_scores': np.array([[0.95]], dtype=np.float32),
-                'det_classes': np.array([[0]], dtype=np.float32),
+                'num_dets': np.full((batch, 1), 1, dtype=np.int32),
+                'det_boxes': np.tile(
+                    np.array([[[0.1, 0.1, 0.5, 0.5]]], dtype=np.float32), (batch, 1, 1)
+                ),
+                'det_scores': np.full((batch, 1), 0.95, dtype=np.float32),
+                'det_classes': np.zeros((batch, 1), dtype=np.float32),
             }
         )
 
@@ -95,6 +106,7 @@ class _FakeOpenSearch:
     def __init__(self) -> None:
         self.images: dict[str, dict[str, Any]] = {}
         self.items: dict[str, dict[str, Any]] = {}
+        self.labels: dict[str, dict[str, Any]] = {}
         self.indices = self._Indices()
 
     class _Indices:
@@ -113,7 +125,8 @@ class _FakeOpenSearch:
         return get_curation_config().items_index
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
-        term = ((body.get('query') or {}).get('term') or {}).get('imohash')
+        query = body.get('query') or {}
+        term = (query.get('term') or {}).get('imohash')
         if term is not None:
             store = self.images
             hits = [
@@ -122,6 +135,27 @@ class _FakeOpenSearch:
                 if d.get('imohash') == term
             ]
             return {'hits': {'hits': hits[:1]}}
+        # label_import's images-index lookup by exact source path.
+        path_term = (query.get('term') or {}).get('image_path')
+        if path_term is not None:
+            hits = [
+                {'_id': d.get('image_id', k), '_source': d}
+                for k, d in self.images.items()
+                if d.get('image_path') == path_term
+            ]
+            return {'hits': {'hits': hits[:1]}}
+        # label_import's items-by-image_id lookup (bool/must term).
+        musts = (query.get('bool') or {}).get('must') or []
+        image_id = next(
+            (m['term']['image_id'] for m in musts if (m.get('term') or {}).get('image_id')), None
+        )
+        if image_id is not None:
+            hits = [
+                {'_id': k, '_source': d}
+                for k, d in self.items.items()
+                if d.get('image_id') == image_id and not d.get('test_holdout')
+            ]
+            return {'hits': {'hits': hits, 'total': {'value': len(hits)}}}
         # /curation/crops style query -- return every non-holdout item.
         if index == self._items_index():
             hits = [{'_id': k, '_source': d} for k, d in self.items.items()]
@@ -167,14 +201,27 @@ class _FakeOpenSearch:
         body: list[dict[str, Any]],
         refresh: bool | str = False,  # noqa: ARG002
     ) -> dict[str, Any]:
+        from src.config import get_curation_config
+
         items_index = self._items_index()
+        labels_index = get_curation_config().labels_confirmed_index
         result_items = []
         for action, doc in zip(body[0::2], body[1::2], strict=True):
             if 'index' in action:
                 meta = action['index']
-                store = self.items if meta['_index'] == items_index else self.images
+                if meta['_index'] == items_index:
+                    store = self.items
+                elif meta['_index'] == labels_index:
+                    store = self.labels
+                else:
+                    store = self.images
                 store[meta['_id']] = doc
                 result_items.append({'index': {'_id': meta['_id'], 'status': 201}})
+            elif 'update' in action:
+                meta = action['update']
+                store = self.items if meta['_index'] == items_index else self.images
+                store.setdefault(meta['_id'], {}).update(doc.get('doc', {}))
+                result_items.append({'update': {'_id': meta['_id'], 'status': 200}})
             elif 'create' in action:
                 meta = action['create']
                 if meta['_id'] in self.items:
@@ -208,14 +255,23 @@ def fake_opensearch() -> _FakeOpenSearch:
 
 
 @pytest.fixture
-def client(fake_opensearch: _FakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def fake_triton() -> _FakeTritonPool:
+    return _FakeTritonPool()
+
+
+@pytest.fixture
+def client(
+    fake_opensearch: _FakeOpenSearch,
+    fake_triton: _FakeTritonPool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
     import src.main as main_module
     from src.core.dependencies import get_async_triton, get_opensearch
     from src.routers.curation._common import _raw_opensearch_dep, _registry_dep
 
     main_module.app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     main_module.app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
-    main_module.app.dependency_overrides[get_async_triton] = lambda: _FakeTritonPool()
+    main_module.app.dependency_overrides[get_async_triton] = lambda: fake_triton
     main_module.app.dependency_overrides[_registry_dep] = lambda: _FakeRegistry()
 
     monkeypatch.setenv('OP_DETECTION_DETECTOR_MODEL', 'fake_item_detector')
@@ -223,7 +279,7 @@ def client(fake_opensearch: _FakeOpenSearch, monkeypatch: pytest.MonkeyPatch) ->
     # app.state.pe_encoder directly (not via FastAPI Depends()), and the
     # lifespan startup below unconditionally (re)builds both -- so these
     # must be patched AFTER entering the TestClient context, not before.
-    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: _FakeTritonPool())
+    monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: fake_triton)
 
     with TestClient(main_module.app) as c:
         main_module.app.state.pe_encoder = _FakePEEncoder()
@@ -233,7 +289,7 @@ def client(fake_opensearch: _FakeOpenSearch, monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_ingest_batch_then_crops_and_status(
-    client: TestClient, fake_opensearch: _FakeOpenSearch
+    client: TestClient, fake_opensearch: _FakeOpenSearch, fake_triton: _FakeTritonPool
 ) -> None:
     body = {
         'items': [
@@ -279,3 +335,44 @@ def test_ingest_batch_then_crops_and_status(
     assert status_resp.status_code == 200, status_resp.text
     status_payload = status_resp.json()
     assert status_payload['total'] == 2
+
+    # G11 guard, end to end through the router: two images cost exactly
+    # one batched Triton round-trip, not two single-image ones.
+    assert fake_triton.batch_sizes == [2]
+
+
+def test_ingest_batch_imports_companion_labels(
+    client: TestClient, fake_opensearch: _FakeOpenSearch
+) -> None:
+    """G12 guard: images + paired ground-truth YOLO labels in one call."""
+    from pathlib import Path
+
+    image_path = Path('/tmp/roundtrip_labeled.jpg')
+    image_path.write_bytes(_jpeg_bytes(7))
+    label_path = Path('/tmp/roundtrip_labeled.txt')
+    # Same region the fake detector proposes (norm box 0.1,0.1..0.5,0.5
+    # of the letterboxed square maps to roughly the upper-left quadrant).
+    label_path.write_text('0 0.3 0.3 0.4 0.4\n')
+
+    resp = client.post(
+        '/curation/ingest/batch',
+        json={
+            'items': [
+                {
+                    'path': str(image_path),
+                    'source': 'roundtrip_test',
+                    'label_txt_path': str(label_path),
+                }
+            ],
+            'label_source': 'ground_truth',
+            'detect_mismatches': True,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload['summary']['successful'] == 1
+    assert payload['summary']['labels_imported'] == 1
+    assert len(fake_opensearch.labels) == 1
+    [label_doc] = list(fake_opensearch.labels.values())
+    assert label_doc['class_id'] == 0
+    assert label_doc['label_source'] == 'ground_truth'
