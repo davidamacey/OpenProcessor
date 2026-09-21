@@ -379,7 +379,7 @@ def test_health_returns_reachable_on_200():
 
 
 def test_verify_plate_parses_well_formed_json():
-    body = '{"is_plate": true, "confidence": "high", "reason": "clearly a label region"}'
+    body = '{"is_region": true, "confidence": "high", "reason": "clearly a label region"}'
 
     def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
         return httpx.Response(200, json=_make_chat_response(body))
@@ -398,7 +398,7 @@ def test_verify_plate_parses_well_formed_json():
 
     verdict = _run(_go())
     assert verdict.crop_id == 'region-1'
-    assert verdict.is_plate is True
+    assert verdict.is_region is True
     assert verdict.confidence == 'high'
     assert 'label region' in verdict.reason
 
@@ -420,6 +420,6 @@ def test_verify_plate_returns_parse_failure_on_garbage():
             )
 
     verdict = _run(_go())
-    assert verdict.is_plate is False
+    assert verdict.is_region is False
     assert verdict.confidence == 'low'
     assert verdict.reason == 'parse_failure'

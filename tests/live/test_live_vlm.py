@@ -107,7 +107,6 @@ def test_vlm_label_batch_caps_the_request_size(kb: Any) -> None:
 
 
 def test_vlm_verify_regions_persists_the_verdict(kb: Any, opensearch: Any, fake_vlm: Any) -> None:
-    fake_vlm.post('/__control', json={'region_verdict_key': 'is_plate'})
     crop_ids = crop_ids_in(opensearch, 'rgn', limit=40)[-3:]
 
     resp = kb.post('/vlm/verify_regions', json={'crop_ids': crop_ids})
@@ -124,7 +123,6 @@ def test_vlm_verify_regions_persists_the_verdict(kb: Any, opensearch: Any, fake_
 def test_vlm_verify_region_batch_returns_ordered_verdicts(
     kb: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
 ) -> None:
-    fake_vlm.post('/__control', json={'region_verdict_key': 'is_plate'})
     crop_ids = crop_ids_in(opensearch, 'rgnfp', limit=3)
     payload = {
         'items': [
@@ -168,39 +166,30 @@ def test_vlm_verify_region_batch_rejects_bad_input(
     assert duplicate.status_code == 400, duplicate.text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'APP BUG (found by this harness): the built-in prompt pack asks the '
-        'model to answer with `is_region` (vlm_prompts.GENERIC_ITEM_PACK.'
-        'region_user / region_batch_user), but both region parsers in '
-        'vlm_labeler.py read `is_plate`. A model that follows the shipped '
-        'prompt exactly is therefore parsed as a negative verdict with '
-        "reason='parse_failure'. Fixing the mismatch is application work, "
-        'outside this wave; the assertion below documents the correct '
-        'behaviour and will start passing once it is fixed.'
-    ),
-)
 def test_vlm_verdict_key_matches_the_shipped_prompt(
     kb: Any, opensearch: Any, fake_vlm: Any, sample_jpeg_b64: str
 ) -> None:
+    """The built-in prompt pack asks the model to answer with `is_region`
+    (vlm_prompts.GENERIC_ITEM_PACK.region_user / region_batch_user), and
+    both region parsers in vlm_labeler.py now read `is_region` too — a
+    model that follows the shipped prompt exactly is parsed correctly.
+
+    The fake defaults to `is_region` already; setting it explicitly here
+    just documents the invariant this test exists to protect.
+    """
     fake_vlm.post('/__control', json={'region_verdict_key': 'is_region'})
-    try:
-        crop_ids = crop_ids_in(opensearch, 'rgnfp', limit=2)
-        resp = kb.post(
-            '/vlm/verify_region_batch',
-            json={
-                'items': [
-                    {'crop_id': crop_id, 'region_image_b64': sample_jpeg_b64}
-                    for crop_id in crop_ids
-                ]
-            },
-        )
-        assert resp.status_code == 200, resp.text
-        results = resp.json()['results']
-        assert all(r['is_region'] is True for r in results), results
-    finally:
-        fake_vlm.post('/__control', json={'region_verdict_key': 'is_plate'})
+    crop_ids = crop_ids_in(opensearch, 'rgnfp', limit=2)
+    resp = kb.post(
+        '/vlm/verify_region_batch',
+        json={
+            'items': [
+                {'crop_id': crop_id, 'region_image_b64': sample_jpeg_b64} for crop_id in crop_ids
+            ]
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    results = resp.json()['results']
+    assert all(r['is_region'] is True for r in results), results
 
 
 def test_vlm_region_visible_batch_honours_an_explicit_negative(

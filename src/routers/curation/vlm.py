@@ -431,7 +431,7 @@ async def vlm_verify_regions(
         bulk.append(
             {
                 'doc': {
-                    _F.verified: verdict.is_plate,
+                    _F.verified: verdict.is_region,
                     _F.reason: verdict.reason,
                     'updated_at': now,
                 }
@@ -522,7 +522,7 @@ async def vlm_verify_region_batch(
         results.append(
             VlmVerifyRegionBatchResult(
                 crop_id=v.crop_id,
-                is_region=v.is_plate,
+                is_region=v.is_region,
                 confidence=v.confidence,
                 reason=v.reason,
                 candidate_text=candidate_text_by_id.get(v.crop_id),
