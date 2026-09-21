@@ -9,7 +9,7 @@
 # - Host: Testing client that sends images to the endpoints via HTTP
 
 # HTTP client for sending requests to FastAPI endpoints
-requests>=2.32.0
+requests>=2.34.2
 aiohttp>=3.9.0
 
 # Load testing framework (sends concurrent requests)
