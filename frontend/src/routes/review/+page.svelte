@@ -1530,6 +1530,7 @@
               bind:bbox={editedPlateLocal}
               viewBox={plateViewBox}
               busy={plateSaving}
+              label={activeSlot.label.title}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else if activeSlot?.capabilities.subBox}
@@ -1542,6 +1543,7 @@
               bbox={editedPlateLocal}
               viewBox={plateViewBox}
               readonly
+              label={activeSlot.label.title}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else}

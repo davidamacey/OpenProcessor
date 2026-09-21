@@ -65,6 +65,11 @@
      * omit to render the full crop.
      */
     viewBox?: BBoxNorm | null;
+    /** Human-facing name for the thing this box outlines — drives the
+     *  aria-label and the empty-canvas hint. Every current caller passes
+     *  the active slot's own label.title, so the default is only ever
+     *  seen by a caller that hasn't been updated yet. */
+    label?: string;
   }
 
   let {
@@ -76,6 +81,7 @@
     readonly = false,
     ringColor = 'rgb(80, 200, 255)',
     viewBox = null,
+    label = 'box',
   }: Props = $props();
 
   type DragMode = 'create' | 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -352,7 +358,7 @@
   onpointerup={onPointerUp}
   onpointercancel={onPointerUp}
   role={readonly ? 'img' : 'application'}
-  aria-label={readonly ? 'Plate bounding box (read-only)' : 'Plate bbox canvas'}
+  aria-label={readonly ? `${label} bounding box (read-only)` : `${label} bbox canvas`}
 >
   <img
     src={getThumbUrl(cropId, thumbSize)}
@@ -430,7 +436,7 @@
     <span
       class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
     >
-      drag to draw a plate box
+      drag to draw a {label} box
     </span>
   {/if}
 </div>
