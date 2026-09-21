@@ -17,6 +17,9 @@
   import SlotCard from '$lib/components/SlotCard.svelte';
   import {
     FP_PLATE_CLUSTER_ID,
+    PLATE_CONFIRM_STATE,
+    PLATE_REJECT_STATE,
+    PLATE_FALSE_POSITIVE_STATE,
     type PlateGalleryController,
   } from '../../../routes/clusters/plateGalleryController.svelte';
 
@@ -229,7 +232,10 @@
           disabled={gallery.plateBusy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyPlateStatus([...gallery.plateSel.ids], 'false_positive')}
+            gallery.applyPlateStatus(
+              [...gallery.plateSel.ids],
+              PLATE_FALSE_POSITIVE_STATE,
+            )}
         >
           ✗ Mark false positive
         </button>
@@ -238,7 +244,7 @@
           disabled={gallery.plateBusy}
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
           onclick={() =>
-            gallery.applyPlateStatus([...gallery.plateSel.ids], 'no_plate_visible')}
+            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_REJECT_STATE)}
         >
           No plate
         </button>
@@ -246,7 +252,8 @@
           type="button"
           disabled={gallery.plateBusy}
           class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
-          onclick={() => gallery.applyPlateStatus([...gallery.plateSel.ids], 'detected')}
+          onclick={() =>
+            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_CONFIRM_STATE)}
         >
           ✓ Verify
         </button>
@@ -372,7 +379,8 @@
             selected={gallery.plateSel.has(p.crop_id)}
             onclick={gallery.togglePlateSelect}
             onedit={gallery.openPlateEditor}
-            onmarkfp={(c) => gallery.applyPlateStatus([c.crop_id], 'false_positive')}
+            onmarkfp={(c) =>
+              gallery.applyPlateStatus([c.crop_id], PLATE_FALSE_POSITIVE_STATE)}
           />
         {/each}
       </div>

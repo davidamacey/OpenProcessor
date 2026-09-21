@@ -41,6 +41,20 @@ import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import type { BBoxNorm, OpCluster, OpCrop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
+import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+
+// Sourced from the profile rather than hardcoded, so a lifecycle-state
+// rename only ever needs editing in licensePlate.ts (P2.6/C4b — see
+// docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.3). This
+// file stays deliberately un-parameterized (P2.7's territory) — these
+// three constants are the narrow exception: a state literal that
+// silently means nothing for another slot is the highest-risk class of
+// straggler, so it's worth fixing here without doing the full
+// per-slot parameterization.
+export const { confirmState: PLATE_CONFIRM_STATE, rejectState: PLATE_REJECT_STATE } =
+  licensePlateSlot.capabilities.lifecycle!;
+export const PLATE_FALSE_POSITIVE_STATE =
+  licensePlateSlot.capabilities.lifecycle!.falsePositiveState!;
 
 /** Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (op_clustering.py). */
 export const FP_PLATE_CLUSTER_ID = -100;
@@ -364,10 +378,7 @@ export function createPlateGalleryController() {
     }
   }
 
-  async function applyPlateStatus(
-    cropIds: string[],
-    status: 'false_positive' | 'no_plate_visible' | 'detected',
-  ): Promise<void> {
+  async function applyPlateStatus(cropIds: string[], status: string): Promise<void> {
     if (cropIds.length === 0 || plateBusy) return;
     plateBusy = true;
     // Snapshot for rollback, then update the affected cards IN PLACE. The
@@ -377,7 +388,7 @@ export function createPlateGalleryController() {
     const snap = platePager.items;
     const snapById = new Map(snap.map((p) => [p.crop_id, p]));
     const idSet = new Set(cropIds);
-    const verified = status === 'detected' ? true : undefined;
+    const verified = status === PLATE_CONFIRM_STATE ? true : undefined;
     // Mirror the backend write contract (batch_set_plate_status): a human
     // status change is terminal, so it also flips plate_validated=true. Keep
     // the optimistic patch identical to what OpenSearch persists so the card
@@ -391,9 +402,15 @@ export function createPlateGalleryController() {
     platePager.items = platePager.items.map((p) => (idSet.has(p.crop_id) ? patch(p) : p));
     plateSel.clear();
     try {
-      const res = await batchPlateStatus(cropIds, status, {
-        plateVerified: verified,
-      });
+      // Callers only ever pass one of the profile's own state values
+      // (PLATE_CONFIRM_STATE / PLATE_REJECT_STATE / PLATE_FALSE_POSITIVE_STATE);
+      // the cast just satisfies batchPlateStatus's still-literal wire
+      // type (that union is api.ts's Wave 2 concern, not this file's).
+      const res = await batchPlateStatus(
+        cropIds,
+        status as 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
+        { plateVerified: verified },
+      );
       // Reconcile with the backend: any crop_id the server reported as a
       // conflict was NOT written, so revert just those cards to their
       // pre-edit state rather than leaving a falsely-applied status.
