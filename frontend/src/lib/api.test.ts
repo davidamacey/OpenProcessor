@@ -1098,8 +1098,9 @@ describe('getSelectStatus / cancelSelect', () => {
 });
 
 /**
- * Scoped VLM-assisted labeling (2026-09-20 contract, not yet live on any
- * backend — docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md
+ * Scoped VLM-assisted labeling (2026-09-20 contract — confirmed live
+ * 2026-09-21 against a real OpenProcessor backend via the actual UI,
+ * see docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md
  * §1.3/§5.3). `class_id`/`detection_profile`/`prompt_pack` are optional
  * query params on the existing start call; `qs()` drops null/undefined so
  * an unscoped call must be byte-identical to the pre-scope request.
