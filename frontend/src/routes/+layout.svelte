@@ -247,6 +247,7 @@
       <a href="/models" class="hover:text-white">Models</a>
       <a href="/train" class="hover:text-white">Train</a>
       <a href="/bakeoff" class="hover:text-white">Bake-off</a>
+      <a href="/settings" class="hover:text-white">Settings</a>
     </nav>
 
     <span
