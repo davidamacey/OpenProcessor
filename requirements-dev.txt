@@ -10,7 +10,7 @@
 
 # HTTP client for sending requests to FastAPI endpoints
 requests>=2.32.0
-aiohttp>=3.9.0
+aiohttp>=3.14.3
 
 # Load testing framework (sends concurrent requests)
 locust>=2.31.0
