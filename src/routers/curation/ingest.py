@@ -49,8 +49,34 @@ from src.services.curation.label_import import (
 )
 
 
+class IngestBatchItem(IngestImageRequest):
+    """One batch entry: an image, and optionally its ground-truth labels.
+
+    ``label_txt_path`` is what makes an "ingest an already-labeled
+    dataset and compare the detector against ground truth" pass a single
+    call instead of an ingest followed by a second
+    ``POST /import_labels/batch`` round trip.
+    """
+
+    label_txt_path: str | None = Field(
+        default=None,
+        description='Optional companion YOLO .txt label file for this image',
+    )
+
+
 class IngestBatchRequest(BaseModel):
-    items: list[IngestImageRequest] = Field(default_factory=list)
+    items: list[IngestBatchItem] = Field(default_factory=list)
+    label_source: str = Field(
+        default=DEFAULT_LABEL_SOURCE,
+        description='label_source recorded on labels imported from label_txt_path',
+    )
+    detect_mismatches: bool = Field(
+        default=False,
+        description=(
+            'Flag labels whose IoU-matched item carried a different detector class, '
+            'and report the count as summary.mismatches'
+        ),
+    )
 
 
 def _get_detection_profile() -> DetectionProfile:
@@ -126,24 +152,41 @@ async def curation_ingest_batch(
 
     Every item shares its ``source`` tag independently; a per-item read
     failure is reported as a ``failed`` result rather than aborting the
-    whole batch.
+    whole batch. Items that carry a ``label_txt_path`` also have their
+    ground-truth YOLO labels imported in the same call.
+
+    The whole-image detector inference is issued in batched Triton calls
+    (one per ``DetectionProfile.batch_limit`` chunk), so a larger batch
+    is materially faster than the same images posted one at a time.
     """
     await _ensure_indexes(opensearch)
     service = await _get_ingest_service(opensearch, registry)
 
     images: list[bytes] = []
     paths: list[str] = []
+    label_paths: list[str | None] = []
     failed_early: list[IngestImageResponse] = []
     for item in body.items:
         try:
             images.append(Path(item.path).read_bytes())
             paths.append(item.path)
+            label_paths.append(item.label_txt_path)
         except OSError as exc:
             failed_early.append(
                 IngestImageResponse(status='failed', image_path=item.path, error=str(exc))
             )
 
-    batch_result = await service.ingest_batch(images, paths) if images else None
+    batch_result = (
+        await service.ingest_batch(
+            images,
+            paths,
+            label_paths=label_paths if any(label_paths) else None,
+            label_source=body.label_source,
+            detect_mismatches=body.detect_mismatches,
+        )
+        if images
+        else None
+    )
     results = list(failed_early)
     summary = _BatchIngestSummaryResponse(failed=len(failed_early))
     if batch_result is not None:
@@ -162,6 +205,8 @@ async def curation_ingest_batch(
         summary.duplicates += batch_result.summary.duplicates
         summary.failed += batch_result.summary.failed
         summary.crops_indexed += batch_result.summary.crops_indexed
+        summary.labels_imported += batch_result.summary.labels_imported
+        summary.mismatches += batch_result.summary.mismatches
 
     if summary.failed == 0:
         status: Any = 'success'
@@ -180,14 +225,17 @@ async def curation_import_labels(
 ) -> dict[str, int]:
     """Import a single YOLO ``.txt`` label file against an already-ingested image."""
     await _ensure_indexes(opensearch)
+    mismatches: list[dict[str, Any]] = []
     n = await import_yolo_labels(
         Path(body.image_path),
         Path(body.label_txt_path),
         registry,
         opensearch,
         label_source=body.label_source or DEFAULT_LABEL_SOURCE,
+        detect_mismatches=body.detect_mismatches,
+        mismatch_sink=mismatches,
     )
-    return {'labels_imported': n}
+    return {'labels_imported': n, 'mismatches': len(mismatches)}
 
 
 @router.post('/import_labels/batch')
@@ -200,7 +248,14 @@ async def curation_import_labels_batch(
     await _ensure_indexes(opensearch)
     pairs = [(Path(i.image_path), Path(i.label_txt_path)) for i in body.items]
     label_source = body.items[0].label_source if body.items else DEFAULT_LABEL_SOURCE
-    return await import_labels_batch(pairs, registry, opensearch, label_source=label_source)
+    detect_mismatches = any(i.detect_mismatches for i in body.items)
+    return await import_labels_batch(
+        pairs,
+        registry,
+        opensearch,
+        label_source=label_source,
+        detect_mismatches=detect_mismatches,
+    )
 
 
 @router.get('/ingest/status')
