@@ -56,7 +56,7 @@ export function normalizeMethodStatus(raw: unknown): MethodStatus {
     : 'disabled';
 }
 
-interface MethodInfoBase {
+export interface MethodInfoBase {
   id: string;
   label: string;
   status: MethodStatus;
@@ -159,11 +159,17 @@ export interface DatasetExportInfo extends MethodInfoBase {
  * OpenProcessor session 2026-09-20,
  * docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §1.3).
  *
- * **Not yet live on any backend.** The axis is absent from every
- * `/methods` response that exists today, which — per the same
- * "absence is the signal, not a status" rule the `export` axis
- * documents above — means every consumer must render nothing at all.
- * `FALLBACK_METHODS.detection_profiles` is `[]` for the same reason.
+ * **Now live on OpenProcessor (corrected 2026-09-21 — see
+ * docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.2).** An
+ * earlier version of this comment claimed the axis was "not yet live on
+ * any backend" and absent from every `/methods` response; that was true
+ * when it was written but is now stale. `strategy_registry.py` registers
+ * `_detection_profile_strategies` unconditionally and yields exactly one
+ * entry — one profile selected per backend process at startup — so
+ * `isDetectionProfileAvailable`/`isScopedAssistAvailable` can return
+ * `true` against a real backend today. `FALLBACK_METHODS.detection_profiles`
+ * stays `[]` regardless: that list models the 404/network-failure path,
+ * which this correction does not change.
  *
  * Deliberately carries no `requires_field`/`field_coverage`: a
  * detection profile is a model/config selection, not a backfilled
