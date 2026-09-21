@@ -612,9 +612,16 @@ class CurationSettingsUpdateRequest(BaseModel):
     """``PUT /curation/settings`` body -- partial by design. Only the axes
     present here are validated + merged into the stored document; axes
     already set are left untouched (see
-    ``src.clients.curation_opensearch.update_curation_settings``)."""
+    ``src.clients.curation_opensearch.update_curation_settings``).
 
-    defaults: dict[str, str] = Field(default_factory=dict)
+    A value of ``null`` for an axis clears that axis's shared override
+    (falls back to that endpoint's own hardcoded default / each /review
+    tab's own tuned sort) -- otherwise a pinned override was permanently
+    unreachable once set, since every id must be currently-advertised and
+    there was no way to express "go back to no override" (raised by the
+    Cropwright settings-UI integration pass)."""
+
+    defaults: dict[str, str | None] = Field(default_factory=dict)
 
 
 class _PublishEvent(BaseModel):

@@ -453,6 +453,12 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
     is not an error -- it means "no shared override for any axis yet" --
     so this always returns the full envelope shape with ``defaults: {}``
     rather than raising or returning ``None``.
+
+    An axis explicitly cleared via ``update_curation_settings(..., {axis:
+    None})`` is stored as a literal ``null`` (OpenSearch's partial-doc
+    merge sets a nested field to null rather than deleting the key) --
+    filtered out here so a cleared axis simply doesn't appear in
+    ``defaults``, identical to "never had an override."
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
@@ -468,15 +474,16 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
         msg = str(exc).lower()
         if not ('notfound' in msg or 'not found' in msg or '404' in msg):
             logger.warning('curation_settings_get_failed', error=str(exc))
+    raw_defaults = source.get('defaults') or {}
     return {
-        'defaults': dict(source.get('defaults') or {}),
+        'defaults': {k: v for k, v in raw_defaults.items() if v is not None},
         'updated_at': source.get('updated_at'),
         'updated_by': source.get('updated_by'),
     }
 
 
 async def update_curation_settings(
-    client: Any, defaults: dict[str, str], cfg: CurationConfig | None = None
+    client: Any, defaults: dict[str, str | None], cfg: CurationConfig | None = None
 ) -> dict[str, Any]:
     """Partially merge ``defaults`` into the single shared settings doc.
 
@@ -488,6 +495,10 @@ async def update_curation_settings(
     ``None`` -- there is no user-account system yet (single shared
     instance) -- but the field is written on every call so the schema
     already carries it for when one exists.
+
+    A ``None`` value for an axis clears its shared override -- stored as
+    a literal null (see :func:`get_curation_settings`'s note on why that
+    read path filters it back out).
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
