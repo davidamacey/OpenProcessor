@@ -61,24 +61,44 @@ class FakeTritonPool:
     box coordinates normalized to ``[0, 1]`` of the network input square —
     the same convention the real end2end TRT export uses (ingest multiplies
     by ``input_size`` before undoing the letterbox).
+
+    The fake honors the *request's* batch dimension — it replies with one
+    detection row per input image, exactly as Triton would. Tests assert
+    on ``calls`` (one entry per Triton round-trip) and ``batch_sizes`` to
+    prove the batch path issues one call for N images rather than N calls.
     """
 
-    def __init__(self, detections: list[tuple[float, float, float, float, float, int]]) -> None:
+    def __init__(
+        self,
+        detections: list[tuple[float, float, float, float, float, int]],
+        *,
+        fail_on_batch_gt: int | None = None,
+    ) -> None:
         self.detections = detections
         self.calls: list[str] = []
+        self.batch_sizes: list[int] = []
+        self.fail_on_batch_gt = fail_on_batch_gt
 
     async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
+        batch = int(inputs[0].shape()[0]) if hasattr(inputs[0], 'shape') else 1
+        if self.fail_on_batch_gt is not None and batch > self.fail_on_batch_gt:
+            raise RuntimeError(f'model does not support batch={batch}')
         self.calls.append(model_name)
+        self.batch_sizes.append(batch)
         n = len(self.detections)
         boxes = np.array([[d[0], d[1], d[2], d[3]] for d in self.detections], dtype=np.float32)
         scores = np.array([d[4] for d in self.detections], dtype=np.float32)
         classes = np.array([d[5] for d in self.detections], dtype=np.float32)
         return FakeInferResult(
             {
-                'num_dets': np.array([[n]], dtype=np.int32),
-                'det_boxes': boxes.reshape(1, n, 4) if n else np.zeros((1, 0, 4), dtype=np.float32),
-                'det_scores': scores.reshape(1, n),
-                'det_classes': classes.reshape(1, n),
+                'num_dets': np.tile(np.array([[n]], dtype=np.int32), (batch, 1)),
+                'det_boxes': (
+                    np.tile(boxes.reshape(1, n, 4), (batch, 1, 1))
+                    if n
+                    else np.zeros((batch, 0, 4), dtype=np.float32)
+                ),
+                'det_scores': np.tile(scores.reshape(1, n), (batch, 1)),
+                'det_classes': np.tile(classes.reshape(1, n), (batch, 1)),
             }
         )
 
@@ -105,16 +125,25 @@ def _jpeg_bytes(size: tuple[int, int] = (400, 300), seed: int = 0) -> bytes:
     return buf.getvalue()
 
 
+def _two_class_registry() -> FakeClassRegistry:
+    """Class ids must be dense 0..N-1 — the YOLO label parser rejects
+    ``cls_id >= len(registry.classes)``."""
+    return FakeClassRegistry([_FakeClassEntry(0, 'gadget'), _FakeClassEntry(1, 'widget')])
+
+
 def _make_service(
     *,
     detections: list[tuple[float, float, float, float, float, int]] | None = None,
     opensearch: FakeIngestOpenSearch | None = None,
     registry: FakeClassRegistry | None = None,
     confidence_floor: float = 0.5,
+    batch_limit: int = 8,
+    fail_on_batch_gt: int | None = None,
 ) -> tuple[CurationIngestService, FakeIngestOpenSearch, FakeTritonPool]:
     os_fake = opensearch or FakeIngestOpenSearch()
     triton = FakeTritonPool(
-        detections if detections is not None else [(0.05, 0.05, 0.6, 0.6, 0.9, 1)]
+        detections if detections is not None else [(0.05, 0.05, 0.6, 0.6, 0.9, 1)],
+        fail_on_batch_gt=fail_on_batch_gt,
     )
     reg = registry or FakeClassRegistry([_FakeClassEntry(1, 'widget')])
     profile = DetectionProfile(
@@ -122,7 +151,7 @@ def _make_service(
         detector_model='primary_end2end',
         input_size=320,
         confidence_floor=confidence_floor,
-        batch_limit=8,
+        batch_limit=batch_limit,
     )
     svc = CurationIngestService(
         opensearch=os_fake,
@@ -311,3 +340,222 @@ class TestBatchIngest:
         assert result.summary.successful == 1
         assert result.status == 'success'
         assert len(result.results) == 2
+
+
+class TestBatchedTritonInference:
+    """Regression guards for G11 — ``ingest_batch`` must issue *batched*
+    Triton calls, not N single-image calls behind a semaphore.
+
+    The public API is output-identical either way, so nothing else in the
+    suite would notice a silent regression back to per-image inference.
+    These tests assert on the call count and the request batch dimension,
+    which is the only observable difference.
+    """
+
+    @pytest.mark.asyncio
+    async def test_batch_issues_one_triton_call_for_the_whole_batch(self) -> None:
+        svc, _, triton = _make_service(batch_limit=8)
+        images = [_jpeg_bytes(seed=s) for s in range(5)]
+        paths = [f'/tmp/b{s}.jpg' for s in range(5)]
+
+        result = await svc.ingest_batch(images, paths)
+
+        assert result.summary.successful == 5
+        # THE assertion: one Triton round-trip for 5 images, carrying a
+        # batch of 5 — not 5 round-trips of batch 1.
+        assert triton.calls == ['primary_end2end']
+        assert triton.batch_sizes == [5]
+
+    @pytest.mark.asyncio
+    async def test_batch_chunks_at_profile_batch_limit(self) -> None:
+        """Chunking honors ``DetectionProfile.batch_limit`` — the engine's
+        configured ``max_batch_size`` — rather than one giant request."""
+        svc, _, triton = _make_service(batch_limit=2)
+        images = [_jpeg_bytes(seed=100 + s) for s in range(5)]
+        paths = [f'/tmp/c{s}.jpg' for s in range(5)]
+
+        result = await svc.ingest_batch(images, paths)
+
+        assert result.summary.successful == 5
+        assert triton.calls == ['primary_end2end'] * 3
+        assert triton.batch_sizes == [2, 2, 1]
+
+    @pytest.mark.asyncio
+    async def test_batch_skips_duplicates_before_inference(self) -> None:
+        """Duplicates never reach the GPU — the batched call carries only
+        the non-duplicate images."""
+        from src.services.curation.ingest import _imohash_bytes
+
+        dup = _jpeg_bytes(seed=200)
+        os_fake = FakeIngestOpenSearch(
+            images={'existing': {'image_id': 'existing', 'imohash': _imohash_bytes(dup)}}
+        )
+        svc, _, triton = _make_service(opensearch=os_fake, batch_limit=8)
+        images = [dup, _jpeg_bytes(seed=201), _jpeg_bytes(seed=202)]
+        paths = ['/tmp/dup.jpg', '/tmp/d1.jpg', '/tmp/d2.jpg']
+
+        result = await svc.ingest_batch(images, paths)
+
+        assert result.summary.duplicates == 1
+        assert result.summary.successful == 2
+        assert triton.batch_sizes == [2]
+
+    @pytest.mark.asyncio
+    async def test_batch_output_matches_per_image_output(self) -> None:
+        """Batched and per-image paths must produce identical documents —
+        batching is a performance change, never a behavior change."""
+        images = [_jpeg_bytes(seed=300 + s) for s in range(3)]
+        paths = [f'/tmp/e{s}.jpg' for s in range(3)]
+
+        svc_batch, os_batch, _ = _make_service()
+        await svc_batch.ingest_batch(images, paths)
+
+        svc_single, os_single, _ = _make_service()
+        for data, path in zip(images, paths, strict=True):
+            await svc_single.ingest_one(data, path, source='batch')
+
+        def _comparable(store: dict) -> list[dict]:
+            out = [
+                {k: v for k, v in doc.items() if k not in {'created_at', 'updated_at'}}
+                for doc in store.values()
+            ]
+            return sorted(out, key=lambda d: d['crop_id'])
+
+        assert _comparable(os_batch.items) == _comparable(os_single.items)
+
+    @pytest.mark.asyncio
+    async def test_batch_falls_back_to_per_image_when_batched_call_fails(self) -> None:
+        """A detector that rejects multi-image requests must not fail the
+        ingest — it falls back to the per-image path."""
+        svc, os_fake, triton = _make_service(batch_limit=8, fail_on_batch_gt=1)
+        images = [_jpeg_bytes(seed=400 + s) for s in range(3)]
+        paths = [f'/tmp/f{s}.jpg' for s in range(3)]
+
+        result = await svc.ingest_batch(images, paths)
+
+        assert result.summary.successful == 3
+        assert len(os_fake.items) == 3
+        # The batched attempt raised (never recorded), then three
+        # per-image calls of batch 1 went through.
+        assert triton.batch_sizes == [1, 1, 1]
+
+    @pytest.mark.asyncio
+    async def test_ingest_one_honors_prefilled_items(self) -> None:
+        """``prefilled_items`` is real plumbing, not a vestigial arg: when
+        supplied, ``ingest_one`` issues no detector call at all."""
+        from src.services.curation.item_doc import DetectedItem
+
+        svc, os_fake, triton = _make_service()
+        prefilled = [
+            DetectedItem(
+                bbox_pixel=(10.0, 10.0, 80.0, 60.0),
+                score=0.9,
+                class_id=1,
+                class_name='widget',
+                class_source='primary_model',
+                proposal_name='widget',
+            )
+        ]
+        result = await svc.ingest_one(
+            _jpeg_bytes(seed=500), '/tmp/g.jpg', prefilled_items=prefilled
+        )
+
+        assert result.status == 'success'
+        assert result.n_crops == 1
+        assert triton.calls == []
+        [doc] = list(os_fake.items.values())
+        assert doc['class_id'] == 1
+
+    @pytest.mark.asyncio
+    async def test_ingest_one_honors_empty_prefilled_items(self) -> None:
+        """An empty prefilled list means "the detector found nothing",
+        not "not prefilled" — it must not trigger a detector call."""
+        svc, os_fake, triton = _make_service()
+        result = await svc.ingest_one(_jpeg_bytes(seed=501), '/tmp/h.jpg', prefilled_items=[])
+
+        assert result.status == 'success'
+        assert result.n_crops == 0
+        assert triton.calls == []
+        assert len(os_fake.images) == 1
+
+
+class TestBatchLabelImport:
+    """Regression guards for G12 — ``ingest_batch`` accepts companion
+    ground-truth labels again."""
+
+    @pytest.mark.asyncio
+    async def test_batch_imports_companion_labels(self, tmp_path: Any) -> None:
+        svc, os_fake, _ = _make_service(registry=_two_class_registry())
+        data = _jpeg_bytes(seed=600)
+        image_path = tmp_path / 'img.jpg'
+        image_path.write_bytes(data)
+        label_path = tmp_path / 'img.txt'
+        # One label covering the same region the fake detector proposes,
+        # agreeing with the detected class.
+        label_path.write_text('1 0.325 0.325 0.55 0.55\n')
+
+        result = await svc.ingest_batch(
+            [data],
+            [str(image_path)],
+            label_paths=[str(label_path)],
+            label_source='ground_truth',
+        )
+
+        assert result.summary.successful == 1
+        assert result.summary.labels_imported == 1
+        assert any(d.get('label_source') == 'ground_truth' for d in os_fake.items.values())
+
+    @pytest.mark.asyncio
+    async def test_batch_without_label_paths_imports_nothing(self, tmp_path: Any) -> None:
+        svc, _, _ = _make_service()
+        data = _jpeg_bytes(seed=601)
+        image_path = tmp_path / 'img.jpg'
+        image_path.write_bytes(data)
+
+        result = await svc.ingest_batch([data], [str(image_path)])
+        assert result.summary.labels_imported == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_reports_label_vs_detector_mismatches(self, tmp_path: Any) -> None:
+        """``detect_mismatches`` surfaces where the detector disagreed with
+        ground truth — the report a re-ingest-and-verify pass needs."""
+        svc, os_fake, _ = _make_service(registry=_two_class_registry())
+        data = _jpeg_bytes(seed=602)
+        image_path = tmp_path / 'img.jpg'
+        image_path.write_bytes(data)
+        label_path = tmp_path / 'img.txt'
+        # Same box as the detector's proposal, but class 0 vs detected 1.
+        label_path.write_text('0 0.325 0.325 0.55 0.55\n')
+
+        result = await svc.ingest_batch(
+            [data],
+            [str(image_path)],
+            label_paths=[str(label_path)],
+            detect_mismatches=True,
+        )
+
+        assert result.summary.labels_imported == 1
+        assert result.summary.mismatches == 1
+        # The ground-truth label still wins; the mismatch is a report only.
+        [item] = list(os_fake.items.values())
+        assert item['class_id'] == 0
+
+    @pytest.mark.asyncio
+    async def test_mismatch_not_counted_when_flag_off(self, tmp_path: Any) -> None:
+        svc, _, _ = _make_service(registry=_two_class_registry())
+        data = _jpeg_bytes(seed=603)
+        image_path = tmp_path / 'img.jpg'
+        image_path.write_bytes(data)
+        label_path = tmp_path / 'img.txt'
+        label_path.write_text('0 0.325 0.325 0.55 0.55\n')
+
+        result = await svc.ingest_batch(
+            [data], [str(image_path)], label_paths=[str(label_path)], detect_mismatches=False
+        )
+        assert result.summary.mismatches == 0
+
+    @pytest.mark.asyncio
+    async def test_mismatched_label_paths_length_rejected(self) -> None:
+        svc, _, _ = _make_service()
+        with pytest.raises(ValueError, match='label_paths'):
+            await svc.ingest_batch([b'x', b'y'], ['/a.jpg', '/b.jpg'], label_paths=[None])
