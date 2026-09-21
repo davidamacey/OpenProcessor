@@ -66,6 +66,7 @@ by router module; every path is relative to the configured
 | `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
+| `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
 | `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
@@ -181,9 +182,22 @@ table.
 ### Export
 
 - `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`
+- `ExportSingleClassRequest`: `export_dir`, `version_tag`, `class_ids`,
+  `box_source` (`item`/`region`), `region_class_name`, `profile_name`,
+  `seed`, `skip_test_split`, `empty_bg_ratio`, `max_positive_images`,
+  `dedup_threshold`, `image_mode` (`whole_frame`/`item_crop`),
+  `img_max_side`, `copy_images`
 
-`ExportLprRequest` (single-class license-plate dataset export) is
-**not implemented** — see the export-capability axis below.
+`POST /export/single_class` builds a narrowed dataset for a single class
+or a class subset, with a stronger integrity envelope than the
+multi-class export: `dataset_sha` hashes the written label *content*,
+`frozen_test_sha` hashes the test split's identity, and the profile's
+own `current` symlink is flipped atomically. `GET
+/export/single_class/status?profile_name=...` reports the last run for
+one profile, with the same `idle`/`unknown`/`success` contract as
+`GET /export/status`. Each `profile_name` gets its own output root and
+its own `current` symlink, so narrowed exports never clobber each other
+or the multi-class dataset.
 
 ### Capability discovery — `GET /methods`
 
@@ -201,14 +215,13 @@ entry carries an `axis` of `cluster` / `score` / `sort` / `overlay` /
 | `id` | `status` | Notes |
 |---|---|---|
 | `yolo` | `stable` | Backed by `GenericYoloExportService`; always advertised. |
+| `single_class` | `stable` | Backed by `SingleClassExportService`; single-class or class-subset export. |
 
-`lpr` (the reference implementation's proprietary single-class
-license-plate export) is **deliberately absent** — never ported
-(Bucket B, out of scope) — rather than listed with `status='disabled'`:
-a status implies "not yet, but this deployment could serve it later,"
-which isn't true for a proprietary overlay this repo doesn't contain. A
-consumer should hide any LPR export UI when `lpr` is absent from this
-axis, not when a request to `POST /export/lpr` 404s.
+There is deliberately **no** `lpr` id. The reference implementation's
+single-class license-plate export is covered by `single_class`, which
+takes its target class ids from the request instead of hardcoding a
+domain vocabulary — a domain-named export kind would be exactly the
+hardcoding this axis exists to avoid.
 
 ### Shared curation-strategy defaults — `GET,PUT /settings`
 

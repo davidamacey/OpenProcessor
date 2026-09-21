@@ -542,32 +542,52 @@ class ExportYoloRequest(BaseModel):
     dedup_threshold: float | None = None
 
 
-class ExportRegionDatasetRequest(BaseModel):
-    """Body for the standalone single-class region-of-interest export
-    (e.g. LPR).
+class ExportSingleClassRequest(BaseModel):
+    """Body for the narrowed single-class / class-subset dataset export.
 
-    All ``detected`` positives and all human ``false_positive`` hard
-    negatives are kept in full. ``empty_bg_ratio`` adds a small sample of
-    genuine region-free (``no_region_visible``) frames as a fraction of
-    positives so the detector still sees some no-region images.
+    Positives come from either the items' own class-labeled boxes
+    (``box_source='item'``) or their region-of-interest sub-annotation
+    (``box_source='region'``). All ``detected`` positives and all human
+    ``false_positive`` hard negatives are kept in full; ``empty_bg_ratio``
+    adds a small sample of genuinely empty frames as a fraction of
+    positives so the detector still sees some no-target images.
     """
 
     export_dir: str | None = None
     version_tag: str = ''
+    # Registry class ids forming this export's vocabulary, IN ORDER — the
+    # dense label id written into the .txt files is the index into this
+    # list. Required for box_source='item'; an optional parent-class
+    # filter for box_source='region' (empty = every item's region).
+    class_ids: list[int] = Field(default_factory=list)
+    # 'item' = each item's own bbox_norm; 'region' = its region-of-interest.
+    box_source: Literal['item', 'region'] = 'item'
+    # data.yaml class name for the single region class in region mode.
+    region_class_name: str = 'region'
+    # Directory name under the export root; also the manifest's default
+    # dataset identity. Keeps this export's artifacts and its own
+    # `current` symlink separate from the multi-class export root.
+    profile_name: str = 'single_class'
+    # RNG seed for the cap sample + the split. Recorded in the manifest,
+    # which is what makes an export re-derivable.
+    seed: int = 42
     skip_test_split: bool = False
-    # Fraction of positives to add as region-free frames (0.1 == 1 per 10).
+    # Fraction of positives to add as target-free frames (0.1 == 1 per 10).
     empty_bg_ratio: float = 0.1
-    # Sample at most this many positive (region-bearing) frames; None == all.
+    # Sample at most this many positive frames; None == all.
     max_positive_images: int | None = None
     # Optional whole-frame near-dup cut (cosine on the images index's
     # secondary embedding). e.g. 0.98 collapses near-identical bursts to
     # one frame; None disables.
     dedup_threshold: float | None = None
-    # 'whole_frame' (full source frame) or 'vehicle_crop' (parent item crop
-    # with the region re-projected) — for whole-image vs crop training A/B.
-    image_mode: str = 'whole_frame'
+    # 'whole_frame' (full source frame) or 'item_crop' (parent item crop
+    # with the region re-projected) — for whole-image vs crop training
+    # A/B. 'item_crop' requires box_source='region'.
+    image_mode: Literal['whole_frame', 'item_crop'] = 'whole_frame'
     # Longest output side in px: 640 for rapid iteration, 1280 for the full run.
     img_max_side: int = 1280
+    # False writes labels + artifacts only (fast dry run, no pixel copy).
+    copy_images: bool = True
 
 
 class StatusResponse(BaseModel):
