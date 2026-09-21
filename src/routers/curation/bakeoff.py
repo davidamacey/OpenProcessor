@@ -122,19 +122,23 @@ class BakeoffModelSpec(BaseModel):
         description='ultralytics | triton | open-image-models | lpdnet | two-stage'
     )
     name: str
-    mode: str | None = None  # full | crop | both (run in source-frame and/or vehicle-crop mode)
+    mode: str | None = None  # full | crop | both (run in source-frame and/or crop mode)
     weights: str | None = None
     imgsz: int | None = None
     device: str | None = None
-    plate_class_id: int | None = None
+    pred_class_id: int | None = None
+    gt_class_id: int | None = None
+    gt_class_name: str | None = None
     lpdnet_variant: str | None = None
     triton_url: str | None = None
     triton_model: str | None = None
-    vehicle_weights: str | None = None
-    vehicle_classes: str | None = None
-    vehicle_imgsz: int | None = None
-    lpr_backend: str | None = None
-    lpr_imgsz: int | None = None
+    # Coarse stage for --mode crop / two-stage (any coarse->fine cascade,
+    # not just vehicle->plate -- see run.py's _primary_detector).
+    primary_weights: str | None = None
+    primary_classes: str | None = None
+    primary_imgsz: int | None = None
+    secondary_backend: str | None = None
+    secondary_imgsz: int | None = None
     training_data: str | None = None
 
 
@@ -150,7 +154,7 @@ class BakeoffRequest(BaseModel):
 
     Provide ``datasets`` (the matrix form: every model is scored on every
     dataset) or the legacy single ``dataset``. ``models`` may use ``mode:
-    'both'`` to score full-frame and vehicle-crop.
+    'both'`` to score full-frame and crop mode.
     """
 
     dataset: str | None = Field(default=None, description='Legacy single frozen export root')

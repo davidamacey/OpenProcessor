@@ -8,7 +8,7 @@ plus per-dataset ``comparison.json``. Writes a ``status.json`` the API serves to
 the UI.
 
 Modes:
-    --watch /eval_jobs   poll for ``*.job.json`` (like legacy_trainer)
+    --watch /eval_jobs   poll for ``*.job.json`` (same protocol as the training job runner)
     --job <file>         run one job spec and exit
 
 Job spec (JSON) --- ``datasets`` is the matrix form; ``dataset`` (singular) is
@@ -17,8 +17,8 @@ still accepted for back-compat::
     {
         'job_id': '2026-05-25T10-00',
         'datasets': [
-            {'name': 'curated', 'path': '/data/lpr_exports/<run>'},
-            {'name': 'andrewmvd', 'path': './data/bakeoff_eval/public/andrewmvd_car_plate'},
+            {'name': 'curated', 'path': '/data/exports/<run>'},
+            {'name': 'public_set', 'path': './data/bakeoff_eval/public/<dataset>'},
         ],
         'verify_frozen': true,
         'out_dir': '/data/bakeoff/<job_id>',
@@ -70,16 +70,18 @@ _OPT_FLAGS = {
     'weights': '--weights',
     'imgsz': '--imgsz',
     'device': '--device',
-    'plate_class_id': '--plate-class-id',
+    'pred_class_id': '--pred-class-id',
+    'gt_class_id': '--gt-class-id',
+    'gt_class_name': '--gt-class-name',
     'mode': '--mode',
     'lpdnet_variant': '--lpdnet-variant',
     'triton_url': '--triton-url',
     'triton_model': '--triton-model',
-    'vehicle_weights': '--vehicle-weights',
-    'vehicle_classes': '--vehicle-classes',
-    'vehicle_imgsz': '--vehicle-imgsz',
-    'lpr_backend': '--lpr-backend',
-    'lpr_imgsz': '--lpr-imgsz',
+    'primary_weights': '--primary-weights',
+    'primary_classes': '--primary-classes',
+    'primary_imgsz': '--primary-imgsz',
+    'secondary_backend': '--secondary-backend',
+    'secondary_imgsz': '--secondary-imgsz',
     'training_data': '--training-data',
     'ort_providers': '--ort-providers',
     'coords_normalized': '--coords-normalized',
@@ -116,7 +118,7 @@ def _quantize_and_variant_models(
 
         {"model_id": "ours_yolo26n", "checkpoint": "/runs/.../best.pt",
          "formats": ["fp32_onnx","fp16_onnx","int8_onnx"], "n_calib": 1000,
-         "calib_dataset": "/data/lpr_exports/<run>",  # default: first dataset
+         "calib_dataset": "/data/exports/<run>",  # default: first dataset
          "out_root": "/data/quant"}
     """
     import sys
