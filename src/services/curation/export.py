@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import random
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -53,6 +54,7 @@ from src.services.curation.export_support import (
     _remap_rows_to_export_ids,
     _resolve_source_path,
     dataset_checksum,
+    even_stratified_sample,
     hash_split,
     stratified_split,
 )
@@ -287,6 +289,14 @@ class GenericYoloExportService:
         computed, via
         :func:`~src.services.detection.frame_dedup.dedup_rows_by_embedding`.
 
+        ``max_images`` caps the export via
+        :func:`~src.services.curation.export_support.even_stratified_sample`
+        — an even round-robin over ``class_id`` applied *after* dedup and
+        the dense-id remap, so a rare class can't be squeezed out and the
+        final count is exactly ``min(max_images, pool)``. The manifest
+        records which of the two modes ran as ``sampling_mode``
+        (``'all'`` / ``'stratified_even'``).
+
         ``resize_mode`` (``'letterbox'`` or ``'aspect'``, default ``None``
         = copy as-is) controls how source pixels are resized into
         ``images/<split>/`` when ``copy_images`` is true.
@@ -298,9 +308,11 @@ class GenericYoloExportService:
                 'must_not': [{'exists': {'field': 'review_dismissed_at'}}],
             }
         }
+        # Scroll the FULL cohort — never cap here. Truncating the raw hit
+        # list would hand the budget to whatever the scroll returned first
+        # and let a rare class vanish; the cap is a class-balanced sample
+        # applied below, once dedup and the id remap have settled the pool.
         hits = await self._scroll_items(query)
-        if max_images is not None:
-            hits = hits[:max_images]
 
         rows = self._hits_to_rows(hits)
         rows, dedup_stats = await self._apply_dedup(rows, dedup_threshold)
@@ -308,6 +320,16 @@ class GenericYoloExportService:
         registry_file = self.registry.load()
         id_map = _build_export_id_map(registry_file.classes)
         rows = _remap_rows_to_export_ids(rows, id_map)
+
+        # Cap AFTER dedup + remap, so the final count lands at exactly
+        # min(max_images, pool) instead of drifting below it.
+        sampling_mode = 'all'
+        if max_images is not None and len(rows) > max_images:
+            rows = even_stratified_sample(
+                rows, max_images, lambda r: str(r.class_id), random.Random(seed)
+            )
+            sampling_mode = 'stratified_even'
+            logger.info('export_sampled', n_images=len(rows), max_images=max_images)
 
         name_by_registry_id = {c.class_id: c.class_name for c in registry_file.classes}
         names: list[str] = [''] * len(id_map)
@@ -421,6 +443,8 @@ class GenericYoloExportService:
             if holdout_item_ids
             else None,
             'dedup': dedup_stats,
+            'max_images': max_images,
+            'sampling_mode': sampling_mode,
             'image_copy': image_copy_stats,
             'resize_mode': resize_mode,
         }
@@ -479,6 +503,7 @@ __all__ = [
     'GenericYoloExportService',
     'SplitCounts',
     'dataset_checksum',
+    'even_stratified_sample',
     'hash_split',
     'resolve_current_export_dir',
     'stratified_split',
