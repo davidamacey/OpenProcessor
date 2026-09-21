@@ -70,8 +70,10 @@ Stated up front, honestly, rather than discovered in production:
   to the internet.
 - **You must supply your own models.** This is BYO-model territory, not
   a batteries-included product — see "Models you must supply" below.
-- **The trainer and segmenter are protocols, not shipped containers.**
-  See "Workers and the curation compose profile" below.
+- **The trainer is a protocol, not a shipped container.** The segmenter
+  is both: `docker/segmenter/` ships a reference implementation of the
+  segmenter wire protocol, behind its own opt-in compose profile. See
+  "Workers and the curation compose profile" below.
 - **Coverage is uneven across the ported surface** — some routers carry
   thorough test suites, others were ported with comparatively thin
   coverage because the original implementation had thin coverage there
@@ -111,9 +113,12 @@ trainer. A deployment supplies:
 - **A segmenter, if you want the cascade's segmenter leg** — any
   service reachable at `SAM3_URL` (the env var name is legacy but the
   wire protocol is a generic segment-request/response; see
-  `scripts/curation/worker/client.py`). This leg is optional — the
-  cascade runs without it — and no segmenter container ships with this
-  repo.
+  `scripts/curation/worker/client.py`). This leg is optional: with
+  `SAM3_URL` empty the cascade runs without it. A reference
+  implementation **does** ship — `docker/segmenter/` wraps SAM 3 behind
+  that wire protocol — but it is opt-in (its own compose profile: it
+  needs a GPU and a HuggingFace token) and it is BYO-weights like
+  everything else here.
 - **A VLM for labeling assist and region verification** — any
   OpenAI-compatible `/v1/chat/completions` endpoint, configured via
   `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY`.
@@ -194,6 +199,21 @@ None of these workers requires Triton or a GPU to *start* — they will
 sit idle or error per-call until you've configured a real detector/VLM
 endpoint. See `docker-compose.yml`'s `curation-*` service definitions
 and `env.template` for every tunable.
+
+The segmenter is a **second, separate profile** because unlike the
+workers above it does need a GPU of its own and a HuggingFace token:
+
+```bash
+SAM3_URL=http://segmenter:8000 \
+  docker compose --profile curation --profile segmenter up -d
+```
+
+| Service | What it does |
+|---|---|
+| `segmenter` | Promptable segmentation (SAM 3) serving the cascade's segmenter leg. See [`docker/segmenter/README.md`](../docker/segmenter/README.md). |
+
+Without `SAM3_URL` the detection worker constructs a disabled client and
+the segmenter leg is skipped entirely — no HTTP call, no failure.
 
 ## Seed / bootstrap path for a fresh install
 
