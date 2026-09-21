@@ -190,7 +190,15 @@ import). What is deliberately not included: any single-class /
 domain-specific dataset export (`/export/lpr` has no generic
 equivalent — a single-class exporter is inherently domain-shaped), a
 fixed class allowlist, or a region-status assignment policy tuned to
-one domain. Only one `DetectionProfile`/VLM `PromptPack` is active per
+one domain. The **backbone-embedding** (`v6_embedding`) chain is also
+only half-wired: the producer side exists
+(`export/export_detector_dual_head.py` re-exports any YOLO-family
+detector with a `sppf_feat` feature-map output, and
+`src/services/detection/geometry.py:roi_pool_sppf` pools it per
+detection), but ingest still requests only `output0` from the detector,
+so nothing writes the field yet. Every reader treats it as optional and
+residual clustering defaults to `pe_embedding`
+(`OP_RESIDUAL_EMBEDDING_FIELD`). Only one `DetectionProfile`/VLM `PromptPack` is active per
 process — there's no per-request selection among several registered
 profiles yet. These are known, accepted gaps — the most likely first
 follow-ups after this subsystem graduates out of experimental status.
