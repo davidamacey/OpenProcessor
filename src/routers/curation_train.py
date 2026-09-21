@@ -319,13 +319,35 @@ def _unresolvable_include_classes(
     return [c for c in include_classes if str(c) not in export_id_map]
 
 
-def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, Any]) -> None:
-    """LPR data-sufficiency checks read from the export manifest, not the registry.
+# Export manifests whose data sufficiency must be judged from the manifest
+# itself rather than the multi-class registry. ``single_class`` is what
+# :mod:`src.services.curation.export_single_class` writes;
+# ``lpr_single_class`` is the reference implementation's own value for the
+# same shape, accepted so an export produced before that exporter existed
+# still preflights.
+SINGLE_CLASS_DATASET_KINDS: frozenset[str] = frozenset({'single_class', 'lpr_single_class'})
 
-    An LPR export is a single-class plate dataset whose labels live on disk; the
-    multi-class ``class_validated`` counts are ~0 for ``license_plate`` and would
-    wrongly block. Validate from the manifest's positive + test-split counts.
+
+def _single_class_label(manifest: dict[str, Any]) -> str:
+    """Human-readable name of a single-class export's target class."""
+    name = manifest.get('class_name')
+    if name:
+        return str(name)
+    names = manifest.get('class_names')
+    if isinstance(names, list) and names:
+        return ', '.join(str(n) for n in names)
+    return 'target class'
+
+
+def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, Any]) -> None:
+    """Single-class data-sufficiency checks read from the export manifest.
+
+    A narrowed export's labels live on disk, and the multi-class
+    ``class_validated`` counts for its target class are typically ~0 — which
+    would wrongly block. Validate from the manifest's positive + test-split
+    counts instead.
     """
+    label = _single_class_label(manifest)
     pos = int(manifest.get('positive_images') or 0)
     if pos < HARD_MIN_CROPS_PER_CLASS:
         checks.append(
@@ -333,7 +355,7 @@ def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, An
                 name='class_balance',
                 severity='block',
                 message=(
-                    f'license_plate has {pos} labeled plate frames '
+                    f'{label} has {pos} labeled positive frames '
                     f'(< hard floor {HARD_MIN_CROPS_PER_CLASS})'
                 ),
                 detail={'positive_images': pos},
@@ -344,7 +366,9 @@ def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, An
             PreflightCheck(
                 name='class_balance',
                 severity='warn',
-                message=f'license_plate has {pos} labeled plate frames (<{WARN_MIN_CROPS_PER_CLASS})',
+                message=(
+                    f'{label} has {pos} labeled positive frames (<{WARN_MIN_CROPS_PER_CLASS})'
+                ),
                 detail={'positive_images': pos},
             )
         )
@@ -353,7 +377,7 @@ def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, An
             PreflightCheck(
                 name='class_balance',
                 severity='ok',
-                message=f'license_plate: {pos} labeled plate frames',
+                message=f'{label}: {pos} labeled positive frames',
             )
         )
 
@@ -364,7 +388,7 @@ def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, An
                 name='test_holdout',
                 severity='block' if test_n == 0 else 'warn',
                 message=(
-                    f'LPR test split has {test_n} frames '
+                    f'Single-class test split has {test_n} frames '
                     f'(<{MIN_TEST_CROPS_PER_CLASS}). Refreeze the test holdout.'
                 ),
                 detail={'test_frames': test_n},
@@ -375,7 +399,7 @@ def _append_lpr_data_checks(checks: list[PreflightCheck], manifest: dict[str, An
             PreflightCheck(
                 name='test_holdout',
                 severity='ok',
-                message=f'LPR test split: {test_n} frames',
+                message=f'Single-class test split: {test_n} frames',
             )
         )
 
@@ -523,7 +547,7 @@ async def _run_preflight(
     # A single-class LPR export validates from its own manifest (disk dataset),
     # not the multi-class registry's class_validated counts.
     _lpr_manifest = _read_export_manifest(spec.dataset_export_dir)
-    _is_lpr = _lpr_manifest.get('dataset_kind') == 'lpr_single_class'
+    _is_lpr = _lpr_manifest.get('dataset_kind') in SINGLE_CLASS_DATASET_KINDS
     target_classes = [] if _is_lpr else _resolve_target_classes(spec)
 
     # ---- 3b. include_classes resolvable against this export (P2-8) ----------

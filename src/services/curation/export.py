@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import random
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
@@ -53,9 +52,12 @@ from src.services.curation.export_support import (
     _ExportRow,
     _remap_rows_to_export_ids,
     _resolve_source_path,
+    atomic_symlink_flip,
+    atomic_write_text,
     dataset_checksum,
     even_stratified_sample,
     hash_split,
+    scroll_hits,
     stratified_split,
 )
 from src.services.curation.holdout import compute_holdout_sha
@@ -166,10 +168,11 @@ class GenericYoloExportService:
         self.registry = registry or get_class_registry()
 
     async def _scroll_items(self, query: dict[str, Any]) -> list[dict[str, Any]]:
-        body: dict[str, Any] = {
-            'size': 500,
-            'query': query,
-            '_source': [
+        return await scroll_hits(
+            self.opensearch,
+            index=self.config.items_index,
+            query=query,
+            source=[
                 'crop_id',
                 'image_id',
                 'image_path',
@@ -179,24 +182,7 @@ class GenericYoloExportService:
                 'test_holdout',
                 'cluster_id',
             ],
-        }
-        resp = await self.opensearch.search(index=self.config.items_index, body=body, scroll='5m')
-        scroll_id = resp.get('_scroll_id')
-        hits = list((resp.get('hits') or {}).get('hits') or [])
-        out = list(hits)
-        try:
-            while hits:
-                resp = await self.opensearch.scroll(scroll_id=scroll_id, scroll='5m')
-                scroll_id = resp.get('_scroll_id')
-                hits = list((resp.get('hits') or {}).get('hits') or [])
-                out.extend(hits)
-        finally:
-            if scroll_id:
-                try:
-                    await self.opensearch.clear_scroll(scroll_id=scroll_id)
-                except Exception as exc:
-                    logger.warning('export_clear_scroll_failed', err=str(exc))
-        return out
+        )
 
     def _hits_to_rows(self, hits: list[dict[str, Any]]) -> list[_ExportRow]:
         rows: list[_ExportRow] = []
@@ -449,10 +435,10 @@ class GenericYoloExportService:
             'resize_mode': resize_mode,
         }
         manifest_path = resolved_export_dir / ARTIFACT_FILENAMES['manifest']
-        self._atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
+        atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
 
         current_symlink = self.config.export_root / 'current'
-        self._atomic_symlink_flip(current_symlink, resolved_export_dir)
+        atomic_symlink_flip(current_symlink, resolved_export_dir)
 
         return ExportResult(
             export_dir=str(resolved_export_dir),
@@ -468,32 +454,6 @@ class GenericYoloExportService:
             current_symlink=str(current_symlink),
         )
 
-    @staticmethod
-    def _atomic_write_text(path: Path, payload: str) -> None:
-        """tmp-write + fsync + rename — never leaves a partially-written
-        manifest visible to a concurrent reader (e.g. preflight scan)."""
-        tmp_path = path.with_suffix(path.suffix + '.tmp')
-        with tmp_path.open('w', encoding='utf-8') as f:
-            f.write(payload)
-            f.flush()
-            os.fsync(f.fileno())
-        tmp_path.replace(path)
-
-    @staticmethod
-    def _atomic_symlink_flip(symlink_path: Path, target: Path) -> None:
-        """Point ``symlink_path`` at ``target`` via a write-then-rename.
-
-        A reader that resolves ``current`` mid-flip always sees either the
-        old or the new export directory, never a missing/half-written
-        symlink.
-        """
-        symlink_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_symlink = symlink_path.with_name(f'.{symlink_path.name}.tmp.{os.getpid()}')
-        if tmp_symlink.exists() or tmp_symlink.is_symlink():
-            tmp_symlink.unlink()
-        tmp_symlink.symlink_to(target, target_is_directory=True)
-        tmp_symlink.replace(symlink_path)
-
 
 __all__ = [
     'ARTIFACT_FILENAMES',
@@ -502,6 +462,8 @@ __all__ = [
     'ExportResult',
     'GenericYoloExportService',
     'SplitCounts',
+    'atomic_symlink_flip',
+    'atomic_write_text',
     'dataset_checksum',
     'even_stratified_sample',
     'hash_split',

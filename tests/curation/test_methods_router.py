@@ -224,17 +224,24 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
     assert entry['requires_banner'] is False
 
 
-def test_export_axis_advertises_yolo_stable_and_omits_lpr(app_client: TestClient) -> None:
+def test_export_axis_advertises_yolo_and_single_class_and_omits_lpr(
+    app_client: TestClient,
+) -> None:
     """cropwright_backend_integration_plan.md §4.3/T-C2: the frontend gates
-    its LPR export panel on this axis rather than probing the write
-    endpoint. ``lpr`` (proprietary, never ported -- Bucket B) must not
-    appear at all, not even as a disabled entry."""
+    its export panels on this axis rather than probing the write endpoint.
+
+    ``single_class`` is the generic narrowed export (G2); ``lpr`` must not
+    appear at all, not even as a disabled entry -- a domain-named export
+    kind is exactly the hardcoding this axis exists to avoid."""
     r = app_client.get('/curation/methods')
     assert r.status_code == 200
     body = r.json()
     export_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
-    assert set(export_entries) == {'yolo'}
+    assert set(export_entries) == {'yolo', 'single_class'}
     assert export_entries['yolo']['status'] == 'stable'
+    assert export_entries['single_class']['status'] == 'stable'
+    assert export_entries['yolo']['default'] is True
+    assert export_entries['single_class']['default'] is False
     assert 'lpr' not in export_entries
 
 

@@ -219,7 +219,12 @@ and `env.template` for every tunable.
    (Cropwright is the first such consumer) at the API — see
    [`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
 7. Export a dataset with `POST /curation/export/yolo` once you have
-   labeled data.
+   labeled data — or `POST /curation/export/single_class` to build a
+   narrowed dataset for one class (or a class subset), which adds
+   background/hard-negative frames the narrowed detector needs and a
+   stronger integrity envelope (`dataset_sha` over the written label
+   content, `frozen_test_sha` over the test split's identity, an
+   atomically-flipped per-profile `current` symlink).
 
 ## Environment variables
 
