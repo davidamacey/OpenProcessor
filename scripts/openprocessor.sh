@@ -309,9 +309,12 @@ cmd_test() {
             ;;
         full)
             log_step "Running full test suite..."
+            if [[ ! -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+                log_error "$PROJECT_DIR/.venv/bin/python not found — create the venv first"
+                return 1
+            fi
             if [[ -f "$PROJECT_DIR/tests/test_full_system.py" ]]; then
-                source "$PROJECT_DIR/.venv/bin/activate" 2>/dev/null || true
-                python "$PROJECT_DIR/tests/test_full_system.py"
+                "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/tests/test_full_system.py"
             else
                 log_error "Test suite not found"
                 return 1
@@ -319,9 +322,12 @@ cmd_test() {
             ;;
         visual)
             log_step "Running visual validation..."
+            if [[ ! -x "$PROJECT_DIR/.venv/bin/python" ]]; then
+                log_error "$PROJECT_DIR/.venv/bin/python not found — create the venv first"
+                return 1
+            fi
             if [[ -f "$PROJECT_DIR/tests/validate_visual_results.py" ]]; then
-                source "$PROJECT_DIR/.venv/bin/activate" 2>/dev/null || true
-                python "$PROJECT_DIR/tests/validate_visual_results.py"
+                "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/tests/validate_visual_results.py"
             else
                 log_error "Visual validation script not found"
                 return 1
@@ -330,6 +336,55 @@ cmd_test() {
         *)
             log_error "Unknown test type: $test_type"
             echo "Available: quick, full, visual"
+            return 1
+            ;;
+    esac
+}
+
+# =============================================================================
+# Curation subsystem — EXPERIMENTAL, opt-in compose profile (D7)
+# =============================================================================
+# Mirrors the `curation-*` Makefile targets. The curation worker services
+# (curation-detection-worker, curation-vlm-worker, curation-auto-label-worker,
+# curation-cluster-refresh) all carry `profiles: [curation]` in
+# docker-compose.yml, so `start`/`stop` above never touch them.
+
+cmd_curation() {
+    local subcommand="${1:-status}"
+    shift 2>/dev/null || true
+
+    cd "$PROJECT_DIR"
+
+    case "$subcommand" in
+        up)
+            log_step "Starting curation subsystem (profile: curation)..."
+            docker compose --profile curation up -d
+            log_success "Curation services starting. Check with: $0 curation status"
+            ;;
+        down)
+            log_step "Stopping curation subsystem (profile: curation)..."
+            docker compose --profile curation down
+            log_success "Curation services stopped"
+            ;;
+        logs)
+            docker compose --profile curation logs -f \
+                curation-detection-worker curation-vlm-worker \
+                curation-auto-label-worker curation-cluster-refresh
+            ;;
+        status)
+            docker compose --profile curation ps \
+                curation-detection-worker curation-vlm-worker \
+                curation-auto-label-worker curation-cluster-refresh curation-evaluator
+            ;;
+        seed)
+            log_warn "curation seed: not yet implemented."
+            echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
+            echo "(see docs/design/oss_main_completion_plan.md, Wave 6 — live"
+            echo "write-path verification harness). Nothing was run."
+            ;;
+        *)
+            log_error "Unknown curation subcommand: $subcommand"
+            echo "Available: up, down, logs, status, seed"
             return 1
             ;;
     esac
@@ -453,6 +508,10 @@ Testing:
   bench [mode]        Run benchmarks
                       Options: quick (default), full
 
+Curation (experimental, opt-in compose profile):
+  curation [action]   Manage the curation worker services
+                      Options: up, down, logs, status (default), seed
+
 Maintenance:
   clean [target]      Clean files
                       Options: cache (default), models, exports, all
@@ -513,6 +572,9 @@ main() {
             ;;
         test)
             cmd_test "$@"
+            ;;
+        curation)
+            cmd_curation "$@"
             ;;
         bench)
             cmd_bench "$@"

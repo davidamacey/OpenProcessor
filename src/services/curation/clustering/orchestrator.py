@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.config import get_curation_config, get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
 from src.services.curation.clustering.id_normalize import run_update_by_query_polled
@@ -70,8 +71,9 @@ VEHICLES_CLUSTER_INDEX: ClusterIndex = ClusterIndex.VEHICLES
 
 Deliberately reuses the pre-existing, unrelated visual-search
 ``ClusterIndex.VEHICLES`` role rather than adding a curation-specific
-member to ``src/services/clustering.py`` — see
-``docs/design/oss_genericization_phase2_plan.md`` §0.11.
+member to ``src/services/clustering.py`` — a naming leftover from the
+reference deployment, tracked as a documented gap in
+``docs/design/curation_design_rationale.md`` §6.
 """
 
 ITEMS_INDEX = get_curation_config().items_index
@@ -719,8 +721,17 @@ async def cluster_residuals(
     from src.services.curation.clustering import embedding_reduce
     from src.services.curation.clustering.backend import detect_cluster_backend
     from src.services.curation.clustering.methods import DEFAULT_METHOD, get_method
+    from src.services.curation.strategy_registry import resolve_effective_default
 
-    method_name = (clustering_method or DEFAULT_METHOD).lower()
+    # DEFAULT_METHOD stays the ultimate fallback (resolve_effective_default
+    # falls back to it internally too) -- an explicit ?clustering_method
+    # always wins over any shared-settings override, same precedence every
+    # other real endpoint's omitted-param resolution uses.
+    if clustering_method:
+        method_name = clustering_method.lower()
+    else:
+        resolved_default = await resolve_effective_default('cluster', client)
+        method_name = (resolved_default or DEFAULT_METHOD).lower()
     mode_label = 'recluster_unvalidated' if recluster_unvalidated else 'strict_residuals'
 
     # Primary-subject clustering gate (optional). When set, train + assign
@@ -1081,7 +1092,7 @@ async def cluster_region_residuals(
     query = {
         'bool': {
             'must': must,
-            'must_not': [{'term': {f'{F.status}.keyword': 'false_positive'}}],
+            'must_not': [{'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}}],
         }
     }
 
@@ -1308,7 +1319,7 @@ async def _count_false_positives(client: AsyncOpenSearch) -> int:
     try:
         resp = await client.count(
             index=ITEMS_INDEX,
-            body={'query': {'term': {f'{F.status}.keyword': 'false_positive'}}},
+            body={'query': {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}}},
         )
         return int(resp.get('count', 0))
     except Exception as exc:
@@ -1445,7 +1456,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     query = {
         'bool': {
             'must': [
-                {'term': {f'{F.status}.keyword': 'false_positive'}},
+                {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
                 {'exists': {'field': F.embedding}},
             ]
         }
@@ -1545,7 +1556,7 @@ def fp_candidate_must_not() -> list[dict[str, Any]]:
     not shield a real false positive. Only a human's decision is final.
     """
     return [
-        {'term': {f'{F.status}.keyword': 'false_positive'}},
+        {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
         {'term': {'test_holdout': True}},
         {'term': {f'{F.label_source}.keyword': 'human'}},
         {'term': {F.verifier: 'human'}},
@@ -1615,7 +1626,7 @@ async def auto_assign_fp_from_centroids(
         bulk.append(
             {
                 'doc': {
-                    F.status: 'false_positive',
+                    F.status: RegionStatus.FALSE_POSITIVE,
                     F.label_source: 'auto_fp_centroid',
                     F.cluster_id: FALSE_POSITIVE_REGION_CLUSTER_ID,
                     F.cluster_subid: sub,

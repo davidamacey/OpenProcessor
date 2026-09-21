@@ -203,7 +203,12 @@ Special thanks to:
 ## License Compliance
 
 ### This Project
-This project's original code is licensed under **MIT License** (see [LICENSE](LICENSE)).
+This project's original code is licensed under **AGPL-3.0-or-later**
+(see [LICENSE](LICENSE)). It was previously MIT-badged; the project was
+re-badged AGPL-3.0-or-later because it incorporates the AGPL-3.0
+Ultralytics fork below as a vendored dependency
+(`src/ultralytics_patches/`), and AGPL-3.0 is a copyleft license that
+propagates to the combined work.
 
 ### Third-Party Components
 

@@ -10,15 +10,43 @@ standing in for the shared jobs/output directories.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+import re
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-if TYPE_CHECKING:
-    from pathlib import Path
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# CFG-6: this harness used to default to owner-private absolute paths --
+# one of which named the location of a licensed proprietary image corpus
+# (a "/mnt/<host-specific-mount>/..." style path) and must never appear
+# in this repo as a literal string again. A generic "any absolute path"
+# scan is too broad (it also matches route strings like '/bakeoff/run',
+# shebangs, etc.) -- narrow this to host-mount-shaped absolute paths
+# (/mnt/..., /home/..., /Users/...), which is exactly the shape the
+# original regression had and nothing legitimate in this harness needs.
+_BAKEOFF_HARNESS_FILES = (
+    'src/routers/curation/bakeoff.py',
+    'scripts/curation/bakeoff/baselines.json',
+    'scripts/curation/bakeoff/run.py',
+    'scripts/curation/bakeoff/bakeoff_runner.py',
+    'scripts/curation/bakeoff/paper_numbers.py',
+)
+_HOST_MOUNT_PATH_RE = re.compile(r'/(?:mnt|home|Users)/[A-Za-z0-9_./\-]+')
+
+
+def test_bakeoff_harness_has_no_owner_private_absolute_path_defaults() -> None:
+    offenders: list[str] = []
+    for rel in _BAKEOFF_HARNESS_FILES:
+        text = (REPO_ROOT / rel).read_text()
+        offenders.extend(f'{rel}: {match.group(0)}' for match in _HOST_MOUNT_PATH_RE.finditer(text))
+    assert not offenders, (
+        'bake-off harness file(s) contain a hardcoded host-mount-shaped '
+        f'absolute path default: {offenders}'
+    )
 
 
 @pytest.fixture

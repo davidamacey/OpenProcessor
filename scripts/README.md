@@ -1,23 +1,36 @@
 # Scripts
 
-Utility scripts for deployment, maintenance, and image processing.
+Utility scripts for setup, deployment, maintenance, image processing,
+and the curation subsystem.
 
 ## Root-Level Scripts
 
-### check_services.sh
+### setup.sh
 
-Health check for all services and models.
+One-shot fresh-install script: pulls Docker images, detects your GPU,
+selects a profile, exports TensorRT engines, starts services, and runs
+smoke tests. See [README.md](../README.md#quick-start).
 
 ```bash
-bash scripts/check_services.sh
+./scripts/setup.sh              # interactive
+./scripts/setup.sh --yes        # non-interactive, defaults
+./scripts/setup.sh --profile=standard --gpu=0 --yes
 ```
 
-**Checks:**
-- Docker container status
-- Triton server health (port 4600)
-- Model availability (all Triton models)
-- FastAPI endpoints (port 4603)
-- GPU status and memory
+### openprocessor.sh
+
+Day-2 management commands — status, logs, restart — for a running
+deployment.
+
+```bash
+./scripts/openprocessor.sh status    # Check service health (API/Triton/OpenSearch)
+./scripts/openprocessor.sh logs -f   # View live logs
+./scripts/openprocessor.sh restart   # Restart all services
+./scripts/openprocessor.sh help      # See all commands
+```
+
+There is no separate `check_services.sh` — `openprocessor.sh status`
+covers that.
 
 ### resize_images.py
 
@@ -37,16 +50,40 @@ python scripts/resize_images.py /path/to/images --size 1024 --output /path/to/ou
 - Parallel processing via multiprocessing
 - Progress bar with ETA
 
+### docker-build-push.sh / security-scan.sh / export_paddleocr.sh / setup_face_test_data.sh
+
+Build/publish and one-off setup helpers — see each script's own header
+comment for usage; they're small and self-documenting.
+
+## `scripts/curation/` — curation subsystem workers and tooling
+
+**Experimental**, ships behind the `curation` Docker Compose profile —
+see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
+
+| Path | What it is |
+|---|---|
+| `ingest_walker.py`, `_fast_walk.py` | Parallel bulk-directory ingest: `os.scandir` walker → reader threads → bounded queue → concurrent `POST /curation/ingest/batch`, with a resumable progress file. |
+| `vlm_worker.py` | Long-lived VLM labeling/verification loop (`curation-vlm-worker` service). |
+| `auto_label_worker.py` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process (`curation-auto-label-worker` service). |
+| `cluster_refresh_daemon.py` | Periodic residual-clustering retrain/refresh (`curation-cluster-refresh` service). |
+| `sam_worker_main.py` | Detection-cascade worker entrypoint (`curation-detection-worker` service). |
+| `worker/` | Shared worker library: cascade runner, HTTP clients (segmenter, VLM), state/checkpoint handling. |
+| `backfill_scores.py` | One-off CLI to backfill item-quality scores onto existing indexed items. |
+| `seed_live_harness.py` | Seeds the throwaway `docker/test/compose.yml` live-verification stack with deterministic data — **never point this at a real deployment** (it refuses to run against an index without a `verify_` prefix). |
+| `bakeoff/` | Detector bake-off evaluation harness (`curation-evaluator` compose service runs this on demand). |
+
 ## Makefile Operations
 
-Many common operations are now available via Makefile:
+Many common operations are available via the Makefile:
 
 ```bash
 make help          # List all available targets
 make up            # Start all services
 make down          # Stop all services
 make logs          # View service logs
-make test          # Run tests
+make test          # Run the pytest suite (.venv/bin/python -m pytest tests/ -q)
+make curation-up   # Start the curation worker services (experimental, opt-in)
+make curation-down # Stop the curation worker services
 ```
 
 ## Related Folders
@@ -56,6 +93,7 @@ make test          # Run tests
 | [export/](../export/) | Model export scripts (ONNX, TensorRT) |
 | [tests/](../tests/) | Test scripts and utilities |
 | [benchmarks/](../benchmarks/) | Go-based benchmarking tool |
+| [docker/test/](../docker/test/) | Live write-path verification harness (see `docker/test/README.md`) |
 
 ## Port Reference
 

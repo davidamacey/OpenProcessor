@@ -1,8 +1,8 @@
 """Training-job control protocol (file-based).
 
 Ported from a private reference vehicle/license-plate curation stack's
-training pipeline — see ``docs/design/oss_genericization_phase2_plan.md``
-Chunk 6. This module encapsulates the API <-> trainer protocol:
+training pipeline — see ``docs/design/curation_design_rationale.md``
+for the genericization rationale. This module encapsulates the API <-> trainer protocol:
 
 - The API writes ``<job_id>.job.json`` into the shared ``/jobs/`` volume
   to start a run. The trainer container watches the directory.
@@ -17,7 +17,7 @@ responsibilities in one place and makes testing trivial -- the entire
 protocol is a tmpdir + JSON.
 
 Environment:
-    LEGACY_TRAIN_JOBS_DIR
+    OP_TRAIN_JOBS_DIR
         Override the ``/jobs/`` mount point (test fixtures use a
         ``tmp_path``). Default: ``/jobs``.
 
@@ -59,9 +59,9 @@ def _resolve_jobs_dir() -> Path:
     """Resolve the ``/jobs/`` directory each time it's needed.
 
     Done lazily (rather than module-level constant) so tests can override
-    ``LEGACY_TRAIN_JOBS_DIR`` with monkeypatch / env-var without re-importing.
+    ``OP_TRAIN_JOBS_DIR`` with monkeypatch / env-var without re-importing.
     """
-    return Path(os.environ.get('LEGACY_TRAIN_JOBS_DIR', '/jobs'))
+    return Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 
 # Public for callers that want the default without the env override.

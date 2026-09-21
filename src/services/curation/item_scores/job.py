@@ -9,7 +9,7 @@ not a new container; the job runs as an ``asyncio`` background task inside
 the yolo-api process itself, started by the router handler and polled via
 the same state-file pattern the labeler already knows how to render).
 
-Directory resolved lazily via ``LEGACY_SCORES_STATE_DIR`` (default ``/jobs/scores``)
+Directory resolved lazily via ``OP_SCORES_STATE_DIR`` (default ``/jobs/scores``)
 so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
 reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
 
@@ -59,7 +59,7 @@ _active_task: asyncio.Task[None] | None = None
 
 def _state_dir() -> Path:
     """Resolved fresh each call so tests can override via monkeypatch."""
-    return Path(os.environ.get('LEGACY_SCORES_STATE_DIR', '/jobs/scores'))
+    return Path(os.environ.get('OP_SCORES_STATE_DIR', '/jobs/scores'))
 
 
 def _state_file() -> Path:
@@ -137,6 +137,24 @@ def _is_busy() -> bool:
     age = _heartbeat_age()
     # No heartbeat yet just means the task hasn't ticked once — still busy.
     return age is None or age <= _HEARTBEAT_STALE_S
+
+
+def reconcile_orphaned_jobs() -> bool:
+    """Startup-only repair: see :mod:`src.services.curation.job_reconcile`.
+
+    Called from ``src.main``'s lifespan before any request is served, so
+    nothing in this process can legitimately hold ``status='running'``
+    yet — a leftover 'running' state.json is necessarily orphaned by a
+    prior process. Returns True if the file was rewritten.
+    """
+    from src.services.curation.job_reconcile import reconcile_stale_running
+
+    return reconcile_stale_running(
+        _state_file(),
+        _heartbeat_file(),
+        stale_s=_HEARTBEAT_STALE_S,
+        error_prefix='scoring job',
+    )
 
 
 def get_state() -> dict[str, Any]:
@@ -315,6 +333,7 @@ __all__ = [
     'compute_coverage',
     'get_state',
     'is_cancelled',
+    'reconcile_orphaned_jobs',
     'run_scoring_job',
     'start_job',
 ]

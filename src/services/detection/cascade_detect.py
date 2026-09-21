@@ -1,7 +1,8 @@
 """Generic sub-region detection cascade — LPR-style detector + PaddleOCR.
 
 Ported from the reference license-plate (LPR) detector (see
-``docs/design/oss_genericization_phase2_plan.md`` §3.3 / §5 Chunk 8).
+``docs/design/curation_design_rationale.md`` §2.3 / §5 — Chunk 8; this
+is one of the ratchet-exempt oversize files).
 Wraps a YOLO-style Triton detector to produce sub-region bounding boxes
 in the **item crop's** coordinate frame (normalized to ``[0, 1]``), plus
 a PaddleOCR-based text detector/recognizer used as a last-resort
@@ -31,6 +32,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.config import DetectionProfile, get_region_fields
+from src.services.detection.geometry import letterbox_to_square, undo_letterbox
+from src.services.detection.profile_registry import register_profile
 
 
 if TYPE_CHECKING:
@@ -68,7 +71,7 @@ DEFAULT_PROFILE = DetectionProfile(
     ocr_det_version='1',
     ocr_det_input_size=640,
     ocr_det_prob_floor=0.30,
-    ocr_rec_model='paddleocr_rec',
+    ocr_rec_model='paddleocr_rec_trt',
     ocr_rec_version='1',
     ocr_pipeline_model='ocr_pipeline',
     # Crop classes routed straight to the secondary segmenter, skipping
@@ -76,6 +79,12 @@ DEFAULT_PROFILE = DetectionProfile(
     # motorcycle plates (near-square, off-axis mounting).
     secondary_shape_groups=frozenset({'sportbikes', 'cruisers', 'dirtbikes'}),
 )
+
+# Register as the default so GET /curation/methods' detection_profile axis
+# (src.services.curation.strategy_registry) and any future multi-profile
+# deployment have a real registry to read from — see
+# src.services.detection.profile_registry.
+register_profile(DEFAULT_PROFILE, default=True)
 
 # The lpr_nanov11_640-shaped TRT engine is exported with a fixed
 # [1, 3, N, N] input — Triton's dynamic batching layers multiple
@@ -259,35 +268,12 @@ def _letterbox(
 ) -> tuple[np.ndarray, float, tuple[float, float]]:
     """Letterbox a PIL image to ``target`` by ``target`` for the detector.
 
-    Returns:
-        Tuple ``(chw, scale, (pad_w, pad_h))``:
-
-        * ``chw``: ``(1, 3, target, target)`` FP32 array in ``[0, 1]``,
-          ready for ``InferInput.set_data_from_numpy``.
-        * ``scale``: Same scale applied to width and height (preserves
-          aspect ratio).
-        * ``(pad_w, pad_h)``: Pixel padding on the **left** and **top**
-          edges. The right / bottom padding is implied (canvas is
-          symmetric).
+    Thin wrapper over :func:`src.services.detection.geometry.letterbox_to_square`
+    (shared with the curation ingest service) kept here so call sites in
+    this module don't need to change; see that function for the return
+    shape contract.
     """
-    orig_w, orig_h = img.size
-    if orig_w == 0 or orig_h == 0:
-        msg = f'degenerate crop size: ({orig_w}, {orig_h})'
-        raise ValueError(msg)
-
-    scale = min(target / orig_h, target / orig_w)
-    new_w = max(1, round(orig_w * scale))
-    new_h = max(1, round(orig_h * scale))
-    resized = img.resize((new_w, new_h), Image.BILINEAR)
-
-    canvas = Image.new('RGB', (target, target), fill)
-    pad_w = (target - new_w) / 2.0
-    pad_h = (target - new_h) / 2.0
-    canvas.paste(resized, (int(pad_w), int(pad_h)))
-
-    arr = np.asarray(canvas, dtype=np.float32) / 255.0
-    chw = np.transpose(arr, (2, 0, 1))[None, ...]  # NCHW
-    return chw.astype(np.float32, copy=False), float(scale), (float(pad_w), float(pad_h))
+    return letterbox_to_square(img, target=target, fill=fill)
 
 
 # =============================================================================
@@ -363,12 +349,7 @@ def _decode_yolo_output(
     y2 = cy + h / 2.0
 
     # Undo letterbox: subtract pad, divide by scale → crop-pixel space.
-    pad_w, pad_h = pad
-    s = max(scale, 1e-6)
-    cx1 = (x1 - pad_w) / s
-    cy1 = (y1 - pad_h) / s
-    cx2 = (x2 - pad_w) / s
-    cy2 = (y2 - pad_h) / s
+    cx1, cy1, cx2, cy2 = undo_letterbox((x1, y1, x2, y2), scale, pad)
 
     # Normalize to crop frame, clamp, and enforce x2 > x1 / y2 > y1.
     nx1 = max(0.0, min(1.0, cx1 / max(crop_w, 1)))

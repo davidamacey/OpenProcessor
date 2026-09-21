@@ -45,8 +45,9 @@ def test_unmatched_path_uses_low_cardinality_fallback(client: TestClient) -> Non
 def test_curation_metric_namespace_is_exposed(client: TestClient) -> None:
     """src.main imports src.services.curation.metrics for its module-level
     side effects (Counter/Histogram registration) — see
-    docs/design/oss_genericization_phase2_plan.md Chunk 1. Confirms those
-    collectors actually reach the same /metrics endpoint as the generic
-    HTTP histogram, without a second scrape target."""
+    docs/design/curation_design_rationale.md for the genericization
+    background. Confirms those collectors actually reach the same
+    /metrics endpoint as the generic HTTP histogram, without a second
+    scrape target."""
     body = client.get('/metrics').text
     assert 'legacy_occ_retry_count' in body

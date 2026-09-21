@@ -13,7 +13,7 @@ The on-disk subdirectory name is derived from
 ``region_fp``) rather than hardcoded, so a deployment with an existing
 store under a different prefix (e.g. a proprietary-dataset overlay
 using ``plate_fp``) can point at it without a code change — see
-``docs/design/oss_genericization_phase2_plan.md`` §3.5.
+``docs/design/curation_design_rationale.md`` §4.
 """
 
 from __future__ import annotations

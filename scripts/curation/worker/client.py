@@ -19,6 +19,17 @@ Failure model:
   more times with 1s, 2s backoff before counting as a failure. Other
   HTTPError classes (5xx, PoolTimeout, ConnectError) count as one
   failure with no retry budget.
+
+The segmenter leg is optional (D5): passing an empty/``None``
+``base_url`` (e.g. ``SAM3_URL=''``) constructs a *disabled* client
+instead of raising. A disabled client's :meth:`Sam3Client.segment_plate`
+always returns ``None`` — the same "no candidate" result an unhealthy
+or empty-response segmenter already produces — without attempting any
+HTTP call, so callers that already treat ``None`` as "fall through to
+the next cascade step" degrade cleanly with zero code changes. A
+deployment with no segmentation service of its own simply leaves
+``SAM3_URL`` unset/empty and documents that behavior; see
+``docs/design/curation_design_rationale.md``.
 """
 
 from __future__ import annotations
@@ -100,16 +111,18 @@ class Sam3Client:
 
     def __init__(
         self,
-        base_url: str,
+        base_url: str | None,
         *,
         client: httpx.AsyncClient | None = None,
         timeout_s: float = 30.0,
         max_candidates: int = 4,
         text_prompt: str = 'license plate, registration plate, number plate',
     ) -> None:
-        urls = [u.strip().rstrip('/') for u in base_url.split(',') if u.strip()]
-        if not urls:
-            raise ValueError('Sam3Client base_url must be non-empty')
+        urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
+        # D5: no segmenter configured is a supported deployment shape, not
+        # an error. Disabled clients skip the HTTP leg entirely (see
+        # segment_plate) rather than raising at construction time.
+        self.enabled = bool(urls)
         self.base_urls = urls
         self._rr_lock = asyncio.Lock()
         self._rr_idx = 0
@@ -130,13 +143,22 @@ class Sam3Client:
         # Indirected for monkeypatching in tests; defaults to time.monotonic.
         self._now = time.monotonic
 
+        if not self.enabled:
+            logger.info(
+                'sam3_disabled',
+                reason='no segmenter_url configured; segmenter leg skipped',
+            )
+
         if len(urls) > 1:
             logger.info('sam3_multi_url', urls=urls, count=len(urls))
 
     @property
     def base_url(self) -> str:
-        """Back-compat: return the first URL when callers expect a single one."""
-        return self.base_urls[0]
+        """Back-compat: return the first URL when callers expect a single one.
+
+        Empty string when disabled (no segmenter configured).
+        """
+        return self.base_urls[0] if self.base_urls else ''
 
     async def _next_url(self) -> str:
         """Round-robin pick the next SAM3 URL (legacy; no health check)."""
@@ -324,8 +346,12 @@ class Sam3Client:
 
         Raises :class:`Sam3AllHostsDown` if every host is UNHEALTHY.
         Returns ``None`` on a single-host failure (recorded against
-        the circuit breaker) or when SAM3 returned no candidate.
+        the circuit breaker), when SAM3 returned no candidate, or
+        (D5) when this client is disabled — no segmenter configured.
+        The disabled case never attempts an HTTP call.
         """
+        if not self.enabled:
+            return None
         # t0 = entry to segment_plate (before any client-side work).
         # See module docstring + metrics.py for the wait/inflight/response
         # decomposition rationale.

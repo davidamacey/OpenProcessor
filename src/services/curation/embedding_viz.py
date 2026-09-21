@@ -90,9 +90,11 @@ logger = get_logger(__name__)
 
 ITEMS_INDEX = get_curation_config().items_index
 
-# Own OpenSearch index for run metadata -- deliberately NOT op_umap_state
-# (that belongs to the retired clustering reducer, embedding_reduce.py).
-UMAP_VIZ_STATE_INDEX = 'op_umap_viz_state'
+# Own OpenSearch index for run metadata -- deliberately NOT the retired
+# clustering reducer's index (embedding_reduce.py). Routed through
+# CurationConfig like every other index name so a deployment renaming
+# its indexes via env vars doesn't leave this one behind.
+UMAP_VIZ_STATE_INDEX = get_curation_config().umap_viz_state_index
 
 # State dir shared with the rest of the curation worker fleet (same
 # CurationConfig.state_dir embedding_reduce.py reads), but a distinct
@@ -231,6 +233,24 @@ def _is_busy() -> bool:
         return False
     age = _heartbeat_age()
     return age is None or age <= _HEARTBEAT_STALE_S
+
+
+def reconcile_orphaned_jobs() -> bool:
+    """Startup-only repair: see :mod:`src.services.curation.job_reconcile`.
+
+    Called from ``src.main``'s lifespan before any request is served —
+    nothing in this process can legitimately hold ``status='running'``
+    yet, so a leftover 'running' state.json is necessarily orphaned by a
+    prior process. Returns True if the file was rewritten.
+    """
+    from src.services.curation.job_reconcile import reconcile_stale_running
+
+    return reconcile_stale_running(
+        _state_file(),
+        _heartbeat_file(),
+        stale_s=_HEARTBEAT_STALE_S,
+        error_prefix='viz projection job',
+    )
 
 
 def get_state() -> dict[str, Any]:
@@ -669,6 +689,7 @@ __all__ = [
     'get_cached_projection',
     'get_state',
     'is_cancelled',
+    'reconcile_orphaned_jobs',
     'run_projection_job',
     'start_job',
 ]

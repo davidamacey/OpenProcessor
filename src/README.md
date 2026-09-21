@@ -432,11 +432,8 @@ docker compose down
 # Requires Triton and OpenSearch running
 docker compose up -d triton-server opensearch
 
-# Activate virtual environment
-source .venv/bin/activate
-
-# Run service with hot reload
-uvicorn src.main:app \
+# Run service with hot reload (call the venv binary directly, never `source .venv/bin/activate`)
+.venv/bin/uvicorn src.main:app \
   --host 0.0.0.0 \
   --port 4603 \
   --workers 2 \
@@ -470,7 +467,6 @@ uvicorn src.main:app \
 
 - [../README.md](../README.md) - Project overview and API reference
 - [../CLAUDE.md](../CLAUDE.md) - Development instructions for AI assistants
-- [../PROJECT_STATUS.md](../PROJECT_STATUS.md) - Current status and test results
 - [utils/README.md](utils/README.md) - Utilities documentation
 - [../docs/README.md](../docs/README.md) - Technical documentation index
 

@@ -8,9 +8,8 @@ hardcoded to the license-plate constants, this profile's tighter aspect
 band would have no effect and this test would fail to demonstrate a
 behavioral difference.
 
-Per ``docs/design/oss_genericization_phase2_plan.md`` §5 Chunk 8, this
-is "the only real proof the genericization happened rather than a
-rename."
+Per ``docs/design/curation_design_rationale.md`` §2.3, this is the real
+proof the genericization happened rather than a rename.
 """
 
 from __future__ import annotations

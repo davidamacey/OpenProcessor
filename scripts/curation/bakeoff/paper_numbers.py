@@ -9,14 +9,15 @@ Reads a completed bake-off matrix run (``matrix.json`` -- the aggregated
 * a printed report of the regenerated headline + cross-dataset table rows (with
   per-column bolding), ready to verify or paste into the paper.
 
-Honors the rule in ``docs/paper/lpr_bakeoff.tex`` (never hand-type a metric; pull
-it from the harness output). Run after every bake-off rerun::
+Honors the rule that any accompanying writeup never hand-types a metric --
+pull it from the harness output. Run after every bake-off rerun::
 
     .venv/bin/python scripts/curation/bakeoff/paper_numbers.py \\
-        --bakeoff-root /data/curation_train_data/bakeoff \\
-        --out docs/paper/numbers.tex
+        --bakeoff-root ./data/bakeoff/out \\
+        --out numbers.tex
 
-Stdlib only -- safe to run anywhere.
+Not stdlib-only anymore (imports src.config for the default --bakeoff-root),
+but requires no GPU / network.
 """
 
 from __future__ import annotations
@@ -27,11 +28,13 @@ import json
 import logging
 from pathlib import Path
 
+from src.config import get_curation_config
+
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger('paper_numbers')
 
-DEFAULT_BAKEOFF_ROOT = Path('/data/curation_train_data/bakeoff')
+DEFAULT_BAKEOFF_ROOT = get_curation_config().state_dir / 'bakeoff_out'
 
 # Public benchmark dataset dir-names; anything else in a matrix run is "curated".
 PUBLIC_DATASETS = ('andrewmvd_car_plate', 'openalpr_us', 'roboflow_alpr')

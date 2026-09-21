@@ -15,8 +15,8 @@ Endpoints:
     GET  /bakeoff/results/{id}   ranked comparison rows for the UI
 
 Ported from a private reference vehicle/license-plate curation stack's
-bake-off router (see ``docs/design/oss_genericization_phase2_plan.md``
-Chunk 6). The bake-off harness itself lives at
+bake-off router (see ``docs/design/curation_design_rationale.md`` for
+the genericization rationale). The bake-off harness itself lives at
 ``scripts/curation/bakeoff/`` (not under ``src/`` — see that package's
 module docstring for why).
 """
@@ -33,7 +33,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from src.config import get_gpu_arbiter_config
+from src.config import get_curation_config, get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.routers.curation._common import router
 
@@ -43,34 +43,47 @@ logger = get_logger(__name__)
 
 # Both yolo-api and the bake-off evaluator container mount the training-data
 # root at the same absolute path, so these are shared between the two
-# containers. `LEGACY_BAKEOFF_*` env var names are unchanged from the reference
-# implementation (established precedent elsewhere in this port — only the
-# hardcoded default *values* are genericized).
-#
+# containers. `OP_BAKEOFF_*` env var names match the reference
+# implementation's naming convention (post-rename, see the env-var-prefix
+# unification commit). The *default* values (when the env var is unset) used
+# to be owner-private absolute paths -- one of which named the location of a
+# licensed proprietary image corpus and must never appear in this repo as a
+# literal string (CFG-6). They are now derived from CurationConfig instead.
+_curation_config = get_curation_config()
+
 # JOBS_DIR defaults to GpuArbiterConfig.bakeoff_jobs_dir when configured, so
 # gpu_arbiter.bakeoff_active() (the reconcile loop's "is a bake-off queued or
 # running" check) watches the SAME directory this router writes job.json
-# into, without requiring the operator to set the LEGACY_BAKEOFF_JOBS_DIR env var
-# and the GpuArbiterConfig field to the same value independently.
+# into, without requiring the operator to set the OP_BAKEOFF_JOBS_DIR env var
+# and the GpuArbiterConfig field to the same value independently. Falls back
+# to a state_dir-relative path (same precedent as OP_TRAIN_STAGING below)
+# when neither is set.
 _configured_jobs_dir = get_gpu_arbiter_config().bakeoff_jobs_dir
 JOBS_DIR = Path(
     os.environ.get(
-        'LEGACY_BAKEOFF_JOBS_DIR',
-        _configured_jobs_dir or '/data/curation_train_data/bakeoff_jobs',
+        'OP_BAKEOFF_JOBS_DIR',
+        _configured_jobs_dir or str(_curation_config.state_dir / 'bakeoff_jobs'),
     )
 )
-OUT_DIR = Path(os.environ.get('LEGACY_BAKEOFF_OUT_DIR', '/data/curation_train_data/bakeoff'))
+OUT_DIR = Path(
+    os.environ.get('OP_BAKEOFF_OUT_DIR', str(_curation_config.state_dir / 'bakeoff_out'))
+)
 # Training runs land here. The trainer records checkpoint_path as a /runs/...
 # container path; the evaluator container mounts the same dir at /runs (ro),
 # so a bake-off can load best.pt by that exact path. yolo-api sees the same
 # files under this host root for existence checks.
-RUNS_HOST_ROOT = Path(os.environ.get('LEGACY_TRAIN_RUNS_ROOT', '/data/curation_train_data/runs'))
+RUNS_HOST_ROOT = Path(
+    os.environ.get('OP_TRAIN_RUNS_ROOT', str(_curation_config.state_dir / 'training_runs'))
+)
 # Roots scanned for frozen evaluation datasets (any dir with TEST_FROZEN.json).
 # Adding a dataset = freeze a dir under one of these; no code change needed.
+# Rooted under CurationConfig.bakeoff_eval_root (env OP_BAKEOFF_EVAL_ROOT) --
+# an operator with an existing frozen-dataset tree overrides that one var
+# rather than three independent absolute-path defaults.
 EVAL_DATASET_ROOTS: list[tuple[str, Path]] = [
-    ('curated', Path('/data/curation_train_data/lpr_exports')),
-    ('public', Path('/data/datasets/plates')),
-    ('sample', Path('/data/datasets/plates/samples')),
+    ('curated', _curation_config.bakeoff_eval_root / 'curated'),
+    ('public', _curation_config.bakeoff_eval_root / 'public'),
+    ('sample', _curation_config.bakeoff_eval_root / 'sample'),
 ]
 # Baseline-model registry (public/commercial detectors). Add a model = one entry
 # in this JSON; no code change. Lives next to the harness so the evaluator and

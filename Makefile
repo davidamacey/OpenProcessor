@@ -10,6 +10,7 @@ SHELL := /bin/bash
 
 # Variables
 COMPOSE := docker compose
+V := .venv/bin
 API_SERVICE := yolo-api
 TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
@@ -212,30 +213,9 @@ test-api-health: ## Test API health
 	@echo "Testing API health (port $(API_PORT))..."
 	@curl -sf http://localhost:$(API_PORT)/health && echo " OK" || echo " FAILED"
 
-.PHONY: test-inference
-test-inference: ## Test inference on all tracks (shell script)
-	@echo "Testing inference on all tracks..."
-	@bash tests/test_inference.sh
-
-.PHONY: test-integration
-test-integration: ## Run integration tests
-	@echo "Running integration tests..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/scripts/test_integration.py
-
-.PHONY: test-patch
-test-patch: ## Verify End2End TRT NMS patch is applied
-	@echo "Verifying End2End TensorRT NMS patch..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_end2end_patch.py
-
-.PHONY: test-onnx
-test-onnx: ## Test ONNX End2End model locally (bypasses Triton)
-	@echo "Testing ONNX End2End model locally..."
-	$(COMPOSE) exec $(API_SERVICE) python /app/tests/test_onnx_end2end.py
-
-.PHONY: test-shared-client
-test-shared-client: ## Test shared vs per-request client performance
-	@echo "Testing shared vs per-request client..."
-	@bash tests/test_shared_vs_per_request.sh
+.PHONY: test
+test: ## Run the pytest suite
+	$(V)/python -m pytest tests/ -q
 
 # ==================================================================================
 # Benchmarking
@@ -1011,13 +991,52 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
 	@bash $(SCRIPTS_DIR)/clone_reference_repos.sh --repo $(REPO)
 
 # ==================================================================================
+# Curation subsystem — EXPERIMENTAL, opt-in compose profile (D7)
+# ==================================================================================
+# The curation worker services (curation-detection-worker, curation-vlm-worker,
+# curation-auto-label-worker, curation-cluster-refresh) all carry
+# `profiles: [curation]` in docker-compose.yml, so `make up`/`make down`
+# never touch them. Use the targets below instead.
+
+.PHONY: curation-up
+curation-up: ## Start the curation worker services (experimental, opt-in)
+	@echo "Starting curation subsystem (profile: curation)..."
+	$(COMPOSE) --profile curation up -d
+	@echo ""
+	@echo "Curation services starting. Check status with: make curation-status"
+
+.PHONY: curation-down
+curation-down: ## Stop the curation worker services
+	@echo "Stopping curation subsystem (profile: curation)..."
+	$(COMPOSE) --profile curation down
+
+.PHONY: curation-logs
+curation-logs: ## Follow logs from the curation worker services
+	$(COMPOSE) --profile curation logs -f \
+		curation-detection-worker curation-vlm-worker \
+		curation-auto-label-worker curation-cluster-refresh
+
+.PHONY: curation-status
+curation-status: ## Show running curation worker containers
+	$(COMPOSE) --profile curation ps \
+		curation-detection-worker curation-vlm-worker \
+		curation-auto-label-worker curation-cluster-refresh curation-evaluator
+
+.PHONY: curation-seed
+curation-seed: ## Seed a demo curation dataset (not yet implemented — Wave 6 scope)
+	@echo "curation-seed: not yet implemented."
+	@echo "scripts/curation/seed_live_harness.py does not exist on this branch yet"
+	@echo "(see docs/design/oss_main_completion_plan.md, Wave 6 — live write-path"
+	@echo "verification harness). Nothing was run."
+
+# ==================================================================================
 # Phony targets (targets that don't create files)
 # ==================================================================================
 
 .PHONY: help up down restart restart-triton restart-api build rebuild \
         logs logs-triton logs-api logs-opensearch status health ps \
         test-detect test-faces test-verify test-embed test-embed-text test-embed-boxes test-ocr test-analyze test-analyze-full test-search test-ingest test-all \
-        test-api-health test-inference test-integration test-patch test-onnx test-shared-client \
+        test-api-health test \
         bench-quick bench-detect bench-faces bench-embed bench-ingest bench-search bench-results bench-python \
         models-list models-status models-reload \
         shell-api shell-triton shell-opensearch profile-api resize-images test-create-images \
@@ -1036,4 +1055,5 @@ clone-ref: ## Clone a specific reference repo (usage: make clone-ref REPO=ultral
         clean clean-all clean-logs clean-bench clean-exports \
         opensearch-reset opensearch-status opensearch-indices opensearch-reset-indexes \
         info docs \
-        clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref
+        clone-refs-essential clone-refs-recommended clone-refs-all clone-refs-list clone-ref \
+        curation-up curation-down curation-logs curation-status curation-seed

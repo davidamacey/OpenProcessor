@@ -23,7 +23,15 @@ construction.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
+from typing import Any
+
+from src.core.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -80,6 +88,41 @@ class PromptPack:
     # registry slug (see ``resolve_class_name``). Only used to *rescue*
     # predictions that don't already match a class name verbatim.
     synonyms: dict[str, str] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Plain-dict serialization -- every field is a ``str`` or a
+        ``dict[str, str]``, so this round-trips through JSON cleanly."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PromptPack:
+        """Build a :class:`PromptPack` from a plain dict (the inverse of
+        :meth:`to_dict`). Unknown keys are ignored so a pack file can carry
+        a ``_comment`` field (the convention this repo's other example
+        config files use) without tripping ``TypeError``; missing keys
+        raise ``TypeError`` the same way the dataclass constructor would,
+        since every field here is required domain content, not something
+        a deployment-supplied pack should be allowed to silently omit.
+        """
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+    def to_json(self, path: str | Path) -> None:
+        """Write this pack to ``path`` as pretty-printed JSON."""
+        Path(path).write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True) + '\n')
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> PromptPack:
+        """Load a :class:`PromptPack` from a JSON file at ``path``.
+
+        Raises the same way ``Path.read_text`` / ``json.loads`` /
+        :meth:`from_dict` would on a missing file, malformed JSON, or a
+        pack missing a required field -- callers that want a fallback
+        (e.g. :func:`resolve_prompt_pack`) are expected to catch and log,
+        not this classmethod itself.
+        """
+        data = json.loads(Path(path).read_text())
+        return cls.from_dict(data)
 
 
 # ---------------------------------------------------------------------------
@@ -214,4 +257,45 @@ GENERIC_ITEM_PACK = PromptPack(
 )
 
 
-__all__ = ['GENERIC_ITEM_PACK', 'PromptPack']
+def resolve_prompt_pack(cfg: Any | None = None) -> PromptPack:
+    """Resolve the :class:`PromptPack` this process should use.
+
+    Mirrors the ``CurationConfig``-driven resolution
+    ``get_curation_config()`` establishes for index names / paths (see
+    ``docs/design/curation_design_rationale.md`` §2.1): a deployment
+    points ``OP_PROMPT_PACK_PATH`` at its own JSON pack (pallets, food
+    items, ...) instead of forking any code. Never raises -- a missing
+    path, a missing file, or a malformed/incomplete pack all fall back to
+    :data:`GENERIC_ITEM_PACK` with a logged warning, so a bad deployment
+    config degrades the labeling vocabulary rather than crashing the
+    process.
+
+    Args:
+        cfg: A :class:`~src.config.curation.CurationConfig` instance, or
+            ``None`` to use the process-wide default
+            (``get_curation_config()``).
+    """
+    if cfg is None:
+        from src.config.curation import get_curation_config
+
+        cfg = get_curation_config()
+
+    path = getattr(cfg, 'prompt_pack_path', None)
+    if path is None:
+        return GENERIC_ITEM_PACK
+
+    from pathlib import Path as _Path
+
+    path = _Path(path)
+    if not path.exists():
+        logger.warning('prompt_pack_path_missing', path=str(path))
+        return GENERIC_ITEM_PACK
+
+    try:
+        return PromptPack.from_json(path)
+    except Exception as exc:
+        logger.warning('prompt_pack_load_failed', path=str(path), error=str(exc))
+        return GENERIC_ITEM_PACK
+
+
+__all__ = ['GENERIC_ITEM_PACK', 'PromptPack', 'resolve_prompt_pack']

@@ -111,12 +111,7 @@ async def test_cluster_residuals_runs_ahc(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """cluster_residuals runs AHC complete+cosine+threshold end-to-end."""
-    from src.services.curation.clustering.orchestrator import (
-        AHC_DISTANCE_THRESHOLD,
-        AHC_LINKAGE,
-        AHC_METRIC,
-        cluster_residuals,
-    )
+    from src.services.curation.clustering.orchestrator import cluster_residuals
 
     _patch_umap_passthrough(monkeypatch)
     client = _make_os_client_with(synthetic_embeddings['embeddings'])
@@ -126,11 +121,13 @@ async def test_cluster_residuals_runs_ahc(
     res = await cluster_residuals(client, clustering_method='ahc')
     assert res['method'] == 'ahc'
     # Method-specific knobs now live under cluster_method_params (the result
-    # envelope was unified across ClusterMethods).
+    # envelope was unified across ClusterMethods). Literal expected values
+    # (not re-imported from the module under test) — a change to any of
+    # these would be a behavior change the labeler dashboard depends on.
     params = res['cluster_method_params']
-    assert params['linkage'] == AHC_LINKAGE
-    assert params['metric'] == AHC_METRIC
-    assert params['distance_threshold'] == AHC_DISTANCE_THRESHOLD
+    assert params['linkage'] == 'complete'
+    assert params['metric'] == 'cosine'
+    assert params['distance_threshold'] == pytest.approx(0.25)
     assert res['status'] == 'success'
     assert res['n_residuals'] == 50
     assert res['n_clusters'] >= 2

@@ -1,8 +1,9 @@
 """Pins for ``GpuArbiterConfig`` (Chunk 6).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` Chunk 6 — a
-generic install with no configured containers/GPU ids must degrade to a
-no-op, not crash.
+See ``docs/design/curation_design_rationale.md`` for the
+config-driven-genericity design principle this follows — a generic
+install with no configured containers/GPU ids must degrade to a no-op,
+not crash.
 """
 
 from __future__ import annotations

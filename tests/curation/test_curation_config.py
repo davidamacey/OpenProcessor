@@ -1,6 +1,6 @@
 """Pins for ``CurationConfig`` / ``IndexRole`` / ``index_name`` (Chunk 0).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` §3.1.
+See ``docs/design/curation_design_rationale.md`` §2.1.
 """
 
 from __future__ import annotations
@@ -32,6 +32,16 @@ def test_defaults_use_path_types() -> None:
     assert isinstance(cfg.source_root, Path)
     assert isinstance(cfg.state_dir, Path)
     assert isinstance(cfg.crop_cache_dir, Path)
+    assert isinstance(cfg.bakeoff_eval_root, Path)
+
+
+def test_bakeoff_eval_root_default_is_relative_not_a_private_path() -> None:
+    """CFG-6: the bake-off harness used to default to owner-private
+    absolute paths (one of which named a licensed proprietary image
+    corpus). The default must be a repo-relative path, never an
+    absolute filesystem path baked into the source."""
+    cfg = CurationConfig()
+    assert not cfg.bakeoff_eval_root.is_absolute()
 
 
 def test_is_frozen() -> None:
@@ -71,3 +81,29 @@ def test_from_env_respects_custom_prefix(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv('MYAPP_CLASSES_INDEX', 'app_classes')
     cfg = CurationConfig.from_env(prefix='MYAPP_')
     assert cfg.classes_index == 'app_classes'
+
+
+def test_from_env_overrides_bakeoff_eval_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_BAKEOFF_EVAL_ROOT', '/tmp/my_bakeoff_eval')
+    cfg = CurationConfig.from_env()
+    assert cfg.bakeoff_eval_root == Path('/tmp/my_bakeoff_eval')
+
+
+def test_prompt_pack_path_defaults_to_none() -> None:
+    """Unlike the other path fields, there is no generic on-disk default --
+    most deployments never need a custom PromptPack (labeling-assist plan
+    task a)."""
+    cfg = CurationConfig()
+    assert cfg.prompt_pack_path is None
+
+
+def test_from_env_overrides_prompt_pack_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_PROMPT_PACK_PATH', '/tmp/my_pack.json')
+    cfg = CurationConfig.from_env()
+    assert cfg.prompt_pack_path == Path('/tmp/my_pack.json')
+
+
+def test_from_env_prompt_pack_path_unset_stays_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_PROMPT_PACK_PATH', raising=False)
+    cfg = CurationConfig.from_env()
+    assert cfg.prompt_pack_path is None

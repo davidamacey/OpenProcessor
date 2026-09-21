@@ -10,12 +10,11 @@ deterministically instead of racing a real ``asyncio.create_task``
 against synchronous ``TestClient`` calls.
 
 The three ``GET /curation/crops?order=diverse`` full-router-integration
-tests below (``test_get_crops_order_diverse_*``) are skipped on this
-branch: ``src/routers/curation/crops.py`` (the ``GET /crops`` endpoint
-``compute_diverse_order`` plugs into) has not been ported yet — it lands
-in a later wave (plan §5 Chunk 9). The ``compute_diverse_order`` helper
-itself is fully covered above by the unit-level tests that call it
-directly without a router.
+tests below (``test_get_crops_order_diverse_*``) exercise
+``src/routers/curation/crops.py``'s ``GET /crops`` endpoint, which
+``compute_diverse_order`` plugs into. The ``compute_diverse_order``
+helper itself is fully covered above by the unit-level tests that call
+it directly without a router.
 """
 
 from __future__ import annotations
@@ -130,7 +129,7 @@ async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
 ) -> None:
     from src.routers.curation.select import compute_diverse_order
 
-    monkeypatch.delenv('LEGACY_SELECT_DIVERSE_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
     result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
     assert result is None
@@ -143,7 +142,7 @@ async def test_compute_diverse_order_returns_full_ranking_when_enabled_and_small
 ) -> None:
     from src.routers.curation.select import compute_diverse_order
 
-    monkeypatch.setenv('LEGACY_SELECT_DIVERSE_ENABLED', '1')
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
     fake_os = _fake_scroll_client(pool)
     result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
@@ -162,10 +161,10 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
     ranking case."""
     from src.routers.curation.select import compute_diverse_order
 
-    monkeypatch.setenv('LEGACY_SELECT_DIVERSE_ENABLED', '1')
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     # sync_max_ops=4 -> isqrt(4) == 2 -> inline cap is 2 rows; our pool of
     # 5 trips truncation immediately on the first (only) scroll page.
-    monkeypatch.setenv('LEGACY_SELECT_SYNC_MAX_OPS', '4')
+    monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '4')
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
     result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
     assert result is None
@@ -177,14 +176,14 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 ) -> None:
     from src.routers.curation.select import compute_diverse_order
 
-    monkeypatch.setenv('LEGACY_SELECT_DIVERSE_ENABLED', '1')
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     fake_os = _fake_scroll_client([])
     result = await compute_diverse_order(fake_os, 'legacy_vehicle_crops', {'match_all': {}})
     assert result == []
 
 
 # =============================================================================
-# GET /curation/crops?order=diverse — full router integration (skipped -- crops.py not ported yet)
+# GET /curation/crops?order=diverse — full router integration
 # =============================================================================
 
 
@@ -229,18 +228,16 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return client
 
 
-@pytest.mark.skip(reason='GET /crops (src/routers/curation/crops.py) not ported yet -- Chunk 9')
 def test_get_crops_order_diverse_flag_off_behaves_like_default(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv('LEGACY_SELECT_DIVERSE_ENABLED', raising=False)
-    r_default = crops_app_client.get('/legacy/crops', params={'order': 'default'})
-    r_diverse = crops_app_client.get('/legacy/crops', params={'order': 'diverse'})
+    monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
+    r_default = crops_app_client.get('/curation/crops', params={'order': 'default'})
+    r_diverse = crops_app_client.get('/curation/crops', params={'order': 'diverse'})
     assert r_default.status_code == r_diverse.status_code == 200
     assert r_default.json() == r_diverse.json()
 
 
-@pytest.mark.skip(reason='GET /crops (src/routers/curation/crops.py) not ported yet -- Chunk 9')
 def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -248,14 +245,13 @@ def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
         'src.routers.curation.select.compute_diverse_order',
         AsyncMock(return_value=['crop-b', 'crop-a']),
     )
-    r = crops_app_client.get('/legacy/crops', params={'order': 'diverse', 'page_size': 50})
+    r = crops_app_client.get('/curation/crops', params={'order': 'diverse', 'page_size': 50})
     assert r.status_code == 200
     body = r.json()
     assert body['total'] == 2
     assert [c['crop_id'] for c in body['crops']] == ['crop-b', 'crop-a']
 
 
-@pytest.mark.skip(reason='GET /crops (src/routers/curation/crops.py) not ported yet -- Chunk 9')
 def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
     crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -263,8 +259,8 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
         'src.routers.curation.select.compute_diverse_order',
         AsyncMock(return_value=None),
     )
-    r_default = crops_app_client.get('/legacy/crops', params={'order': 'default'})
-    r_diverse = crops_app_client.get('/legacy/crops', params={'order': 'diverse'})
+    r_default = crops_app_client.get('/curation/crops', params={'order': 'default'})
+    r_diverse = crops_app_client.get('/curation/crops', params={'order': 'diverse'})
     assert r_diverse.json() == r_default.json()
 
 
@@ -277,8 +273,8 @@ def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
 def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as legacy_router
 
-    monkeypatch.setenv('LEGACY_SELECT_JOBS_DIR', str(tmp_path / 'select'))
-    monkeypatch.setenv('LEGACY_SELECT_DIVERSE_ENABLED', '1')
+    monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
 
     fake_os = AsyncMock()
@@ -293,7 +289,7 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 def test_select_diverse_disabled_400(
     select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv('LEGACY_SELECT_DIVERSE_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     r = select_app_client.post('/curation/select/diverse', json={'k': 5})
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']
@@ -335,13 +331,13 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
 def test_select_diverse_job_path_for_large_pool(
     select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Force the job path via a tiny LEGACY_SELECT_SYNC_MAX_OPS, then drive
+    """Force the job path via a tiny OP_SELECT_SYNC_MAX_OPS, then drive
     the lifecycle exactly like test_scores_router.py does: monkeypatch
     the background coroutine to hang on a controlled asyncio.Event so the
     'running' state is observable deterministically."""
     from src.services.curation.selection import job as select_job
 
-    monkeypatch.setenv('LEGACY_SELECT_SYNC_MAX_OPS', '1')
+    monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '1')
     select_app_client.fake_os.count = AsyncMock(return_value={'count': 50_000})
 
     hang_forever = asyncio.Event()

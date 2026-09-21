@@ -4,7 +4,8 @@ Aggregates endpoints split across many sub-modules onto a single
 `router` object owned by `_common`. The submodule imports below are
 side-effect imports — each registers `@router.<verb>(...)` handlers.
 This list grows one entry per router as later chunks port them (see
-docs/design/oss_genericization_phase2_plan.md §2.4 step 3).
+docs/design/curation_design_rationale.md for the genericization
+approach these chunks follow).
 
 Re-exports only the symbols ported tests actually patch by string
 (`src.routers.curation.<symbol>`) — unlike the reference package's
@@ -34,6 +35,7 @@ import src.routers.curation.review
 import src.routers.curation.scores
 import src.routers.curation.search
 import src.routers.curation.select
+import src.routers.curation.settings
 import src.routers.curation.stats
 import src.routers.curation.viz
 import src.routers.curation.vlm  # noqa: F401 - side-effect import
@@ -69,8 +71,11 @@ from src.clients.curation_opensearch import get_class_registry
 # `__init__`); `models` imports `_get_vlm_labeler` from `vlm` directly;
 # `pipeline_events` lazily imports `stats.stats_dataset` and
 # `autolabel.job` inside its generator function body (not at module
-# load time) to avoid a load-order dependency. This package now
-# aggregates all 21 curation routers (plan §5 Chunk 9's final count).
+# load time) to avoid a load-order dependency. This package aggregated
+# all 21 curation routers as of plan §5 Chunk 9's final count; the
+# curation deployment-settings plan adds a 22nd, `settings`
+# (`GET,PUT /curation/settings`), registering on this same shared
+# `router`.
 from src.routers.curation._common import _ensure_indexes, _raw_opensearch_dep, router
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.routers.curation_images import crops_router as images_crops_router, router as images_router
