@@ -368,19 +368,14 @@ def test_viz_projection_rebuild_then_serve(kb: Any, opensearch: Any) -> None:
     assert {'crop_id', 'x', 'y'} <= set(first), first
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'APP GAP (found by this harness): the UMAP run-metadata index name is '
-        "hardcoded as 'op_umap_viz_state' in src/services/curation/"
-        'embedding_viz.py (and "op_umap_state" in clustering/embedding_reduce.py) '
-        'rather than resolved through CurationConfig, so no OP_*_INDEX setting '
-        'can move it. A deployment that renames every configured index still '
-        'gets these two under the hardcoded names. Routing them through '
-        'CurationConfig is application work, outside this wave.'
-    ),
-)
 def test_viz_state_index_honours_the_configured_index_prefix(opensearch: Any) -> None:
+    """The UMAP run-metadata index names (viz-only and the retired
+    clustering reducer's) are resolved through
+    ``CurationConfig.umap_viz_state_index`` / ``umap_state_index``,
+    each overridable via its own ``OP_*_INDEX`` env var — the harness sets
+    both to ``verify_``-prefixed names, so no unscoped ``op_*`` index
+    should ever appear.
+    """
     names = [i['index'] for i in opensearch.get('/_cat/indices?format=json').json()]
     unscoped = [n for n in names if n.startswith('op_') and not n.startswith('verify_')]
     assert unscoped == [], unscoped

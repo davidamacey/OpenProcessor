@@ -147,16 +147,8 @@ _INTERNAL_INDEX_PREFIXES = (
 )
 
 
-# APP GAP (found by this harness): two UMAP state indexes are hardcoded in
-# application code instead of being resolved through CurationConfig, so no
-# OP_*_INDEX setting can move them and they appear here unprefixed. The
-# harness tolerates them by name (they hold a single run-metadata document)
-# and tests/live/test_live_clusters.py carries an xfail documenting the gap.
-UNSCOPED_APP_INDEXES = frozenset({'op_umap_viz_state', 'op_umap_state'})
-
-
 def _is_internal_index(name: str) -> bool:
-    return name.startswith(_INTERNAL_INDEX_PREFIXES) or name in UNSCOPED_APP_INDEXES
+    return name.startswith(_INTERNAL_INDEX_PREFIXES)
 
 
 @pytest.fixture(scope='session', autouse=True)
