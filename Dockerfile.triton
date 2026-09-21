@@ -9,7 +9,7 @@
 # re-exporting every engine — see docs/MIGRATION_TRITON_26.md.
 # =============================================================================
 
-FROM nvcr.io/nvidia/tritonserver:26.06-py3
+FROM nvcr.io/nvidia/tritonserver:26.08-py3
 
 LABEL org.opencontainers.image.title="OpenProcessor Inference Server" \
       org.opencontainers.image.description="NVIDIA Triton Inference Server with TensorRT models for visual AI" \
