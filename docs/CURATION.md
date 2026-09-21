@@ -109,6 +109,23 @@ trainer. A deployment supplies:
   auto-registration yet. A deployment that wants its own profile
   advertised alongside (or instead of) `license_plate` needs a small
   amount of startup code calling `register_profile()`.
+- **A dual-head detector, if you want the backbone embedding**
+  (`v6_embedding`). Residual clustering, the embedding visualization,
+  item scores and the OCC conflict handler all read that field, and it
+  is produced by RoI-pooling a detector's backbone feature map over each
+  detection box (`src.services.detection.geometry.roi_pool_sppf`,
+  pooled to `CurationConfig.backbone_embedding_dim`). A stock detector
+  export emits only the detection tensor, so the detector must be
+  re-exported with a second output — use
+  [`export/export_detector_dual_head.py`](../export/export_detector_dual_head.py)
+  (`output0` + `sppf_feat`; see [`export/README.md`](../export/README.md)).
+  Optional: by default residual clustering reduces `pe_embedding`
+  instead (`OP_RESIDUAL_EMBEDDING_FIELD`), so a deployment that never
+  populates `v6_embedding` still clusters — it just has one fewer
+  embedding space to compare against. **Ingest does not yet write the
+  field**: `WholeImageDetector` requests only `output0` from the
+  secondary detector, so wiring `sppf_feat` into the ingest write path
+  is still required to fill it.
 - **An OCR/recognition model, if your region type has readable text**
   (`DetectionProfile.ocr_rec_model`) — optional, only used by the
   text-hint heuristics.

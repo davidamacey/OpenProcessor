@@ -11,6 +11,8 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 | Script | Purpose | Output |
 |--------|---------|--------|
 | `export_models.py` | YOLO11 object detection with end2end NMS | TensorRT engine |
+| `export_detector_dual_head.py` | Any YOLO-family detector, re-exported with a backbone feature-map output | ONNX + TensorRT engine |
+| `export_detector_dual_head.sh` | `trtexec` engine build + model-repo install for the above | TensorRT engine |
 | `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
 | `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
@@ -73,6 +75,62 @@ docker compose exec yolo-api python /app/export/export_models.py \
     --normalize-boxes
 ```
 
+### Dual-Head Detector (detections + backbone embedding source)
+
+The curation subsystem stores a per-item **backbone embedding**
+(`v6_embedding`, dimension `CurationConfig.backbone_embedding_dim`) and
+consumes it in residual clustering, the embedding visualization, item
+scores and the OCC conflict handler. It is produced by RoI-pooling a
+detector's backbone feature map over each detection box
+(`src.services.detection.geometry.roi_pool_sppf`) — which requires the
+feature map to be on the wire. A stock detector export emits only the
+detection tensor, so the detector has to be re-exported with a second
+output:
+
+| Output | Shape | Meaning |
+|--------|-------|---------|
+| `output0` | family-specific (YOLOv5 `[B, N, 5 + nc]`, Ultralytics v8+ `[B, 4 + nc, N]`) | Detection tensor, unchanged from a single-head export |
+| `sppf_feat` | `[B, C, H, W]` where `H = W = imgsz / 32` | Backbone bottleneck (SPPF) feature map |
+
+```bash
+# ONNX only (CPU-friendly; validates via onnxruntime round-trip)
+docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
+    --weights /app/pytorch_models/my_detector.pt \
+    --triton-name my_detector_dual_head --imgsz 640
+
+# ONNX + TensorRT engine + config.pbtxt + labels.txt into the model repo
+docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
+    --weights /app/pytorch_models/my_detector.pt \
+    --triton-name my_detector_dual_head \
+    --imgsz 1280 --max-batch 16 --formats onnx trt
+
+# Legacy YOLOv5-fork checkpoint (fork path defaults to $DETECTION_YOLOV5_FORK)
+docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
+    --weights /app/pytorch_models/legacy_v5.pt --loader yolov5 \
+    --imgsz 1280 --triton-name legacy_v5_dual_head
+```
+
+Nothing is hardcoded to one model: checkpoint, Triton name, input size,
+tapped module (`--feature-module`/`--feature-index`) and both output
+names are CLI arguments. The tapped module is found by **class name**
+(`SPPF` by default), not by a fixed layer index, so architecture drift
+cannot silently tap the wrong layer.
+
+Where `trtexec` is available but the TensorRT Python bindings are not
+(e.g. inside the triton-server container), build the engine with the
+shell companion instead of `--formats trt`:
+
+```bash
+export/export_detector_dual_head.sh \
+    --onnx pytorch_models/my_detector_dual_head.onnx \
+    --name my_detector_dual_head --input-size 1280 --max-batch 16
+```
+
+Whichever path builds the engine, the model's `config.pbtxt` must declare
+**both** outputs — Triton serves only the tensors its config names, so
+omitting `sppf_feat` silently drops the feature map even though the
+engine produces it. `--formats trt` writes that file for you.
+
 ### SCRFD Face Detection
 
 ```bash
@@ -117,6 +175,11 @@ docker compose exec yolo-api python /app/export/export_paddleocr_rec.py
 - Input: `[B, 3, 640, 640]` FP16, normalized [0, 1]
 - Output (end2end): `num_dets`, `det_boxes`, `det_scores`, `det_classes`
 - Dynamic batching: 1-64 (configurable)
+
+### Dual-Head Detector
+- Input: `[B, 3, S, S]` FP32, letterboxed, normalized [0, 1] (`S` = `--imgsz`)
+- Output: `output0` (detection tensor) + `sppf_feat` `[B, C, S/32, S/32]`
+- Dynamic batching: 1-`--max-batch`
 
 ### SCRFD-10G Face Detection
 - Input: `[B, 3, 640, 640]` FP32, RGB, (x-127.5)/128.0 normalized
