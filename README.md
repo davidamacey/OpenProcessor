@@ -213,7 +213,36 @@ All endpoints available on port **4603**.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Service health check |
-| `/health/models` | GET | Triton model status |
+| `/ready` | GET | Readiness probe — Triton + OpenSearch reachability (no separate `/health/models` route exists) |
+
+---
+
+### Curation & Active Learning
+
+**Experimental for v0.3.0.** A generic, domain-agnostic active-learning
+curation subsystem: ingest images, detect and crop regions of interest,
+cluster and browse them, label by hand or via an OpenAI-compatible VLM,
+track class registries and review queues, export labeled datasets, and
+drive a training loop through a documented file-based protocol.
+
+It's real, working, and tested — 25 route groups, 109 routes under
+`/curation` as of this release (verify the live count with
+`python -c "from src.main import app; print(len([r for r in app.routes if r.path.startswith('/curation')]))"`)
+— but it's new, still evolving, ships opt-in behind the `curation`
+Docker Compose profile, and is disabled by default:
+
+```bash
+docker compose --profile curation up -d
+```
+
+See **[docs/CURATION.md](docs/CURATION.md)** for the full user guide —
+what's required (you supply your own detector/VLM/trainer models), the
+class-registry schema with a non-vehicle worked example, the complete
+`OP_*` environment variable table, and the known gaps stated up front.
+See **[docs/design/curation_api_contract.md](docs/design/curation_api_contract.md)**
+for the wire-level API contract, and **[SECURITY.md](SECURITY.md)** —
+the curation surface has no authentication, same as the rest of this
+API.
 
 ---
 
@@ -464,14 +493,16 @@ Run comprehensive test suite to verify all functionality:
 
 ```bash
 # Full system test (32 tests covering all endpoints)
-source .venv/bin/activate
-python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
+.venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
 
 # Visual validation (draws bounding boxes on test images)
-python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
+.venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
 
 # View annotated test images
 ls test_results/*.jpg
+
+# Full offline pytest suite (see docs/CURATION.md for the curation-only suite)
+.venv/bin/python -m pytest tests/ -q
 ```
 
 **Test Coverage:**
@@ -500,11 +531,16 @@ See [benchmarks/README.md](benchmarks/README.md) for detailed benchmarking guide
 
 - **[CLAUDE.md](CLAUDE.md)**: AI assistant instructions and detailed architecture
 - **[docs/](docs/)**: Technical documentation
+  - [docs/CURATION.md](docs/CURATION.md): Curation & active-learning subsystem user guide (experimental)
+  - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): Component and runtime topology
   - [docs/OCR.md](docs/OCR.md): OCR model setup
   - [docs/FACE_RECOGNITION_IMPLEMENTATION.md](docs/FACE_RECOGNITION_IMPLEMENTATION.md): Face recognition details
   - [docs/opensearch_schema_design.md](docs/opensearch_schema_design.md): Vector search schema
 - **[export/README.md](export/README.md)**: Model export documentation
 - **[benchmarks/README.md](benchmarks/README.md)**: Benchmark tool guide
+- **[SECURITY.md](SECURITY.md)**: Security policy — read this before exposing the API beyond a trusted network
+- **[CONTRIBUTING.md](CONTRIBUTING.md)**: Dev setup, test suites, and commit conventions
+- **[CHANGELOG.md](CHANGELOG.md)**: Release history
 
 ---
 

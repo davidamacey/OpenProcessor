@@ -432,11 +432,8 @@ docker compose down
 # Requires Triton and OpenSearch running
 docker compose up -d triton-server opensearch
 
-# Activate virtual environment
-source .venv/bin/activate
-
-# Run service with hot reload
-uvicorn src.main:app \
+# Run service with hot reload (call the venv binary directly, never `source .venv/bin/activate`)
+.venv/bin/uvicorn src.main:app \
   --host 0.0.0.0 \
   --port 4603 \
   --workers 2 \
