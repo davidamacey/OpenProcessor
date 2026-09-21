@@ -50,8 +50,10 @@
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
-  // In the legacy ensemble cluster_id == class_id, so the class entry
-  // for this page is whichever class shares the cluster's numeric id.
+  // The backend guarantees cluster_id == class_id for `cluster_kind ===
+  // 'class'` clusters (src/lib/types.ts's `ClusterKind`), so the class
+  // entry for this page is whichever class shares the cluster's numeric
+  // id — null for candidate clusters (id >= 10000), which have no class.
   // Drives the validated / labeled / cluster-total banner in the header.
   const clsForCluster = $derived(
     classesStore.classes.find((c) => c.id === clusterId) ?? null,
@@ -929,10 +931,11 @@
   }
 
   // ---------------- SSE: live updates for this cluster's class ----
-  // The legacy convention is `cluster_id == class_id` once a class
-  // has been assigned (see legacy_ingest.py + design doc), so we
-  // subscribe with `class_id=clusterId`. Crop.created without a class
-  // is hidden from per-class pages by event_hub's filter.
+  // cluster_id == class_id holds for class-kind clusters (see
+  // `ClusterKind` in src/lib/types.ts and the scoping note on getCluster
+  // in src/lib/api.ts), so we subscribe with `class_id=clusterId`.
+  // Crop.created without a class is hidden from per-class pages by
+  // event_hub's filter.
   let liveNewCount = $state<number>(0);
   let scrolledPastFirst20 = $state<boolean>(false);
   let liveSub: OpEventSubscription | null = null;
@@ -1461,7 +1464,7 @@
   {/if}
 
   <!-- Hotkey legend strip removed — class folders + hotkeys live in the
-       left sidebar now (the legacy_sorter UX). -->
+       left sidebar now (the sorter-app UX). -->
 
   <!-- Grid container. The class-list left sidebar is the layout-level
        ClassSidebar — it auto-receives drops via dropOnClassStore. -->

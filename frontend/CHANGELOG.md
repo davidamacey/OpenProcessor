@@ -8,6 +8,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `/bakeoff` is now gated on backend availability instead of assuming
+  `/curation/bakeoff/*` is always mounted. A new one-shot probe
+  (`src/lib/bakeoffAvailability.svelte.ts`) calls the idempotent
+  `GET {API_PREFIX}/bakeoff/runs`: a 404/501 hides the nav link and
+  swaps the page body for a calm "not available" note; any other
+  failure (network error, 5xx, abort) leaves the route visible, since a
+  transient outage must not look like an absent capability. This was the
+  last backend-optional surface in the app with no availability gate at
+  all — the nav link rendered unconditionally and the page fired four
+  GETs on every mount regardless of whether the router existed. The
+  module is explicitly provisional and documents its own replacement:
+  once the backend ships an `evaluation` axis on `GET {API_PREFIX}/methods`
+  (mirroring the existing `export` axis), this probe is deleted in favor
+  of the same capability-discovery pattern every other gate in the app
+  already uses. See `docs/design/bakeoff-train-genericization-plan-2026-09-21.md`.
+
+### Changed
+
+- `/train`'s single-class dataset-export panel now renders its
+  remaining copy (heading, dataset-kind toggle label, the `current`
+  symlink name, the description blurb, the "no export yet" message, the
+  build button, and the success/failure toasts) from the active slot's
+  already-resolved `datasetExportSpec` instead of nine hand-written
+  LPR-specific strings. `spec.blurb` — declared on the profile and
+  validated by `datasetExportForSlot`, but rendered nowhere until now —
+  is the one genuinely dead config value this fixes. `exportLpr`/
+  `exportLprStatus`, the `/export/lpr` wire path, `spec.options[]`, and
+  `OpLprExportResponse` are all unchanged; this is a copy-only pass, not
+  a new capability.
+- The four production comments asserting `cluster_id == class_id` as a
+  "legacy ensemble" or "legacy convention" (`src/routes/+layout.svelte`,
+  `src/routes/clusters/[id]/+page.svelte`, `src/routes/clusters/+page.svelte`)
+  now name the invariant's real, backend-contractual scope
+  (`cluster_kind === 'class'`, per `ClusterKind` in `src/lib/types.ts`)
+  and cite in-repo sources instead of a private backend filename
+  (`legacy_ingest.py`) a public reader can't open. No logic change —
+  the invariant was already correct, just mis-attributed and
+  under-qualified. One unrelated stray reference to "the legacy_sorter
+  UX" is reworded to "the sorter-app UX" in the same pass.
+
+### Fixed
+
+- `src/routes/train/datasetExportGate.test.ts`'s highest-value
+  assertion referenced the dead identifier `refreshLprStatus` (renamed to
+  `refreshSingleClassExportStatus` in an earlier pass), making the test
+  unfailable — it could never have caught the "never 404 unconditionally
+  on mount" regression it exists to guard. Renamed to the live
+  identifier; verified it fails when the regression is reintroduced.
+
 - A new `/settings` page gives deployment operators one place to set the
   shared, backend-side defaults for two curation strategies — the
   clustering method used by every auto-label run this app starts, and the

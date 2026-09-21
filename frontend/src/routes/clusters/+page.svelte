@@ -112,7 +112,7 @@
     return v == null ? null : Number.isFinite(+v) ? +v : null;
   });
 
-  // The legacy ensemble stores plates as a *sub-bbox* on each vehicle
+  // This backend stores plates as a *sub-bbox* on each vehicle
   // crop (`plate_bbox_norm`), NOT as standalone docs in the cluster
   // index. So filtering this page by a slot-bound class (e.g.
   // license_plate) always returns 0 / unlabeled clusters — confusing

@@ -134,10 +134,11 @@
   function selectClass(cls: { id: number } | null): void {
     void (async () => {
       const { goto } = await import('$app/navigation');
-      // In the legacy ensemble, cluster_id == class_id, so clicking a
-      // class in the sidebar navigates straight to that class's cluster
-      // instead of filtering the current page. Behaves the same on /classes
-      // since /clusters/{id} is the canonical view.
+      // For `cluster_kind === 'class'` clusters the backend guarantees
+      // cluster_id == class_id (see `ClusterKind` in src/lib/types.ts), so
+      // clicking a class in the sidebar navigates straight to that class's
+      // cluster instead of filtering the current page. Behaves the same on
+      // /classes since /clusters/{id} is the canonical view.
       if (cls) {
         // A class bound to a slot (e.g. license_plate) isn't a cluster —
         // plates are sub-bboxes on vehicle crops (plate_bbox_norm). Route
