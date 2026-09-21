@@ -28,7 +28,7 @@ KNOWN_TABS: tuple[str, ...] = (
     'outliers',
     'uncertainty',
     'model_disagreements',
-    'plates',
+    'regions',
     'primary_low_conf',
     'coco_blind_spots',
 )
@@ -127,12 +127,12 @@ def build_tab_query(
         must.append({'exists': {'field': 'probe_pred_entropy'}})
         # Default sort: 'uncertainty_entropy' — see review_sorts.py.
         reason = 'high probe entropy — active-learning candidate'
-    elif tab == 'plates':
-        # Plate-detection review queue. Surfaces crops where the LPR / SAM3
-        # / Gemma chain produced a bounding box that was NOT auto-confirmed
-        # — i.e. the SAM3 score, Gemma confidence, or bbox shape didn't all
-        # clear the auto-confirm thresholds in kb_sam_worker.
-        # _auto_confirm_or_pending. The user opens each in PlateEditor,
+    elif tab == 'regions':
+        # Region-detection review queue. Surfaces crops where the detector /
+        # segmenter / VLM chain produced a bounding box that was NOT
+        # auto-confirmed — i.e. the segmenter score, VLM confidence, or bbox
+        # shape didn't all clear the worker's auto-confirm thresholds. The
+        # user opens each in the region editor,
         # tweaks the bbox if needed, and clicks Confirm; that flips
         # label_validated=true. High-confidence triple-agreement crops are
         # already ``label_validated=true`` and skip this queue entirely.
@@ -252,7 +252,7 @@ def build_tab_query(
             detail=(
                 f'unknown review tab: {tab}. '
                 'Must be one of: all, mismatches, gemma_low_conf, outliers, '
-                'uncertainty, model_disagreements, plates, primary_low_conf, '
+                'uncertainty, model_disagreements, regions, primary_low_conf, '
                 'coco_blind_spots'
             ),
         )

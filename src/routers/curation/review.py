@@ -202,7 +202,7 @@ async def review_queue(
         PathParam(
             description=(
                 'One of: all | mismatches | gemma_low_conf | outliers | '
-                'uncertainty | model_disagreements | plates | '
+                'uncertainty | model_disagreements | regions | '
                 'primary_low_conf | coco_blind_spots'
             )
         ),
@@ -394,7 +394,7 @@ async def review_queue(
                 # model thought (and how confident it was).
                 'probe_pred_class': src.get('probe_pred_class'),
                 'probe_pred_entropy': src.get('probe_pred_entropy'),
-                # Region-detection outputs — needed by the `plates` review tab
+                # Region-detection outputs — needed by the `regions` review tab
                 # so the labeler can render the bbox on the source image
                 # for human confirmation.
                 # Frozen plate_* wire names (docs/design/curation_api_contract.md) —

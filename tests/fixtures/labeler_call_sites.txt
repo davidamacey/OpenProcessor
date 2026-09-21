@@ -33,10 +33,12 @@
 # below) and /gemma/label_batch (T-C1, now /vlm/label_batch below).
 #
 # Work item B2 (LPR vocabulary off the public API) renamed the ten
-# /plates/... call sites below to /regions/... -- an agreed breaking change,
-# so these ten entries were hand-edited here to the new paths ahead of the
-# matching Cropwright commit rather than re-snapshotted. Re-snapshot as usual
-# once the frontend change lands.
+# /plates/... call sites below to /regions/..., plus /crops/{param}/plate ->
+# /crops/{param}/region and /crops/{param}/plate_meta ->
+# /crops/{param}/region_meta -- an agreed breaking change, so those entries
+# were hand-edited here to the new paths ahead of the matching Cropwright
+# commit rather than re-snapshotted. Re-snapshot as usual once the frontend
+# change lands.
 
 /bakeoff/baseline_models
 /bakeoff/eval_datasets
@@ -61,8 +63,8 @@
 /crops/{param}
 /crops/{param}/image
 /crops/{param}/label
-/crops/{param}/plate
-/crops/{param}/plate_meta
+/crops/{param}/region
+/crops/{param}/region_meta
 /crops/{param}/region_thumbnail
 /crops/{param}/review_dismiss
 /crops/{param}/thumbnail

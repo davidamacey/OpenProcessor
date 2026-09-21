@@ -437,7 +437,7 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
     }
 
 
-@router.put('/crops/{crop_id}/plate')
+@router.put('/crops/{crop_id}/region')
 async def set_crop_plate(
     crop_id: str,
     payload: ItemRegionRequest,
@@ -472,7 +472,7 @@ async def set_crop_plate(
     }
 
 
-@router.patch('/crops/{crop_id}/plate_meta')
+@router.patch('/crops/{crop_id}/region_meta')
 async def patch_crop_plate_meta(
     crop_id: str,
     payload: ItemRegionMetaRequest,
@@ -480,7 +480,7 @@ async def patch_crop_plate_meta(
 ) -> dict[str, Any]:
     """Patch region metadata (text / status / rejection reason).
 
-    Bbox edits go through ``PUT /crops/{crop_id}/plate``; this endpoint
+    Bbox edits go through ``PUT /crops/{crop_id}/region``; this endpoint
     is for operator corrections of the surrounding fields. Only the
     fields explicitly present in the payload are written.
     """
@@ -550,12 +550,12 @@ async def patch_crop_plate_meta(
     return {'crop_id': crop_id, 'updated_fields': sorted(wire_fields)}
 
 
-@router.put('/crops/batch_plate')
+@router.put('/crops/batch_region')
 async def batch_set_crop_plate(
     payload: ItemBatchRegionRequest,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
-    """Bulk variant of ``PUT /crops/{crop_id}/plate``.
+    """Bulk variant of ``PUT /crops/{crop_id}/region``.
 
     Most useful for the curator's "mark these N crops as no region
     visible" hotkey on the cluster page (via ``bbox_norm=null``);

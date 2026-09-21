@@ -243,8 +243,8 @@ class ItemDoc(BaseModel):
     # RegionFields (that governs OpenSearch document keys only).
     plate_bbox_norm: list[float] | None = None
     plate_score: float | None = None
-    # Round-trip counterparts of what PATCH /crops/{id}/plate_meta and
-    # PUT /crops/{id}/plate write (RegionFields.status/text/etc on the
+    # Round-trip counterparts of what PATCH /crops/{id}/region_meta and
+    # PUT /crops/{id}/region write (RegionFields.status/text/etc on the
     # storage side) — added so a GET after either write actually reflects
     # it instead of silently dropping the region metadata (the frontend's
     # review-queue "Back" path and mapRawCrop() need these back).
@@ -376,7 +376,7 @@ class ItemRegionMetaRequest(BaseModel):
 
     Use this for operator corrections like fixing an OCR'd region text or
     changing the status to ``verify_rejected``. To set or clear the bbox
-    itself, use ``PUT /crops/{crop_id}/plate`` — that endpoint owns the
+    itself, use ``PUT /crops/{crop_id}/region`` — that endpoint owns the
     geometry contract.
 
     Every field is optional; only the provided ones are written. ``None``

@@ -63,7 +63,7 @@ by router module; every path is relative to the configured
 |---|---|
 | `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
-| `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/plate`, `PUT /crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
@@ -111,7 +111,7 @@ disagree, and see D3 for the plan to close that gap.
 
 ### Crops
 
-- `ItemDoc`: `crop_id`, `image_id`, `image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `label_validated`, `label_source`, `plate_bbox_norm`, `plate_score`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `thumbnail_url`, `plate_status`, `plate_text`, `plate_text_source`, `plate_text_confidence`, `plate_rejection_reason`, `plate_detector`, `plate_detector_version`, `plate_verified`, `plate_verified_at`, `plate_verifier`, `plate_label_source` — the last eleven are round-trip counterparts of what `PATCH /crops/{id}/plate_meta` and `PUT /crops/{id}/plate` write (via `RegionFields` on the storage side), added so a `GET` after either write actually reflects the region metadata instead of silently dropping it.
+- `ItemDoc`: `crop_id`, `image_id`, `image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `label_validated`, `label_source`, `plate_bbox_norm`, `plate_score`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `thumbnail_url`, `plate_status`, `plate_text`, `plate_text_source`, `plate_text_confidence`, `plate_rejection_reason`, `plate_detector`, `plate_detector_version`, `plate_verified`, `plate_verified_at`, `plate_verifier`, `plate_label_source` — the last eleven are round-trip counterparts of what `PATCH /crops/{id}/region_meta` and `PUT /crops/{id}/region` write (via `RegionFields` on the storage side), added so a `GET` after either write actually reflects the region metadata instead of silently dropping it.
 - `CropsPageResponse`: `total`, `page`, `page_size`, `crops`, `method`, `version`, `n_pool`
 - `CropLabelRequest`: `class_id`, `label_source`
 - `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source`
@@ -366,17 +366,26 @@ and no statuses were merged:
 | Route | `POST /plates/fp_centroids/build` | `POST /regions/fp_centroids/build` |
 | Route | `GET /plates/fp_centroids/status` | `GET /regions/fp_centroids/status` |
 | Route | `GET /plates/suspected_false_positives` | `GET /regions/suspected_false_positives` |
+| Route | `PUT /crops/{crop_id}/plate` | `PUT /crops/{crop_id}/region` |
+| Route | `PATCH /crops/{crop_id}/plate_meta` | `PATCH /crops/{crop_id}/region_meta` |
+| Route | `PUT /crops/batch_plate` | `PUT /crops/batch_region` |
 | Status value | `no_plate_box` | `no_region_box` |
 | Status value | `no_plate_visible` | `no_region_visible` |
 | Cohort `mode=` | `lpr_blind_spots` | `detector_blind_spots` |
 | Cohort `mode=` | `lpr_low_conf_correct` | `low_conf_correct` |
+| `GET /review/{tab}` tab | `plates` | `regions` |
 
-Not renamed, deliberately: `PUT /crops/{crop_id}/plate`, `PUT
-/crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `GET
-/crops/{crop_id}/region_thumbnail`, every `plate_*` JSON key (frozen —
-see the invariant at the top of this doc), the `plates` review tab, and
-the `disagreement` / `human_corrected` / `false_positives` cohort
-modes.
+The three `/crops/{crop_id}/...` renames bring those routes in line with
+their already-generic sibling `GET /crops/{crop_id}/region_thumbnail`.
+
+Not renamed, deliberately: `GET /crops/{crop_id}/region_thumbnail`
+(already generic), every `plate_*` JSON key including
+`plate_thumbnail_url` and the `n_plates` ingest counter (frozen — see
+the invariant at the top of this doc), every OpenSearch document field
+name (`plate_bbox_norm` etc. — the reindex is WONTFIX per H4 below),
+the `plates` key in `GET /stats/dataset`'s response body (a wire field,
+not a path), and the `disagreement` / `human_corrected` /
+`false_positives` cohort modes.
 
 Deployments carrying documents written before B2 need a one-off
 `update_by_query` rewriting the two status strings; nothing else in
