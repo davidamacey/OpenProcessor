@@ -38,7 +38,7 @@ def test_set_region_bbox_writes_human_provenance(
     crop_id = region_cohort[0]
     bbox = [0.11, 0.22, 0.33, 0.44]
 
-    resp = client.put(f'/crops/{crop_id}/plate', json={'bbox_norm': bbox, 'label_source': 'human'})
+    resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': bbox, 'label_source': 'human'})
     assert resp.status_code == 200, resp.text
     assert resp.json()['plate_status'] == 'detected'
 
@@ -60,7 +60,7 @@ def test_clear_region_bbox_records_a_deliberate_negative(
     client: Any, opensearch: Any, region_cohort: list[str]
 ) -> None:
     crop_id = region_cohort[1]
-    resp = client.put(f'/crops/{crop_id}/plate', json={'bbox_norm': None})
+    resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': None})
     assert resp.status_code == 200, resp.text
     assert resp.json()['plate_status'] == 'no_region_visible'
 
@@ -83,7 +83,7 @@ def test_malformed_region_bbox_is_rejected(
 ) -> None:
     crop_id = region_cohort[2]
     before = get_doc(opensearch, INDEXES['items'], crop_id)
-    resp = client.put(f'/crops/{crop_id}/plate', json={'bbox_norm': bbox})
+    resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': bbox})
     assert resp.status_code == 400, resp.text
     after = get_doc(opensearch, INDEXES['items'], crop_id)
     assert after['_seq_no'] == before['_seq_no']
@@ -94,7 +94,7 @@ def test_patch_region_metadata_writes_text_and_source(
 ) -> None:
     crop_id = region_cohort[3]
     resp = client.patch(
-        f'/crops/{crop_id}/plate_meta',
+        f'/crops/{crop_id}/region_meta',
         json={'plate_text': 'LIVE-HARNESS-7', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -116,7 +116,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
 ) -> None:
     crop_id = region_cohort[4]
     resp = client.patch(
-        f'/crops/{crop_id}/plate_meta',
+        f'/crops/{crop_id}/region_meta',
         json={'plate_status': 'false_positive', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -129,7 +129,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
 
     # Un-marking releases it so the next re-cluster re-absorbs it.
     resp = client.patch(
-        f'/crops/{crop_id}/plate_meta',
+        f'/crops/{crop_id}/region_meta',
         json={'plate_status': 'detected', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -143,17 +143,17 @@ def test_patch_region_rejects_a_non_human_status_and_an_empty_body(
 ) -> None:
     crop_id = region_cohort[5]
     bad_status = client.patch(
-        f'/crops/{crop_id}/plate_meta', json={'plate_status': 'pending_detection'}
+        f'/crops/{crop_id}/region_meta', json={'plate_status': 'pending_detection'}
     )
     assert bad_status.status_code == 400, bad_status.text
 
-    empty = client.patch(f'/crops/{crop_id}/plate_meta', json={'label_source': 'human'})
+    empty = client.patch(f'/crops/{crop_id}/region_meta', json={'label_source': 'human'})
     assert empty.status_code == 400, empty.text
 
 
 def test_batch_region_clear(client: Any, opensearch: Any, region_cohort: list[str]) -> None:
     batch = region_cohort[6:9]
-    resp = client.put('/crops/batch_plate', json={'crop_ids': batch, 'bbox_norm': None})
+    resp = client.put('/crops/batch_region', json={'crop_ids': batch, 'bbox_norm': None})
     assert resp.status_code == 200, resp.text
     assert resp.json()['updated'] == len(batch)
     assert resp.json()['conflicts'] == []
