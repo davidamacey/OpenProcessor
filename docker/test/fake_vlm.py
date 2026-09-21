@@ -22,8 +22,9 @@ Control surface (test-only, not part of any real API):
 * ``GET  /health``           -> ``{"status": "ok"}``
 * ``GET  /__stats``          -> per-prompt-kind call counts
 * ``POST /__control``        -> override reply knobs, e.g.
-  ``{"region_verdict_key": "is_region"}`` to make the fake answer with the key
-  the prompt pack actually asks for, or ``{"region_visible": true}``.
+  ``{"region_verdict_key": "is_plate"}`` to make the fake answer with a
+  legacy/off-spec key instead of the one the prompt pack actually asks
+  for, or ``{"region_visible": true}``.
 * ``POST /__reset``          -> restore defaults and zero the counters.
 """
 
@@ -51,10 +52,11 @@ DEFAULTS: dict[str, Any] = {
     'region_reason': 'fake verifier: fixed affirmative',
     'region_text': os.environ.get('FAKE_VLM_REGION_TEXT', 'FAKE-LABEL-0042'),
     'region_text_confidence': 'high',
-    # Key the verdict object uses. The built-in prompt pack asks the model for
-    # `is_region`; the labeler's parser reads `is_plate`. Tests flip this to
-    # cover both sides of that mismatch explicitly.
-    'region_verdict_key': 'is_plate',
+    # Key the verdict object uses. The built-in prompt pack asks the model
+    # for `is_region`, and the labeler's parser reads `is_region` too — this
+    # default matches the shipped prompt. Tests can flip this to a legacy
+    # key (e.g. `is_plate`) to prove the parser no longer accepts it.
+    'region_verdict_key': 'is_region',
     # Region-visibility pre-filter. Defaults to an explicit negative: that
     # endpoint fails open to True, so only a negative reply distinguishes
     # "the fake was understood" from "the fake was ignored".
