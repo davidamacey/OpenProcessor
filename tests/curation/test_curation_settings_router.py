@@ -104,5 +104,32 @@ def test_put_rejects_an_axis_methods_advertises_but_has_no_settable_default(
     assert 'score' in r.json()['detail']
 
 
+def test_put_null_clears_a_previously_pinned_axis(app_client: TestClient) -> None:
+    """Raised by the Cropwright settings-UI pass: once an axis is pinned,
+    there was no way to express "go back to no shared override" -- every
+    value had to be a currently-advertised id. A null value must clear it
+    without touching other axes, and the cleared axis must then be absent
+    from GET (not merely a no-op that keeps the stale value around)."""
+    app_client.put(
+        '/curation/settings', json={'defaults': {'cluster': 'ahc', 'sort': 'atypicality'}}
+    )
+
+    r = app_client.put('/curation/settings', json={'defaults': {'sort': None}})
+    assert r.status_code == 200, r.text
+    assert r.json()['defaults'] == {'cluster': 'ahc'}
+
+    r2 = app_client.get('/curation/settings')
+    assert r2.json()['defaults'] == {'cluster': 'ahc'}
+    assert 'sort' not in r2.json()['defaults']
+
+
+def test_put_null_for_an_axis_with_no_prior_override_is_a_harmless_no_op(
+    app_client: TestClient,
+) -> None:
+    r = app_client.put('/curation/settings', json={'defaults': {'cluster': None}})
+    assert r.status_code == 200, r.text
+    assert r.json()['defaults'] == {}
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

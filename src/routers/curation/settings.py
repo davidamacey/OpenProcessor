@@ -40,7 +40,7 @@ from src.routers.curation._common import (
 logger = get_logger(__name__)
 
 
-async def _validate_defaults(defaults: dict[str, str], opensearch: Any) -> None:
+async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -> None:
     """422 with a clear, valid-ids-listing message for any axis/id pair a
     ``PUT`` can't actually honor.
 
@@ -54,7 +54,9 @@ async def _validate_defaults(defaults: dict[str, str], opensearch: Any) -> None:
        change (``SETTABLE_DEFAULT_AXES`` -- ``score``/``overlay``/``export``
        have no single-selectable-id "default" concept today; see that
        constant's docstring).
-    2. ``id`` must be a currently-advertised id for that axis.
+    2. ``id`` must be a currently-advertised id for that axis -- unless
+       ``value`` is ``None``, which always validates: clearing an axis's
+       override never needs an id, that's the whole point of clearing it.
     """
     from src.services.curation.strategy_defaults import SETTABLE_DEFAULT_AXES
     from src.services.curation.strategy_registry import get_registry
@@ -71,6 +73,8 @@ async def _validate_defaults(defaults: dict[str, str], opensearch: Any) -> None:
                 f'axis {axis!r} does not accept a shared default; '
                 f'valid axes: {sorted(SETTABLE_DEFAULT_AXES)}'
             )
+            continue
+        if value is None:
             continue
         valid_ids = ids_by_axis.get(axis, set())
         if value not in valid_ids:
@@ -110,8 +114,10 @@ async def update_curation_settings_route(
     :data:`~src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`
     and each id must be currently advertised for that axis on
     ``GET /methods`` — otherwise this returns ``422`` listing the valid
-    axes/ids. ``updated_by`` is always ``None`` — no user-account system
-    exists yet.
+    axes/ids. A value of ``null`` clears that axis's shared override
+    (see ``CurationSettingsUpdateRequest``'s docstring) — the axis simply
+    won't appear in the next ``GET``'s ``defaults`` map. ``updated_by`` is
+    always ``None`` — no user-account system exists yet.
     """
     from src.clients.curation_opensearch import update_curation_settings
 
