@@ -58,7 +58,7 @@ LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.description="Visual AI API with object detection, face recognition, embeddings, and OCR" \
       org.opencontainers.image.vendor="OpenProcessor" \
       org.opencontainers.image.authors="OpenProcessor Contributors" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
