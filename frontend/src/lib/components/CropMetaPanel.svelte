@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { OpCrop } from '$lib/types';
   import ProvenanceChip from './ProvenanceChip.svelte';
+  import { slotRegistry } from '$lib/annotations/registeredSlots';
+  import { slotOf } from '$lib/annotations/cropSlots';
+  import { slotIsPresent } from '$lib/annotations/types';
 
   interface Props {
     crop: OpCrop;
@@ -9,25 +12,29 @@
   let { crop }: Props = $props();
 
   // Server emits a handful of fields that aren't yet in OpCrop's TS
-  // shape (gemma_confidence categorical, plate_status string,
-  // class_source string). Read them via narrow casts so this panel
-  // doesn't need a public-type widening in the same PR.
+  // shape (gemma_confidence categorical, class_source string). Read
+  // them via a narrow cast so this panel doesn't need a public-type
+  // widening in the same PR.
   const extra = $derived(
     crop as unknown as {
       gemma_confidence?: string | null;
-      plate_status?: string | null;
       class_source?: string | null;
     },
   );
   const gemmaConf = $derived<string | null>(extra.gemma_confidence ?? null);
-  const plateStatus = $derived<string | null>(extra.plate_status ?? null);
   const classSource = $derived<string | null>(extra.class_source ?? null);
 
-  const hasPlate = $derived(
-    !!crop.plate_bbox_norm ||
-      !!crop.plate_detector ||
-      !!crop.plate_text ||
-      plateStatus != null,
+  // Slot(s) bound to this crop's class. A one-entry map built from the
+  // crop's own class_id/class_name is all forClass() needs — this panel
+  // has no other source of a classesById lookup, and every crop already
+  // carries the one class name that matters for its own binding check.
+  const boundSlots = $derived(
+    crop.class_id != null
+      ? slotRegistry.forClass(
+          crop.class_id,
+          new Map([[crop.class_id, crop.class_name ?? '']]),
+        )
+      : [],
   );
 
   function pct(value: number | null | undefined): string {
@@ -106,75 +113,83 @@
   {/if}
 </dl>
 
-{#if hasPlate}
-  <div class="mt-4 border-t border-zinc-800 pt-3">
-    <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">Plate</div>
-    <dl class="grid grid-cols-2 gap-y-1 text-xs">
-      {#if plateStatus}
-        <dt class="text-zinc-500">Status</dt>
-        <dd class="text-zinc-200">{plateStatus}</dd>
-      {/if}
+{#each boundSlots as spec (spec.key)}
+  {@const data = slotOf(crop, spec)}
+  {#if slotIsPresent(data)}
+    <div class="mt-4 border-t border-zinc-800 pt-3">
+      <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+        {spec.label.title}
+      </div>
+      <dl class="grid grid-cols-2 gap-y-1 text-xs">
+        {#if data?.lifecycle?.state}
+          <dt class="text-zinc-500">Status</dt>
+          <dd class="text-zinc-200">{data.lifecycle.state.label}</dd>
+        {:else if data?.lifecycle?.status}
+          <dt class="text-zinc-500">Status</dt>
+          <dd class="text-zinc-200">{data.lifecycle.status}</dd>
+        {/if}
 
-      {#if crop.plate_score != null}
-        <dt class="text-zinc-500">Score</dt>
-        <dd class="font-mono">{pct(crop.plate_score)}</dd>
-      {/if}
+        {#if data?.subBox?.score != null}
+          <dt class="text-zinc-500">Score</dt>
+          <dd class="font-mono">{pct(data.subBox.score)}</dd>
+        {/if}
 
-      {#if crop.plate_detector || crop.plate_verifier}
-        <dt class="text-zinc-500">Detector</dt>
-        <dd class="flex flex-wrap items-center gap-1.5">
-          {#if crop.plate_detector}
-            <ProvenanceChip
-              detector={crop.plate_detector}
-              version={crop.plate_detector_version}
-            />
-          {/if}
-          {#if crop.plate_verifier}
-            <ProvenanceChip
-              detector={crop.plate_verifier}
-              tag="verify"
-              version={crop.plate_verifier_version}
-              size="sm"
-            />
-          {/if}
-        </dd>
-      {/if}
+        {#if data?.provenance?.detector || data?.provenance?.verifier}
+          <dt class="text-zinc-500">Detector</dt>
+          <dd class="flex flex-wrap items-center gap-1.5">
+            {#if data.provenance.detector}
+              <ProvenanceChip
+                detector={data.provenance.detector}
+                version={data.provenance.detectorVersion}
+              />
+            {/if}
+            {#if data.provenance.verifier}
+              <ProvenanceChip
+                detector={data.provenance.verifier}
+                tag="verify"
+                version={data.provenance.verifierVersion}
+                size="sm"
+              />
+            {/if}
+          </dd>
+        {/if}
 
-      {#if crop.plate_detector_chain && crop.plate_detector_chain.length > 0}
-        <dt class="text-zinc-500">Cascade</dt>
-        <dd class="flex flex-wrap items-center gap-1">
-          {#each crop.plate_detector_chain as entry (entry)}
-            <ProvenanceChip raw={entry} size="sm" />
-          {/each}
-        </dd>
-      {/if}
+        {#if data?.provenance?.chain && data.provenance.chain.length > 0}
+          <dt class="text-zinc-500">Cascade</dt>
+          <dd class="flex flex-wrap items-center gap-1">
+            {#each data.provenance.chain as entry (entry)}
+              <ProvenanceChip raw={entry} size="sm" />
+            {/each}
+          </dd>
+        {/if}
 
-      {#if crop.plate_text != null}
-        <dt class="text-zinc-500">Text</dt>
-        <dd class="flex items-center gap-1.5">
-          <span
-            class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
-          >
-            {crop.plate_text || '∅'}
-          </span>
-          {#if crop.plate_text_source}
-            <ProvenanceChip detector={crop.plate_text_source} size="sm" />
-          {/if}
-          {#if crop.plate_text_confidence != null}
-            <span class="font-mono text-[10px] text-zinc-500">
-              {pct(crop.plate_text_confidence)}
+        {#if data?.text?.value != null}
+          <dt class="text-zinc-500">Text</dt>
+          <dd class="flex items-center gap-1.5">
+            <span
+              class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
+            >
+              {data.text.value || '∅'}
             </span>
-          {/if}
-        </dd>
-      {/if}
+            {#if data.text.source}
+              <ProvenanceChip detector={data.text.source} size="sm" />
+            {/if}
+            {#if data.text.confidence != null}
+              <span class="font-mono text-[10px] text-zinc-500">
+                {pct(data.text.confidence)}
+              </span>
+            {/if}
+          </dd>
+        {/if}
 
-      {#if crop.plate_rejection_reason}
-        <dt class="text-zinc-500">Rejection</dt>
-        <dd class="text-zinc-300">{crop.plate_rejection_reason}</dd>
-      {/if}
-    </dl>
-  </div>
-{/if}
+        {#if data?.lifecycle?.rejectionReason}
+          <dt class="text-zinc-500">Rejection</dt>
+          <dd class="text-zinc-300">{data.lifecycle.rejectionReason}</dd>
+        {/if}
+      </dl>
+    </div>
+  {/if}
+{/each}
 
 {#if crop.source_image_path || crop.updated_at}
   <div class="mt-4 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
