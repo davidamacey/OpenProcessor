@@ -1,0 +1,195 @@
+# =============================================================================
+# Live write-path verification harness — isolated, disposable, never the
+# production stack.
+#
+# Always invoke with the explicit project name so nothing can collide with
+# a real deployment's containers/volumes/network:
+#
+#   docker compose -p op-live-verify -f docker/test/compose.yml up -d --wait
+#   docker compose -p op-live-verify -f docker/test/compose.yml down -v --remove-orphans
+#
+# Design constraints (see README.md in this directory):
+#   * host ports live in the 147xx band, outside every band a real
+#     deployment or another project on this host uses;
+#   * every OpenSearch index name is `verify_`-prefixed, so even a
+#     mis-wired OPENSEARCH_URL cannot write into real data;
+#   * the API runs --workers=1 because several cancel endpoints and the
+#     SSE hub keep in-process state — with 2 workers a cancel POST can
+#     land on a different worker than the start POST;
+#   * /var/run/docker.sock is NEVER mounted. The GPU arbiter is a no-op
+#     in this repo and must stay one; the harness proves that by leaving
+#     it no socket to talk to.
+# =============================================================================
+
+name: op-live-verify
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:3.6.0
+    container_name: op-verify-opensearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      # Deliberately small: this is a throwaway fixture holding a few
+      # hundred documents on a host that runs many other stacks.
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_SECURITY_PLUGIN=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - 14702:9200
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS http://localhost:9200 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 40
+    networks:
+      - verify_net
+
+  fake-vlm:
+    build:
+      context: .
+      dockerfile: Dockerfile.fake-vlm
+    image: op-verify-fake-vlm:latest
+    container_name: op-verify-fake-vlm
+    environment:
+      # Default class the fake answers with on the classification path.
+      # Must match a class the seed script creates, so the label actually
+      # resolves against the registry instead of landing in the
+      # `vlm_unmatched` cohort.
+      - FAKE_VLM_CLASS=box
+      - FAKE_VLM_REGION_TEXT=FAKE-LABEL-0042
+    ports:
+      - 14704:8000
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - verify_net
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: op-verify-api:latest
+    container_name: op-verify-api
+    # NOTE: no `env_file: ./.env` — the harness is hermetic on purpose.
+    volumes:
+      - ../../src:/app/src:ro
+      - ../../scripts:/app/scripts:ro
+      - ../../VERSION:/app/VERSION:ro
+      # Everything the API is allowed to write lives under one bind mount
+      # so the test process can assert on the bytes it produced. The
+      # previous ad-hoc harness mounted none of these and every registry
+      # write / export vanished into the container layer.
+      - ./verify-data:/verify-data
+      - ./verify-data/jobs:/jobs
+    environment:
+      # The app reads `opensearch_url` (src/config/settings.py, env_prefix
+      # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
+      - OPENSEARCH_URL=http://opensearch:9200
+      # AsyncTritonPool.initialize() only constructs gRPC client objects;
+      # it never dials. A deliberately unresolvable host proves no code
+      # path on the verified surface needs Triton.
+      - TRITON_URL=triton-unavailable:8001
+      # Serve byte-identical paths to what an existing labeler frontend
+      # already calls, so it can be pointed at the harness without a
+      # rebuild. Every curation router builds its prefix at module
+      # import, so this must be set before src.main is imported.
+      - OP_API_PREFIX=/legacy
+      # Belt and braces: every configured index name carries the
+      # `verify_` prefix, and tests/live/conftest.py refuses to run if
+      # any of them does not.
+      - OP_IMAGES_INDEX=verify_images
+      - OP_ITEMS_INDEX=verify_items
+      - OP_LABELS_CONFIRMED_INDEX=verify_labels_confirmed
+      - OP_CLASSES_INDEX=verify_classes
+      - OP_CLUSTERS_INDEX=verify_clusters
+      - OP_SETTINGS_INDEX=verify_settings
+      # Writable, host-visible filesystem roots.
+      - OP_REGISTRY_PATH=/verify-data/class_registry.json
+      - OP_SOURCE_ROOT=/verify-data/images
+      - OP_EXPORT_ROOT=/verify-data/exports
+      - OP_STATE_DIR=/verify-data/state
+      - OP_CROP_CACHE_DIR=/verify-data/crop_cache
+      - OP_BAKEOFF_EVAL_ROOT=/verify-data/bakeoff_eval
+      # Shared job-file protocol with the fake trainer.
+      - OP_TRAIN_JOBS_DIR=/jobs
+      - OP_SCORES_STATE_DIR=/jobs/scores
+      - OP_SELECT_JOBS_DIR=/jobs/select
+      - OP_VIZ_JOBS_DIR=/jobs/viz
+      - OP_AUTO_LABEL_STATE_DIR=/jobs/auto_label
+      # OpenAI-compatible endpoint (src/services/labeling/vlm_client.py).
+      - OPENWEBUI_BASE_URL=http://fake-vlm:8000/v1
+      - OPENWEBUI_MODEL=fake-vlm
+      - OPENWEBUI_API_KEY=EMPTY
+      # Three write endpoints are disabled by default; without these the
+      # harness would "exercise" them and only ever see 400.
+      - OP_SCORES_ENABLED=1
+      - OP_SELECT_DIVERSE_ENABLED=1
+      - OP_VIZ_PROJECTION_ENABLED=1
+      - HF_HOME=/tmp/hf
+      - HF_HUB_CACHE=/tmp/hf/hub
+    command:
+      - uvicorn
+      - src.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      # ONE worker — see the header comment.
+      - --workers=1
+      - --log-level=info
+    ports:
+      - 14701:8000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/live || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      fake-vlm:
+        condition: service_healthy
+    networks:
+      - verify_net
+
+  trainer:
+    # Reuses the API image (already built above) purely for bash + a
+    # writable /jobs mount; it runs no application code.
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: op-verify-api:latest
+    container_name: op-verify-trainer
+    volumes:
+      - ./fake_trainer.sh:/opt/fake_trainer.sh:ro
+      - ./verify-data/jobs:/jobs
+    environment:
+      - FAKE_TRAINER_POLL_SECONDS=1
+      - FAKE_TRAINER_EPOCHS=3
+    command: ["bash", "/opt/fake_trainer.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f fake_trainer.sh > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - verify_net
+
+networks:
+  verify_net:
+    driver: bridge
