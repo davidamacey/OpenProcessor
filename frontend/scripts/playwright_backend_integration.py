@@ -272,11 +272,41 @@ def step1_navigation(page: Any, front: str, timeout: int) -> bool:
         page.remove_listener("pageerror", on_pageerror)
         page.remove_listener("response", on_response)
 
+        # A missing static/annotation-profiles.json (tier-2 deployment
+        # config) is expected on every stock deployment that hasn't
+        # dropped one in -- see docs/design/tier2-annotation-profile-
+        # config-plan-2026-09-20.md: absent file -> silent fall-back to
+        # built-in profiles, by design. The browser still logs the
+        # underlying 404 to the console and the network log regardless
+        # of how gracefully the app's own JS handles the response --
+        # that's unavoidable browser behavior, not something app code
+        # can suppress -- so exempt exactly this one known, intended 404
+        # rather than let it mask a real console error on the same page.
+        exempt_bad = [b for b in bad_responses if "annotation-profiles.json" in b["url"]]
+        real_bad = [b for b in bad_responses if b not in exempt_bad]
+        # The console text for a failed `fetch()` never repeats the URL
+        # (just "Failed to load resource: ... status of 404"), so it
+        # can't be string-matched to a URL directly -- drop up to as
+        # many matching-status generic console entries as there are
+        # exempted responses, on the reasonable assumption that each
+        # failed resource load produces exactly one such console line.
+        real_console_errors = list(console_errors)
+        for b in exempt_bad:
+            needle = f"status of {b['status']}"
+            for i, e in enumerate(real_console_errors):
+                if needle in e:
+                    del real_console_errors[i]
+                    break
         ok = check(
             f"step 1: {name} navigates clean (no console error, no pageerror, no >=400, <main> non-empty)",
-            not console_errors and not page_errors and not bad_responses and main_text > 0,
-            f"console_errors={console_errors[:3]} pageerrors={page_errors[:3]} "
-            f"bad={bad_responses[:3]} main_len={main_text}",
+            not real_console_errors and not page_errors and not real_bad and main_text > 0,
+            f"console_errors={real_console_errors[:3]} pageerrors={page_errors[:3]} "
+            f"bad={real_bad[:3]} main_len={main_text}"
+            + (
+                " (annotation-profiles.json 404 present but exempt, by design)"
+                if len(real_bad) < len(bad_responses)
+                else ""
+            ),
         )
         ok_all = ok_all and ok
         record_step(
@@ -297,6 +327,19 @@ def step1_navigation(page: Any, front: str, timeout: int) -> bool:
 def step2_thumbnails(page: Any, front: str, api: Api, timeout: int) -> bool:
     def render_check(path: str, label: str) -> tuple[bool, list[dict[str, Any]]]:
         page.goto(f"{front}{path}", wait_until="domcontentloaded", timeout=timeout)
+        # `domcontentloaded` fires before this SPA's client-side data fetch
+        # populates the grid, so `document.images` can genuinely be an
+        # empty NodeList at this instant -- `.every()` on an empty array
+        # is trivially true, so the wait_for_function below can return
+        # immediately having proven nothing. Wait for at least one <img>
+        # to exist first (bounded by `timeout`), THEN wait for those
+        # images to finish loading.
+        try:
+            page.wait_for_function(
+                "() => document.images.length > 0", timeout=timeout
+            )
+        except Exception:
+            pass  # legitimately zero rows for this path (e.g. an empty gallery)
         try:
             page.wait_for_function(
                 "() => Array.from(document.images).every(i => i.complete)", timeout=timeout
@@ -638,6 +681,24 @@ def step10_sse(page: Any, front: str, api: Api) -> bool:
     return ok1 and ok2
 
 
+def _wait_for_main_rendered(page: Any, timeout_ms: int = 8000) -> None:
+    """Wait past `domcontentloaded` for this SPA's client-side data fetch
+    to actually populate <main> -- see step2_thumbnails' render_check for
+    the same race in image form. A bare `domcontentloaded` navigation can
+    leave <main> empty for a beat while the page's own load()/onMount
+    fetch is still in flight, which previously produced false "doesn't
+    render" / "control not present" failures on this exact machine under
+    load, not a real app defect (confirmed by re-checking manually with a
+    longer wait each time)."""
+    try:
+        page.wait_for_function(
+            "() => (document.querySelector('main')?.innerText || '').length > 0",
+            timeout=timeout_ms,
+        )
+    except Exception:
+        pass  # fall through; the caller's own assertion still reports the true state
+
+
 def step11_export_gating(api: Api, page: Any, front: str) -> bool:
     methods = http_get(api.url("/methods"))
     strategies = methods.get("strategies", [])
@@ -650,12 +711,14 @@ def step11_export_gating(api: Api, page: Any, front: str) -> bool:
         f"entries={export_entries}",
     )
     page.goto(f"{front}/train", wait_until="domcontentloaded")
+    _wait_for_main_rendered(page)
     lpr_panel_present = page.evaluate(
         "() => !!document.querySelector('[data-testid=lpr-export-panel]')"
     )
     ok2 = check("step 11: /train renders no LPR export panel", not lpr_panel_present)
 
     page.goto(f"{front}/export", wait_until="domcontentloaded")
+    _wait_for_main_rendered(page)
     # /export only ever offers a YOLO-format export (the axis=export
     # entry checked above is literally id=='yolo') -- any "trigger an
     # export" control on this page IS the YOLO control, whether or not
@@ -704,6 +767,7 @@ def step12_train_read_path(api: Api, page: Any, front: str) -> bool:
     ok = check("step 12: /train/{profiles,presets,runs,status} all 200", all_200, f"{codes}")
 
     page.goto(f"{front}/train", wait_until="domcontentloaded")
+    _wait_for_main_rendered(page)
     main_len = page.evaluate("() => (document.querySelector('main')?.innerText || '').length")
     ok2 = check("step 12: /train renders", main_len > 0)
 
