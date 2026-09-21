@@ -111,7 +111,7 @@ disagree, and see D3 for the plan to close that gap.
 
 ### Crops
 
-- `ItemDoc`: `crop_id`, `image_id`, `image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `label_validated`, `label_source`, `plate_bbox_norm`, `plate_score`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `thumbnail_url`
+- `ItemDoc`: `crop_id`, `image_id`, `image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `label_validated`, `label_source`, `plate_bbox_norm`, `plate_score`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `thumbnail_url`, `plate_status`, `plate_text`, `plate_text_source`, `plate_text_confidence`, `plate_rejection_reason`, `plate_detector`, `plate_detector_version`, `plate_verified`, `plate_verified_at`, `plate_verifier`, `plate_label_source` — the last eleven are round-trip counterparts of what `PATCH /crops/{id}/plate_meta` and `PUT /crops/{id}/plate` write (via `RegionFields` on the storage side), added so a `GET` after either write actually reflects the region metadata instead of silently dropping it.
 - `CropsPageResponse`: `total`, `page`, `page_size`, `crops`, `method`, `version`, `n_pool`
 - `CropLabelRequest`: `class_id`, `label_source`
 - `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source`
@@ -147,17 +147,21 @@ the key-invariant section above.
 - `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`
 - `VlmVerifyRegionBatchItem`: `crop_id`, `plate_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
 - `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
-- `VlmVerifyRegionBatchResult`: `crop_id`, `is_plate`, `confidence`, `reason`, `candidate_text`
+- `VlmVerifyRegionBatchResult`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text`
 - `VlmVerifyRegionBatchResponse`: `results`
 - `VlmRegionVisibleBatchItem`: `crop_id`, `image_b64`
 - `VlmRegionVisibleBatchRequest` (`POST /vlm/region_visible_batch`): `items`
 - `VlmRegionVisibleBatchResponse`: `visible` (`dict[str, bool]`, keyed by `crop_id`)
 
-Note `plate_image_b64` / `is_plate` are themselves frozen wire field
-names carried over unchanged from the reference implementation — only
-the URL segment (`gemma` → `vlm`) and the Python class prefix
-(`Gemma*` → `Vlm*`) changed. Nothing about the request/response JSON
-shape changed for an existing caller other than the path it POSTs to.
+Note `plate_image_b64` is itself a frozen wire field name carried over
+unchanged from the reference implementation. `is_region` (the verdict
+boolean on `VlmVerifyRegionBatchResult`) is **not** `is_plate` — an
+earlier draft of this class in `src/routers/curation/_common.py` used
+`is_plate` and was never imported by the actual route
+(`src/routers/curation/vlm.py` defines and uses its own, wired,
+`is_region`-bearing class); that dead duplicate has been removed from
+`_common.py` so the code has exactly one definition, matching this
+table.
 
 ### Review / holdout
 

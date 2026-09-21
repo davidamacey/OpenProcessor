@@ -31,7 +31,7 @@ generic Python; the domain lives entirely in data** — three frozen
 dataclasses a deployment constructs (or overrides via environment
 variables) rather than a codebase it forks.
 
-## 2. The three configuration dataclasses
+## 2. The four configuration dataclasses
 
 ### 2.1 `CurationConfig` (`src/config/curation.py`)
 
@@ -68,17 +68,33 @@ A deployment describing a different region — a barcode on a package, a
 tag on livestock — constructs its own `DetectionProfile` instance
 instead of branching or forking the cascade code that consumes it.
 
-**Known gap, tracked rather than fixed here:** at the time of writing,
-`DetectionProfile`'s *default* field values are still the reference
+`DetectionProfile.from_env(prefix='OP_DETECTION_')` now exists, so a
+deployment can override individual fields via environment variable the
+same way it can for `CurationConfig` and `RegionFields` (see
+`env.template`'s `OP_DETECTION_*` block). **Known gap, still tracked:**
+`DetectionProfile`'s *default* field values remain the reference
 deployment's tuned numbers (its aspect-ratio range, its text-length
 range, its OCR/segmenter model names) rather than domain-neutral
-placeholders, and the dataclass has no `from_env()` of its own (unlike
-`CurationConfig` and `RegionFields`). A new deployment today configures
-correctly by constructing an explicit instance — it does not get a
-neutral default for free, and cannot override individual fields via
-environment variable the way it can for the other two dataclasses. Both
-of those are recorded as follow-up work; fixing them is not part of
-this pass.
+placeholders — a new deployment gets a working example, not a neutral
+default, out of the box, and should expect to override most fields for
+its own region type. Also, exactly one `DetectionProfile` (and one
+`PromptPack`) is active per process today; there is no per-request
+selection among multiple registered profiles yet, even though the
+underlying `profile_registry` mechanism supports registering more than
+one.
+
+### 2.4 `RegionStatus` (`src/config/region_state.py`)
+
+The canonical state-machine enum for the region-of-interest pipeline
+(`pending_detection` → detector cascade → `detected` /
+`verify_rejected` / `no_region_box`; `pending_verification` → VLM
+verify → `detected` / `no_region_visible`; any path can short-circuit to
+the terminal `detection_failed`, and a human reviewer can additionally
+mark a detected box `false_positive` without deleting it, preserving
+provenance for hard-negative training). On-disk string values are kept
+byte-identical to what earlier code wrote directly as literals — this
+is a Python-symbol rename, not an OpenSearch data migration, matching
+the same no-reindex reasoning as `RegionFields` (§4).
 
 ## 3. The frozen wire-contract split
 
@@ -203,42 +219,51 @@ discovered-in-production surprises. None of them is fixed in this pass;
 they're recorded here so the rationale for *why the code looks
 unfinished in these specific ways* lives somewhere durable.
 
-- **Thinner ingest path than the reference by design.** The public
-  ingest surface currently exposes read-only status/lookup endpoints;
-  no route creates a new item. The generic mechanics for a full
-  create-path (duplicate detection, quality-gate scoring, crop-cache
-  population, bulk indexing) are more portable than the amount of
-  domain-specific logic the reference ingest path had wrapped around
-  them might suggest, and closing this gap with a genuinely generic
-  ingest service is planned follow-up work, not abandoned scope.
-- **The asynchronous half of the product — long-lived detection/label
-  workers, a training container, a segmentation service — exists as
-  ported code with no corresponding container or compose service yet.**
-  The synchronous HTTP API (browse, label, cluster, export) is usable
-  standalone; the asynchronous pipeline that would keep it fed
-  automatically is a separate, larger integration effort.
-- **Environment-variable and metric-name prefixes are not yet fully
-  reconciled.** Some capability flags and Prometheus metric names still
-  carry a legacy prefix from the reference deployment rather than the
-  generic `OP_`/`op_` convention used elsewhere; this is a naming
-  cleanup with no functional impact, tracked as follow-up rather than
-  addressed opportunistically file-by-file (a partial, ad hoc rename
-  would be worse than a consistent, deliberate one).
+- **Ingest is thinner than the reference deployment's, by design.**
+  `POST /curation/ingest/image` and `/ingest/batch` exist and create
+  items (duplicate detection, quality-gate scoring, crop-cache
+  population, bulk indexing), and `POST /curation/import_labels(/batch)`
+  imports pre-existing YOLO-format labels. What did **not** port: the
+  reference's dual-head domain detector runner, its fixed
+  domain-specific class allowlist, and its region-status assignment
+  policy tuned to one domain — those remain a future, deployment-specific
+  overlay, not something this generic ingest service should hardcode.
+- **The asynchronous half of the product now has a first-party home,
+  but it is still opt-in and still needs a trainer/segmenter you
+  supply.** `docker compose --profile curation up -d` starts the
+  detection worker, VLM worker, auto-label worker, and cluster-refresh
+  daemon against this codebase. There is still no shipped trainer
+  container or segmentation-service container — `/curation/train/*`
+  and the cascade's segmenter leg talk a documented HTTP/file protocol
+  (see `docs/CURATION.md`) that a deployment implements or points at
+  its own service; nothing here starts one for you.
+- **Environment-variable and metric-name prefixes are fully
+  reconciled on the `OP_`/`op_` convention** — the `LEGACY_*` env vars and
+  `legacy_*` metric names from the original port have been renamed. See
+  `env.template` for the current, complete surface.
 - **`DetectionProfile`'s shipped defaults are domain-tuned, not
-  domain-neutral** (§2.3) — a new deployment must construct its own
-  instance rather than relying on the defaults describing a sensible
-  generic region.
+  domain-neutral** (§2.3) — a new deployment should construct its own
+  instance (or override via `OP_DETECTION_*`) rather than relying on
+  the defaults describing a sensible generic region. Only one
+  `DetectionProfile`/`PromptPack` is active per process; there is no
+  per-request selection among several registered profiles yet.
+- **No authentication of any kind on the API** — see `SECURITY.md`.
+  Several curation write routes are destructive
+  (`DELETE /curation/models/{model_name}`) or read arbitrary
+  server-side paths (`POST /ingest/directory`). Do not expose this
+  service directly to the internet.
 - **Coverage is uneven across the ported surface.** Some routers and
   services carry thorough test suites; others were ported with
   comparatively thin coverage because the reference implementation
   itself had thin coverage there. Restoring/extending coverage on the
   weakest surfaces is ongoing, tracked work rather than a silent gap.
 
-None of the above blocks using the subsystem for its core loop —
-ingest via direct OpenSearch writes or the label-import path, browse,
-cluster, review, label, and export — it constrains how far along the
-"turnkey for an arbitrary new deployment" spectrum the subsystem
-currently sits.
+None of the above blocks using the subsystem for its core loop — ingest
+(direct API calls or the label-import path), browse, cluster, review,
+label, and export. It constrains how far along the "turnkey for an
+arbitrary new deployment, fully autonomous end to end" spectrum the
+subsystem currently sits, which is why it ships labelled experimental
+for this release (v0.3.0) — see `docs/CURATION.md`.
 
 ## 7. Labeling-assist item selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model
 
