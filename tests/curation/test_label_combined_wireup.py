@@ -2,8 +2,8 @@
 cohort takes the single combined VLM call path instead of the legacy
 verify + class chain.
 
-Deferred here from Chunk 7 (docs/design/oss_genericization_phase2_plan.md
-§6.1) because it exercises ``scripts.curation.sam_worker_main``'s
+Deferred here from Chunk 7 because it exercises
+``scripts.curation.sam_worker_main``'s
 ``_process_crop`` cohort-routing logic, which needs the worker package
 that lands in this chunk.
 
@@ -94,7 +94,7 @@ def _gemma_with_combined(
     g.label_combined = AsyncMock(return_value=reply)
     g.verify_plate = AsyncMock(
         return_value=VlmRegionVerdict(
-            crop_id='ignored', is_plate=False, confidence='low', reason='unused'
+            crop_id='ignored', is_region=False, confidence='low', reason='unused'
         )
     )
     g.label_or_propose_batch = AsyncMock(return_value=[])
@@ -186,7 +186,7 @@ class TestCohortRouting:
         gemma = _gemma_with_combined(reply=VlmCombinedReply(img_id='x', class_id=None))
         gemma.verify_plate = AsyncMock(
             return_value=VlmRegionVerdict(
-                crop_id='c', is_plate=True, confidence='high', reason='ok'
+                crop_id='c', is_region=True, confidence='high', reason='ok'
             )
         )
         task = _make_task(

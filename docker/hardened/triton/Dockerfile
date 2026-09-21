@@ -5,7 +5,7 @@
 # HTTP RCE chain (CVE-2025-23310/23311/23317, fixed 25.07) and the Dec-2025
 # DoS pair (CVE-2025-33201/33211, fixed 25.10).
 #
-# Hardening applied here (see docs/security/triton_deepstream_cve_remediation.md):
+# Hardening applied here (see docs/security/triton_cve_hardening.md):
 #   Tier 1  apt upgrade  -> pull noble-security fixes (curl, gnutls, perl, systemd, ...)
 #   Tier 1  pip upgrade  -> starlette >= 1.3.1 (OpenAI-compatible frontend dep)
 #   Tier 2  purge the compile-time toolchain (build-essential, *-dev headers,

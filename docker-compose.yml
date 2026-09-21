@@ -56,6 +56,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # CFG-5: previously the ONLY var reaching this container from .env was
+    # OP_API_PREFIX (explicitly interpolated below) -- everything else in
+    # .env (see env.template) was silently unreachable. env_file loads the
+    # whole file as container env vars; explicit `environment:` entries
+    # below still take precedence over same-named .env values.
+    env_file:
+      - path: ./.env
+        required: false
     volumes:
       - ./src:/app/src
       - ./export:/app/export
@@ -66,6 +74,14 @@ services:
       - ./pytorch_models:/app/pytorch_models
       - ./test_images:/app/test_images
       - ./VERSION:/app/VERSION:ro
+      - ./data:/app/data
+      - openprocessor-state:/var/lib/openprocessor
+      # Shared with the curation-auto-label-worker service (profile
+      # `curation`): the API writes /jobs/auto_label/trigger.json and
+      # polls state.json/heartbeat; the worker claims and runs it. Also
+      # backs OP_TRAIN_JOBS_DIR / OP_SCORES_STATE_DIR / OP_SELECT_JOBS_DIR
+      # / OP_VIZ_JOBS_DIR (all default under /jobs — see env.template).
+      - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
     environment:
       # Triton gRPC endpoint (Docker service name)
@@ -73,6 +89,11 @@ services:
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+      # Curation/labeling API prefix (CurationConfig.api_prefix, generic
+      # default /curation — see env.template). Every curation router
+      # builds its prefix at *module import*, so this must be set before
+      # src.main is imported; it cannot change at container runtime.
+      - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
     shm_size: 8g
     stdin_open: true # Keep stdin open
     tty: true # Allocate a pseudo-TTY
@@ -120,6 +141,206 @@ services:
                 - gpu
     depends_on:
       - triton-server
+    networks:
+      - triton_net
+
+  # ===================================================================
+  # Curation subsystem — EXPERIMENTAL, opt-in via `--profile curation`
+  # (D7). `docker compose up -d` on its own never starts anything below
+  # this point; run `docker compose --profile curation up -d` (or
+  # `make curation-up`) once you also want the async labeling/detection
+  # workers. See docs/design/curation_design_rationale.md.
+  #
+  # Every worker below mounts ./src and ./scripts read-only (:ro) —
+  # unlike yolo-api's writable hot-reload mounts, these are long-running
+  # background processes with no request/response cycle to redeploy
+  # against; a `docker compose --profile curation up -d --force-recreate
+  # <service>` picks up code changes.
+  # ===================================================================
+
+  curation-detection-worker:
+    image: davidamacey/openprocessor:latest
+    container_name: curation-detection-worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - curation
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - openprocessor-state:/var/lib/openprocessor
+    environment:
+      - TRITON_URL=triton-server:8001
+      - OPENSEARCH_URL=http://opensearch:9200
+      # D5: no segmenter ships with this repo by default — leaving
+      # SAM3_URL empty makes the cascade's segmenter leg a documented
+      # no-op (see scripts/curation/worker/client.py Sam3Client). Point
+      # this at your own segmentation service's `POST /sam3/segment_plate`
+      # (or a comma-separated SAM3_URLS list) to enable it.
+      - SAM3_URL=${SAM3_URL:-}
+      - SAM3_URLS=${SAM3_URLS:-}
+      - GEMMA_URL=${GEMMA_URL:-}
+    command:
+      - python
+      - -m
+      - scripts.curation.worker
+      - --continuous
+    healthcheck:
+      # No HTTP port is exposed by this worker; pgrep is the trivial
+      # process-alive check (procps is installed in the shared image —
+      # see Dockerfile).
+      test: ["CMD-SHELL", "pgrep -f 'scripts.curation.worker' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      - triton-server
+      - opensearch
+    networks:
+      - triton_net
+
+  curation-vlm-worker:
+    image: davidamacey/openprocessor:latest
+    container_name: curation-vlm-worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - curation
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - openprocessor-state:/var/lib/openprocessor
+    environment:
+      - OP_API=http://yolo-api:8000
+      - OPENSEARCH_URL=http://opensearch:9200
+    command:
+      - python
+      - scripts/curation/vlm_worker.py
+      - --continuous
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'scripts/curation/vlm_worker.py' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      - yolo-api
+      - opensearch
+    networks:
+      - triton_net
+
+  curation-auto-label-worker:
+    image: davidamacey/openprocessor:latest
+    container_name: curation-auto-label-worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - curation
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      # Shared with yolo-api: this is the trigger/state/heartbeat file
+      # protocol POST /curation/pipeline/auto_label writes into (see
+      # OP_AUTO_LABEL_STATE_DIR, default /jobs/auto_label).
+      - openprocessor-jobs:/jobs
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+    command:
+      - python
+      - -m
+      - scripts.curation.auto_label_worker
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pgrep -f 'scripts.curation.auto_label_worker' || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      - opensearch
+    networks:
+      - triton_net
+
+  curation-cluster-refresh:
+    image: davidamacey/openprocessor:latest
+    container_name: curation-cluster-refresh
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - curation
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+    command:
+      - python
+      - scripts/curation/cluster_refresh_daemon.py
+      - --api=http://yolo-api:8000
+      - --opensearch=http://opensearch:9200
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pgrep -f 'scripts/curation/cluster_refresh_daemon.py' || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      - yolo-api
+      - opensearch
+    networks:
+      - triton_net
+
+  # On-demand only (no `restart:` — see docker/evaluator/Dockerfile):
+  # `docker compose --profile curation run --rm curation-evaluator`.
+  curation-evaluator:
+    image: davidamacey/openprocessor-evaluator:latest
+    container_name: curation-evaluator
+    build:
+      context: .
+      dockerfile: docker/evaluator/Dockerfile
+    profiles:
+      - curation
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./src:/app/src:ro
+      - openprocessor-state:/var/lib/openprocessor
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities:
+                - gpu
     networks:
       - triton_net
 
@@ -313,3 +534,5 @@ volumes:
   loki_data:
   opensearch_data:
   opensearch_dashboards_data:
+  openprocessor-state:
+  openprocessor-jobs:

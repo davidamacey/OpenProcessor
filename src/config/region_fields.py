@@ -1,7 +1,7 @@
 """OpenSearch field-name indirection for the per-item "region of interest".
 
-This is the settled design from
-``docs/design/oss_genericization_phase2_plan.md`` §3.2 / §8 decision 1: an
+This is the settled design documented in
+``docs/design/curation_design_rationale.md`` §4: an
 existing deployment's live OpenSearch field names (e.g. ``plate_status``,
 ``plate_bbox_norm``, …) are NOT renamed — there is zero data migration and
 zero reindex risk. Instead, code stops hardcoding those literal strings and
@@ -15,10 +15,10 @@ names — a rename becomes a config flip, not a code change.
 
 - OpenSearch query bodies, ``_source`` lists, bulk update docs, painless
   scripts, and index mapping bodies — YES, governed by ``RegionFields``.
-- Pydantic attribute names on HTTP wire models (the labeler frontend's
-  JSON contract) — NO, frozen independently. See
-  ``docs/design/labeler_api_contract.md``.
-- Enum *values* in ``src/config/plate_state.py`` — NO, values not field
+- Pydantic attribute names on HTTP wire models (the generic curation
+  API's JSON contract) — NO, frozen independently. See
+  ``docs/design/curation_api_contract.md``.
+- Enum *values* in ``src/config/region_state.py`` — NO, values not field
   names, untouched in Phase 2.
 - Metric names — NO, deferred to a later phase.
 
@@ -86,10 +86,10 @@ class RegionFields:
     # Internal cascade flag: set when a detector's confidence was high
     # enough to skip the VLM verify round-trip entirely (see
     # DetectionProfile / the curation worker's fast-path). Not part of
-    # the original 37-attribute count in the reference audit (docs/design/
-    # oss_genericization_phase2_plan.md §3.2) -- added while porting
-    # Chunk 8's worker, per that section's own instruction: "if you hit
-    # a literal with no matching attribute, add the attribute."
+    # the original attribute count in the reference audit -- added while
+    # porting Chunk 8's worker, per the standing instruction: "if you hit
+    # a literal with no matching attribute, add the attribute." (See
+    # docs/design/curation_design_rationale.md §4.)
     skip_verify: str = 'region_skip_verify'
 
     # Legacy-suffixed columns kept for rollback (e.g. plate_*_legacy).
@@ -119,11 +119,18 @@ _default_region_fields: RegionFields | None = None
 def get_region_fields() -> RegionFields:
     """Module-level default ``RegionFields`` instance.
 
+    Built via :meth:`RegionFields.from_env` so the ``OP_REGION_FIELD_*``
+    env vars documented on that classmethod actually take effect for the
+    process-wide default — this was previously constructing a bare
+    ``RegionFields()`` and silently ignoring every ``OP_REGION_FIELD_*``
+    override.
+
     Callers that need a deployment-specific instance (e.g. a future
     overlay for an existing deployment) should construct and inject
-    their own rather than relying on this default.
+    their own rather than relying on this default — mirrors
+    :func:`src.config.curation.get_curation_config`.
     """
     global _default_region_fields  # noqa: PLW0603 - lazily-built module singleton
     if _default_region_fields is None:
-        _default_region_fields = RegionFields()
+        _default_region_fields = RegionFields.from_env()
     return _default_region_fields

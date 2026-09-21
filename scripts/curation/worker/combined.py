@@ -30,6 +30,7 @@ from scripts.curation.worker.verify import (
     _combined_write_doc,
 )
 from src.config import get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
     DEFAULT_PROFILE,
@@ -88,7 +89,7 @@ def _is_combined_cohort(class_source: str, class_confidence: float) -> bool:
 def _finalize_no_region(task: _ItemTask) -> None:
     """Write the terminal no_plate_box doc, layering combined class fields."""
     F = get_region_fields()
-    task.update_doc = {F.status: 'no_plate_box'}
+    task.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
     if task.detection_trace:
         task.update_doc[F.detector_chain] = list(task.detection_trace)
     if task.combined_class_update:

@@ -31,6 +31,7 @@ from src.clients.curation_opensearch import (
     ensure_items_viz_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
+from src.config.region_state import RegionStatus
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
 
@@ -235,13 +236,29 @@ class ItemDoc(BaseModel):
     # stale auto_promote 'cluster_v6_majority_agreement' string).
     label_source: str | None = ''
     # Frozen HTTP wire-model attribute names — see
-    # docs/design/labeler_api_contract.md and the RegionFields scope
-    # table (docs/design/oss_genericization_phase2_plan.md §3.2). These
-    # are the JSON contract with the labeler frontend and are NOT
-    # indirected through RegionFields (that governs OpenSearch document
-    # keys only).
+    # docs/design/curation_api_contract.md and the RegionFields scope
+    # described in docs/design/curation_design_rationale.md §3-4. These
+    # are the generic curation API's JSON contract (Cropwright is one
+    # consumer among anticipated others) and are NOT indirected through
+    # RegionFields (that governs OpenSearch document keys only).
     plate_bbox_norm: list[float] | None = None
     plate_score: float | None = None
+    # Round-trip counterparts of what PATCH /crops/{id}/plate_meta and
+    # PUT /crops/{id}/plate write (RegionFields.status/text/etc on the
+    # storage side) — added so a GET after either write actually reflects
+    # it instead of silently dropping the region metadata (the frontend's
+    # review-queue "Back" path and mapRawCrop() need these back).
+    plate_status: str | None = None
+    plate_text: str | None = None
+    plate_text_source: str | None = None
+    plate_text_confidence: float | None = None
+    plate_rejection_reason: str | None = None
+    plate_detector: str | None = None
+    plate_detector_version: str | None = None
+    plate_verified: bool | None = None
+    plate_verified_at: str | None = None
+    plate_verifier: str | None = None
+    plate_label_source: str | None = None
     test_holdout: bool = False
     # Primary-subject rank (1 = largest crop in its photo) + blur quality.
     # Drive the "largest / 2nd-largest" toggle and clarity slider in the UI.
@@ -330,7 +347,12 @@ class ItemBatchRegionRequest(BaseModel):
 # ('pending_detection', 'pending_verification', 'detection_failed') that
 # represent transient pipeline state — humans never set those by hand.
 HUMAN_REGION_STATUS_VALUES = frozenset(
-    {'detected', 'no_plate_visible', 'verify_rejected', 'false_positive'}
+    {
+        RegionStatus.DETECTED,
+        RegionStatus.NO_PLATE_VISIBLE,
+        RegionStatus.VERIFY_REJECTED,
+        RegionStatus.FALSE_POSITIVE,
+    }
 )
 
 
@@ -455,20 +477,6 @@ class VlmVerifyRegionBatchRequest(BaseModel):
     items: list[VlmVerifyRegionBatchItem]
 
 
-class VlmVerifyRegionBatchResult(BaseModel):
-    """One ordered result in the region-verify-batch response."""
-
-    crop_id: str
-    is_plate: bool
-    confidence: str
-    reason: str = ''
-    candidate_text: str | None = None
-
-
-class VlmVerifyRegionBatchResponse(BaseModel):
-    results: list[VlmVerifyRegionBatchResult]
-
-
 class VlmRegionVisibleBatchItem(BaseModel):
     crop_id: str
     image_b64: str = Field(
@@ -582,6 +590,38 @@ class CropFlagNewClassRequest(BaseModel):
 
     crop_ids: list[str]
     note: str = ''
+
+
+class CurationSettingsResponse(BaseModel):
+    """``GET,PUT /curation/settings`` response envelope.
+
+    ``defaults`` is deliberately ``dict[str, str]`` (an OPEN map keyed by
+    axis id), not a fixed set of named fields (``cluster``/``sort``/etc.)
+    -- a future axis must not require a wire-format change. Missing key =
+    no shared override for that axis; the caller falls back to
+    ``GET /methods``'s own hardcoded-default resolution (see
+    ``src.services.curation.strategy_registry.resolve_effective_default``).
+    """
+
+    defaults: dict[str, str] = Field(default_factory=dict)
+    updated_at: str | None = None
+    updated_by: str | None = None
+
+
+class CurationSettingsUpdateRequest(BaseModel):
+    """``PUT /curation/settings`` body -- partial by design. Only the axes
+    present here are validated + merged into the stored document; axes
+    already set are left untouched (see
+    ``src.clients.curation_opensearch.update_curation_settings``).
+
+    A value of ``null`` for an axis clears that axis's shared override
+    (falls back to that endpoint's own hardcoded default / each /review
+    tab's own tuned sort) -- otherwise a pinned override was permanently
+    unreachable once set, since every id must be currently-advertised and
+    there was no way to express "go back to no override" (raised by the
+    Cropwright settings-UI integration pass)."""
+
+    defaults: dict[str, str | None] = Field(default_factory=dict)
 
 
 class _PublishEvent(BaseModel):

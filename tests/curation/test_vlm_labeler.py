@@ -1,12 +1,12 @@
 """Unit tests for ``src.services.labeling.vlm_labeler.VlmLabeler``.
 
-Ported from the reference ``tests/test_gemma_labeler.py`` (§5 Chunk 7 of
-``docs/design/oss_genericization_phase2_plan.md``). Mechanism only — the
-reference file used generic placeholder class names ('acura', 'bmw',
-'porsche') purely as opaque strings for the chunking/parsing tests; this
-port swaps them for equally-opaque neutral strings so nothing vehicle-
-specific survives, per the plan's "port the mechanism, not the
-vocabulary" instruction.
+Ported from the reference ``tests/test_gemma_labeler.py`` (§5 Chunk 7 —
+see ``docs/design/curation_design_rationale.md`` for the genericization
+approach). Mechanism only — the reference file used generic placeholder
+class names ('acura', 'bmw', 'porsche') purely as opaque strings for the
+chunking/parsing tests; this port swaps them for equally-opaque neutral
+strings so nothing vehicle-specific survives, per the "port the
+mechanism, not the vocabulary" principle.
 
 Tests are intentionally hermetic:
 - All upstream HTTP traffic is replaced with a fake httpx transport.
@@ -379,7 +379,7 @@ def test_health_returns_reachable_on_200():
 
 
 def test_verify_plate_parses_well_formed_json():
-    body = '{"is_plate": true, "confidence": "high", "reason": "clearly a label region"}'
+    body = '{"is_region": true, "confidence": "high", "reason": "clearly a label region"}'
 
     def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
         return httpx.Response(200, json=_make_chat_response(body))
@@ -398,7 +398,7 @@ def test_verify_plate_parses_well_formed_json():
 
     verdict = _run(_go())
     assert verdict.crop_id == 'region-1'
-    assert verdict.is_plate is True
+    assert verdict.is_region is True
     assert verdict.confidence == 'high'
     assert 'label region' in verdict.reason
 
@@ -420,6 +420,6 @@ def test_verify_plate_returns_parse_failure_on_garbage():
             )
 
     verdict = _run(_go())
-    assert verdict.is_plate is False
+    assert verdict.is_region is False
     assert verdict.confidence == 'low'
     assert verdict.reason == 'parse_failure'

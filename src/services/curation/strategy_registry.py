@@ -8,8 +8,8 @@ constant does NOT move, see plan §8 non-goal #1).
 
 Phase 1 adds placeholder entries for the new ``crop_scores/`` scorers
 (``uniqueness`` / ``mistakenness`` / ``near_dup``). Their ``status`` tracks
-the ``KB_SCORES_ENABLED`` feature flag: ``'disabled'`` until an operator
-opts in, ``'shadow'`` (computed + logged, not selectable — ``KB_SCORES_SHADOW``)
+the ``OP_SCORES_ENABLED`` feature flag: ``'disabled'`` until an operator
+opts in, ``'shadow'`` (computed + logged, not selectable — ``OP_SCORES_SHADOW``)
 once enabled-but-shadow, ``'experimental'`` once out of shadow. The frontend
 renders only ``stable``/``experimental`` entries (plan §3, "capability-
 discovery linchpin"); ``shadow``/``disabled`` entries are never offered as a
@@ -21,7 +21,7 @@ go/no-go validation protocol against the real ~350k-crop pool (see
 ``VALIDATED_SCORERS`` below promotes the scorers whose *complete* gate
 passed (no human-in-the-loop or GPU-training step left unexecuted) one
 notch above the flag-driven status computed for the rest — i.e. from
-``shadow`` to ``experimental`` while ``KB_SCORES_SHADOW`` is still set.
+``shadow`` to ``experimental`` while ``OP_SCORES_SHADOW`` is still set.
 Only ``mistakenness`` qualifies today: its full gate (synthetic 5%
 label-flip AUROC >= 0.80 *and* precision@100 >= 0.50) is a pure synthetic
 check with no human/GPU step, and both bars passed. ``uniqueness`` and
@@ -31,7 +31,7 @@ threshold sweep) but each method's plan-table gate also requires a step
 this validation pass could not execute (a blind operator A/B for
 uniqueness; 50 manually-judged pairs per threshold for near_dup) — they
 stay at whatever the flag-driven status says (``shadow``/``disabled``)
-until that step runs. This never overrides ``KB_SCORES_ENABLED=false``
+until that step runs. This never overrides ``OP_SCORES_ENABLED=false``
 (disabled stays disabled regardless of validation history — the flag is
 a master kill switch, not a per-method opt-in).
 
@@ -52,25 +52,27 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 StrategyStatus = Literal['stable', 'experimental', 'shadow', 'disabled']
-StrategyAxis = Literal['cluster', 'score', 'sort', 'overlay']
+StrategyAxis = Literal[
+    'cluster', 'score', 'sort', 'overlay', 'export', 'detection_profile', 'prompt_pack'
+]
 
 
 def _scores_enabled() -> bool:
     """Read fresh each call (not a module constant) so tests can
     ``monkeypatch.setenv`` without reimporting — matches the
     ``train_jobs._resolve_jobs_dir`` convention in this repo."""
-    return os.environ.get('KB_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return os.environ.get('OP_SCORES_ENABLED', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _scores_shadow() -> bool:
-    return os.environ.get('KB_SCORES_SHADOW', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    return os.environ.get('OP_SCORES_SHADOW', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _select_diverse_enabled() -> bool:
     """Mirrors ``kb_select.py``'s own flag check — kept independent (not
     imported from there) so this dependency-light module never needs to
     import a router module just to read one env var."""
-    return os.environ.get('KB_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_SELECT_DIVERSE_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -82,7 +84,7 @@ def _semantic_search_enabled() -> bool:
     """Mirrors ``kb_semantic.py``'s own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``/``_viz_projection_enabled``."""
-    return os.environ.get('KB_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_SEMANTIC_SEARCH_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -94,7 +96,7 @@ def _viz_projection_enabled() -> bool:
     """Mirrors ``kb_viz.py``'s own flag check — same "don't import a
     router module just to read one env var" reasoning as
     ``_select_diverse_enabled``."""
-    return os.environ.get('KB_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
+    return os.environ.get('OP_VIZ_PROJECTION_ENABLED', '').strip().lower() in {
         '1',
         'true',
         'yes',
@@ -142,9 +144,9 @@ above together, never independently."""
 
 
 def _score_strategy_status() -> StrategyStatus:
-    """Phase 1 scorers are 'disabled' until KB_SCORES_ENABLED, then
+    """Phase 1 scorers are 'disabled' until OP_SCORES_ENABLED, then
     'shadow' (computed but not selectable as a sort) until an operator
-    also clears KB_SCORES_SHADOW, then 'experimental'."""
+    also clears OP_SCORES_SHADOW, then 'experimental'."""
     if not _scores_enabled():
         return 'disabled'
     if _scores_shadow():
@@ -156,17 +158,34 @@ VALIDATED_SCORERS: frozenset[str] = frozenset({'mistakenness'})
 """Scorer ids whose Phase 2 validation (curation-strategy plan §6) passed
 the *complete* gate in ``docs/design/curation_scores.md`` -- promoted one
 notch above the flag-driven status (``shadow`` -> ``experimental``) so an
-operator running with ``KB_SCORES_SHADOW=1`` still sees it as selectable.
+operator running with ``OP_SCORES_SHADOW=1`` still sees it as selectable.
 Deliberately NOT ``uniqueness``/``near_dup``: their pre-screens passed on
 real data but the plan's full gate for each needs a step this validation
 pass couldn't execute (human blind A/B; manually-judged near-dup pairs) --
 see the doc for exact numbers before adding anything here."""
 
 
-def _cluster_strategies() -> list[dict[str, Any]]:
+# Shared-settings default resolution lives in its own module
+# (strategy_defaults.py) -- this file grew past the pre-commit 700-LOC
+# ratchet once that logic landed, and "resolve the effective default id
+# for an axis" is a genuinely separate concern from "build the full
+# GET /methods payload." Re-exported here (see __all__ below) so every
+# existing import of ``strategy_registry.resolve_effective_default`` /
+# ``strategy_registry.SETTABLE_DEFAULT_AXES`` keeps working unchanged.
+from src.services.curation.strategy_defaults import (  # noqa: E402
+    SETTABLE_DEFAULT_AXES,
+    resolve_effective_default,
+)
+
+
+def _cluster_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Reflect the real ``cluster_methods`` registry — never hand-duplicated
-    names, so this can't drift from ``get_method``/``available_methods``."""
-    from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
+    names, so this can't drift from ``get_method``/``available_methods``.
+    ``default_id`` is :func:`resolve_effective_default`'s answer for the
+    ``'cluster'`` axis, resolved once by the caller (``get_registry``) so
+    every axis's default resolution happens against the same settings-doc
+    snapshot within one request."""
+    from src.services.curation.clustering.methods import available_methods
 
     return [
         {
@@ -174,7 +193,7 @@ def _cluster_strategies() -> list[dict[str, Any]]:
             'axis': 'cluster',
             'label': name.upper() if name in {'ivf', 'ahc'} else name.replace('_', ' ').title(),
             'status': 'stable',
-            'default': name == DEFAULT_METHOD,
+            'default': name == default_id,
         }
         for name in available_methods()
     ]
@@ -182,7 +201,7 @@ def _cluster_strategies() -> list[dict[str, Any]]:
 
 def effective_scorer_status(scorer_id: str) -> StrategyStatus:
     """Current status for one ``crop_scores`` scorer id, applying the same
-    ``KB_SCORES_ENABLED``/``KB_SCORES_SHADOW``/``VALIDATED_SCORERS``
+    ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``/``VALIDATED_SCORERS``
     promotion rule ``_score_strategies()`` uses for ``GET /curation/methods``.
 
     Extracted so other Phase-3 modules (``review_sorts.py``) can ask "what
@@ -192,7 +211,7 @@ def effective_scorer_status(scorer_id: str) -> StrategyStatus:
     caller should cache this across a request boundary."""
     status = _score_strategy_status()
     # Promote a validated scorer one notch (shadow -> experimental)
-    # without ever bypassing the KB_SCORES_ENABLED master switch.
+    # without ever bypassing the OP_SCORES_ENABLED master switch.
     if status == 'shadow' and scorer_id in VALIDATED_SCORERS:
         return 'experimental'
     return status
@@ -227,7 +246,7 @@ def _score_strategies() -> list[dict[str, Any]]:
     return entries
 
 
-def _sort_strategies() -> list[dict[str, Any]]:
+def _sort_strategies(default_id: str | None) -> list[dict[str, Any]]:
     """Phase 3 ``review_sorts.py`` registry entries (curation-strategy plan
     §3.2) — the ``'sort'`` axis this module's ``StrategyAxis`` type has
     declared since Phase 3 but ``get_registry()`` never actually populated
@@ -244,7 +263,13 @@ def _sort_strategies() -> list[dict[str, Any]]:
     independently-selectable sort — ``default_sort_for_tab`` resolves it
     differently per review tab (plan §3.2) — so surfacing it here would
     just be a confusing, always-present duplicate of whichever tab-specific
-    entry is actually in effect for the tab currently open."""
+    entry is actually in effect for the tab currently open.
+
+    ``default_id`` (curation deployment-settings plan) is
+    :func:`resolve_effective_default`'s answer for the ``'sort'`` axis —
+    an *additional*, opt-in global default an operator can set via ``PUT
+    /curation/settings`` on top of the untouched per-tab defaults; ``None``
+    when no override is set (the pre-existing, always-``False`` behavior)."""
     try:
         from src.services.curation.review_sorts import get_review_sorts
     except ImportError:
@@ -260,7 +285,7 @@ def _sort_strategies() -> list[dict[str, Any]]:
                 'axis': 'sort',
                 'label': sort.label,
                 'status': sort.status,
-                'default': False,
+                'default': sort.id == default_id,
                 'requires_field': sort.requires_field,
             }
         )
@@ -270,7 +295,7 @@ def _sort_strategies() -> list[dict[str, Any]]:
 def _overlay_strategies() -> list[dict[str, Any]]:
     """Phase 4 ``selection/`` overlays (curation-strategy plan §2.6/§3.4).
     One entry today: ``diverse`` (k-center-greedy). Status tracks
-    ``KB_SELECT_DIVERSE_ENABLED`` the same live-read pattern
+    ``OP_SELECT_DIVERSE_ENABLED`` the same live-read pattern
     ``effective_scorer_status`` uses for the score axis, but capped at
     ``experimental`` — never ``stable`` — regardless of the flag, because
     only the cheap pre-screen has passed
@@ -317,7 +342,7 @@ def _semantic_search_strategy() -> list[dict[str, Any]]:
 
 def _viz_projection_status() -> StrategyStatus:
     """``do_not_ship`` is a hard kill switch — stays ``disabled`` even if
-    an operator sets ``KB_VIZ_PROJECTION_ENABLED=1`` (same "flag can only
+    an operator sets ``OP_VIZ_PROJECTION_ENABLED=1`` (same "flag can only
     turn a validated thing on, never revive a failed one" rule
     ``VALIDATED_SCORERS`` enforces for the score axis). Otherwise tracks
     the flag, capped at ``experimental`` — never ``stable`` — because the
@@ -359,9 +384,99 @@ def _viz_projection_strategy() -> list[dict[str, Any]]:
     ]
 
 
+def _export_strategies() -> list[dict[str, Any]]:
+    """Dataset-export capability axis (cropwright_backend_integration_plan.md
+    §4.3/T-C2).
+
+    Advertises which export *kinds* ``POST {prefix}/export/{kind}`` can
+    actually produce on this deployment, so a consumer gates an export UI
+    on capability rather than probing a write endpoint (``POST
+    /export/lpr`` would kick off a real dataset build) with a throwaway
+    request just to see whether it 404s.
+
+    ``lpr`` — the reference implementation's proprietary single-class
+    license-plate export (Bucket B, out of scope — never ported) — is
+    deliberately absent from this list rather than listed with
+    ``status='disabled'``: a status implies "not yet, but this deployment
+    could serve it later", which isn't true for a proprietary overlay this
+    repo doesn't contain.
+    """
+    return [
+        {
+            'id': 'yolo',
+            'axis': 'export',
+            'label': 'YOLO detection dataset export',
+            'status': 'stable',
+            'default': True,
+        }
+    ]
+
+
+def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]]:
+    """Configured sub-region ``DetectionProfile`` axis (labeling-assist
+    plan task (b)).
+
+    Reads :mod:`src.services.detection.profile_registry` -- a real,
+    process-lifetime registry a deployment can add more than one profile
+    to (e.g. a license-plate profile AND a shipping-label profile) --
+    rather than hardcoding the single ``DEFAULT_PROFILE`` here. Today
+    exactly one profile is ever registered (importing
+    ``src.services.detection.cascade_detect`` registers its own
+    ``DEFAULT_PROFILE`` as the default), so this axis lists exactly one
+    entry, but the mechanism is not limited to one.
+
+    ``default_id`` is :func:`resolve_effective_default`'s answer for the
+    ``'detection_profile'`` axis (falls back to
+    ``get_default_profile_name()`` with no shared-settings override)."""
+    # Import triggers cascade_detect's module-level `register_profile`
+    # call if it hasn't run yet in this process.
+    from src.services.detection import cascade_detect  # noqa: F401
+    from src.services.detection.profile_registry import get_profiles
+
+    return [
+        {
+            'id': profile.name,
+            'axis': 'detection_profile',
+            'label': profile.name,
+            'status': 'stable',
+            'default': profile.name == default_id,
+        }
+        for profile in get_profiles().values()
+    ]
+
+
+def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
+    """Configured VLM ``PromptPack`` axis (labeling-assist plan task (c)).
+
+    Lists whatever pack :func:`~src.services.labeling.vlm_prompts.
+    resolve_prompt_pack` actually resolves for this process -- a
+    deployment-supplied pack via ``OP_PROMPT_PACK_PATH``, or the built-in
+    generic pack when unset/missing. Always exactly one entry (there is
+    only ever one active pack per process). ``default_id`` is
+    :func:`resolve_effective_default`'s answer for the ``'prompt_pack'``
+    axis; since a shared-settings override is only ever honored when it
+    names a currently-advertised id (:func:`_advertised_ids_for_axis`
+    returns exactly ``{pack.name}`` here), this entry's ``default`` is
+    always ``True`` in practice -- there is nothing else it could resolve
+    to today.
+    """
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+
+    pack = resolve_prompt_pack()
+    return [
+        {
+            'id': pack.name,
+            'axis': 'prompt_pack',
+            'label': pack.name,
+            'status': 'stable',
+            'default': pack.name == default_id,
+        }
+    ]
+
+
 _COVERAGE_CACHE: dict[str, int | None] | None = None
 _COVERAGE_CACHE_AT = 0.0
-_COVERAGE_TTL_S = float(os.environ.get('KB_FIELD_COVERAGE_TTL_S', '60'))
+_COVERAGE_TTL_S = float(os.environ.get('OP_FIELD_COVERAGE_TTL_S', '60'))
 _COVERAGE_TOTAL_KEY = '__total__'
 """Sentinel key the pool-size count is cached under, alongside the
 per-field exists counts, in the same dict -- avoids a second cache
@@ -452,11 +567,35 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     sorts) always carry ``field_coverage: None`` -- coverage doesn't apply
     to a field every crop always has.
     """
+    # Fetched at most once per request (None if opensearch is None) so
+    # every axis's 'default' flag below reflects a single consistent
+    # settings-doc snapshot, and this endpoint issues one settings lookup
+    # total rather than one per axis.
+    settings_doc: dict[str, Any] | None = None
+    if opensearch is not None:
+        try:
+            from src.clients.curation_opensearch import get_curation_settings
+
+            settings_doc = await get_curation_settings(opensearch)
+        except Exception as exc:
+            logger.warning('kb_methods_settings_lookup_failed', error=str(exc))
+            settings_doc = None
+
+    cluster_default = await resolve_effective_default('cluster', settings_doc=settings_doc)
+    sort_default = await resolve_effective_default('sort', settings_doc=settings_doc)
+    detection_profile_default = await resolve_effective_default(
+        'detection_profile', settings_doc=settings_doc
+    )
+    prompt_pack_default = await resolve_effective_default('prompt_pack', settings_doc=settings_doc)
+
     strategies = [
-        *_cluster_strategies(),
-        *_sort_strategies(),
+        *_cluster_strategies(cluster_default),
+        *_sort_strategies(sort_default),
         *_score_strategies(),
         *_overlay_strategies(),
+        *_export_strategies(),
+        *_detection_profile_strategies(detection_profile_default),
+        *_prompt_pack_strategies(prompt_pack_default),
     ]
 
     fields = frozenset(e['requires_field'] for e in strategies if e.get('requires_field'))
@@ -498,6 +637,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
 
 
 __all__ = [
+    'SETTABLE_DEFAULT_AXES',
     'VALIDATED_SCORERS',
     'VIZ_PROJECTION_PURITY',
     'VIZ_PROJECTION_REQUIRES_BANNER',
@@ -506,4 +646,5 @@ __all__ = [
     'StrategyStatus',
     'effective_scorer_status',
     'get_registry',
+    'resolve_effective_default',
 ]

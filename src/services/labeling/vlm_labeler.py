@@ -11,13 +11,13 @@ nothing here names that model) to:
   on a product photo; a license plate on a vehicle crop) is real, and
   read any text on it
 
-Split out of the reference ``gemma_labeler.py`` per §3.4 of
-``docs/design/oss_genericization_phase2_plan.md`` (a 3-way split: this
+Split out of the reference ``gemma_labeler.py`` (a 3-way split: this
 module is the orchestration half — transport lives in
 ``vlm_client.py``, prompt/vocabulary data lives in ``vlm_prompts.py``).
 This module lands over the 700-LOC pre-commit ratchet cap on arrival;
-that is expected (§0.5) — the follow-up split of ``VlmLabeler``'s class
-body is out of scope for this port.
+that is expected (see ``docs/design/curation_design_rationale.md`` §5)
+— the follow-up split of ``VlmLabeler``'s class body is out of scope
+for this port.
 
 Design notes
 ------------
@@ -191,7 +191,7 @@ class VlmRegionVerdict(BaseModel):
     """
 
     crop_id: str
-    is_plate: bool
+    is_region: bool
     confidence: ConfidenceLevel
     reason: str = Field(default='', description='≤15-word free-text reason from the VLM.')
     text: str | None = Field(
@@ -873,7 +873,7 @@ class VlmLabeler:
             )
             return VlmRegionVerdict(
                 crop_id=crop.crop_id,
-                is_plate=False,
+                is_region=False,
                 confidence='low',
                 reason='upstream error',
             )
@@ -896,7 +896,7 @@ class VlmLabeler:
         inside the upstream images-per-prompt cap.
 
         Returns one :class:`VlmRegionVerdict` per input crop, in the
-        same order. Failed chunks fall back to ``is_plate=False,
+        same order. Failed chunks fall back to ``is_region=False,
         confidence='low'`` so the caller can route the crop to human
         review (same behaviour as the single-crop fallback).
         """
@@ -968,7 +968,7 @@ class VlmLabeler:
             return [
                 VlmRegionVerdict(
                     crop_id=c.crop_id,
-                    is_plate=False,
+                    is_region=False,
                     confidence='low',
                     reason='upstream error',
                 )
@@ -1434,7 +1434,7 @@ class VlmLabeler:
         fallback = [
             VlmRegionVerdict(
                 crop_id=c.crop_id,
-                is_plate=False,
+                is_region=False,
                 confidence='low',
                 reason='parse_failure',
             )
@@ -1510,26 +1510,26 @@ class VlmLabeler:
                 out.append(
                     VlmRegionVerdict(
                         crop_id=crop.crop_id,
-                        is_plate=False,
+                        is_region=False,
                         confidence='low',
                         reason='missing_in_response',
                     )
                 )
                 continue
-            is_plate_raw = entry.get('is_plate')
-            if isinstance(is_plate_raw, bool):
-                is_plate = is_plate_raw
-            elif isinstance(is_plate_raw, str):
-                is_plate = is_plate_raw.strip().lower() in ('true', 'yes', '1')
+            is_region_raw = entry.get('is_region')
+            if isinstance(is_region_raw, bool):
+                is_region = is_region_raw
+            elif isinstance(is_region_raw, str):
+                is_region = is_region_raw.strip().lower() in ('true', 'yes', '1')
             else:
-                is_plate = False
+                is_region = False
             confidence = _normalize_confidence(entry.get('confidence'))
             reason = str(entry.get('reason', '') or '')[:120]
-            text, text_confidence = _extract_region_text(entry, is_plate=is_plate)
+            text, text_confidence = _extract_region_text(entry, is_region=is_region)
             out.append(
                 VlmRegionVerdict(
                     crop_id=crop.crop_id,
-                    is_plate=is_plate,
+                    is_region=is_region,
                     confidence=confidence,
                     reason=reason,
                     text=text,
@@ -1734,7 +1734,7 @@ class VlmLabeler:
             visible_raw = entry.get('visible')
             if visible_raw is None:
                 # Tolerate alternate keys callers might emit.
-                visible_raw = entry.get('is_plate') or entry.get(fields.visible)
+                visible_raw = entry.get('is_region') or entry.get(fields.visible)
             if isinstance(visible_raw, bool):
                 out[crop.crop_id] = visible_raw
             elif isinstance(visible_raw, str):
@@ -1759,7 +1759,7 @@ class VlmLabeler:
         """
 
         fallback = VlmRegionVerdict(
-            crop_id=crop.crop_id, is_plate=False, confidence='low', reason='parse_failure'
+            crop_id=crop.crop_id, is_region=False, confidence='low', reason='parse_failure'
         )
         if not raw:
             return fallback
@@ -1786,7 +1786,7 @@ class VlmLabeler:
                 parsed = json.loads(c)
             except json.JSONDecodeError:
                 continue
-            if isinstance(parsed, dict) and 'is_plate' in parsed:
+            if isinstance(parsed, dict) and 'is_region' in parsed:
                 break
             parsed = None
         if parsed is None:
@@ -1799,20 +1799,20 @@ class VlmLabeler:
         if not isinstance(parsed, dict):
             return fallback
 
-        is_plate_raw = parsed.get('is_plate')
-        if isinstance(is_plate_raw, bool):
-            is_plate = is_plate_raw
-        elif isinstance(is_plate_raw, str):
-            is_plate = is_plate_raw.strip().lower() in ('true', 'yes', '1')
+        is_region_raw = parsed.get('is_region')
+        if isinstance(is_region_raw, bool):
+            is_region = is_region_raw
+        elif isinstance(is_region_raw, str):
+            is_region = is_region_raw.strip().lower() in ('true', 'yes', '1')
         else:
-            is_plate = False
+            is_region = False
 
         confidence = _normalize_confidence(parsed.get('confidence'))
         reason = str(parsed.get('reason', '') or '')[:120]
-        text, text_confidence = _extract_region_text(parsed, is_plate=is_plate)
+        text, text_confidence = _extract_region_text(parsed, is_region=is_region)
         return VlmRegionVerdict(
             crop_id=crop.crop_id,
-            is_plate=is_plate,
+            is_region=is_region,
             confidence=confidence,
             reason=reason,
             text=text,
@@ -1828,14 +1828,14 @@ _TEXT_SENTINELS = frozenset({'', 'null', 'none', 'unknown', 'unreadable', 'n/a',
 
 
 def _extract_region_text(
-    parsed: dict[str, Any], *, is_plate: bool
+    parsed: dict[str, Any], *, is_region: bool
 ) -> tuple[str | None, ConfidenceLevel | None]:
     """Pull region text + confidence from a parsed verdict dict.
 
-    Only honored when ``is_plate=True``. Cleans empty/sentinel strings
+    Only honored when ``is_region=True``. Cleans empty/sentinel strings
     to None so callers can treat them uniformly.
     """
-    if not is_plate:
+    if not is_region:
         return None, None
     raw = parsed.get('text')
     if raw is None:

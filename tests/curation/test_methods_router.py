@@ -6,7 +6,7 @@ established pattern — see test_review_disagreements.py). Verifies:
 
 * Every real cluster method (ivf/ahc/hdbscan) is reported stable, ivf is
   the sole default (mirrors DEFAULT_METHOD — plan §8 non-goal #1).
-* Score-axis entries reflect KB_SCORES_ENABLED / KB_SCORES_SHADOW.
+* Score-axis entries reflect OP_SCORES_ENABLED / OP_SCORES_SHADOW.
 * Disabled entries are never marked default; every advertised id resolves
   via the real registries (cluster_methods.get_method /
   crop_scores.get_scorer).
@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
@@ -47,11 +48,11 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     fake_os = AsyncMock()
     fake_os.count = AsyncMock(return_value={'count': 0})
     monkeypatch.setattr('src.routers.curation._ensure_indexes', AsyncMock(return_value=None))
-    monkeypatch.delenv('KB_SCORES_ENABLED', raising=False)
-    monkeypatch.delenv('KB_SCORES_SHADOW', raising=False)
-    monkeypatch.delenv('KB_SELECT_DIVERSE_ENABLED', raising=False)
-    monkeypatch.delenv('KB_VIZ_PROJECTION_ENABLED', raising=False)
-    monkeypatch.delenv('KB_SEMANTIC_SEARCH_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
+    monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
+    monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
+    monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
 
     app = FastAPI()
     app.include_router(kb_router)
@@ -102,8 +103,8 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     ``shadow`` here."""
     from src.services.curation.strategy_registry import VALIDATED_SCORERS
 
-    monkeypatch.setenv('KB_SCORES_ENABLED', '1')
-    monkeypatch.setenv('KB_SCORES_SHADOW', '1')
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.setenv('OP_SCORES_SHADOW', '1')
     r = app_client.get('/curation/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
@@ -113,8 +114,8 @@ def test_score_entries_shadow_when_enabled_and_shadow(
             f'{scorer_id}: expected {expected}, got {entry["status"]}'
         )
     assert VALIDATED_SCORERS  # sanity: at least one scorer has been validated
-    # Phase 4/5/P2-14 additive flags (KB_SELECT_DIVERSE_ENABLED,
-    # KB_VIZ_PROJECTION_ENABLED, KB_SEMANTIC_SEARCH_ENABLED) joined this
+    # Phase 4/5/P2-14 additive flags (OP_SELECT_DIVERSE_ENABLED,
+    # OP_VIZ_PROJECTION_ENABLED, OP_SEMANTIC_SEARCH_ENABLED) joined this
     # envelope; unset here so this test's env matches its own setup above.
     assert body['flags'] == {
         'kb_scores_enabled': True,
@@ -128,8 +129,8 @@ def test_score_entries_shadow_when_enabled_and_shadow(
 def test_score_entries_experimental_when_enabled_not_shadow(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv('KB_SCORES_ENABLED', '1')
-    monkeypatch.delenv('KB_SCORES_SHADOW', raising=False)
+    monkeypatch.setenv('OP_SCORES_ENABLED', '1')
+    monkeypatch.delenv('OP_SCORES_SHADOW', raising=False)
     r = app_client.get('/curation/methods')
     body = r.json()
     score_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'score'}
@@ -168,8 +169,8 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     """Curation-strategy plan §6/§10.2: only diversity's cheap pre-screen
     passed (docs/design/curation_scores.md §6); the full training A/B gate
     has not run, so this overlay must never advertise 'stable' regardless
-    of KB_SELECT_DIVERSE_ENABLED."""
-    monkeypatch.setenv('KB_SELECT_DIVERSE_ENABLED', '1')
+    of OP_SELECT_DIVERSE_ENABLED."""
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'diverse')
@@ -198,7 +199,7 @@ def test_viz_projection_experimental_when_flag_on_but_never_stable(
     section), but the interactive-perf half is a frontend check this
     backend-only pass never ran -- same "capped at experimental" reasoning
     ``diverse`` uses for its own still-outstanding gate half."""
-    monkeypatch.setenv('KB_VIZ_PROJECTION_ENABLED', '1')
+    monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
@@ -212,18 +213,127 @@ def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: Test
     pass, not a placeholder) plus the frontend-facing banner flag --
     ``requires_banner`` is False because the measured purity landed in the
     plan §6 "ship plain" tier (>=0.30), not the 0.15-0.30 banner tier."""
-    from src.services.curation.strategy_registry import (
-        VIZ_PROJECTION_PURITY,
-        VIZ_PROJECTION_REQUIRES_BANNER,
-    )
-
     r = app_client.get('/curation/methods')
     body = r.json()
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
-    assert entry['purity'] == VIZ_PROJECTION_PURITY
+    # Literal expected values (not re-imported from the module under
+    # test) — a change to either would be a real, dashboard-visible
+    # behavior change this test must catch.
+    assert entry['purity'] == pytest.approx(0.472)
     assert entry['purity'] >= 0.30
-    assert entry['requires_banner'] == VIZ_PROJECTION_REQUIRES_BANNER
     assert entry['requires_banner'] is False
+
+
+def test_export_axis_advertises_yolo_stable_and_omits_lpr(app_client: TestClient) -> None:
+    """cropwright_backend_integration_plan.md §4.3/T-C2: the frontend gates
+    its LPR export panel on this axis rather than probing the write
+    endpoint. ``lpr`` (proprietary, never ported -- Bucket B) must not
+    appear at all, not even as a disabled entry."""
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    export_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'export'}
+    assert set(export_entries) == {'yolo'}
+    assert export_entries['yolo']['status'] == 'stable'
+    assert 'lpr' not in export_entries
+
+
+def test_detection_profile_axis_advertises_the_registered_default(
+    app_client: TestClient,
+) -> None:
+    """Labeling-assist plan task (b): today exactly one ``DetectionProfile``
+    is ever constructed (``cascade_detect.DEFAULT_PROFILE``, registered as
+    the default the moment that module is imported -- see
+    ``src.services.detection.profile_registry``). This axis must list it,
+    keyed by the profile's own ``name`` field, as the sole stable/default
+    entry."""
+    from src.services.detection.cascade_detect import DEFAULT_PROFILE
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
+    assert set(profile_entries) == {DEFAULT_PROFILE.name}
+    entry = profile_entries[DEFAULT_PROFILE.name]
+    assert entry['status'] == 'stable'
+    assert entry['default'] is True
+
+
+def test_detection_profile_registry_supports_more_than_one_profile() -> None:
+    """The mechanism itself must not be hardcoded to a single entry --
+    registering a second profile must surface both, with only the
+    explicitly-default one flagged."""
+    from src.config import DetectionProfile
+    from src.services.detection import profile_registry
+
+    saved = profile_registry.get_profiles()
+    saved_default = profile_registry.get_default_profile_name()
+    try:
+        profile_registry._reset_registry_for_tests()
+        first = DetectionProfile(name='license_plate')
+        second = DetectionProfile(name='shipping_label')
+        profile_registry.register_profile(first, default=True)
+        profile_registry.register_profile(second)
+
+        from src.services.curation.strategy_registry import _detection_profile_strategies
+
+        # No shared-settings override configured for this test -- pass the
+        # registry's own hardcoded default straight through, same as
+        # resolve_effective_default('detection_profile', opensearch=None).
+        entries = {
+            e['id']: e
+            for e in _detection_profile_strategies(profile_registry.get_default_profile_name())
+        }
+        assert set(entries) == {'license_plate', 'shipping_label'}
+        assert entries['license_plate']['default'] is True
+        assert entries['shipping_label']['default'] is False
+        assert all(e['axis'] == 'detection_profile' for e in entries.values())
+    finally:
+        profile_registry._reset_registry_for_tests()
+        for profile in saved.values():
+            profile_registry.register_profile(profile, default=profile.name == saved_default)
+
+
+def test_prompt_pack_axis_advertises_the_resolved_pack(app_client: TestClient) -> None:
+    """Labeling-assist plan task (c): with no ``OP_PROMPT_PACK_PATH``
+    configured, the axis must advertise the built-in generic pack by its
+    own ``name`` field."""
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
+    assert set(pack_entries) == {GENERIC_ITEM_PACK.name}
+    entry = pack_entries[GENERIC_ITEM_PACK.name]
+    assert entry['status'] == 'stable'
+    assert entry['default'] is True
+
+
+def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
+    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deployment pointing ``OP_PROMPT_PACK_PATH`` at its own pack file
+    (task a) sees that pack's name on the axis instead of the generic
+    fallback."""
+    import json
+
+    from src.config.curation import CurationConfig
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    custom = GENERIC_ITEM_PACK.to_dict()
+    custom['name'] = 'pallet_v1'
+    pack_path = tmp_path / 'pack.json'
+    pack_path.write_text(json.dumps(custom))
+
+    custom_cfg = CurationConfig(prompt_pack_path=pack_path)
+    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
+    assert set(pack_entries) == {'pallet_v1'}
 
 
 def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:

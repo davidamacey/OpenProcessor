@@ -23,7 +23,6 @@ from __future__ import annotations
 import base64
 import binascii
 import io
-import os
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
-from src.config import get_region_fields
+from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -55,11 +54,19 @@ _F = get_region_fields()
 
 def _get_vlm_labeler() -> Any:
     """Lazy VlmLabeler singleton — imported so VLM routes don't pull
-    httpx for the whole router on cold start."""
+    httpx for the whole router on cold start.
+
+    The pack is resolved once, at singleton construction, via
+    :func:`~src.services.labeling.vlm_prompts.resolve_prompt_pack` — a
+    deployment-supplied ``OP_PROMPT_PACK_PATH`` pack, or the built-in
+    generic pack when unset/missing (see
+    ``docs/design/curation_design_rationale.md``).
+    """
     from src.services.labeling.vlm_labeler import VlmLabeler
+    from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     if not hasattr(_get_vlm_labeler, '_inst'):
-        _get_vlm_labeler._inst = VlmLabeler()  # type: ignore[attr-defined]
+        _get_vlm_labeler._inst = VlmLabeler(pack=resolve_prompt_pack())  # type: ignore[attr-defined]
     return _get_vlm_labeler._inst  # type: ignore[attr-defined]
 
 
@@ -185,7 +192,11 @@ async def vlm_label_batch(
     # with the LRU-thumbnail JPEG bytes (128px is enough for the VLM).
     from src.services.labeling.vlm_labeler import ItemCrop
 
-    crop_cache_dir = os.environ.get('GEMMA_CROP_CACHE_DIR', '/dev/shm/curation_crops')  # nosec B108 — intentional tmpfs cache
+    # Same OP_CROP_CACHE_DIR / CurationConfig.crop_cache_dir the worker
+    # (scripts/curation/worker/state.py) writes into -- this used to read a
+    # different env var with a different default (GEMMA_CROP_CACHE_DIR),
+    # which meant a 100% cache miss out of the box (CFG-2).
+    crop_cache_dir = str(get_curation_config().crop_cache_dir)
 
     def _vlm_jpeg_for(crop_id: str, image_path: str, bbox: tuple) -> bytes | None:
         # Phase A: prefer the RAM crop cache populated by ingest, if any.
@@ -420,7 +431,7 @@ async def vlm_verify_regions(
         bulk.append(
             {
                 'doc': {
-                    _F.verified: verdict.is_plate,
+                    _F.verified: verdict.is_region,
                     _F.reason: verdict.reason,
                     'updated_at': now,
                 }
@@ -511,7 +522,7 @@ async def vlm_verify_region_batch(
         results.append(
             VlmVerifyRegionBatchResult(
                 crop_id=v.crop_id,
-                is_region=v.is_plate,
+                is_region=v.is_region,
                 confidence=v.confidence,
                 reason=v.reason,
                 candidate_text=candidate_text_by_id.get(v.crop_id),

@@ -15,7 +15,7 @@ from typing import Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from src.config import get_curation_config
+from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import DEFAULT_PROFILE
 
@@ -55,24 +55,13 @@ SECONDARY_SHAPE_GROUPS: frozenset[str] = DEFAULT_PROFILE.secondary_shape_groups
 # Status names (task #7 rename — see plan / task #7 description).
 # Worker emits the new long-form names everywhere; reads accept both
 # legacy and new names until the OS migration completes.
-STATUS_PENDING_DETECTION = 'pending_detection'
-STATUS_PENDING_VERIFICATION = 'pending_verification'
+STATUS_PENDING_DETECTION = RegionStatus.PENDING_DETECTION
+STATUS_PENDING_VERIFICATION = RegionStatus.PENDING_VERIFICATION
 _PENDING_DETECTION_ALIASES = frozenset({STATUS_PENDING_DETECTION, 'pending'})
 _PENDING_VERIFICATION_ALIASES = frozenset({STATUS_PENDING_VERIFICATION, 'pending_verify'})
 
 # Terminal statuses the worker MUST NOT override.
-_TERMINAL_STATUSES: frozenset[str] = frozenset(
-    {
-        'detected',
-        'no_plate_visible',
-        'verify_rejected',
-        'no_plate_box',
-        'detection_failed',
-        # Human-marked bad detection (box kept for FP analysis / hard-
-        # negative training). Terminal — worker must not re-run it.
-        'false_positive',
-    }
-)
+_TERMINAL_STATUSES: frozenset[str] = TERMINAL_STATUSES
 
 
 # =============================================================================

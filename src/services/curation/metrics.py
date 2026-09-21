@@ -10,7 +10,7 @@ Metric *names* (``kb_*``) are unchanged from the reference
 implementation this module was ported from — renaming them is
 deferred to a later phase since they are operationally visible
 (dashboards, alert rules); only the *module path* moves here. See
-``docs/design/oss_genericization_phase2_plan.md`` §0.9.
+``docs/design/curation_design_rationale.md`` §6 (known gaps).
 """
 
 from __future__ import annotations

@@ -23,6 +23,7 @@ import orjson
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import ORJSONResponse, Response
 
+from src.clients.occ import OCCFinalConflictError
 from src.clients.triton_pool import AsyncTritonPool
 from src.config import get_settings
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
@@ -178,6 +179,36 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
 
+    # Reconcile job state.json files left at status='running' by a process
+    # that was killed mid-job — see docs/design/curation_design_rationale.md
+    # and each module's reconcile_orphaned_jobs() docstring. Best-effort and
+    # isolated per module so one misconfigured state dir can't block startup
+    # or the other three checks.
+    from src.services.curation import embedding_viz
+    from src.services.curation.autolabel import job as autolabel_job
+    from src.services.curation.item_scores import job as item_scores_job
+    from src.services.curation.selection import job as selection_job
+
+    for _module in (item_scores_job, selection_job, embedding_viz, autolabel_job):
+        try:
+            if _module.reconcile_orphaned_jobs():
+                logger.warning('orphaned_job_reconciled', module=_module.__name__)
+        except Exception as exc:
+            logger.warning(
+                'orphaned_job_reconcile_skipped', module=_module.__name__, error=str(exc)
+            )
+
+    # Gap 2 (model export): same idea, different shape — see
+    # src.services.model_export's module docstring.
+    try:
+        from src.services.model_export import reconcile_orphaned_export_tasks
+
+        n_reconciled = reconcile_orphaned_export_tasks()
+        if n_reconciled:
+            logger.warning('orphaned_export_tasks_reconciled', count=n_reconciled)
+    except Exception as exc:
+        logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
+
     # Best-effort: warm the PE-Core text encoder for GET /curation/search/text.
     # Non-fatal if torch/perception_models isn't installed or the checkpoint
     # isn't available — the search endpoint surfaces a 503 in that case
@@ -252,7 +283,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     application = FastAPI(
-        title='Visual AI API',
+        title='OpenProcessor',
         description=(
             'High-performance visual AI service providing object detection, '
             'face recognition, image embeddings, visual search, and OCR. '
@@ -268,11 +299,11 @@ def create_app() -> FastAPI:
     # cross-origin calls are rare, but this covers: dev mode (vite/webpack
     # dev servers on a different port), direct API access from LAN IPs, and
     # any other internal network clients. Ported from the reference
-    # implementation's CORS block (triton-api's src/main.py) — dropped
-    # during the initial OSS port, which broke any frontend dev server
-    # talking to this API cross-origin (browser fetch fails with
-    # "Failed to fetch"/no CORS headers, even though the server itself
-    # processes and logs the request as 200).
+    # implementation's CORS block — dropped during the initial OSS port,
+    # which broke any frontend dev server talking to this API
+    # cross-origin (browser fetch fails with "Failed to fetch"/no CORS
+    # headers, even though the server itself processes and logs the
+    # request as 200).
     from fastapi.middleware.cors import CORSMiddleware
 
     application.add_middleware(
@@ -387,6 +418,36 @@ def create_app() -> FastAPI:
             )
 
         return response
+
+    @application.exception_handler(OCCFinalConflictError)
+    async def occ_final_conflict_handler(request: Request, exc: OCCFinalConflictError):
+        """Map exhausted-OCC-retry conflicts to HTTP 409.
+
+        Registered ahead of the generic ``Exception`` handler below so a
+        human-write endpoint's re-raised :class:`OCCFinalConflictError`
+        (see ``src.clients.occ`` call sites in ``routers/curation/``)
+        surfaces as a client-actionable "someone else edited this concurrently"
+        response instead of an opaque 500.
+        """
+        req_id = get_request_id()
+        logger.warning(
+            'occ_final_conflict',
+            request_id=req_id,
+            method=request.method,
+            path=request.url.path,
+            doc_id=exc.doc_id,
+            retries=exc.retries,
+        )
+        return ORJSONResponse(
+            status_code=409,
+            content={
+                'detail': 'concurrent write conflict; refresh and retry',
+                'doc_id': exc.doc_id,
+                'retries': exc.retries,
+                'request_id': req_id,
+            },
+            headers={'X-Request-ID': req_id},
+        )
 
     # Global Exception Handler - include request ID for debugging
     @application.exception_handler(Exception)

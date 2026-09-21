@@ -109,7 +109,7 @@ class Settings(BaseSettings):
     # ==========================================================================
     # API Configuration
     # ==========================================================================
-    api_title: str = Field(default='Visual Search API', description='API title for OpenAPI docs')
+    api_title: str = Field(default='OpenProcessor', description='API title for OpenAPI docs')
 
     api_description: str = Field(
         default='Unified visual search with object detection, face recognition, and CLIP embeddings',
@@ -117,6 +117,19 @@ class Settings(BaseSettings):
     )
 
     api_version: str = Field(default_factory=_read_version, description='API version')
+
+    # ==========================================================================
+    # Model Export Configuration
+    # ==========================================================================
+    # Predates the curation subsystem and isn't curation-specific (it backs
+    # the standalone TensorRT model-export/upload feature), so it lives on
+    # the base Settings rather than CurationConfig. One JSON file per task
+    # id, written the same atomic temp+rename way as the curation job
+    # modules — see src.services.model_export.
+    export_task_dir: Path = Field(
+        default=Path('/jobs/model_export'),
+        description='Directory for durable model-export task state (one <task_id>.json file each)',
+    )
 
     # ==========================================================================
     # Logging Configuration
@@ -157,6 +170,12 @@ class Settings(BaseSettings):
         env_prefix = ''  # No prefix for env vars
         case_sensitive = False
         extra = 'ignore'
+        # CFG-5: previously unset -- a bare `.env` in the repo root did
+        # nothing for a locally-run process (docker-compose's own .env
+        # handling is separate and only covered vars explicitly
+        # interpolated into docker-compose.yml, e.g. OP_API_PREFIX).
+        env_file = '.env'
+        env_file_encoding = 'utf-8'
 
 
 @lru_cache

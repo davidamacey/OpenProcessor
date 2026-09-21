@@ -74,12 +74,12 @@ def _make_task(
     )
 
 
-def _gemma_mock(*, is_plate: bool, confidence: str = 'high') -> MagicMock:
+def _gemma_mock(*, is_region: bool, confidence: str = 'high') -> MagicMock:
     """A VlmLabeler stub whose ``verify_plate`` returns a fixed verdict."""
     g = MagicMock()
     g.verify_plate = AsyncMock(
         return_value=VlmRegionVerdict(
-            crop_id='ignored', is_plate=is_plate, confidence=confidence, reason='test'
+            crop_id='ignored', is_region=is_region, confidence=confidence, reason='test'
         )
     )
     g.aclose = AsyncMock()
@@ -144,7 +144,7 @@ class TestRouting:
             lpr=_lpr_mock([]),
             sam3=_sam3_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True, confidence='high'),
+            gemma=_gemma_mock(is_region=True, confidence='high'),
         )
         assert task.update_doc[F.status] == 'detected'
         assert task.update_doc[F.bbox_norm] == list(lpr_in_source)
@@ -162,9 +162,9 @@ class TestRouting:
         gemma.verify_plate = AsyncMock(
             side_effect=[
                 VlmRegionVerdict(
-                    crop_id='c', is_plate=False, confidence='high', reason='not a plate'
+                    crop_id='c', is_region=False, confidence='high', reason='not a plate'
                 ),
-                VlmRegionVerdict(crop_id='c', is_plate=True, confidence='high', reason='plate'),
+                VlmRegionVerdict(crop_id='c', is_region=True, confidence='high', reason='plate'),
             ]
         )
         gemma.aclose = AsyncMock()
@@ -204,7 +204,7 @@ class TestRouting:
             lpr=lpr,
             sam3=_sam3_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True),
+            gemma=_gemma_mock(is_region=True),
         )
         lpr.detect_batch.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
@@ -228,7 +228,7 @@ class TestRouting:
             lpr=_lpr_mock([lpr_cand]),
             sam3=sam3,
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True),
+            gemma=_gemma_mock(is_region=True),
         )
         sam3.segment_plate.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
@@ -244,8 +244,8 @@ class TestRouting:
         gemma = MagicMock()
         gemma.verify_plate = AsyncMock(
             side_effect=[
-                VlmRegionVerdict(crop_id='c', is_plate=False, confidence='high', reason='no'),
-                VlmRegionVerdict(crop_id='c', is_plate=True, confidence='high', reason='yes'),
+                VlmRegionVerdict(crop_id='c', is_region=False, confidence='high', reason='no'),
+                VlmRegionVerdict(crop_id='c', is_region=True, confidence='high', reason='yes'),
             ]
         )
         gemma.aclose = AsyncMock()
@@ -272,7 +272,7 @@ class TestRouting:
                 lpr=_lpr_mock([]),
                 sam3=_sam3_mock(None),
                 ocr_recognizer=_ocr_recognizer_mock(),
-                gemma=_gemma_mock(is_plate=True),
+                gemma=_gemma_mock(is_region=True),
             )
             assert task.update_doc == {}, f'status={status!r} should not be touched'
 
@@ -285,7 +285,7 @@ class TestRouting:
             lpr=_lpr_mock([None]),
             sam3=_sam3_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=False),
+            gemma=_gemma_mock(is_region=False),
         )
         # Phase A2: every write carries a detector_chain. Status remains
         # 'no_plate_box' (queue for human review) and the chain captures
@@ -318,7 +318,7 @@ class TestRouting:
         sub_sam_cand = RegionCandidate(
             bbox_norm=(0.20, 0.30, 0.80, 0.60), score=0.74, source='sam3'
         )
-        gemma = _gemma_mock(is_plate=True)
+        gemma = _gemma_mock(is_region=True)
         task = _make_task(status='pending', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0))
         await worker._process_crop(
             task,
@@ -334,7 +334,7 @@ class TestRouting:
         # text-hint write.
         assert task.update_doc[F.detector] == 'sam3'
         chain = task.update_doc.get(F.detector_chain) or []
-        assert any('paddleocr_rec:text_hint:hit' in s for s in chain)
+        assert any('paddleocr_rec_trt:text_hint:hit' in s for s in chain)
         assert any('sam3:text_hint:gemma_verify_ok' in s for s in chain)
 
 
@@ -360,7 +360,7 @@ class TestReprojection:
             lpr=_lpr_mock([None]),
             sam3=_sam3_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True),
+            gemma=_gemma_mock(is_region=True),
         )
         expected = list(crop_norm_to_source_norm(sam_cand.bbox_norm, vehicle))
         # Sanity: the projected box should be inside the vehicle box.
@@ -392,7 +392,7 @@ class TestProvenance:
             lpr=_lpr_mock([lpr_cand]),
             sam3=_sam3_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True),
+            gemma=_gemma_mock(is_region=True),
         )
         assert task.update_doc[F.detector] == 'lpr_nanov11_640'
         assert task.update_doc[F.detector_version] == '1'
@@ -419,7 +419,7 @@ class TestProvenance:
             lpr=_lpr_mock([None]),
             sam3=_sam3_mock(sam_cand),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True),
+            gemma=_gemma_mock(is_region=True),
         )
         assert task.update_doc[F.detector] == 'sam3'
         assert task.update_doc[F.bbox_frame] == 'source'
@@ -451,7 +451,7 @@ class TestProvenance:
             lpr=_lpr_mock([big_cand]),
             sam3=_sam3_mock(None),
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=True),
+            gemma=_gemma_mock(is_region=True),
         )
         chain = task.update_doc.get(F.detector_chain) or []
         assert not any('sanity_reject' in s for s in chain)

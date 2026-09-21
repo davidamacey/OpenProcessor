@@ -18,7 +18,7 @@ still accepted for back-compat::
         'job_id': '2026-05-25T10-00',
         'datasets': [
             {'name': 'curated', 'path': '/data/lpr_exports/<run>'},
-            {'name': 'andrewmvd', 'path': '/mnt/nvm/datasets/plates/andrewmvd_car_plate'},
+            {'name': 'andrewmvd', 'path': './data/bakeoff_eval/public/andrewmvd_car_plate'},
         ],
         'verify_frozen': true,
         'out_dir': '/data/bakeoff/<job_id>',
@@ -58,12 +58,12 @@ from .freeze import verify
 # GPU pool + concurrency for parallel scoring. The detectors are tiny (hundreds
 # of MB), so a single A6000 hosts several at once; image loading is the real
 # bottleneck, parallelized across CPU cores. Tune on the evaluator via env vars
-# KB_BAKEOFF_GPUS (comma-separated PCI ids; default the A6000 with headroom) and
-# KB_BAKEOFF_CONCURRENCY (parallel task slots).
+# OP_BAKEOFF_GPUS (comma-separated PCI ids; default the A6000 with headroom) and
+# OP_BAKEOFF_CONCURRENCY (parallel task slots).
 _GPUS: list[str] = [
-    g.strip() for g in os.environ.get('KB_BAKEOFF_GPUS', '0').split(',') if g.strip()
+    g.strip() for g in os.environ.get('OP_BAKEOFF_GPUS', '0').split(',') if g.strip()
 ]
-_CONCURRENCY: int = max(1, int(os.environ.get('KB_BAKEOFF_CONCURRENCY', '4')))
+_CONCURRENCY: int = max(1, int(os.environ.get('OP_BAKEOFF_CONCURRENCY', '4')))
 
 
 _OPT_FLAGS = {
@@ -247,14 +247,14 @@ def _run_throughput_sweep(
 def _run_coreml_mac_leg(quant: dict[str, Any], out_dir: Path) -> None:
     """Drive the Mac Studio CoreML export+bench over SSH (best-effort, opt-in).
 
-    Gated by the ``KB_COREML_HOST`` env var (e.g. ``superstudio@superstudio.home.arpa``)
+    Gated by the ``OP_COREML_HOST`` env var (e.g. ``superstudio@superstudio.home.arpa``)
     so it's a safe no-op until the evaluator is provisioned with ssh/rsync + a key
     that can reach the Mac on the LAN. Exports FP16/INT8 CoreML on the Mac, benchmarks
     ANE+CPU, and pulls the .mlpackage + throughput JSON back.
     """
-    host = os.environ.get('KB_COREML_HOST')
+    host = os.environ.get('OP_COREML_HOST')
     if not host:
-        print('[bakeoff] coreml: KB_COREML_HOST not set, skipping Mac leg', flush=True)
+        print('[bakeoff] coreml: OP_COREML_HOST not set, skipping Mac leg', flush=True)
         return
     repo_root = Path(__file__).resolve().parents[3]
     model_id = quant.get('model_id', 'ours_yolo26n')
