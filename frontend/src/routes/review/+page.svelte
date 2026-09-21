@@ -386,13 +386,16 @@
   let liveSub: OpEventSubscription | null = null;
   onMount(() => {
     liveSub = subscribeKbEvents({
-      // Both classification + plate-verify changes are interesting on
-      // the review page — the operator may be on any tab.
+      // Both classification + any slot-verify changes are interesting on
+      // the review page — the operator may be on any tab. `_verified` is
+      // structural (matches every crop.<slot.key>_verified event, plus
+      // the pre-rename crop.plate_verified literal — see
+      // sse.ts's slotVerifiedEventTypes()), not a single hardcoded slot.
       onEvent: (ev) => {
         if (
           ev.type === 'crop.classified' ||
           ev.type === 'crop.created' ||
-          ev.type === 'crop.plate_verified'
+          ev.type.endsWith('_verified')
         ) {
           liveNewCount += 1;
         }

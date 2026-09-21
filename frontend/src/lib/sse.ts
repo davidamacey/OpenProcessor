@@ -15,6 +15,7 @@
  */
 
 import { apiBase, API_PREFIX } from './api';
+import { slotRegistry } from './annotations/registeredSlots';
 
 // All event payloads share these fields; specific types add more.
 export interface OpBaseEvent {
@@ -38,17 +39,27 @@ export interface OpCropClassifiedEvent extends OpBaseEvent {
   class_source?: string;
 }
 
-export interface OpCropPlateVerifiedEvent extends OpBaseEvent {
-  type: 'crop.plate_verified';
+/**
+ * A slot's "human verified this box" event. Generalized off the
+ * plate-only `OpCropPlateVerifiedEvent` (which typed `plate_status`/
+ * `plate_text` directly) — `type` is now any `crop.<slot.key>_verified`
+ * string (or the literal `'crop.plate_verified'`, kept for back-compat
+ * with the pre-rename wire name — see `slotVerifiedEventTypes()`), and
+ * the slot-specific fields are carried untyped so a handler reads them
+ * off the active slot's own wire field names (`capabilities.lifecycle
+ * .statusField` / `capabilities.text.valueField`) rather than a
+ * hardcoded `plate_status`/`plate_text` pair.
+ */
+export interface OpCropSlotVerifiedEvent extends OpBaseEvent {
+  type: string;
   crop_id: string;
-  plate_status?: string;
-  plate_text?: string | null;
+  [wireField: string]: unknown;
 }
 
 export type OpEvent =
   | OpCropCreatedEvent
   | OpCropClassifiedEvent
-  | OpCropPlateVerifiedEvent
+  | OpCropSlotVerifiedEvent
   | OpBaseEvent;
 
 export interface OpEventSubscribeOptions {
@@ -66,9 +77,30 @@ export interface OpEventSubscription {
 
 const RECONNECT_INITIAL_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
-// Event types we care about. Everything else is silently ignored so a
-// future event type added on the backend doesn't trip up older clients.
-const KNOWN_EVENT_TYPES = ['crop.created', 'crop.classified', 'crop.plate_verified'];
+
+/**
+ * Event types we care about. Everything else is silently ignored so a
+ * future event type added on the backend doesn't trip up older clients
+ * — but that same "ignore the unknown" behavior is a live bug for a
+ * SECOND queue-capable slot: `EventSource.addEventListener` requires an
+ * exact type name, so a slot whose verify event isn't in this list never
+ * refreshes the queue, with no error surfaced anywhere (docs/design/
+ * slot-generic-crop-mapping-plan-2026-09-21.md §7.1, C7). Reads
+ * `slotRegistry` at CALL time (mirrors `mapCropSlots`'s own trap note)
+ * so a slot installed after this module's first evaluation is covered.
+ */
+export function slotVerifiedEventTypes(): string[] {
+  const derived = slotRegistry.queues.map((s) => `crop.${s.key}_verified`);
+  // 'crop.plate_verified' is the literal wire name license_plate uses
+  // today (its slot key is 'license_plate', not 'plate', so it doesn't
+  // match the crop.<slot.key>_verified pattern above) — kept explicitly
+  // so this still works against a backend that hasn't renamed yet.
+  return Array.from(new Set(['crop.plate_verified', ...derived]));
+}
+
+function knownEventTypes(): string[] {
+  return ['crop.created', 'crop.classified', ...slotVerifiedEventTypes()];
+}
 
 /**
  * Open an SSE subscription to /curation/events.
@@ -243,7 +275,7 @@ export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscri
     // Subscribe to each known event-type listener separately. The
     // backend uses `event: <type>` headers so EventSource dispatches
     // typed events instead of falling back to `message`.
-    for (const t of KNOWN_EVENT_TYPES) {
+    for (const t of knownEventTypes()) {
       es.addEventListener(t, (ev: MessageEvent) => {
         try {
           const payload = JSON.parse(ev.data) as OpEvent;
