@@ -79,6 +79,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -400,9 +401,20 @@ def export_via_optimum(
             raise RuntimeError(f'Optimum produced no .onnx under {work_dir}')
         produced = candidates[0]
 
+    # A >2 GB export is split into an external-data sidecar that must stay
+    # next to the graph; moving only the .onnx would silently strip the
+    # weights. Leave those exports where Optimum put them.
+    external = [p for p in work_dir.iterdir() if p.suffix in {'.onnx_data', '.pb'}]
+    if external:
+        logger.warning(
+            f'Optimum wrote external weight data ({[p.name for p in external]}); '
+            f'keeping the export in place at {produced} instead of moving it.'
+        )
+        return produced
+
     onnx_path.parent.mkdir(parents=True, exist_ok=True)
     if produced != onnx_path:
-        onnx_path.write_bytes(produced.read_bytes())
+        shutil.copy2(produced, onnx_path)
     logger.info(f'ONNX saved: {onnx_path} (optimum work dir kept at {work_dir})')
     return onnx_path
 
