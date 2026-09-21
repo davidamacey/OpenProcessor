@@ -13,6 +13,8 @@ A high-performance FastAPI service providing comprehensive visual AI capabilitie
 All inference runs through NVIDIA Triton Inference Server for optimal GPU utilization.
 """
 
+import asyncio
+import contextlib
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -69,12 +71,20 @@ __all__ = ['get_request_id', 'request_id_ctx']
 # Shared Resources (managed by lifespan)
 # =============================================================================
 
+# How often the GPU-arbiter reconcile loop re-asserts the desired state of
+# the deployment's GPU-resident containers. Short enough that a crashed
+# trainer's claim is released within seconds, long enough to be free in
+# steady state (each tick is a directory glob plus, at most, no-op docker
+# stop/start calls on containers already in the target state).
+ARBITER_RECONCILE_INTERVAL_SECONDS = 15.0
+
 
 class AppResources:
     """Container for shared application resources."""
 
     shared_executor: ThreadPoolExecutor | None = None
     async_triton_pool: AsyncTritonPool | None = None
+    arbiter_task: asyncio.Task[None] | None = None
 
 
 def get_shared_executor() -> ThreadPoolExecutor:
@@ -134,8 +144,11 @@ async def lifespan(app: FastAPI):
     - Create shared ThreadPoolExecutor for CPU-bound tasks
     - Create AsyncTritonPool for high-throughput inference
     - Shared Triton gRPC client auto-created on first use
+    - Reconcile orphaned job state left behind by a killed process
+    - Reconcile the GPU arbiter and start its periodic reconcile loop
 
     Shutdown:
+    - Cancel the GPU-arbiter reconcile loop
     - Close AsyncTritonPool
     - Shutdown shared ThreadPoolExecutor
     - Close all Triton gRPC connections
@@ -209,6 +222,48 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('orphaned_export_tasks_reconcile_skipped', error=str(exc))
 
+    # GPU arbiter. A training run claims the deployment's GPU-resident
+    # containers by writing a lock + pause sentinel and stopping them
+    # (src.services.training.gpu_arbiter). Nothing in the trainer releases
+    # that claim if it dies mid-run, so without this the containers stay
+    # down and the sentinel stays set *forever*. Reconcile once here (crash
+    # recovery), then keep enforcing on a periodic loop: while a run is live
+    # it re-stops any claimed container that comes back up, and once no run
+    # is active it clears the lock + sentinel and restarts the containers.
+    #
+    # Deliberately parameter-free: every deployment-specific fact (which
+    # containers, which GPU ids, the trainer jobs dir) is resolved by the
+    # arbiter itself from GpuArbiterConfig / OP_TRAIN_JOBS_DIR, so no
+    # container name, NAS path or GPU id is hardcoded here. An install that
+    # configures none of it degrades to a no-op. Imported inside the
+    # lifespan (not at module scope) so the whole block stays optional and
+    # testable — same shape as the reconcile blocks above.
+    try:
+        from src.services.training.gpu_arbiter import reconcile_on_startup
+
+        action = await reconcile_on_startup()
+        logger.info('gpu_arbiter_reconciled', action=action.action, detail=action.detail)
+
+        async def _arbiter_reconcile_loop() -> None:
+            """Re-assert the desired GPU-service state on a fixed interval.
+
+            Idempotent by construction (stop/start only act on containers
+            not already in the target state), so running this in every
+            uvicorn worker is safe re-enforcement rather than a race. One
+            failing tick must never kill the loop — the next one retries.
+            """
+            while True:
+                await asyncio.sleep(ARBITER_RECONCILE_INTERVAL_SECONDS)
+                try:
+                    await reconcile_on_startup()
+                except Exception as exc:
+                    logger.warning('gpu_arbiter_reconcile_loop_error', error=str(exc))
+
+        AppResources.arbiter_task = asyncio.create_task(_arbiter_reconcile_loop())
+        logger.info('gpu_arbiter_loop_started', interval_s=ARBITER_RECONCILE_INTERVAL_SECONDS)
+    except Exception as exc:
+        logger.warning('gpu_arbiter_reconcile_skipped', error=str(exc))
+
     # Best-effort: warm the PE-Core text encoder for GET /curation/search/text.
     # Non-fatal if torch/perception_models isn't installed or the checkpoint
     # isn't available — the search endpoint surfaces a 503 in that case
@@ -234,6 +289,16 @@ async def lifespan(app: FastAPI):
     # SHUTDOWN
     # =========================================================================
     logger.info('shutdown_begin', phase='cleanup')
+
+    # Cancel the GPU-arbiter reconcile loop. Cleared afterwards so a second
+    # app lifecycle in the same process (tests, embedded runs) never sees a
+    # stale finished task.
+    if AppResources.arbiter_task is not None:
+        AppResources.arbiter_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await AppResources.arbiter_task
+        AppResources.arbiter_task = None
+        logger.info('gpu_arbiter_loop_stopped')
 
     # Close AsyncTritonPool
     if AppResources.async_triton_pool is not None:
