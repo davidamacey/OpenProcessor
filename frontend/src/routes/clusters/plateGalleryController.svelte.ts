@@ -32,7 +32,6 @@ import {
   getRegionThumbUrl,
   getSuspectedFalsePositives,
   refinePlateCluster,
-  setCropPlate,
   type PlateBrowseItem,
   type SuspectedFpItem,
 } from '$lib/api';
@@ -433,37 +432,38 @@ export function createPlateGalleryController() {
     }
   }
 
-  async function savePlateBbox(plateBboxSrc: BBoxNorm | null): Promise<void> {
+  /**
+   * `onsave` for `SlotBboxEditor` — the editor has ALREADY performed the
+   * write via `setSlotBox` (C8, docs/design/slot-generic-crop-mapping-
+   * plan-2026-09-21.md §7.1) by the time this fires. This function only
+   * does the optimistic local-state patch; it must NOT re-PUT the box
+   * (a pre-C8 bug — this used to call `setCropPlate` a second time here,
+   * redundantly re-sending a box the editor had just saved).
+   */
+  function savePlateBbox(plateBboxSrc: BBoxNorm | null): void {
     if (!editPlateCrop) return;
     const cropId = editPlateCrop.id;
-    // Editor yields a source-frame BBoxNorm {cx,cy,w,h}; the API takes
-    // [x1,y1,x2,y2]. null clears the box (→ no_plate_visible server-side).
+    // Editor yields a BBoxNorm {cx,cy,w,h} in the slot's stored frame
+    // (source, for license_plate); the local cache stores [x1,y1,x2,y2].
     const arr = plateBboxSrc ? bboxNormToXYXY(plateBboxSrc) : null;
-    try {
-      const res = await setCropPlate(
-        cropId,
-        arr as [number, number, number, number] | null,
-      );
-      toastStore.success('Plate saved');
-      editPlateCrop = null;
-      // Patch just this card in place rather than reloading page 1 (which
-      // would wipe the list and reset scroll). Use the authoritative
-      // plate_status the backend returned (clearing the box → no_plate_visible
-      // server-side) instead of guessing. The plate thumbnail is a
-      // server-rendered URL, so bust its cache to pull the re-cropped box.
-      platePager.items = platePager.items.map((p) =>
-        p.crop_id === cropId
-          ? {
-              ...p,
-              plate_status: res.plate_status ?? p.plate_status,
-              plate_bbox_norm: arr ?? null,
-              plate_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
-            }
-          : p,
-      );
-    } catch (err) {
-      toastStore.error(`Save failed: ${(err as Error).message}`);
-    }
+    toastStore.success('Plate saved');
+    editPlateCrop = null;
+    // Patch just this card in place rather than reloading page 1 (which
+    // would wipe the list and reset scroll). The bbox presence/absence
+    // determines confirmed-vs-rejected status, mirroring the editor's
+    // own write. The plate thumbnail is a server-rendered URL, so
+    // bust its cache to pull the re-cropped box.
+    platePager.items = platePager.items.map((p) =>
+      p.crop_id === cropId
+        ? {
+            ...p,
+            plate_status: arr ? PLATE_CONFIRM_STATE : PLATE_REJECT_STATE,
+            plate_verified: arr ? true : p.plate_verified,
+            plate_bbox_norm: arr ?? null,
+            plate_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
+          }
+        : p,
+    );
   }
 
   return {

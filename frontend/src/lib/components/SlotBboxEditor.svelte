@@ -4,64 +4,75 @@
    * Single-crop sub-bbox editor (modal). Renamed from PlateEditor.svelte
    * (P2.3, docs/genericization-plan-2026-09-13.md §3.1) — today the only
    * configured sub-bbox is the license_plate slot, so every comment and
-   * call site below still reads "plate", but nothing here is
-   * structurally plate-specific.
+   * call site below used to still read "plate"; C8 (docs/design/
+   * slot-generic-crop-mapping-plan-2026-09-21.md §7.1) closed that gap.
    *
    * Opens from CropCard's pencil button. Lets a curator draw, drag,
    * resize, and clear a sub-bbox on top of the parent crop thumbnail,
-   * then saves it back to the API.
+   * then saves it back to the API via the active slot's own declared
+   * endpoints (`setSlotBox`).
    *
-   * Internally we work in the **crop's local frame** (normalized [0, 1]
-   * inside the parent box) so that pointer math is independent of the
-   * source image. On save we reconstruct the source-frame box via
-   * `cropToSourceFrame` and PUT it as `[x1, y1, x2, y2]`.
+   * Internally we work in the **crop's local (parent) frame** (normalized
+   * [0, 1] inside the parent box) so that pointer math is independent of
+   * the source image. On save we reconstruct the slot's own stored frame
+   * via `projectFromParent` — never hardcoding 'source' — and PUT it as
+   * `[x1, y1, x2, y2]`.
    *
    * Hotkeys (focus inside the modal):
    *   [ / ]    nudge right edge in / out by 1 crop-pixel
    *   ↑↓←→     move whole box by 1 crop-pixel
-   *   Backspace clear the box (saves as plate_status='no_plate_visible')
+   *   Backspace clear the box (saves as the slot's rejectState)
    *   Enter    save & advance
    *   Escape   close without saving
    *
-   * Deviation from the plan: §3.1 additionally calls for removing the
-   * direct `setCropPlate` import in favor of the caller performing the
-   * write via `onsave` (so a non-plate slot could inject its own
-   * `endpoints.setBox`/`clearBox`). That changes `onsave`'s contract for
-   * both call sites (CropCard.svelte, clusters/+page.svelte) from
-   * "notify after an already-completed save" to "perform the save" —
-   * judged out of scope for this pass; `setCropPlate` stays a direct
-   * import here. Tracked as follow-up work alongside the SlotSpec
-   * `endpoints` wiring.
+   * `onsave` fires AFTER this component has already performed the write
+   * (via `setSlotBox`) — "notify", not "perform the save". The box it
+   * passes is in the slot's own stored frame (`source` for
+   * licensePlateSlot today), not necessarily literal image-source
+   * coordinates for every future slot.
    */
-  import { getThumbUrl, setCropPlate } from '$lib/api';
-  import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
+  import { getThumbUrl, setSlotBox } from '$lib/api';
+  import { bboxNormToXYXY } from '$lib/bboxFrames';
+  import { projectFromParent } from '$lib/annotations/readSlot';
+  import { slotOf } from '$lib/annotations/cropSlots';
+  import { slotForClassName } from '$lib/annotations/registeredSlots';
+  import type { SlotSpec } from '$lib/annotations/types';
   import { toastStore } from '$stores/toast.svelte';
   import type { BBoxNorm, OpCrop } from '$lib/types';
 
   interface Props {
     crop: OpCrop;
-    /** Called after a successful save (or clear). Passes the new
-     *  source-frame plate bbox, or `null` if cleared. */
-    onsave?: (plateBboxSrc: BBoxNorm | null) => void;
+    /** Slot whose sub-box this modal edits. Defaults to whatever slot is
+     *  bound to the crop's own class, matching CropCard's own default. */
+    slot?: SlotSpec;
+    /** Called after a successful save (or clear). Passes the new bbox in
+     *  the slot's own stored frame, or `null` if cleared. */
+    onsave?: (savedBoxInStoredFrame: BBoxNorm | null) => void;
     /** Called when the user dismisses without saving. */
     onclose: () => void;
-    /** Optional thumbnail size override (px). Default 512 — large enough
-     *  for accurate hand-drawing on plates. */
+    /** Optional thumbnail size override (px). Defaults to the active
+     *  slot's own `capabilities.subBox.editor.thumbSize` (512 for
+     *  license_plate) — large enough for accurate hand-drawing. */
     thumbSize?: number;
   }
 
-  let { crop, onsave, onclose, thumbSize = 512 }: Props = $props();
+  let { crop, slot, onsave, onclose, thumbSize }: Props = $props();
+
+  const activeSlot = $derived(slot ?? slotForClassName(crop.class_name));
+  const editorThumbSize = $derived(
+    thumbSize ?? activeSlot?.capabilities.subBox?.editor.thumbSize ?? 512,
+  );
 
   // -- state ------------------------------------------------------------
-  // Plate box in the crop's local frame ([0, 1]^4). null means "no box".
-  // We seed from the existing source-frame plate by projecting it into
-  // crop frame; null seed is fine ("no plate yet").
-  function seedPlate(): BBoxNorm | null {
-    if (!crop.plate_bbox_norm || !crop.bbox_norm) return null;
-    return sourceToCropFrame(crop.plate_bbox_norm, crop.bbox_norm);
+  // Sub-box in the crop's local (parent) frame ([0, 1]^4). null means "no
+  // box". Seeded from readSlot's own projection (subBox.parent) — never
+  // re-derived by hand — so this works for any storedFrame, not just
+  // 'source'.
+  function seedBox(): BBoxNorm | null {
+    return activeSlot ? (slotOf(crop, activeSlot)?.subBox?.parent ?? null) : null;
   }
 
-  let plateLocal = $state<BBoxNorm | null>(seedPlate());
+  let plateLocal = $state<BBoxNorm | null>(seedBox());
   let busy = $state<boolean>(false);
   let errorText = $state<string | null>(null);
 
@@ -119,13 +130,16 @@
 
   let drag = $state<DragState | null>(null);
 
-  // Footer footer-text shows current source-frame coords for sanity.
+  // Footer footer-text shows the box in the slot's own stored frame, for
+  // sanity — via the same projectFromParent used at save time.
   const sourceFrameSummary = $derived.by<string>(() => {
-    if (plateLocal == null) return 'no plate';
+    if (plateLocal == null) return `no ${activeSlot?.label.singular ?? 'box'}`;
     if (!crop.bbox_norm) return '(missing parent vehicle box)';
-    const src = cropToSourceFrame(plateLocal, crop.bbox_norm);
-    const [x1, y1, x2, y2] = bboxNormToXYXY(src);
-    return `src [x1=${x1.toFixed(4)}, y1=${y1.toFixed(4)}, x2=${x2.toFixed(4)}, y2=${y2.toFixed(4)}]`;
+    if (!activeSlot) return '';
+    const parentXyxy = bboxNormToXYXY(crop.bbox_norm);
+    const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
+    const [x1, y1, x2, y2] = projectFromParent(plateLocal, parentXyxy, frame);
+    return `${frame} [x1=${x1.toFixed(4)}, y1=${y1.toFixed(4)}, x2=${x2.toFixed(4)}, y2=${y2.toFixed(4)}]`;
   });
 
   const cropFrameSummary = $derived.by<string>(() => {
@@ -137,7 +151,9 @@
   // 1 crop-pixel = 1 / displayed-pixel-width, normalized. We don't have
   // direct access to the crop's true pixel dimensions client-side, so
   // approximate via the thumbnail size (close enough for hotkey nudges).
-  const pxStep = $derived(1 / thumbSize);
+  const pxStep = $derived(
+    activeSlot?.capabilities.subBox?.editor.nudgeStep ?? 1 / editorThumbSize,
+  );
 
   // -- pointer math -----------------------------------------------------
 
@@ -343,27 +359,31 @@
 
   async function save(): Promise<void> {
     if (busy) return;
+    if (!activeSlot) return;
+    const label = activeSlot.label.singular;
     errorText = null;
     busy = true;
     try {
-      // Clear: PUT null → backend writes plate_status='no_plate_visible'.
+      // Clear: PUT null -> backend writes the slot's rejectState.
       if (plateLocal == null) {
-        await setCropPlate(crop.id, null);
-        toastStore.success('Plate cleared.');
+        await setSlotBox(activeSlot, crop.id, null);
+        toastStore.success(`${activeSlot.label.title} cleared.`);
         onsave?.(null);
         return;
       }
       if (!crop.bbox_norm) {
-        throw new Error('Cannot save plate: parent vehicle bbox is missing.');
+        throw new Error(`Cannot save ${label}: parent vehicle bbox is missing.`);
       }
-      const sourceBox = cropToSourceFrame(plateLocal, crop.bbox_norm);
-      const tuple = bboxNormToXYXY(sourceBox);
-      await setCropPlate(crop.id, tuple);
-      toastStore.success('Plate saved.');
-      onsave?.(sourceBox);
+      const parentXyxy = bboxNormToXYXY(crop.bbox_norm);
+      const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
+      const tuple = projectFromParent(plateLocal, parentXyxy, frame);
+      await setSlotBox(activeSlot, crop.id, tuple);
+      toastStore.success(`${activeSlot.label.title} saved.`);
+      const [x1, y1, x2, y2] = tuple;
+      onsave?.({ cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 });
     } catch (e) {
       errorText = (e as Error).message;
-      toastStore.error(errorText ?? 'Plate save failed.');
+      toastStore.error(errorText ?? `${activeSlot.label.title} save failed.`);
     } finally {
       busy = false;
     }
@@ -389,7 +409,7 @@
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
   role="dialog"
   aria-modal="true"
-  aria-label="Edit plate bounding box"
+  aria-label="Edit {activeSlot?.label.title ?? 'box'} bounding box"
   use:focusOnMount
   tabindex="-1"
   onclick={(e) => {
@@ -403,7 +423,9 @@
     class="flex w-full max-w-3xl flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4 shadow-2xl"
   >
     <header class="flex items-baseline justify-between">
-      <h3 class="text-base font-semibold text-zinc-100">Edit plate</h3>
+      <h3 class="text-base font-semibold text-zinc-100">
+        Edit {activeSlot?.label.singular ?? 'box'}
+      </h3>
       <span class="font-mono text-[11px] text-zinc-500">{crop.id}</span>
     </header>
 
@@ -416,10 +438,10 @@
       onpointerup={onPointerUp}
       onpointercancel={onPointerUp}
       role="application"
-      aria-label="Plate bbox canvas"
+      aria-label="{activeSlot?.label.title ?? 'Box'} bbox canvas"
     >
       <img
-        src={getThumbUrl(crop.id, thumbSize)}
+        src={getThumbUrl(crop.id, editorThumbSize)}
         alt="crop preview"
         draggable="false"
         onload={onImgLoad}
@@ -427,7 +449,7 @@
       />
 
       {#if plateLocal}
-        <!-- Plate ring + drag handles -->
+        <!-- Sub-box ring + drag handles -->
         <div
           class="absolute border-2 border-yellow-400 bg-yellow-400/10"
           style={ringStyle}
@@ -485,7 +507,7 @@
         <span
           class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
         >
-          drag to draw a plate box
+          drag to draw a {activeSlot?.label.singular ?? 'box'} box
         </span>
       {/if}
     </div>

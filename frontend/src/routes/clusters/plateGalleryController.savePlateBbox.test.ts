@@ -1,0 +1,102 @@
+/**
+ * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
+ * `savePlateBbox` used to re-PUT the box via `setCropPlate` even though
+ * `SlotBboxEditor` had already saved it via `setSlotBox` — a redundant
+ * double-write on every plate-gallery bbox save. It is now a pure local
+ * patch: no network call, no `fetch` stub needed, which is itself part
+ * of the proof (a lingering `setCropPlate` call would require one).
+ */
+import { describe, expect, it, vi } from 'vitest';
+import { createPlateGalleryController } from './plateGalleryController.svelte';
+import type { OpCrop } from '$lib/types';
+import type { PlateBrowseItem } from '$lib/api';
+
+function fakeCrop(id: string): OpCrop {
+  return {
+    id,
+    source_image_path: '/img.jpg',
+    bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
+    class_id: 3,
+    class_name: 'license_plate',
+    class_source: null,
+    label_source: 'human',
+    label_validated: true,
+    label_confidence: null,
+    cluster_id: null,
+    similarity_to_centroid: null,
+    cluster_subid: null,
+    test_holdout: false,
+    updated_at: '',
+  } as OpCrop;
+}
+
+function fakePlateItem(id: string): PlateBrowseItem {
+  return {
+    crop_id: id,
+    id,
+    image_path: '/img.jpg',
+    bbox_norm: [0.3, 0.3, 0.7, 0.7],
+    plate_bbox_norm: null,
+    plate_score: null,
+    plate_status: 'pending_verification',
+    plate_verified: false,
+    plate_validated: null,
+    plate_detector: null,
+    plate_detector_version: null,
+    plate_detector_chain: null,
+    plate_bbox_frame: null,
+    plate_detected_at: null,
+    plate_verifier: null,
+    plate_verifier_version: null,
+    plate_verified_at: null,
+    plate_rejection_reason: null,
+    plate_visible: null,
+    plate_text: null,
+    plate_text_source: null,
+    plate_text_confidence: null,
+    class_id: 3,
+    class_name: 'license_plate',
+    cluster_id: null,
+    updated_at: '',
+  } as PlateBrowseItem;
+}
+
+describe('savePlateBbox — no redundant write', () => {
+  it('patches the local pager item to confirmed and never calls fetch', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const gallery = createPlateGalleryController();
+    gallery.editPlateCrop = fakeCrop('c1');
+    gallery.platePager.items = [fakePlateItem('c1')];
+
+    gallery.savePlateBbox({ cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(gallery.editPlateCrop).toBeNull();
+    const patched = gallery.platePager.items.find((p) => p.crop_id === 'c1');
+    expect(patched?.plate_status).toBe('detected');
+    expect(patched?.plate_verified).toBe(true);
+    expect(patched?.plate_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('clearing (null) patches to the rejectState and clears the bbox', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const gallery = createPlateGalleryController();
+    gallery.editPlateCrop = fakeCrop('c2');
+    gallery.platePager.items = [fakePlateItem('c2')];
+
+    gallery.savePlateBbox(null);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const patched = gallery.platePager.items.find((p) => p.crop_id === 'c2');
+    expect(patched?.plate_status).toBe('no_plate_visible');
+    expect(patched?.plate_bbox_norm).toBeNull();
+
+    vi.unstubAllGlobals();
+  });
+});

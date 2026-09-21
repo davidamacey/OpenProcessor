@@ -373,6 +373,7 @@
 {#if plateEditorOpen}
   <SlotBboxEditor
     {crop}
+    slot={activeSlot}
     onclose={() => (plateEditorOpen = false)}
     onsave={(plateSrc) => {
       plateEditorOpen = false;

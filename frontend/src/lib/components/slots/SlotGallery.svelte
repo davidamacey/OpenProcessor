@@ -22,6 +22,7 @@
     PLATE_FALSE_POSITIVE_STATE,
     type PlateGalleryController,
   } from '../../../routes/clusters/plateGalleryController.svelte';
+  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 
   interface Props {
     gallery: PlateGalleryController;
@@ -409,6 +410,7 @@
 {#if gallery.editPlateCrop}
   <SlotBboxEditor
     crop={gallery.editPlateCrop}
+    slot={licensePlateSlot}
     onsave={gallery.savePlateBbox}
     onclose={() => (gallery.editPlateCrop = null)}
   />
