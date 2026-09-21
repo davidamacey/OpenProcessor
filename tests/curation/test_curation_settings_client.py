@@ -124,6 +124,15 @@ async def test_get_reflects_a_prior_update(
 
 
 @pytest.mark.asyncio
+async def test_put_null_clears_an_axis_without_deleting_the_document(
+    fake_os: FakeSettingsOpenSearch, cfg: CurationConfig
+) -> None:
+    await update_curation_settings(fake_os, {'cluster': 'ahc', 'sort': 'atypicality'}, cfg=cfg)
+    doc = await update_curation_settings(fake_os, {'sort': None}, cfg=cfg)
+    assert doc['defaults'] == {'cluster': 'ahc'}
+
+
+@pytest.mark.asyncio
 async def test_uses_the_fixed_singleton_doc_id(
     fake_os: FakeSettingsOpenSearch, cfg: CurationConfig
 ) -> None:
