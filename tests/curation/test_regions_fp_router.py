@@ -1,10 +1,10 @@
 """Tests for ``src/routers/curation/regions_fp.py`` (plan Wave 5 W5.c —
 18.18% coverage, no prior test on any route).
 
-Covers the read-side cluster-card assembly (``GET /plates/clusters``,
+Covers the read-side cluster-card assembly (``GET /regions/clusters``,
 where the permanent false-positive bucket must sort first and carry
 ``cluster_kind='false_positive'``) and the "no centroids built yet"
-short-circuit on ``GET /plates/suspected_false_positives`` — the two
+short-circuit on ``GET /regions/suspected_false_positives`` — the two
 routes cheaply testable against a fake OpenSearch without pulling in
 the background-job machinery (``cluster_plates``,
 ``build_fp_centroids_endpoint``) or a real FAISS/embedding store.
@@ -69,7 +69,7 @@ def test_list_plate_clusters_pins_fp_bucket_first(app_client_factory: Any) -> No
     ]
     client = app_client_factory(_FakeAggOS(buckets))
 
-    resp = client.get('/curation/plates/clusters')
+    resp = client.get('/curation/regions/clusters')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['count'] == 2
@@ -85,7 +85,7 @@ def test_list_plate_clusters_reports_representative_ids_and_subcluster_flag(
     buckets = [_bucket(9, doc_count=12, rep_ids=['crop-x', 'crop-y'], n_sub=3, validated=5)]
     client = app_client_factory(_FakeAggOS(buckets))
 
-    resp = client.get('/curation/plates/clusters')
+    resp = client.get('/curation/regions/clusters')
     assert resp.status_code == 200, resp.text
     cluster = resp.json()['clusters'][0]
     assert cluster['representative_crop_ids'] == ['crop-x', 'crop-y']
@@ -96,7 +96,7 @@ def test_list_plate_clusters_reports_representative_ids_and_subcluster_flag(
 
 def test_list_plate_clusters_no_buckets_returns_empty(app_client_factory: Any) -> None:
     client = app_client_factory(_FakeAggOS([]))
-    resp = client.get('/curation/plates/clusters')
+    resp = client.get('/curation/regions/clusters')
     assert resp.status_code == 200
     assert resp.json() == {'clusters': [], 'count': 0}
 
@@ -107,7 +107,7 @@ def test_list_plate_clusters_surfaces_opensearch_error_as_503(app_client_factory
             raise RuntimeError('cluster down')
 
     client = app_client_factory(_BoomOS())
-    resp = client.get('/curation/plates/clusters')
+    resp = client.get('/curation/regions/clusters')
     assert resp.status_code == 503
 
 
@@ -124,7 +124,7 @@ def test_suspected_false_positives_short_circuits_when_no_centroids_built(
     monkeypatch.setattr(FalsePositiveCentroidStore, 'load', lambda _self: False)
 
     client = app_client_factory(_FakeAggOS([]))
-    resp = client.get('/curation/plates/suspected_false_positives')
+    resp = client.get('/curation/regions/suspected_false_positives')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['items'] == []
@@ -136,7 +136,7 @@ def test_plate_cluster_status_and_fp_centroid_status_are_reachable(
     app_client_factory: Any,
 ) -> None:
     client = app_client_factory(_FakeAggOS([]))
-    resp = client.get('/curation/plates/cluster/status')
+    resp = client.get('/curation/regions/cluster/status')
     assert resp.status_code == 200
-    resp2 = client.get('/curation/plates/fp_centroids/status')
+    resp2 = client.get('/curation/regions/fp_centroids/status')
     assert resp2.status_code == 200

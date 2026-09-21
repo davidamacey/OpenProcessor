@@ -29,12 +29,12 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.detection.cascade_detect import DEFAULT_PROFILE, region_provenance
+from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE, region_provenance
 
 
 _TRAINING_CANDIDATE_MODES = (
-    'lpr_blind_spots',
-    'lpr_low_conf_correct',
+    'detector_blind_spots',
+    'low_conf_correct',
     'disagreement',
     'human_corrected',
     'false_positives',
@@ -107,7 +107,7 @@ def _fp_cluster_fields(region_status: str | None) -> dict[str, Any]:
     return {F.cluster_id: None, F.cluster_subid: None}
 
 
-@router.get('/plates')
+@router.get('/regions')
 async def list_plates(
     opensearch: OpenSearchDep,
     page: int = Query(1, ge=1),
@@ -211,11 +211,11 @@ async def list_plates(
 
 
 def _training_candidate_query(
-    mode: str, profile: DetectionProfile = DEFAULT_PROFILE
+    mode: str, profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE
 ) -> tuple[dict[str, Any], str]:
     """Return the OpenSearch query body + selection_reason for a mode."""
     F = get_region_fields()
-    if mode == 'lpr_blind_spots':
+    if mode == 'detector_blind_spots':
         # Primary detector missed but the secondary segmenter found a
         # region, the VLM verified. These are the high-signal training
         # examples — the next primary-detector training cycle needs
@@ -238,7 +238,7 @@ def _training_candidate_query(
             },
             'Primary detector missed; secondary segmenter found the region, VLM confirmed',
         )
-    if mode == 'lpr_low_conf_correct':
+    if mode == 'low_conf_correct':
         return (
             {
                 'bool': {
@@ -310,12 +310,15 @@ def _training_candidate_query(
     )
 
 
-@router.get('/plates/training_candidates')
+@router.get('/regions/training_candidates')
 async def training_candidates(
     opensearch: OpenSearchDep,
     mode: str = Query(
         ...,
-        description=('lpr_blind_spots | lpr_low_conf_correct | disagreement | human_corrected'),
+        description=(
+            'detector_blind_spots | low_conf_correct | disagreement | '
+            'human_corrected | false_positives'
+        ),
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
@@ -390,12 +393,12 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
             'doc': {
                 F.bbox_norm: None,
                 F.score: None,
-                F.status: RegionStatus.NO_PLATE_VISIBLE,
+                F.status: RegionStatus.NO_REGION_VISIBLE,
                 F.label_source: payload.label_source,
-                F.detector: DEFAULT_PROFILE.human_detector_name,
-                F.detector_version: DEFAULT_PROFILE.human_detector_version,
-                F.verifier: DEFAULT_PROFILE.human_detector_name,
-                F.verifier_version: DEFAULT_PROFILE.human_detector_version,
+                F.detector: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
+                F.detector_version: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+                F.verifier: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
+                F.verifier_version: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
                 F.verified_at: now,
                 F.detected_at: now,
                 F.bbox_frame: 'source',
@@ -421,11 +424,11 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
             # edits (audit: SAM-worker class-clobber bug).
             F.validated: True,
             **region_provenance(
-                detector=DEFAULT_PROFILE.human_detector_name,
-                detector_version=DEFAULT_PROFILE.human_detector_version,
+                detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
+                detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
                 bbox_frame='source',
-                verifier=DEFAULT_PROFILE.human_detector_name,
-                verifier_version=DEFAULT_PROFILE.human_detector_version,
+                verifier=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
+                verifier_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
                 detected_at=now,
                 verified_at=now,
             ),
@@ -445,7 +448,7 @@ async def set_crop_plate(
     ``bbox_norm`` is in the **source-image** coordinate frame. The
     labeler converts crop-frame → source-frame before POSTing; the API
     never sees crop-frame coords. ``None`` body clears the box and
-    marks the crop as ``plate_status='no_plate_visible'``.
+    marks the crop as ``plate_status='no_region_visible'``.
     """
     F = get_region_fields()
     body = _region_doc(payload)
@@ -593,14 +596,14 @@ async def batch_set_crop_plate(
     return {'updated': updated, 'conflicts': conflicts}
 
 
-@router.post('/plates/batch_status')
+@router.post('/regions/batch_status')
 async def batch_set_plate_status(
     payload: CropBatchStatusRequest,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
     """Bulk-set region status over many crops — the cluster-view triage op.
 
-    Mark regions ``false_positive`` / ``no_plate_visible`` in one call, or
+    Mark regions ``false_positive`` / ``no_region_visible`` in one call, or
     bulk-confirm with ``plate_status='detected'`` + ``plate_verified=True``.
     Mirrors ``patch_crop_plate_meta`` (human edits are terminal →
     ``plate_validated=True`` so they leave the /review queue).

@@ -95,7 +95,7 @@ async def test_sort_override_naming_a_shadow_id_falls_back_to_none(
 async def test_detection_profile_and_prompt_pack_resolve_their_single_entry(
     fake_os: FakeSettingsOpenSearch,
 ) -> None:
-    from src.services.detection import cascade_detect  # noqa: F401 - registers DEFAULT_PROFILE
+    from src.services.detection import cascade_detect  # noqa: F401 - registers the profile
     from src.services.detection.profile_registry import get_default_profile_name
     from src.services.labeling.vlm_prompts import resolve_prompt_pack
 

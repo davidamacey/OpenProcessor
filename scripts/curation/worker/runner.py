@@ -27,7 +27,7 @@ from src.services.curation.metrics import (
     LEGACY_STAGE_LPR_DURATION_SECONDS,
 )
 from src.services.detection.cascade_detect import (
-    DEFAULT_PROFILE,
+    REFERENCE_LICENSE_PLATE_PROFILE,
     PaddleOcrTextRecognizer,
     RegionDetector,
     crop_norm_to_source_norm,
@@ -240,17 +240,17 @@ async def run(args: argparse.Namespace) -> int:
     #                       VISIBLE_CHUNK per call, fail-OPEN on parse error)
     #                       splits into:
     #                         - visible=True          -> sam_q
-    #                         - visible=False         -> out_q (no_plate_visible)
+    #                         - visible=False         -> out_q (no_region_visible)
     #
     #   sam_q            -> Stage A.secondary + text-hint OCR re-pass
     #                       splits into:
     #                         - high-conf skip        -> out_q (detected)
     #                         - candidate found        -> combined_q
-    #                         - all detectors miss     -> out_q (no_plate_box)
+    #                         - all detectors miss     -> out_q (no_region_box)
     #
     #   combined_q       -> Stage B (batched combined VLM call,
     #                       COMBINED_CHUNK per call)
-    #                       writes detected / verify_rejected / no_plate_visible
+    #                       writes detected / verify_rejected / no_region_visible
     #                       to out_q
     #
     #   out_q            -> writer (batched OS bulk_update)
@@ -303,7 +303,7 @@ async def run(args: argparse.Namespace) -> int:
         'consecutive_empty_polls': 0,
         # gemma_visible_skipped: primary-miss / secondary-shape crops
         # that the visibility pre-filter short-circuited to
-        # no_plate_visible (no segmenter call, no combined call). The
+        # no_region_visible (no segmenter call, no combined call). The
         # point of this stage; bigger is better.
         'gemma_visible_skipped': 0,
         # gemma_visible_kept: crops that passed the filter and went on
@@ -439,7 +439,7 @@ async def run(args: argparse.Namespace) -> int:
                     )
                 if t.crop_jpeg is None:
                     F = get_region_fields()
-                    t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
+                    t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
                     await out_q.put(t)
                     in_q.task_done()
                     continue
@@ -574,7 +574,7 @@ async def run(args: argparse.Namespace) -> int:
         Drains ``gemma_visible_q`` in chunks of ``VISIBLE_CHUNK`` and
         asks the VLM "is a region of interest visible at all?" per
         crop. Crops that come back ``False`` short-circuit to
-        ``no_plate_visible`` without ever touching the secondary
+        ``no_region_visible`` without ever touching the secondary
         segmenter or the combined call — that's the entire point of
         this stage. Crops that come back ``True`` (or that the parser
         fails open on) advance to ``sam_q``.
@@ -630,7 +630,7 @@ async def run(args: argparse.Namespace) -> int:
                     structlog.contextvars.bind_contextvars(request_id=t.request_id)
                     try:
                         if i in bad_indices:
-                            t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
+                            t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
                             await out_q.put(t)
                             continue
                         # Default True (fail-open) when the crop is
@@ -644,7 +644,7 @@ async def run(args: argparse.Namespace) -> int:
                             metrics['gemma_visible_skipped'] += 1
                             t.detection_trace.append('gemma_visible:no')
                             t.update_doc = {
-                                F.status: RegionStatus.NO_PLATE_VISIBLE,
+                                F.status: RegionStatus.NO_REGION_VISIBLE,
                                 F.detector_chain: list(t.detection_trace),
                             }
                             await out_q.put(t)
@@ -674,7 +674,7 @@ async def run(args: argparse.Namespace) -> int:
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
                 if t.crop_jpeg is None:
-                    t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
+                    t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
                     await out_q.put(t)
                     sam_q.task_done()
                     continue
@@ -729,15 +729,17 @@ async def run(args: argparse.Namespace) -> int:
                         projected = crop_norm_to_source_norm(
                             sam_candidate.bbox_norm, t.vehicle_bbox_norm
                         )
-                        t.detection_trace.append(f'{DEFAULT_PROFILE.segmenter_name}:hit')
                         t.detection_trace.append(
-                            f'{DEFAULT_PROFILE.segmenter_name}:skip_gemma_verify'
+                            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:hit'
+                        )
+                        t.detection_trace.append(
+                            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:skip_gemma_verify'
                         )
                         t.update_doc = _region_write_doc(
                             plate_in_source=projected,
                             score=sam_candidate.score,
-                            detector=DEFAULT_PROFILE.segmenter_name,
-                            detector_version=DEFAULT_PROFILE.segmenter_version,
+                            detector=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
+                            detector_version=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
                             chain=t.detection_trace,
                             plate_verified=False,
                             plate_validated=False,
@@ -774,7 +776,9 @@ async def run(args: argparse.Namespace) -> int:
                     ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
                 )
                 if ocr_pick is not None:
-                    t.detection_trace.append(f'{DEFAULT_PROFILE.ocr_rec_model}:text_hint:hit')
+                    t.detection_trace.append(
+                        f'{REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model}:text_hint:hit'
+                    )
                     sub_cand, _sub_box = await _resegment_from_text_hint(
                         t.crop_jpeg, ocr_pick.bbox_norm, sam3
                     )
@@ -790,17 +794,21 @@ async def run(args: argparse.Namespace) -> int:
                         await combined_q.put(t)
                         sam_q.task_done()
                         continue
-                    t.detection_trace.append(f'{DEFAULT_PROFILE.segmenter_name}:text_hint:miss')
+                    t.detection_trace.append(
+                        f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:text_hint:miss'
+                    )
                 elif ocr_regions:
                     t.detection_trace.append(
-                        f'{DEFAULT_PROFILE.ocr_rec_model}:text_hint:no_plate_shape'
+                        f'{REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model}:text_hint:no_plate_shape'
                     )
                 else:
-                    t.detection_trace.append(f'{DEFAULT_PROFILE.ocr_rec_model}:text_hint:miss')
+                    t.detection_trace.append(
+                        f'{REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model}:text_hint:miss'
+                    )
 
-                # Nothing found by any detector → no_plate_box.
+                # Nothing found by any detector → no_region_box.
                 t.update_doc = {
-                    F.status: RegionStatus.NO_PLATE_BOX,
+                    F.status: RegionStatus.NO_REGION_BOX,
                     F.detector_chain: list(t.detection_trace),
                 }
                 await out_q.put(t)
@@ -837,7 +845,7 @@ async def run(args: argparse.Namespace) -> int:
             NOT re-loop the secondary segmenter (would re-introduce 2
             VLM calls). ``combined_bbox_wrong`` counter tracks this
             cohort.
-          - plate_visible=False -> write 'no_plate_visible' + class fields.
+          - plate_visible=False -> write 'no_region_visible' + class fields.
           - reply missing / parse failure -> drop from in_flight, leave
             plate_status unchanged so the next producer poll re-fetches.
         """
@@ -922,7 +930,7 @@ async def run(args: argparse.Namespace) -> int:
                     try:
                         if i in bad_indices:
                             # Defensive — Stage A should always set these.
-                            t.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
+                            t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
                             await out_q.put(t)
                             continue
                         reply = replies_by_id.get(t.crop_id)
@@ -982,8 +990,8 @@ async def run(args: argparse.Namespace) -> int:
                             # canonical detector name used in provenance.
                             _det = {
                                 'sam3': (
-                                    DEFAULT_PROFILE.segmenter_name,
-                                    DEFAULT_PROFILE.segmenter_version,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
                                 ),
                                 # OCR-hinted re-pass: bbox came from the
                                 # secondary segmenter too, just on a
@@ -992,16 +1000,16 @@ async def run(args: argparse.Namespace) -> int:
                                 # text-hint trace lives on the detector
                                 # chain.
                                 'sam3_text_hint': (
-                                    DEFAULT_PROFILE.segmenter_name,
-                                    DEFAULT_PROFILE.segmenter_version,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
                                 ),
                                 'lpr': (
-                                    DEFAULT_PROFILE.detector_model,
-                                    DEFAULT_PROFILE.detector_version,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
                                 ),
                                 'lpr_existing': (
-                                    DEFAULT_PROFILE.detector_model,
-                                    DEFAULT_PROFILE.detector_version,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
                                 ),
                             }.get(
                                 t.candidate_source,
@@ -1032,7 +1040,9 @@ async def run(args: argparse.Namespace) -> int:
                                 rc = t.candidate_text_confidence or 0.0
                                 t.update_doc[F.text] = t.candidate_text
                                 t.update_doc[F.text_raw] = t.candidate_text
-                                t.update_doc[F.text_source] = DEFAULT_PROFILE.ocr_rec_model
+                                t.update_doc[F.text_source] = (
+                                    REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model
+                                )
                                 t.update_doc[F.text_engine_version] = '1'
                                 # Map numeric rec_score -> VLM confidence
                                 # bin so downstream consumers treat
@@ -1066,7 +1076,7 @@ async def run(args: argparse.Namespace) -> int:
                                 f'{t.candidate_source or "unknown"}:combined_no_plate_visible'
                             )
                             t.update_doc = {
-                                F.status: RegionStatus.NO_PLATE_VISIBLE,
+                                F.status: RegionStatus.NO_REGION_VISIBLE,
                                 F.detector_chain: list(t.detection_trace),
                                 **_combined_class_update(
                                     reply, effective_class_names, name_to_id=name_to_id

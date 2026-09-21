@@ -39,7 +39,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.vlm import _get_vlm_labeler
-from src.services.detection.cascade_detect import DEFAULT_PROFILE
+from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
 from src.services.training.triton_promote import (
     DEFAULT_TRITON_MODELS_DIR,
     ModelNotPromotedError,
@@ -142,29 +142,29 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     always-present CLIP + PE encoder entries.
     """
     entries: list[tuple[str, str, str, str]] = []
-    if DEFAULT_PROFILE.detector_model:
+    if REFERENCE_LICENSE_PLATE_PROFILE.detector_model:
         entries.append(
             (
-                DEFAULT_PROFILE.detector_model,
+                REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
                 'Region Detector',
                 'Finds the configured region-of-interest (see DetectionProfile) '
                 'inside each item crop.',
                 'TensorRT detection',
             )
         )
-    if DEFAULT_PROFILE.ocr_det_model:
+    if REFERENCE_LICENSE_PLATE_PROFILE.ocr_det_model:
         entries.append(
             (
-                DEFAULT_PROFILE.ocr_det_model,
+                REFERENCE_LICENSE_PLATE_PROFILE.ocr_det_model,
                 'OCR Text Detector',
                 'Locates text regions inside a crop to seed a re-detection pass.',
                 'TensorRT detection',
             )
         )
-    if DEFAULT_PROFILE.ocr_rec_model:
+    if REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model:
         entries.append(
             (
-                DEFAULT_PROFILE.ocr_rec_model,
+                REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model,
                 'OCR Text Recognizer',
                 'Reads text out of a located text region.',
                 'TensorRT recognition',
@@ -211,9 +211,9 @@ def _region_protected_models() -> frozenset[str]:
     names = {
         name
         for name in (
-            DEFAULT_PROFILE.detector_model,
-            DEFAULT_PROFILE.ocr_det_model,
-            DEFAULT_PROFILE.ocr_rec_model,
+            REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+            REFERENCE_LICENSE_PLATE_PROFILE.ocr_det_model,
+            REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model,
             TritonModelConfig.OCR_DET_MODEL,
             TritonModelConfig.OCR_REC_MODEL,
         )

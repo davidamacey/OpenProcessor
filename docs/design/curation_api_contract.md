@@ -63,7 +63,7 @@ by router module; every path is relative to the configured
 |---|---|
 | `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
-| `regions.py` / `regions_fp.py` | `GET /plates`, `PUT /crops/{crop_id}/plate`, `PUT /crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `POST /plates/batch_status`, `POST /plates/cluster`, `GET /plates/cluster/status`, `GET /plates/clusters`, `POST /plates/clusters/refine/{cluster_id}`, `POST /plates/fp_centroids/build`, `GET /plates/fp_centroids/status`, `GET /plates/suspected_false_positives`, `GET /plates/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/plate`, `PUT /crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
@@ -120,10 +120,10 @@ disagree, and see D3 for the plan to close that gap.
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropPlateRequest`: `bbox_norm` (source-image frame), `label_source`
 - `CropBatchPlateRequest`: `crop_ids`, `bbox_norm`, `label_source`
-- `CropBatchStatusRequest`: `crop_ids`, `plate_status`, `plate_verified`, `label_source` — `plate_status` must be one of `HUMAN_PLATE_STATUS_VALUES` = `{'detected', 'no_plate_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
+- `CropBatchStatusRequest`: `crop_ids`, `plate_status`, `plate_verified`, `label_source` — `plate_status` must be one of `HUMAN_REGION_STATUS_VALUES` = `{'detected', 'no_region_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
 - `CropPlateMetaRequest`: `plate_text`, `plate_status`, `plate_rejection_reason`, `label_source` (all optional; only provided fields are written; `extra='forbid'`)
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
-- **Region thumbnail URLs**: `ItemDoc`/`/plates` responses carry `thumbnail_url` and `plate_thumbnail_url` fields whose *values* point at `GET {prefix}/crops/{crop_id}/region_thumbnail` — the JSON key `plate_thumbnail_url` is frozen (do not rename), but the URL path segment it contains is the generic `region_thumbnail`, not `plate_thumbnail` (no such route is registered; see `cropwright_backend_integration_plan.md` §1.3 for the bug this fixed).
+- **Region thumbnail URLs**: `ItemDoc`/`/regions` responses carry `thumbnail_url` and `plate_thumbnail_url` fields whose *values* point at `GET {prefix}/crops/{crop_id}/region_thumbnail` — the JSON key `plate_thumbnail_url` is frozen (do not rename), but the URL path segment it contains is the generic `region_thumbnail`, not `plate_thumbnail` (no such route is registered; see `cropwright_backend_integration_plan.md` §1.3 for the bug this fixed).
 
 ### Classes
 
@@ -300,9 +300,11 @@ read-modify-write round trip in application code.
   etc. as document keys) — governed by `RegionFields`
   (`src/config/region_fields.py`), overridable per deployment via
   `OP_REGION_FIELD_*` (see `env.template`).
-- **`PlateStatus` enum values** in `src/config/plate_state.py` — these
+- **`RegionStatus` enum values** in `src/config/region_state.py` — these
   are values, not field names. See D2 below for the codegen contract's
-  status.
+  status. Work item B2 exercised exactly that freedom: `no_plate_box` /
+  `no_plate_visible` became `no_region_box` / `no_region_visible` (see
+  the B2 note under "Coordination notes" below).
 - **The `/curation` URL prefix itself** — a config field
   (`CurationConfig.api_prefix`, env override `OP_API_PREFIX`) that
   defaults to `/curation`. A deployment may run behind a different
@@ -345,6 +347,40 @@ ignored `OP_REGION_FIELD_*` overrides.
   slot would justify it. No action planned.
 
 ## Coordination notes for consumers
+
+### B2 — LPR vocabulary removed from the public surface (BREAKING)
+
+Agreed with the Cropwright team before landing; ship both sides
+together. Pure 1:1 renames — no handler, filter, or semantic change,
+and no statuses were merged:
+
+| Kind | Before | After |
+|---|---|---|
+| Route | `GET /plates` | `GET /regions` |
+| Route | `GET /plates/training_candidates` | `GET /regions/training_candidates` |
+| Route | `POST /plates/batch_status` | `POST /regions/batch_status` |
+| Route | `POST /plates/cluster` | `POST /regions/cluster` |
+| Route | `GET /plates/cluster/status` | `GET /regions/cluster/status` |
+| Route | `POST /plates/clusters/refine/{cluster_id}` | `POST /regions/clusters/refine/{cluster_id}` |
+| Route | `GET /plates/clusters` | `GET /regions/clusters` |
+| Route | `POST /plates/fp_centroids/build` | `POST /regions/fp_centroids/build` |
+| Route | `GET /plates/fp_centroids/status` | `GET /regions/fp_centroids/status` |
+| Route | `GET /plates/suspected_false_positives` | `GET /regions/suspected_false_positives` |
+| Status value | `no_plate_box` | `no_region_box` |
+| Status value | `no_plate_visible` | `no_region_visible` |
+| Cohort `mode=` | `lpr_blind_spots` | `detector_blind_spots` |
+| Cohort `mode=` | `lpr_low_conf_correct` | `low_conf_correct` |
+
+Not renamed, deliberately: `PUT /crops/{crop_id}/plate`, `PUT
+/crops/batch_plate`, `PATCH /crops/{crop_id}/plate_meta`, `GET
+/crops/{crop_id}/region_thumbnail`, every `plate_*` JSON key (frozen —
+see the invariant at the top of this doc), the `plates` review tab, and
+the `disagreement` / `human_corrected` / `false_positives` cohort
+modes.
+
+Deployments carrying documents written before B2 need a one-off
+`update_by_query` rewriting the two status strings; nothing else in
+storage changes.
 
 - This doc is the shared source of truth for the `/curation` API. Point
   any consumer's docs here instead of duplicating the field list.
