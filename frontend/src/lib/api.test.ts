@@ -13,6 +13,7 @@ import {
   cancelSelect,
   getCluster,
   getClassRegistryUrl,
+  getCurationSettings,
   getDataYamlUrl,
   getManifestUrl,
   getMethods,
@@ -20,6 +21,7 @@ import {
   getSelectStatus,
   getVizProjection,
   normalizeApiPrefix,
+  putCurationDefaults,
   rebuildVizProjection,
   searchCrops,
   selectDiverse,
@@ -1204,5 +1206,85 @@ describe('API_PREFIX', () => {
     expect(normalizeApiPrefix('curation')).toBe('/curation');
     expect(normalizeApiPrefix('/curation/')).toBe('/curation');
     expect(normalizeApiPrefix('/curation///')).toBe('/curation');
+  });
+});
+
+/**
+ * `getCurationSettings`/`putCurationDefaults` — docs/design/
+ * curation-settings-ui-plan-2026-09-21.md §4.1. Deliberately asymmetric
+ * vs. `getMethods`: THIS endpoint throws on failure rather than
+ * degrading to a fallback, since a settings page must tell a 404
+ * ("backend predates the feature") apart from every other outcome.
+ */
+describe('getCurationSettings / putCurationDefaults', () => {
+  const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      ...init,
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getCurationSettings composes ${API_PREFIX}/settings and parses the body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        defaults: { cluster: 'ivf' },
+        updated_at: '2026-09-20T23:04:39+00:00',
+        updated_by: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getCurationSettings();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? '';
+    expect(calledUrl).toContain(`${API_PREFIX}/settings`);
+    expect(result).toEqual({
+      defaults: { cluster: 'ivf' },
+      updated_at: '2026-09-20T23:04:39+00:00',
+      updated_by: null,
+    });
+  });
+
+  it('putCurationDefaults sends PUT with the exact partial body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        defaults: { sort: 'uncertainty_entropy' },
+        updated_at: '2026-09-21T00:00:00+00:00',
+        updated_by: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await putCurationDefaults({ sort: 'uncertainty_entropy' });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain(`${API_PREFIX}/settings`);
+    expect(calledInit.method).toBe('PUT');
+    expect(calledInit.body).toBe(
+      JSON.stringify({ defaults: { sort: 'uncertainty_entropy' } }),
+    );
+    expect(result.defaults).toEqual({ sort: 'uncertainty_entropy' });
+  });
+
+  it('getCurationSettings THROWS on 404 (unlike getMethods, which falls back)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getCurationSettings()).rejects.toBeInstanceOf(ApiError);
+    await expect(getCurationSettings()).rejects.toMatchObject({ status: 404 });
+
+    // Contrast: getMethods() on the identical 404 response resolves rather
+    // than rejecting. Same fetch mock, different endpoint contract.
+    await expect(getMethods()).resolves.toEqual(FALLBACK_METHODS);
   });
 });

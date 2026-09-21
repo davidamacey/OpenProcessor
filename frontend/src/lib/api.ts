@@ -16,6 +16,7 @@ import {
   parseKbMethodsResponse,
   type OpMethodsResponse,
 } from './strategies';
+import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from './shapeGate';
 import type {
   BulkLabelResult,
@@ -289,6 +290,72 @@ export async function getMethods(signal?: AbortSignal): Promise<OpMethodsRespons
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     return FALLBACK_METHODS;
   }
+}
+
+// -- shared curation defaults (GET,PUT {API_PREFIX}/settings) -----------
+//
+// Deployment-wide strategy defaults, verified against wt-oss-hardening's
+// `src/routers/curation/settings.py` on 2026-09-21. See
+// docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.
+
+/**
+ * Read the deployment's shared curation defaults.
+ *
+ * **Unlike `getMethods()`, this DOES reject.** That asymmetry is
+ * deliberate: `getMethods` is fired from many component mounts and its
+ * absence has a meaningful fallback (`FALLBACK_METHODS`), so swallowing
+ * failures there is right. This endpoint is fired from exactly one page,
+ * and that page must distinguish three outcomes an opaque fallback would
+ * fuse into one:
+ *
+ *   404  -> this backend predates the feature; show "not supported",
+ *           render no controls at all
+ *   5xx/net -> transient; show the error and offer a retry
+ *   200  -> real record (possibly `defaults: {}` when nothing has ever
+ *           been written — that is the normal first-run response, NOT an
+ *           error)
+ *
+ * Throwing preserves `ApiError.status`, which is the only thing that can
+ * tell those apart. `curationSettingsStore` is the single place that
+ * catches.
+ */
+export async function getCurationSettings(
+  signal?: AbortSignal,
+): Promise<CurationSettings> {
+  const raw = await apiFetch<unknown>(`${API_PREFIX}/settings`, {}, signal);
+  return parseCurationSettings(raw);
+}
+
+/**
+ * Merge one or more axis defaults into the shared record.
+ *
+ * PARTIAL BODY BY CONTRACT — send only the axes being changed. The
+ * backend writes `{'doc': {...}, 'doc_as_upsert': True}`, an OpenSearch
+ * recursive object merge, so axes not mentioned are left untouched. This
+ * is also what protects an axis id this build has never heard of from
+ * being clobbered by an older frontend: never send the whole `defaults`
+ * map back, only the delta.
+ *
+ * Throws `ApiError` with `status === 422` when an axis is unsettable or
+ * an id is not currently advertised for it; `ApiError.detail` carries the
+ * server's own message listing the valid axes/ids. Note `errorDetail()`
+ * truncates at 200 chars, so a long `valid ids: [...]` list can be
+ * elided — the caller should re-sync `/methods` rather than rely on
+ * parsing that string (see the store's `saveDefault`).
+ *
+ * Returns the FULL merged record. Always adopt this; never
+ * optimistically construct the post-save state client-side.
+ */
+export async function putCurationDefaults(
+  defaults: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<CurationSettings> {
+  const raw = await apiFetch<unknown>(
+    `${API_PREFIX}/settings`,
+    { method: 'PUT', body: JSON.stringify({ defaults }) },
+    signal,
+  );
+  return parseCurationSettings(raw);
 }
 
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
