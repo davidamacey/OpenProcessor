@@ -85,7 +85,23 @@ trainer. A deployment supplies:
 - **A region-of-interest detector** — any Triton model whose name you
   set as `DetectionProfile.detector_model` (via `OP_DETECTION_*` env
   vars or a constructed instance). Ingest returns `503` until one is
-  configured and loaded.
+  configured and loaded. **Note:** `GET /methods` advertises exactly
+  one built-in `detection_profile` out of the box, named
+  `license_plate` with `detector_model=lpr_nanov11_640` — this is
+  `cascade_detect.py`'s `DEFAULT_PROFILE`, kept byte-identical to the
+  original reference deployment's constants so that deployment's
+  existing call sites (which never pass a profile explicitly) keep
+  working unchanged across this genericization. It is **not** a
+  suggested starting point for a new, non-LPR deployment. Setting your
+  own `OP_DETECTION_*` env vars configures the profile ingest actually
+  uses (`_get_detection_profile()` in `routers/curation/ingest.py`),
+  but does **not** by itself make it appear on `GET /methods` — that
+  registry is populated only by explicit
+  `src.services.detection.profile_registry.register_profile()` calls
+  (see that module's docstring); there is no config-driven
+  auto-registration yet. A deployment that wants its own profile
+  advertised alongside (or instead of) `license_plate` needs a small
+  amount of startup code calling `register_profile()`.
 - **An OCR/recognition model, if your region type has readable text**
   (`DetectionProfile.ocr_rec_model`) — optional, only used by the
   text-hint heuristics.
