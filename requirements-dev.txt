@@ -18,7 +18,7 @@ locust>=2.31.0
 # Data analysis and visualization (for benchmark results)
 pandas>=2.2.0
 numpy>=1.26.0
-matplotlib>=3.9.0
+matplotlib>=3.11.2
 
 # Image handling (for client-side image manipulation if needed)
 opencv-python>=4.8.0
