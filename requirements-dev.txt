@@ -13,7 +13,7 @@ requests>=2.32.0
 aiohttp>=3.9.0
 
 # Load testing framework (sends concurrent requests)
-locust>=2.31.0
+locust>=2.46.6
 
 # Data analysis and visualization (for benchmark results)
 pandas>=2.2.0
