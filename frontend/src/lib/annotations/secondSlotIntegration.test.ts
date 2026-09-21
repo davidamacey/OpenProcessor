@@ -20,6 +20,12 @@ import { licensePlateSlot } from './profiles/licensePlate';
 import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
 import { buildReviewTabs, isSlotTab, slotTabId, tabFromUrlId } from '../reviewTabs';
 import { buildSlotKeymap, singleCharCombos } from '../review/slotKeymap';
+import {
+  humanWritableStates,
+  panelLabels,
+  statusClearsBox,
+  statusWantsRejectionReason,
+} from '../review/slotPanel';
 import { reservedHotkeyLetters } from '../classHotkey';
 import { cohortsForClass } from './cohorts';
 import { vi } from 'vitest';
@@ -87,5 +93,31 @@ describe('P3.6: registering a second capable slot works with zero production cod
       expect(c.query).toBeDefined();
       expect(['slot', 'crop']).toContain(c.rowKind);
     }
+  });
+
+  // C6 (Finding D, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
+  // §6): /review's inline panel body — not just the tab shell/keymap —
+  // is now slot-generic. These are the executable proof: the same four
+  // slotPanel.ts functions the panel calls produce a completely
+  // different, correct result for a second slot, with zero code change.
+  it("slotPanel helpers produce the tail-number slot's own vocabulary, not license_plate's", () => {
+    expect(humanWritableStates(aircraftTailNumberSlot)).toEqual([
+      { value: 'detected', label: 'detected' },
+      { value: 'not_visible', label: 'no tail number visible' },
+      { value: 'obscured', label: 'obscured / partial' },
+    ]);
+    expect(statusClearsBox(aircraftTailNumberSlot, 'not_visible')).toBe(true);
+    expect(statusClearsBox(aircraftTailNumberSlot, 'no_plate_visible')).toBe(false);
+    expect(statusWantsRejectionReason(aircraftTailNumberSlot, 'obscured')).toBe(true);
+    expect(statusWantsRejectionReason(aircraftTailNumberSlot, 'detected')).toBe(false);
+    expect(panelLabels(aircraftTailNumberSlot)).toEqual({
+      scoreLabel: 'Tail number score',
+      statusLabel: 'Tail number status',
+      textLabel: 'Tail number',
+      textPlaceholder: 'N123AB',
+      confirmLabel: 'Confirm Tail number',
+      rejectLabel: 'Reject (no tail number)',
+      noBoxHint: 'No tail number bbox on this crop — press E to draw one.',
+    });
   });
 });

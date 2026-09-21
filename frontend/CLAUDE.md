@@ -281,7 +281,9 @@ Global:
 | `E`             | Plates tab: enter bbox edit mode                                                                                                      |
 | `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                                                        |
 
-### Slot-generic review tabs (P2.8b/P2.8c, docs/genericization-plan-2026-09-13.md §9.5)
+### Slot-generic review tabs (P2.8b/P2.8c, docs/genericization-plan-2026-09-13.md §9.5;
+
+panel body generalized by C6, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §6)
 
 The ~12 `tab === 'plates'` call sites that used to gate the Plates-tab-only
 behavior above are gone. `review/+page.svelte` derives one value,
@@ -297,10 +299,25 @@ is set, and the text-filter input reads its label/placeholder from
 structural `slot:${key}` template (`ReviewTab` = `CoreReviewTab |
 SlotReviewTab`), not `'plates'` — `'plates'` survives only as the
 `license_plate` slot's `urlId` bookmark value (`tabFromUrlId('plates')`
-→ `'slot:license_plate'`, in `src/lib/reviewTabs.ts`). A second
-queue-capable slot registered in `registeredSlots.ts` gets a fully
-working review tab (keymap, hint strip, inline review panel gating)
-with zero further edits to `review/+page.svelte` — proved by
+→ `'slot:license_plate'`, in `src/lib/reviewTabs.ts`).
+
+The inline review panel body (score / status / detector / OCR text /
+rejection reason / confirm-reject-FP-back buttons) is now generic too —
+this was Finding D, a real gap through 2026-09-21: the tab shell, keymap
+and gating were already slot-generic, but the panel body underneath
+still read `current.plate_*` fields and a directly-imported
+`licensePlateSlot` regardless of the active tab. It now reads every
+value through `slotOf(current, activeSlot)` (`src/lib/annotations/
+cropSlots.ts`, off `OpCrop.slots` — populated by `mapRawCrop` via
+`mapCropSlots`/`readSlot`), and every label/status-vocabulary/copy
+string through `src/lib/review/slotPanel.ts`'s `humanWritableStates` /
+`statusClearsBox` / `statusWantsRejectionReason` / `panelLabels`. Writes
+go through `setSlotBox`/`patchSlotMeta` (`api.ts`), which target the
+active slot's own declared `endpoints`/wire field names — never a
+hardcoded `/crops/{id}/plate` or `plate_status` literal. A second
+queue-capable slot registered in `registeredSlots.ts` now gets a fully
+working review tab — shell, keymap, hint strip, AND inline panel body —
+with zero further edits to `review/+page.svelte`, proved by
 `src/lib/annotations/secondSlotIntegration.test.ts`.
 
 The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over

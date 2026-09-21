@@ -19,7 +19,7 @@ import {
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from './shapeGate';
 import { mapCropSlots } from './annotations/cropSlots';
-import type { XYXY, SlotKey, SlotData } from './annotations/types';
+import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type {
   BulkLabelResult,
   ClusterFilter,
@@ -1437,36 +1437,72 @@ export function setCropPlate(
 }
 
 /**
- * Patch plate metadata fields without touching the bbox. Backend
- * endpoint: `PATCH /curation/crops/{id}/plate_meta`. Only the keys present in
- * `patch` are sent — pass `plate_text: null` to clear, omit to leave
- * untouched. `plate_status` must be one of `'detected' |
- * 'no_plate_visible' | 'verify_rejected' | 'false_positive'` (the
- * human-writable subset). `false_positive` keeps the detected box (for
- * FP analysis + LPR hard-negative training); `no_plate_visible` clears it.
+ * PUT a slot's sub-box via the spec's declared endpoint, or clear it
+ * (`xyxy === null`) via `clearBox` when the profile declares a distinct
+ * one, falling back to `setBox` with a null body otherwise (matching
+ * `setCropPlate`'s existing "PUT with bbox_norm: null clears" contract —
+ * licensePlateSlot doesn't declare a separate clearBox URL, so this
+ * degrades to that same call for the one profile that's actually wired
+ * today).
  */
-export interface PlateMetaPatch {
-  plate_text?: string | null;
-  plate_status?:
-    | 'detected'
-    | 'no_plate_visible'
-    | 'verify_rejected'
-    | 'false_positive'
-    | null;
-  plate_rejection_reason?: string | null;
+export function setSlotBox(
+  spec: SlotSpec,
+  cropId: string,
+  xyxy: [number, number, number, number] | null,
+  signal?: AbortSignal,
+): Promise<OpCrop> {
+  const path =
+    (xyxy === null ? spec.endpoints.clearBox?.(cropId) : undefined) ??
+    spec.endpoints.setBox?.(cropId);
+  if (!path) {
+    return Promise.reject(
+      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint`),
+    );
+  }
+  return apiFetch<OpCrop>(
+    `${API_PREFIX}${path}`,
+    { method: 'PUT', body: JSON.stringify({ bbox_norm: xyxy }) },
+    signal,
+  );
 }
 
-export function updateCropPlateMeta(
+/**
+ * PATCH a slot's metadata fields (status / text / rejection reason)
+ * without touching the bbox. The BODY KEYS are the spec's own wire
+ * field names — for `licensePlateSlot` this produces a body
+ * byte-identical to the old `PlateMetaPatch` (`plate_text` /
+ * `plate_status` / `plate_rejection_reason`), pinned in api.test.ts.
+ * Keys whose capability is absent, or whose value is `undefined`
+ * (as opposed to `null`, which clears), are omitted.
+ */
+export function patchSlotMeta(
+  spec: SlotSpec,
   cropId: string,
-  patch: PlateMetaPatch,
+  patch: {
+    status?: string | null;
+    text?: string | null;
+    rejectionReason?: string | null;
+  },
   signal?: AbortSignal,
 ): Promise<{ crop_id: string; updated_fields: string[] }> {
+  const cap = spec.capabilities;
+  const body: Record<string, unknown> = {};
+  if (patch.status !== undefined && cap.lifecycle?.statusField) {
+    body[cap.lifecycle.statusField] = patch.status;
+  }
+  if (patch.text !== undefined && cap.text?.valueField) {
+    body[cap.text.valueField] = patch.text;
+  }
+  if (patch.rejectionReason !== undefined && cap.lifecycle?.rejectionReasonField) {
+    body[cap.lifecycle.rejectionReasonField] = patch.rejectionReason;
+  }
+  const path = spec.endpoints.patchMeta?.(cropId);
+  if (!path) {
+    return Promise.reject(new Error(`slot "${spec.key}" has no patchMeta endpoint`));
+  }
   return apiFetch(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/plate_meta`,
-    {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    },
+    `${API_PREFIX}${path}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
     signal,
   );
 }

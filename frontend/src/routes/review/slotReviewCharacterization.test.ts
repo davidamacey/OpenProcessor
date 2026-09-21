@@ -98,24 +98,28 @@ describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack de
   // the actual behavior. What's pinned here is that the page still wires
   // to them the way the plan requires (keyed by crop id, not cursor;
   // $state.raw for identity-correct removal).
-  it('keys the Plates-tab save-abort registry by crop id, not by cursor index', () => {
-    expect(reviewPageSrc).toMatch(/plateMetaAborts = new AbortRegistry\(\)/);
-    expect(reviewPageSrc).toMatch(/plateMetaAborts\.start\(id\)/);
-    expect(reviewPageSrc).toMatch(/plateMetaAborts\.finish\(id, ac\)/);
+  it('keys the slot-tab save-abort registry by crop id, not by cursor index', () => {
+    // Generalized off `plateMetaAborts` by C6 (slot-generic crop-mapping
+    // plan, 2026-09-21) — same mechanism, slot-generic name.
+    expect(reviewPageSrc).toMatch(/slotMetaAborts = new AbortRegistry\(\)/);
+    expect(reviewPageSrc).toMatch(/slotMetaAborts\.start\(id\)/);
+    expect(reviewPageSrc).toMatch(/slotMetaAborts\.finish\(id, ac\)/);
   });
 
   it('undo stack is $state.raw and delegates push/remove/pop to slotQueueOps', () => {
     // Deep reactivity would proxy pushed entries, so removeUndo's
     // identity-based filter could never match a pushed entry.
+    // Generalized off `plateUndoStack`/`PlateUndoEntry`/`PLATE_UNDO_MAX`
+    // by C6 (slot-generic crop-mapping plan, 2026-09-21).
     expect(reviewPageSrc).toMatch(
-      /plateUndoStack = \$state\.raw<PlateUndoEntry\[\]>\(\[\]\)/,
+      /slotUndoStack = \$state\.raw<SlotUndoEntry\[\]>\(\[\]\)/,
     );
-    expect(reviewPageSrc).toMatch(/pushUndo\(plateUndoStack, entry, PLATE_UNDO_MAX\)/);
-    expect(reviewPageSrc).toMatch(/removeUndo\(plateUndoStack, entry\)/);
-    expect(reviewPageSrc).toMatch(/popUndo\(plateUndoStack\)/);
+    expect(reviewPageSrc).toMatch(/pushUndo\(slotUndoStack, entry, SLOT_UNDO_MAX\)/);
+    expect(reviewPageSrc).toMatch(/removeUndo\(slotUndoStack, entry\)/);
+    expect(reviewPageSrc).toMatch(/popUndo\(slotUndoStack\)/);
   });
 
-  it('plateBack() re-insertion delegates to reinsertAt (clamped splice)', () => {
+  it('slotBack() re-insertion delegates to reinsertAt (clamped splice)', () => {
     expect(reviewPageSrc).toMatch(/reinsertAt\(queue\.items, last\.insertAt, fresh\)/);
   });
 });

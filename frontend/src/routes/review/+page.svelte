@@ -10,9 +10,8 @@
     getThumbUrl,
     putCropLabel,
     selectDiverse,
-    setCropPlate,
-    updateCropPlateMeta,
-    type PlateMetaPatch,
+    setSlotBox,
+    patchSlotMeta,
   } from '$lib/api';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
@@ -22,15 +21,23 @@
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import StrategyBar from '$lib/components/StrategyBar.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
-  import { describeEnvelope, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
   import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
   import { AbortRegistry } from '$lib/review/abortRegistry';
   import { buildSlotKeymap, rejectKeyGlyph } from '$lib/review/slotKeymap';
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
   import { computeViewBox } from '$lib/review/viewBox';
-  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+  import {
+    humanWritableStates,
+    statusClearsBox,
+    statusWantsRejectionReason,
+    panelLabels,
+  } from '$lib/review/slotPanel';
+  import { slotOf } from '$lib/annotations/cropSlots';
+  import { describeEnvelope } from '$lib/annotations/types';
+  import type { SlotData } from '$lib/annotations/types';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
-  import { bboxNormToXYXY, cropToSourceFrame, sourceToCropFrame } from '$lib/bboxFrames';
+  import { bboxNormToXYXY } from '$lib/bboxFrames';
+  import { projectFromParent } from '$lib/annotations/readSlot';
   import {
     endpointForTab,
     isSlotTab,
@@ -698,82 +705,78 @@
     }
   }
 
-  // -- plate-tab actions ----------------------------------------------
+  // -- slot-tab actions -------------------------------------------------
   // Inline editor — no modal. The canvas is always live; if the user
   // tweaks the proposed bbox, Confirm saves the edited version. If they
   // leave it alone, Confirm saves the proposal as-is. The goal is one
-  // keystroke (Enter) per plate when scanning thousands of crops.
+  // keystroke (Enter) per item when scanning thousands of crops.
   //
-  // editedPlateLocal lives in the *crop-local* frame (the same space the
-  // BboxCanvas operates in). We seed it from current.plate_bbox_norm
-  // (source-frame) by projecting through the parent vehicle bbox; the
-  // seeding effect re-runs whenever the cursor advances to a new crop.
-  let editedPlateLocal = $state<BBoxNorm | null>(null);
-  let plateCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(null);
+  // editedSlotBox lives in the *crop-local* (parent) frame (the same
+  // space BboxCanvas operates in) — read straight off readSlot's own
+  // projection (slotOf(current, activeSlot)?.subBox?.parent), never
+  // re-derived by hand. The seeding effect re-runs whenever the cursor
+  // advances to a new crop.
+  let editedSlotBox = $state<BBoxNorm | null>(null);
+  let slotCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(null);
   // Read-only by default: the canvas only becomes interactive when the
   // operator presses E (or clicks Edit bbox). Most cascade-detected
-  // plates are already correct — forcing the heavy drag-handle UI on
+  // proposals are already correct — forcing the heavy drag-handle UI on
   // every crop is what made the tab feel "weird" vs. the other review
   // tabs. Edit mode resets to false on every cursor advance so the
-  // operator always lands on the next plate in scan-and-confirm mode.
+  // operator always lands on the next item in scan-and-confirm mode.
   let editMode = $state<boolean>(false);
-  let plateSaving = $state<boolean>(false);
+  let slotSaving = $state<boolean>(false);
 
-  // Inline editors for the plate metadata fields. Seeded from the
-  // current crop on every cursor advance; saved on blur / Enter via
-  // PATCH /curation/crops/{id}/plate_meta. Each field saves independently
-  // with optimistic-UI + revert-on-error, matching the assign() pattern.
-  let editedPlateText = $state<string>('');
-  let editedPlateStatus = $state<string>('');
+  // Inline editors for the slot metadata fields. Seeded from the
+  // current crop's SlotData on every cursor advance; saved on blur /
+  // Enter via patchSlotMeta (PATCH {slot's own patchMeta endpoint}).
+  // Each field saves independently with optimistic-UI + revert-on-error,
+  // matching the assign() pattern.
+  let editedSlotText = $state<string>('');
+  let editedSlotStatus = $state<string>('');
   let editedRejectionReason = $state<string>('');
-  // Status values an operator is allowed to write. Derived from the
-  // license_plate slot's lifecycle capability (P2.8, closes Finding
-  // C.4's second hand-copy of HUMAN_PLATE_STATUS_VALUES — the first was
-  // api.ts:1365's inline union, the third is openprocessor's
-  // _common.py:324, the fourth is a codegen'd file with zero importers).
-  // Order matches `licensePlateSlot.capabilities.lifecycle.states`, not
-  // the hand-picked order the old inline array happened to use.
-  const PLATE_STATUS_OPTIONS: Array<{ value: string; label: string }> = (
-    licensePlateSlot.capabilities.lifecycle?.states ?? []
-  )
-    .filter((s) => s.humanWritable)
-    .map((s) => ({ value: s.value, label: s.label }));
+  // Status values an operator is allowed to write, for the ACTIVE slot —
+  // closes Finding D (the panel used to render licensePlateSlot's own
+  // vocabulary regardless of which slot tab was active). Order matches
+  // the active slot's own `capabilities.lifecycle.states`.
+  const slotStatusOptions = $derived(activeSlot ? humanWritableStates(activeSlot) : []);
+  const slotLabels = $derived(activeSlot ? panelLabels(activeSlot) : null);
 
-  // Undo stack for plate confirm/reject. Each entry holds the previously
-  // confirmed plate so "Back" can re-insert the crop into the queue and
-  // restore the bbox the user just saved (allowing them to fix a mistake
+  // Undo stack for slot confirm/reject. Each entry holds the previously
+  // confirmed box so "Back" can re-insert the crop into the queue and
+  // restore what the user just saved (allowing them to fix a mistake
   // without re-finding the crop). Bounded to 20 entries — enough for
   // half a session of confusion, small enough to keep memory tiny.
-  interface PlateUndoEntry {
+  interface SlotUndoEntry {
     item: ReviewItem;
     insertAt: number;
     /**
-     * The plate bbox in source-frame that was sent to the server for
-     * this confirm — null means "rejected" (no plate visible).
+     * The sub-box in the slot's own stored frame that was sent to the
+     * server for this confirm — null means "rejected" (not visible).
      */
     saved: [number, number, number, number] | null;
   }
   // $state.raw, not $state: deep reactivity would proxy every pushed entry,
-  // so _removePlateUndo could never match the raw object the caller holds.
+  // so _removeSlotUndo could never match the raw object the caller holds.
   // Every mutation reassigns the array, so raw is just as reactive here.
-  let plateUndoStack = $state.raw<PlateUndoEntry[]>([]);
-  const PLATE_UNDO_MAX = 20;
-  function _pushPlateUndo(entry: PlateUndoEntry): void {
-    plateUndoStack = pushUndo(plateUndoStack, entry, PLATE_UNDO_MAX);
+  let slotUndoStack = $state.raw<SlotUndoEntry[]>([]);
+  const SLOT_UNDO_MAX = 20;
+  function _pushSlotUndo(entry: SlotUndoEntry): void {
+    slotUndoStack = pushUndo(slotUndoStack, entry, SLOT_UNDO_MAX);
   }
 
   /** Drop a specific step-back entry — used when its API call failed. */
-  function _removePlateUndo(entry: PlateUndoEntry): void {
-    plateUndoStack = removeUndo(plateUndoStack, entry);
+  function _removeSlotUndo(entry: SlotUndoEntry): void {
+    slotUndoStack = removeUndo(slotUndoStack, entry);
   }
 
-  async function plateBack(): Promise<void> {
-    const { entry: last, rest } = popUndo(plateUndoStack);
+  async function slotBack(): Promise<void> {
+    const { entry: last, rest } = popUndo(slotUndoStack);
     if (!last) {
       toastStore.info('Nothing to go back to.');
       return;
     }
-    plateUndoStack = rest;
+    slotUndoStack = rest;
     // Back in play: let loadMore surface it again if a later page returns it.
     handledIds.delete(last.item.id);
     // Refetch the crop so the operator sees what the database actually
@@ -786,7 +789,7 @@
       // The /curation/crops/{id} endpoint returns a OpCrop, but the review
       // queue carries extra fields (reason, proposed_*). Keep the
       // snapshot's queue-only metadata and overlay the authoritative
-      // store fields on top.
+      // store fields (including the freshly re-mapped .slots) on top.
       fresh = { ...last.item, ...c } as ReviewItem;
     } catch (e) {
       toastStore.warn(
@@ -801,155 +804,203 @@
     toastStore.info('Stepped back. Press E to re-edit, Enter to re-confirm.');
   }
 
-  function _seedPlateFromCurrent(): void {
-    if (!current || !current.plate_bbox_norm || !current.bbox_norm) {
-      editedPlateLocal = null;
-      return;
-    }
-    editedPlateLocal = sourceToCropFrame(current.plate_bbox_norm, current.bbox_norm);
+  function _seedSlotFromCurrent(): void {
+    editedSlotBox =
+      current && activeSlot
+        ? (slotOf(current, activeSlot)?.subBox?.parent ?? null)
+        : null;
   }
 
-  // Plate-centered viewport for the right-side canvas. **Frozen** —
+  // Slot-centered viewport for the right-side canvas. **Frozen** —
   // computed once when the crop loads and held steady during edits.
-  // If we derived it from `editedPlateLocal` instead, every drag tick
+  // If we derived it from `editedSlotBox` instead, every drag tick
   // would recompute the zoom and the IMG transform would pan/scale
   // along with the resize handle, making the box feel like it's
   // rubber-banding the whole image. The canvas applies viewBox as a
   // pure display transform; saved coordinates remain in crop-local
-  // frame and project to source frame on confirm.
-  const PLATE_VIEW_PADDING = 2.5;
-  let plateViewBox = $state<BBoxNorm | null>(null);
+  // frame and project to the slot's stored frame on confirm.
+  const SLOT_VIEW_PADDING = 2.5;
+  let slotViewBox = $state<BBoxNorm | null>(null);
   function _seedViewBox(): void {
     // Padding/squaring/clamping math lives in viewBox.ts (Phase 0 seam),
     // with its own unit tests; the untrack()-wrapped call site (below)
     // is what actually makes this "frozen" and has to stay here.
-    plateViewBox = computeViewBox(editedPlateLocal, PLATE_VIEW_PADDING);
+    slotViewBox = computeViewBox(editedSlotBox, SLOT_VIEW_PADDING);
   }
 
   // Reseed whenever the cursor changes (advancing to next crop) or the
-  // tab/items reset. Also exit edit mode so the next plate lands in
+  // tab/items reset. Also exit edit mode so the next item lands in
   // read-only scan mode regardless of where we left the previous one.
   $effect(() => {
     void current?.id;
-    _seedPlateFromCurrent();
+    _seedSlotFromCurrent();
     // Freeze the zoom viewport on the just-seeded bbox. Wrapped in
-    // untrack() so the read of `editedPlateLocal` inside _seedViewBox
+    // untrack() so the read of `editedSlotBox` inside _seedViewBox
     // does NOT make this effect re-run on every drag tick — that
-    // would re-fire _seedPlateFromCurrent and overwrite the user's
+    // would re-fire _seedSlotFromCurrent and overwrite the user's
     // in-progress resize with the server snapshot ("can't edit the
     // bbox" bug).
     untrack(() => _seedViewBox());
-    editedPlateText = current?.plate_text ?? '';
-    editedPlateStatus = current?.plate_status ?? '';
-    editedRejectionReason = current?.plate_rejection_reason ?? '';
+    const seedData = current && activeSlot ? slotOf(current, activeSlot) : null;
+    editedSlotText = seedData?.text?.value ?? '';
+    editedSlotStatus = seedData?.lifecycle?.status ?? '';
+    editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
     editMode = false;
   });
 
-  // In-flight plate-meta saves, keyed by crop id so concurrent edits to
+  // In-flight slot-meta saves, keyed by crop id so concurrent edits to
   // the same crop are aborted-then-replaced (the latest blur wins) and
   // edits to a *different* crop don't interfere with each other.
-  const plateMetaAborts = new AbortRegistry();
+  const slotMetaAborts = new AbortRegistry();
 
-  async function savePlateMeta(
-    patch: PlateMetaPatch,
-    snapshot: Partial<ReviewItem>,
+  /** Resolves the SlotState for a raw status value under the active slot. */
+  function _resolveSlotState(status: string) {
+    return (
+      activeSlot?.capabilities.lifecycle?.states.find((s) => s.value === status) ?? null
+    );
+  }
+
+  async function saveSlotMeta(
+    patch: {
+      status?: string | null;
+      text?: string | null;
+      rejectionReason?: string | null;
+    },
+    applyOptimistic: (prev: SlotData) => SlotData,
   ): Promise<void> {
-    if (!current) return;
+    if (!current || !activeSlot) return;
     const id = current.id;
+    const key = activeSlot.key;
     // Look up by id, not cursor — if the user advances mid-save the
     // captured idx would point at the next crop and the revert would
     // corrupt unrelated state.
     const findIdx = () => queue.items.findIndex((x) => x.id === id);
     const idx0 = findIdx();
-    const prior: Partial<ReviewItem> = {};
+    const priorData: SlotData =
+      idx0 >= 0 ? (queue.items[idx0].slots?.[key] ?? { key }) : { key };
     if (idx0 >= 0) {
-      for (const k of Object.keys(snapshot) as Array<keyof ReviewItem>) {
-        (prior as Record<string, unknown>)[k] = queue.items[idx0][k];
-      }
-      queue.items[idx0] = { ...queue.items[idx0], ...snapshot } as ReviewItem;
+      queue.items[idx0] = {
+        ...queue.items[idx0],
+        slots: { ...queue.items[idx0].slots, [key]: applyOptimistic(priorData) },
+      };
     }
     // Abort any in-flight save on this crop so we don't get an ABA-style
     // response that overwrites a newer edit.
-    const ac = plateMetaAborts.start(id);
+    const ac = slotMetaAborts.start(id);
     try {
-      await updateCropPlateMeta(id, patch, ac.signal);
+      await patchSlotMeta(activeSlot, id, patch, ac.signal);
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer save
       const idx1 = findIdx();
-      if (idx1 >= 0) queue.items[idx1] = { ...queue.items[idx1], ...prior } as ReviewItem;
+      if (idx1 >= 0) {
+        queue.items[idx1] = {
+          ...queue.items[idx1],
+          slots: { ...queue.items[idx1].slots, [key]: priorData },
+        };
+      }
       // Reseed local inputs only if we're still on the same crop the
       // user was editing; otherwise leave the inputs alone — they're
       // already bound to the new crop's state.
       if (current?.id === id) {
-        editedPlateText = queue.items[idx1]?.plate_text ?? '';
-        editedPlateStatus = queue.items[idx1]?.plate_status ?? '';
-        editedRejectionReason = queue.items[idx1]?.plate_rejection_reason ?? '';
+        editedSlotText = priorData.text?.value ?? '';
+        editedSlotStatus = priorData.lifecycle?.status ?? '';
+        editedRejectionReason = priorData.lifecycle?.rejectionReason ?? '';
       }
       toastStore.error(`Save failed: ${(e as Error).message}`);
     } finally {
-      plateMetaAborts.finish(id, ac);
+      slotMetaAborts.finish(id, ac);
     }
   }
 
-  async function commitPlateText(): Promise<void> {
-    if (!current) return;
-    const next = editedPlateText.trim() || null;
-    if ((current.plate_text ?? null) === next) return;
-    await savePlateMeta(
-      { plate_text: next },
-      {
-        plate_text: next,
-        plate_text_source: 'human',
-        plate_text_confidence: next ? 1.0 : null,
+  async function commitSlotText(): Promise<void> {
+    if (!current || !activeSlot) return;
+    const slotData = slotOf(current, activeSlot);
+    const next = editedSlotText.trim() || null;
+    if ((slotData?.text?.value ?? null) === next) return;
+    await saveSlotMeta({ text: next }, (prev) => ({
+      ...prev,
+      text: {
+        value: next,
+        raw: prev.text?.raw ?? null,
+        source: 'human',
+        confidence: next ? 1.0 : null,
+        engineVersion: prev.text?.engineVersion ?? null,
       },
-    );
+    }));
   }
 
-  async function commitPlateStatus(): Promise<void> {
-    if (!current) return;
-    if (!editedPlateStatus) return;
-    if (editedPlateStatus === current.plate_status) return;
-    // 'no_plate_visible' implies the bbox is gone — call setCropPlate
-    // null to keep the bbox + status in sync (avoids the contradiction
-    // of "no_plate_visible" with a populated plate_bbox_norm).
-    if (editedPlateStatus === 'no_plate_visible') {
+  async function commitSlotStatus(): Promise<void> {
+    if (!current || !activeSlot) return;
+    if (!editedSlotStatus) return;
+    const slotData = slotOf(current, activeSlot);
+    if (editedSlotStatus === slotData?.lifecycle?.status) return;
+    // The reject state implies the bbox is gone — call setSlotBox null
+    // to keep the bbox + status in sync (avoids the contradiction of a
+    // reject status with a populated sub-box).
+    if (statusClearsBox(activeSlot, editedSlotStatus)) {
       try {
-        await setCropPlate(current.id, null);
+        await setSlotBox(activeSlot, current.id, null);
         const idx = queue.items.findIndex((x) => x.id === current.id);
         if (idx >= 0) {
+          const key = activeSlot.key;
+          const prev = queue.items[idx].slots?.[key] ?? { key };
           queue.items[idx] = {
             ...queue.items[idx],
-            plate_bbox_norm: null,
-            plate_status: 'no_plate_visible',
+            slots: {
+              ...queue.items[idx].slots,
+              [key]: {
+                ...prev,
+                subBox: prev.subBox
+                  ? { ...prev.subBox, rawXyxy: null, parent: null }
+                  : prev.subBox,
+                lifecycle: {
+                  status: editedSlotStatus,
+                  state: _resolveSlotState(editedSlotStatus),
+                  verified: prev.lifecycle?.verified ?? null,
+                  rejectionReason: prev.lifecycle?.rejectionReason ?? null,
+                },
+              },
+            },
           } as ReviewItem;
         }
-        editedPlateLocal = null;
+        editedSlotBox = null;
       } catch (e) {
         toastStore.error(`Save failed: ${(e as Error).message}`);
       }
       return;
     }
-    await savePlateMeta(
-      { plate_status: editedPlateStatus as PlateMetaPatch['plate_status'] },
-      { plate_status: editedPlateStatus },
-    );
+    await saveSlotMeta({ status: editedSlotStatus }, (prev) => ({
+      ...prev,
+      lifecycle: {
+        status: editedSlotStatus,
+        state: _resolveSlotState(editedSlotStatus),
+        verified: prev.lifecycle?.verified ?? null,
+        rejectionReason: prev.lifecycle?.rejectionReason ?? null,
+      },
+    }));
   }
 
   async function commitRejectionReason(): Promise<void> {
-    if (!current) return;
+    if (!current || !activeSlot) return;
+    const slotData = slotOf(current, activeSlot);
     const next = editedRejectionReason.trim() || null;
-    if ((current.plate_rejection_reason ?? null) === next) return;
-    await savePlateMeta(
-      { plate_rejection_reason: next },
-      { plate_rejection_reason: next },
-    );
+    if ((slotData?.lifecycle?.rejectionReason ?? null) === next) return;
+    await saveSlotMeta({ rejectionReason: next }, (prev) => ({
+      ...prev,
+      lifecycle: {
+        status: prev.lifecycle?.status ?? null,
+        state: prev.lifecycle?.state ?? null,
+        verified: prev.lifecycle?.verified ?? null,
+        rejectionReason: next,
+      },
+    }));
   }
 
   function toggleEdit(): void {
     if (!current) return;
     if (editMode) {
       // Cancel-style exit: drop local edits and reseed from server state.
-      _seedPlateFromCurrent();
+      _seedSlotFromCurrent();
       _seedViewBox();
       editMode = false;
       return;
@@ -962,101 +1013,128 @@
   }
 
   async function saveBboxAndExit(): Promise<void> {
-    if (!current) return;
-    if (!editedPlateLocal) {
+    if (!current || !activeSlot) return;
+    if (!editedSlotBox) {
       toastStore.warn('No bbox to save — draw one or press Backspace to clear.');
       return;
     }
     if (!current.bbox_norm) {
-      toastStore.error('Missing parent vehicle bbox; cannot project to source frame.');
+      toastStore.error(
+        'Missing parent vehicle bbox; cannot project to the stored frame.',
+      );
       return;
     }
     const id = current.id;
-    const sourceBox = cropToSourceFrame(editedPlateLocal, current.bbox_norm);
-    const tuple = bboxNormToXYXY(sourceBox) as [number, number, number, number];
-    plateSaving = true;
+    const parentXyxy = bboxNormToXYXY(current.bbox_norm);
+    const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
+    const tuple = projectFromParent(editedSlotBox, parentXyxy, frame);
+    slotSaving = true;
     try {
-      await setCropPlate(id, tuple);
-      // Server flips plate_status to 'detected'/'human_confirmed' on bbox
-      // write; reflect that locally without waiting for a queue refetch.
+      await setSlotBox(activeSlot, id, tuple);
+      // Server flips status to the slot's confirmState + verified=true on
+      // bbox write; reflect that locally without waiting for a refetch.
       const idx = queue.items.findIndex((x) => x.id === id);
       if (idx >= 0) {
+        const key = activeSlot.key;
+        const prev = queue.items[idx].slots?.[key] ?? { key };
+        const confirmState = activeSlot.capabilities.lifecycle?.confirmState ?? null;
         queue.items[idx] = {
           ...queue.items[idx],
-          plate_bbox_norm: sourceBox,
-          plate_status: 'detected',
-          plate_verified: true,
-        };
+          slots: {
+            ...queue.items[idx].slots,
+            [key]: {
+              ...prev,
+              subBox: prev.subBox
+                ? { ...prev.subBox, rawXyxy: tuple, parent: editedSlotBox }
+                : prev.subBox,
+              lifecycle: confirmState
+                ? {
+                    status: confirmState,
+                    state: _resolveSlotState(confirmState),
+                    verified: true,
+                    rejectionReason: prev.lifecycle?.rejectionReason ?? null,
+                  }
+                : prev.lifecycle,
+            },
+          },
+        } as ReviewItem;
       }
       editMode = false;
       toastStore.success('Bbox saved.');
     } catch (e) {
       toastStore.error(`Save failed: ${(e as Error).message}`);
     } finally {
-      plateSaving = false;
+      slotSaving = false;
     }
   }
 
-  async function confirmPlate(): Promise<void> {
-    if (!current) return;
-    if (!editedPlateLocal) {
-      toastStore.warn('No plate bbox to confirm — drag one in or press D to reject.');
+  async function confirmSlot(): Promise<void> {
+    if (!current || !activeSlot) return;
+    if (!editedSlotBox) {
+      toastStore.warn(
+        `No ${activeSlot.label.singular} bbox to confirm — drag one in or press D to reject.`,
+      );
       return;
     }
     if (!current.bbox_norm) {
-      toastStore.error('Missing parent vehicle bbox; cannot project to source frame.');
+      toastStore.error(
+        'Missing parent vehicle bbox; cannot project to the stored frame.',
+      );
       return;
     }
     const item = current;
-    const sourceBox = cropToSourceFrame(editedPlateLocal, item.bbox_norm!);
-    const tuple = bboxNormToXYXY(sourceBox) as [number, number, number, number];
+    const parentXyxy = bboxNormToXYXY(item.bbox_norm!);
+    const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
+    const tuple = projectFromParent(editedSlotBox, parentXyxy, frame);
     // Snapshot for "Back" before mutating the queue.
-    const undoEntry: PlateUndoEntry = { item, insertAt: cursor, saved: tuple };
-    _pushPlateUndo(undoEntry);
+    const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: tuple };
+    _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
-      await setCropPlate(item.id, tuple);
-      toastStore.success('Plate confirmed. ← to go back.');
+      await setSlotBox(activeSlot, item.id, tuple);
+      toastStore.success(`${activeSlot.label.title} confirmed. ← to go back.`);
     } catch (e) {
-      _removePlateUndo(undoEntry);
+      _removeSlotUndo(undoEntry);
       restore();
       toastStore.error(`Confirm failed: ${(e as Error).message}`);
     }
   }
 
-  async function rejectPlate(): Promise<void> {
-    if (!current) return;
+  async function rejectSlot(): Promise<void> {
+    if (!current || !activeSlot) return;
     const item = current;
-    const undoEntry: PlateUndoEntry = { item, insertAt: cursor, saved: null };
-    _pushPlateUndo(undoEntry);
+    const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: null };
+    _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
-      // null bbox = "no plate visible" per setCropPlate contract.
-      await setCropPlate(item.id, null);
-      toastStore.success('Plate rejected. ← to go back.');
+      // null bbox = "not visible" per setSlotBox's clear contract.
+      await setSlotBox(activeSlot, item.id, null);
+      toastStore.success(`${activeSlot.label.title} rejected. ← to go back.`);
     } catch (e) {
-      _removePlateUndo(undoEntry);
+      _removeSlotUndo(undoEntry);
       restore();
       toastStore.error(`Reject failed: ${(e as Error).message}`);
     }
   }
 
   async function markFalsePositive(): Promise<void> {
-    if (!current) return;
+    if (!current || !activeSlot) return;
+    const fpState = activeSlot.capabilities.lifecycle?.falsePositiveState;
+    if (!fpState) return; // no falsePositiveState declared -> action shouldn't be reachable
     const item = current;
-    // False positive: a detector drew this box but it is NOT a plate.
-    // We KEEP the box + all detection metadata (unlike Reject, which
-    // clears it) — flipping only plate_status. The retained geometry
+    // False positive: a detector drew this box but it is NOT the slot's
+    // subject. We KEEP the box + all detection metadata (unlike Reject,
+    // which clears it) — flipping only status. The retained geometry
     // feeds FP analysis and becomes a hard negative in the dedicated
-    // LPR training export.
-    const undoEntry: PlateUndoEntry = { item, insertAt: cursor, saved: null };
-    _pushPlateUndo(undoEntry);
+    // training export.
+    const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: null };
+    _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
-      await updateCropPlateMeta(item.id, { plate_status: 'false_positive' });
+      await patchSlotMeta(activeSlot, item.id, { status: fpState });
       toastStore.success('Marked false positive (box kept). ← to go back.');
     } catch (e) {
-      _removePlateUndo(undoEntry);
+      _removeSlotUndo(undoEntry);
       restore();
       toastStore.error(`Mark FP failed: ${(e as Error).message}`);
     }
@@ -1134,11 +1212,11 @@
       // hand-maintained copy — asserted by slotKeymap.test.ts rather than
       // only readable here.
       for (const entry of buildSlotKeymap(activeSlot, editMode, {
-        confirm: confirmPlate,
-        reject: rejectPlate,
+        confirm: confirmSlot,
+        reject: rejectSlot,
         markFalsePositive,
         toggleEdit,
-        back: plateBack,
+        back: slotBack,
         advance: () => {
           cursor = Math.min(queue.items.length - 1, cursor + 1);
           maybePrefetch();
@@ -1171,10 +1249,10 @@
       // Backspace) into the slot's bbox canvas. Outside edit mode arrows
       // page the queue like every other tab.
       canvasKey = (e: KeyboardEvent) => {
-        if (!plateCanvas) return;
+        if (!slotCanvas) return;
         const target = e.target as HTMLElement | null;
         if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
-        if (plateCanvas.handleKey(e)) e.preventDefault();
+        if (slotCanvas.handleKey(e)) e.preventDefault();
       };
       window.addEventListener('keydown', canvasKey);
     } else if (!isSlotTab(tab)) {
@@ -1495,13 +1573,13 @@
             src={getSourceImageWithBbox(
               current.id,
               1280,
-              // Cache-bust on plate-bbox edits so the burned-in overlay
+              // Cache-bust on sub-box edits so the burned-in overlay
               // refreshes after a save. updated_at would be nicer but
-              // not every code path mutates it locally; bbox tuple is
-              // a stable enough fingerprint.
-              current.plate_bbox_norm
-                ? `${current.plate_bbox_norm.cx.toFixed(4)},${current.plate_bbox_norm.cy.toFixed(4)},${current.plate_bbox_norm.w.toFixed(4)},${current.plate_bbox_norm.h.toFixed(4)}`
-                : 'none',
+              // not every code path mutates it locally; the raw xyxy
+              // tuple is a stable enough fingerprint.
+              (activeSlot ? slotOf(current, activeSlot)?.subBox?.rawXyxy : null)?.join(
+                ',',
+              ) ?? 'none',
             )}
             alt="source"
             loading="lazy"
@@ -1525,11 +1603,11 @@
                  stable; the read-only default below shows the crop at
                  natural aspect to match the other review tabs. -->
             <BboxCanvas
-              bind:this={plateCanvas}
+              bind:this={slotCanvas}
               cropId={current.id}
-              bind:bbox={editedPlateLocal}
-              viewBox={plateViewBox}
-              busy={plateSaving}
+              bind:bbox={editedSlotBox}
+              viewBox={slotViewBox}
+              busy={slotSaving}
               label={activeSlot.label.title}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
@@ -1540,8 +1618,8 @@
                  just shown. Press E to edit. -->
             <BboxCanvas
               cropId={current.id}
-              bbox={editedPlateLocal}
-              viewBox={plateViewBox}
+              bbox={editedSlotBox}
+              viewBox={slotViewBox}
               readonly
               label={activeSlot.label.title}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
@@ -1626,56 +1704,57 @@
           {/if}
         </dl>
 
-        {#if activeSlot}
-          <!-- Plate-detection inline review. The canvas above is live —
-               drag/resize the proposal in place and hit Enter to confirm.
-               The Reject button (or D) marks no_plate_visible. The whole
-               flow is two keystrokes per crop on average: minor twitch
-               with arrows / handles, then Enter. -->
+        {#if activeSlot && slotLabels}
+          {@const slotData = slotOf(current, activeSlot)}
+          <!-- Slot inline review. The canvas above is live — drag/resize
+               the proposal in place and hit Enter to confirm. The Reject
+               button (or D) marks the slot's rejectState. The whole flow
+               is two keystrokes per crop on average: minor twitch with
+               arrows / handles, then Enter. -->
           <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
-            <span class="text-zinc-500">Plate score</span>
+            <span class="text-zinc-500">{slotLabels.scoreLabel}</span>
             <span class="font-mono text-zinc-200">
-              {current.plate_score != null
-                ? `${(current.plate_score * 100).toFixed(1)}%`
+              {slotData?.subBox?.score != null
+                ? `${(slotData.subBox.score * 100).toFixed(1)}%`
                 : '—'}
             </span>
-            <span class="text-zinc-500">Plate status</span>
+            <span class="text-zinc-500">{slotLabels.statusLabel}</span>
             <span>
               <select
-                bind:value={editedPlateStatus}
-                onchange={() => void commitPlateStatus()}
+                bind:value={editedSlotStatus}
+                onchange={() => void commitSlotStatus()}
                 class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
               >
                 <option value="">—</option>
-                {#each PLATE_STATUS_OPTIONS as opt (opt.value)}
+                {#each slotStatusOptions as opt (opt.value)}
                   <option value={opt.value}>{opt.label}</option>
                 {/each}
               </select>
             </span>
             <span class="text-zinc-500">Detector</span>
             <span class="flex flex-wrap items-center gap-1.5">
-              {#if current.plate_detector}
+              {#if slotData?.provenance?.detector}
                 <ProvenanceChip
-                  detector={current.plate_detector}
-                  version={current.plate_detector_version}
+                  detector={slotData.provenance.detector}
+                  version={slotData.provenance.detectorVersion}
                 />
-                {#if current.plate_verifier}
+                {#if slotData.provenance.verifier}
                   <ProvenanceChip
-                    detector={current.plate_verifier}
+                    detector={slotData.provenance.verifier}
                     tag="verify"
-                    version={current.plate_verifier_version}
+                    version={slotData.provenance.verifierVersion}
                     size="sm"
                   />
                 {/if}
               {:else}
                 <span class="text-zinc-500">—</span>
               {/if}
-              {#if current.plate_shape_warning}
+              {#if slotData?.subBox?.shapeWarning}
                 <span
                   class="rounded border border-yellow-500/60 bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-200"
-                  title="{describeEnvelope(
-                    PLATE_SHAPE_ENVELOPE,
-                  )}. Likely legacy / corrupted data — press E to fix."
+                  title="{activeSlot.capabilities.subBox?.envelope
+                    ? describeEnvelope(activeSlot.capabilities.subBox.envelope)
+                    : 'Implausible shape'}. Likely legacy / corrupted data — press E to fix."
                 >
                   ⚠ shape · press E to fix
                 </span>
@@ -1689,50 +1768,55 @@
                   size="sm"
                 />
               {/if}
-              {#if !editedPlateLocal && !editMode}
+              {#if !editedSlotBox && !editMode}
                 <span
                   class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
-                  title="No plate bbox on this crop — press E to draw one."
+                  title={slotLabels.noBoxHint}
                 >
                   no bbox · press E to draw
                 </span>
               {/if}
             </span>
-            {#if current.plate_detector_chain && current.plate_detector_chain.length > 0}
+            {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
               <span class="text-zinc-500">Cascade</span>
               <span class="flex flex-wrap items-center gap-1">
-                {#each current.plate_detector_chain as entry (entry)}
+                {#each slotData.provenance.chain as entry (entry)}
                   <ProvenanceChip raw={entry} size="sm" />
                 {/each}
               </span>
             {/if}
-            <span class="text-zinc-500">Plate text</span>
+            <span class="text-zinc-500">{slotLabels.textLabel}</span>
             <span class="flex items-center gap-1.5">
               <input
                 type="text"
-                bind:value={editedPlateText}
-                onblur={() => void commitPlateText()}
+                bind:value={editedSlotText}
+                onblur={() => void commitSlotText()}
                 onkeydown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     (e.currentTarget as HTMLInputElement).blur();
                   }
                 }}
-                placeholder="ABC123"
+                placeholder={slotLabels.textPlaceholder}
                 spellcheck="false"
-                autocapitalize="characters"
-                class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
+                  ? 'characters'
+                  : 'off'}
+                class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none {activeSlot
+                  .capabilities.text?.monospace
+                  ? 'font-mono'
+                  : ''}"
               />
-              {#if current.plate_text_source}
-                <ProvenanceChip detector={current.plate_text_source} size="sm" />
+              {#if slotData?.text?.source}
+                <ProvenanceChip detector={slotData.text.source} size="sm" />
               {/if}
-              {#if current.plate_text_confidence != null}
+              {#if slotData?.text?.confidence != null}
                 <span class="text-[10px] text-zinc-500">
-                  {(current.plate_text_confidence * 100).toFixed(0)}%
+                  {(slotData.text.confidence * 100).toFixed(0)}%
                 </span>
               {/if}
             </span>
-            {#if editedPlateStatus === 'verify_rejected' || editedPlateStatus === 'no_plate_visible'}
+            {#if statusWantsRejectionReason(activeSlot, editedSlotStatus)}
               <span class="text-zinc-500">Rejection reason</span>
               <span>
                 <input
@@ -1757,7 +1841,7 @@
                 class="btn btn-primary"
                 type="button"
                 onclick={saveBboxAndExit}
-                disabled={plateSaving}
+                disabled={slotSaving}
               >
                 Save bbox
               </button>
@@ -1765,25 +1849,28 @@
                 class="btn"
                 type="button"
                 onclick={toggleEdit}
-                disabled={plateSaving}
+                disabled={slotSaving}
               >
                 Cancel
               </button>
             {:else}
-              <button class="btn btn-primary" type="button" onclick={confirmPlate}>
-                Confirm Plate
+              <button class="btn btn-primary" type="button" onclick={confirmSlot}>
+                {slotLabels.confirmLabel}
               </button>
-              <button class="btn btn-danger" type="button" onclick={rejectPlate}>
-                Reject (no plate)
+              <button class="btn btn-danger" type="button" onclick={rejectSlot}>
+                {slotLabels.rejectLabel}
               </button>
-              <button
-                class="btn"
-                type="button"
-                onclick={markFalsePositive}
-                title="Detector drew a box but it's not a plate — keep the box as a training hard negative (F)"
-              >
-                False positive
-              </button>
+              {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
+                <button
+                  class="btn"
+                  type="button"
+                  onclick={markFalsePositive}
+                  title="Detector drew a box but it's not the {activeSlot.label
+                    .singular} — keep the box as a training hard negative (F)"
+                >
+                  False positive
+                </button>
+              {/if}
               <button class="btn" type="button" onclick={skip}>Skip</button>
               <button
                 class="btn"
@@ -1797,17 +1884,18 @@
               <button
                 class="btn"
                 type="button"
-                onclick={plateBack}
-                disabled={plateUndoStack.length === 0}
-                title="Re-open the most-recently confirmed plate (←)"
+                onclick={slotBack}
+                disabled={slotUndoStack.length === 0}
+                title="Re-open the most-recently confirmed {activeSlot.label
+                  .singular} (←)"
               >
                 ← Back
               </button>
             {/if}
           </div>
-          {#if plateUndoStack.length > 0}
+          {#if slotUndoStack.length > 0}
             <p class="mt-1 text-[10px] text-zinc-500">
-              {plateUndoStack.length} confirmed in this session — press ← to step back.
+              {slotUndoStack.length} confirmed in this session — press ← to step back.
             </p>
           {/if}
         {:else}
