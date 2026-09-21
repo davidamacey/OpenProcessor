@@ -419,10 +419,10 @@ def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]
     Reads :mod:`src.services.detection.profile_registry` -- a real,
     process-lifetime registry a deployment can add more than one profile
     to (e.g. a license-plate profile AND a shipping-label profile) --
-    rather than hardcoding the single ``DEFAULT_PROFILE`` here. Today
+    rather than hardcoding the single ``REFERENCE_LICENSE_PLATE_PROFILE`` here. Today
     exactly one profile is ever registered (importing
     ``src.services.detection.cascade_detect`` registers its own
-    ``DEFAULT_PROFILE`` as the default), so this axis lists exactly one
+    ``REFERENCE_LICENSE_PLATE_PROFILE`` as the default), so this axis lists exactly one
     entry, but the mechanism is not limited to one.
 
     ``default_id`` is :func:`resolve_effective_default`'s answer for the

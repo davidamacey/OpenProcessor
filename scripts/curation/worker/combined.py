@@ -33,7 +33,7 @@ from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
-    DEFAULT_PROFILE,
+    REFERENCE_LICENSE_PLATE_PROFILE,
     RegionDetector,
     crop_norm_to_source_norm,
     is_plausible_region_bbox,
@@ -87,9 +87,9 @@ def _is_combined_cohort(class_source: str, class_confidence: float) -> bool:
 
 
 def _finalize_no_region(task: _ItemTask) -> None:
-    """Write the terminal no_plate_box doc, layering combined class fields."""
+    """Write the terminal no_region_box doc, layering combined class fields."""
     F = get_region_fields()
-    task.update_doc = {F.status: RegionStatus.NO_PLATE_BOX}
+    task.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
     if task.detection_trace:
         task.update_doc[F.detector_chain] = list(task.detection_trace)
     if task.combined_class_update:
@@ -128,7 +128,7 @@ async def _try_combined_class_region(
         logger.info('legacy_combined_parse_failure', crop_id=task.crop_id, error=str(exc))
         return False
 
-    # Stash class-side update so the eventual no_plate_box terminal write
+    # Stash class-side update so the eventual no_region_box terminal write
     # can layer it in (via _finalize_no_region) when the region-side
     # verification fails.
     task.combined_class_update = _combined_class_update(
@@ -172,17 +172,19 @@ async def _try_combined_on_sam3(
     """Run the secondary segmenter on the crop, then a combined VLM call.
 
     Returns True if a final ``update_doc`` was written (either via the
-    combined call or the terminal no_plate_box helper); False means the
+    combined call or the terminal no_region_box helper); False means the
     caller should keep going through legacy paths.
     """
     cand = await sam3.segment_plate(task.crop_jpeg or b'')
     if cand is None:
-        task.detection_trace.append(f'{DEFAULT_PROFILE.segmenter_name}:miss')
+        task.detection_trace.append(f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:miss')
         _finalize_no_region(task)
         return True
     gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
     if not gate_ok:
-        task.detection_trace.append(f'{DEFAULT_PROFILE.segmenter_name}:sanity_reject:{gate_reason}')
+        task.detection_trace.append(
+            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:sanity_reject:{gate_reason}'
+        )
         _finalize_no_region(task)
         return True
     projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
@@ -191,9 +193,9 @@ async def _try_combined_on_sam3(
         candidate_in_crop=cand.bbox_norm,
         candidate_in_source=projected,
         candidate_score=cand.score,
-        detector=DEFAULT_PROFILE.segmenter_name,
-        detector_version=DEFAULT_PROFILE.segmenter_version,
-        detector_chain_tag=DEFAULT_PROFILE.segmenter_name,
+        detector=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
+        detector_version=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
+        detector_chain_tag=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
         gemma=gemma,
     )
     if ok:
@@ -231,9 +233,9 @@ async def _run_combined_cohort_path(
             candidate_in_crop=cand_in_crop,
             candidate_in_source=task.lpr_plate_in_source,
             candidate_score=task.lpr_score,
-            detector=DEFAULT_PROFILE.detector_model,
-            detector_version=DEFAULT_PROFILE.detector_version,
-            detector_chain_tag=DEFAULT_PROFILE.detector_model,
+            detector=REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+            detector_version=REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+            detector_chain_tag=REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
             gemma=gemma,
         )
 
@@ -257,12 +259,14 @@ async def _run_combined_pending_detection(
     lpr_results = await lpr.detect_batch([task.crop_jpeg])
     cand = lpr_results[0] if lpr_results else None
     if cand is None:
-        task.detection_trace.append(f'{DEFAULT_PROFILE.detector_model}:miss')
+        task.detection_trace.append(f'{REFERENCE_LICENSE_PLATE_PROFILE.detector_model}:miss')
         return await _try_combined_on_sam3(task, sam3=sam3, gemma=gemma)
     gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
     if not gate_ok:
-        task.detection_trace.append(f'{DEFAULT_PROFILE.detector_model}:hit')
-        task.detection_trace.append(f'{DEFAULT_PROFILE.detector_model}:sanity_reject:{gate_reason}')
+        task.detection_trace.append(f'{REFERENCE_LICENSE_PLATE_PROFILE.detector_model}:hit')
+        task.detection_trace.append(
+            f'{REFERENCE_LICENSE_PLATE_PROFILE.detector_model}:sanity_reject:{gate_reason}'
+        )
         # Fall through to legacy cascade (secondary-segmenter path with
         # trace already populated).
         return False
@@ -272,9 +276,9 @@ async def _run_combined_pending_detection(
         candidate_in_crop=cand.bbox_norm,
         candidate_in_source=projected,
         candidate_score=cand.score,
-        detector=DEFAULT_PROFILE.detector_model,
-        detector_version=DEFAULT_PROFILE.detector_version,
-        detector_chain_tag=DEFAULT_PROFILE.detector_model,
+        detector=REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+        detector_version=REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+        detector_chain_tag=REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
         gemma=gemma,
     )
     if ok:

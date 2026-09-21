@@ -3,7 +3,7 @@
 Builds a SECOND, non-plate ``DetectionProfile`` (a hypothetical 'box'
 region type with a tighter, more square-ish aspect band than the
 license-plate default) and drives it through the same cascade
-primitives that ``DEFAULT_PROFILE`` uses. If a heuristic were still
+primitives that ``REFERENCE_LICENSE_PLATE_PROFILE`` uses. If a heuristic were still
 hardcoded to the license-plate constants, this profile's tighter aspect
 band would have no effect and this test would fail to demonstrate a
 behavioral difference.
@@ -23,7 +23,7 @@ from PIL import Image
 
 from src.config import DetectionProfile
 from src.services.detection.cascade_detect import (
-    DEFAULT_PROFILE,
+    REFERENCE_LICENSE_PLATE_PROFILE,
     OcrRegion,
     RegionCandidate,
     RegionDetector,
@@ -65,11 +65,11 @@ class _FakeInferResult:
 
 def test_profiles_are_distinct_instances() -> None:
     """Sanity: the two profiles really do carry different values."""
-    assert BOX_PROFILE.name != DEFAULT_PROFILE.name
-    assert BOX_PROFILE.detector_model != DEFAULT_PROFILE.detector_model
-    assert BOX_PROFILE.aspect_min != DEFAULT_PROFILE.aspect_min
-    assert BOX_PROFILE.confidence_floor != DEFAULT_PROFILE.confidence_floor
-    assert BOX_PROFILE.input_size != DEFAULT_PROFILE.input_size
+    assert BOX_PROFILE.name != REFERENCE_LICENSE_PLATE_PROFILE.name
+    assert BOX_PROFILE.detector_model != REFERENCE_LICENSE_PLATE_PROFILE.detector_model
+    assert BOX_PROFILE.aspect_min != REFERENCE_LICENSE_PLATE_PROFILE.aspect_min
+    assert BOX_PROFILE.confidence_floor != REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor
+    assert BOX_PROFILE.input_size != REFERENCE_LICENSE_PLATE_PROFILE.input_size
 
 
 def test_letterbox_uses_profile_input_size_and_fill() -> None:
@@ -131,7 +131,7 @@ def test_ocr_region_shape_checks_use_the_bound_profile() -> None:
         text_raw='AB12',
         det_score=0.9,
         rec_score=0.95,
-        profile=DEFAULT_PROFILE,
+        profile=REFERENCE_LICENSE_PLATE_PROFILE,
     )
     square_region_box = OcrRegion(
         bbox_norm=(0.1, 0.1, 0.3, 0.3),
@@ -167,6 +167,6 @@ def test_ocr_region_text_candidate_gate_is_profile_scoped() -> None:
         text_raw=region.text_raw,
         det_score=region.det_score,
         rec_score=region.rec_score,
-        profile=DEFAULT_PROFILE,
+        profile=REFERENCE_LICENSE_PLATE_PROFILE,
     )
     assert not default_equivalent.is_plate_text_candidate

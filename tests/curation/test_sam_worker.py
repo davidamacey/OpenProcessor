@@ -265,7 +265,7 @@ class TestRouting:
     @pytest.mark.asyncio
     async def test_terminal_status_is_skipped(self) -> None:
         """Terminal statuses must never be touched."""
-        for status in ('detected', 'no_plate_visible', 'verify_rejected', 'no_plate_box'):
+        for status in ('detected', 'no_region_visible', 'verify_rejected', 'no_region_box'):
             task = _make_task(status=status)
             await worker._process_crop(
                 task,
@@ -277,7 +277,7 @@ class TestRouting:
             assert task.update_doc == {}, f'status={status!r} should not be touched'
 
     @pytest.mark.asyncio
-    async def test_all_detectors_miss_marks_no_plate_box(self) -> None:
+    async def test_all_detectors_miss_marks_no_region_box(self) -> None:
         F = get_region_fields()
         task = _make_task(status='pending', group='cars')
         await worker._process_crop(
@@ -288,10 +288,10 @@ class TestRouting:
             gemma=_gemma_mock(is_region=False),
         )
         # Phase A2: every write carries a detector_chain. Status remains
-        # 'no_plate_box' (queue for human review) and the chain captures
+        # 'no_region_box' (queue for human review) and the chain captures
         # which detectors were tried — used by the LPR-blind-spot
         # training-set selector.
-        assert task.update_doc[F.status] == 'no_plate_box'
+        assert task.update_doc[F.status] == 'no_region_box'
         chain = task.update_doc.get(F.detector_chain) or []
         assert any('lpr_nanov11_640:miss' in s for s in chain)
         assert any('sam3:miss' in s for s in chain)
@@ -476,7 +476,7 @@ class TestBulkWrite:
         b = _make_task(crop_id='b')
         # No update — should be skipped.
         c = _make_task(crop_id='c')
-        c.update_doc = {F.status: 'no_plate_box'}
+        c.update_doc = {F.status: 'no_region_box'}
 
         async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
             found: dict[str, dict[str, Any]] = {d['_id']: {} for d in body['docs']}

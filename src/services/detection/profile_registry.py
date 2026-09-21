@@ -2,7 +2,7 @@
 instances.
 
 Today exactly one profile is ever constructed at runtime — the module-level
-``DEFAULT_PROFILE`` in :mod:`src.services.detection.cascade_detect`, which
+``REFERENCE_LICENSE_PLATE_PROFILE`` in :mod:`src.services.detection.cascade_detect`, which
 registers itself as the default the moment that module is imported. This
 module exists so ``GET /curation/methods``' ``detection_profile`` axis (see
 ``src.services.curation.strategy_registry``) has a real mechanism to read

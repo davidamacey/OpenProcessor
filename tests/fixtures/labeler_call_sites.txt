@@ -31,6 +31,14 @@
 # Two more exclusions were removed once their paired frontend fixes landed:
 # /crops/{param}/plate_thumbnail (T-B2, now /crops/{param}/region_thumbnail
 # below) and /gemma/label_batch (T-C1, now /vlm/label_batch below).
+#
+# Work item B2 (LPR vocabulary off the public API) renamed the ten
+# /plates/... call sites below to /regions/..., plus /crops/{param}/plate ->
+# /crops/{param}/region and /crops/{param}/plate_meta ->
+# /crops/{param}/region_meta -- an agreed breaking change, so those entries
+# were hand-edited here to the new paths ahead of the matching Cropwright
+# commit rather than re-snapshotted. Re-snapshot as usual once the frontend
+# change lands.
 
 /bakeoff/baseline_models
 /bakeoff/eval_datasets
@@ -55,8 +63,8 @@
 /crops/{param}
 /crops/{param}/image
 /crops/{param}/label
-/crops/{param}/plate
-/crops/{param}/plate_meta
+/crops/{param}/region
+/crops/{param}/region_meta
 /crops/{param}/region_thumbnail
 /crops/{param}/review_dismiss
 /crops/{param}/thumbnail
@@ -75,16 +83,16 @@
 /pipeline/auto_label/start
 /pipeline/auto_label/status
 /pipeline/events
-/plates
-/plates/batch_status
-/plates/cluster
-/plates/cluster/status
-/plates/clusters
-/plates/clusters/refine/{param}
-/plates/fp_centroids/build
-/plates/fp_centroids/status
-/plates/suspected_false_positives
-/plates/training_candidates
+/regions
+/regions/batch_status
+/regions/cluster
+/regions/cluster/status
+/regions/clusters
+/regions/clusters/refine/{param}
+/regions/fp_centroids/build
+/regions/fp_centroids/status
+/regions/suspected_false_positives
+/regions/training_candidates
 /review/{param}
 /search/text
 /select/cancel

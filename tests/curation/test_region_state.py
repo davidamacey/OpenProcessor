@@ -32,8 +32,8 @@ def test_expected_values_are_byte_identical_to_prior_literals() -> None:
     assert RegionStatus.PENDING_VERIFICATION.value == 'pending_verification'
     assert RegionStatus.DETECTED.value == 'detected'
     assert RegionStatus.VERIFY_REJECTED.value == 'verify_rejected'
-    assert RegionStatus.NO_PLATE_BOX.value == 'no_plate_box'
-    assert RegionStatus.NO_PLATE_VISIBLE.value == 'no_plate_visible'
+    assert RegionStatus.NO_REGION_BOX.value == 'no_region_box'
+    assert RegionStatus.NO_REGION_VISIBLE.value == 'no_region_visible'
     assert RegionStatus.DETECTION_FAILED.value == 'detection_failed'
     assert RegionStatus.FALSE_POSITIVE.value == 'false_positive'
 

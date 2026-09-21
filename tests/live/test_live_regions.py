@@ -38,7 +38,7 @@ def test_set_region_bbox_writes_human_provenance(
     crop_id = region_cohort[0]
     bbox = [0.11, 0.22, 0.33, 0.44]
 
-    resp = client.put(f'/crops/{crop_id}/plate', json={'bbox_norm': bbox, 'label_source': 'human'})
+    resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': bbox, 'label_source': 'human'})
     assert resp.status_code == 200, resp.text
     assert resp.json()['plate_status'] == 'detected'
 
@@ -60,14 +60,14 @@ def test_clear_region_bbox_records_a_deliberate_negative(
     client: Any, opensearch: Any, region_cohort: list[str]
 ) -> None:
     crop_id = region_cohort[1]
-    resp = client.put(f'/crops/{crop_id}/plate', json={'bbox_norm': None})
+    resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': None})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['plate_status'] == 'no_plate_visible'
+    assert resp.json()['plate_status'] == 'no_region_visible'
 
     src = _source(opensearch, crop_id)
     assert src['region_bbox_norm'] is None
     assert src['region_score'] is None
-    assert src['region_status'] == 'no_plate_visible'
+    assert src['region_status'] == 'no_region_visible'
     assert src['region_validated'] is True
 
 
@@ -83,7 +83,7 @@ def test_malformed_region_bbox_is_rejected(
 ) -> None:
     crop_id = region_cohort[2]
     before = get_doc(opensearch, INDEXES['items'], crop_id)
-    resp = client.put(f'/crops/{crop_id}/plate', json={'bbox_norm': bbox})
+    resp = client.put(f'/crops/{crop_id}/region', json={'bbox_norm': bbox})
     assert resp.status_code == 400, resp.text
     after = get_doc(opensearch, INDEXES['items'], crop_id)
     assert after['_seq_no'] == before['_seq_no']
@@ -94,7 +94,7 @@ def test_patch_region_metadata_writes_text_and_source(
 ) -> None:
     crop_id = region_cohort[3]
     resp = client.patch(
-        f'/crops/{crop_id}/plate_meta',
+        f'/crops/{crop_id}/region_meta',
         json={'plate_text': 'LIVE-HARNESS-7', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -116,7 +116,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
 ) -> None:
     crop_id = region_cohort[4]
     resp = client.patch(
-        f'/crops/{crop_id}/plate_meta',
+        f'/crops/{crop_id}/region_meta',
         json={'plate_status': 'false_positive', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -129,7 +129,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
 
     # Un-marking releases it so the next re-cluster re-absorbs it.
     resp = client.patch(
-        f'/crops/{crop_id}/plate_meta',
+        f'/crops/{crop_id}/region_meta',
         json={'plate_status': 'detected', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -143,23 +143,23 @@ def test_patch_region_rejects_a_non_human_status_and_an_empty_body(
 ) -> None:
     crop_id = region_cohort[5]
     bad_status = client.patch(
-        f'/crops/{crop_id}/plate_meta', json={'plate_status': 'pending_detection'}
+        f'/crops/{crop_id}/region_meta', json={'plate_status': 'pending_detection'}
     )
     assert bad_status.status_code == 400, bad_status.text
 
-    empty = client.patch(f'/crops/{crop_id}/plate_meta', json={'label_source': 'human'})
+    empty = client.patch(f'/crops/{crop_id}/region_meta', json={'label_source': 'human'})
     assert empty.status_code == 400, empty.text
 
 
 def test_batch_region_clear(client: Any, opensearch: Any, region_cohort: list[str]) -> None:
     batch = region_cohort[6:9]
-    resp = client.put('/crops/batch_plate', json={'crop_ids': batch, 'bbox_norm': None})
+    resp = client.put('/crops/batch_region', json={'crop_ids': batch, 'bbox_norm': None})
     assert resp.status_code == 200, resp.text
     assert resp.json()['updated'] == len(batch)
     assert resp.json()['conflicts'] == []
     for crop_id in batch:
         src = _source(opensearch, crop_id)
-        assert src['region_status'] == 'no_plate_visible'
+        assert src['region_status'] == 'no_region_visible'
         assert src['region_bbox_norm'] is None
 
 
@@ -168,7 +168,7 @@ def test_bulk_region_status_confirms_many_regions_at_once(
 ) -> None:
     batch = region_cohort[10:15]
     resp = client.post(
-        '/plates/batch_status',
+        '/regions/batch_status',
         json={
             'crop_ids': batch,
             'plate_status': 'detected',
@@ -191,14 +191,14 @@ def test_bulk_region_status_rejects_a_pipeline_only_status(
     client: Any, region_cohort: list[str]
 ) -> None:
     resp = client.post(
-        '/plates/batch_status',
+        '/regions/batch_status',
         json={'crop_ids': region_cohort[16:17], 'plate_status': 'detection_failed'},
     )
     assert resp.status_code == 400, resp.text
 
 
 def test_region_browse_reflects_the_human_edits(client: Any) -> None:
-    resp = client.get('/plates', params={'page_size': 50, 'detector': HUMAN_DETECTOR})
+    resp = client.get('/regions', params={'page_size': 50, 'detector': HUMAN_DETECTOR})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['total'] >= 1, body
@@ -208,14 +208,14 @@ def test_region_browse_reflects_the_human_edits(client: Any) -> None:
 
 
 def test_training_candidate_cohorts_are_queryable(client: Any) -> None:
-    resp = client.get('/plates/training_candidates', params={'mode': 'human_corrected'})
+    resp = client.get('/regions/training_candidates', params={'mode': 'human_corrected'})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['mode'] == 'human_corrected'
     assert body['total'] >= 1, body
     assert body['items'][0]['selection_reason']
 
-    unknown = client.get('/plates/training_candidates', params={'mode': 'not_a_mode'})
+    unknown = client.get('/regions/training_candidates', params={'mode': 'not_a_mode'})
     assert unknown.status_code == 400, unknown.text
 
 

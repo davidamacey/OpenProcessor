@@ -182,10 +182,10 @@ def _wait_for_job(get_state: Any, *, timeout: float = 300.0) -> dict[str, Any]:
 
 
 def test_region_clustering_partitions_the_region_pool(client: Any, opensearch: Any) -> None:
-    resp = client.post('/plates/cluster', params={'auto_fp_threshold': 0.0})
+    resp = client.post('/regions/cluster', params={'auto_fp_threshold': 0.0})
     assert resp.status_code == 200, resp.text
 
-    state = _wait_for_job(lambda: client.get('/plates/cluster/status').json())
+    state = _wait_for_job(lambda: client.get('/regions/cluster/status').json())
     assert state.get('error') is None, state
     result = state['result']
     assert result['status'] == 'success', result
@@ -209,7 +209,7 @@ def test_region_clustering_partitions_the_region_pool(client: Any, opensearch: A
 
 
 def test_region_cluster_cards_pin_the_false_positive_bucket_first(client: Any) -> None:
-    resp = client.get('/plates/clusters')
+    resp = client.get('/regions/clusters')
     assert resp.status_code == 200, resp.text
     clusters = resp.json()['clusters']
     assert clusters, resp.text
@@ -231,7 +231,7 @@ def test_region_refine_writes_region_subids(client: Any, opensearch: Any) -> Non
     if biggest['doc_count'] < 4:
         pytest.skip(f'no region bucket has the 4-member AHC floor: {buckets}')
 
-    resp = client.post(f'/plates/clusters/refine/{biggest["key"]}')
+    resp = client.post(f'/regions/clusters/refine/{biggest["key"]}')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['action'] == 'refined', body
@@ -243,15 +243,15 @@ def test_region_refine_writes_region_subids(client: Any, opensearch: Any) -> Non
 
 
 def test_fp_centroid_build_then_suspected_false_positives(client: Any) -> None:
-    resp = client.post('/plates/fp_centroids/build')
+    resp = client.post('/regions/fp_centroids/build')
     assert resp.status_code == 200, resp.text
-    state = _wait_for_job(lambda: client.get('/plates/fp_centroids/status').json())
+    state = _wait_for_job(lambda: client.get('/regions/fp_centroids/status').json())
     assert state.get('error') is None, state
     result = state['result']
     assert result['status'] == 'success', result
     assert result['n_members'] >= 1, result
 
-    suspected = client.get('/plates/suspected_false_positives', params={'threshold': 0.35})
+    suspected = client.get('/regions/suspected_false_positives', params={'threshold': 0.35})
     assert suspected.status_code == 200, suspected.text
     body = suspected.json()
     assert body['centroids_built'] is True, body

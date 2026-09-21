@@ -24,7 +24,7 @@ import pytest
 from PIL import Image
 
 from src.services.detection.cascade_detect import (
-    DEFAULT_PROFILE,
+    REFERENCE_LICENSE_PLATE_PROFILE,
     RegionCandidate,
     RegionDetector,
     _decode_yolo_output,
@@ -67,7 +67,7 @@ def _make_raw_output(
     fallback branch.
     """
     arr = np.zeros((5, n_anchors), dtype=np.float32)
-    multiplier = float(DEFAULT_PROFILE.input_size) if pixel_space else 1.0
+    multiplier = float(REFERENCE_LICENSE_PLATE_PROFILE.input_size) if pixel_space else 1.0
     # Anchor 0 = our planted detection at the requested score.
     arr[0, 0] = cx_norm * multiplier
     arr[1, 0] = cy_norm * multiplier
@@ -253,7 +253,7 @@ class TestConfidenceFloor:
                 pad=pad,
                 crop_w=crop_w,
                 crop_h=crop_h,
-                confidence_floor=DEFAULT_PROFILE.confidence_floor,
+                confidence_floor=REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor,
             )
             is None
         )
@@ -269,7 +269,7 @@ class TestConfidenceFloor:
         raw[0, 1, 0] = 320.0
         raw[0, 2, 0] = 32.0
         raw[0, 3, 0] = 16.0
-        raw[0, 4, 0] = DEFAULT_PROFILE.confidence_floor
+        raw[0, 4, 0] = REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor
 
         result = _decode_yolo_output(
             raw,
@@ -277,7 +277,7 @@ class TestConfidenceFloor:
             pad=pad,
             crop_w=crop_w,
             crop_h=crop_h,
-            confidence_floor=DEFAULT_PROFILE.confidence_floor,
+            confidence_floor=REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor,
         )
         assert result is not None
 

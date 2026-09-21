@@ -221,7 +221,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             requires_field=fields.score,
             status='stable',
             description=(
-                'Highest-confidence region detection first. Legacy default for the plates tab.'
+                'Highest-confidence region detection first. Legacy default for the regions tab.'
             ),
         ),
         ReviewSort(
@@ -310,7 +310,7 @@ _TAB_DEFAULTS: dict[str, str] = {
     'gemma_low_conf': 'recent',
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
-    'plates': 'region_score',
+    'regions': 'region_score',
     'model_disagreements': 'disagreement_entropy_asc',
     'primary_low_conf': 'primary_low_conf_default',
     'coco_blind_spots': 'coco_blind_spots_default',
