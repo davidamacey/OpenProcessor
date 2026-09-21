@@ -1,0 +1,17 @@
+# =============================================================================
+# Fake OpenAI-compatible vision chat endpoint for the live verification
+# harness. Standard library only — no pip install, no network at build
+# time beyond the base image.
+# =============================================================================
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY fake_vlm.py /app/fake_vlm.py
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=5s --timeout=5s --start-period=5s --retries=10 \
+    CMD ["python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+
+CMD ["python3", "-u", "/app/fake_vlm.py"]

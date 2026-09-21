@@ -2,8 +2,8 @@
 
 Example:
     .venv/bin/python -m scripts.curation.bakeoff.run \
-        --dataset /mnt/nvm/curation_train_data/lpr_current \
-        --backend ultralytics --weights /mnt/nvm/photos_license/lpr-nanov11-640.pt \
+        --dataset ./data/bakeoff_eval/curated/lpr_current \
+        --backend ultralytics --weights ./weights/lpr_nanov11_640.pt \
         --imgsz 1280 --name lpr-nanov11-640 --out-dir /tmp/bakeoff
 
 Run once per model; the per-model JSON files are then merged into the
@@ -304,7 +304,7 @@ def main() -> int:
     )
     # Vehicle stage (crop mode + two-stage). A COCO detector (YOLO11/YOLO26)
     # filtered to vehicle classes (car=2, motorcycle=3, bus=5, truck=7).
-    p.add_argument('--vehicle-weights', default='/mnt/nvm/photos_license/yolo11n.pt')
+    p.add_argument('--vehicle-weights', default='./weights/yolo11n.pt')
     p.add_argument('--vehicle-classes', default='2,3,5,7', help='COCO vehicle class ids to keep')
     p.add_argument('--vehicle-imgsz', type=int, default=960)
     p.add_argument('--vehicle-conf', type=float, default=0.25)

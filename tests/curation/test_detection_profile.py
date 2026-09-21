@@ -1,6 +1,6 @@
 """Pins for ``DetectionProfile`` (Chunk 0).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` §3.3.
+See ``docs/design/curation_design_rationale.md`` §2.3.
 """
 
 from __future__ import annotations
@@ -49,6 +49,112 @@ def test_is_frozen() -> None:
         pass
     else:
         raise AssertionError('DetectionProfile must be immutable (frozen dataclass)')
+
+
+def test_ocr_rec_model_defaults_to_the_real_triton_directory_name() -> None:
+    """CFG-7: this used to default to 'paddleocr_rec', but no model
+    directory of that name exists -- the real one (verified against
+    docker-compose.yml's --load-model list, scripts/setup.sh's
+    required_models, scripts/export_paddleocr.sh, and the models/ tree
+    on disk) is 'paddleocr_rec_trt'. GET /curation/models/status queries
+    Triton by this name; the old default made it permanently report a
+    missing model."""
+    profile = DetectionProfile(name='license_plate')
+    assert profile.ocr_rec_model == 'paddleocr_rec_trt'
+
+
+def test_from_env_overrides_every_field(monkeypatch) -> None:
+    from dataclasses import fields
+
+    env_values = {
+        'NAME': 'env_region',
+        'DETECTOR_MODEL': 'env_detector',
+        'DETECTOR_VERSION': '2',
+        'INPUT_SIZE': '512',
+        'CONFIDENCE_FLOOR': '0.55',
+        'BATCH_LIMIT': '32',
+        'LETTERBOX_FILL': '10,20,30',
+        'ASPECT_MIN': '0.9',
+        'ASPECT_MAX': '3.3',
+        'TEXT_HINT_ASPECT_MIN': '1.1',
+        'TEXT_HINT_ASPECT_MAX': '5.5',
+        'TEXT_HINT_REC_FLOOR': '0.65',
+        'TEXT_HINT_LEN_MIN': '3',
+        'TEXT_HINT_LEN_MAX': '12',
+        'AUTO_CONFIRM_ASPECT': '0.25,4.5',
+        'AUTO_CONFIRM_AREA_FRAC': '0.01,0.75',
+        'TEXT_PATTERN': r'[0-9]{3,}',
+        'SEGMENTER_NAME': 'env_segmenter',
+        'SEGMENTER_VERSION': '3',
+        'HUMAN_DETECTOR_NAME': 'env_human',
+        'HUMAN_DETECTOR_VERSION': '4',
+        'OCR_DET_MODEL': 'env_ocr_det',
+        'OCR_DET_VERSION': '5',
+        'OCR_DET_INPUT_SIZE': '480',
+        'OCR_DET_PROB_FLOOR': '0.42',
+        'OCR_REC_MODEL': 'env_ocr_rec',
+        'OCR_REC_VERSION': '6',
+        'OCR_PIPELINE_MODEL': 'env_ocr_pipeline',
+        'SAM_TEXT_PROMPT': 'env prompt',
+        'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
+    }
+    prefix = 'OP_DETECTION_'
+    for suffix, value in env_values.items():
+        monkeypatch.setenv(f'{prefix}{suffix}', value)
+
+    profile = DetectionProfile.from_env(prefix)
+
+    # Every field the dataclass declares got an env override -- fail
+    # loudly (rather than silently) if a future field is added here
+    # without a matching env_values entry above.
+    field_names = {f.name for f in fields(profile)}
+    assert field_names == {name.lower() for name in env_values}
+
+    assert profile.name == 'env_region'
+    assert profile.detector_model == 'env_detector'
+    assert profile.detector_version == '2'
+    assert profile.input_size == 512
+    assert profile.confidence_floor == 0.55
+    assert profile.batch_limit == 32
+    assert profile.letterbox_fill == (10, 20, 30)
+    assert profile.aspect_min == 0.9
+    assert profile.aspect_max == 3.3
+    assert profile.text_hint_aspect_min == 1.1
+    assert profile.text_hint_aspect_max == 5.5
+    assert profile.text_hint_rec_floor == 0.65
+    assert profile.text_hint_len_min == 3
+    assert profile.text_hint_len_max == 12
+    assert profile.auto_confirm_aspect == (0.25, 4.5)
+    assert profile.auto_confirm_area_frac == (0.01, 0.75)
+    assert profile.text_pattern == r'[0-9]{3,}'
+    assert profile.segmenter_name == 'env_segmenter'
+    assert profile.segmenter_version == '3'
+    assert profile.human_detector_name == 'env_human'
+    assert profile.human_detector_version == '4'
+    assert profile.ocr_det_model == 'env_ocr_det'
+    assert profile.ocr_det_version == '5'
+    assert profile.ocr_det_input_size == 480
+    assert profile.ocr_det_prob_floor == 0.42
+    assert profile.ocr_rec_model == 'env_ocr_rec'
+    assert profile.ocr_rec_version == '6'
+    assert profile.ocr_pipeline_model == 'env_ocr_pipeline'
+    assert profile.sam_text_prompt == 'env prompt'
+    assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
+
+
+def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:
+    monkeypatch.setenv('OP_DETECTION_ASPECT_MIN', '0.1')
+    profile = DetectionProfile.from_env()
+    assert profile.aspect_min == 0.1
+    # Unset vars fall back to the dataclass default.
+    assert profile.name == 'region'
+    assert profile.ocr_rec_model == 'paddleocr_rec_trt'
+    assert profile.segmenter_name == 'sam3'
+
+
+def test_from_env_name_kwarg_used_when_name_env_unset() -> None:
+    profile = DetectionProfile.from_env(name='custom_default_name')
+    assert profile.name == 'custom_default_name'
 
 
 def test_two_distinct_profiles_are_independent() -> None:

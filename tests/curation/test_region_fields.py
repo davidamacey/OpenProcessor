@@ -1,6 +1,6 @@
 """Pins for ``RegionFields`` (Chunk 0).
 
-See ``docs/design/oss_genericization_phase2_plan.md`` §3.2. Chunk 0
+See ``docs/design/curation_design_rationale.md`` §4. Chunk 0
 covers defaults + overridability only — the mapping/query agreement
 property (the index-mapping builder produces the same key set as a
 ``RegionFields`` instance) is deferred to Chunk 1, when
@@ -126,3 +126,24 @@ def test_from_env_custom_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_get_region_fields_returns_singleton() -> None:
     assert get_region_fields() is get_region_fields()
     assert get_region_fields() is get_region_fields_direct()
+
+
+def test_get_region_fields_singleton_observes_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: ``get_region_fields()`` must build the process-wide
+    singleton via ``RegionFields.from_env()`` so ``OP_REGION_FIELD_*``
+    overrides actually take effect — it previously constructed a bare
+    ``RegionFields()`` and silently ignored the env, the same bug class
+    ``get_curation_config()`` was already fixed for (mirrors
+    ``test_curation_config.test_from_env_overrides_only_set_vars``).
+    """
+    import src.config.region_fields as region_fields_module
+
+    monkeypatch.setenv('OP_REGION_FIELD_STATUS', 'plate_status_env_override')
+    monkeypatch.setattr(region_fields_module, '_default_region_fields', None)
+    try:
+        f = get_region_fields()
+        assert f.status == 'plate_status_env_override'
+        # Unset fields keep their generic default even on the singleton.
+        assert f.bbox_norm == 'region_bbox_norm'
+    finally:
+        monkeypatch.setattr(region_fields_module, '_default_region_fields', None)

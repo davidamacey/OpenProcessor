@@ -4,7 +4,7 @@ Ported from a private reference vehicle/license-plate curation stack's
 training-pipeline test suite (Chunk 6). These tests exercise the API
 <-> trainer protocol: writing a ``job.json``, reading a ``status.json``,
 dropping a ``cancel`` sentinel, and detecting stale heartbeats. The
-fixtures redirect ``KB_TRAIN_JOBS_DIR`` to a per-test ``tmp_path`` so
+fixtures redirect ``OP_TRAIN_JOBS_DIR`` to a per-test ``tmp_path`` so
 nothing escapes into a real ``/jobs/`` volume.
 """
 
@@ -33,8 +33,8 @@ from src.services.training.jobs import (
 
 @pytest.fixture
 def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect KB_TRAIN_JOBS_DIR at the env-var level."""
-    monkeypatch.setenv('KB_TRAIN_JOBS_DIR', str(tmp_path))
+    """Redirect OP_TRAIN_JOBS_DIR at the env-var level."""
+    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     return tmp_path
 
 

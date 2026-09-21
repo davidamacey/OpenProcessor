@@ -58,16 +58,20 @@ LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.description="Visual AI API with object detection, face recognition, embeddings, and OCR" \
       org.opencontainers.image.vendor="OpenProcessor" \
       org.opencontainers.image.authors="OpenProcessor Contributors" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor" \
       org.opencontainers.image.documentation="https://github.com/davidamacey/OpenProcessor/blob/main/README.md"
 
 # Runtime-only system packages (no build tools); upgrade first for
 # Debian point-release security fixes.
+# procps -> pgrep, used by the curation worker services' healthchecks
+# (docker-compose.yml `profiles: [curation]`) — this image is shared
+# between yolo-api and those long-running worker processes.
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
     jq \
+    procps \
     libgl1 \
     libglib2.0-0t64 \
     libgomp1 \
@@ -81,7 +85,13 @@ RUN groupadd -r appuser && \
     chown -R appuser:appuser /app && \
     mkdir -p /home/appuser/.cache/huggingface \
              /home/appuser/.cache/torch && \
-    chown -R appuser:appuser /home/appuser/.cache
+    chown -R appuser:appuser /home/appuser/.cache && \
+    # CurationConfig.state_dir default -- created + owned by appuser here so
+    # a fresh named Docker volume mounted over this path on first `up`
+    # inherits appuser ownership (Docker copies an empty named volume's
+    # ownership from the image directory it's mounted over).
+    mkdir -p /var/lib/openprocessor && \
+    chown -R appuser:appuser /var/lib/openprocessor
 
 WORKDIR /app
 

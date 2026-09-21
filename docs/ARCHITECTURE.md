@@ -79,18 +79,21 @@ The system uses Docker Compose to orchestrate three core services:
 
 ## Curation Subsystem
 
-A generic active-learning curation and labeling stack, mounted under a
-single configurable prefix (`CurationConfig.api_prefix`, default
-`/curation`) alongside the core detection/face/embed/OCR routers. It
-was genericized out of a private, domain-specific reference
-implementation (vehicle/license-plate curation) via
-[`docs/design/oss_genericization_phase2_plan.md`](design/oss_genericization_phase2_plan.md);
-the wire contract with an existing labeler frontend is documented in
-[`docs/design/labeler_api_contract.md`](design/labeler_api_contract.md).
+**Experimental for this release** — see
+[`docs/CURATION.md`](CURATION.md) for the user-facing guide. A generic
+active-learning curation and labeling stack, mounted under a single
+configurable prefix (`CurationConfig.api_prefix`, default `/curation`)
+alongside the core detection/face/embed/OCR routers. Its design
+rationale (the config dataclasses, the storage/wire-contract split, the
+pre-commit ratchet exemptions, and known gaps) is documented in
+[`docs/design/curation_design_rationale.md`](design/curation_design_rationale.md).
+The generic wire contract (Cropwright's labeler frontend is one
+consumer among anticipated others) is documented in
+[`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
 
 ### Design principles
 
-- **Config-driven genericity, not a rewrite.** Three dataclasses carry
+- **Config-driven genericity, not a rewrite.** Four dataclasses carry
   everything that was previously hardcoded for one domain:
   - `CurationConfig` (`src/config/curation.py`) — OpenSearch index
     names, filesystem roots, API prefix, embedding dimensions.
@@ -104,12 +107,17 @@ the wire contract with an existing labeler frontend is documented in
     model names, aspect/area heuristics, and OCR wiring for one
     detectable region type. A deployment with a different region type
     constructs its own profile instead of forking the cascade code.
+  - `RegionStatus` (`src/config/region_state.py`) — the canonical
+    region-of-interest status state machine
+    (`pending_detection`/`pending_verification` → `detected` /
+    `verify_rejected` / `no_region_box` / `no_region_visible` /
+    `detection_failed`, plus a human-settable `false_positive`).
 - **HTTP wire contract is independent of backend storage field names.**
   Pydantic request/response model attribute names (e.g.
   `ItemDoc.plate_bbox_norm`) are frozen and never renamed by this
   genericization; only the *OpenSearch field* a handler reads/writes
   internally is routed through `RegionFields`. See
-  `labeler_api_contract.md` for the full frozen-vs-configurable split.
+  `curation_api_contract.md` for the full frozen-vs-configurable split.
 - **Services before routers, leaves before trunks.** The service layer
   (`src/services/curation/`, `src/services/detection/`,
   `src/services/labeling/`, `src/services/training/`) has no FastAPI
@@ -132,19 +140,50 @@ the wire contract with an existing labeler frontend is documented in
 | Detection cascade | `src/services/detection/` | Crop quality, frame dedup, PE preprocessing, ensemble NMS, region lean, FP store, cascade orchestration |
 | VLM labeling | `src/services/labeling/{vlm_client,vlm_labeler,vlm_prompts}.py` | VLM transport/retry, class-resolution + region-verify orchestration, prompt/vocabulary packs |
 | Training | `src/services/training/` | Job lifecycle, preflight scan, GPU arbiter, Triton promote, bakeoff harness |
-| Routers | `src/routers/curation/` (21 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `labeler_api_contract.md` for the full route table |
+| Routers | `src/routers/curation/` (23 modules) + `curation_images.py`, `curation_train.py`, `curation_umap.py` | HTTP surface — see `curation_api_contract.md` for the full route table |
 | Workers | `scripts/curation/{vlm_worker,auto_label_worker,cluster_refresh_daemon,sam_worker_main}.py`, `scripts/curation/worker/` | Long-lived out-of-process consumers (VLM labeling loop, auto-label dispatcher, periodic cluster refresh, detection cascade worker) |
 
-### What's intentionally thinner than the reference
+### Runtime-companion topology
 
-The reference implementation's domain-specific bulk-ingest, label-import
-and single-class dataset-export services are Bucket B — proprietary
-dataset-family logic the genericization plan declines to extract. `POST /curation/ingest/image`, `/ingest/batch`,
-`/import_labels*` and `/export/lpr` therefore have no generic
-equivalent; `ingest.py`/`export.py` only carry the parts that were
-already backend-agnostic (status/backlog introspection, path lookup,
-the generic multi-class YOLO exporter). This is a known, accepted gap
-— the most likely first follow-up after this subsystem ships.
+The synchronous HTTP API works standalone; a set of long-lived async
+workers keeps the dataset moving without a human driving every step,
+and ships as its own opt-in Docker Compose profile:
+
+```bash
+docker compose --profile curation up -d
+```
+
+| Service | Role |
+|---|---|
+| `curation-detection-worker` | Runs the detection cascade continuously over `pending_detection` items. |
+| `curation-vlm-worker` | Verifies/labels items via the configured VLM. |
+| `curation-auto-label-worker` | Long-lived driver for the `/curation/pipeline/auto_label` protocol. |
+| `curation-cluster-refresh` | Periodically retrains/refreshes residual clustering. |
+| `curation-evaluator` (run on demand) | Bake-off evaluation harness — `docker compose --profile curation run --rm curation-evaluator`. |
+
+None of these workers requires the base API image to be rebuilt — they
+run the same `davidamacey/openprocessor` image with a different
+entrypoint (see `docker-compose.yml`'s `curation-*` service
+definitions). A trainer container and a segmentation-service container
+are **not** shipped; the API implements only the control-plane side of
+their protocols (a shared-volume `job.json`/`status.json` file protocol
+for training, and a generic HTTP segment-request/response shape for the
+segmenter) — see [`docs/CURATION.md`](CURATION.md) for what a
+deployment supplies to make those routes do something.
+
+### What's intentionally thinner than a bespoke pipeline
+
+`POST /curation/ingest/image`, `/ingest/batch`, and
+`/import_labels(/batch)` exist and create items (duplicate detection, a
+quality gate, crop-cache population, bulk indexing, YOLO-format label
+import). What is deliberately not included: any single-class /
+domain-specific dataset export (`/export/lpr` has no generic
+equivalent — a single-class exporter is inherently domain-shaped), a
+fixed class allowlist, or a region-status assignment policy tuned to
+one domain. Only one `DetectionProfile`/VLM `PromptPack` is active per
+process — there's no per-request selection among several registered
+profiles yet. These are known, accepted gaps — the most likely first
+follow-ups after this subsystem graduates out of experimental status.
 
 ---
 

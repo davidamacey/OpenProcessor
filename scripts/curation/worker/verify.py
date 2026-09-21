@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.config import get_region_fields
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
     DEFAULT_PROFILE,
@@ -45,7 +46,7 @@ class _VerifyOutcome:
 async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) -> _VerifyOutcome:
     """Verify and read a region in one VLM call.
 
-    A ``confidence='low'`` ``is_plate=True`` verdict is treated as a
+    A ``confidence='low'`` ``is_region=True`` verdict is treated as a
     rejection to keep the bar high — we'd rather route to the secondary
     segmenter than write a questionable region box. The returned
     outcome also carries ``text`` + ``text_confidence`` (None when the
@@ -53,7 +54,7 @@ async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) ->
     threads into :func:`_region_write_doc`.
     """
     verdict = await vlm.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg))
-    accepted = bool(verdict.is_plate) and verdict.confidence != 'low'
+    accepted = bool(verdict.is_region) and verdict.confidence != 'low'
     return _VerifyOutcome(
         ok=accepted,
         confidence=verdict.confidence,
@@ -125,7 +126,7 @@ def _region_write_doc(
     detector: str,
     detector_version: str,
     chain: list[str],
-    plate_status: str = 'detected',
+    plate_status: str = RegionStatus.DETECTED,
     plate_verified: bool = True,
     plate_validated: bool = False,
     verifier: str | None = 'gemma-4-e4b',
@@ -186,7 +187,7 @@ def _region_reject_doc(
     """
     F = get_region_fields()
     doc: dict[str, Any] = {
-        F.status: 'detection_failed',
+        F.status: RegionStatus.DETECTION_FAILED,
         F.rejection_reason: reason,
     }
     doc.update(
@@ -279,7 +280,7 @@ def _combined_class_update(
         update['gemma_vehicle_make'] = reply.make
     if reply.model:
         update['gemma_vehicle_model'] = reply.model
-    update['gemma_plate_visible'] = bool(reply.plate_visible)
+    update[get_region_fields().visible] = bool(reply.plate_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream
     # pipeline stages read this to skip a redundant class call.

@@ -35,10 +35,11 @@ from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_m
 from src.services.curation.clustering import orchestrator as _orchestrator
 
 
-# Import order matters here (R11): orchestrator.py's bottom-of-file
+# Import order matters here: orchestrator.py's bottom-of-file
 # import of auto_promote.py only resolves cleanly if orchestrator is
-# the FIRST of the two modules loaded in this process — see
-# docs/design/oss_genericization_phase2_plan.md §7 R11. The assignment
+# the FIRST of the two modules loaded in this process — a consequence
+# of orchestrator.py being one of the ratchet-exempt oversize files
+# documented in docs/design/curation_design_rationale.md §5. The assignment
 # below (rather than a plain `from orchestrator import ITEMS_INDEX`)
 # is deliberate: it's a real statement that breaks ruff/isort's import
 # block so it can't silently re-alphabetize auto_promote's import back

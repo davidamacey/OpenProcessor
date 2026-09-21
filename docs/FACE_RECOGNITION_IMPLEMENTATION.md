@@ -173,7 +173,7 @@ make test-faces-quick
 make test-faces
 
 # Full system test
-source .venv/bin/activate && python tests/test_full_system.py
+.venv/bin/python tests/test_full_system.py
 ```
 
 ---

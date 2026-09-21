@@ -10,18 +10,24 @@ crops. The guard is scoped to CLASS fields only — region-field writes
 stay unconditional (test_holdout protects class-label ground truth, not
 region detection state).
 
-Two sub-tests from the reference file this was ported from are dropped:
-the ``cleanup_low_conf_v6_labels`` / class-id-realign query-shape checks
-target one-off migration scripts in the reference tree's operator-tooling
- directory that were
-never in scope for this plan (project-specific maintenance tooling, not
-Bucket A/B curation code), and the reference tree's label-import
- lookup-query
-check targets a Bucket B module never ported anywhere in this plan.
+``TestAutomatedClassWritersExcludeTestHoldout`` restores five (of the
+reference file's seven) per-writer ``test_holdout``-exclusion checks
+(plan Wave 5 T-2): the cascade writer's check already lives in
+``TestShouldClassifyHoldoutGuard`` above, and the reference's
+label-import lookup-query check targets a module never ported anywhere
+in this plan (out of Wave 5's scope — that's Wave 2 territory). The
+reference's two one-off-migration-script checks (``cleanup_low_conf_v6_labels``
+/ class-id-realign) target operator tooling this plan never ports;
+their live equivalents on this tree are the two ``must_not`` clauses in
+``src/services/curation/probe_predictions.py``'s
+``run_probe_inference``/``build_uncertainty_queue``, which is what those
+two restored tests assert against instead.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -31,6 +37,7 @@ from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_m
 from scripts.curation.worker.runner import _should_classify
 from scripts.curation.worker.state import _ItemTask
 from scripts.curation.worker.verify import _combined_class_update
+from src.config import get_region_fields
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
@@ -158,10 +165,136 @@ class TestCombinedClassUpdateResetsProvenance:
             model='CBR',
         )
         update = _combined_class_update(reply, None)
-        assert update['gemma_plate_visible'] is True
+        assert update[get_region_fields().visible] is True
         assert update['gemma_vehicle_make'] == 'Honda'
         assert update['gemma_vehicle_model'] == 'CBR'
         assert 'class_source' not in update
+
+
+class TestAutomatedClassWritersExcludeTestHoldout:
+    """One check per automated class writer, each against the writer's
+    real query-building code (not a re-derived literal) so breaking the
+    guard in the source actually fails the test."""
+
+    @pytest.mark.asyncio
+    async def test_auto_promote_scroll_query_has_holdout_must_not(self) -> None:
+        # Import order matters: orchestrator.py imports auto_promote at the
+        # bottom of its own file (an intentional, preserved circular
+        # import — see auto_promote.py's module docstring), so importing
+        # orchestrator first resolves it the same way the app does.
+        import src.services.curation.clustering.auto_promote as auto_promote_mod
+        import src.services.curation.clustering.orchestrator  # noqa: F401
+
+        fake_client = AsyncMock()
+        fake_client.search = AsyncMock(
+            return_value={
+                'aggregations': {
+                    'clusters': {
+                        'buckets': [
+                            {
+                                'key': 7,
+                                'doc_count': 10,
+                                'top_class': {
+                                    'buckets': [{'key': 'sedan', 'doc_count': 9}],
+                                },
+                            },
+                        ],
+                    },
+                },
+            }
+        )
+        captured: dict[str, Any] = {}
+
+        async def _fake_scroll_ids(_client: Any, *, index: str, query: dict[str, Any]) -> list[str]:
+            captured['index'] = index
+            captured['query'] = query
+            return []
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(auto_promote_mod, '_scroll_ids', _fake_scroll_ids)
+            await auto_promote_mod.auto_promote_clusters(fake_client, min_purity=0.5, min_members=1)
+
+        assert captured, 'auto_promote_clusters never reached the scroll query'
+        must_not = captured['query']['bool']['must_not']
+        assert {'term': {'test_holdout': True}} in must_not
+
+    @pytest.mark.asyncio
+    async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
+        import src.routers.curation.classes as classes_mod
+        from src.clients.curation_opensearch import ClassRegistry
+        from src.routers.curation._common import ClassMergeRequest
+
+        registry = ClassRegistry(path=tmp_path / 'class_registry.json')
+        registry.add_class('sedan', group='vehicle')
+        registry.add_class('suv', group='vehicle')
+        classes = registry.load().classes
+        source_id, target_id = classes[0].class_id, classes[1].class_id
+
+        fake_os = AsyncMock()
+        fake_os.count = AsyncMock(return_value={'count': 0})
+        fake_os.update_by_query = AsyncMock(return_value={})
+        fake_os.search = AsyncMock(return_value={'hits': {'hits': []}, '_scroll_id': None})
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(classes_mod, 'get_class_registry', lambda: registry)
+            await classes_mod.merge_class(
+                ClassMergeRequest(source_id=source_id, target_id=target_id), fake_os
+            )
+
+        assert fake_os.update_by_query.await_count >= 1
+        query = fake_os.update_by_query.await_args_list[0].kwargs['body']['query']
+        must_not = query['bool']['must_not']
+        assert {'term': {'test_holdout': True}} in must_not
+
+    @pytest.mark.asyncio
+    async def test_probe_inference_query_excludes_holdout(self) -> None:
+        import src.services.curation.probe_predictions as probe_mod
+
+        fake_os = AsyncMock()
+        fake_os.search = AsyncMock(return_value={'hits': {'hits': []}, '_scroll_id': None})
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                probe_mod,
+                '_build_predictor',
+                lambda *_a, **_kw: (lambda _crop: (None, 0.0, 0.0, 0.0), 'v0'),
+            )
+            processed = await probe_mod.run_probe_inference(
+                model_path=Path('unused.onnx'),
+                opensearch=fake_os,
+            )
+
+        assert processed == 0
+        assert fake_os.search.await_args is not None
+        query = fake_os.search.await_args.kwargs['body']['query']
+        must_not = query['bool']['must_not']
+        assert {'term': {'test_holdout': True}} in must_not
+
+    @pytest.mark.asyncio
+    async def test_uncertainty_queue_count_query_excludes_holdout(self) -> None:
+        import src.services.curation.probe_predictions as probe_mod
+
+        fake_os = AsyncMock()
+        fake_os.count = AsyncMock(return_value={'count': 0})
+
+        result = await probe_mod.build_uncertainty_queue(fake_os, percent=5.0)
+
+        assert result == []
+        assert fake_os.count.await_args is not None
+        body = fake_os.count.await_args.kwargs['body']
+        must_not = body['query']['bool']['must_not']
+        assert {'term': {'test_holdout': True}} in must_not
+
+    def test_vlm_label_batch_guard_predicate_skips_holdout_doc(self) -> None:
+        """``vlm_label_batch`` fetches crops by explicit id (no query to
+        filter), so its test_holdout guard is a per-doc predicate
+        consulted inside the OCC merger before any class field is
+        written — this is that predicate."""
+        from src.routers.curation.vlm import _is_frozen_test_holdout
+
+        assert _is_frozen_test_holdout({'test_holdout': True}) is True
+        assert _is_frozen_test_holdout({'test_holdout': False}) is False
+        assert _is_frozen_test_holdout({}) is False
 
 
 class TestMergeClassRefusesFrozenCrops:

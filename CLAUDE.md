@@ -4,21 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## IMPORTANT: Python Environment
 
-**ALWAYS use the project's virtual environment for all Python operations:**
+**ALWAYS call the venv binaries directly — never use `source` to activate:**
 
 ```bash
-# Activate the venv first
-source .venv/bin/activate
-
-# Then run Python commands
-python script.py
-pytest tests/
-pre-commit run --all-files
+.venv/bin/python tests/test_full_system.py
+.venv/bin/python -m pytest tests/
+.venv/bin/pre-commit run --all-files
 ```
 
 **When running Python scripts or commands:**
-- ✅ CORRECT: `source .venv/bin/activate && python tests/test_full_system.py`
-- ✅ CORRECT: `source .venv/bin/activate && pre-commit run --all-files`
+- ✅ CORRECT: `.venv/bin/python tests/test_full_system.py`
+- ✅ CORRECT: `.venv/bin/pre-commit run --all-files`
+- ❌ WRONG: `source .venv/bin/activate && python ...` (triggers a shell-injection warning in some harnesses)
 - ❌ WRONG: `python tests/test_full_system.py` (uses system Python)
 - ❌ WRONG: `python3 tests/test_full_system.py` (uses system Python3)
 
@@ -117,11 +114,16 @@ All endpoints available on port **4603**.
 
 ### API Versioning
 
-All API endpoints are available at both the root path and under the `/v1` prefix:
+The core inference/ingest/query surface is available at both the root path and under the `/v1` prefix:
 - `/detect` and `/v1/detect` - Both work identically
 - `/faces/recognize` and `/v1/faces/recognize` - Both work identically
 
-**Versioned endpoints are recommended** for production use as they ensure compatibility
+**This `/v1` twin does NOT cover the `/curation` surface.** The curation
+subsystem (see [docs/CURATION.md](docs/CURATION.md)) is experimental for
+this release and every `/curation/*` route is only mounted at its single,
+unversioned path — there is no `/v1/curation/*` twin today.
+
+**Versioned endpoints are recommended** for production use of the core API as they ensure compatibility
 when new API versions are released. The current supported version is **v1**.
 
 Check API version via:
@@ -130,7 +132,7 @@ curl http://localhost:4603/ | jq '.api_versions'
 # {"current":"v1","supported":["v1"],"deprecated":[]}
 
 curl http://localhost:4603/health | jq '{version, api_version}'
-# {"version":"0.1.0","api_version":"v1"}
+# {"version":"0.3.0","api_version":"v1"}
 ```
 
 ### /detect - Object Detection
@@ -222,15 +224,15 @@ curl http://localhost:4603/health | jq '{version, api_version}'
 
 Mounted under `CurationConfig.api_prefix` (default `/curation`; 103 routes
 across 21 router modules under `src/routers/curation/`). See
-[`docs/design/labeler_api_contract.md`](docs/design/labeler_api_contract.md)
+[`docs/design/curation_api_contract.md`](docs/design/curation_api_contract.md)
 for the full route table and wire-model field names, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#curation-subsystem) for the
-component map. Built from
-[`docs/design/oss_genericization_phase2_plan.md`](docs/design/oss_genericization_phase2_plan.md),
-which genericized a private vehicle/license-plate curation stack behind
-three config dataclasses (`CurationConfig`, `RegionFields`,
-`DetectionProfile`) — a different domain constructs its own instances
-rather than forking the code.
+component map. Design rationale — why it's built behind three config
+dataclasses (`CurationConfig`, `RegionFields`, `DetectionProfile`) that
+genericized a private vehicle/license-plate curation stack, so a
+different domain constructs its own instances rather than forking the
+code — is in
+[`docs/design/curation_design_rationale.md`](docs/design/curation_design_rationale.md).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -349,11 +351,10 @@ docker compose down
 
 ```bash
 # Comprehensive test suite (all endpoints, ingest, search)
-source .venv/bin/activate
-python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
+.venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
 
 # Visual validation (draws bounding boxes on images)
-python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
+.venv/bin/python tests/validate_visual_results.py 2>&1 | tee test_results/visual_validation.txt
 
 # View annotated images
 ls test_results/*.jpg

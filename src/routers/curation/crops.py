@@ -224,6 +224,17 @@ def _src_to_crop_doc(src: dict[str, Any], fallback_id: str) -> ItemDoc:
         label_source=src.get('label_source', ''),
         plate_bbox_norm=src.get(fields.bbox_norm),
         plate_score=src.get(fields.score),
+        plate_status=src.get(fields.status),
+        plate_text=src.get(fields.text),
+        plate_text_source=src.get(fields.text_source),
+        plate_text_confidence=src.get(fields.text_confidence),
+        plate_rejection_reason=src.get(fields.rejection_reason),
+        plate_detector=src.get(fields.detector),
+        plate_detector_version=src.get(fields.detector_version),
+        plate_verified=src.get(fields.verified),
+        plate_verified_at=src.get(fields.verified_at),
+        plate_verifier=src.get(fields.verifier),
+        plate_label_source=src.get(fields.label_source),
         test_holdout=bool(src.get('test_holdout', False)),
         crop_rank_in_image=src.get('crop_rank_in_image'),
         crop_area_norm=src.get('crop_area_norm'),
@@ -249,27 +260,26 @@ async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[ItemDoc]:
     ]
 
 
-@router.get('/crops/{crop_id}')
+@router.get('/crops/{crop_id}', response_model=ItemDoc)
 async def get_crop(
     crop_id: str,
     opensearch: OpenSearchDep,
-) -> dict[str, Any]:
+) -> ItemDoc:
     """Return the authoritative item document by id.
 
     Used by the labeler's review-queue "Back" path so the operator sees
     what was actually persisted (not a stale local snapshot). Returns
-    the full ``_source`` from OpenSearch — the labeler's ``mapRawCrop``
-    accepts every region / class / provenance field directly.
+    the frozen ``ItemDoc`` wire contract (``plate_*`` names) — same
+    translation ``GET /crops`` uses via ``_src_to_crop_doc`` — never the
+    raw OpenSearch ``_source``, whose keys follow ``RegionFields`` (e.g.
+    ``region_*`` by default) and are not part of the HTTP contract.
     """
     try:
         resp = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
-    # Ensure crop_id is present even on rows that historically omitted it
-    # from _source (older ingest batches keyed by _id only).
-    src.setdefault('crop_id', crop_id)
-    return src
+    return _src_to_crop_doc(src, crop_id)
 
 
 @router.put('/crops/{crop_id}/label')

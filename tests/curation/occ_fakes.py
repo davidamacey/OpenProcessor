@@ -132,3 +132,143 @@ class FakeOccOpenSearch:
             status, error_type = self.bulk_status.get(doc_id, (200, None))
             items.append(make_bulk_update_item(doc_id, status=status, error_type=error_type))
         return make_bulk_response(items)
+
+
+class FakeIngestOpenSearch:
+    """AsyncOpenSearch double covering the surface
+    :func:`src.clients.occ.occ_upsert_bulk` and
+    :class:`src.services.curation.ingest.CurationIngestService` need:
+    ``search``/``msearch`` (dedup), ``mget``/``bulk``/``update``/``get``
+    (the create-then-OCC-update upsert path), and a blind ``bulk`` index
+    for the images doc.
+
+    Backed by two plain dicts (``images``, ``items``) rather than
+    real OpenSearch query evaluation — ``search``/``msearch`` only
+    understand the ``term: {imohash: ...}`` query ingest issues for
+    dedup, which is all this double needs to support.
+    """
+
+    def __init__(
+        self,
+        *,
+        images: dict[str, dict[str, Any]] | None = None,
+        items: dict[str, dict[str, Any]] | None = None,
+        create_conflict_ids: set[str] | None = None,
+    ) -> None:
+        self.images: dict[str, dict[str, Any]] = dict(images or {})
+        self.items: dict[str, dict[str, Any]] = dict(items or {})
+        self._seq: dict[str, int] = dict.fromkeys(self.items, 1)
+        # Ids that should 409 on their FIRST bulk `create` attempt, to
+        # exercise occ_upsert_bulk's create-conflict -> refetch -> OCC
+        # update fallback path.
+        self._create_conflict_pending: set[str] = set(create_conflict_ids or set())
+        self.bulk_calls: list[list[dict[str, Any]]] = []
+        self.update_calls: list[dict[str, Any]] = []
+
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        from src.config import get_curation_config
+
+        term = ((body.get('query') or {}).get('term') or {}).get('imohash')
+        store = self.items if index == get_curation_config().items_index else self.images
+        hits = [
+            {'_id': doc.get('image_id', doc_id), '_source': doc}
+            for doc_id, doc in store.items()
+            if term is None or doc.get('imohash') == term
+        ]
+        return {'hits': {'hits': hits[: body.get('size', len(hits))]}}
+
+    async def msearch(self, *, body: list[dict[str, Any]]) -> dict[str, Any]:
+        responses = []
+        for line in body[1::2]:
+            term = ((line.get('query') or {}).get('term') or {}).get('imohash')
+            hits = [
+                {'_id': doc.get('image_id', doc_id), '_source': doc}
+                for doc_id, doc in self.images.items()
+                if doc.get('imohash') == term
+            ]
+            responses.append({'hits': {'hits': hits[:1]}})
+        return {'responses': responses}
+
+    async def mget(self, *, body: dict[str, Any], index: str) -> dict[str, Any]:  # noqa: ARG002
+        ids = body['ids']
+        docs = []
+        for doc_id in ids:
+            if doc_id in self.items:
+                docs.append(
+                    {
+                        '_id': doc_id,
+                        'found': True,
+                        '_source': self.items[doc_id],
+                        '_seq_no': self._seq.get(doc_id, 1),
+                        '_primary_term': 1,
+                    }
+                )
+            else:
+                docs.append({'_id': doc_id, 'found': False})
+        return {'docs': docs}
+
+    async def bulk(
+        self,
+        *,
+        body: list[dict[str, Any]],
+        refresh: bool | str = False,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        from src.config import get_curation_config
+
+        items_index = get_curation_config().items_index
+        self.bulk_calls.append(body)
+        items: list[dict[str, Any]] = []
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            if 'index' in action:
+                meta = action['index']
+                doc_id = meta['_id']
+                if meta['_index'] != items_index:
+                    self.images[doc_id] = doc
+                else:
+                    self.items[doc_id] = doc
+                    self._seq[doc_id] = 1
+                items.append({'index': {'_id': doc_id, 'status': 201}})
+            elif 'create' in action:
+                meta = action['create']
+                doc_id = meta['_id']
+                if doc_id in self._create_conflict_pending:
+                    self._create_conflict_pending.discard(doc_id)
+                    items.append({'create': {'_id': doc_id, 'status': 409}})
+                elif doc_id in self.items:
+                    items.append({'create': {'_id': doc_id, 'status': 409}})
+                else:
+                    self.items[doc_id] = doc
+                    self._seq[doc_id] = 1
+                    items.append({'create': {'_id': doc_id, 'status': 201}})
+            else:  # pragma: no cover - defensive, ingest never emits bare 'update' actions in bulk
+                msg = f'unsupported bulk action: {action}'
+                raise ValueError(msg)
+        errors = any(next(iter(i.values())).get('status') not in (200, 201) for i in items)
+        return {'errors': errors, 'items': items}
+
+    async def update(
+        self,
+        *,
+        index: str,  # noqa: ARG002
+        id: str,  # noqa: A002
+        body: dict[str, Any],
+        if_seq_no: int,
+        if_primary_term: int,  # noqa: ARG002
+        refresh: bool | str = False,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        self.update_calls.append({'id': id, 'body': body, 'if_seq_no': if_seq_no})
+        current_seq = self._seq.get(id, 1)
+        if if_seq_no != current_seq:
+            msg = f'version_conflict_engine_exception: {id}'
+            raise RuntimeError(msg)
+        self.items.setdefault(id, {}).update(body['doc'])
+        self._seq[id] = current_seq + 1
+        return {'_id': id, 'result': 'updated', '_seq_no': self._seq[id], '_primary_term': 1}
+
+    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+        return {
+            '_id': id,
+            '_source': self.items.get(id, {}),
+            '_seq_no': self._seq.get(id, 1),
+            '_primary_term': 1,
+        }

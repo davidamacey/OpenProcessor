@@ -3,7 +3,7 @@
 
 ``RegionFields`` (``src/config/region_fields.py``) is the single source
 of truth for OpenSearch region field names — see
-``docs/design/oss_genericization_phase2_plan.md`` §3.2. On the working
+``docs/design/curation_design_rationale.md`` §4. On the working
 branch a ``'plate_...'``/``"plate_..."`` string literal is *always* a
 mistake: it means a file was copied across from the reference tree
 without being genericized to read fields via ``RegionFields``.
@@ -13,10 +13,11 @@ passes every changed ``*.py`` file under ``src/``, ``scripts/`` and
 ``tests/`` as a positional argument (same wiring style as
 ``check_file_size.py``). Of those, this script only actually checks
 files that fall under ``PORTED_PATHS`` — a growing allowlist of
-already-ported paths (§3.2 "Per-chunk enforcement guard"). It starts
-empty in Chunk 0; each later wave appends its newly-ported paths in the
-same commit that ports them. This gives a ratchet: once a module is
-ported, it can never regress to hardcoding a `plate_*` literal again.
+already-ported paths (see the same doc's §4 "Per-chunk enforcement
+guard"). It starts empty in Chunk 0; each later wave appends its
+newly-ported paths in the same commit that ports them. This gives a
+ratchet: once a module is ported, it can never regress to hardcoding a
+`plate_*` literal again.
 
 Two hardcoded exemptions (never driven by ``PORTED_PATHS``):
 - ``src/config/region_fields.py`` — its docstrings legitimately name
@@ -24,22 +25,26 @@ Two hardcoded exemptions (never driven by ``PORTED_PATHS``):
 - ``tests/curation/test_region_fields.py`` — the overridability fixture
   legitimately constructs a `plate_*`-named instance.
 
-Plus two line-level skips for the frozen HTTP wire contract with the
-labeler frontend (see ``docs/design/labeler_api_contract.md``) — never
-an OpenSearch field reference, and explicitly out of ``RegionFields``'
-scope:
+Plus two line-level skips for the frozen HTTP wire contract of the
+generic curation API (see ``docs/design/curation_api_contract.md``) —
+never an OpenSearch field reference, and explicitly out of
+``RegionFields``' scope:
 
 - Pydantic attribute declarations of the shape ``plate_foo: ...``
   (matching ``^\\s*plate_[a-z_]+\\s*:``).
 - Wire-response dict-literal keys whose *value* is visibly routed
-  through ``RegionFields`` (``F.foo`` / ``doc[F.foo]``), a Pydantic
-  model attribute (``payload.foo``), or a URL path literal (``f'/...'``)
-  — e.g. ``'plate_status': src.get(F.status)`` in a router's
-  OpenSearch-doc -> wire-JSON serializer, or ``'plate_text' in
-  fields_set`` checking membership against a wire model's own frozen
-  field-set. The **left-hand** key is the wire contract (frozen); the
-  right-hand side is what this guard actually polices, and it's already
-  clean by construction here.
+  through a ``RegionFields`` instance -- conventionally bound to ``F``,
+  ``_F``, or ``fields`` across this codebase (``F.foo`` / ``doc[F.foo]``
+  / ``fields.foo``), a Pydantic model attribute (``payload.foo``), or a
+  URL path literal (``f'/...'``) — e.g. ``'plate_status':
+  src.get(fields.status)`` in a router's OpenSearch-doc -> wire-JSON
+  serializer, or ``'plate_text' in fields_set`` checking membership
+  against a wire model's own frozen field-set. The **left-hand** key is
+  the wire contract (frozen); the right-hand side is what this guard
+  actually polices, and it's already clean by construction here.
+- ``wire_fields.append('plate_foo')`` bookkeeping -- a router recording
+  which frozen wire-contract field *names* it just applied (for an
+  ``updated_fields`` response), never an OpenSearch document key.
 
 Run manually: `python3 scripts/codegen/check_no_literal_region_fields.py <files...>`
 """
@@ -228,6 +233,18 @@ PORTED_PATHS: tuple[str, ...] = (
     # Chunk 9 commit (c) — pipeline router.
     'src/routers/curation/pipeline.py',
     'tests/curation/test_pipeline.py',
+    # Wave 2 — generic curation ingest path.
+    'src/services/curation/label_import.py',
+    'src/services/detection/geometry.py',
+    'src/services/curation/ingest.py',
+    'src/services/curation/item_doc.py',
+    'src/services/curation/clustering/ivf_ingest.py',
+    'tests/curation/test_label_import.py',
+    'tests/curation/test_geometry.py',
+    'tests/curation/test_ingest_service.py',
+    'tests/curation/test_ensemble_nms.py',
+    'tests/curation/test_pe_preprocess.py',
+    'tests/integration/test_ingest_roundtrip.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
@@ -247,10 +264,15 @@ _PYDANTIC_ATTR_RE = re.compile(r'^\s*plate_[a-z_]+\s*:')
 # interpolation (``f'{config.api_prefix}/...'``) — both are still just
 # URL construction, never an OpenSearch field reference.
 _WIRE_KEY_RE = re.compile(
-    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(src\.get\(F\.|payload\.|\w+\[F\.|f['"](/|\{))"""
+    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(bool\()?"""
+    r"""(src\.get\(_?F\.|src\.get\(fields\.|payload\.|\w+\[_?F\.|\w+\[fields\.|f['"](/|\{))"""
 )
 # Membership check against a wire model's own `model_fields_set`.
 _FIELDS_SET_RE = re.compile(r"""['"]plate_[a-z_]+['"]\s+in\s+fields_set""")
+# Bookkeeping: a router recording which frozen wire-contract field name it
+# just applied (e.g. into an `updated_fields` response), never an
+# OpenSearch document key.
+_WIRE_FIELDS_APPEND_RE = re.compile(r"""wire_fields\.append\(['"]plate_[a-z_]+['"]\)""")
 
 
 def _is_ported(rel_posix: str) -> bool:
@@ -275,7 +297,11 @@ def _scan_file(path: Path) -> list[tuple[int, str]]:
     for lineno, line in enumerate(text.splitlines(), start=1):
         if _PYDANTIC_ATTR_RE.match(line):
             continue
-        if _WIRE_KEY_RE.match(line) or _FIELDS_SET_RE.search(line):
+        if (
+            _WIRE_KEY_RE.match(line)
+            or _FIELDS_SET_RE.search(line)
+            or _WIRE_FIELDS_APPEND_RE.search(line)
+        ):
             continue
         if _LITERAL_RE.search(line):
             violations.append((lineno, line.strip()))
@@ -311,7 +337,7 @@ def main() -> int:
             "\nERROR: 'plate_...' literal(s) found in ported curation "
             'code. Route field access through a RegionFields instance '
             'instead (src/config/region_fields.py). See '
-            'docs/design/oss_genericization_phase2_plan.md §3.2.\n'
+            'docs/design/curation_design_rationale.md §4.\n'
         )
     return exit_code
 

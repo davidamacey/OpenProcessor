@@ -11,7 +11,7 @@ math. New fields only: ``dup_group_id`` / ``dup_group_size`` /
 **Threshold is a hypothesis, not a finding** (plan §2.5/§10.3): crops likely
 need a tighter cut than the whole-frame 0.98 — a near-dup *photo* burst still
 contains distinct crops (a truck and its trailer), so 0.98 was never
-validated at crop granularity. ``KB_CROP_DUP_THRESHOLD`` (default 0.98,
+validated at crop granularity. ``OP_CROP_DUP_THRESHOLD`` (default 0.98,
 matching :data:`frame_dedup.DEFAULT_FRAME_DEDUP_THRESHOLD` until the sweep
 in plan §6 says otherwise) makes this a knob, not a hardcoded assumption.
 
@@ -51,7 +51,7 @@ NEAR_DUP_VERSION = 'v1'
 
 def _threshold() -> float:
     try:
-        return float(os.environ.get('KB_CROP_DUP_THRESHOLD', str(DEFAULT_FRAME_DEDUP_THRESHOLD)))
+        return float(os.environ.get('OP_CROP_DUP_THRESHOLD', str(DEFAULT_FRAME_DEDUP_THRESHOLD)))
     except ValueError:
         return DEFAULT_FRAME_DEDUP_THRESHOLD
 

@@ -69,3 +69,26 @@ faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
 
 # Duplicate Detection
 imohash  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)
+
+# Perception Encoder (PE) text tower for text-to-image curation search
+# (src/clients/pe_encoder.py, lazily imported in warm_text_encoder()).
+# Not on PyPI under a normal name -- the pip distribution is named
+# `perception_models`, but the package it installs is top-level `core`
+# (verified against facebookresearch/perception_models' own pyproject.toml).
+# This was previously undeclared entirely (comment in pe_encoder.py claimed
+# it was already here) -- same missing-dependency bug class as the
+# clustering packages above, just not one of the four the audit named.
+perception_models @ git+https://github.com/facebookresearch/perception_models.git
+
+# Text-detection lean/angle recovery (src/services/detection/region_lean.py,
+# lazily imported in default_detector()). Also currently undeclared anywhere;
+# the module has no production importer yet (pending the Wave 2 ingest
+# wiring), but it is real ported code with a real hard (non-optional) import.
+paddleocr
+
+# Curation Clustering (lazily imported -- ImportError only surfaces on first
+# call to a clustering endpoint if these are missing from the image)
+scikit-learn  # src/services/curation/clustering/orchestrator.py, methods/ahc.py, backend.py; scripts/curation/bakeoff/sample.py
+umap-learn  # src/services/curation/clustering/embedding_reduce.py, backend.py; src/services/curation/embedding_viz.py
+hdbscan  # src/services/curation/clustering/methods/hdbscan.py
+joblib  # src/services/curation/clustering/embedding_reduce.py, embedding_viz.py

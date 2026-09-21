@@ -8,9 +8,12 @@ Technical documentation for the Visual AI API.
 
 - **[Main README](../README.md)** - Project overview, API endpoints, quick start
 - **[CLAUDE.md](../CLAUDE.md)** - Project instructions for AI assistants
+- **[CURATION.md](CURATION.md)** - Curation & active-learning subsystem user guide (experimental)
 - **[Benchmarks Guide](../benchmarks/README.md)** - Performance testing with triton_bench
 - **[Model Export](../export/README.md)** - TensorRT model export documentation
 - **[Attribution](../ATTRIBUTION.md)** - Third-party code attribution and licensing
+- **[SECURITY.md](../SECURITY.md)** - Security policy — no authentication, do not expose to the internet
+- **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Dev setup, test suites, commit conventions
 
 ---
 
@@ -41,12 +44,13 @@ Technical documentation for the Visual AI API.
 |----------|-------------|
 | [opensearch_schema_design.md](opensearch_schema_design.md) | FAISS IVF clustering and OpenSearch index design |
 
-### Curation / Labeling
+### Curation / Labeling (experimental)
 
 | Document | Description |
 |----------|-------------|
-| [design/oss_genericization_phase2_plan.md](design/oss_genericization_phase2_plan.md) | The plan that built the generic `curation` subsystem (config, clustering, scoring, training, VLM labeling, detection cascade) |
-| [design/labeler_api_contract.md](design/labeler_api_contract.md) | `/curation` HTTP wire contract — Pydantic model field names, frozen vs. configurable |
+| [CURATION.md](CURATION.md) | User guide — what it is, required models, class-registry schema, workers, seed path, known gaps |
+| [design/curation_design_rationale.md](design/curation_design_rationale.md) | Design rationale — the four config dataclasses, frozen wire contract, pre-commit ratchet |
+| [design/curation_api_contract.md](design/curation_api_contract.md) | `/curation` HTTP wire contract — Pydantic model field names, frozen vs. configurable, capability discovery (`/methods`) |
 
 ---
 
@@ -66,7 +70,7 @@ The API provides these endpoint groups (all on port 4603):
 | `/clusters` | FAISS clustering | train, stats, albums |
 | `/query` | Data retrieval | image, stats, duplicates |
 | `/health` | Monitoring | Service health, model status |
-| `/curation` | Curation + active-learning labeling subsystem | classes, crops, regions, clusters, review, scores, select, VLM labeling, training, export, pipeline — see [labeler_api_contract.md](design/labeler_api_contract.md) |
+| `/curation` | Curation + active-learning labeling subsystem | classes, crops, regions, clusters, review, scores, select, VLM labeling, training, export, pipeline — see [curation_api_contract.md](design/curation_api_contract.md) |
 
 ---
 
@@ -135,12 +139,15 @@ make download-test-images
 ### Run Tests
 
 ```bash
+# Full pytest suite (1000+ tests, offline — this is what CI runs)
+make test
+# equivalent to: .venv/bin/python -m pytest tests/ -q
+
 # Endpoint integration tests (auto-downloads test images)
 make test-endpoints
 
-# Comprehensive test suite
-source .venv/bin/activate
-python tests/test_full_system.py
+# Comprehensive smoke-test script
+.venv/bin/python tests/test_full_system.py
 
 # Individual endpoint tests
 make test-faces           # Face detection + recognition
@@ -186,5 +193,5 @@ curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 
 ---
 
-**Last Updated:** 2026-01-27
-**Version:** 2.1 - Updated for SCRFD face pipeline and test data setup
+**Last Updated:** 2026-09-21
+**Version:** 0.3.0 - Curation subsystem, CI, and OSS furniture added

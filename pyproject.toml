@@ -3,21 +3,21 @@
 
 [project]
 name = "openprocessor"
-version = "0.1.0"
+version = "0.3.0"
 description = "Self-hosted AI-powered visual processing engine with object detection, face recognition, CLIP embeddings, OCR, and vector search"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     {name = "OpenProcessor Contributors"}
 ]
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-or-later"}
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Image Recognition",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3.12",
 ]
 
@@ -38,7 +38,7 @@ dependencies = [
     "onnxruntime-gpu",
     "onnx-graphsurgeon",
     "tensorrt-cu13==11.1.0.106",
-    "nvidia-dali-cuda120",
+    "nvidia-modelopt[onnx]",
     "torch",
     "torchvision",
     "opencv-python",
@@ -46,6 +46,7 @@ dependencies = [
     "scipy",
     "requests",
     "aiohttp",
+    "httpx",
     "matplotlib",
     "seaborn",
     "pandas",
@@ -53,11 +54,23 @@ dependencies = [
     "tqdm",
     "tabulate",
     "pyyaml",
+    "structlog>=24.1.0",
+    "tenacity>=8.2",
     "opensearch-py>=2.3.0",
     "transformers>=4.30.0",
     "timm",
     "huggingface_hub",
+    "ftfy",
+    "open-clip-torch>=2.24.0",
+    "faiss-gpu-cu12>=1.10.0",
+    "imohash",
     "prometheus-client>=0.20",
+    "scikit-learn",
+    "umap-learn",
+    "hdbscan",
+    "joblib",
+    "perception_models @ git+https://github.com/facebookresearch/perception_models.git",
+    "paddleocr",
 ]
 
 [project.optional-dependencies]
@@ -280,11 +293,19 @@ addopts = [
     "--strict-markers",
     "--tb=short",
     "--cov=src",
+    "--cov=scripts",
     "--cov-report=term-missing",
     "--cov-report=html",
+    "--cov-fail-under=51",
+    # Live write-path tests need the isolated harness in docker/test/ to be
+    # up; they are deselected by default so the offline gate is unchanged.
+    # Run them with: pytest tests/live -q --no-cov -m live
+    "-m",
+    "not live",
 ]
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
+    "live: write-path tests that require the docker/test/ verification harness to be running",
 ]
 
 # =============================================================================
@@ -292,7 +313,7 @@ markers = [
 # =============================================================================
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "scripts"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

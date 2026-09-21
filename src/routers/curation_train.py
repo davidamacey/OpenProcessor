@@ -38,6 +38,7 @@ from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
 from src.config import IndexRole, get_curation_config, get_region_fields, index_name
+from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
@@ -200,8 +201,8 @@ async def _count_pending_ingest(opensearch: Any) -> int:
         'query': {
             'terms': {
                 F.status: [
-                    'pending_detection',
-                    'pending_verification',
+                    RegionStatus.PENDING_DETECTION,
+                    RegionStatus.PENDING_VERIFICATION,
                     'pending',
                     'pending_verify',
                 ]
@@ -254,12 +255,12 @@ def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
     almost always has plenty of headroom regardless of whether the real
     training volume is anywhere near full. Prefer the export dir itself
     (guaranteed to be on the real volume once a job names one) and fall
-    back to ``KB_TRAIN_STAGING`` (the same env var the trainer/API compose
+    back to ``OP_TRAIN_STAGING`` (the same env var the trainer/API compose
     services already use for the training-data root).
     """
     if spec.dataset_export_dir and Path(spec.dataset_export_dir).exists():
         return str(spec.dataset_export_dir)
-    return os.environ.get('KB_TRAIN_STAGING', str(config.state_dir / 'training_staging'))
+    return os.environ.get('OP_TRAIN_STAGING', str(config.state_dir / 'training_staging'))
 
 
 def _training_volume_mount_sane(path: str) -> bool:
