@@ -8,6 +8,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Annotation slots are now wired all the way through the crop pipeline
+  instead of stopping at the adapter layer (Wave 0 + Wave 1 of
+  `docs/design/slot-generic-crop-mapping-plan-2026-09-21.md`, C1-C11).
+  `OpCrop` gains a `slots?: Record<SlotKey, SlotData>` map, populated by
+  `mapRawCrop`/`getPlates` via the existing `readSlot` adapter
+  (`src/lib/annotations/cropSlots.ts`'s `mapCropSlots`/`slotOf`).
+  `SlotState` gains an optional `aliases?: string[]` (the read-tolerance
+  half of a future wire-vocabulary rename), and `readSlot.ts` exports
+  `projectFromParent`, the inverse of its private forward projection.
+  Every consumer that used to read a hardcoded `crop.plate_*` field or
+  import `licensePlateSlot` directly — `CropMetaPanel`, `CropCard`,
+  `BboxCanvas`, `/review`'s entire inline slot panel (Finding D),
+  `sse.ts`'s verify-event dispatch, `SlotBboxEditor`, `SlotCard`, and
+  `DatasetStats`' detection panel — now reads through the active slot's
+  own capabilities, so a second registered slot renders correctly with
+  zero further code change (proved by
+  `src/lib/annotations/secondSlotIntegration.test.ts`).
+
+### Fixed
+
+- `sse.ts`'s `subscribeKbEvents` used to hardcode a fixed list of known
+  SSE event types; any type outside that list was silently never
+  dispatched. A second queue-capable slot's own verify event would have
+  refreshed nothing on `/review`, with no error anywhere. Event types
+  are now derived from `slotRegistry.queues` at call time.
+- `plateGalleryController.svelte.ts`'s `savePlateBbox` (the plate
+  gallery's bbox-editor save handler) was re-sending the box to the
+  backend a second time on every save, even though `SlotBboxEditor` had
+  already performed the write — a redundant PUT on every plate-gallery
+  bbox save. It is now a pure local-state patch.
+
 - `/bakeoff` is now gated on backend availability instead of assuming
   `/curation/bakeoff/*` is always mounted. A new one-shot probe
   (`src/lib/bakeoffAvailability.svelte.ts`) calls the idempotent

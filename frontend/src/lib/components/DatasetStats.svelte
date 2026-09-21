@@ -25,6 +25,14 @@
   import { onDestroy } from 'svelte';
   import { type DatasetStats } from '$lib/api';
   import { subscribePipelineEvents, type OpEventSubscription } from '$lib/sse';
+  import { registeredSlots } from '$lib/annotations/registeredSlots';
+
+  // The slot whose `stats` capability titles this panel (today:
+  // license_plate's 'plates'/'Plate detections'/'Plate coverage', all
+  // already verbatim in licensePlate.ts). No slot with a stats
+  // capability -> no panel at all, rather than an empty "Plate
+  // detections" card for a slot-less deployment.
+  const statsSlot = $derived(registeredSlots.find((s) => s.stats));
 
   // Polling interval prop preserved for back-compat with existing
   // callers; ignored now that we're push-driven.
@@ -145,8 +153,18 @@
   // primary detector; SAM3 is a fallback; human placements come from the
   // labeler UI. Denominator = total_crops (so % is "fraction of crops
   // where a plate was detected"), not labeledTotal.
+  // by_lpr/by_sam3 stay hardcoded — the /curation/stats/dataset payload itself
+  // is LPR-shaped, and generalizing these rows needs either a per-slot
+  // rows descriptor (inventing a capability from one example) or a
+  // backend change. Neither is this commit's job (docs/design/
+  // slot-generic-crop-mapping-plan-2026-09-21.md §7.3); only the
+  // panel's TITLES and its lookup key are slot-generic below.
   const platesRows = $derived.by(() => {
-    const p = stats?.plates;
+    const p = statsSlot?.stats
+      ? (stats as unknown as Record<string, DatasetStats['plates'] | undefined>)?.[
+          statsSlot.stats.key
+        ]
+      : undefined;
     const total = stats?.total_crops ?? 0;
     if (!p || total === 0) return [];
     const rows: Array<{
@@ -378,69 +396,76 @@
       </div>
     </div>
 
-    <!-- Plate detections — separate from class labels. LPR runs on every
-         crop and tries to find a plate bbox; SAM3 is the fallback for
-         when LPR misses; humans place plates via the labeler UI. The
-         denominator is total_crops, so % = "fraction of crops with a
-         plate detection". -->
-    <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div class="surface p-4 lg:col-span-2">
-        <header class="mb-3 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-zinc-300">Plate detections</h3>
-          <span class="text-xs text-zinc-500">
-            {fmt(stats.plates?.boxed ?? 0)} with a plate box ·
-            {fmt(stats.plates?.confirmed ?? 0)} confirmed
-          </span>
-        </header>
-        {#if platesRows.length === 0}
-          <p class="text-sm text-zinc-500">No plate detections yet.</p>
-        {:else}
-          <ul class="space-y-1.5">
-            {#each platesRows as row (row.key)}
-              <li class="flex items-center gap-3 text-xs">
-                <span class="w-32 shrink-0 text-zinc-300">{row.label}</span>
-                <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">
-                  <div
-                    class="h-full {row.tone}"
-                    style:width="{Math.max(0.5, row.pct)}%"
-                    title="{row.pct}% of total crops"
-                  ></div>
-                </div>
-                <span class="w-20 shrink-0 text-right font-mono text-zinc-300">
-                  {fmt(row.count)}
-                </span>
-                <span class="w-12 shrink-0 text-right font-mono text-zinc-500">
-                  {row.pct.toFixed(1)}%
-                </span>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-
-      <!-- Plate coverage summary -->
-      <div class="surface p-4">
-        <h3 class="mb-3 text-sm font-semibold text-zinc-300">Plate coverage</h3>
-        <div class="flex items-baseline gap-2">
-          <span class="font-mono text-2xl text-zinc-100">
-            {(
-              ((stats.plates?.boxed ?? 0) / Math.max(1, stats.total_crops)) *
-              100
-            ).toFixed(1)}%
-          </span>
-          <span class="text-xs text-zinc-500">of crops have a plate box</span>
+    <!-- Slot detections — separate from class labels. Titled from the
+         active stats-capable slot's own spec (today: license_plate's
+         'Plate detections'/'Plate coverage'). LPR runs on every crop and
+         tries to find a plate bbox; SAM3 is the fallback for when LPR
+         misses; humans place plates via the labeler UI. The denominator
+         is total_crops, so % = "fraction of crops with a detection". No
+         stats-capable slot registered -> no panel at all (see
+         statsSlot above). -->
+    {#if statsSlot?.stats}
+      {@const statsSpec = statsSlot.stats}
+      {@const p = (
+        stats as unknown as Record<string, DatasetStats['plates'] | undefined>
+      )[statsSpec.key]}
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div class="surface p-4 lg:col-span-2">
+          <header class="mb-3 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-zinc-300">{statsSpec.panelTitle}</h3>
+            <span class="text-xs text-zinc-500">
+              {fmt(p?.boxed ?? 0)} with a box ·
+              {fmt(p?.confirmed ?? 0)} confirmed
+            </span>
+          </header>
+          {#if platesRows.length === 0}
+            <p class="text-sm text-zinc-500">No detections yet.</p>
+          {:else}
+            <ul class="space-y-1.5">
+              {#each platesRows as row (row.key)}
+                <li class="flex items-center gap-3 text-xs">
+                  <span class="w-32 shrink-0 text-zinc-300">{row.label}</span>
+                  <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">
+                    <div
+                      class="h-full {row.tone}"
+                      style:width="{Math.max(0.5, row.pct)}%"
+                      title="{row.pct}% of total crops"
+                    ></div>
+                  </div>
+                  <span class="w-20 shrink-0 text-right font-mono text-zinc-300">
+                    {fmt(row.count)}
+                  </span>
+                  <span class="w-12 shrink-0 text-right font-mono text-zinc-500">
+                    {row.pct.toFixed(1)}%
+                  </span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </div>
-        <p class="mt-2 text-xs text-zinc-500">
-          {fmt(stats.plates?.boxed ?? 0)} crops carry a plate box ({fmt(
-            stats.plates?.confirmed ?? 0,
-          )} Gemma-confirmed). The remaining
-          {fmt(stats.total_crops - (stats.plates?.boxed ?? 0))} either had no visible plate
-          (Gemma pre-filter said no) or the LPR/SAM3 detectors haven't reached them yet. A detector
-          ran on
-          {fmt(stats.plates?.total_detected ?? 0)} crops total (includes rejected/failed attempts).
-        </p>
+
+        <!-- Coverage summary -->
+        <div class="surface p-4">
+          <h3 class="mb-3 text-sm font-semibold text-zinc-300">
+            {statsSpec.coverageTitle}
+          </h3>
+          <div class="flex items-baseline gap-2">
+            <span class="font-mono text-2xl text-zinc-100">
+              {(((p?.boxed ?? 0) / Math.max(1, stats.total_crops)) * 100).toFixed(1)}%
+            </span>
+            <span class="text-xs text-zinc-500">of crops have a box</span>
+          </div>
+          <p class="mt-2 text-xs text-zinc-500">
+            {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} Gemma-confirmed).
+            The remaining
+            {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (Gemma
+            pre-filter said no) or the LPR/SAM3 detectors haven't reached them yet. A detector
+            ran on
+            {fmt(p?.total_detected ?? 0)} crops total (includes rejected/failed attempts).
+          </p>
+        </div>
       </div>
-    </div>
+    {/if}
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <!-- Unlabeled / pending -->
