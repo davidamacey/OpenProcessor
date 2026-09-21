@@ -1,0 +1,3 @@
+# Default owner for everything not matched below.
+# See https://docs.github.com/articles/about-codeowners
+* @davidamacey
