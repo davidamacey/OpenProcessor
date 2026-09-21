@@ -63,7 +63,7 @@ def _lpr_mock(candidates):
     return lpr
 
 
-def _gemma_mock(*, is_plate: bool):
+def _gemma_mock(*, is_region: bool):
     from unittest.mock import AsyncMock, MagicMock
 
     from src.services.labeling.vlm_labeler import VlmRegionVerdict
@@ -71,7 +71,7 @@ def _gemma_mock(*, is_plate: bool):
     g = MagicMock()
     g.verify_plate = AsyncMock(
         return_value=VlmRegionVerdict(
-            crop_id='ignored', is_plate=is_plate, confidence='high', reason='test'
+            crop_id='ignored', is_region=is_region, confidence='high', reason='test'
         )
     )
     g.aclose = AsyncMock()
@@ -139,7 +139,7 @@ class TestCascadeWithoutSegmenter:
             lpr=_lpr_mock([None]),
             sam3=sam3,
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=False),
+            gemma=_gemma_mock(is_region=False),
         )
 
         # Cascade completed cleanly (no exception) and reached a terminal
@@ -162,7 +162,7 @@ class TestCascadeWithoutSegmenter:
             lpr=_lpr_mock([]),
             sam3=sam3,
             ocr_recognizer=_ocr_recognizer_mock(),
-            gemma=_gemma_mock(is_plate=False),
+            gemma=_gemma_mock(is_region=False),
         )
 
         assert task.update_doc[F.status] == 'no_plate_box'

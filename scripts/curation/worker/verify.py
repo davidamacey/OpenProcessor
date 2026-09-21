@@ -46,7 +46,7 @@ class _VerifyOutcome:
 async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) -> _VerifyOutcome:
     """Verify and read a region in one VLM call.
 
-    A ``confidence='low'`` ``is_plate=True`` verdict is treated as a
+    A ``confidence='low'`` ``is_region=True`` verdict is treated as a
     rejection to keep the bar high — we'd rather route to the secondary
     segmenter than write a questionable region box. The returned
     outcome also carries ``text`` + ``text_confidence`` (None when the
@@ -54,7 +54,7 @@ async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) ->
     threads into :func:`_region_write_doc`.
     """
     verdict = await vlm.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg))
-    accepted = bool(verdict.is_plate) and verdict.confidence != 'low'
+    accepted = bool(verdict.is_region) and verdict.confidence != 'low'
     return _VerifyOutcome(
         ok=accepted,
         confidence=verdict.confidence,
