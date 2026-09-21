@@ -539,6 +539,23 @@ export-config: ## Export models from YAML config file (usage: make export-config
 		--save-labels \
 		--generate-config
 
+.PHONY: export-dual-head
+export-dual-head: ## Export a detector with a backbone feature-map output (usage: make export-dual-head MODEL=/app/pytorch_models/d.pt NAME=d_dual_head [IMGSZ=640] [BATCH=8])
+	@if [ -z "$(MODEL)" ] || [ -z "$(NAME)" ]; then \
+		echo "Error: MODEL and NAME parameters required"; \
+		echo "Usage: make export-dual-head MODEL=/app/pytorch_models/my_detector.pt NAME=my_detector_dual_head [IMGSZ=640] [BATCH=8]"; \
+		echo ""; \
+		echo "Produces output0 + sppf_feat; sppf_feat is RoI-pooled per detection"; \
+		echo "into the curation backbone embedding (see export/README.md)."; \
+		exit 1; \
+	fi
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_detector_dual_head.py \
+		--weights "$(MODEL)" \
+		--triton-name "$(NAME)" \
+		--imgsz "$(or $(IMGSZ),640)" \
+		--max-batch "$(or $(BATCH),8)" \
+		--formats onnx trt
+
 .PHONY: export-list
 export-list: ## List available built-in models
 	@$(COMPOSE) exec $(API_SERVICE) python /app/export/export_models.py --list-models
