@@ -108,7 +108,8 @@
    * Whether the backend advertises this export kind on
    * `GET {API_PREFIX}/methods`'s `export` axis. Absent ⇒ the panel and
    * the dataset-kind toggle that selects it are not rendered at all —
-   * absent, not disabled — and `refreshLprStatus()` is never called, so
+   * absent, not disabled — and `refreshSingleClassExportStatus()` is never
+   * called, so
    * a deployment that never ported the LPR exporter produces zero 404s
    * on this route. Never probe the export endpoint to find out; see
    * `isDatasetExportAvailable`.
@@ -122,10 +123,14 @@
   );
 
   // Which frozen export the training run targets: the multi-class vehicle
-  // dataset (current) or the single-class LPR dataset (lpr_current).
-  let datasetKind = $state<'vehicles' | 'lpr'>('vehicles');
+  // dataset (current) or the registered slot's single-class dataset (today,
+  // license_plate's `lpr_current`). `datasetKind` is `'vehicles'` or
+  // whatever string the active slot's `extras.datasetExport.datasetKind`
+  // declares — never a hardcoded second literal, so a second registered
+  // slot with its own dataset export needs no change here.
+  let datasetKind = $state<string>('vehicles');
   let vehiclesDir = $state<string>('');
-  let lprExportDir = $state<string>('');
+  let singleClassExportDir = $state<string>('');
   // All materialized dataset versions on disk (both kinds), newest first.
   let datasets = $state<OpDataset[]>([]);
   // Explicit operator pick. Empty => fall back to the `current` symlink for the
@@ -136,12 +141,14 @@
   const kindDatasets = $derived(datasets.filter((d) => d.kind === datasetKind));
   let datasetExportDir = $derived(
     selectedExportDir ||
-      (datasetKind === datasetExportSpec?.datasetKind ? lprExportDir : vehiclesDir),
+      (datasetKind === datasetExportSpec?.datasetKind
+        ? singleClassExportDir
+        : vehiclesDir),
   );
   let datasetMessage = $state<string | null>(null);
   let refreshing = $state<boolean>(false);
 
-  function selectDatasetKind(kind: 'vehicles' | 'lpr'): void {
+  function selectDatasetKind(kind: string): void {
     datasetKind = kind;
     selectedExportDir = ''; // reset to the current export of the new kind
   }
@@ -186,28 +193,33 @@
     return `${dir} (${n} imgs${samp}${tag}${cur}) ${when}`.trim();
   }
 
-  // ---- LPR (license-plate) export --------------------------------------
-  // Single-class plate dataset, built on demand. Backend is synchronous,
-  // so we just await it and surface the resulting dir + counts.
-  let lprExporting = $state<boolean>(false);
-  let lprMessage = $state<string | null>(null);
+  // ---- Single-class dataset export (today: license_plate's LPR export) --
+  // Built on demand via the active slot's `extras.datasetExport` spec.
+  // Backend is synchronous, so we just await it and surface the resulting
+  // dir + counts. The `exportLpr`/`exportLprStatus` API functions and
+  // `/export/lpr` wire path stay as-is — LPR is the only dataset export
+  // this deployment's backend implements today (see licensePlate.ts's
+  // `extras.datasetExport` comment) — but this page's own state/handler
+  // names no longer bake that in.
+  let singleClassExporting = $state<boolean>(false);
+  let singleClassExportMessage = $state<string | null>(null);
   // Export options. whole_frame = full source frame (deployment distribution);
   // vehicle_crop = parent vehicle crop with the plate re-projected. 640 for a
   // fast pass, 1280 for the full run. dedup collapses >=0.98 near-dup frames.
-  let lprImageMode = $state<'whole_frame' | 'vehicle_crop'>('whole_frame');
-  let lprImgSize = $state<640 | 1280>(1280);
-  let lprDedup = $state<boolean>(true);
+  let singleClassImageMode = $state<'whole_frame' | 'vehicle_crop'>('whole_frame');
+  let singleClassImgSize = $state<640 | 1280>(1280);
+  let singleClassDedup = $state<boolean>(true);
   // Optional N: sample at most this many positive (plate-bearing) frames,
   // spread EVENLY across plate clusters. Blank/0 == every positive. Lets us
   // build progressively larger dataset versions from the same labeled pool.
-  let lprMaxPositives = $state<number | null>(null);
+  let singleClassMaxPositives = $state<number | null>(null);
 
-  async function refreshLprStatus(): Promise<void> {
+  async function refreshSingleClassExportStatus(): Promise<void> {
     try {
       const s = await exportLprStatus();
-      lprExportDir = s.export_dir ?? '';
+      singleClassExportDir = s.export_dir ?? '';
     } catch {
-      // Non-fatal — the LPR export just hasn't run yet.
+      // Non-fatal — the export just hasn't run yet.
     }
   }
 
@@ -215,45 +227,47 @@
   // exists. Firing it unconditionally on mount is precisely the "never
   // 404" violation this task removes: on OpenProcessor,
   // `GET {API_PREFIX}/export/lpr/status` is not a registered route, and
-  // refreshLprStatus()'s bare `catch {}` made that invisible outside the
-  // network tab. Plain `let`, not `$state` — writing it must not
-  // re-trigger this effect.
-  let lprStatusRequested = false;
+  // refreshSingleClassExportStatus()'s bare `catch {}` made that invisible
+  // outside the network tab. Plain `let`, not `$state` — writing it must
+  // not re-trigger this effect.
+  let singleClassStatusRequested = false;
   $effect(() => {
-    if (datasetExportAvailable && !lprStatusRequested) {
-      lprStatusRequested = true;
-      void refreshLprStatus();
+    if (datasetExportAvailable && !singleClassStatusRequested) {
+      singleClassStatusRequested = true;
+      void refreshSingleClassExportStatus();
     }
   });
 
-  async function runLprExport(): Promise<void> {
-    lprExporting = true;
-    lprMessage = null;
+  async function runSingleClassExport(): Promise<void> {
+    singleClassExporting = true;
+    singleClassExportMessage = null;
     try {
       const r = await exportLpr({
-        image_mode: lprImageMode,
-        img_max_side: lprImgSize,
-        dedup_threshold: lprDedup ? 0.98 : null,
+        image_mode: singleClassImageMode,
+        img_max_side: singleClassImgSize,
+        dedup_threshold: singleClassDedup ? 0.98 : null,
         max_positive_images:
-          lprMaxPositives && lprMaxPositives > 0 ? lprMaxPositives : undefined,
+          singleClassMaxPositives && singleClassMaxPositives > 0
+            ? singleClassMaxPositives
+            : undefined,
       });
-      lprExportDir = r.export_dir;
+      singleClassExportDir = r.export_dir;
       // Refresh the picker so the new version shows up immediately.
       void refreshDataset();
       const pos = r.positive_images ?? '?';
       const fp = r.false_positive_background_images ?? '?';
-      const mode = r.image_mode ?? lprImageMode;
-      const size = r.img_max_side ?? lprImgSize;
-      lprMessage = `LPR export done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives), ${mode} @ ${size}px${lprDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      const mode = r.image_mode ?? singleClassImageMode;
+      const size = r.img_max_side ?? singleClassImgSize;
+      singleClassExportMessage = `LPR export done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives), ${mode} @ ${size}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
-        lprMessage += ' ⚠ zero positives — check plate labeling.';
+        singleClassExportMessage += ' ⚠ zero positives — check plate labeling.';
       }
       toastStore.success('LPR export complete');
     } catch (e) {
-      lprMessage = `LPR export failed: ${(e as Error).message}`;
+      singleClassExportMessage = `LPR export failed: ${(e as Error).message}`;
       toastStore.error('LPR export failed');
     } finally {
-      lprExporting = false;
+      singleClassExporting = false;
     }
   }
 
@@ -829,7 +843,7 @@
             datasetExportSpec?.datasetKind
               ? 'border-blue-500 bg-blue-950 text-blue-200'
               : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
-            onclick={() => selectDatasetKind(datasetExportSpec!.datasetKind as 'lpr')}
+            onclick={() => selectDatasetKind(datasetExportSpec!.datasetKind)}
           >
             LPR plates (single-class)
           </button>
@@ -897,18 +911,18 @@
         <button
           type="button"
           class="rounded border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
-          onclick={runLprExport}
-          disabled={lprExporting}
+          onclick={runSingleClassExport}
+          disabled={singleClassExporting}
         >
-          {lprExporting ? 'Exporting…' : 'Build LPR export'}
+          {singleClassExporting ? 'Exporting…' : 'Build LPR export'}
         </button>
       </div>
       <div class="mt-3 flex flex-wrap items-end gap-4">
         <label class="block">
           <span class="mb-1 block text-xs text-zinc-400">image mode</span>
           <select
-            bind:value={lprImageMode}
-            disabled={lprExporting}
+            bind:value={singleClassImageMode}
+            disabled={singleClassExporting}
             class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           >
             <option value="whole_frame">whole frame</option>
@@ -918,8 +932,8 @@
         <label class="block">
           <span class="mb-1 block text-xs text-zinc-400">image size</span>
           <select
-            bind:value={lprImgSize}
-            disabled={lprExporting}
+            bind:value={singleClassImgSize}
+            disabled={singleClassExporting}
             class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           >
             <option value={640}>640 (fast)</option>
@@ -935,13 +949,17 @@
             min="0"
             step="500"
             placeholder="all"
-            bind:value={lprMaxPositives}
-            disabled={lprExporting}
+            bind:value={singleClassMaxPositives}
+            disabled={singleClassExporting}
             class="w-32 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           />
         </label>
         <label class="flex items-center gap-2 pb-1.5">
-          <input type="checkbox" bind:checked={lprDedup} disabled={lprExporting} />
+          <input
+            type="checkbox"
+            bind:checked={singleClassDedup}
+            disabled={singleClassExporting}
+          />
           <span class="text-xs text-zinc-400">dedup near-dup frames (cos ≥ 0.98)</span>
         </label>
       </div>
@@ -949,11 +967,13 @@
         N samples positives spread <em>evenly across plate clusters</em> — build a small set
         first, then a larger one from the same labeled pool for progressive training.
       </p>
-      {#if lprExportDir}
-        <p class="mt-1 break-all font-mono text-sm text-zinc-200">{lprExportDir}</p>
+      {#if singleClassExportDir}
+        <p class="mt-1 break-all font-mono text-sm text-zinc-200">
+          {singleClassExportDir}
+        </p>
       {/if}
-      {#if lprMessage}
-        <p class="mt-2 text-xs text-zinc-400">{lprMessage}</p>
+      {#if singleClassExportMessage}
+        <p class="mt-2 text-xs text-zinc-400">{singleClassExportMessage}</p>
       {:else}
         <p class="mt-2 text-xs text-zinc-500">
           Single-class plate dataset (positives + human FP hard-negatives + a sample of

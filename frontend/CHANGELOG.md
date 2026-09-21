@@ -108,6 +108,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `/train/+page.svelte`'s own internal state for the single-class dataset
+  export panel is renamed off vehicle/lpr-specific naming: `datasetKind`
+  is now typed `string` instead of the hardcoded `'vehicles' | 'lpr'`
+  union (removing a `datasetExportSpec.datasetKind as 'lpr'` cast that
+  forced a generically-typed spec value back into a hardcoded literal),
+  and the LPR-export local state/handlers (`lprExportDir`, `lprExporting`,
+  `lprMessage`, `lprImageMode`, `lprImgSize`, `lprDedup`,
+  `lprMaxPositives`, `refreshLprStatus`, `runLprExport`) are renamed to
+  `singleClassExportDir`/`singleClassExporting`/`singleClassExportMessage`/
+  `singleClassImageMode`/`singleClassImgSize`/`singleClassDedup`/
+  `singleClassMaxPositives`/`refreshSingleClassExportStatus`/
+  `runSingleClassExport`. Pure identifier/type rename with the
+  capability-gating mechanism (`extras.datasetExport`, the `/methods`
+  `export` axis check) completely unchanged; `TrainForm.svelte` already
+  used the generic `singleClassExport` prop name from T-C3 and needed no
+  further change. The `exportLpr`/`exportLprStatus` API functions and the
+  `/export/lpr` wire path are untouched — they name the one dataset
+  export this deployment's backend actually implements today, not a
+  hardcoded assumption on Cropwright's side.
 - `/train`'s LPR export panel is now gated on server capability instead
   of being hardcoded (P2.15). `GET {API_PREFIX}/methods` grew an `export`
   axis listing the dataset-export kinds a deployment can actually produce;
