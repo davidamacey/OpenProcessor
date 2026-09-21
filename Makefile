@@ -551,6 +551,15 @@ export-mobileclip: ## Export MobileCLIP models
 	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_text_encoder.py
 	@$(MAKE) restart-triton
 
+.PHONY: export-pe
+export-pe: ## Export the PE-Core image encoder (curation pe_embedding) to ONNX + TensorRT
+	@echo "Exporting PE-Core-L14-336 image encoder to ONNX..."
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_image_encoder.py
+	@echo "Building the TensorRT engine (Path 1)..."
+	@echo "  On failure, fall back to: bash export/build_pe_ort_fallback.sh"
+	ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh
+	@$(MAKE) restart-triton
+
 .PHONY: export-status
 export-status: ## Show status of all exported models
 	@echo "==================================================================================="

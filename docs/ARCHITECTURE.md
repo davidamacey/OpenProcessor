@@ -135,6 +135,7 @@ consumer among anticipated others) is documented in
 | Scoring + selection | `src/services/curation/item_scores/`, `selection/` | Mistakenness/uniqueness/near-dup scores; k-center-greedy diverse sampling |
 | Review | `src/services/curation/{review_queries,review_sorts,holdout}.py` | `/review` tab query construction, sort strategies, frozen test-holdout |
 | Semantic search | `src/services/curation/semantic_search.py` | PE-Core kNN text→image search over the items index |
+| PE-Core embeddings | `src/clients/pe_encoder.py`, `src/services/detection/pe_preprocess.py` | Triton `pe_image_encoder` (images) + in-process CPU PyTorch (text). Build the Triton side with `export/export_pe_image_encoder.py` + `export/build_pe_trt.sh` (or `build_pe_ort_fallback.sh`) — see [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings) |
 | Auto-label pipeline | `src/services/curation/autolabel/` | File-backed job dispatch to the long-lived auto-label worker |
 | Export | `src/services/curation/export.py` | Generic YOLO-format dataset export (deterministic split, manifest checksum) |
 | Detection cascade | `src/services/detection/` | Crop quality, frame dedup, PE preprocessing, ensemble NMS, region lean, FP store, cascade orchestration |

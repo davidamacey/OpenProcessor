@@ -86,6 +86,24 @@ Stated up front, honestly, rather than discovered in production:
 Nothing in this subsystem ships a pretrained region-detector, VLM, or
 trainer. A deployment supplies:
 
+- **An image-embedding model — `pe_image_encoder` (required, not
+  optional).** Unlike everything else in this list, the Triton model
+  *name* here is hardcoded, not configurable: `src/clients/pe_encoder.py`
+  calls `pe_image_encoder` with a single FP32 input `images`
+  `[B, 3, 336, 336]` and reads a single FP32 output `image_embeddings`
+  `[B, 1024]`. The result is stored as the `pe_embedding` field and is
+  what semantic search (`GET /curation/search/text`), near-duplicate
+  detection, residual clustering and the embedding visualization all run
+  on — without it, ingest cannot write an embedding and those features
+  have nothing to query. This repo **does** ship the export chain for it:
+  `export/export_pe_image_encoder.py` (PE-Core-L14-336 vision tower →
+  ONNX), then `export/build_pe_trt.sh` (→ TensorRT plan) or
+  `export/build_pe_ort_fallback.sh` (serve the ONNX directly when the
+  TensorRT build fails on PE's attention-pool ops). See
+  [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings).
+  Swapping in a different embedding model means keeping that same Triton
+  model name and tensor contract, and matching the preprocessing in
+  `src/services/detection/pe_preprocess.py`.
 - **A region-of-interest detector** — any Triton model whose name you
   set as `DetectionProfile.detector_model` (via `OP_DETECTION_*` env
   vars or a constructed instance). Ingest returns `503` until one is
@@ -235,19 +253,24 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    edit `classes` for your domain, or start from an empty
    `{"version": 1, "updated_at": "...", "classes": []}` and add classes
    via `POST /curation/classes`.
-3. Configure at least a detector model in `DetectionProfile` (env or
+3. Build and load the `pe_image_encoder` Triton model — see "Models you
+   must supply" above and
+   [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings).
+   Ingest writes no `pe_embedding` without it, and semantic search /
+   near-dup / clustering then have nothing to operate on.
+4. Configure at least a detector model in `DetectionProfile` (env or
    constructed instance) — ingest 503s until one is set.
-4. Ingest images: `POST /curation/ingest/image` for one image at a
+5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
    walk with a resumable progress file.
-5. Optionally bring up the async workers (`--profile curation`) so
+6. Optionally bring up the async workers (`--profile curation`) so
    detection/labeling/clustering keep running without you driving each
    step by hand.
-6. Browse and label via `GET /curation/crops`, `PUT
+7. Browse and label via `GET /curation/crops`, `PUT
    /curation/crops/{crop_id}/label`, etc., or point a labeling frontend
    (Cropwright is the first such consumer) at the API — see
    [`docs/design/curation_api_contract.md`](design/curation_api_contract.md).
-7. Export a dataset with `POST /curation/export/yolo` once you have
+8. Export a dataset with `POST /curation/export/yolo` once you have
    labeled data — or `POST /curation/export/single_class` to build a
    narrowed dataset for one class (or a class subset), which adds
    background/hard-negative frames the narrowed detector needs and a
