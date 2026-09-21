@@ -1,21 +1,27 @@
 <script lang="ts">
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
-  import { sourceToCropFrame } from '$lib/bboxFrames';
   import type { BBoxNorm, OpCrop, LabelSource } from '$lib/types';
+  import { slotOf } from '$lib/annotations/cropSlots';
+  import { slotForClassName } from '$lib/annotations/registeredSlots';
+  import type { SlotSpec } from '$lib/annotations/types';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
 
   interface Props {
     crop: OpCrop;
+    /** Slot whose sub-box/ring this card overlays. Defaults to whatever
+     *  slot is bound to the crop's own class — every current call site
+     *  relies on that default rather than passing one explicitly. */
+    slot?: SlotSpec;
     selected?: boolean;
     onclick?: (crop: OpCrop, e: MouseEvent) => void;
     onacceptGemma?: (crop: OpCrop) => void;
     onrejectGemma?: (crop: OpCrop) => void;
     /**
-     * Optional callback fired after the plate editor saves a new
-     * source-frame plate box (or null for "no plate visible"). Lets the
-     * page update local state without a full reload.
+     * Optional callback fired after the slot editor saves a new
+     * source-frame sub-box (or null for "not visible"). Lets the page
+     * update local state without a full reload.
      */
-    onplatesaved?: (cropId: string, plateBboxSrc: BBoxNorm | null) => void;
+    onslotsaved?: (cropId: string, boxSrc: BBoxNorm | null) => void;
     /**
      * Optional "open details" hook — wires the per-card "ⓘ" affordance
      * to a parent-owned CropDetailModal so the cluster grid can show the
@@ -26,13 +32,16 @@
 
   let {
     crop,
+    slot,
     selected = false,
     onclick,
     onacceptGemma,
     onrejectGemma,
-    onplatesaved,
+    onslotsaved,
     ondetail,
   }: Props = $props();
+
+  const activeSlot = $derived(slot ?? slotForClassName(crop.class_name));
 
   let expanded = $state<boolean>(false);
   let plateEditorOpen = $state<boolean>(false);
@@ -54,34 +63,27 @@
     imgNaturalH = img.naturalHeight || 0;
   }
 
-  // `plate_status` is a forward-tolerant field on OpCrop — the type
-  // header in types.ts says we accept extra server fields silently —
-  // so we read it via a narrow cast instead of widening the public type
-  // (which is outside this task's allowed-modify list).
-  const plateStatus = $derived<string | null>(
-    (crop as unknown as { plate_status?: string | null }).plate_status ?? null,
-  );
+  // Slot data for the active slot, read off the already-mapped crop —
+  // never re-derived via readSlot() (§2.4 of the plan: a OpCrop's boxes
+  // are BBoxNorm, not the XYXY readSlot expects).
+  const slotData = $derived(slotOf(crop, activeSlot));
 
-  // The predicate for "a human has confirmed this plate" is the boolean
-  // `plate_verified` field, not a status string — `plate_status` never
-  // takes the value `'human_confirmed'` (see Finding C.3,
+  // The predicate for "a human has confirmed this box" is the boolean
+  // `verified` field, not a status string (see Finding C.3,
   // docs/genericization-plan-2026-09-13.md §2.7 / §3.8).
-  const plateVerified = $derived<boolean>(
-    !!(crop as unknown as { plate_verified?: boolean | null }).plate_verified,
+  const slotVerified = $derived<boolean>(!!slotData?.lifecycle?.verified);
+
+  const noSlot = $derived(
+    activeSlot?.capabilities.lifecycle != null &&
+      slotData?.lifecycle?.status === activeSlot.capabilities.lifecycle.rejectState,
   );
 
-  const noPlate = $derived(plateStatus === 'no_plate_visible');
-
-  // Convert the source-frame plate bbox to the crop's local frame so we
-  // can overlay it on the thumbnail. Returns null when no plate, when
-  // the human said "no plate", or when the parent vehicle box is
-  // degenerate (sourceToCropFrame guard).
-  const plateInCrop = $derived.by<BBoxNorm | null>(() => {
-    if (noPlate) return null;
-    if (!crop.plate_bbox_norm) return null;
-    if (!crop.bbox_norm) return null;
-    return sourceToCropFrame(crop.plate_bbox_norm, crop.bbox_norm);
-  });
+  // The sub-box, already projected into the parent-crop frame by
+  // readSlot's own projection at mapping time — no second hand-rolled
+  // projection here.
+  const plateInCrop = $derived<BBoxNorm | null>(
+    noSlot ? null : (slotData?.subBox?.parent ?? null),
+  );
 
   // Letterbox-compensated ring rectangle (percent of the aspect-square
   // container). When natural dims aren't known yet (still loading), fall
@@ -120,22 +122,17 @@
     };
   });
 
-  // Ring color: green when a human has confirmed the plate (plate_verified
-  // === true), yellow for unverified machine-suggested plates. Mirrors
-  // §11.3 of the design doc.
-  //
-  // Previously this checked `plateStatus === 'human_confirmed' ||
-  // plateStatus === 'detected'`. `'human_confirmed'` is not a value the
-  // backend can ever produce (openprocessor's PlateStatus has 8 members, none
-  // of them that) — so the first branch was dead, and 'detected' (what the
-  // pipeline writes for every machine detection, verified or not) matched
-  // the second branch, meaning every machine-detected plate rendered the
-  // green "human confirmed" ring. See Finding C.3 /
-  // docs/genericization-plan-2026-09-13.md §2.7.
+  // Ring color: green when a human has confirmed the sub-box (verified
+  // === true), yellow for unverified machine-suggested boxes. Mirrors
+  // §11.3 of the design doc, and Finding C.3
+  // (docs/genericization-plan-2026-09-13.md §2.7): `verified` — not any
+  // status value — is the correct predicate for the confirmed ring.
   const plateRingColorClass = $derived(
-    plateVerified
-      ? 'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]'
-      : 'border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45)]',
+    slotVerified
+      ? (activeSlot?.capabilities.subBox?.ring.confirmed ??
+          'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]')
+      : (activeSlot?.capabilities.subBox?.ring.proposed ??
+          'border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45)]'),
   );
 
   // Badge color + text reflect the ACTUAL source of the validated label.
@@ -226,12 +223,13 @@
       }}
     />
 
-    {#if noPlate}
+    {#if noSlot}
       <span
         class="absolute top-1 left-1 rounded-sm border border-zinc-500/60 bg-zinc-700/70 px-1 py-0.5 font-mono text-[10px] text-zinc-200"
-        title="Plate marked as not visible by a human reviewer"
+        title="{activeSlot?.label.title ??
+          'Slot'} marked as not visible by a human reviewer"
       >
-        no plate
+        no {activeSlot?.label.singular ?? 'box'}
       </span>
     {:else if ringRectPct}
       <!--
@@ -254,7 +252,7 @@
       <span
         class="absolute top-1 left-1 rounded-sm border border-blue-400/60 bg-blue-500/30 px-1 py-0.5 font-mono text-[10px] text-white"
       >
-        plate
+        {activeSlot?.label.singular ?? 'box'}
       </span>
     {/if}
 
@@ -265,8 +263,8 @@
         e.stopPropagation();
         plateEditorOpen = true;
       }}
-      aria-label="Edit plate box"
-      title="Edit plate (✎)"
+      aria-label="Edit {activeSlot?.label.singular ?? 'box'}"
+      title="Edit {activeSlot?.label.singular ?? 'box'} (✎)"
     >
       ✎
     </button>
@@ -378,7 +376,7 @@
     onclose={() => (plateEditorOpen = false)}
     onsave={(plateSrc) => {
       plateEditorOpen = false;
-      onplatesaved?.(crop.id, plateSrc);
+      onslotsaved?.(crop.id, plateSrc);
     }}
   />
 {/if}
