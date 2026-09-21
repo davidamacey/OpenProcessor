@@ -16,7 +16,7 @@ aiohttp>=3.9.0
 locust>=2.31.0
 
 # Data analysis and visualization (for benchmark results)
-pandas>=2.2.0
+pandas>=3.0.6
 numpy>=1.26.0
 matplotlib>=3.9.0
 
