@@ -12,6 +12,7 @@ dist/
 .idea/
 coverage/
 .cache/
+__pycache__/
 
 # Diagnostic image dumps from /diagnostics scripts (generated per run,
 # not part of the source tree). Keep the scripts and any READMEs.

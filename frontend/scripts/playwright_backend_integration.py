@@ -312,7 +312,23 @@ def step2_thumbnails(page: Any, front: str, api: Api, timeout: int) -> bool:
         return any(i["naturalWidth"] > 0 for i in imgs), imgs
 
     clusters_ok, clusters_imgs = render_check("/clusters", "clusters grid")
-    plates_ok, plates_imgs = render_check("/clusters?class=license_plate", "plates gallery")
+
+    # The plates gallery (and the region_thumbnail guard below, which can
+    # only observe a src if the gallery has rows to render) only has
+    # anything to show on a deployment whose class registry actually
+    # includes `license_plate` -- a from-scratch generic test dataset
+    # (e.g. a warehouse/pallet domain) legitimately has none, and an
+    # empty gallery there is correct behavior, not a failure. Check the
+    # registry first so this step reports a skip instead of a false FAIL.
+    classes = http_get(api.url("/classes"))
+    has_lp_class = any(
+        c.get("class_name") == "license_plate" for c in classes.get("classes", [])
+    )
+
+    if has_lp_class:
+        plates_ok, plates_imgs = render_check("/clusters?class=license_plate", "plates gallery")
+    else:
+        plates_ok, plates_imgs = True, []  # nothing to assert; see skip note below
 
     region_seg = f"{api.prefix}/crops/"
     has_region = any(
@@ -322,17 +338,27 @@ def step2_thumbnails(page: Any, front: str, api: Api, timeout: int) -> bool:
     ok = check(
         "step 2: >=1 <img> naturalWidth>0 on /clusters and the plates gallery",
         clusters_ok and plates_ok,
-        f"clusters_ok={clusters_ok} plates_ok={plates_ok}",
+        f"clusters_ok={clusters_ok} plates_ok={plates_ok}"
+        + ("" if has_lp_class else " (skipped: no license_plate class in this dataset)"),
     )
     ok2 = check(
         "step 2: >=1 rendered src contains {prefix}/crops/...region_thumbnail (bug-#3 guard)",
-        has_region,
-        f"sample srcs={[i['src'] for i in plates_imgs[:3]]}",
+        has_region if has_lp_class else True,
+        f"sample srcs={[i['src'] for i in plates_imgs[:3]]}"
+        if has_lp_class
+        else "skipped: no license_plate class in this dataset",
     )
     record_step(
         2,
         "thumbnails render",
-        [{"clusters_ok": clusters_ok, "plates_ok": plates_ok, "has_region_thumb": has_region}],
+        [
+            {
+                "clusters_ok": clusters_ok,
+                "plates_ok": plates_ok,
+                "has_region_thumb": has_region,
+                "has_license_plate_class": has_lp_class,
+            }
+        ],
     )
     return ok and ok2
 
@@ -567,19 +593,42 @@ def _sse_probe(page: Any, path: str, timeout_ms: int) -> dict[str, Any]:
     )
 
 
+def _same_origin(a: str, b: str) -> bool:
+    """True iff `a` and `b` share scheme+host+port (Python has no `new URL()`)."""
+    pat = re.compile(r"^([a-zA-Z][a-zA-Z0-9+.-]*://[^/]+)")
+    ma, mb = pat.match(a), pat.match(b)
+    return bool(ma and mb and ma.group(1) == mb.group(1))
+
+
 def step10_sse(page: Any, front: str, api: Api) -> bool:
     # Must run inside the page via page.evaluate -- the point is the
     # browser's view of the SSE endpoint through nginx, not Python's.
-    # Same-origin relative path (api.relative()), matching sse.ts's own
-    # ${apiBase}${API_PREFIX}/events construction -- not --api's origin.
+    #
+    # sse.ts itself picks same-origin-relative vs. absolute based on
+    # whether apiBase is a cross-origin URL (see its own `apiBase &&
+    # /^https?:\/\//i.test(apiBase)` branch) -- this probe must mirror
+    # that same branch, not hardcode the same-origin (production nginx
+    # proxy) case. In a same-origin run (--url and --api share an
+    # origin, or --api is unset/relative), api.relative() is correct
+    # and matches sse.ts. In a cross-origin dev-server run (--api on a
+    # different host/port than --url, as in a `npm run dev` +
+    # PUBLIC_TRITON_API_URL=<remote> smoke test), a relative path
+    # resolves against the WRONG origin (the frontend's, not the
+    # API's) and this probe would report a false failure having tested
+    # nothing -- use the absolute api.url() in that case instead.
+    same_origin = _same_origin(front, api.origin)
+    events_path = api.relative("/events") if same_origin else api.url("/events")
+    pipeline_path = (
+        api.relative("/pipeline/events") if same_origin else api.url("/pipeline/events")
+    )
     page.goto(front, wait_until="domcontentloaded")
-    result = _sse_probe(page, api.relative("/events"), 8000)
+    result = _sse_probe(page, events_path, 8000)
     ok1 = check(
         "step 10: GET {prefix}/events reaches readyState==1 (OPEN), no error",
         not result.get("error"),
         f"{result}",
     )
-    result2 = _sse_probe(page, api.relative("/pipeline/events"), 8000)
+    result2 = _sse_probe(page, pipeline_path, 8000)
     ok2 = check(
         "step 10: GET {prefix}/pipeline/events reaches readyState==1 (OPEN), no error",
         not result2.get("error"),
@@ -607,11 +656,17 @@ def step11_export_gating(api: Api, page: Any, front: str) -> bool:
     ok2 = check("step 11: /train renders no LPR export panel", not lpr_panel_present)
 
     page.goto(f"{front}/export", wait_until="domcontentloaded")
+    # /export only ever offers a YOLO-format export (the axis=export
+    # entry checked above is literally id=='yolo') -- any "trigger an
+    # export" control on this page IS the YOLO control, whether or not
+    # its visible label spells "yolo" literally. The live label is
+    # "Export to staging" / "Re-export", so match on the export verb
+    # instead of assuming a specific brand string in the button copy.
     yolo_control_present = page.evaluate(
         "() => Array.from(document.querySelectorAll('button, [role=button]'))"
-        ".some(b => /yolo/i.test(b.textContent || ''))"
+        ".some(b => /yolo|export/i.test(b.textContent || ''))"
     )
-    ok3 = check("step 11: /export's YOLO control is present", yolo_control_present)
+    ok3 = check("step 11: /export's export-trigger control is present", yolo_control_present)
 
     export_status_code = None
     try:
