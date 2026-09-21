@@ -243,6 +243,8 @@ async def import_yolo_labels(
     registry: ClassRegistry,
     opensearch: AsyncOpenSearch,
     label_source: str = DEFAULT_LABEL_SOURCE,
+    detect_mismatches: bool = False,
+    mismatch_sink: list[dict[str, Any]] | None = None,
 ) -> int:
     """Import a single YOLO label ``.txt`` -> labels_confirmed + item validation.
 
@@ -252,6 +254,15 @@ async def import_yolo_labels(
         registry: ClassRegistry (used for deprecated/unmapped checks + class_name).
         opensearch: AsyncOpenSearch client.
         label_source: stored on each labels_confirmed row + item update.
+        detect_mismatches: When true, an IoU-matched item whose existing
+            detector ``class_id`` disagrees with the ground-truth label
+            is stamped ``class_mismatch=true`` (plus the detector's class
+            and confidence) on its ``labels_confirmed`` row, and appended
+            to ``mismatch_sink``. This is the model-vs-ground-truth
+            disagreement report for a re-ingest-and-verify pass; it never
+            changes which class is written — the label always wins.
+        mismatch_sink: Optional list that mismatch records are appended
+            to, so a caller can count/inspect them without re-querying.
 
     Returns:
         Number of label rows indexed.
@@ -296,8 +307,32 @@ async def import_yolo_labels(
                 best_iou = score
                 best_crop = crop
         target_crop_id: str
+        mismatch: dict[str, Any] | None = None
         if best_crop is not None and best_iou >= LABEL_IOU_MATCH:
             target_crop_id = str(best_crop.get('crop_id') or best_crop['_id'])
+            if detect_mismatches:
+                detector_class_id = best_crop.get('class_id')
+                if detector_class_id is not None and int(detector_class_id) != cls_id:
+                    mismatch = {
+                        'crop_id': target_crop_id,
+                        'image_path': str(image_path),
+                        'bbox_norm': bbox_norm,
+                        'label_class_id': cls_id,
+                        'label_class_name': class_name,
+                        'detector_class_id': int(detector_class_id),
+                        'detector_class_name': best_crop.get('class_name'),
+                        'detector_class_source': best_crop.get('class_source'),
+                        'detector_confidence': best_crop.get('confidence'),
+                        'iou': best_iou,
+                    }
+                    if mismatch_sink is not None:
+                        mismatch_sink.append(mismatch)
+                    logger.info(
+                        'label_import_class_mismatch',
+                        crop_id=target_crop_id,
+                        label_class_id=cls_id,
+                        detector_class_id=int(detector_class_id),
+                    )
             bulk_body.append({'update': {'_index': _items_index(), '_id': target_crop_id}})
             bulk_body.append(
                 {
@@ -347,6 +382,16 @@ async def import_yolo_labels(
                 'label_source': label_source,
                 'confirmed_at': now,
                 'crop_id': target_crop_id,
+                **(
+                    {
+                        'class_mismatch': True,
+                        'detector_class_id': mismatch['detector_class_id'],
+                        'detector_class_name': mismatch['detector_class_name'],
+                        'detector_confidence': mismatch['detector_confidence'],
+                    }
+                    if mismatch is not None
+                    else {}
+                ),
             }
         )
 
@@ -372,6 +417,7 @@ async def import_labels_batch(
     registry: ClassRegistry,
     opensearch: AsyncOpenSearch,
     label_source: str = DEFAULT_LABEL_SOURCE,
+    detect_mismatches: bool = False,
 ) -> dict[str, int]:
     """Batch-import many image+label pairs.
 
@@ -380,25 +426,33 @@ async def import_labels_batch(
         registry: ClassRegistry.
         opensearch: AsyncOpenSearch client.
         label_source: passed to :func:`import_yolo_labels`.
+        detect_mismatches: passed to :func:`import_yolo_labels`; the
+            per-file mismatch records are aggregated into the returned
+            ``mismatches`` count.
 
     Returns:
-        ``{labels_imported, files_processed, files_failed}``.
+        ``{labels_imported, files_processed, files_failed, mismatches}``.
     """
     summary = {
         'labels_imported': 0,
         'files_processed': 0,
         'files_failed': 0,
+        'mismatches': 0,
     }
     for image_path, label_path in pairs:
         try:
+            sink: list[dict[str, Any]] = []
             n = await import_yolo_labels(
                 image_path,
                 label_path,
                 registry,
                 opensearch,
                 label_source=label_source,
+                detect_mismatches=detect_mismatches,
+                mismatch_sink=sink,
             )
             summary['labels_imported'] += n
+            summary['mismatches'] += len(sink)
             summary['files_processed'] += 1
         except Exception as exc:
             logger.warning(

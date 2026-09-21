@@ -240,7 +240,18 @@ class FakeIngestOpenSearch:
                     self.items[doc_id] = doc
                     self._seq[doc_id] = 1
                     items.append({'create': {'_id': doc_id, 'status': 201}})
-            else:  # pragma: no cover - defensive, ingest never emits bare 'update' actions in bulk
+            elif 'update' in action:
+                # label_import emits partial-doc updates against items it
+                # IoU-matched to an existing detector proposal.
+                meta = action['update']
+                doc_id = meta['_id']
+                target = self.images if meta['_index'] != items_index else self.items
+                if doc_id in target:
+                    target[doc_id].update(doc.get('doc', {}))
+                    items.append({'update': {'_id': doc_id, 'status': 200}})
+                else:
+                    items.append({'update': {'_id': doc_id, 'status': 404}})
+            else:  # pragma: no cover - defensive
                 msg = f'unsupported bulk action: {action}'
                 raise ValueError(msg)
         errors = any(next(iter(i.values())).get('status') not in (200, 201) for i in items)

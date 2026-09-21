@@ -72,6 +72,30 @@ def iou(a: tuple[float, float, float, float], b: tuple[float, float, float, floa
     return inter / union
 
 
+def letterbox_params(
+    img: Image.Image,
+    target: int,
+) -> tuple[float, tuple[float, float]]:
+    """The ``(scale, (pad_w, pad_h))`` :func:`letterbox_to_square` would produce.
+
+    Pure arithmetic — no resize, no allocation. Callers that already hold
+    a detector's raw output and only need the parameters to map boxes
+    back to source coordinates use this instead of re-letterboxing the
+    image just to throw the pixels away.
+
+    Raises:
+        ValueError: If ``img`` has a zero-size dimension.
+    """
+    orig_w, orig_h = img.size
+    if orig_w == 0 or orig_h == 0:
+        msg = f'degenerate image size: ({orig_w}, {orig_h})'
+        raise ValueError(msg)
+    scale = min(target / orig_h, target / orig_w)
+    new_w = max(1, round(orig_w * scale))
+    new_h = max(1, round(orig_h * scale))
+    return float(scale), ((target - new_w) / 2.0, (target - new_h) / 2.0)
+
+
 def letterbox_to_square(
     img: Image.Image,
     target: int,
@@ -191,6 +215,7 @@ __all__ = [
     'crop_id',
     'crop_to_jpeg',
     'iou',
+    'letterbox_params',
     'letterbox_to_square',
     'roi_pool_sppf',
     'undo_letterbox',
