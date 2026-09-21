@@ -1,11 +1,12 @@
-"""Two-stage in-house pipeline: vehicle detect -> crop -> LPR -> map back.
+"""Generic two-stage pipeline: coarse detect -> crop -> fine detect -> map back.
 
-The deployed LPR model runs on vehicle crops at 640, where plates are
-large. To score it on the SAME full-frame benchmark as the single-pass
-public detectors, we wrap the real pipeline: detect vehicles, crop each
-(with padding), run the crop-based LPR detector, and project plate boxes
-back to full-frame coordinates, then NMS. Documented in the paper as a
-pipeline (two models) vs the single-pass contenders.
+A fine-grained model often runs on a coarse-detector's crop, where its
+target is large in-frame (e.g. a plate detector on a vehicle crop). To
+score it on the SAME full-frame benchmark as single-pass detectors, this
+wraps the real pipeline: detect coarse regions, crop each (with padding),
+run the fine-grained detector on the crop, and project its boxes back to
+full-frame coordinates, then NMS. Originated for a vehicle->plate
+cascade; the two detectors and their classes are entirely caller-supplied.
 """
 
 from __future__ import annotations
@@ -23,50 +24,50 @@ if TYPE_CHECKING:
 
 
 class TwoStageDetector:
-    """Compose a vehicle-region detector with a crop-based LPR detector."""
+    """Compose a coarse-region detector with a crop-based fine detector."""
 
     runtime = 'two-stage'
 
     def __init__(
         self,
-        vehicle: Detector,
-        lpr: Detector,
+        primary: Detector,
+        secondary: Detector,
         *,
-        name: str = 'in-house 2-stage (vehicle->crop->LPR)',
+        name: str = 'two-stage (coarse->crop->fine)',
         pad_frac: float = 0.1,
-        vehicle_conf: float = 0.25,
+        primary_conf: float = 0.25,
         nms_iou: float = 0.45,
     ) -> None:
-        self.vehicle = vehicle
-        self.lpr = lpr
+        self.primary = primary
+        self.secondary = secondary
         self.name = name
         self.pad_frac = pad_frac
-        self.vehicle_conf = vehicle_conf
+        self.primary_conf = primary_conf
         self.nms_iou = nms_iou
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
         h, w = image_rgb.shape[:2]
-        plate_dets: list[Detection] = []
-        for veh in self.vehicle.detect(image_rgb):
-            if veh.score < self.vehicle_conf:
+        dets: list[Detection] = []
+        for region in self.primary.detect(image_rgb):
+            if region.score < self.primary_conf:
                 continue
-            cx1, cy1, cx2, cy2 = self._padded_crop(veh, w, h)
+            cx1, cy1, cx2, cy2 = self._padded_crop(region, w, h)
             if cx2 - cx1 < 2 or cy2 - cy1 < 2:
                 continue
             crop = image_rgb[cy1:cy2, cx1:cx2]
-            plate_dets.extend(
+            dets.extend(
                 Detection(p.x1 + cx1, p.y1 + cy1, p.x2 + cx1, p.y2 + cy1, p.score)
-                for p in self.lpr.detect(crop)
+                for p in self.secondary.detect(crop)
             )
-        return self._nms(plate_dets)
+        return self._nms(dets)
 
-    def _padded_crop(self, veh: Detection, w: int, h: int) -> tuple[int, int, int, int]:
-        bw, bh = veh.x2 - veh.x1, veh.y2 - veh.y1
+    def _padded_crop(self, region: Detection, w: int, h: int) -> tuple[int, int, int, int]:
+        bw, bh = region.x2 - region.x1, region.y2 - region.y1
         px, py = bw * self.pad_frac, bh * self.pad_frac
-        x1 = max(0, int(veh.x1 - px))
-        y1 = max(0, int(veh.y1 - py))
-        x2 = min(w, int(veh.x2 + px))
-        y2 = min(h, int(veh.y2 + py))
+        x1 = max(0, int(region.x1 - px))
+        y1 = max(0, int(region.y1 - py))
+        x2 = min(w, int(region.x2 + px))
+        y2 = min(h, int(region.y2 + py))
         return x1, y1, x2, y2
 
     def _nms(self, dets: list[Detection]) -> list[Detection]:

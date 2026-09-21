@@ -1,9 +1,7 @@
 """Ultralytics backend — runs any ``.pt``/``.onnx`` Ultralytics model.
 
-Covers the current ``best.pt``, the new full-frame YOLO26 contender, and
-public Ultralytics-format detectors (DeepPlate YOLOv11, YOLOv8 ALPR). For
-multi-class public models, pass ``plate_class_id`` to keep only the plate
-class; single-class plate models keep everything.
+For multi-class public models, pass ``pred_class_id`` to keep only the
+target class; single-class models keep everything.
 """
 
 from __future__ import annotations
@@ -31,7 +29,7 @@ class UltralyticsDetector:
         device: str | int = 0,
         conf: float = 0.001,
         iou: float = 0.7,
-        plate_class_id: int | None = None,
+        pred_class_id: int | None = None,
         keep_classes: set[int] | None = None,
         half: bool = True,
     ) -> None:
@@ -42,10 +40,10 @@ class UltralyticsDetector:
         self.device = device
         self.conf = conf
         self.iou = iou
-        self.plate_class_id = plate_class_id
+        self.pred_class_id = pred_class_id
         # When set, keep only these class ids (e.g. COCO vehicle classes
-        # {2,3,5,7} for the crop-mode vehicle stage). Takes precedence over
-        # plate_class_id.
+        # {2,3,5,7} for an example crop-mode coarse stage). Takes precedence
+        # over pred_class_id.
         self.keep_classes = keep_classes
         self.half = half
         self._model = YOLO(weights)
@@ -75,7 +73,7 @@ class UltralyticsDetector:
             if self.keep_classes is not None:
                 if cls not in self.keep_classes:
                     continue
-            elif self.plate_class_id is not None and cls != self.plate_class_id:
+            elif self.pred_class_id is not None and cls != self.pred_class_id:
                 continue
             out.append(Detection(float(x1), float(y1), float(x2), float(y2), float(score)))
         return out

@@ -1,10 +1,11 @@
 """Triton gRPC backend — scores the actually-deployed TRT engine.
 
-This measures the production path (lpr_nanov11_640 TensorRT FP16 served by
-Triton), so its accuracy vs the same weights run through Ultralytics is a
-real "deployment parity" datapoint, and its latency reflects real serving.
-Decode follows the the training export's coordinate convention (normalized [0,1] coords);
-flip ``coords_normalized`` if a parity check vs Ultralytics disagrees.
+This measures the production path (any single-class YOLOv11 TensorRT
+model served by Triton), so its accuracy vs the same weights run through
+Ultralytics is a real "deployment parity" datapoint, and its latency
+reflects real serving. Decode follows the training export's coordinate
+convention (normalized [0,1] coords); flip ``coords_normalized`` if a
+parity check vs Ultralytics disagrees.
 """
 
 from __future__ import annotations
@@ -19,8 +20,8 @@ if TYPE_CHECKING:
     import numpy as np
 
 
-class TritonLprDetector:
-    """Run a YOLOv11-format plate model served by Triton over gRPC."""
+class TritonYoloDetector:
+    """Run a single-class YOLOv11-format detector served by Triton over gRPC."""
 
     runtime = 'triton-trt'
 
@@ -28,7 +29,7 @@ class TritonLprDetector:
         self,
         *,
         url: str = 'localhost:4601',
-        model: str = 'lpr_nanov11_640',
+        model: str,
         name: str | None = None,
         input_name: str = 'images',
         output_name: str = 'output0',
