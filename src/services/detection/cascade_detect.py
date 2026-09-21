@@ -12,9 +12,13 @@ Every heuristic that used to be a hardcoded module constant (detector
 identity, confidence floors, aspect bands, OCR wiring) now lives on a
 :class:`~src.config.DetectionProfile` instance, so a deployment can
 describe a different region type (a box, a tractor's ID plate, …)
-without forking this module. ``DEFAULT_PROFILE`` reproduces the
-reference license-plate defaults so existing call sites that don't
-pass a profile keep working unchanged.
+without forking this module. ``REFERENCE_LICENSE_PLATE_PROFILE``
+reproduces the reference license-plate constants — it is an *example*
+profile, not a domain-neutral one, and its name says so since work item
+B2. It is nevertheless still the profile registered with
+``default=True`` and still the fallback for call sites that don't pass
+a profile, because no neutral default has been built yet; see the
+FOLLOW-UP note next to ``register_profile`` below.
 """
 
 from __future__ import annotations
@@ -44,11 +48,13 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Default profile — reproduces the reference license-plate constants.
+# Reference profile — reproduces the reference license-plate constants.
+# Still the *registered* default (see register_profile below) because no
+# domain-neutral profile exists yet.
 # =============================================================================
 
 
-DEFAULT_PROFILE = DetectionProfile(
+REFERENCE_LICENSE_PLATE_PROFILE = DetectionProfile(
     name='license_plate',
     detector_model='lpr_nanov11_640',
     detector_version='1',
@@ -84,7 +90,14 @@ DEFAULT_PROFILE = DetectionProfile(
 # (src.services.curation.strategy_registry) and any future multi-profile
 # deployment have a real registry to read from — see
 # src.services.detection.profile_registry.
-register_profile(DEFAULT_PROFILE, default=True)
+#
+# FOLLOW-UP (B2): the rename above says what this profile *is* — a
+# license-plate reference example, not a domain-neutral default — but it is
+# still what `default=True` registers, because no neutral detection profile
+# has been built yet. Building one (and demoting this to a plain registered
+# example) is deliberately out of scope for B2; until then the runtime
+# behaviour here is unchanged from before the rename.
+register_profile(REFERENCE_LICENSE_PLATE_PROFILE, default=True)
 
 # The lpr_nanov11_640-shaped TRT engine is exported with a fixed
 # [1, 3, N, N] input — Triton's dynamic batching layers multiple
@@ -115,7 +128,7 @@ class RegionCandidate:
 
     bbox_norm: tuple[float, float, float, float]
     score: float
-    source: str = DEFAULT_PROFILE.detector_model
+    source: str = REFERENCE_LICENSE_PLATE_PROFILE.detector_model
     rectangularity: float | None = None
 
 
@@ -263,8 +276,8 @@ def _decode_jpeg(jpeg_bytes: bytes) -> Image.Image:
 
 def _letterbox(
     img: Image.Image,
-    target: int = DEFAULT_PROFILE.input_size,
-    fill: tuple[int, int, int] = DEFAULT_PROFILE.letterbox_fill,
+    target: int = REFERENCE_LICENSE_PLATE_PROFILE.input_size,
+    fill: tuple[int, int, int] = REFERENCE_LICENSE_PLATE_PROFILE.letterbox_fill,
 ) -> tuple[np.ndarray, float, tuple[float, float]]:
     """Letterbox a PIL image to ``target`` by ``target`` for the detector.
 
@@ -287,9 +300,9 @@ def _decode_yolo_output(
     pad: tuple[float, float],
     crop_w: int,
     crop_h: int,
-    confidence_floor: float = DEFAULT_PROFILE.confidence_floor,
-    input_size: int = DEFAULT_PROFILE.input_size,
-    source: str = DEFAULT_PROFILE.detector_model,
+    confidence_floor: float = REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor,
+    input_size: int = REFERENCE_LICENSE_PLATE_PROFILE.input_size,
+    source: str = REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
 ) -> RegionCandidate | None:
     """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to a normalized region box.
 
@@ -399,7 +412,7 @@ class RegionDetector:
     def __init__(
         self,
         triton_pool: AsyncTritonPool,
-        profile: DetectionProfile = DEFAULT_PROFILE,
+        profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE,
         *,
         confidence_floor: float | None = None,
         model_name: str | None = None,
@@ -611,7 +624,7 @@ class PaddleOcrRegionDetector:
     def __init__(
         self,
         triton_pool: AsyncTritonPool,
-        profile: DetectionProfile = DEFAULT_PROFILE,
+        profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE,
         *,
         model_name: str | None = None,
         input_size: int | None = None,
@@ -788,7 +801,7 @@ class OcrRegion:
 
     ``profile`` carries the aspect/length/score thresholds this
     region's shape-and-text checks are evaluated against — defaults to
-    :data:`DEFAULT_PROFILE` so existing callers that don't thread a
+    :data:`REFERENCE_LICENSE_PLATE_PROFILE` so existing callers that don't thread a
     profile through keep working unchanged.
     """
 
@@ -797,7 +810,7 @@ class OcrRegion:
     text_raw: str  # exact OCR string (may include unicode / punctuation)
     det_score: float
     rec_score: float
-    profile: DetectionProfile = field(default_factory=lambda: DEFAULT_PROFILE)
+    profile: DetectionProfile = field(default_factory=lambda: REFERENCE_LICENSE_PLATE_PROFILE)
 
     @property
     def is_plate_shaped(self) -> bool:
@@ -886,7 +899,7 @@ class PaddleOcrTextRecognizer:
     def __init__(
         self,
         triton_pool: AsyncTritonPool,
-        profile: DetectionProfile = DEFAULT_PROFILE,
+        profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE,
         *,
         model_name: str | None = None,
         rec_score_floor: float = 0.5,
@@ -1071,7 +1084,7 @@ class PaddleOcrTextRecognizer:
 
 
 __all__ = [
-    'DEFAULT_PROFILE',
+    'REFERENCE_LICENSE_PLATE_PROFILE',
     'OcrRegion',
     'PaddleOcrRegionDetector',
     'PaddleOcrTextRecognizer',

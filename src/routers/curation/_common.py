@@ -243,8 +243,8 @@ class ItemDoc(BaseModel):
     # RegionFields (that governs OpenSearch document keys only).
     plate_bbox_norm: list[float] | None = None
     plate_score: float | None = None
-    # Round-trip counterparts of what PATCH /crops/{id}/plate_meta and
-    # PUT /crops/{id}/plate write (RegionFields.status/text/etc on the
+    # Round-trip counterparts of what PATCH /crops/{id}/region_meta and
+    # PUT /crops/{id}/region write (RegionFields.status/text/etc on the
     # storage side) — added so a GET after either write actually reflects
     # it instead of silently dropping the region metadata (the frontend's
     # review-queue "Back" path and mapRawCrop() need these back).
@@ -325,7 +325,7 @@ class ItemRegionRequest(BaseModel):
     ``bbox_norm`` is in the **source-image** coordinate frame; the
     labeler is responsible for converting from crop-frame to
     source-frame before POSTing. ``None`` clears the box and marks the
-    item as ``plate_status='no_plate_visible'`` (a deliberate human
+    item as ``plate_status='no_region_visible'`` (a deliberate human
     decision, distinct from "not yet detected").
     """
 
@@ -349,7 +349,7 @@ class ItemBatchRegionRequest(BaseModel):
 HUMAN_REGION_STATUS_VALUES = frozenset(
     {
         RegionStatus.DETECTED,
-        RegionStatus.NO_PLATE_VISIBLE,
+        RegionStatus.NO_REGION_VISIBLE,
         RegionStatus.VERIFY_REJECTED,
         RegionStatus.FALSE_POSITIVE,
     }
@@ -360,7 +360,7 @@ class CropBatchStatusRequest(BaseModel):
     """Bulk-set ``plate_status`` over many items (the cluster-view triage op).
 
     Lets an operator select an outlier sub-cluster and mark every region
-    ``false_positive`` / ``no_plate_visible`` in one call, or bulk-confirm
+    ``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm
     good regions (``plate_status='detected'`` + ``plate_verified=True``).
     ``plate_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
     """
@@ -376,7 +376,7 @@ class ItemRegionMetaRequest(BaseModel):
 
     Use this for operator corrections like fixing an OCR'd region text or
     changing the status to ``verify_rejected``. To set or clear the bbox
-    itself, use ``PUT /crops/{crop_id}/plate`` — that endpoint owns the
+    itself, use ``PUT /crops/{crop_id}/region`` — that endpoint owns the
     geometry contract.
 
     Every field is optional; only the provided ones are written. ``None``
@@ -544,7 +544,7 @@ class ExportRegionDatasetRequest(BaseModel):
 
     All ``detected`` positives and all human ``false_positive`` hard
     negatives are kept in full. ``empty_bg_ratio`` adds a small sample of
-    genuine region-free (``no_plate_visible``) frames as a fraction of
+    genuine region-free (``no_region_visible``) frames as a fraction of
     positives so the detector still sees some no-region images.
     """
 

@@ -238,7 +238,7 @@ code — is in
 |--------|----------|-------------|
 | GET, POST | `/curation/classes`, `/curation/classes/merge` | Class registry CRUD + merge |
 | GET, PUT, DELETE | `/curation/crops`, `/curation/crops/{id}/label` | Item browse/label/move/exclude |
-| GET, PUT, PATCH | `/curation/plates`, `/curation/crops/{id}/plate*` | Region-of-interest detect/verify/metadata |
+| GET, PUT, PATCH | `/curation/regions`, `/curation/crops/{id}/region*` | Region-of-interest detect/verify/metadata |
 | GET | `/curation/clusters`, `/curation/clusters/representatives` | Cluster cards + representatives |
 | GET | `/curation/review/{tab}` | Active-learning review queue |
 | POST, GET | `/curation/scores/*`, `/curation/select/*` | Mistakenness/uniqueness scoring, diverse selection |

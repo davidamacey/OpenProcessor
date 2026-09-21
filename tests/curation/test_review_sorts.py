@@ -27,7 +27,7 @@ LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
     'uncertainty': [
         {'probe_pred_entropy': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
-    'plates': [{'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
+    'regions': [{'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'model_disagreements': [
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
@@ -50,7 +50,7 @@ EXPECTED_DEFAULT_IDS: dict[str, str] = {
     'gemma_low_conf': 'recent',
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
-    'plates': 'region_score',
+    'regions': 'region_score',
     'model_disagreements': 'disagreement_entropy_asc',
     'primary_low_conf': 'primary_low_conf_default',
     'coco_blind_spots': 'coco_blind_spots_default',

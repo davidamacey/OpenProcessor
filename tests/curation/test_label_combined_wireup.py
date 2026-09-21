@@ -211,13 +211,13 @@ class TestCohortRouting:
         assert 'gemma_verify_completed_at' not in task.update_doc
 
     @pytest.mark.asyncio
-    async def test_no_plate_candidate_uses_class_only_path(self) -> None:
+    async def test_no_region_candidate_uses_class_only_path(self) -> None:
         """Phase C: cohort crop without a candidate → no combined call.
 
         The curation worker only handles the region-detection cascade;
         class-only VLM runs are the pipeline's job. A pending_detection
         cohort crop where the primary detector + secondary segmenter
-        both miss results in a terminal ``no_plate_box`` write with no
+        both miss results in a terminal ``no_region_box`` write with no
         combined call (and no label_or_propose_batch, since class-only
         labeling belongs to the pipeline, not this worker).
         """
@@ -241,7 +241,7 @@ class TestCohortRouting:
         )
         gemma.label_combined.assert_not_awaited()
         gemma.label_or_propose_batch.assert_not_awaited()
-        assert task.update_doc[F.status] == 'no_plate_box'
+        assert task.update_doc[F.status] == 'no_region_box'
 
     @pytest.mark.asyncio
     async def test_pending_detection_cohort_lpr_hit_uses_combined(self) -> None:

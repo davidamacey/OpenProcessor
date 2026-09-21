@@ -242,19 +242,19 @@ def test_detection_profile_axis_advertises_the_registered_default(
     app_client: TestClient,
 ) -> None:
     """Labeling-assist plan task (b): today exactly one ``DetectionProfile``
-    is ever constructed (``cascade_detect.DEFAULT_PROFILE``, registered as
+    is ever constructed (``cascade_detect.REFERENCE_LICENSE_PLATE_PROFILE``, registered as
     the default the moment that module is imported -- see
     ``src.services.detection.profile_registry``). This axis must list it,
     keyed by the profile's own ``name`` field, as the sole stable/default
     entry."""
-    from src.services.detection.cascade_detect import DEFAULT_PROFILE
+    from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
 
     r = app_client.get('/curation/methods')
     assert r.status_code == 200
     body = r.json()
     profile_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'detection_profile'}
-    assert set(profile_entries) == {DEFAULT_PROFILE.name}
-    entry = profile_entries[DEFAULT_PROFILE.name]
+    assert set(profile_entries) == {REFERENCE_LICENSE_PLATE_PROFILE.name}
+    entry = profile_entries[REFERENCE_LICENSE_PLATE_PROFILE.name]
     assert entry['status'] == 'stable'
     assert entry['default'] is True
 

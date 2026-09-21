@@ -22,7 +22,7 @@ ALL_TABS = (
     'outliers',
     'uncertainty',
     'model_disagreements',
-    'plates',
+    'regions',
     'primary_low_conf',
     'coco_blind_spots',
 )
@@ -40,7 +40,7 @@ LEGACY_SORT_CLAUSE = {
     'model_disagreements': [
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
-    'plates': [{'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
+    'regions': [{'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
         {'v6_raw_confidence': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
@@ -58,7 +58,7 @@ EXPECTED_DEFAULT_SORT_ID = {
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
     'model_disagreements': 'disagreement_entropy_asc',
-    'plates': 'region_score',
+    'regions': 'region_score',
     'primary_low_conf': 'primary_low_conf_default',
     'coco_blind_spots': 'coco_blind_spots_default',
 }

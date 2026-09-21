@@ -27,6 +27,15 @@ On-disk string values are kept byte-identical to the values already
 written by earlier code (``pending_detection``, ``detected``, etc.) —
 same no-migration reasoning as ``RegionFields``: this is a rename of
 the Python symbol, not the OpenSearch data.
+
+**Exception (work item B2):** ``no_plate_box`` / ``no_plate_visible``
+were the last two domain-specific (license-plate) values on the public
+wire contract and were renamed to ``no_region_box`` /
+``no_region_visible`` — symbol *and* value — to match the generic
+vocabulary the rest of this module already uses. That is a breaking
+change to the wire contract, coordinated with the frontend consumer
+before landing, and a deployment carrying pre-B2 documents needs a
+one-off ``update_by_query`` to rewrite those two status strings.
 """
 
 from __future__ import annotations
@@ -41,11 +50,11 @@ class RegionStatus(str, Enum):
     PENDING_VERIFICATION = 'pending_verification'
     DETECTED = 'detected'
     VERIFY_REJECTED = 'verify_rejected'
-    NO_PLATE_BOX = 'no_plate_box'
-    NO_PLATE_VISIBLE = 'no_plate_visible'
+    NO_REGION_BOX = 'no_region_box'
+    NO_REGION_VISIBLE = 'no_region_visible'
     DETECTION_FAILED = 'detection_failed'
     # Human says "this detected box is not a valid region". Box + provenance
-    # are PRESERVED (unlike NO_PLATE_VISIBLE) for FP analysis + detector
+    # are PRESERVED (unlike NO_REGION_VISIBLE) for FP analysis + detector
     # hard-negative training.
     FALSE_POSITIVE = 'false_positive'
 
@@ -53,9 +62,9 @@ class RegionStatus(str, Enum):
 TERMINAL_STATUSES: frozenset[RegionStatus] = frozenset(
     {
         RegionStatus.DETECTED,
-        RegionStatus.NO_PLATE_VISIBLE,
+        RegionStatus.NO_REGION_VISIBLE,
         RegionStatus.VERIFY_REJECTED,
-        RegionStatus.NO_PLATE_BOX,
+        RegionStatus.NO_REGION_BOX,
         RegionStatus.DETECTION_FAILED,
         RegionStatus.FALSE_POSITIVE,
     }

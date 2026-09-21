@@ -1,6 +1,6 @@
 """Write-path tests for the human region-labelling endpoints (plan Wave
-5 W5.c): ``PUT /crops/{id}/plate``, ``PATCH /crops/{id}/plate_meta``,
-``POST /plates/batch_status``.
+5 W5.c): ``PUT /crops/{id}/region``, ``PATCH /crops/{id}/region_meta``,
+``POST /regions/batch_status``.
 
 Before this file, ``src/routers/curation/regions.py`` (12.62% coverage)
 had never had a single test exercise a write path — the entire human
@@ -97,7 +97,7 @@ def app_client(fake_os: _FakeRegionOS) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# PUT crops-id-plate
+# PUT crops-id-region
 # ---------------------------------------------------------------------------
 
 
@@ -105,7 +105,7 @@ def test_set_crop_plate_stamps_verifier_fields(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.put(
-        '/curation/crops/crop-1/plate',
+        '/curation/crops/crop-1/region',
         json={'bbox_norm': [0.1, 0.2, 0.3, 0.4], 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -124,12 +124,12 @@ def test_set_crop_plate_stamps_verifier_fields(
     assert written[F.detected_at]
 
 
-def test_set_crop_plate_null_bbox_marks_no_plate_visible(
+def test_set_crop_plate_null_bbox_marks_no_region_visible(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
-    resp = app_client.put('/curation/crops/crop-1/plate', json={'bbox_norm': None})
+    resp = app_client.put('/curation/crops/crop-1/region', json={'bbox_norm': None})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['plate_status'] == 'no_plate_visible'
+    assert resp.json()['plate_status'] == 'no_region_visible'
     written = fake_os._docs['crop-1']
     assert written[F.bbox_norm] is None
     assert written[F.score] is None
@@ -138,7 +138,7 @@ def test_set_crop_plate_null_bbox_marks_no_plate_visible(
 
 def test_set_crop_plate_rejects_out_of_range_bbox(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/crops/crop-1/plate',
+        '/curation/crops/crop-1/region',
         json={'bbox_norm': [1.5, 0.2, 0.3, 0.4]},
     )
     assert resp.status_code == 400
@@ -146,7 +146,7 @@ def test_set_crop_plate_rejects_out_of_range_bbox(app_client: TestClient) -> Non
 
 def test_set_crop_plate_rejects_degenerate_bbox(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/crops/crop-1/plate',
+        '/curation/crops/crop-1/region',
         json={'bbox_norm': [0.5, 0.5, 0.5, 0.5]},
     )
     assert resp.status_code == 400
@@ -154,14 +154,14 @@ def test_set_crop_plate_rejects_degenerate_bbox(app_client: TestClient) -> None:
 
 def test_set_crop_plate_missing_crop_returns_404(app_client: TestClient) -> None:
     resp = app_client.put(
-        '/curation/crops/does-not-exist/plate',
+        '/curation/crops/does-not-exist/region',
         json={'bbox_norm': [0.1, 0.2, 0.3, 0.4]},
     )
     assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# PATCH crops-id-plate_meta
+# PATCH crops-id-region_meta
 # ---------------------------------------------------------------------------
 
 
@@ -169,7 +169,7 @@ def test_patch_plate_meta_rejects_status_outside_human_settable_set(
     app_client: TestClient,
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/plate_meta',
+        '/curation/crops/crop-1/region_meta',
         json={'plate_status': 'pending_detection'},  # pipeline-only status
     )
     assert resp.status_code == 400
@@ -180,7 +180,7 @@ def test_patch_plate_meta_accepts_human_settable_status(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/plate_meta',
+        '/curation/crops/crop-1/region_meta',
         json={'plate_status': 'verify_rejected', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -194,7 +194,7 @@ def test_patch_plate_meta_false_positive_routes_to_fp_bucket(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/plate_meta',
+        '/curation/crops/crop-1/region_meta',
         json={'plate_status': 'false_positive', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -207,7 +207,7 @@ def test_patch_plate_meta_text_only_does_not_touch_cluster_fields(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.patch(
-        '/curation/crops/crop-1/plate_meta',
+        '/curation/crops/crop-1/region_meta',
         json={'plate_text': 'ABC123'},
     )
     assert resp.status_code == 200, resp.text
@@ -218,7 +218,7 @@ def test_patch_plate_meta_text_only_does_not_touch_cluster_fields(
 
 
 def test_patch_plate_meta_requires_at_least_one_field(app_client: TestClient) -> None:
-    resp = app_client.patch('/curation/crops/crop-1/plate_meta', json={})
+    resp = app_client.patch('/curation/crops/crop-1/region_meta', json={})
     assert resp.status_code == 400
 
 
@@ -231,7 +231,7 @@ def test_patch_plate_meta_response_reports_wire_names_not_storage_keys(
     generic on the JSON key, RegionFields-indirected only on the right of
     ``src.get(...)``, docs/design/curation_api_contract.md)."""
     resp = app_client.patch(
-        '/curation/crops/crop-1/plate_meta',
+        '/curation/crops/crop-1/region_meta',
         json={'plate_text': 'ABC123', 'plate_status': 'detected', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
@@ -250,7 +250,7 @@ def test_get_crop_returns_plate_wire_names_not_region_storage_keys(
     (``plate_*`` names), never the raw OpenSearch ``_source`` (whose keys
     follow ``RegionFields``, ``region_*`` by default)."""
     app_client.patch(
-        '/curation/crops/crop-1/plate_meta',
+        '/curation/crops/crop-1/region_meta',
         json={'plate_text': 'ABC123', 'plate_status': 'detected', 'label_source': 'human'},
     )
     resp = app_client.get('/curation/crops/crop-1')
@@ -265,7 +265,7 @@ def test_get_crop_returns_plate_wire_names_not_region_storage_keys(
 
 
 # ---------------------------------------------------------------------------
-# POST plates-batch_status
+# POST regions-batch_status
 # ---------------------------------------------------------------------------
 
 
@@ -273,7 +273,7 @@ def test_batch_set_plate_status_rejects_non_human_settable_status(
     app_client: TestClient,
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': ['crop-1'], 'plate_status': 'detection_failed'},
     )
     assert resp.status_code == 400
@@ -283,7 +283,7 @@ def test_batch_set_plate_status_updates_every_crop_and_refreshes(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={
             'crop_ids': ['crop-1', 'crop-2'],
             'plate_status': 'detected',
@@ -305,7 +305,7 @@ def test_batch_set_plate_status_false_positive_marks_fp_bucket_for_every_crop(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': ['crop-1', 'crop-2'], 'plate_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
@@ -315,7 +315,7 @@ def test_batch_set_plate_status_false_positive_marks_fp_bucket_for_every_crop(
 
 def test_batch_set_plate_status_empty_crop_ids_is_a_noop(app_client: TestClient) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': [], 'plate_status': 'detected'},
     )
     assert resp.status_code == 200
@@ -326,7 +326,7 @@ def test_batch_set_plate_status_missing_crop_reports_conflict_not_500(
     app_client: TestClient,
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': ['crop-1', 'does-not-exist'], 'plate_status': 'detected'},
     )
     assert resp.status_code == 200, resp.text

@@ -14,7 +14,7 @@ from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
-    DEFAULT_PROFILE,
+    REFERENCE_LICENSE_PLATE_PROFILE,
     _now_iso,
     class_provenance,
     is_plausible_region_bbox,
@@ -113,7 +113,7 @@ def _bbox_shape_is_plausible(bbox_in_crop: tuple[float, float, float, float]) ->
         return False
     x1, y1, x2, y2 = bbox_in_crop
     area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
-    return area >= DEFAULT_PROFILE.auto_confirm_area_frac[0]
+    return area >= REFERENCE_LICENSE_PLATE_PROFILE.auto_confirm_area_frac[0]
 
 
 _VLM_TEXT_CONFIDENCE_MAP = {'high': 0.92, 'medium': 0.70, 'low': 0.40}
