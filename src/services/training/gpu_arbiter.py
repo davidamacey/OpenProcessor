@@ -20,6 +20,13 @@ service that comes back up (blocking the hand-off), and once nothing is
 active it clears the lock and restarts the services — which doubles as
 crash recovery.
 
+That loop is not self-starting: it is wired into the FastAPI lifespan in
+:mod:`src.main` (one reconcile at startup, then a task ticking every
+``src.main.ARBITER_RECONCILE_INTERVAL_SECONDS``, cancelled on shutdown).
+Without that wiring nothing ever releases a crashed trainer's claim, so
+any host embedding this module in a different app must start an
+equivalent loop — see ``tests/integration/test_gpu_arbiter_lifespan.py``.
+
 **Deployment facts vs. mechanism.** Which GPU ids a job may target, which
 containers to stop/start, and which container is "the trainer" for
 reachability probing are deployment facts — see
@@ -486,18 +493,36 @@ async def release_gpus_after_training(
 # ---- recovery on API startup -------------------------------------------
 
 
+def _resolve_train_jobs_dir() -> Path:
+    """The trainer's jobs directory, honoring ``OP_TRAIN_JOBS_DIR``.
+
+    Delegates to the training-jobs module rather than re-reading the env
+    var so the arbiter can never scan a different directory than the one
+    jobs are actually written to. Imported lazily to keep this module
+    importable on its own.
+    """
+    from src.services.training.jobs import _resolve_jobs_dir
+
+    return _resolve_jobs_dir()
+
+
 async def reconcile_on_startup(
     *,
-    train_jobs_dir: Path = Path('/jobs'),
+    train_jobs_dir: Path | None = None,
     sentinel: Path | None = None,
 ) -> ArbiterAction:
     """Enforce the desired GPU-service state -- both directions.
 
-    This runs once at API startup *and* on a periodic loop, in every
-    uvicorn worker. It is the single authority that decides whether the
-    configured GPU-resident containers should be **down** (a training
-    run owns the GPUs) or **up** (no run active), and it actively drives
-    the containers toward that state on every tick. Because
+    ``train_jobs_dir`` defaults to the deployment's configured jobs
+    directory (:func:`_resolve_train_jobs_dir`); callers pass it
+    explicitly only to point at a test fixture.
+
+    This runs once at API startup *and* on a periodic loop (both wired
+    in :mod:`src.main`'s lifespan), in every uvicorn worker. It is the
+    single authority that decides whether the configured GPU-resident
+    containers should be **down** (a training run owns the GPUs) or
+    **up** (no run active), and it actively drives the containers toward
+    that state on every tick. Because
     :func:`stop_gpu_services` / :func:`start_gpu_services` only act on
     containers not already in the target state, running this in all
     workers is harmless idempotent re-enforcement, not a race.
@@ -521,13 +546,14 @@ async def reconcile_on_startup(
     and start the containers back up.
     """
     sentinel_target = sentinel_path(sentinel)
+    jobs_dir = train_jobs_dir if train_jobs_dir is not None else _resolve_train_jobs_dir()
     status_states: dict[str, str | None] = {}
     active_stems: set[str] = set()
     active_multi = False
     active_single = False
 
-    if train_jobs_dir.exists():
-        for status_file in train_jobs_dir.glob('*.status.json'):
+    if jobs_dir.exists():
+        for status_file in jobs_dir.glob('*.status.json'):
             try:
                 payload = json.loads(status_file.read_text(encoding='utf-8'))
             except (OSError, ValueError):
@@ -535,7 +561,7 @@ async def reconcile_on_startup(
             stem = status_file.name[: -len('.status.json')]
             status_states[stem] = payload.get('state')
 
-        for job_file in train_jobs_dir.glob('*.job.json'):
+        for job_file in jobs_dir.glob('*.job.json'):
             stem = job_file.name[: -len('.job.json')]
             state = status_states.get(stem)
             # Active unless the status has reached a terminal state. No status
