@@ -297,9 +297,15 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=51",
+    # Live write-path tests need the isolated harness in docker/test/ to be
+    # up; they are deselected by default so the offline gate is unchanged.
+    # Run them with: pytest tests/live -q --no-cov -m live
+    "-m",
+    "not live",
 ]
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
+    "live: write-path tests that require the docker/test/ verification harness to be running",
 ]
 
 # =============================================================================
