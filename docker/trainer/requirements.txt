@@ -1,0 +1,48 @@
+# =============================================================================
+# Curation trainer image dependencies (docker/trainer/Dockerfile)
+# =============================================================================
+# Ultralytics itself is NOT listed here: it is installed from a pinned git
+# commit (ULTRALYTICS_SHA build arg) so a run's manifest can record exactly
+# which training recipe produced a checkpoint.
+#
+# Torch is resolved from the PyTorch CUDA wheel index passed as
+# --extra-index-url at build time (TORCH_CUDA_INDEX); those wheels bundle the
+# CUDA runtime, which is why the image can stay on a python:*-slim base.
+
+torch>=2.6,<3
+torchvision>=0.21,<1
+
+# Ultralytics runtime deps we want resolved up front rather than auto-installed
+# mid-run (see the ONNX note below).
+numpy>=1.26,<3
+opencv-python-headless>=4.10,<5
+Pillow>=10.4
+PyYAML>=6.0
+requests>=2.32
+scipy>=1.13
+pandas>=2.2
+matplotlib>=3.9
+psutil>=6.0
+tqdm>=4.66
+
+# ONNX export toolchain. Without these pre-installed, Ultralytics'
+# `model.export(format='onnx')` attempts its own pip install *inside the
+# running container* at export time -- which fails on a non-root user with no
+# network policy and silently drops every run back to "ONNX export failed",
+# leaving nothing for POST {api_prefix}/train/promote/{job_id} to pick up.
+onnx>=1.16,<2
+onnxslim>=0.1.71
+onnxruntime-gpu>=1.19
+
+# Stage-1 on-disk augmentation (docker/trainer/augment.py).
+albumentations>=2.0,<3
+
+# Experiment tracking (docker/trainer/mlflow_callbacks.py). Optional at
+# runtime -- every hook degrades to a warning when the server is unreachable.
+mlflow>=2.18
+
+# GPU telemetry published on status.json's `gpu` block.
+pynvml>=11.5
+
+# Structured logs, matching the API's logging style.
+structlog>=24.1
