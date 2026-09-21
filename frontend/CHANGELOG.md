@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- A new `/settings` page gives deployment operators one place to set the
+  shared, backend-side defaults for two curation strategies — the
+  clustering method used by every auto-label run this app starts, and the
+  review-queue sort applied to every `/review` tab that does not request
+  its own — persisted via `GET,PUT {API_PREFIX}/settings`. This is stored
+  backend-side rather than per-browser because the product has no user
+  accounts: one operator's pick is every operator's pick, on every
+  session, until changed again. The page also lists two more axes the
+  backend advertises but does not yet act on, `detection_profile` and
+  `prompt_pack`, as a read-only "Advertised but not yet wired" section —
+  no dropdown, no Save button — because no backend request path reads a
+  shared default for either one yet, and offering a control that silently
+  does nothing would be worse than not offering one. A known backend gap
+  (H-1): once a shared review-sort default is pinned, there is currently
+  no way to un-pin it through this API — "each tab uses its own default"
+  is a state no `PUT` can re-express — so every save goes through an
+  explicit confirm dialog, with a stronger warning on the sort control
+  specifically. Against a backend that predates this endpoint, the page
+  degrades to an explicit "not supported" note with no controls rendered,
+  rather than erroring or guessing.
 - Deployment operators can now register their own annotation slot —
   without forking the repo or touching a single line of application
   code — by dropping an `annotation-profiles.json` file next to the
