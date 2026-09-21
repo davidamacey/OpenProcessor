@@ -1,0 +1,41 @@
+OpenProcessor segmenter — third-party attributions
+==================================================
+
+The segmenter service in this directory wraps Meta's Segment Anything
+Model 3 (SAM 3) to serve the detection cascade's segmenter leg. See
+../../docs/CURATION.md and ./README.md for how it is used.
+
+------------------------------------------------------------------------
+SAM 3 (the model + Python library)
+------------------------------------------------------------------------
+Source:   https://github.com/facebookresearch/sam3
+License:  Apache License 2.0 (see the upstream LICENSE file)
+Use:      The Dockerfile pip-installs SAM 3 into the image; the service
+          imports ``sam3.model_builder.build_sam3_image_model`` and
+          ``sam3.model.sam3_image_processor.Sam3Processor``.
+
+The SAM 3 weights are pulled from HuggingFace at first run. The
+HuggingFace token is supplied via the ``HF_TOKEN`` environment variable
+(``HUGGINGFACE_HUB_TOKEN`` and ``HUGGING_TOKEN`` are also accepted), and
+is forwarded into the container by docker-compose.
+
+------------------------------------------------------------------------
+Architectural inspiration: efwfe/Labely
+------------------------------------------------------------------------
+Source:   https://github.com/efwfe/Labely
+License:  README states "MIT License" (no LICENSE file in the repo as of
+          2026-05-09; the README claim is treated as authoritative for
+          attribution purposes).
+Use:      The shape of this service — a FastAPI process that loads
+          ``Sam3Processor`` once on startup and exposes a single
+          text-prompt segmentation endpoint — was informed by reading
+          ``services/sam3_inference/main.py`` in the Labely repository.
+          The implementation here is a clean rewrite (no copied code):
+          async-correct (inference runs in a thread executor behind a
+          per-processor lock), structured logging, HuggingFace-token
+          aware, and matched to this project's request/response shape
+          (``POST /sam3/segment_plate`` with ``crop_jpeg_b64`` +
+          ``text_prompt`` returning crop-frame normalized bboxes).
+
+If the Labely project later adds a LICENSE file or changes terms, the
+attribution above should be updated to match.

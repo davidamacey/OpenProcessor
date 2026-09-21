@@ -136,6 +136,22 @@ The SCRFD face detection model and post-processing pipeline are based on Insight
 
 ---
 
+## Meta SAM 3 (Segment Anything Model 3)
+
+The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to serve the curation detection cascade's segmenter leg.
+
+### Repository Information
+- **Repository:** https://github.com/facebookresearch/sam3
+- **License:** Apache License 2.0
+- **Model weights:** pulled from HuggingFace at first run (gated; requires `HF_TOKEN`)
+
+### Usage in This Project
+- `docker/segmenter/Dockerfile` pip-installs SAM 3 from a pinned upstream commit; no SAM 3 source is vendored into this repository
+- `docker/segmenter/sam3_backend.py` imports `sam3.model_builder.build_sam3_image_model` and `sam3.model.sam3_image_processor.Sam3Processor`
+- Service-local attribution detail: [`docker/segmenter/NOTICE`](docker/segmenter/NOTICE)
+
+---
+
 ## Reference Architectures
 
 The following repositories were used as **reference only** (no code directly copied):
@@ -173,7 +189,14 @@ The following repositories were used as **reference only** (no code directly cop
 - **License:** Not specified in repository
 - **Author:** Hien Nguyen (@hiennguyen9874)
 
-### 5. SthPhoenix/InsightFace-REST
+### 5. efwfe/Labely
+- **URL:** https://github.com/efwfe/Labely
+- **Usage:** Reference for the shape of a SAM 3 inference service (`services/sam3_inference/main.py`); `docker/segmenter/` is a clean rewrite, not a copy
+- **What We Learned:**
+  - Loading `Sam3Processor` once at process start and serving a single text-prompt segmentation endpoint
+- **License:** README states MIT License (no LICENSE file in the repository as of 2026-05-09)
+
+### 6. SthPhoenix/InsightFace-REST
 - **URL:** https://github.com/SthPhoenix/InsightFace-REST
 - **Usage:** Reference for SCRFD TensorRT deployment with dynamic batching at scale
 - **What We Learned:**
@@ -197,6 +220,7 @@ Special thanks to:
 - **InsightFace Team (Jia Guo, Jiankang Deng et al.)** - For SCRFD face detection, ArcFace recognition, and face alignment algorithms
 - **Hien Nguyen (@hiennguyen9874)** - For the triton-face-recognition reference implementation
 - **OpenCLIP Contributors** - For the open-source CLIP implementation
+- **Meta AI (FAIR)** - For Segment Anything 3, which powers the optional segmenter container
 
 ---
 
@@ -222,6 +246,7 @@ propagates to the combined work.
 | InsightFace (SCRFD, ArcFace) | MIT | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
+| Meta SAM 3 (optional segmenter image) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 
 **Note:** The use of AGPL-3.0 licensed code (ultralytics fork) may impose obligations on derivative works. Consult the AGPL-3.0 license for details: https://www.gnu.org/licenses/agpl-3.0.en.html
 

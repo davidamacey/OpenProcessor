@@ -177,11 +177,12 @@ services:
     environment:
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
-      # D5: no segmenter ships with this repo by default — leaving
-      # SAM3_URL empty makes the cascade's segmenter leg a documented
-      # no-op (see scripts/curation/worker/client.py Sam3Client). Point
-      # this at your own segmentation service's `POST /sam3/segment_plate`
-      # (or a comma-separated SAM3_URLS list) to enable it.
+      # D5: the segmenter leg is opt-in. Empty SAM3_URL makes it a
+      # documented no-op (see scripts/curation/worker/client.py
+      # Sam3Client). Set SAM3_URL=http://segmenter:8000 to use the
+      # `segmenter` service below (`--profile segmenter`), or point it
+      # at your own service's `POST /sam3/segment_plate` — a
+      # comma-separated SAM3_URLS list load-balances across several.
       - SAM3_URL=${SAM3_URL:-}
       - SAM3_URLS=${SAM3_URLS:-}
       - GEMMA_URL=${GEMMA_URL:-}
@@ -333,6 +334,60 @@ services:
       - ./scripts:/app/scripts:ro
       - ./src:/app/src:ro
       - openprocessor-state:/var/lib/openprocessor
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities:
+                - gpu
+    networks:
+      - triton_net
+
+  # The detection cascade's segmenter leg (see docker/segmenter/README.md).
+  # Its own profile, not `curation`: it needs a GPU of its own plus a
+  # HuggingFace token for gated weights, so enabling it is an explicit
+  # choice. Leaving it off keeps SAM3_URL empty, which makes the leg a
+  # clean no-op (tests/curation/test_sam3_optional.py).
+  #
+  #   SAM3_URL=http://segmenter:8000 \
+  #     docker compose --profile curation --profile segmenter up -d
+  segmenter:
+    image: davidamacey/openprocessor-segmenter:latest
+    container_name: openprocessor-segmenter
+    build:
+      context: docker/segmenter
+      dockerfile: Dockerfile
+    profiles:
+      - segmenter
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    ports:
+      - 4611:8000  # Segmentation HTTP API
+    environment:
+      # Gated weights: the service boots and logs a warning without a
+      # token, then fails the download. Set HF_TOKEN in .env.
+      - HF_TOKEN=${HF_TOKEN:-}
+      - SEGMENTER_DEVICE=${SEGMENTER_DEVICE:-cuda:0}
+      - SEGMENTER_INSTANCES=${SEGMENTER_INSTANCES:-2}
+      - SEGMENTER_SHARED_WEIGHTS=${SEGMENTER_SHARED_WEIGHTS:-0}
+      - SEGMENTER_COMPILE=${SEGMENTER_COMPILE:-0}
+      - SEGMENTER_ENABLE_MASKS=${SEGMENTER_ENABLE_MASKS:-1}
+    healthcheck:
+      # Matches the Dockerfile's probe: /health answers 200 with
+      # loaded=false while weights download and the pool builds.
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:8000/health | grep -q '\"loaded\":true'",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 3
     deploy:
       resources:
         reservations:

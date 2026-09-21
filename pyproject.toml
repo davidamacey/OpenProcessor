@@ -100,7 +100,7 @@ target-version = "py312"
 line-length = 100
 
 # Directories to include/exclude
-include = ["src/**/*.py", "export/**/*.py", "dali/**/*.py", "scripts/**/*.py", "tests/**/*.py"]
+include = ["src/**/*.py", "export/**/*.py", "dali/**/*.py", "scripts/**/*.py", "tests/**/*.py", "docker/**/*.py"]
 exclude = [
     ".git",
     ".venv",
