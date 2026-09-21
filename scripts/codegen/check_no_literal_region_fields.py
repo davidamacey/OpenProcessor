@@ -245,6 +245,12 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_ensemble_nms.py',
     'tests/curation/test_pe_preprocess.py',
     'tests/integration/test_ingest_roundtrip.py',
+    # G2 — generic single-class / class-subset dataset export.
+    'src/services/curation/export_single_class.py',
+    'src/services/curation/export_single_class_rows.py',
+    'src/services/curation/export_support.py',
+    'src/routers/curation/export_single_class.py',
+    'tests/curation/test_export_single_class.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
