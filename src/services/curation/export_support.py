@@ -1,10 +1,15 @@
-"""Split-assignment and image-pixel helpers for :mod:`src.services.curation.export`.
+"""Split-assignment, atomic-write and image-pixel helpers shared by the
+curation dataset exporters.
 
 Pulled out of ``export.py`` to keep that module under the repo's 700-LOC
-file-size ratchet (plan §6 R4) — this module has no public surface of its
-own; everything here is imported straight back into ``export.py`` and
-re-exported from there, so callers only ever need ``from
-src.services.curation.export import ...``.
+file-size ratchet (plan §6 R4). Everything here is imported straight back
+into ``export.py`` and re-exported from there, so callers of the
+multi-class exporter only ever need ``from
+src.services.curation.export import ...``. The single-class / class-subset
+exporter (:mod:`src.services.curation.export_single_class`) imports the
+same building blocks directly — deliberately, so the two exporters share
+one sampler, one splitter, one resize worker and one atomic-write
+primitive rather than growing divergent copies.
 """
 
 from __future__ import annotations
@@ -16,14 +21,14 @@ import subprocess  # nosec B404 - only used with a fixed argv + resolved executa
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from src.core.logging import get_logger
 
 
 if TYPE_CHECKING:
     import random
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from src.clients.curation_opensearch import RegistryClassEntry
     from src.config import CurationConfig
@@ -32,6 +37,21 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _T = TypeVar('_T')
+
+
+class SplittableRow(Protocol):
+    """Minimum surface :func:`stratified_split` needs from a row.
+
+    Declared structurally rather than as ``_ExportRow`` so the
+    single-class exporter's own frame-level row type can be handed to
+    the same splitter without either module having to fake the other's
+    fields. ``group_key`` is read via ``getattr``, so any additional
+    grouping attribute (e.g. ``image_id``) is reachable too.
+    """
+
+    item_id: str
+    class_id: int
+    has_test_crop: bool
 
 
 @dataclass
@@ -125,7 +145,7 @@ def even_stratified_sample(
 
 
 def stratified_split(
-    rows: list[_ExportRow],
+    rows: Sequence[SplittableRow],
     *,
     seed: int,
     train_ratio: float,
@@ -157,7 +177,7 @@ def stratified_split(
     Returns ``{item_id: split}`` for every row.
     """
 
-    def _group_of(row: _ExportRow) -> str:
+    def _group_of(row: SplittableRow) -> str:
         if group_key is None:
             return f'item:{row.item_id}'
         value = getattr(row, group_key, None)
@@ -165,7 +185,7 @@ def stratified_split(
             return f'item:{row.item_id}'
         return f'{group_key}:{value}'
 
-    groups: dict[str, list[_ExportRow]] = {}
+    groups: dict[str, list[SplittableRow]] = {}
     for row in rows:
         groups.setdefault(_group_of(row), []).append(row)
 
@@ -206,6 +226,49 @@ def stratified_split(
         for m in members:
             item_split[m.item_id] = split
     return item_split
+
+
+async def scroll_hits(
+    opensearch: Any,
+    *,
+    index: str,
+    query: dict[str, Any],
+    source: list[str],
+    page_size: int = 500,
+    scroll_ttl: str = '5m',
+    cap: int | None = None,
+) -> list[dict[str, Any]]:
+    """Scroll ``index`` and return every raw hit.
+
+    Shared by both exporters so there is exactly one place that gets the
+    scroll-context lifecycle right (``clear_scroll`` in a ``finally``, a
+    failed clear logged but never fatal).
+
+    ``cap`` stops early once that many hits are collected — used to
+    bounded-sample a pool that is far larger than the export needs
+    (e.g. every region-free frame in the index), instead of paying for a
+    full scroll and discarding almost all of it.
+    """
+    body: dict[str, Any] = {'size': page_size, 'query': query, '_source': source}
+    resp = await opensearch.search(index=index, body=body, scroll=scroll_ttl)
+    scroll_id = resp.get('_scroll_id')
+    hits = list((resp.get('hits') or {}).get('hits') or [])
+    out: list[dict[str, Any]] = []
+    try:
+        while hits:
+            out.extend(hits)
+            if cap is not None and len(out) >= cap:
+                break
+            resp = await opensearch.scroll(scroll_id=scroll_id, scroll=scroll_ttl)
+            scroll_id = resp.get('_scroll_id')
+            hits = list((resp.get('hits') or {}).get('hits') or [])
+    finally:
+        if scroll_id:
+            try:
+                await opensearch.clear_scroll(scroll_id=scroll_id)
+            except Exception as exc:
+                logger.warning('export_clear_scroll_failed', err=str(exc))
+    return out
 
 
 def dataset_checksum(item_ids: list[str]) -> str:
@@ -283,8 +346,31 @@ def _letterbox_pil(img: Any, target: int) -> Any:
     return canvas
 
 
+def _crop_pil(img: Any, crop_norm: tuple[float, float, float, float]) -> Any:
+    """Crop ``img`` to a normalized ``(x1, y1, x2, y2)`` box.
+
+    Normalized (not pixel) coordinates so the box is scale-independent —
+    the same stored ``bbox_norm`` crops correctly whatever resolution the
+    source frame happens to be. A degenerate or out-of-bounds box leaves
+    the image untouched rather than raising: the caller already validated
+    geometry upstream, and an unexpected edge case should cost one
+    uncropped training image, not the whole export.
+    """
+    w, h = img.size
+    x1, y1, x2, y2 = crop_norm
+    left, top = max(0, int(x1 * w)), max(0, int(y1 * h))
+    right, bottom = min(w, int(x2 * w)), min(h, int(y2 * h))
+    if right <= left or bottom <= top:
+        return img
+    return img.crop((left, top, right, bottom))
+
+
 def _copy_or_resize_one(
-    src_path: str, dest_path: str, resize_mode: str | None, target_size: int
+    src_path: str,
+    dest_path: str,
+    resize_mode: str | None,
+    target_size: int,
+    crop_norm: tuple[float, float, float, float] | None = None,
 ) -> tuple[str, bool, str | None]:
     """Worker-process body for the image copy/resize stage.
 
@@ -292,27 +378,65 @@ def _copy_or_resize_one(
     ``ProcessPoolExecutor``. Never raises — a per-image failure is
     reported back as ``(dest_path, False, error)`` so one bad source file
     can't abort the whole export.
+
+    ``crop_norm`` (normalized ``x1,y1,x2,y2``) crops before resizing, for
+    the single-class exporter's ``item_crop`` image mode. It forces a
+    decode even when ``resize_mode`` is ``None``, since a byte copy
+    obviously can't crop.
     """
     try:
         Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
-        if resize_mode is None:
+        if resize_mode is None and crop_norm is None:
             shutil.copyfile(src_path, dest_path)
             return dest_path, True, None
         from PIL import Image
 
         with Image.open(src_path) as img:
             rgb = img.convert('RGB')
+            if crop_norm is not None:
+                rgb = _crop_pil(rgb, crop_norm)
             if resize_mode == 'letterbox':
                 rgb = _letterbox_pil(rgb, target_size)
             elif resize_mode == 'aspect':
                 rgb.thumbnail((target_size, target_size), Image.LANCZOS)
-            else:
+            elif resize_mode is not None:
                 msg = f'unknown resize_mode: {resize_mode!r}'
                 raise ValueError(msg)
             rgb.save(dest_path, format='JPEG', quality=90)
         return dest_path, True, None
     except Exception as exc:
         return dest_path, False, str(exc)
+
+
+def atomic_write_text(path: Path, payload: str) -> None:
+    """tmp-write + fsync + rename.
+
+    Never leaves a partially-written file visible to a concurrent reader
+    (e.g. a preflight scan reading ``manifest.json`` while an export
+    rewrites it).
+    """
+    tmp_path = path.with_suffix(path.suffix + '.tmp')
+    with tmp_path.open('w', encoding='utf-8') as f:
+        f.write(payload)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp_path.replace(path)
+
+
+def atomic_symlink_flip(symlink_path: Path, target: Path) -> None:
+    """Point ``symlink_path`` at ``target`` via a write-then-rename.
+
+    A reader that resolves the link mid-flip always sees either the old
+    or the new target, never a missing/half-written symlink. The tmp name
+    carries the pid so two processes flipping the same link concurrently
+    can't clobber each other's staging entry.
+    """
+    symlink_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_symlink = symlink_path.with_name(f'.{symlink_path.name}.tmp.{os.getpid()}')
+    if tmp_symlink.exists() or tmp_symlink.is_symlink():
+        tmp_symlink.unlink()
+    tmp_symlink.symlink_to(target, target_is_directory=True)
+    tmp_symlink.replace(symlink_path)
 
 
 def _code_sha() -> str:
@@ -343,8 +467,12 @@ def _code_sha() -> str:
 
 
 __all__ = [
+    'SplittableRow',
+    'atomic_symlink_flip',
+    'atomic_write_text',
     'dataset_checksum',
     'even_stratified_sample',
     'hash_split',
+    'scroll_hits',
     'stratified_split',
 ]

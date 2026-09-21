@@ -394,12 +394,13 @@ def _export_strategies() -> list[dict[str, Any]]:
     /export/lpr`` would kick off a real dataset build) with a throwaway
     request just to see whether it 404s.
 
-    ``lpr`` — the reference implementation's proprietary single-class
-    license-plate export (Bucket B, out of scope — never ported) — is
-    deliberately absent from this list rather than listed with
-    ``status='disabled'``: a status implies "not yet, but this deployment
-    could serve it later", which isn't true for a proprietary overlay this
-    repo doesn't contain.
+    ``single_class`` is the generic replacement for the reference
+    implementation's proprietary single-class license-plate export: it
+    takes the target class ids from the request rather than hardcoding a
+    domain vocabulary, so it covers that use case and any other narrowed
+    export without this repo carrying a deployment-specific overlay.
+    There is deliberately no ``lpr`` id — a domain-named export kind
+    would be exactly the hardcoding this axis exists to avoid.
     """
     return [
         {
@@ -408,7 +409,14 @@ def _export_strategies() -> list[dict[str, Any]]:
             'label': 'YOLO detection dataset export',
             'status': 'stable',
             'default': True,
-        }
+        },
+        {
+            'id': 'single_class',
+            'axis': 'export',
+            'label': 'Single-class / class-subset dataset export',
+            'status': 'stable',
+            'default': False,
+        },
     ]
 
 

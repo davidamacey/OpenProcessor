@@ -364,6 +364,41 @@ def test_preflight_skips_include_classes_check_for_lpr(
     assert 'include_classes_resolvable' not in names
 
 
+def test_preflight_accepts_the_generic_single_class_dataset_kind(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    """A dataset built by ``POST /curation/export/single_class`` writes
+    ``dataset_kind='single_class'``; preflight must take the manifest-driven
+    branch for it, and name the target class from the manifest rather than
+    a hardcoded vocabulary."""
+    import json
+
+    export_dir = tmp_path / 'export_single_class'
+    export_dir.mkdir()
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_kind': 'single_class',
+                'class_name': 'street_sign',
+                'positive_images': 1200,
+                'split_counts': {'train': 1000, 'val': 100, 'test': 100},
+            }
+        )
+    )
+
+    body = {'dataset_export_dir': str(export_dir), 'profile': 'medium'}
+    r = app_client.post('/curation/train/preflight', json=body)
+
+    assert r.status_code == 200, r.text
+    out = r.json()
+    balance = next(c for c in out['checks'] if c['name'] == 'class_balance')
+    assert balance['severity'] == 'ok'
+    assert 'street_sign' in balance['message']
+    assert 'license_plate' not in balance['message']
+    # The manifest-driven branch also skips the label scan entirely.
+    assert next(c for c in out['checks'] if c['name'] == 'empty_labels')['severity'] == 'ok'
+
+
 # =============================================================================
 # empty_labels / region_pairing real scan (P2-8)
 # =============================================================================

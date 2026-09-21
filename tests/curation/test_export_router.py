@@ -219,3 +219,190 @@ def test_registry_artifact_missing_file_in_valid_export_dir(
 
     assert response.status_code == 404
     assert 'class_registry.json' in response.json()['detail']
+
+
+# =============================================================================
+# Single-class / class-subset export endpoints (plan §4.1 G2)
+# =============================================================================
+
+
+def test_single_class_routes_are_mounted(app_client: TestClient) -> None:
+    route_paths = {route.path for route in app_client.app.routes}
+    assert '/curation/export/single_class' in route_paths
+    assert '/curation/export/single_class/status' in route_paths
+
+
+@pytest.mark.asyncio
+async def test_single_class_handler_builds_the_profile_from_the_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The target vocabulary comes from the REQUEST, not from anything
+    hardcoded in the service — the whole point of G2's genericization."""
+    from src.routers.curation._common import ExportSingleClassRequest
+    from src.routers.curation.export_single_class import (
+        export_single_class as export_single_class_handler,
+    )
+    from src.services.curation.export_single_class import (
+        SingleClassExportProfile,
+        SingleClassExportResult,
+        SingleClassExportService,
+        SingleClassSplitCounts,
+    )
+
+    captured: dict[str, Any] = {}
+
+    def _fake_init(
+        self: SingleClassExportService,
+        opensearch: Any,
+        *,
+        profile: SingleClassExportProfile,
+        **_kwargs: Any,
+    ) -> None:
+        captured['profile'] = profile
+
+    async def _fake_export(
+        self: SingleClassExportService,
+        **kwargs: Any,
+    ) -> SingleClassExportResult:
+        captured.update(kwargs)
+        return SingleClassExportResult(
+            export_dir='/tmp/fake-single-class',
+            version_tag=kwargs.get('version_tag', ''),
+            manifest_path='/tmp/fake-single-class/manifest.json',
+            data_yaml_path='/tmp/fake-single-class/data.yaml',
+            dataset_sha='abc123',
+            frozen_test_sha='def456',
+            split_counts=SingleClassSplitCounts(train=8, val=1, test=1),
+            image_count=10,
+            class_count=2,
+            positive_images=10,
+            background_images=0,
+            started_at='2026-01-01T00:00:00+00:00',
+            finished_at='2026-01-01T00:00:05+00:00',
+            current_symlink='/tmp/exports/plates/current',
+        )
+
+    monkeypatch.setattr(SingleClassExportService, '__init__', _fake_init)
+    monkeypatch.setattr(SingleClassExportService, 'export', _fake_export)
+
+    payload = ExportSingleClassRequest(
+        version_tag='subset-v1',
+        class_ids=[7, 3],
+        profile_name='plates',
+        box_source='region',
+        region_class_name='license_plate',
+        seed=99,
+        max_positive_images=250,
+        img_max_side=640,
+    )
+    response = await export_single_class_handler(payload, MagicMock())
+
+    profile = captured['profile']
+    assert profile.class_ids == (7, 3)
+    assert profile.name == 'plates'
+    assert profile.box_source == 'region'
+    assert profile.region_class_name == 'license_plate'
+    assert captured['seed'] == 99
+    assert captured['max_positive_images'] == 250
+    assert captured['img_max_side'] == 640
+    assert response['dataset_sha'] == 'abc123'
+    assert response['frozen_test_sha'] == 'def456'
+    assert response['positives_zero_warning'] is False
+
+
+@pytest.mark.asyncio
+async def test_single_class_handler_maps_bad_config_to_422_not_500(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty class_ids is a caller mistake, not a server fault."""
+    from fastapi import HTTPException
+
+    from src.routers.curation._common import ExportSingleClassRequest
+    from src.routers.curation.export_single_class import (
+        export_single_class as export_single_class_handler,
+    )
+    from src.services.curation.export_single_class import SingleClassExportService
+
+    async def _raise(self: SingleClassExportService, **_kwargs: Any) -> None:
+        msg = "box_source='item' requires a non-empty profile.class_ids"
+        raise ValueError(msg)
+
+    monkeypatch.setattr(SingleClassExportService, 'export', _raise)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await export_single_class_handler(ExportSingleClassRequest(), MagicMock())
+
+    assert excinfo.value.status_code == 422
+    assert 'class_ids' in str(excinfo.value.detail)
+
+
+def test_single_class_status_is_idle_before_any_export(app_client: TestClient) -> None:
+    response = app_client.get('/curation/export/single_class/status?profile_name=never-run')
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'status': 'idle',
+        'last_run': None,
+        'profile_name': 'never-run',
+    }
+
+
+def test_single_class_status_reports_the_manifest(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import json
+
+    export_dir = tmp_path / '20260921T000000Z'
+    export_dir.mkdir()
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_kind': 'single_class',
+                'dataset_sha': 'cafe1234',
+                'frozen_test_sha': 'beef5678',
+                'finished_at': '2026-09-21T00:00:05+00:00',
+                'class_count': 1,
+                'class_names': ['license_plate'],
+                'image_count': 42,
+                'positive_images': 40,
+                'background_images': 2,
+                'false_positive_background_images': 2,
+                'positives_zero_warning': False,
+                'split_counts': {'train': 34, 'val': 4, 'test': 4},
+            }
+        )
+    )
+    monkeypatch.setattr(
+        'src.routers.curation.export_single_class._resolve_current_dir',
+        lambda _profile_name: export_dir,
+    )
+
+    body = app_client.get('/curation/export/single_class/status?profile_name=plates').json()
+
+    assert body['status'] == 'success'
+    assert body['profile_name'] == 'plates'
+    assert body['dataset_sha'] == 'cafe1234'
+    assert body['frozen_test_sha'] == 'beef5678'
+    assert body['class_names'] == ['license_plate']
+    assert body['split_counts'] == {'train': 34, 'val': 4, 'test': 4}
+
+
+def test_single_class_status_unknown_when_manifest_unreadable(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    export_dir = tmp_path / '20260921T000001Z'
+    export_dir.mkdir()
+    (export_dir / 'manifest.json').write_text('{ not json')
+    monkeypatch.setattr(
+        'src.routers.curation.export_single_class._resolve_current_dir',
+        lambda _profile_name: export_dir,
+    )
+
+    body = app_client.get('/curation/export/single_class/status').json()
+
+    assert body['status'] == 'unknown'
+    assert body['export_dir'] == str(export_dir)
