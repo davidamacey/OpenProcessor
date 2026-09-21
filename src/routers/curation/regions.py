@@ -491,6 +491,11 @@ async def patch_crop_plate_meta(
         )
 
     doc: dict[str, Any] = {'updated_at': _now_iso()}
+    # Wire-contract (plate_*) names of the fields this request actually
+    # changed — reported back in the response instead of `doc.keys()`,
+    # which are internal RegionFields storage keys (region_* by default)
+    # and must never leak onto the HTTP contract.
+    wire_fields: list[str] = []
     if 'plate_text' in fields_set:
         # Human-typed text is the ground truth; mark the source so the
         # region thumbnail / OCR pipeline knows not to overwrite it.
@@ -499,6 +504,7 @@ async def patch_crop_plate_meta(
         # Human OCR is by definition 1.0 confidence — null would imply
         # "unknown" which is misleading when a human typed it.
         doc[F.text_confidence] = 1.0 if payload.plate_text else None
+        wire_fields.append('plate_text')
     if 'plate_status' in fields_set:
         if (
             payload.plate_status is not None
@@ -515,8 +521,10 @@ async def patch_crop_plate_meta(
         # Only when plate_status is in the payload — never clobber the cluster
         # id on a text-only edit.
         doc.update(_fp_cluster_fields(payload.plate_status))
+        wire_fields.append('plate_status')
     if 'plate_rejection_reason' in fields_set:
         doc[F.rejection_reason] = payload.plate_rejection_reason
+        wire_fields.append('plate_rejection_reason')
 
     # Operator-initiated edits are terminal — keep the row out of the
     # /review?tab=plates queue. AI-source patches (auto-relabel jobs) skip
@@ -536,7 +544,7 @@ async def patch_crop_plate_meta(
         raise
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
-    return {'crop_id': crop_id, 'updated_fields': sorted(doc.keys())}
+    return {'crop_id': crop_id, 'updated_fields': sorted(wire_fields)}
 
 
 @router.put('/crops/batch_plate')
