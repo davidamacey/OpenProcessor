@@ -1,14 +1,19 @@
-"""LPR bake-off CLI: score one detector backend on the frozen test split.
+"""Detector bake-off CLI: score one detector backend on a frozen test split.
+
+Domain-agnostic: point it at any single-class-per-run YOLO test split
+(any target class id, any class name) and any of the wired backends.
+Originated as an LPR-detector comparison harness; the class/backend
+identity is entirely CLI-driven, nothing here is hardcoded to plates.
 
 Example:
     .venv/bin/python -m scripts.curation.bakeoff.run \
-        --dataset ./data/bakeoff_eval/curated/lpr_current \
-        --backend ultralytics --weights ./weights/lpr_nanov11_640.pt \
-        --imgsz 1280 --name lpr-nanov11-640 --out-dir /tmp/bakeoff
+        --dataset ./data/bakeoff_eval/curated/my_export \
+        --backend ultralytics --weights ./weights/my_model.pt \
+        --imgsz 1280 --name my-model-v1 --out-dir /tmp/bakeoff
 
 Run once per model; the per-model JSON files are then merged into the
-comparison tables for the paper. Accuracy is identical-metric (COCOeval)
-across backends; latency is reported per the model's native runtime.
+comparison tables. Accuracy is identical-metric (COCOeval) across
+backends; latency is reported per the model's native runtime.
 """
 
 from __future__ import annotations
@@ -63,12 +68,12 @@ def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
             device=args.device,
             conf=args.conf_floor,
             iou=args.nms_iou,
-            plate_class_id=args.plate_class_id,
+            pred_class_id=args.pred_class_id,
         )
     if backend == 'triton':
-        from .backends.triton_trt import TritonLprDetector
+        from .backends.triton_trt import TritonYoloDetector
 
-        return TritonLprDetector(
+        return TritonYoloDetector(
             url=args.triton_url,
             model=args.triton_model,
             name=args.name,
@@ -122,17 +127,22 @@ def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
     raise SystemExit(f'unknown / not-yet-wired backend: {backend!r}')
 
 
-def _vehicle_detector(args: argparse.Namespace) -> Detector:
-    """COCO vehicle detector for crop mode (keeps car/motorcycle/bus/truck)."""
+def _primary_detector(args: argparse.Namespace) -> Detector:
+    """Coarse-stage COCO detector for crop mode (any class list you keep).
+
+    Default class list (car/motorcycle/bus/truck) is just an example for a
+    vehicle->plate style cascade -- pass --primary-classes to target any
+    other COCO classes for a different coarse->fine cascade.
+    """
     from .backends.ultralytics_pt import UltralyticsDetector
 
-    keep = {int(c) for c in str(args.vehicle_classes).split(',') if c.strip()}
+    keep = {int(c) for c in str(args.primary_classes).split(',') if c.strip()}
     return UltralyticsDetector(
-        args.vehicle_weights,
-        name='vehicle',
-        imgsz=args.vehicle_imgsz,
+        args.primary_weights,
+        name='primary',
+        imgsz=args.primary_imgsz,
         device=args.device,
-        conf=args.vehicle_conf,
+        conf=args.primary_conf,
         iou=args.nms_iou,
         keep_classes=keep or None,
     )
@@ -141,20 +151,22 @@ def _vehicle_detector(args: argparse.Namespace) -> Detector:
 def _build_backend(args: argparse.Namespace) -> Detector:
     """Build the system under test, honoring --mode (full vs crop).
 
-    ``--mode crop`` wraps ANY backend in the vehicle->crop->detector
-    pipeline (the sorter deployment mode); ``--mode full`` runs the
-    detector directly on the source frame. The legacy ``two-stage`` backend
-    remains for the bespoke in-house vehicle+crop-LPR combo.
+    ``--mode crop`` wraps ANY backend in a coarse-detector->crop->detector
+    pipeline (e.g. vehicle->plate, but any two-stage cascade works);
+    ``--mode full`` runs the detector directly on the source frame. The
+    ``two-stage`` backend is a fixed, non-wrapped variant of that same
+    cascade for when the coarse+fine pair is the system under test itself
+    (not a wrapper around one of the other single backends above).
     """
     if args.backend == 'two-stage':
         from .backends.two_stage import TwoStageDetector
         from .backends.ultralytics_pt import UltralyticsDetector
 
-        vehicle = _vehicle_detector(args)
-        if args.lpr_backend == 'triton':
-            from .backends.triton_trt import TritonLprDetector
+        primary = _primary_detector(args)
+        if args.secondary_backend == 'triton':
+            from .backends.triton_trt import TritonYoloDetector
 
-            lpr: Detector = TritonLprDetector(
+            secondary: Detector = TritonYoloDetector(
                 url=args.triton_url,
                 model=args.triton_model,
                 input_size=640,
@@ -162,16 +174,16 @@ def _build_backend(args: argparse.Namespace) -> Detector:
                 iou=args.nms_iou,
             )
         else:
-            lpr = UltralyticsDetector(
+            secondary = UltralyticsDetector(
                 args.weights,
-                name='lpr',
-                imgsz=args.lpr_imgsz,
+                name='secondary',
+                imgsz=args.secondary_imgsz,
                 device=args.device,
                 conf=args.conf_floor,
                 iou=args.nms_iou,
             )
         return TwoStageDetector(
-            vehicle, lpr, name=args.name or 'in-house 2-stage', nms_iou=args.nms_iou
+            primary, secondary, name=args.name or 'two-stage', nms_iou=args.nms_iou
         )
 
     inner = _build_detector(args, args.backend)
@@ -179,10 +191,10 @@ def _build_backend(args: argparse.Namespace) -> Detector:
         from .backends.two_stage import TwoStageDetector
 
         return TwoStageDetector(
-            _vehicle_detector(args),
+            _primary_detector(args),
             inner,
             name=args.name or inner.name,
-            vehicle_conf=args.vehicle_conf,
+            primary_conf=args.primary_conf,
             nms_iou=args.nms_iou,
         )
     return inner
@@ -225,7 +237,7 @@ def _per_stratum(
                 for i in imgs
             ],
             'annotations': [],
-            'categories': [{'id': 1, 'name': 'license_plate'}],
+            'categories': [{'id': 1, 'name': ds.target_class_name}],
         }
         ann_id = 1
         for i in imgs:
@@ -254,13 +266,18 @@ def _per_stratum(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description='LPR detector bake-off (single backend run).')
+    p = argparse.ArgumentParser(description='Detector bake-off (single backend run).')
     p.add_argument('--dataset', type=Path, help='Export root with images/<split> + labels/<split>')
     p.add_argument('--split', default='test')
     p.add_argument('--images', type=Path, help='Override: images dir (instead of --dataset)')
     p.add_argument('--labels', type=Path, help='Override: labels dir')
     p.add_argument('--stratum-map', type=Path, help='JSON {image_stem: stratum} for per-cluster')
-    p.add_argument('--gt-plate-class', type=int, default=0, help='Plate class id in GT labels')
+    p.add_argument('--gt-class-id', type=int, default=0, help='Target class id in GT labels')
+    p.add_argument(
+        '--gt-class-name',
+        default='object',
+        help='Display name for the target class (cosmetic, COCO categories block)',
+    )
     p.add_argument(
         '--backend',
         required=True,
@@ -278,15 +295,18 @@ def main() -> int:
     p.add_argument('--name', help='Model display name for the report')
     p.add_argument('--imgsz', type=int, default=1280)
     p.add_argument('--device', default='0')
-    p.add_argument('--plate-class-id', type=int, default=None, help='Keep only this pred class')
-    # full = detector on the source frame; crop = vehicle->crop->detector
-    # (the sorter deployment mode). Applies to ANY backend.
+    p.add_argument('--pred-class-id', type=int, default=None, help='Keep only this pred class')
+    # full = detector on the source frame; crop = coarse->crop->detector
+    # (a cascade deployment mode). Applies to ANY backend.
     p.add_argument('--mode', choices=['full', 'crop'], default='full')
-    # LPDNet (NVIDIA TAO DetectNet_v2) backend
+    # LPDNet (NVIDIA TAO DetectNet_v2) backend -- a plate-detection-specific
+    # architecture; only meaningful if you're actually benchmarking plates.
     p.add_argument('--lpdnet-variant', choices=['usa', 'ccpd'], default='usa')
     # Triton backend
     p.add_argument('--triton-url', default='localhost:4601')
-    p.add_argument('--triton-model', default='lpr_nanov11_640')
+    p.add_argument(
+        '--triton-model', help='Triton model name to score (required for --backend triton)'
+    )
     # ONNX Runtime / CoreML backends (the quantized portable artifacts).
     p.add_argument(
         '--ort-providers',
@@ -302,21 +322,25 @@ def main() -> int:
     p.add_argument(
         '--coreml-compute-units', default='ALL', help='CoreML ComputeUnit (ALL/CPU_ONLY/...)'
     )
-    # Vehicle stage (crop mode + two-stage). A COCO detector (YOLO11/YOLO26)
-    # filtered to vehicle classes (car=2, motorcycle=3, bus=5, truck=7).
-    p.add_argument('--vehicle-weights', default='./weights/yolo11n.pt')
-    p.add_argument('--vehicle-classes', default='2,3,5,7', help='COCO vehicle class ids to keep')
-    p.add_argument('--vehicle-imgsz', type=int, default=960)
-    p.add_argument('--vehicle-conf', type=float, default=0.25)
-    p.add_argument('--lpr-backend', choices=['ultralytics', 'triton'], default='ultralytics')
-    p.add_argument('--lpr-imgsz', type=int, default=640, help='Crop LPR input size (two-stage)')
+    # Coarse stage (crop mode + two-stage): a COCO detector (YOLO11/YOLO26)
+    # filtered to any class list. Default (car/motorcycle/bus/truck) is just
+    # an example for a vehicle->plate cascade -- pass --primary-classes for
+    # a different coarse->fine cascade.
+    p.add_argument('--primary-weights', default='./weights/yolo11n.pt')
+    p.add_argument('--primary-classes', default='2,3,5,7', help='COCO class ids to keep')
+    p.add_argument('--primary-imgsz', type=int, default=960)
+    p.add_argument('--primary-conf', type=float, default=0.25)
+    p.add_argument('--secondary-backend', choices=['ultralytics', 'triton'], default='ultralytics')
+    p.add_argument(
+        '--secondary-imgsz', type=int, default=640, help='Crop input size (two-stage fine stage)'
+    )
     p.add_argument('--conf-floor', type=float, default=0.001, help='Low floor so mAP sees full PR')
     p.add_argument('--nms-iou', type=float, default=0.7, help='NMS IoU during inference')
     p.add_argument('--op-conf', type=float, default=0.25, help='Operating-point confidence')
     p.add_argument('--op-iou', type=float, default=0.45, help='Operating-point match IoU')
     p.add_argument('--warmup', type=int, default=3, help='Frames excluded from latency stats')
-    p.add_argument('--out-dir', type=Path, default=Path('/tmp/lpr_bakeoff'))
-    p.add_argument('--training-data', help="Note on this model's training data (for the paper)")
+    p.add_argument('--out-dir', type=Path, default=Path('/tmp/bakeoff'))
+    p.add_argument('--training-data', help="Note on this model's training data (for the report)")
     # MLflow logging on by default (the MLflow tracking service on :5000); the
     # logger fails soft if the server/package is unavailable. Use --no-mlflow
     # to disable.
@@ -330,21 +354,28 @@ def main() -> int:
         '--mlflow-uri',
         default=os.environ.get('MLFLOW_TRACKING_URI', 'http://localhost:5000'),
     )
-    p.add_argument('--mlflow-experiment', default='lpr-bakeoff')
+    p.add_argument('--mlflow-experiment', default='bakeoff')
     args = p.parse_args()
+
+    if args.backend == 'triton' and not args.triton_model:
+        raise SystemExit('--triton-model is required for --backend triton')
+    if args.backend == 'two-stage' and args.secondary_backend == 'triton' and not args.triton_model:
+        raise SystemExit('--triton-model is required when --secondary-backend triton')
 
     if args.images and args.labels:
         ds = YoloTestSet(
             args.images,
             args.labels,
-            plate_class_id=args.gt_plate_class,
+            target_class_id=args.gt_class_id,
+            target_class_name=args.gt_class_name,
             stratum_map=(json.loads(args.stratum_map.read_text()) if args.stratum_map else None),
         )
     elif args.dataset:
         ds = YoloTestSet.from_dataset_root(
             args.dataset,
             split=args.split,
-            plate_class_id=args.gt_plate_class,
+            target_class_id=args.gt_class_id,
+            target_class_name=args.gt_class_name,
             stratum_map_path=args.stratum_map,
         )
     else:
@@ -355,7 +386,7 @@ def main() -> int:
 
     print(
         f'test set: {len(ds.images)} frames '
-        f'({ds.n_positive_frames} with plates, {ds.n_background_frames} background)'
+        f'({ds.n_positive_frames} positive, {ds.n_background_frames} background)'
     )
 
     backend = _build_backend(args)
