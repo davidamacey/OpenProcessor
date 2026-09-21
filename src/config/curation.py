@@ -65,6 +65,14 @@ class CurationConfig:
     # ``src.clients.curation_opensearch.CURATION_SETTINGS_DOC_ID`` for the
     # fixed doc id this index always addresses.
     settings_index: str = 'op_curation_settings'
+    # Two deliberately distinct UMAP-state indexes (see
+    # ``src/services/curation/embedding_viz.py`` module docstring):
+    # the retired clustering reducer's fitted-manifold cache
+    # (``clustering/embedding_reduce.py``) and the visualization-only
+    # projection's own metadata slot. They must never share a name or
+    # state, so they get separate fields rather than one shared role.
+    umap_state_index: str = 'op_umap_state'
+    umap_viz_state_index: str = 'op_umap_viz_state'
 
     class_registry_path: Path = Path('./data/class_registry.json')
     # Optional deployment-supplied VLM PromptPack (see
@@ -133,6 +141,8 @@ class CurationConfig:
             classes_index=_str('CLASSES_INDEX', defaults.classes_index),
             clusters_index=_str('CLUSTERS_INDEX', defaults.clusters_index),
             settings_index=_str('SETTINGS_INDEX', defaults.settings_index),
+            umap_state_index=_str('UMAP_STATE_INDEX', defaults.umap_state_index),
+            umap_viz_state_index=_str('UMAP_VIZ_STATE_INDEX', defaults.umap_viz_state_index),
             class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
             source_root=_path('SOURCE_ROOT', defaults.source_root),

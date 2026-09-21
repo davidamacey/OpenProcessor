@@ -90,9 +90,11 @@ logger = get_logger(__name__)
 
 ITEMS_INDEX = get_curation_config().items_index
 
-# Own OpenSearch index for run metadata -- deliberately NOT op_umap_state
-# (that belongs to the retired clustering reducer, embedding_reduce.py).
-UMAP_VIZ_STATE_INDEX = 'op_umap_viz_state'
+# Own OpenSearch index for run metadata -- deliberately NOT the retired
+# clustering reducer's index (embedding_reduce.py). Routed through
+# CurationConfig like every other index name so a deployment renaming
+# its indexes via env vars doesn't leave this one behind.
+UMAP_VIZ_STATE_INDEX = get_curation_config().umap_viz_state_index
 
 # State dir shared with the rest of the curation worker fleet (same
 # CurationConfig.state_dir embedding_reduce.py reads), but a distinct

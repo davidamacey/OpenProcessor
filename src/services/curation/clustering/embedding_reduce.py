@@ -52,7 +52,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-UMAP_STATE_INDEX = 'op_umap_state'
+UMAP_STATE_INDEX = get_curation_config().umap_state_index
 ITEMS_INDEX = get_curation_config().items_index
 
 # State dir shared with the VLM worker via the GPU arbiter pause
