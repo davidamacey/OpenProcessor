@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-21
 
 ### Added
 - **Curation subsystem (EXPERIMENTAL)**: a generic active-learning
@@ -78,6 +78,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed all `KB_*` environment variables to `OP_*` (23 vars) and all
   `kb_*` Prometheus metric names to `op_*`, closing the last
   reference-deployment naming residue in the config surface.
+- **`region_*`/`plate_*` wire-contract leak**: `GET /curation/crops/{id}`
+  returned the raw OpenSearch `_source` (RegionFields storage keys,
+  `region_*` by default) instead of the frozen `ItemDoc` `plate_*` wire
+  contract; `PATCH /crops/{id}/plate_meta`'s `updated_fields` echoed
+  the same internal keys instead of the request's wire names; and
+  `GET /review/{tab}` built its response dict using storage keys as
+  literal JSON keys. All three now correctly emit `plate_*`. `ItemDoc`
+  gained 11 previously-missing round-trip fields
+  (`plate_status`/`plate_text`/`plate_detector`/`plate_verified`/etc)
+  that `PATCH .../plate_meta` wrote but no `GET` ever returned. Found
+  via a live cross-repo integration test against the Cropwright
+  labeler frontend.
+- **Shared settings could not be cleared**: `PUT /curation/settings`
+  required every submitted value to be a currently-advertised strategy
+  id, so once an axis was pinned there was no way back to "each
+  endpoint uses its own tuned default" — a `null` value now clears
+  that axis's override.
+
+### Removed
+- `docs/security/` and `docker/hardened/deepstream/` — an internal
+  DeepStream CVE-hardening investigation unrelated to this product
+  (the Triton half of that work is kept — see
+  `docs/security/triton_cve_hardening.md` and
+  `docker/hardened/triton/`).
 
 ### Changed
 - **License: re-badged MIT → AGPL-3.0-or-later.** This project vendors

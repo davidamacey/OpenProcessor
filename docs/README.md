@@ -193,5 +193,5 @@ curl -s http://localhost:4600/v2/models | jq '.models[] | {name, state}'
 
 ---
 
-**Last Updated:** 2026-09-20
-**Version:** 0.2.1+ (`v0.3.0` pending) - Curation subsystem, CI, and OSS furniture added
+**Last Updated:** 2026-09-21
+**Version:** 0.3.0 - Curation subsystem, CI, and OSS furniture added
