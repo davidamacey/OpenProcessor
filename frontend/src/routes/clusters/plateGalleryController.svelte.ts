@@ -408,7 +408,7 @@ export function createPlateGalleryController() {
       const res = await batchPlateStatus(
         licensePlateSlot,
         cropIds,
-        status as 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
+        status as 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
         { plateVerified: verified },
       );
       // Reconcile with the backend: any crop_id the server reported as a

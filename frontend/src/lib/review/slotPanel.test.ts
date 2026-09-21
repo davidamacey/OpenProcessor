@@ -13,7 +13,7 @@ describe('humanWritableStates', () => {
     expect(humanWritableStates(licensePlateSlot)).toEqual([
       { value: 'detected', label: 'detected (plate visible)' },
       { value: 'verify_rejected', label: 'rejected (bad detection)' },
-      { value: 'no_plate_visible', label: 'no plate visible' },
+      { value: 'no_region_visible', label: 'no plate visible' },
       { value: 'false_positive', label: 'false positive (keep box)' },
     ]);
   });
@@ -29,7 +29,7 @@ describe('humanWritableStates', () => {
 
 describe('statusClearsBox', () => {
   it('licensePlateSlot: only rejectState clears the box', () => {
-    expect(statusClearsBox(licensePlateSlot, 'no_plate_visible')).toBe(true);
+    expect(statusClearsBox(licensePlateSlot, 'no_region_visible')).toBe(true);
     expect(statusClearsBox(licensePlateSlot, 'detected')).toBe(false);
     expect(statusClearsBox(licensePlateSlot, '')).toBe(false);
   });
@@ -41,11 +41,11 @@ describe('statusClearsBox', () => {
 });
 
 describe('statusWantsRejectionReason', () => {
-  it("licensePlateSlot: exactly {verify_rejected, no_plate_visible} — the no-regression proof for the old '=== verify_rejected || === no_plate_visible' check", () => {
+  it("licensePlateSlot: exactly {verify_rejected, no_region_visible} — the no-regression proof for the old '=== verify_rejected || === no_plate_visible' check", () => {
     const wants = licensePlateSlot.capabilities
       .lifecycle!.states.map((s) => s.value)
       .filter((v) => statusWantsRejectionReason(licensePlateSlot, v));
-    expect(wants.sort()).toEqual(['no_plate_visible', 'verify_rejected'].sort());
+    expect(wants.sort()).toEqual(['no_region_visible', 'verify_rejected'].sort());
   });
 
   it('aircraftTailNumberSlot: obscured (rejected) and not_visible (absent), not detected (proposed)', () => {

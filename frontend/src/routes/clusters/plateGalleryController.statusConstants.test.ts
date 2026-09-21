@@ -32,7 +32,7 @@ describe('plateGalleryController status constants', () => {
 
   it("today's values match the pre-C4b hardcoded literals (no behavior change)", () => {
     expect(PLATE_CONFIRM_STATE).toBe('detected');
-    expect(PLATE_REJECT_STATE).toBe('no_plate_visible');
+    expect(PLATE_REJECT_STATE).toBe('no_region_visible');
     expect(PLATE_FALSE_POSITIVE_STATE).toBe('false_positive');
   });
 });

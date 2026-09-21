@@ -94,7 +94,7 @@ describe('savePlateBbox — no redundant write', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     const patched = gallery.platePager.items.find((p) => p.crop_id === 'c2');
-    expect(patched?.plate_status).toBe('no_plate_visible');
+    expect(patched?.plate_status).toBe('no_region_visible');
     expect(patched?.plate_bbox_norm).toBeNull();
 
     vi.unstubAllGlobals();

@@ -47,7 +47,7 @@ describe('api.ts declares exactly one REGION_BASE constant', () => {
     // this route family, update the value here in the SAME commit that
     // flips the constant (C14) — this assertion is the deliberate,
     // single, expected diff line of that lockstep change.
-    expect(m![1]).toBe('/plates');
+    expect(m![1]).toBe('/regions');
   });
 });
 

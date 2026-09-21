@@ -50,9 +50,9 @@
 
   // Synthetic license_plate gallery card. Plates are sub-bboxes on
   // vehicle crops, not FAISS docs, so the cluster grid never produces
-  // a card for them. We surface one explicitly using /curation/plates so the
+  // a card for them. We surface one explicitly using /curation/regions so the
   // operator can click into the plate inventory the same way they click
-  // into any other class cluster. Card is null until the first /curation/plates
+  // into any other class cluster. Card is null until the first /curation/regions
   // call resolves; the cluster grid hides it during that window.
   let lpCard = $state<OpCluster | null>(null);
 
@@ -383,7 +383,7 @@
 
   // Build the synthetic license_plate gallery card. Plates live as
   // sub-bboxes on vehicle crops (not FAISS docs) so the cluster grid
-  // never includes them. We query /curation/plates for the total inventory
+  // never includes them. We query /curation/regions for the total inventory
   // and use the first 4 plate-bearing crops as thumbnails. Card is
   // null until this resolves; the grid renders it as the first item
   // when the unfiltered view is active.

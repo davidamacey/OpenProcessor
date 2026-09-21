@@ -36,7 +36,7 @@ describe('patchSlotMeta', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_PREFIX}/crops/c1/plate_meta`);
+    expect(url).toBe(`${API_PREFIX}/crops/c1/region_meta`);
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({
       plate_status: 'detected',
@@ -80,7 +80,7 @@ describe('setSlotBox', () => {
     await setSlotBox(licensePlateSlot, 'c1', [0.1, 0.1, 0.2, 0.2]);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_PREFIX}/crops/c1/plate`);
+    expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body)).toEqual({ bbox_norm: [0.1, 0.1, 0.2, 0.2] });
   });
@@ -93,7 +93,7 @@ describe('setSlotBox', () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     // licensePlateSlot's clearBox and setBox are the same URL today.
-    expect(url).toBe(`${API_PREFIX}/crops/c1/plate`);
+    expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
     expect(JSON.parse(init.body)).toEqual({ bbox_norm: null });
   });
 

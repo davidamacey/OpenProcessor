@@ -95,13 +95,23 @@ export const licensePlateSlot: SlotSpec = {
           role: 'rejected',
         },
         {
-          value: 'no_plate_box',
+          // Wave 2 C14 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
+          // §8.4(ii)): OpenProcessor renamed this status value
+          // no_plate_box -> no_region_box (merged at b3f928d). `value`
+          // is what the UI now writes; `aliases` keeps the old value
+          // resolving to this same state on read forever, since
+          // existing OpenSearch documents may still carry it (the
+          // 347k-doc reindex this would otherwise require was WONTFIX'd).
+          value: 'no_region_box',
+          aliases: ['no_plate_box'],
           label: 'no box found',
           humanWritable: false,
           role: 'absent',
         },
         {
-          value: 'no_plate_visible',
+          // no_plate_visible -> no_region_visible, same rename/alias story.
+          value: 'no_region_visible',
+          aliases: ['no_plate_visible'],
           label: 'no plate visible',
           humanWritable: true,
           role: 'absent',
@@ -122,15 +132,20 @@ export const licensePlateSlot: SlotSpec = {
         },
       ],
       confirmState: 'detected',
-      rejectState: 'no_plate_visible',
+      rejectState: 'no_region_visible',
       falsePositiveState: 'false_positive',
     },
 
     queue: {
-      endpointId: 'plates',
+      // Wave 2 C14: the review-tab endpoint id 'plates' -> 'regions'
+      // (GET /curation/review/regions; the old 'plates' id now 400s
+      // server-side). urlId stays 'plates' FOREVER — it's the bookmark
+      // contract (reviewTabs.ts's tabFromUrlId), decoupled from the
+      // wire route name by design; do not rename it.
+      endpointId: 'regions',
       urlId: 'plates',
       tabLabel: 'Plates',
-      browsePath: '/plates',
+      browsePath: '/regions',
       keymap: {
         confirm: ['enter'],
         reject: ['d'],
@@ -154,10 +169,10 @@ export const licensePlateSlot: SlotSpec = {
     //
     // Wave 2 C13/C14 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
     // §8.4(iii)): `id` (internal — a render key + suppressDerived match
-    // target) is split from `params.mode` (the wire value the backend's
-    // ?mode= query string actually sends). They used to be the same
-    // string; the backend's rename only touches the wire value, so only
-    // `mode` moves in C14 below — the two lpr_* ids already moved here.
+    // target) was split from `params.mode` (the wire value the
+    // backend's ?mode= query string actually sends) in C13; C14 flips
+    // `mode` itself, now that both sides agree: 'lpr_blind_spots' ->
+    // 'detector_blind_spots', 'lpr_low_conf_correct' -> 'low_conf_correct'.
     trainingCohorts: {
       // license_plate's own hand-tuned detector_blind_spots/low_conf_correct
       // are strictly better than the generic derived blind_spots/low_conf
@@ -174,8 +189,8 @@ export const licensePlateSlot: SlotSpec = {
             'SAM3 found the plate, Gemma confirmed, LPR missed — high-signal training examples',
           query: {
             kind: 'endpoint',
-            path: '/plates/training_candidates',
-            params: { mode: 'lpr_blind_spots', class_id: '{classId}' },
+            path: '/regions/training_candidates',
+            params: { mode: 'detector_blind_spots', class_id: '{classId}' },
           },
           rowKind: 'slot',
           reviewTarget: 'slotQueue',
@@ -186,8 +201,8 @@ export const licensePlateSlot: SlotSpec = {
           description: 'LPR + Gemma agreed but LPR score < 0.6 — high-loss training rows',
           query: {
             kind: 'endpoint',
-            path: '/plates/training_candidates',
-            params: { mode: 'lpr_low_conf_correct', class_id: '{classId}' },
+            path: '/regions/training_candidates',
+            params: { mode: 'low_conf_correct', class_id: '{classId}' },
           },
           rowKind: 'slot',
           reviewTarget: 'slotQueue',
@@ -198,7 +213,7 @@ export const licensePlateSlot: SlotSpec = {
           description: 'LPR + SAM3 both fired; review for IoU disagreement',
           query: {
             kind: 'endpoint',
-            path: '/plates/training_candidates',
+            path: '/regions/training_candidates',
             params: { mode: 'disagreement', class_id: '{classId}' },
           },
           rowKind: 'slot',
@@ -210,7 +225,7 @@ export const licensePlateSlot: SlotSpec = {
           description: 'Human reviewed and corrected a model output — gold standard',
           query: {
             kind: 'endpoint',
-            path: '/plates/training_candidates',
+            path: '/regions/training_candidates',
             params: { mode: 'human_corrected', class_id: '{classId}' },
           },
           rowKind: 'slot',
@@ -222,7 +237,7 @@ export const licensePlateSlot: SlotSpec = {
           description: 'Human marked a detector box as a false positive (box retained)',
           query: {
             kind: 'endpoint',
-            path: '/plates/training_candidates',
+            path: '/regions/training_candidates',
             params: { mode: 'false_positives', class_id: '{classId}' },
           },
           rowKind: 'slot',
@@ -275,11 +290,16 @@ export const licensePlateSlot: SlotSpec = {
     },
   },
 
+  // Wave 2 C14: the crop-scoped writes rename too —
+  // PUT/DELETE /curation/crops/{id}/plate -> /region,
+  // PATCH /curation/crops/{id}/plate_meta -> /region_meta — confirmed by the
+  // backend session alongside the collection-route rename (plan §8.5
+  // Q2, resolved "yes" rather than the plan's conservative default).
   endpoints: {
-    setBox: (id) => `/crops/${encodeURIComponent(id)}/plate`,
-    clearBox: (id) => `/crops/${encodeURIComponent(id)}/plate`,
-    patchMeta: (id) => `/crops/${encodeURIComponent(id)}/plate_meta`,
-    batchStatus: () => `/plates/batch_status`,
+    setBox: (id) => `/crops/${encodeURIComponent(id)}/region`,
+    clearBox: (id) => `/crops/${encodeURIComponent(id)}/region`,
+    patchMeta: (id) => `/crops/${encodeURIComponent(id)}/region_meta`,
+    batchStatus: () => `/regions/batch_status`,
   },
 
   stats: {

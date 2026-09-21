@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * Plates list view for /clusters, backed by /curation/plates — extracted
+   * Plates list view for /clusters, backed by /curation/regions — extracted
    * verbatim from clusters/+page.svelte's `{:else if isLicensePlateFilter}`
    * template branch (P2.6, docs/genericization-plan-2026-09-13.md
    * §3.4/§5a). All state/logic lives in the injected `gallery` controller
@@ -31,7 +31,7 @@
   let { gallery }: Props = $props();
 </script>
 
-<!-- Plates list view — backed by /curation/plates. Plates live as a
+<!-- Plates list view — backed by /curation/regions. Plates live as a
      plate_bbox_norm sub-bbox on each vehicle crop (not as their
      own cluster docs), so this view surfaces them directly with
      detector provenance + OCR text chips. -->

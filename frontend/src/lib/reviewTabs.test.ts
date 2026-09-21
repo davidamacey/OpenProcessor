@@ -50,7 +50,7 @@ describe('buildReviewTabs (P2.8 data-driving)', () => {
     expect(tabs).toHaveLength(1);
     expect(tabs[0].id).toBe('slot:license_plate');
     expect(tabs[0].urlId).toBe('plates');
-    expect(tabs[0].endpointId).toBe('plates');
+    expect(tabs[0].endpointId).toBe('regions');
     expect(tabs[0].label).toBe('Plates');
     expect(tabs[0].slot).toBe(licensePlateSlot);
   });
@@ -94,8 +94,8 @@ describe('endpointForTab', () => {
     expect(endpointForTab('uncertainty')).toBe('uncertainty');
   });
 
-  it("resolves the license_plate slot tab to its endpointId ('plates', identical today)", () => {
-    expect(endpointForTab('slot:license_plate')).toBe('plates');
+  it("resolves the license_plate slot tab to its endpointId ('regions', renamed Wave 2 C14 — the review-tab id 'plates' now 400s server-side)", () => {
+    expect(endpointForTab('slot:license_plate')).toBe('regions');
   });
 
   it('falls through to the raw id for anything not in REVIEW_TABS (e.g. a preset id)', () => {

@@ -26,6 +26,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   zero further code change (proved by
   `src/lib/annotations/secondSlotIntegration.test.ts`).
 
+### Changed
+
+- **BREAKING (backend-contract):** adopted OpenProcessor's (openprocessor)
+  region wire-vocabulary rename, merged to its `main` at `b3f928d`
+  (Wave 2, C12-C14 of
+  `docs/design/slot-generic-crop-mapping-plan-2026-09-21.md`). This app
+  will 404 against any backend older than `b3f928d`.
+  - Routes: `/plates` and its 9 sub-routes (`cluster`,
+    `cluster/status`, `clusters`, `clusters/refine/{id}`,
+    `fp_centroids/build`, `fp_centroids/status`,
+    `suspected_false_positives`, `training_candidates`,
+    `batch_status`) all move to `/regions`. `/crops/{id}/plate` →
+    `/crops/{id}/region`, `/crops/{id}/plate_meta` →
+    `/crops/{id}/region_meta`.
+  - The `/review` slot-tab endpoint id `plates` → `regions` (the
+    bookmark `?tab=plates` URL itself is unaffected — that's a separate,
+    permanently-frozen contract, see `reviewTabs.ts`).
+  - Status values `no_plate_box`/`no_plate_visible` →
+    `no_region_box`/`no_region_visible`. The old values are still
+    accepted on read forever via `SlotState.aliases` (added in Wave 0,
+    C1) — no OpenSearch reindex required.
+  - Training-cohort `?mode=` values `lpr_blind_spots`/
+    `lpr_low_conf_correct` → `detector_blind_spots`/`low_conf_correct`.
+  - Every `plate_*` OpenSearch **document field name**
+    (`plate_bbox_norm`, `plate_status`, `plate_detector`, …), the
+    `plates` key in `GET /stats/dataset`'s response, and
+    `plate_thumbnail_url`'s JSON key are explicitly UNCHANGED — jointly
+    agreed WONTFIX with the backend team (a 347k-document reindex was
+    not worth it).
+  - `runCohortQuery` (`/train`) now dispatches on a compiled cohort
+    query's final path segment (`cohortEndpointKind()`,
+    `src/lib/annotations/cohorts.ts`) instead of a
+    `path === '/plates/training_candidates'` string-equality check,
+    which would have silently returned an empty training-cohort
+    preview against the renamed backend.
+  - Deleted `src/lib/plateStatus.ts` (an auto-generated, zero-importer
+    file superseded by `licensePlateSlot.capabilities.lifecycle.states`)
+    rather than renaming its now-doubly-dead members.
+
 ### Fixed
 
 - `sse.ts`'s `subscribeKbEvents` used to hardcode a fixed list of known

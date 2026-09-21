@@ -42,7 +42,7 @@ gone — every route in this table exists and works; nothing here is a stub.
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/` (legacy, logo link only) | Older stats + recent-crops + quick Gemma-cluster-run page. Superseded by `/dashboard` for nav purposes but still reachable; not deleted since it's a working page, just not the primary entry point.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `/dashboard`                 | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises the `detection_profile`/`prompt_pack` axes — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool.                                                                                                                                                                                                                                                                                                                                                               |
-| `/clusters`                  | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/plates` (detector / verified / score / plate-text filters; click → jump to the license_plate slot's review tab). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below).                                                                                                                                                                                                                                                                                                                                                          |
+| `/clusters`                  | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `/curation/regions` (renamed from `/curation/plates`, OpenProcessor 2026-09, `b3f928d`) (detector / verified / score / plate-text filters; click → jump to the license_plate slot's review tab). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below).                                                                                                                                                                                                                                                                                           |
 | `/clusters/[id]`             | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `/review`                    | 5 top-level review tabs (2026-09 consolidation, down from 9 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / one tab per registered queue-capable slot (today: **Plates**, for `license_plate`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. The All tab additionally offers a row of **quick-filter preset chips** (Gemma mismatches / Gemma low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. A slot tab (Plates today) carries provenance chips + Gemma-OCR'd plate text + ⚠ shape warnings, driven by the active slot's capabilities rather than a hardcoded `'plates'` check (see "Slot-generic review tabs" below). |
 | `/classes`                   | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -191,11 +191,14 @@ by class. Mechanism lives in `src/lib/annotations/cohorts.ts`:
   backend change.
 - **`SlotSpec.capabilities.trainingCohorts`** (optional) — a slot's own
   hand-declared cohorts, which replace any derived id of the same name.
-  `licensePlateSlot` declares its 5 backend `/curation/plates/
-training_candidates` modes here (`lpr_blind_spots` /
-  `lpr_low_conf_correct` / `disagreement` / `human_corrected` /
-  `false_positives` — the 5th mode was previously typed but
-  unreachable from the UI; it's live now).
+  `licensePlateSlot` declares its 5 backend `/curation/regions/
+training_candidates` modes here — cohort ids `detector_blind_spots` /
+  `low_conf_correct` / `disagreement` / `human_corrected` /
+  `false_positives` (`false_positives` was previously typed but
+  unreachable from the UI; it's live now). The first two ids' wire
+  `?mode=` values were `lpr_blind_spots` / `lpr_low_conf_correct` before
+  OpenProcessor's 2026-09 region rename (`b3f928d`); they are now
+  `detector_blind_spots` / `low_conf_correct`, matching the ids.
 - **`derivedCohorts()`** — capability ⇒ cohort rules (subBox ⇒
   `blind_spots`, subBox+scoreField ⇒ `low_conf`, provenance.chainField
   ⇒ `disagreement`, lifecycle.falsePositiveState ⇒ `false_positives`).
@@ -381,10 +384,11 @@ readSlot.ts`) against a `SlotSpec` (`registeredSlots.ts`) rather than
 
 **New API helpers:**
 
-- `getPlates(params)` — `/curation/plates` paginated browse with
-  detector/verified/score/text filters.
-- `getTrainingCandidates(mode, params)` — `/curation/plates/training_candidates`
-  with 4 cohort modes.
+- `getPlates(params)` — `/curation/regions` paginated browse with
+  detector/verified/score/text filters (renamed from `/curation/plates`,
+  OpenProcessor 2026-09, `b3f928d`).
+- `getTrainingCandidates(mode, params)` — `/curation/regions/training_candidates`
+  with 5 cohort modes.
 
 ## Deployment annotation profiles (tier 2, 2026-09-20)
 

@@ -558,8 +558,12 @@ export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectio
  * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md). Do not
  * reintroduce a bare '/plates' literal in any of the sites below;
  * `regionRouteScan.test.ts` fails the build if you do.
+ *
+ * Flipped 2026-09-21 (Wave 2 C14) — the backend's rename shipped; this
+ * is the whole lockstep change. `git revert` this commit to restore
+ * compatibility with a pre-rename backend.
  */
-const REGION_BASE = '/plates';
+const REGION_BASE = '/regions';
 
 export interface PlateBrowseItem {
   crop_id: string;
@@ -794,9 +798,12 @@ export function getSuspectedFalsePositives(
   );
 }
 
+// Wave 2 C14: 'lpr_blind_spots' -> 'detector_blind_spots',
+// 'lpr_low_conf_correct' -> 'low_conf_correct' (the wire ?mode= values
+// licensePlateSlot's cohorts now send — see licensePlate.ts).
 export type TrainingCohortMode =
-  | 'lpr_blind_spots'
-  | 'lpr_low_conf_correct'
+  | 'detector_blind_spots'
+  | 'low_conf_correct'
   | 'disagreement'
   | 'human_corrected'
   | 'false_positives';
@@ -1357,10 +1364,15 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
  *   coordinates to set/replace the plate box (server records
  *   `plate_status='human_confirmed'`).
  * - Pass `null` to clear the plate; the backend interprets this as
- *   `plate_status='no_plate_visible'`.
+ *   `plate_status='no_region_visible'`.
  *
- * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/plate`,
- * defined by backend task #32 to match this contract.
+ * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/region`
+ * (renamed from `/plate`, Wave 2 C14), defined by backend task #32 to
+ * match this contract.
+ *
+ * Dead code as of Wave 1 (C6/C8): every call site now goes through
+ * `setSlotBox(licensePlateSlot, …)` instead. Kept renamed rather than
+ * deleted here — deleting it is orthogonal to the wire rename.
  */
 /**
  * Fetch a single crop by id from the authoritative store. Used by the
@@ -1383,7 +1395,7 @@ export function setCropPlate(
   signal?: AbortSignal,
 ): Promise<OpCrop> {
   return apiFetch<OpCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/plate`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region`,
     {
       method: 'PUT',
       body: JSON.stringify({ bbox_norm: bbox }),
@@ -1464,7 +1476,8 @@ export function patchSlotMeta(
 }
 
 /**
- * Bulk-set plate_status over many crops. Backend: `POST /curation/plates/batch_status`.
+ * Bulk-set plate_status over many crops. Backend: `POST /curation/regions/batch_status`
+ *   (renamed from `/curation/plates/batch_status`, Wave 2 C14).
  * The cluster-view triage op: select outlier plates → mark all false_positive,
  * or bulk-confirm good plates (status='detected' + plateVerified=true).
  *
@@ -1478,7 +1491,7 @@ export function patchSlotMeta(
 export function batchPlateStatus(
   spec: SlotSpec,
   cropIds: string[],
-  plateStatus: 'detected' | 'no_plate_visible' | 'verify_rejected' | 'false_positive',
+  plateStatus: 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
   opts: { plateVerified?: boolean; labelSource?: string } = {},
   signal?: AbortSignal,
 ): Promise<{
@@ -2066,7 +2079,8 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
  * be one (cropwright_backend_integration_plan.md §3.2: no compatibility
  * surface lands on the contract-owning side).
  *
- * Note the deliberate asymmetry with the JSON key: `/plates` responses
+ * Note the deliberate asymmetry with the JSON key: `/regions` responses
+ *   (renamed from `/plates`, Wave 2 C14)
  * carry a field literally named `plate_thumbnail_url` whose *value* now
  * points at `…/region_thumbnail`. The key is frozen wire contract; only
  * the path inside it is generic. Do not "fix" the key to match.
