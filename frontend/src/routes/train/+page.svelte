@@ -53,7 +53,11 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { slotRegistry, registeredSlots } from '$lib/annotations/registeredSlots';
-  import { cohortsForClass, type CohortSpec } from '$lib/annotations/cohorts';
+  import {
+    cohortsForClass,
+    cohortEndpointKind,
+    type CohortSpec,
+  } from '$lib/annotations/cohorts';
   import { datasetExportForSlot } from '$lib/annotations/datasetExport';
   import { isDatasetExportAvailable } from '$lib/strategies';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -669,10 +673,13 @@
   /** Dispatches a compiled tier-1 endpoint query to the one existing
    *  api.ts function that already answers it — the three shapes every
    *  CORE_COHORTS/licensePlateSlot cohort compiles to today (§9.1's
-   *  mode table + §9.2.2's CORE_COHORTS). Anything else (a future
-   *  slot's endpoint cohort naming a path none of these three
-   *  recognize) fails closed to an empty/null result rather than
-   *  guessing at an endpoint shape. */
+   *  mode table + §9.2.2's CORE_COHORTS), keyed structurally by
+   *  `cohortEndpointKind()` rather than a `path === '/plates/…'`
+   *  string-equality check (Wave 2 C12 — see cohorts.ts's doc comment
+   *  on `cohortEndpointKind` for why the old check silently broke on a
+   *  base-path rename). Anything else (a future slot's endpoint cohort
+   *  naming a path none of these three recognize) fails closed to an
+   *  empty/null result rather than guessing at an endpoint shape. */
   async function runCohortQuery(
     cohort: CohortSpec,
     pageSize: number,
@@ -681,8 +688,9 @@
     const { path, params } = cohort.query;
     const classId =
       typeof params.class_id === 'string' ? Number(params.class_id) : undefined;
+    const kind = cohortEndpointKind(path);
 
-    if (path === '/plates/training_candidates') {
+    if (kind === 'training_candidates') {
       const mode = params.mode as TrainingCohortMode;
       const res = await getTrainingCandidates(mode, {
         page_size: pageSize,
@@ -690,7 +698,7 @@
       });
       return { total: res.total, items: res.items };
     }
-    if (path === '/crops') {
+    if (kind === 'crops') {
       const res = await getCrops({
         class_id: classId,
         label_validated:
@@ -702,7 +710,7 @@
       });
       return { total: res.total, items: res.items };
     }
-    if (path === '/review/model_disagreements') {
+    if (kind === 'model_disagreements') {
       const res = await getReviewQueue('model_disagreements', 1, pageSize, {
         class_id: classId,
       });

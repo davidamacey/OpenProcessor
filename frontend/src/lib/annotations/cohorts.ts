@@ -279,6 +279,33 @@ function compiled(spec: CohortSpec, ctx: CohortContext): CohortSpec {
 }
 
 /**
+ * The three tier-1 endpoint shapes `/train`'s `runCohortQuery` knows how
+ * to answer today (§9.1's mode table + §9.2.2's CORE_COHORTS), keyed by
+ * a compiled query's final path segment rather than the whole path.
+ *
+ * Replaces the former `path === '/plates/training_candidates'`
+ * string-equality dispatch (Wave 2 C12,
+ * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §10). That
+ * check silently broke two ways: (1) it hardcoded the `/plates` base,
+ * so the backend's `/plates` → `/regions` rename would have made every
+ * license_plate cohort preview return `{total: 0, items: []}` with no
+ * error; (2) a second slot's endpoint cohort under any other base path
+ * (e.g. a tier-2 profile's `/widgets/training_candidates`) fell through
+ * to the same silent empty result. Matching the last segment fixes both
+ * — the dispatch no longer cares what the base path is, only what kind
+ * of endpoint it names.
+ */
+export type CohortEndpointKind = 'training_candidates' | 'crops' | 'model_disagreements';
+
+export function cohortEndpointKind(path: string): CohortEndpointKind | null {
+  const segment = path.split('/').filter(Boolean).pop();
+  if (segment === 'training_candidates') return 'training_candidates';
+  if (segment === 'model_disagreements') return 'model_disagreements';
+  if (segment === 'crops') return 'crops';
+  return null;
+}
+
+/**
  * Resolution order: `CORE_COHORTS` (per class) ++ derived ++ declared,
  * later entries replacing earlier ones by `id`, minus `suppressDerived`.
  * Tier-2 entries are dropped entirely when the backend flag is off, so

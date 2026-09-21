@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CORE_COHORTS,
+  cohortEndpointKind,
   cohortsForClass,
   compileCohortQuery,
   derivedCohorts,
@@ -135,5 +136,32 @@ describe('cohortsForClass — predicateCohortsAvailable gate', () => {
     const classesById = new Map([[9, 'aircraft']]);
     const cohorts = cohortsForClass(9, 'aircraft', registry, classesById, false);
     expect(cohorts.map((c) => c.id).sort()).toEqual(CORE_COHORTS.map((c) => c.id).sort());
+  });
+});
+
+describe('cohortEndpointKind (Wave 2 C12 — structural dispatch, not path === literal)', () => {
+  it('recognizes training_candidates under the old /plates base', () => {
+    expect(cohortEndpointKind('/plates/training_candidates')).toBe('training_candidates');
+  });
+
+  it('recognizes training_candidates under the renamed /regions base — the whole point of the fix', () => {
+    expect(cohortEndpointKind('/regions/training_candidates')).toBe(
+      'training_candidates',
+    );
+  });
+
+  it("recognizes a hypothetical second slot's differently-based endpoint cohort", () => {
+    expect(cohortEndpointKind('/widgets/training_candidates')).toBe(
+      'training_candidates',
+    );
+  });
+
+  it('recognizes /crops and /review/model_disagreements regardless of base', () => {
+    expect(cohortEndpointKind('/crops')).toBe('crops');
+    expect(cohortEndpointKind('/review/model_disagreements')).toBe('model_disagreements');
+  });
+
+  it('fails closed (null) for an unrecognized endpoint shape', () => {
+    expect(cohortEndpointKind('/regions/suspected_false_positives')).toBeNull();
   });
 });
