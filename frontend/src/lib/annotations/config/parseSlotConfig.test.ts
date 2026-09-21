@@ -399,6 +399,26 @@ describe('parseSlotConfig — lifecycle', () => {
     (s.capabilities as any).lifecycle.states[0].role = 'maybe';
     expectRejected(parseSlotConfig(s), /role/);
   });
+
+  it('36a. states[].aliases: valid identifier array accepted', () => {
+    const s = fullSlot();
+    (s.capabilities as any).lifecycle.states[0].aliases = ['legacy_value'];
+    const r = parseSlotConfig(s);
+    expect(r.slot).toBeDefined();
+    expect(r.slot!.capabilities.lifecycle!.states[0].aliases).toEqual(['legacy_value']);
+  });
+
+  it('36b. states[].aliases: non-string entry rejected', () => {
+    const s = fullSlot();
+    (s.capabilities as any).lifecycle.states[0].aliases = [123];
+    expectRejected(parseSlotConfig(s), /aliases/);
+  });
+
+  it('36c. states[].aliases: invalid identifier rejected', () => {
+    const s = fullSlot();
+    (s.capabilities as any).lifecycle.states[0].aliases = ['../etc/passwd'];
+    expectRejected(parseSlotConfig(s), /aliases/);
+  });
 });
 
 describe('parseSlotConfig — queue', () => {

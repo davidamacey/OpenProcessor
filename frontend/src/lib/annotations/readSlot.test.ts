@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { readSlot } from './readSlot';
+import { readSlot, projectFromParent } from './readSlot';
 import { slotIsPresent } from './types';
 import { licensePlateSlot } from './profiles/licensePlate';
-import type { XYXY } from './types';
+import type { XYXY, BBoxNormLike, SlotFrame } from './types';
 
 describe('readSlot / licensePlateSlot', () => {
   const parent: XYXY = [0, 0, 0.4, 0.2]; // vw=0.4, vh=0.2
@@ -56,4 +56,59 @@ describe('readSlot / licensePlateSlot', () => {
     const d = readSlot(raw, licensePlateSlot, parent);
     expect(d.subBox?.shapeWarning).toBe(true);
   });
+
+  it('resolves a legacy status value via aliases to the state a rename declares', () => {
+    const spec = {
+      ...licensePlateSlot,
+      capabilities: {
+        ...licensePlateSlot.capabilities,
+        lifecycle: {
+          ...licensePlateSlot.capabilities.lifecycle!,
+          states: licensePlateSlot.capabilities.lifecycle!.states.map((s) =>
+            s.value === 'no_plate_visible'
+              ? { ...s, value: 'no_region_visible', aliases: ['no_plate_visible'] }
+              : s,
+          ),
+        },
+      },
+    };
+    const d = readSlot({ plate_status: 'no_plate_visible' }, spec, parent);
+    expect(d.lifecycle?.status).toBe('no_plate_visible');
+    expect(d.lifecycle?.state?.value).toBe('no_region_visible');
+    expect(d.lifecycle?.state?.role).toBe('absent');
+  });
+});
+
+describe('projectFromParent — inverse of the private projectToParent', () => {
+  const cases: Array<{ frame: SlotFrame; parentXyxy: XYXY; childSourceXyxy: XYXY }> = [
+    {
+      frame: 'source',
+      parentXyxy: [0, 0, 0.4, 0.2],
+      childSourceXyxy: [0.1, 0.08, 0.3, 0.12],
+    },
+    {
+      frame: 'parent',
+      parentXyxy: [0.2, 0.2, 0.6, 0.8],
+      childSourceXyxy: [0.3, 0.3, 0.5, 0.5],
+    },
+  ];
+
+  for (const { frame, parentXyxy, childSourceXyxy } of cases) {
+    it(`round-trips through readSlot's forward projection (${frame} frame)`, () => {
+      const spec = {
+        ...licensePlateSlot,
+        capabilities: {
+          ...licensePlateSlot.capabilities,
+          subBox: { ...licensePlateSlot.capabilities.subBox!, storedFrame: frame },
+        },
+      };
+      const raw = { plate_bbox_norm: childSourceXyxy };
+      const d = readSlot(raw, spec, parentXyxy);
+      const parentFrameBox = d.subBox!.parent as BBoxNormLike;
+      const back = projectFromParent(parentFrameBox, parentXyxy, frame);
+      for (let i = 0; i < 4; i++) {
+        expect(back[i]).toBeCloseTo(childSourceXyxy[i], 9);
+      }
+    });
+  }
 });

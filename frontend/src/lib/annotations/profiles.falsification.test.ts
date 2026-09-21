@@ -96,6 +96,29 @@ describe('capability-model falsification: three independently-configured slots',
     expect(defect.capabilities.queue?.keymap.editBox).toBeUndefined();
   });
 
+  it('a profile declaring lifecycle.states[].aliases resolves both the new and legacy raw value to the same state, with zero code outside profiles/', () => {
+    const tail = registry.byKey('aircraft_tail_number')!;
+    const renamed = {
+      ...tail,
+      capabilities: {
+        ...tail.capabilities,
+        lifecycle: {
+          ...tail.capabilities.lifecycle!,
+          states: tail.capabilities.lifecycle!.states.map((s) =>
+            s.value === 'not_visible'
+              ? { ...s, value: 'tail_not_visible', aliases: ['not_visible'] }
+              : s,
+          ),
+        },
+      },
+    };
+    const parent: XYXY = [0, 0, 1, 1];
+    const viaNewValue = readSlot({ tail_status: 'tail_not_visible' }, renamed, parent);
+    const viaLegacyAlias = readSlot({ tail_status: 'not_visible' }, renamed, parent);
+    expect(viaNewValue.lifecycle?.state).toEqual(viaLegacyAlias.lifecycle?.state);
+    expect(viaLegacyAlias.lifecycle?.state?.value).toBe('tail_not_visible');
+  });
+
   it('none of the three slots share bind classes (no accidental collision)', () => {
     const classNames = [licensePlateSlot, aircraftTailNumberSlot, defectCodeSlot].map(
       (s) => s.bind.className,

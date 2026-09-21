@@ -798,6 +798,24 @@ function parseStates(raw: unknown, key: string, errors: string[]): SlotState[] |
       }
       item.badge = s.badge;
     }
+    if (s.aliases !== undefined) {
+      if (
+        !Array.isArray(s.aliases) ||
+        s.aliases.length > LIMITS.stateAliases ||
+        !s.aliases.every(
+          (a) =>
+            typeof a === 'string' &&
+            IDENTIFIER_RE.test(a) &&
+            a.length <= LIMITS.identifierChars,
+        )
+      ) {
+        errors.push(
+          `slot "${key}": capabilities.lifecycle.states[].aliases must be a string array of valid identifiers — skipped`,
+        );
+        return null;
+      }
+      item.aliases = s.aliases as string[];
+    }
     out.push(item);
   }
   return out;

@@ -120,6 +120,7 @@ export const LIMITS = {
   cohorts: 32,
   cohortParams: 16,
   combosPerAction: 4,
+  stateAliases: 8,
   identifierChars: 64,
   labelChars: 120,
   pathChars: 200,

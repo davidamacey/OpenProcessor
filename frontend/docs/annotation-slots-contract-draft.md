@@ -313,7 +313,13 @@ mirrors.
                 ]
               },
               "dim": { "type": "boolean" },
-              "badge": { "type": "string" }
+              "badge": { "type": "string" },
+              "aliases": {
+                "type": "array",
+                "items": { "type": "string" },
+                "maxItems": 8,
+                "description": "Additional raw status values that resolve to this state on read. `value` is always what the UI writes; `aliases` is what it accepts — the read-tolerance half of a wire-vocabulary migration (see docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.4(ii))."
+              }
             }
           }
         },

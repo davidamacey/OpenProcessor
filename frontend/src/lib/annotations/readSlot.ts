@@ -69,6 +69,38 @@ function projectToParent(
   };
 }
 
+/**
+ * Inverse of `projectToParent`: given a box already expressed in the
+ * PARENT crop's frame (`{cx,cy,w,h}`), returns it as `[x1,y1,x2,y2]` in
+ * the frame the slot actually stores (`'source'` or `'parent'`).
+ *
+ * Needed for saving an edited box back to the wire: the editor UI always
+ * works in parent-crop-normalized coordinates, but a slot may store
+ * `'source'`-frame boxes, so a straight write would silently corrupt the
+ * geometry. `/review` and `SlotBboxEditor.svelte` both hand-rolled this
+ * via `cropToSourceFrame`, which hardcodes `'source'` — this is the one
+ * documented, slot-generic way to do it.
+ */
+export function projectFromParent(
+  parentFrameBox: BBoxNormLike,
+  parentSourceXyxy: XYXY,
+  frame: SlotFrame,
+): XYXY {
+  const { cx, cy, w, h } = parentFrameBox;
+  if (frame === 'parent') {
+    return [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
+  }
+  // frame === 'source': un-project through the parent box.
+  const [vx1, vy1, vx2, vy2] = parentSourceXyxy;
+  const vw = vx2 - vx1;
+  const vh = vy2 - vy1;
+  const px1 = vx1 + (cx - w / 2) * vw;
+  const py1 = vy1 + (cy - h / 2) * vh;
+  const px2 = vx1 + (cx + w / 2) * vw;
+  const py2 = vy1 + (cy + h / 2) * vh;
+  return [px1, py1, px2, py2];
+}
+
 export function readSlot(
   raw: Record<string, unknown>,
   spec: SlotSpec,
@@ -127,7 +159,9 @@ export function readSlot(
   if (cap.lifecycle) {
     const status = asString(pick(raw, cap.lifecycle.statusField));
     const state = status
-      ? (cap.lifecycle.states.find((s) => s.value === status) ?? null)
+      ? (cap.lifecycle.states.find(
+          (s) => s.value === status || (s.aliases?.includes(status) ?? false),
+        ) ?? null)
       : null;
     out.lifecycle = {
       status,

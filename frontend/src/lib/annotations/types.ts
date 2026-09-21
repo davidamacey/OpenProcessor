@@ -173,6 +173,13 @@ export interface SlotState {
   role?: 'proposed' | 'confirmed' | 'rejected' | 'falsePositive' | 'absent' | 'pending';
   dim?: boolean;
   badge?: string;
+  /** Read-tolerance half of a wire-vocabulary migration: additional raw
+   *  status values that resolve to this same state. `value` is always
+   *  what the UI *writes*; `aliases` is what it *accepts* on read, so a
+   *  backend enum rename (or old OpenSearch documents that still carry
+   *  the pre-rename value) never resolves to a null state. See
+   *  docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.4(ii). */
+  aliases?: string[];
 }
 
 export interface LifecycleCapability {
