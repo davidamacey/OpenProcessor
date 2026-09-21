@@ -47,7 +47,7 @@ def test_scan_file_ignores_a_plain_comment_mentioning_an_unrelated_literal(
 ) -> None:
     # The literal regex only matches a quoted `plate_...`-prefixed token;
     # prose describing the *value* (not the field name) never matches.
-    content = "# Human reviewed and said plate_status='no_plate_visible'\n"
+    content = "# Human reviewed and said plate_status='no_region_visible'\n"
     path = _write(tmp_path, content)
     assert guard._scan_file(path) == []
 

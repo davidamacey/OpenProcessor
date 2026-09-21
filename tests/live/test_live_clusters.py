@@ -182,10 +182,10 @@ def _wait_for_job(get_state: Any, *, timeout: float = 300.0) -> dict[str, Any]:
 
 
 def test_region_clustering_partitions_the_region_pool(kb: Any, opensearch: Any) -> None:
-    resp = kb.post('/plates/cluster', params={'auto_fp_threshold': 0.0})
+    resp = kb.post('/regions/cluster', params={'auto_fp_threshold': 0.0})
     assert resp.status_code == 200, resp.text
 
-    state = _wait_for_job(lambda: kb.get('/plates/cluster/status').json())
+    state = _wait_for_job(lambda: kb.get('/regions/cluster/status').json())
     assert state.get('error') is None, state
     result = state['result']
     assert result['status'] == 'success', result
@@ -209,7 +209,7 @@ def test_region_clustering_partitions_the_region_pool(kb: Any, opensearch: Any) 
 
 
 def test_region_cluster_cards_pin_the_false_positive_bucket_first(kb: Any) -> None:
-    resp = kb.get('/plates/clusters')
+    resp = kb.get('/regions/clusters')
     assert resp.status_code == 200, resp.text
     clusters = resp.json()['clusters']
     assert clusters, resp.text
@@ -231,7 +231,7 @@ def test_region_refine_writes_region_subids(kb: Any, opensearch: Any) -> None:
     if biggest['doc_count'] < 4:
         pytest.skip(f'no region bucket has the 4-member AHC floor: {buckets}')
 
-    resp = kb.post(f'/plates/clusters/refine/{biggest["key"]}')
+    resp = kb.post(f'/regions/clusters/refine/{biggest["key"]}')
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['action'] == 'refined', body
@@ -243,15 +243,15 @@ def test_region_refine_writes_region_subids(kb: Any, opensearch: Any) -> None:
 
 
 def test_fp_centroid_build_then_suspected_false_positives(kb: Any) -> None:
-    resp = kb.post('/plates/fp_centroids/build')
+    resp = kb.post('/regions/fp_centroids/build')
     assert resp.status_code == 200, resp.text
-    state = _wait_for_job(lambda: kb.get('/plates/fp_centroids/status').json())
+    state = _wait_for_job(lambda: kb.get('/regions/fp_centroids/status').json())
     assert state.get('error') is None, state
     result = state['result']
     assert result['status'] == 'success', result
     assert result['n_members'] >= 1, result
 
-    suspected = kb.get('/plates/suspected_false_positives', params={'threshold': 0.35})
+    suspected = kb.get('/regions/suspected_false_positives', params={'threshold': 0.35})
     assert suspected.status_code == 200, suspected.text
     body = suspected.json()
     assert body['centroids_built'] is True, body

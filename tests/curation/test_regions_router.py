@@ -1,6 +1,6 @@
 """Write-path tests for the human region-labelling endpoints (plan Wave
 5 W5.c): ``PUT /crops/{id}/plate``, ``PATCH /crops/{id}/plate_meta``,
-``POST /plates/batch_status``.
+``POST /regions/batch_status``.
 
 Before this file, ``src/routers/curation/regions.py`` (12.62% coverage)
 had never had a single test exercise a write path — the entire human
@@ -124,12 +124,12 @@ def test_set_crop_plate_stamps_verifier_fields(
     assert written[F.detected_at]
 
 
-def test_set_crop_plate_null_bbox_marks_no_plate_visible(
+def test_set_crop_plate_null_bbox_marks_no_region_visible(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.put('/curation/crops/crop-1/plate', json={'bbox_norm': None})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['plate_status'] == 'no_plate_visible'
+    assert resp.json()['plate_status'] == 'no_region_visible'
     written = fake_os._docs['crop-1']
     assert written[F.bbox_norm] is None
     assert written[F.score] is None
@@ -273,7 +273,7 @@ def test_batch_set_plate_status_rejects_non_human_settable_status(
     app_client: TestClient,
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': ['crop-1'], 'plate_status': 'detection_failed'},
     )
     assert resp.status_code == 400
@@ -283,7 +283,7 @@ def test_batch_set_plate_status_updates_every_crop_and_refreshes(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={
             'crop_ids': ['crop-1', 'crop-2'],
             'plate_status': 'detected',
@@ -305,7 +305,7 @@ def test_batch_set_plate_status_false_positive_marks_fp_bucket_for_every_crop(
     app_client: TestClient, fake_os: _FakeRegionOS
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': ['crop-1', 'crop-2'], 'plate_status': 'false_positive'},
     )
     assert resp.status_code == 200, resp.text
@@ -315,7 +315,7 @@ def test_batch_set_plate_status_false_positive_marks_fp_bucket_for_every_crop(
 
 def test_batch_set_plate_status_empty_crop_ids_is_a_noop(app_client: TestClient) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': [], 'plate_status': 'detected'},
     )
     assert resp.status_code == 200
@@ -326,7 +326,7 @@ def test_batch_set_plate_status_missing_crop_reports_conflict_not_500(
     app_client: TestClient,
 ) -> None:
     resp = app_client.post(
-        '/curation/plates/batch_status',
+        '/curation/regions/batch_status',
         json={'crop_ids': ['crop-1', 'does-not-exist'], 'plate_status': 'detected'},
     )
     assert resp.status_code == 200, resp.text

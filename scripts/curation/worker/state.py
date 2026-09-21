@@ -17,7 +17,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config
 from src.core.logging import get_logger
-from src.services.detection.cascade_detect import DEFAULT_PROFILE
+from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
 
 
 logger = get_logger('curation_worker')
@@ -50,7 +50,7 @@ JPEG_QUALITY = 90
 # profile) — update there when the registry adds / renames a group.
 # The reference detector is known weak on this shape class; the
 # secondary segmenter is the better bet.
-SECONDARY_SHAPE_GROUPS: frozenset[str] = DEFAULT_PROFILE.secondary_shape_groups
+SECONDARY_SHAPE_GROUPS: frozenset[str] = REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups
 
 # Status names (task #7 rename — see plan / task #7 description).
 # Worker emits the new long-form names everywhere; reads accept both

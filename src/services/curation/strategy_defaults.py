@@ -51,7 +51,7 @@ def _hardcoded_default_for_axis(axis: str) -> str | None:
 
         return DEFAULT_METHOD
     if axis == 'detection_profile':
-        from src.services.detection import cascade_detect  # noqa: F401 - registers DEFAULT_PROFILE
+        from src.services.detection import cascade_detect  # noqa: F401 - registers the profile
         from src.services.detection.profile_registry import get_default_profile_name
 
         return get_default_profile_name()
@@ -82,7 +82,7 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
             if sort_id != 'default' and rs.status in ('stable', 'experimental')
         )
     if axis == 'detection_profile':
-        from src.services.detection import cascade_detect  # noqa: F401 - registers DEFAULT_PROFILE
+        from src.services.detection import cascade_detect  # noqa: F401 - registers the profile
         from src.services.detection.profile_registry import get_profiles
 
         return frozenset(get_profiles())

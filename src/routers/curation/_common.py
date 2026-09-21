@@ -325,7 +325,7 @@ class ItemRegionRequest(BaseModel):
     ``bbox_norm`` is in the **source-image** coordinate frame; the
     labeler is responsible for converting from crop-frame to
     source-frame before POSTing. ``None`` clears the box and marks the
-    item as ``plate_status='no_plate_visible'`` (a deliberate human
+    item as ``plate_status='no_region_visible'`` (a deliberate human
     decision, distinct from "not yet detected").
     """
 
@@ -349,7 +349,7 @@ class ItemBatchRegionRequest(BaseModel):
 HUMAN_REGION_STATUS_VALUES = frozenset(
     {
         RegionStatus.DETECTED,
-        RegionStatus.NO_PLATE_VISIBLE,
+        RegionStatus.NO_REGION_VISIBLE,
         RegionStatus.VERIFY_REJECTED,
         RegionStatus.FALSE_POSITIVE,
     }
@@ -360,7 +360,7 @@ class CropBatchStatusRequest(BaseModel):
     """Bulk-set ``plate_status`` over many items (the cluster-view triage op).
 
     Lets an operator select an outlier sub-cluster and mark every region
-    ``false_positive`` / ``no_plate_visible`` in one call, or bulk-confirm
+    ``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm
     good regions (``plate_status='detected'`` + ``plate_verified=True``).
     ``plate_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
     """
@@ -544,7 +544,7 @@ class ExportRegionDatasetRequest(BaseModel):
 
     All ``detected`` positives and all human ``false_positive`` hard
     negatives are kept in full. ``empty_bg_ratio`` adds a small sample of
-    genuine region-free (``no_plate_visible``) frames as a fraction of
+    genuine region-free (``no_region_visible``) frames as a fraction of
     positives so the detector still sees some no-region images.
     """
 

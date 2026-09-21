@@ -144,7 +144,7 @@ class TestCascadeWithoutSegmenter:
 
         # Cascade completed cleanly (no exception) and reached a terminal
         # write rather than hanging or crashing on the missing segmenter.
-        assert task.update_doc[F.status] == 'no_plate_box'
+        assert task.update_doc[F.status] == 'no_region_box'
         chain = task.update_doc.get(F.detector_chain) or []
         assert any('sam3:miss' in s for s in chain)
 
@@ -165,4 +165,4 @@ class TestCascadeWithoutSegmenter:
             gemma=_gemma_mock(is_region=False),
         )
 
-        assert task.update_doc[F.status] == 'no_plate_box'
+        assert task.update_doc[F.status] == 'no_region_box'

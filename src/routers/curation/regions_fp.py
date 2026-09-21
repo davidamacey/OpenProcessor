@@ -36,7 +36,7 @@ from src.routers.curation._common import (
 from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES, _region_item
 
 
-@router.post('/plates/cluster')
+@router.post('/regions/cluster')
 async def cluster_plates(
     opensearch: OpenSearchDep,
     max_rank: int | None = Query(None, ge=1, description='Only top-N largest crops.'),
@@ -60,7 +60,7 @@ async def cluster_plates(
     regions take minutes). Rebuilds FP sub-centroids, auto-pulls tight FP
     matches into the FP bucket, then re-partitions the good regions (the
     re-partition is skipped if a manual refine is still fresh, unless
-    ``force_repartition``). Poll GET /kb/plates/cluster/status."""
+    ``force_repartition``). Poll GET {api_prefix}/regions/cluster/status."""
     from src.services.curation.clustering.orchestrator import start_region_cluster_job
 
     await _ensure_indexes(opensearch)
@@ -73,7 +73,7 @@ async def cluster_plates(
     )
 
 
-@router.get('/plates/cluster/status')
+@router.get('/regions/cluster/status')
 async def plate_cluster_status() -> dict[str, Any]:
     """Status of the background region-clustering job."""
     from src.services.curation.clustering.orchestrator import region_cluster_job_status
@@ -81,7 +81,7 @@ async def plate_cluster_status() -> dict[str, Any]:
     return region_cluster_job_status()
 
 
-@router.post('/plates/clusters/refine/{cluster_id}')
+@router.post('/regions/clusters/refine/{cluster_id}')
 async def refine_plate_cluster_endpoint(
     cluster_id: int,
     opensearch: OpenSearchDep,
@@ -107,7 +107,7 @@ async def refine_plate_cluster_endpoint(
     return result
 
 
-@router.get('/plates/clusters')
+@router.get('/regions/clusters')
 async def list_plate_clusters(
     opensearch: OpenSearchDep,
     max_clusters: int = Query(500, ge=1, le=2000),
@@ -196,7 +196,7 @@ async def list_plate_clusters(
     return {'clusters': clusters, 'count': len(clusters)}
 
 
-@router.post('/plates/fp_centroids/build')
+@router.post('/regions/fp_centroids/build')
 async def build_fp_centroids_endpoint(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Sub-type the FP bucket + (re)build the FP centroid store (background).
 
@@ -209,7 +209,7 @@ async def build_fp_centroids_endpoint(opensearch: OpenSearchDep) -> dict[str, An
     return await start_region_fp_centroid_job(opensearch)
 
 
-@router.get('/plates/fp_centroids/status')
+@router.get('/regions/fp_centroids/status')
 async def fp_centroids_status() -> dict[str, Any]:
     """Background FP-centroid build job snapshot + persisted centroid metadata."""
     from src.services.curation.clustering.orchestrator import region_fp_centroid_job_status
@@ -217,7 +217,7 @@ async def fp_centroids_status() -> dict[str, Any]:
     return region_fp_centroid_job_status()
 
 
-@router.get('/plates/suspected_false_positives')
+@router.get('/regions/suspected_false_positives')
 async def suspected_false_positives(
     opensearch: OpenSearchDep,
     threshold: float = Query(0.35, ge=0.0, le=2.0),
@@ -230,7 +230,7 @@ async def suspected_false_positives(
     its nearest one (``nearest_fp_subid``), so a crop that resembles only one
     flavour of false positive (e.g. a bumper but not a sticker) is still caught.
     Assists auto-labeling: an operator reviews the nearest matches and
-    bulk-confirms via ``POST /kb/plates/batch_status`` (which routes them into
+    bulk-confirms via ``POST {api_prefix}/regions/batch_status`` (which routes them into
     the permanent FP bucket). Requires :func:`build_fp_centroids_endpoint` to
     have run; otherwise returns an empty result with ``centroids_built=false``.
     """
@@ -249,7 +249,14 @@ async def suspected_false_positives(
             'page': page,
             'page_size': page_size,
             'centroids_built': False,
-            'message': 'No FP centroids yet; POST /kb/plates/fp_centroids/build first.',
+            'message': (
+                'No FP centroids yet; POST '
+                # Kept as its own literal so the route-parity guard
+                # (tests/integration/test_labeler_route_parity.py) can resolve
+                # the path it advertises.
+                f'{config.api_prefix}/regions/fp_centroids/build'
+                ' first.'
+            ),
         }
 
     # Same candidate pool as the auto-pull: everything except already-FP,

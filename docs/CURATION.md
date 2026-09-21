@@ -88,8 +88,11 @@ trainer. A deployment supplies:
   configured and loaded. **Note:** `GET /methods` advertises exactly
   one built-in `detection_profile` out of the box, named
   `license_plate` with `detector_model=lpr_nanov11_640` — this is
-  `cascade_detect.py`'s `DEFAULT_PROFILE`, kept byte-identical to the
-  original reference deployment's constants so that deployment's
+  `cascade_detect.py`'s `REFERENCE_LICENSE_PLATE_PROFILE` (named for what
+  it is since work item B2, though it is still the profile registered
+  with `default=True` until a domain-neutral default exists), kept
+  byte-identical to the original reference deployment's constants so that
+  deployment's
   existing call sites (which never pass a profile explicitly) keep
   working unchanged across this genericization. It is **not** a
   suggested starting point for a new, non-LPR deployment. Setting your

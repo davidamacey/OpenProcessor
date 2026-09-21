@@ -114,7 +114,7 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
                 existing_set.add(entry)
             update[F.detector_chain] = chain
         elif F.detector_chain in update:
-            # Worker built a chain in-task (e.g. final no_plate_box).
+            # Worker built a chain in-task (e.g. final no_region_box).
             # Union with the existing OS chain to preserve concurrent
             # writes.
             new_entries = list(update[F.detector_chain])

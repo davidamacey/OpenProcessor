@@ -356,7 +356,7 @@ end to end:**
    `src.services.detection.profile_registry.register_profile()` at
    process startup, or construct it directly wherever the detection
    cascade is wired for your deployment — mirror
-   `cascade_detect.DEFAULT_PROFILE`'s shape.
+   `cascade_detect.REFERENCE_LICENSE_PLATE_PROFILE`'s shape.
 3. Write a `PromptPack` JSON file describing the pallet vocabulary —
    copy `data/prompt_pack.example.json` (a worked warehouse/pallet
    pack) and edit its prompts/`class_descriptions`/`synonyms`.

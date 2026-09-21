@@ -147,7 +147,7 @@ def build_tab_query(
         # surfaced here — they are the LPR-training cohort.
         must_not.append({'term': {fields.validated: True}})
         must_not.append({'term': {'class_validated': True}})
-        must_not.append({'term': {f'{fields.status}.keyword': RegionStatus.NO_PLATE_VISIBLE}})
+        must_not.append({'term': {f'{fields.status}.keyword': RegionStatus.NO_REGION_VISIBLE}})
         must_not.append({'term': {f'{fields.status}.keyword': RegionStatus.VERIFY_REJECTED}})
         # Human already marked the detection a false positive (box kept
         # for FP analysis / LPR hard-negative training) — terminal, must
