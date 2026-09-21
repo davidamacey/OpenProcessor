@@ -64,7 +64,7 @@ jobs:
           sudo chmod +x /usr/local/bin/hadolint
 
       - name: Cache pre-commit environments
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
