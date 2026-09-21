@@ -196,11 +196,13 @@
   // ---- Single-class dataset export (today: license_plate's LPR export) --
   // Built on demand via the active slot's `extras.datasetExport` spec.
   // Backend is synchronous, so we just await it and surface the resulting
-  // dir + counts. The `exportLpr`/`exportLprStatus` API functions and
-  // `/export/lpr` wire path stay as-is — LPR is the only dataset export
-  // this deployment's backend implements today (see licensePlate.ts's
-  // `extras.datasetExport` comment) — but this page's own state/handler
-  // names no longer bake that in.
+  // dir + counts. Only api.ts's wire path (`exportLpr`/`exportLprStatus`,
+  // `/export/lpr`) and the four typed option controls below remain
+  // LPR-shaped — deliberately: see
+  // docs/design/bakeoff-train-genericization-plan-2026-09-21.md §3.3/§3.4
+  // for why generalizing them would produce a form builder with exactly
+  // one form to build. Every other string in this section now reads from
+  // the active slot's declared `datasetExportSpec`.
   let singleClassExporting = $state<boolean>(false);
   let singleClassExportMessage = $state<string | null>(null);
   // Export options. whole_frame = full source frame (deployment distribution);
@@ -239,6 +241,9 @@
   });
 
   async function runSingleClassExport(): Promise<void> {
+    // Non-null: this handler only runs from a button inside
+    // `{#if datasetExportAvailable && datasetExportSpec}`.
+    const spec = datasetExportSpec!;
     singleClassExporting = true;
     singleClassExportMessage = null;
     try {
@@ -258,14 +263,14 @@
       const fp = r.false_positive_background_images ?? '?';
       const mode = r.image_mode ?? singleClassImageMode;
       const size = r.img_max_side ?? singleClassImgSize;
-      singleClassExportMessage = `LPR export done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives), ${mode} @ ${size}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives), ${mode} @ ${size}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
-        singleClassExportMessage += ' ⚠ zero positives — check plate labeling.';
+        singleClassExportMessage += ' ⚠ zero positives — check labeling for this slot.';
       }
-      toastStore.success('LPR export complete');
+      toastStore.success(`${spec.label} complete`);
     } catch (e) {
-      singleClassExportMessage = `LPR export failed: ${(e as Error).message}`;
-      toastStore.error('LPR export failed');
+      singleClassExportMessage = `${spec.label} failed: ${(e as Error).message}`;
+      toastStore.error(`${spec.label} failed`);
     } finally {
       singleClassExporting = false;
     }
@@ -845,7 +850,9 @@
               : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
             onclick={() => selectDatasetKind(datasetExportSpec!.datasetKind)}
           >
-            LPR plates (single-class)
+            {datasetExportSpec!.label}{datasetExportSpec!.singleClass
+              ? ' (single-class)'
+              : ''}
           </button>
         {/if}
       </div>
@@ -862,7 +869,7 @@
         >
           <option value="">
             current ({datasetKind === datasetExportSpec?.datasetKind
-              ? 'lpr_current'
+              ? `${datasetExportSpec.kind}_current`
               : 'current'} symlink — latest)
           </option>
           {#each kindDatasets as d (d.export_dir)}
@@ -875,8 +882,7 @@
       <p class="mt-1 break-all font-mono text-sm text-zinc-200">{datasetExportDir}</p>
       {#if datasetKind === datasetExportSpec?.datasetKind}
         <p class="mt-2 text-xs text-zinc-400">
-          Single-class <span class="font-mono">license_plate</span> dataset (positives + FP
-          hard-negatives + plate-free backgrounds), cluster-stratified.
+          {datasetExportSpec.blurb}
         </p>
       {:else}
         <p class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
@@ -895,7 +901,7 @@
     {:else}
       <p class="mt-1 text-sm text-zinc-300">
         {datasetKind === datasetExportSpec?.datasetKind
-          ? 'No LPR export yet — build one below.'
+          ? `No ${datasetExportSpec?.label} yet — build one below.`
           : (datasetMessage ?? 'Loading…')}
       </p>
     {/if}
@@ -914,7 +920,7 @@
           onclick={runSingleClassExport}
           disabled={singleClassExporting}
         >
-          {singleClassExporting ? 'Exporting…' : 'Build LPR export'}
+          {singleClassExporting ? 'Exporting…' : `Build ${datasetExportSpec.label}`}
         </button>
       </div>
       <div class="mt-3 flex flex-wrap items-end gap-4">
@@ -964,8 +970,8 @@
         </label>
       </div>
       <p class="mt-2 text-[11px] text-zinc-500">
-        N samples positives spread <em>evenly across plate clusters</em> — build a small set
-        first, then a larger one from the same labeled pool for progressive training.
+        N samples positives spread <em>evenly across clusters</em> — build a small set first,
+        then a larger one from the same labeled pool for progressive training.
       </p>
       {#if singleClassExportDir}
         <p class="mt-1 break-all font-mono text-sm text-zinc-200">

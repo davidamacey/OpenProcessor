@@ -58,4 +58,14 @@ describe('/train dataset-export capability gate', () => {
   it("never hardcodes datasetKind === 'lpr' — routes through datasetExportSpec instead", () => {
     expect(src).not.toMatch(/datasetKind === 'lpr'/);
   });
+
+  // bakeoff-train-genericization plan §3.2/§6 commit 2: spec.blurb was
+  // declared, validated, and rendered nowhere — a hand-written copy sat
+  // right above it instead. Pin both sides: the spec field is actually
+  // rendered, and the old hardcoded button copy it used to sit next to
+  // is gone.
+  it('renders datasetExportSpec.blurb and no longer hardcodes "Build LPR export"', () => {
+    expect(src).toMatch(/datasetExportSpec\.blurb/);
+    expect(src).not.toMatch(/Build LPR export/);
+  });
 });

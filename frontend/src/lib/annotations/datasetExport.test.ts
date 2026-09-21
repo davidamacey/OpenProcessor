@@ -63,6 +63,20 @@ describe('datasetExportForSlot', () => {
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
+  // `/train` now renders `spec.blurb` directly (bakeoff-train-genericization
+  // plan §3.2/§6 commit 2) — until that landed, this field was declared and
+  // validated but rendered nowhere, so nothing would have noticed if this
+  // check were silently dropped. Pinning both the missing and empty-string
+  // cases keeps that from happening again now that a real consumer exists.
+  it('returns undefined when blurb is an empty string', () => {
+    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const slot: SlotSpec = {
+      ...licensePlateSlot,
+      extras: { datasetExport: { ...base, blurb: '' } },
+    };
+    expect(datasetExportForSlot(slot)).toBeUndefined();
+  });
+
   it('returns undefined when buildPath is absolute', () => {
     const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
     const slot: SlotSpec = {
