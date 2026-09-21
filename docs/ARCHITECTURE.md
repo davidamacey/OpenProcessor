@@ -164,12 +164,22 @@ docker compose --profile curation up -d
 None of these workers requires the base API image to be rebuilt — they
 run the same `davidamacey/openprocessor` image with a different
 entrypoint (see `docker-compose.yml`'s `curation-*` service
-definitions). A trainer container and a segmentation-service container
-are **not** shipped; the API implements only the control-plane side of
-their protocols (a shared-volume `job.json`/`status.json` file protocol
-for training, and a generic HTTP segment-request/response shape for the
-segmenter) — see [`docs/CURATION.md`](CURATION.md) for what a
-deployment supplies to make those routes do something.
+definitions).
+
+Two further services sit behind their own `--profile training`, because a
+training run takes a GPU for hours and starting one should be an explicit
+act:
+
+| Service | Role |
+|---|---|
+| `curation-trainer` | Watches `/jobs/` and runs each `job.json` through Ultralytics — the trainer half of the file protocol (`docker/trainer/`). Its own image, built from `docker/trainer/Dockerfile`. |
+| `curation-mlflow` | Optional experiment tracking for those runs (port 4609). Every tracking hook degrades to a warning when it is unreachable. |
+
+A segmentation-service container is still **not** shipped; the API
+implements only the control-plane side of that protocol (a generic HTTP
+segment-request/response shape) — see
+[`docs/CURATION.md`](CURATION.md) for what a deployment supplies to make
+those routes do something.
 
 ### What's intentionally thinner than a bespoke pipeline
 

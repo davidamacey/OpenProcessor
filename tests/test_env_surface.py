@@ -6,7 +6,7 @@ there is no mechanism to keep the two in sync as new ones get added.
 Two directions:
 
 1. Every ``OP_*`` literal passed to ``os.environ.get(...)``/``os.getenv(...)``
-   anywhere under ``src/`` or ``scripts/``, PLUS every var implied by the
+   anywhere under :data:`_SCANNED_ROOTS`, PLUS every var implied by the
    three ``from_env``-driven config dataclasses (``CurationConfig``,
    ``RegionFields``, ``DetectionProfile``), must appear somewhere in
    ``env.template`` (commented out is fine -- this repo's convention is to
@@ -35,6 +35,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _DIRECT_ENV_RE = re.compile(r"os\.(?:environ\.get|getenv)\(\s*['\"](OP_[A-Z0-9_]+)['\"]")
 
+# First-party Python this repo ships. ``docker/`` holds the side-car container
+# sources (the trainer watcher, the test-harness fakes) -- they are not
+# importable from ``src/`` but they read ``OP_*`` vars a deployment has to set,
+# so leaving them unscanned would let the trainer's whole env surface drift out
+# of env.template unnoticed.
+_SCANNED_ROOTS = ('src', 'scripts', 'docker')
+
 # Prefixes documented via a "2-3 examples + see the dataclass" convention
 # rather than one env.template line per field (RegionFields has ~30
 # fields, DetectionProfile ~30) -- direction 1 (code -> env.template) is
@@ -57,7 +64,7 @@ _TEMPLATE_SIDE_ALLOWLIST = {
 
 def _direct_env_vars_read_by_code() -> set[str]:
     found: set[str] = set()
-    for root in ('src', 'scripts'):
+    for root in _SCANNED_ROOTS:
         for path in (REPO_ROOT / root).rglob('*.py'):
             text = path.read_text(encoding='utf-8', errors='ignore')
             found.update(_DIRECT_ENV_RE.findall(text))
@@ -97,8 +104,8 @@ def test_every_op_env_var_read_by_code_is_documented_in_env_template() -> None:
         and not v.startswith(_PATTERN_DOCUMENTED_PREFIXES)
     )
     assert not missing, (
-        'OP_* env vars read by src/ or scripts/ but not documented anywhere '
-        f'in env.template: {missing}'
+        f'OP_* env vars read by {"/, ".join(_SCANNED_ROOTS)}/ but not documented '
+        f'anywhere in env.template: {missing}'
     )
 
 
@@ -114,6 +121,6 @@ def test_every_op_env_var_in_env_template_is_read_by_code() -> None:
         and not t.startswith(_PATTERN_DOCUMENTED_PREFIXES)
     )
     assert not orphaned, (
-        'env.template documents OP_* var(s) that nothing in src/ or scripts/ '
+        f'env.template documents OP_* var(s) that nothing in {"/, ".join(_SCANNED_ROOTS)}/ '
         f'actually reads (stale/renamed?): {orphaned}'
     )

@@ -70,8 +70,9 @@ Stated up front, honestly, rather than discovered in production:
   to the internet.
 - **You must supply your own models.** This is BYO-model territory, not
   a batteries-included product — see "Models you must supply" below.
-- **The trainer and segmenter are protocols, not shipped containers.**
-  See "Workers and the curation compose profile" below.
+- **The segmenter is a protocol, not a shipped container.** (A trainer
+  container *does* ship — see "Workers and the curation compose profile"
+  below — but you still bring your own dataset and base weights.)
 - **Coverage is uneven across the ported surface** — some routers carry
   thorough test suites, others were ported with comparatively thin
   coverage because the original implementation had thin coverage there
@@ -119,14 +120,21 @@ trainer. A deployment supplies:
   `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY`.
   `src/services/labeling/vlm_client.py` is the only thing that talks to
   it; nothing hardcodes a specific vendor or model.
-- **A trainer, if you want `/curation/train/*` to drive anything.** The
-  API implements only the control-plane side of a documented file
-  protocol (`src/services/training/jobs.py`): it writes
-  `<job_id>.job.json` into a shared `/jobs/` volume to start a run and a
-  `<job_id>.cancel` sentinel to cancel one; a trainer process watching
-  that directory writes `<job_id>.status.json` every ~5s and
-  `<job_id>.run.log`. No trainer container ships with this repo — write
-  one against that protocol, or treat `/curation/train/*` as inert.
+- **A dataset and base weights for training.** `/curation/train/*` is a
+  control plane over a shared-volume file protocol
+  (`src/services/training/jobs.py`): the API writes `<job_id>.job.json`
+  into `/jobs/` to start a run and a `<job_id>.cancel` sentinel to
+  cancel one; the trainer watching that directory writes
+  `<job_id>.status.json` every ~5s, `<job_id>.run.log`, and
+  `<job_id>.manifest.json` at the end. A trainer container implementing
+  that half **does** ship — `docker/trainer/`, compose service
+  `curation-trainer` under `--profile training`. What you supply is the
+  frozen dataset export (produced by `/curation/export/*`) and the base
+  weights the job trains from; the trainer downloads the family/size
+  checkpoint named by the job spec unless
+  `hyperparameters.model` points at a local file or architecture YAML.
+  You can still swap in your own trainer: it only has to speak the file
+  protocol above.
 
 ## Class-registry schema
 
