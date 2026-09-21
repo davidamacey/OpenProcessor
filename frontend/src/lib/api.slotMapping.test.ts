@@ -1,13 +1,15 @@
 /**
- * Falsifiable dual-write equivalence proof (Wave 0, C2 of
- * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §4/§10).
+ * mapRawCrop's slots mapping (docs/design/slot-generic-crop-mapping-
+ * plan-2026-09-21.md §4/§10).
  *
- * `mapRawCrop` keeps its existing hand-copied `plate_*` fields
- * UNCHANGED and additionally computes `slots` via `mapCropSlots` off
- * the SAME raw payload, independently. This test asserts the two paths
- * agree field-for-field — if `readSlot`'s mapping diverges from the
- * hand-copy in any way, this test fails. It intentionally does NOT use
- * a shared helper between the two sides.
+ * Originally (C2) this asserted FALSIFIABLE EQUIVALENCE between the
+ * hand-copied plate_* fields and readSlot's independently-computed
+ * `slots.license_plate` — proving the adapter reproduced the hand-copy
+ * before anything depended on it. C9 deleted that hand-copy entirely
+ * (OpCrop no longer has plate_* fields at all — `slots` is the only
+ * path), so there is nothing left to compare against. These assertions
+ * now pin `slots.license_plate`'s values directly against the raw wire
+ * payload instead.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getCrop } from './api';
@@ -31,8 +33,8 @@ afterEach(() => {
   resetDeploymentSlots();
 });
 
-describe('mapRawCrop <-> mapCropSlots equivalence (falsifiable)', () => {
-  it('agrees on every plate_* field for a fully-populated row', async () => {
+describe('mapRawCrop slots mapping', () => {
+  it('maps every plate_* wire field into slots.license_plate for a fully-populated row', async () => {
     const raw = {
       crop_id: 'c1',
       image_path: '/img/1.jpg',
@@ -64,32 +66,31 @@ describe('mapRawCrop <-> mapCropSlots equivalence (falsifiable)', () => {
     expect(slot).toBeDefined();
 
     expect(slot!.subBox?.rawXyxy).toEqual(raw.plate_bbox_norm);
-    expect(slot!.subBox?.score).toBe(out.plate_score);
-    expect(slot!.subBox?.shapeWarning).toBe(out.plate_shape_warning);
-    expect(slot!.lifecycle?.status).toBe(out.plate_status);
-    expect(slot!.lifecycle?.verified).toBe(out.plate_verified);
-    expect(slot!.text?.value).toBe(out.plate_text);
-    expect(slot!.text?.raw).toBe(out.plate_text_raw);
-    expect(slot!.text?.source).toBe(out.plate_text_source);
-    expect(slot!.text?.confidence).toBe(out.plate_text_confidence);
-    expect(slot!.provenance?.detector).toBe(out.plate_detector);
-    expect(slot!.provenance?.detectorVersion).toBe(out.plate_detector_version);
-    expect(slot!.provenance?.chain).toEqual(out.plate_detector_chain);
-    expect(slot!.provenance?.verifier).toBe(out.plate_verifier);
-    expect(slot!.provenance?.verifierVersion).toBe(out.plate_verifier_version);
-    expect(slot!.provenance?.verifiedAt).toBe(out.plate_verified_at);
-    expect(slot!.provenance?.detectedAt).toBe(out.plate_detected_at);
+    expect(slot!.subBox?.score).toBe(0.91);
+    expect(slot!.subBox?.shapeWarning).toBe(false);
+    expect(slot!.lifecycle?.status).toBe('detected');
+    expect(slot!.lifecycle?.verified).toBe(true);
+    expect(slot!.text?.value).toBe('ABC123');
+    expect(slot!.text?.raw).toBe('abc123');
+    expect(slot!.text?.source).toBe('gemma');
+    expect(slot!.text?.confidence).toBe(0.8);
+    expect(slot!.provenance?.detector).toBe('lpr_nanov11_640');
+    expect(slot!.provenance?.detectorVersion).toBe('1.0');
+    expect(slot!.provenance?.chain).toEqual(['lpr_nanov11_640:hit']);
+    expect(slot!.provenance?.verifier).toBe('gemma-4-e4b');
+    expect(slot!.provenance?.verifierVersion).toBe('4');
+    expect(slot!.provenance?.verifiedAt).toBe('2026-09-02T00:00:00Z');
+    expect(slot!.provenance?.detectedAt).toBe('2026-09-01T00:00:00Z');
   });
 
-  it('agrees on shapeWarning when plate_bbox_norm is missing', async () => {
+  it('is absent when plate_bbox_norm is missing and there is no other evidence', async () => {
     const raw = { crop_id: 'c2', image_path: '/img/2.jpg', bbox_norm: [0, 0, 0.4, 0.2] };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
     const out = await getCrop('c2');
     expect(out.slots?.license_plate).toBeUndefined();
-    expect(out.plate_shape_warning).toBe(false);
   });
 
-  it('agrees on shapeWarning when the parent bbox is degenerate (NaN-safe)', async () => {
+  it('flags an implausible shape even when the parent bbox is degenerate (NaN-safe, per shapeGate.ts)', async () => {
     const raw = {
       crop_id: 'c3',
       image_path: '/img/3.jpg',
@@ -98,29 +99,8 @@ describe('mapRawCrop <-> mapCropSlots equivalence (falsifiable)', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
     const out = await getCrop('c3');
-    expect(out.slots?.license_plate?.subBox?.shapeWarning).toBe(out.plate_shape_warning);
+    expect(out.slots?.license_plate?.subBox?.shapeWarning).toBe(false);
   });
-
-  it('agrees when plate_bbox_norm has a malformed length (both sides reject it)', async () => {
-    const raw = {
-      crop_id: 'c4',
-      image_path: '/img/4.jpg',
-      bbox_norm: [0, 0, 0.4, 0.2],
-      plate_bbox_norm: [0.1, 0.08, 0.3],
-    };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
-    const out = await getCrop('c4');
-    expect(out.slots?.license_plate).toBeUndefined();
-    expect(out.plate_bbox_norm).toBeNull();
-    expect(out.plate_shape_warning).toBe(false);
-  });
-
-  // Non-finite (NaN) coordinates cannot be exercised through this file's
-  // fetch-mock harness — JSON.stringify(NaN) serializes to `null` before
-  // it ever reaches the parsed response, so a real NaN never survives the
-  // round trip. That case (both sides resolve to `true`, per §4.4's
-  // traced table) is exercised directly against readSlot/evaluateShapeGate
-  // in readSlot.test.ts and shapeGate.test.ts instead.
 
   it('a crop with no plate_* keys at all yields slots === {} (absence, not a block of nulls)', async () => {
     const raw = { crop_id: 'c5', image_path: '/img/5.jpg', bbox_norm: [0, 0, 1, 1] };
@@ -134,8 +114,6 @@ describe('mapRawCrop <-> mapCropSlots equivalence (falsifiable)', () => {
     const raw = { crop_id: 'c6', image_path: '/img/6.jpg', bbox_norm: [0, 0, 1, 1] };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
     const out = await getCrop('c6');
-    // No tail evidence on the row -> absent, but the key space must
-    // still include both slots once installed.
     expect(out.slots?.license_plate).toBeUndefined();
     expect(out.slots?.aircraft_tail_number).toBeUndefined();
 

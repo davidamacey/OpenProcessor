@@ -17,7 +17,6 @@ import {
   type OpMethodsResponse,
 } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
-import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from './shapeGate';
 import { mapCropSlots } from './annotations/cropSlots';
 import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type {
@@ -1087,26 +1086,6 @@ type RawCrop = {
   cluster_subid?: string | null;
   label_validated?: boolean;
   label_source?: string;
-  plate_bbox_norm?: number[] | null;
-  plate_score?: number | null;
-  plate_status?: string | null;
-  plate_verified?: boolean | null;
-  // Provenance fields (Wave 1 — written on every new plate/class write).
-  plate_detector?: string | null;
-  plate_detector_version?: string | null;
-  plate_detector_chain?: string[] | null;
-  plate_bbox_frame?: string | null;
-  plate_detected_at?: string | null;
-  plate_verifier?: string | null;
-  plate_verifier_version?: string | null;
-  plate_verified_at?: string | null;
-  plate_rejection_reason?: string | null;
-  plate_visible?: boolean | null;
-  plate_text?: string | null;
-  plate_text_raw?: string | null;
-  plate_text_source?: string | null;
-  plate_text_confidence?: number | null;
-  plate_text_engine_version?: string | null;
   class_detector?: string | null;
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
@@ -1127,23 +1106,6 @@ type RawCrop = {
   updated_at?: string;
 };
 
-// Plate-bbox shape envelope — must match the server-side
-// is_plausible_plate_bbox helper in
-// openprocessor:src/services/legacy/plate_detect.py. Defense in depth:
-// flags rows whose stored bbox is implausible *after* projecting into
-// the crop frame, regardless of whether the server-side gate caught it.
-//
-// Implementation lives in `shapeGate.ts` and is shared with
-// `SlotCard.svelte`, which used to carry its own inline copy that
-// disagreed on non-finite input (see docs/genericization-plan-2026-09-13.md
-// Finding C.1 and shapeGate.ts's doc comment).
-function _platesShapeWarning(
-  plateSrc: number[] | null | undefined,
-  vehicleSrc: number[],
-): boolean {
-  return evaluateShapeGate(plateSrc, vehicleSrc, PLATE_SHAPE_ENVELOPE);
-}
-
 function mapRawCrop(c: RawCrop): OpCrop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
   const out: OpCrop = {
@@ -1160,33 +1122,10 @@ function mapRawCrop(c: RawCrop): OpCrop {
     similarity_to_centroid:
       c.cluster_distance != null ? Math.max(0, 1 - c.cluster_distance) : null,
     cluster_subid: c.cluster_subid ?? null,
-    plate_bbox_norm:
-      c.plate_bbox_norm && c.plate_bbox_norm.length === 4
-        ? xyxyToBBoxNorm(c.plate_bbox_norm)
-        : null,
-    plate_score: c.plate_score ?? null,
-    plate_status: c.plate_status ?? null,
-    plate_verified: c.plate_verified ?? null,
-    plate_detector: c.plate_detector ?? null,
-    plate_detector_version: c.plate_detector_version ?? null,
-    plate_detector_chain: c.plate_detector_chain ?? null,
-    plate_bbox_frame: c.plate_bbox_frame ?? null,
-    plate_detected_at: c.plate_detected_at ?? null,
-    plate_verifier: c.plate_verifier ?? null,
-    plate_verifier_version: c.plate_verifier_version ?? null,
-    plate_verified_at: c.plate_verified_at ?? null,
-    plate_rejection_reason: c.plate_rejection_reason ?? null,
-    plate_visible: c.plate_visible ?? null,
-    plate_text: c.plate_text ?? null,
-    plate_text_raw: c.plate_text_raw ?? null,
-    plate_text_source: c.plate_text_source ?? null,
-    plate_text_confidence: c.plate_text_confidence ?? null,
-    plate_text_engine_version: c.plate_text_engine_version ?? null,
     class_detector: c.class_detector ?? null,
     class_detector_version: c.class_detector_version ?? null,
     class_labeled_at: c.class_labeled_at ?? null,
     class_labeler: c.class_labeler ?? null,
-    plate_shape_warning: _platesShapeWarning(c.plate_bbox_norm ?? null, bb),
     test_holdout: !!c.test_holdout,
     crop_rank_in_image: c.crop_rank_in_image ?? null,
     crop_area_norm: c.crop_area_norm ?? null,
@@ -1610,7 +1549,7 @@ export async function getReviewQueue(
   // The /curation/review API ships bbox_norm + plate_bbox_norm as
   // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends OpCrop where
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
-  // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmPlate all see the
+  // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmSlot all see the
   // same shape regardless of the endpoint that produced the item.
   type RawReviewItem = RawCrop & {
     reason?: string;
@@ -1618,9 +1557,6 @@ export async function getReviewQueue(
     proposed_class_name?: string | null;
     probe_pred_class?: string | null;
     probe_pred_entropy?: number | null;
-    plate_score?: number | null;
-    plate_status?: string | null;
-    plate_verified?: boolean | null;
   };
   type RawPage = {
     total: number;
@@ -1645,9 +1581,6 @@ export async function getReviewQueue(
       proposed_class_name: it.proposed_class_name ?? null,
       probe_pred_class: it.probe_pred_class ?? null,
       probe_pred_entropy: it.probe_pred_entropy ?? null,
-      plate_score: it.plate_score ?? null,
-      plate_status: it.plate_status ?? null,
-      plate_verified: it.plate_verified ?? null,
     };
   });
   return {
