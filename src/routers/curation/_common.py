@@ -243,6 +243,22 @@ class ItemDoc(BaseModel):
     # RegionFields (that governs OpenSearch document keys only).
     plate_bbox_norm: list[float] | None = None
     plate_score: float | None = None
+    # Round-trip counterparts of what PATCH /crops/{id}/plate_meta and
+    # PUT /crops/{id}/plate write (RegionFields.status/text/etc on the
+    # storage side) — added so a GET after either write actually reflects
+    # it instead of silently dropping the region metadata (the frontend's
+    # review-queue "Back" path and mapRawCrop() need these back).
+    plate_status: str | None = None
+    plate_text: str | None = None
+    plate_text_source: str | None = None
+    plate_text_confidence: float | None = None
+    plate_rejection_reason: str | None = None
+    plate_detector: str | None = None
+    plate_detector_version: str | None = None
+    plate_verified: bool | None = None
+    plate_verified_at: str | None = None
+    plate_verifier: str | None = None
+    plate_label_source: str | None = None
     test_holdout: bool = False
     # Primary-subject rank (1 = largest crop in its photo) + blur quality.
     # Drive the "largest / 2nd-largest" toggle and clarity slider in the UI.
@@ -459,20 +475,6 @@ class VlmVerifyRegionBatchRequest(BaseModel):
     """Request body for the batched region-verify endpoint."""
 
     items: list[VlmVerifyRegionBatchItem]
-
-
-class VlmVerifyRegionBatchResult(BaseModel):
-    """One ordered result in the region-verify-batch response."""
-
-    crop_id: str
-    is_plate: bool
-    confidence: str
-    reason: str = ''
-    candidate_text: str | None = None
-
-
-class VlmVerifyRegionBatchResponse(BaseModel):
-    results: list[VlmVerifyRegionBatchResult]
 
 
 class VlmRegionVisibleBatchItem(BaseModel):

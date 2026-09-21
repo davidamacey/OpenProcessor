@@ -371,11 +371,11 @@ async def review_queue(
                     or src.get('label_validated', False)
                 ),
                 'class_validated': bool(src.get('class_validated', False)),
-                fields.validated: bool(src.get(fields.validated, False)),
+                'plate_validated': bool(src.get(fields.validated, False)),
                 'cluster_id': src.get('cluster_id'),
                 'cluster_distance': src.get('cluster_distance'),
-                fields.bbox_norm: src.get(fields.bbox_norm),
-                fields.score: src.get(fields.score),
+                'plate_bbox_norm': src.get(fields.bbox_norm),
+                'plate_score': src.get(fields.score),
                 'test_holdout': bool(src.get('test_holdout', False)),
                 # Primary-subject rank + blur + COCO hint for the new tabs.
                 'crop_rank_in_image': src.get('crop_rank_in_image'),
@@ -397,27 +397,32 @@ async def review_queue(
                 # Region-detection outputs — needed by the `plates` review tab
                 # so the labeler can render the bbox on the source image
                 # for human confirmation.
-                fields.status: src.get(fields.status),
-                fields.verified: src.get(fields.verified),
+                # Frozen plate_* wire names (docs/design/curation_api_contract.md) —
+                # `fields.*` on the right-hand side only picks the OpenSearch
+                # storage key to read from; the JSON key itself must never be
+                # RegionFields-indirected or it leaks the storage field name
+                # (region_* by default) onto the HTTP contract.
+                'plate_status': src.get(fields.status),
+                'plate_verified': src.get(fields.verified),
                 # Region provenance (Wave 1) — labeler chips render which
                 # detector + verifier produced the stored bbox.
-                fields.detector: src.get(fields.detector),
-                fields.detector_version: src.get(fields.detector_version),
-                fields.detector_chain: src.get(fields.detector_chain),
-                fields.bbox_frame: src.get(fields.bbox_frame),
-                fields.detected_at: src.get(fields.detected_at),
-                fields.verifier: src.get(fields.verifier),
-                fields.verifier_version: src.get(fields.verifier_version),
-                fields.verified_at: src.get(fields.verified_at),
-                fields.rejection_reason: src.get(fields.rejection_reason),
-                fields.visible: src.get(fields.visible),
+                'plate_detector': src.get(fields.detector),
+                'plate_detector_version': src.get(fields.detector_version),
+                'plate_detector_chain': src.get(fields.detector_chain),
+                'plate_bbox_frame': src.get(fields.bbox_frame),
+                'plate_detected_at': src.get(fields.detected_at),
+                'plate_verifier': src.get(fields.verifier),
+                'plate_verifier_version': src.get(fields.verifier_version),
+                'plate_verified_at': src.get(fields.verified_at),
+                'plate_rejection_reason': src.get(fields.rejection_reason),
+                'plate_visible': src.get(fields.visible),
                 # Region OCR (Wave 2b — fields may be absent until that
                 # phase ships; pass through unconditionally).
-                fields.text: src.get(fields.text),
-                fields.text_raw: src.get(fields.text_raw),
-                fields.text_source: src.get(fields.text_source),
-                fields.text_confidence: src.get(fields.text_confidence),
-                fields.text_engine_version: src.get(fields.text_engine_version),
+                'plate_text': src.get(fields.text),
+                'plate_text_raw': src.get(fields.text_raw),
+                'plate_text_source': src.get(fields.text_source),
+                'plate_text_confidence': src.get(fields.text_confidence),
+                'plate_text_engine_version': src.get(fields.text_engine_version),
                 # Class provenance (Wave 1).
                 'class_detector': src.get('class_detector'),
                 'class_detector_version': src.get('class_detector_version'),
