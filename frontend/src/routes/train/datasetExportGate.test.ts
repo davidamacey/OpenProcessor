@@ -33,17 +33,17 @@ describe('/train dataset-export capability gate', () => {
     expect(src).toMatch(/strategiesStore\.methods\.dataset_exports/);
   });
 
-  // The single highest-value assertion in this file: refreshLprStatus()
+  // The single highest-value assertion in this file: refreshSingleClassExportStatus()
   // firing unconditionally on mount is the actual 404 this task removes
   // (GET {API_PREFIX}/export/lpr/status is not a registered route on a
   // backend that never advertises the lpr export kind). Scan the
   // onMount(async () => { … }) block specifically, not the whole file —
-  // refreshLprStatus is still defined and still called, just from the
-  // gated $effect further down.
-  it('refreshLprStatus() is not called inside onMount', () => {
+  // refreshSingleClassExportStatus is still defined and still called, just
+  // from the gated $effect further down.
+  it('refreshSingleClassExportStatus() is not called inside onMount', () => {
     const onMountMatch = src.match(/onMount\(async \(\) => \{[\s\S]*?\n {2}\}\);/);
     expect(onMountMatch).not.toBeNull();
-    expect(onMountMatch?.[0]).not.toMatch(/refreshLprStatus/);
+    expect(onMountMatch?.[0]).not.toMatch(/refreshSingleClassExportStatus/);
   });
 
   it('the export section and the dataset-kind toggle are both gated on datasetExportAvailable', () => {
