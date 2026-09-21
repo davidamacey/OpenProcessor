@@ -222,6 +222,48 @@ def test_patch_plate_meta_requires_at_least_one_field(app_client: TestClient) ->
     assert resp.status_code == 400
 
 
+def test_patch_plate_meta_response_reports_wire_names_not_storage_keys(
+    app_client: TestClient,
+) -> None:
+    """``updated_fields`` must echo the frozen ``plate_*`` wire contract,
+    never internal RegionFields storage keys (``region_*`` by default) —
+    this is the bug a Cropwright integration test caught (the field is
+    generic on the JSON key, RegionFields-indirected only on the right of
+    ``src.get(...)``, docs/design/curation_api_contract.md)."""
+    resp = app_client.patch(
+        '/curation/crops/crop-1/plate_meta',
+        json={'plate_text': 'ABC123', 'plate_status': 'detected', 'label_source': 'human'},
+    )
+    assert resp.status_code == 200, resp.text
+    updated_fields = resp.json()['updated_fields']
+    assert updated_fields == ['plate_status', 'plate_text']
+    for field in updated_fields:
+        assert not field.startswith(F.prefix), (
+            f'{field!r} leaks a RegionFields storage-key prefix onto the wire contract'
+        )
+
+
+def test_get_crop_returns_plate_wire_names_not_region_storage_keys(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    """``GET /crops/{id}`` must return the frozen ``ItemDoc`` wire model
+    (``plate_*`` names), never the raw OpenSearch ``_source`` (whose keys
+    follow ``RegionFields``, ``region_*`` by default)."""
+    app_client.patch(
+        '/curation/crops/crop-1/plate_meta',
+        json={'plate_text': 'ABC123', 'plate_status': 'detected', 'label_source': 'human'},
+    )
+    resp = app_client.get('/curation/crops/crop-1')
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body['plate_text'] == 'ABC123'
+    assert body['plate_status'] == 'detected'
+    for key in body:
+        assert not key.startswith(F.prefix), (
+            f'{key!r} leaks a RegionFields storage-key prefix onto the wire contract'
+        )
+
+
 # ---------------------------------------------------------------------------
 # POST plates-batch_status
 # ---------------------------------------------------------------------------

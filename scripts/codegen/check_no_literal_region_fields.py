@@ -33,14 +33,18 @@ never an OpenSearch field reference, and explicitly out of
 - Pydantic attribute declarations of the shape ``plate_foo: ...``
   (matching ``^\\s*plate_[a-z_]+\\s*:``).
 - Wire-response dict-literal keys whose *value* is visibly routed
-  through ``RegionFields`` (``F.foo`` / ``doc[F.foo]``), a Pydantic
-  model attribute (``payload.foo``), or a URL path literal (``f'/...'``)
-  — e.g. ``'plate_status': src.get(F.status)`` in a router's
-  OpenSearch-doc -> wire-JSON serializer, or ``'plate_text' in
-  fields_set`` checking membership against a wire model's own frozen
-  field-set. The **left-hand** key is the wire contract (frozen); the
-  right-hand side is what this guard actually polices, and it's already
-  clean by construction here.
+  through a ``RegionFields`` instance -- conventionally bound to ``F``,
+  ``_F``, or ``fields`` across this codebase (``F.foo`` / ``doc[F.foo]``
+  / ``fields.foo``), a Pydantic model attribute (``payload.foo``), or a
+  URL path literal (``f'/...'``) — e.g. ``'plate_status':
+  src.get(fields.status)`` in a router's OpenSearch-doc -> wire-JSON
+  serializer, or ``'plate_text' in fields_set`` checking membership
+  against a wire model's own frozen field-set. The **left-hand** key is
+  the wire contract (frozen); the right-hand side is what this guard
+  actually polices, and it's already clean by construction here.
+- ``wire_fields.append('plate_foo')`` bookkeeping -- a router recording
+  which frozen wire-contract field *names* it just applied (for an
+  ``updated_fields`` response), never an OpenSearch document key.
 
 Run manually: `python3 scripts/codegen/check_no_literal_region_fields.py <files...>`
 """
@@ -260,10 +264,15 @@ _PYDANTIC_ATTR_RE = re.compile(r'^\s*plate_[a-z_]+\s*:')
 # interpolation (``f'{config.api_prefix}/...'``) — both are still just
 # URL construction, never an OpenSearch field reference.
 _WIRE_KEY_RE = re.compile(
-    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(src\.get\(F\.|payload\.|\w+\[F\.|f['"](/|\{))"""
+    r"""^\s*['"]plate_[a-z_]+['"]\s*:\s*(bool\()?"""
+    r"""(src\.get\(_?F\.|src\.get\(fields\.|payload\.|\w+\[_?F\.|\w+\[fields\.|f['"](/|\{))"""
 )
 # Membership check against a wire model's own `model_fields_set`.
 _FIELDS_SET_RE = re.compile(r"""['"]plate_[a-z_]+['"]\s+in\s+fields_set""")
+# Bookkeeping: a router recording which frozen wire-contract field name it
+# just applied (e.g. into an `updated_fields` response), never an
+# OpenSearch document key.
+_WIRE_FIELDS_APPEND_RE = re.compile(r"""wire_fields\.append\(['"]plate_[a-z_]+['"]\)""")
 
 
 def _is_ported(rel_posix: str) -> bool:
@@ -288,7 +297,11 @@ def _scan_file(path: Path) -> list[tuple[int, str]]:
     for lineno, line in enumerate(text.splitlines(), start=1):
         if _PYDANTIC_ATTR_RE.match(line):
             continue
-        if _WIRE_KEY_RE.match(line) or _FIELDS_SET_RE.search(line):
+        if (
+            _WIRE_KEY_RE.match(line)
+            or _FIELDS_SET_RE.search(line)
+            or _WIRE_FIELDS_APPEND_RE.search(line)
+        ):
             continue
         if _LITERAL_RE.search(line):
             violations.append((lineno, line.strip()))
