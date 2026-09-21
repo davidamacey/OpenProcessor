@@ -18,6 +18,8 @@ import {
 } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { evaluateShapeGate, PLATE_SHAPE_ENVELOPE } from './shapeGate';
+import { mapCropSlots } from './annotations/cropSlots';
+import type { XYXY, SlotKey, SlotData } from './annotations/types';
 import type {
   BulkLabelResult,
   ClusterFilter,
@@ -584,6 +586,10 @@ export interface PlateBrowseItem {
   thumbnail_url?: string;
   plate_thumbnail_url?: string;
   selection_reason?: string;
+  /** Per-slot capability data — see `OpCrop.slots` in types.ts. Added by
+   *  `getPlates` via `mapCropSlots`; absent on any row that predates this
+   *  mapping in a stale cache. */
+  slots?: Record<SlotKey, SlotData>;
 }
 
 export interface PlatesPage {
@@ -616,15 +622,25 @@ export interface PlatesQuery {
   include_test?: boolean;
 }
 
-export function getPlates(
+export async function getPlates(
   params: PlatesQuery = {},
   signal?: AbortSignal,
 ): Promise<PlatesPage> {
-  return apiFetch<PlatesPage>(
+  const page = await apiFetch<PlatesPage>(
     `${API_PREFIX}/plates${qs(params as Record<string, unknown>)}`,
     {},
     signal,
   );
+  return {
+    ...page,
+    items: page.items.map((raw) => ({
+      ...raw,
+      slots: mapCropSlots(
+        raw as unknown as Record<string, unknown>,
+        (raw.bbox_norm ?? [0, 0, 0, 0]) as XYXY,
+      ),
+    })),
+  };
 }
 
 /** Plate-clustering background-job snapshot. The one-click pipeline result also
@@ -1181,6 +1197,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
     mistakenness_scored_at: c.mistakenness_scored_at ?? null,
+    slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
     // (Svelte each_key_duplicate).

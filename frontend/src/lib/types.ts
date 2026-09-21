@@ -7,6 +7,8 @@
  * server-side schema bump won't break the app.
  */
 
+import type { SlotKey, SlotData } from './annotations/types';
+
 export type LabelSource =
   | 'v6_original_label'
   | 'hdd_user_label'
@@ -192,6 +194,13 @@ export interface OpCrop {
    *  (move / batch_label / class_merge / residual recluster) — the
    *  subid is meaningful only inside its origin cluster. */
   cluster_subid: string | null;
+  /** Per-slot capability data, keyed by SlotKey, produced by mapRawCrop
+   *  via mapCropSlots(). Only slots with actual evidence on the row
+   *  appear (slotIsPresent). Optional because many test fixtures
+   *  construct OpCrop literals directly; read it through
+   *  `slotOf(crop, spec)` (annotations/cropSlots.ts), never `?.[...]`
+   *  by hand, so the accessor can be tightened later. */
+  slots?: Record<SlotKey, SlotData>;
   /** Plate sub-bbox normalized to source image. */
   plate_bbox_norm?: BBoxNorm | null;
   /** Detector confidence for the plate proposal (0..1). */
