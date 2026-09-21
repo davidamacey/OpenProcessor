@@ -9,6 +9,7 @@
     slotForClassName,
     slotRegistryWarnings,
   } from '$lib/annotations/registeredSlots';
+  import { bakeoffAvailability } from '$lib/bakeoffAvailability.svelte';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
@@ -39,6 +40,14 @@
       releaseHealth();
       releaseClasses();
     };
+  });
+
+  // One-shot, never-rejecting probe deciding whether the /bakeoff nav
+  // link renders at all — see bakeoffAvailability.svelte.ts's doc comment
+  // for why a probe is safe here (idempotent read, unambiguous 404 vs.
+  // "no runs yet") and why this whole mechanism is provisional.
+  $effect(() => {
+    void bakeoffAvailability.init();
   });
 
   // Tier-2 deployment-profile problems are the operator's to fix and are
@@ -246,7 +255,9 @@
       <a href="/export" class="hover:text-white">Export</a>
       <a href="/models" class="hover:text-white">Models</a>
       <a href="/train" class="hover:text-white">Train</a>
-      <a href="/bakeoff" class="hover:text-white">Bake-off</a>
+      {#if bakeoffAvailability.available !== false}
+        <a href="/bakeoff" class="hover:text-white">Bake-off</a>
+      {/if}
       <a href="/settings" class="hover:text-white">Settings</a>
     </nav>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * /bakeoff — LPR model x dataset bake-off cockpit.
+   * /bakeoff — Model x dataset bake-off cockpit.
    *
    * Scores every selected model on every selected frozen dataset (matrix) in
    * the on-demand legacy-evaluator container, then renders a model x dataset
@@ -27,6 +27,7 @@
     type BakeoffRunSummary,
     type BakeoffTrainedModel,
   } from '$lib/api';
+  import { bakeoffAvailability } from '$lib/bakeoffAvailability.svelte';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import QuantizationPanel from '$components/QuantizationPanel.svelte';
 
@@ -233,7 +234,15 @@
     return matrix?.best?.[ds]?.[metric] === model;
   }
 
-  onMount(() => {
+  onMount(async () => {
+    // Only fire the four discovery GETs once the capability probe says
+    // the router exists — firing them unconditionally is the "never 404"
+    // violation removed from /train's export panel (see that page's
+    // onMount comment). bakeoffAvailability.init() is idempotent and
+    // shares its result with +layout.svelte's nav-link gate, so this
+    // reuses that same probe rather than doubling it.
+    await bakeoffAvailability.init();
+    if (bakeoffAvailability.available === false) return;
     void refreshRuns();
     void refreshDatasets();
     void refreshBaselines();
@@ -245,7 +254,7 @@
 <svelte:head><title>Bake-off · Cropwright</title></svelte:head>
 
 <div class="mx-auto max-w-6xl p-6 text-zinc-200">
-  <h1 class="mb-1 text-2xl font-semibold">LPR Model × Dataset Bake-off</h1>
+  <h1 class="mb-1 text-2xl font-semibold">Model × Dataset Bake-off</h1>
   <p class="mb-6 text-sm text-zinc-400">
     Every selected model scored on every selected frozen dataset with one IoU metric
     (pycocotools), in the on-demand <code>legacy-evaluator</code>. Best per dataset is
@@ -254,258 +263,269 @@
 
   <div class="mb-6"><MonitoringLinks /></div>
 
-  {#if error}
-    <div class="mb-4 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200">
-      {error}
-    </div>
-  {/if}
-
-  <!-- Run form -->
-  <section class="mb-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-    <div class="mb-4 grid gap-4 md:grid-cols-2">
-      <!-- Datasets -->
-      <div>
-        <h2 class="mb-2 text-sm font-medium text-zinc-300">
-          Datasets ({evalDatasets.filter((d) => d.enabled).length}/{evalDatasets.length})
-        </h2>
-        <div class="max-h-44 space-y-1 overflow-auto pr-1">
-          {#each [['curated', 'Curated (ours, frozen split)'], ['public', 'Public — full split'], ['sample', 'Balanced — deduplicated cluster sample']] as [kind, heading] (kind)}
-            {@const group = evalDatasets.filter((d) => d.kind === kind)}
-            {#if group.length}
-              <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
-                {heading}
-              </p>
-              {#each group as d (d.path)}
-                <label class="flex items-center gap-2 text-xs">
-                  <input type="checkbox" bind:checked={d.enabled} />
-                  <span class="font-mono">{d.name}</span>
-                  {#if d.n_test}<span class="text-[10px] text-zinc-500"
-                      >{d.n_test} frames</span
-                    >{/if}
-                </label>
-              {/each}
-            {/if}
-          {/each}
-          {#if evalDatasets.length === 0}
-            <p class="text-xs text-zinc-600">no frozen datasets discovered</p>
-          {/if}
-        </div>
-      </div>
-
-      <!-- Models -->
-      <div>
-        <h2 class="mb-2 text-sm font-medium text-zinc-300">Models</h2>
-        <div class="max-h-44 space-y-1 overflow-auto pr-1">
-          <p class="text-[10px] uppercase tracking-wide text-zinc-500">Our trained</p>
-          {#each trainedModels as t (t.run_id)}
-            <label class="flex items-center gap-2 text-xs">
-              <input type="checkbox" bind:checked={t.enabled} />
-              <span class="font-mono">{t.name}</span>
-              {#if t.model_size}<span
-                  class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200"
-                  >{t.model_size}</span
-                >{/if}
-              <input
-                type="number"
-                min="320"
-                step="32"
-                bind:value={t.imgsz}
-                class="w-16 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px]"
-              />
-            </label>
-          {/each}
-          <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">Baselines</p>
-          {#each baselines as b (b.name)}
-            <label class="flex items-center gap-2 text-xs">
-              <input type="checkbox" bind:checked={b.enabled} />
-              <span class="font-mono">{b.name}</span>
-              <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400"
-                >{b.backend}</span
-              >
-            </label>
-          {/each}
-        </div>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap items-center gap-4">
-      <label class="text-sm">
-        <span class="text-zinc-400">Regime</span>
-        <select
-          bind:value={mode}
-          class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
-        >
-          <option value="both">both (full + crop)</option>
-          <option value="full">full-frame</option>
-          <option value="crop">vehicle-crop</option>
-        </select>
-      </label>
-      <button
-        onclick={startRun}
-        disabled={busy}
-        class="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
-      >
-        {busy ? 'Enqueuing…' : 'Run matrix bake-off'}
-      </button>
-      {#if activeJob}
-        <span class="text-sm text-zinc-400">
-          job <code>{activeJob}</code> — <strong>{activeState}</strong>
-          {#if activeProgress}({activeProgress.done}/{activeProgress.total}){/if}
-        </span>
-      {/if}
-    </div>
-
-    {#if activeJob && activeProgress && activeProgress.total > 0 && activeState !== 'done' && activeState !== 'error'}
-      <div class="mt-3">
-        <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
-          <div
-            class="h-full bg-emerald-600 transition-all"
-            style="width: {Math.round(
-              (activeProgress.done / activeProgress.total) * 100,
-            )}%"
-          ></div>
-        </div>
-        <p class="mt-1 text-xs text-zinc-500">
-          {activeProgress.done} / {activeProgress.total} evaluations ({Math.round(
-            (activeProgress.done / activeProgress.total) * 100,
-          )}%) — auto-stops SAM3/Gemma during the run, restores them when done.
-        </p>
+  {#if bakeoffAvailability.available === false}
+    <p class="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 text-sm text-zinc-400">
+      Model evaluation is not available on this backend.
+    </p>
+  {:else}
+    {#if error}
+      <div class="mb-4 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200">
+        {error}
       </div>
     {/if}
-  </section>
 
-  <div class="grid grid-cols-[240px_1fr] gap-6">
-    <!-- Runs list -->
-    <aside>
-      <h2 class="mb-2 text-sm font-medium text-zinc-400">Runs</h2>
-      <ul class="space-y-1">
-        {#each runs as r (r.job_id)}
-          <li>
-            <button
-              onclick={() => loadMatrix(r.job_id)}
-              class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {selected ===
-              r.job_id
-                ? 'bg-zinc-800'
-                : ''}"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
-                <span class="shrink-0 text-zinc-500">{r.state ?? ''}</span>
-              </div>
-              {#if r.started_at}
-                <div class="text-[10px] text-zinc-600">
-                  {new Date(r.started_at).toLocaleString()}
-                </div>
-              {/if}
-            </button>
-          </li>
-        {:else}
-          <li class="text-xs text-zinc-600">no runs yet</li>
-        {/each}
-      </ul>
-    </aside>
-
-    <!-- Matrix -->
-    <main>
-      {#if matrix && matrix.models.length}
-        <div class="mb-2 flex items-center justify-between">
-          <h2 class="text-sm font-medium text-zinc-400">Matrix — {selected}</h2>
-          <label class="text-xs text-zinc-400">
-            metric
-            <select
-              bind:value={metric}
-              class="ml-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
-            >
-              {#each matrix.metrics as m (m)}
-                <option value={m}>{METRIC_LABELS[m] ?? m}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-        <div class="overflow-x-auto rounded-lg border border-zinc-800">
-          <table class="w-full text-sm">
-            <thead class="bg-zinc-900 text-xs uppercase text-zinc-400">
-              <tr>
-                <th class="px-3 py-2 text-left">Model \\ Dataset</th>
-                {#each matrix.datasets as ds (ds)}
-                  <th class="px-2 py-2 text-right">{ds}</th>
+    <!-- Run form -->
+    <section class="mb-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+      <div class="mb-4 grid gap-4 md:grid-cols-2">
+        <!-- Datasets -->
+        <div>
+          <h2 class="mb-2 text-sm font-medium text-zinc-300">
+            Datasets ({evalDatasets.filter((d) => d.enabled)
+              .length}/{evalDatasets.length})
+          </h2>
+          <div class="max-h-44 space-y-1 overflow-auto pr-1">
+            {#each [['curated', 'Curated (ours, frozen split)'], ['public', 'Public — full split'], ['sample', 'Balanced — deduplicated cluster sample']] as [kind, heading] (kind)}
+              {@const group = evalDatasets.filter((d) => d.kind === kind)}
+              {#if group.length}
+                <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
+                  {heading}
+                </p>
+                {#each group as d (d.path)}
+                  <label class="flex items-center gap-2 text-xs">
+                    <input type="checkbox" bind:checked={d.enabled} />
+                    <span class="font-mono">{d.name}</span>
+                    {#if d.n_test}<span class="text-[10px] text-zinc-500"
+                        >{d.n_test} frames</span
+                      >{/if}
+                  </label>
                 {/each}
-              </tr>
-            </thead>
-            <tbody>
-              {#each matrix.models as m (m)}
-                <tr class="border-t border-zinc-800 hover:bg-zinc-800/40">
-                  <td class="px-3 py-2 font-mono text-xs">{m}</td>
+              {/if}
+            {/each}
+            {#if evalDatasets.length === 0}
+              <p class="text-xs text-zinc-600">no frozen datasets discovered</p>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Models -->
+        <div>
+          <h2 class="mb-2 text-sm font-medium text-zinc-300">Models</h2>
+          <div class="max-h-44 space-y-1 overflow-auto pr-1">
+            <p class="text-[10px] uppercase tracking-wide text-zinc-500">Our trained</p>
+            {#each trainedModels as t (t.run_id)}
+              <label class="flex items-center gap-2 text-xs">
+                <input type="checkbox" bind:checked={t.enabled} />
+                <span class="font-mono">{t.name}</span>
+                {#if t.model_size}<span
+                    class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200"
+                    >{t.model_size}</span
+                  >{/if}
+                <input
+                  type="number"
+                  min="320"
+                  step="32"
+                  bind:value={t.imgsz}
+                  class="w-16 rounded border border-zinc-700 bg-zinc-950 px-1 text-[10px]"
+                />
+              </label>
+            {/each}
+            <p class="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
+              Baselines
+            </p>
+            {#each baselines as b (b.name)}
+              <label class="flex items-center gap-2 text-xs">
+                <input type="checkbox" bind:checked={b.enabled} />
+                <span class="font-mono">{b.name}</span>
+                <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400"
+                  >{b.backend}</span
+                >
+              </label>
+            {/each}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4">
+        <label class="text-sm">
+          <span class="text-zinc-400">Regime</span>
+          <select
+            bind:value={mode}
+            class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+          >
+            <option value="both">both (full + crop)</option>
+            <option value="full">full-frame</option>
+            <option value="crop">parent-crop</option>
+          </select>
+        </label>
+        <button
+          onclick={startRun}
+          disabled={busy}
+          class="rounded bg-emerald-700 px-4 py-1.5 text-sm font-medium hover:bg-emerald-600 disabled:opacity-50"
+        >
+          {busy ? 'Enqueuing…' : 'Run matrix bake-off'}
+        </button>
+        {#if activeJob}
+          <span class="text-sm text-zinc-400">
+            job <code>{activeJob}</code> — <strong>{activeState}</strong>
+            {#if activeProgress}({activeProgress.done}/{activeProgress.total}){/if}
+          </span>
+        {/if}
+      </div>
+
+      {#if activeJob && activeProgress && activeProgress.total > 0 && activeState !== 'done' && activeState !== 'error'}
+        <div class="mt-3">
+          <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
+            <div
+              class="h-full bg-emerald-600 transition-all"
+              style="width: {Math.round(
+                (activeProgress.done / activeProgress.total) * 100,
+              )}%"
+            ></div>
+          </div>
+          <p class="mt-1 text-xs text-zinc-500">
+            {activeProgress.done} / {activeProgress.total} evaluations ({Math.round(
+              (activeProgress.done / activeProgress.total) * 100,
+            )}%) — auto-stops SAM3/Gemma during the run, restores them when done.
+          </p>
+        </div>
+      {/if}
+    </section>
+
+    <div class="grid grid-cols-[240px_1fr] gap-6">
+      <!-- Runs list -->
+      <aside>
+        <h2 class="mb-2 text-sm font-medium text-zinc-400">Runs</h2>
+        <ul class="space-y-1">
+          {#each runs as r (r.job_id)}
+            <li>
+              <button
+                onclick={() => loadMatrix(r.job_id)}
+                class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {selected ===
+                r.job_id
+                  ? 'bg-zinc-800'
+                  : ''}"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
+                  <span class="shrink-0 text-zinc-500">{r.state ?? ''}</span>
+                </div>
+                {#if r.started_at}
+                  <div class="text-[10px] text-zinc-600">
+                    {new Date(r.started_at).toLocaleString()}
+                  </div>
+                {/if}
+              </button>
+            </li>
+          {:else}
+            <li class="text-xs text-zinc-600">no runs yet</li>
+          {/each}
+        </ul>
+      </aside>
+
+      <!-- Matrix -->
+      <main>
+        {#if matrix && matrix.models.length}
+          <div class="mb-2 flex items-center justify-between">
+            <h2 class="text-sm font-medium text-zinc-400">Matrix — {selected}</h2>
+            <label class="text-xs text-zinc-400">
+              metric
+              <select
+                bind:value={metric}
+                class="ml-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+              >
+                {#each matrix.metrics as m (m)}
+                  <option value={m}>{METRIC_LABELS[m] ?? m}</option>
+                {/each}
+              </select>
+            </label>
+          </div>
+          <div class="overflow-x-auto rounded-lg border border-zinc-800">
+            <table class="w-full text-sm">
+              <thead class="bg-zinc-900 text-xs uppercase text-zinc-400">
+                <tr>
+                  <th class="px-3 py-2 text-left">Model \\ Dataset</th>
                   {#each matrix.datasets as ds (ds)}
-                    <td
-                      class="px-2 py-2 text-right {isBest(m, ds)
-                        ? 'font-bold text-emerald-300'
-                        : ''}"
-                    >
-                      {fmt(cell(m, ds), metric)}
-                    </td>
+                    <th class="px-2 py-2 text-right">{ds}</th>
                   {/each}
                 </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        <p class="mt-2 text-xs text-zinc-500">
-          {metric === 'latency_ms'
-            ? 'milliseconds (lower better)'
-            : metric === 'size_mb'
-              ? 'megabytes (lower better)'
-              : 'percent'}; best per dataset in
-          <span class="font-bold text-emerald-300">bold</span>.
-        </p>
+              </thead>
+              <tbody>
+                {#each matrix.models as m (m)}
+                  <tr class="border-t border-zinc-800 hover:bg-zinc-800/40">
+                    <td class="px-3 py-2 font-mono text-xs">{m}</td>
+                    {#each matrix.datasets as ds (ds)}
+                      <td
+                        class="px-2 py-2 text-right {isBest(m, ds)
+                          ? 'font-bold text-emerald-300'
+                          : ''}"
+                      >
+                        {fmt(cell(m, ds), metric)}
+                      </td>
+                    {/each}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <p class="mt-2 text-xs text-zinc-500">
+            {metric === 'latency_ms'
+              ? 'milliseconds (lower better)'
+              : metric === 'size_mb'
+                ? 'megabytes (lower better)'
+                : 'percent'}; best per dataset in
+            <span class="font-bold text-emerald-300">bold</span>.
+          </p>
 
-        <QuantizationPanel {matrix} dataset={matrix.datasets[0]} />
-      {:else if comparison && comparison.models.length}
-        <h2 class="mb-2 text-sm font-medium text-zinc-400">
-          Results — {selected} (single dataset, ranked by mAP@.5:.95)
-        </h2>
-        <div class="overflow-x-auto rounded-lg border border-zinc-800">
-          <table class="w-full text-sm">
-            <thead class="bg-zinc-900 text-xs uppercase text-zinc-400">
-              <tr>
-                <th class="px-3 py-2 text-left">Model</th>
-                <th class="px-2 py-2 text-right">mAP@.5</th>
-                <th class="px-2 py-2 text-right">mAP@.5:.95</th>
-                <th class="px-2 py-2 text-right">meanIoU</th>
-                <th class="px-2 py-2 text-right">P</th>
-                <th class="px-2 py-2 text-right">R</th>
-                <th class="px-2 py-2 text-right">F1</th>
-                <th class="px-2 py-2 text-right">ms</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each comparison.models as m, i (m.model)}
-                <tr class="border-t border-zinc-800 {i === 0 ? 'bg-emerald-950/40' : ''}">
-                  <td class="px-3 py-2 font-mono text-xs">{m.model}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.map_50)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.map_50_95)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.mean_iou)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.precision)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.recall)}</td>
-                  <td class="px-2 py-2 text-right">{pct(m.f1)}</td>
-                  <td class="px-2 py-2 text-right text-zinc-400"
-                    >{m.latency_ms.toFixed(0)}</td
-                  >
+          <QuantizationPanel {matrix} dataset={matrix.datasets[0]} />
+        {:else if comparison && comparison.models.length}
+          <h2 class="mb-2 text-sm font-medium text-zinc-400">
+            Results — {selected} (single dataset, ranked by mAP@.5:.95)
+          </h2>
+          <div class="overflow-x-auto rounded-lg border border-zinc-800">
+            <table class="w-full text-sm">
+              <thead class="bg-zinc-900 text-xs uppercase text-zinc-400">
+                <tr>
+                  <th class="px-3 py-2 text-left">Model</th>
+                  <th class="px-2 py-2 text-right">mAP@.5</th>
+                  <th class="px-2 py-2 text-right">mAP@.5:.95</th>
+                  <th class="px-2 py-2 text-right">meanIoU</th>
+                  <th class="px-2 py-2 text-right">P</th>
+                  <th class="px-2 py-2 text-right">R</th>
+                  <th class="px-2 py-2 text-right">F1</th>
+                  <th class="px-2 py-2 text-right">ms</th>
                 </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-        <p class="mt-2 text-xs text-zinc-500">
-          Percent; top row (green) leads on mAP@.5:.95.
-        </p>
-      {:else if selected}
-        <p class="text-sm text-zinc-500">
-          No results for {selected} yet (still running?).
-        </p>
-      {:else}
-        <p class="text-sm text-zinc-500">Select a run to view its results.</p>
-      {/if}
-    </main>
-  </div>
+              </thead>
+              <tbody>
+                {#each comparison.models as m, i (m.model)}
+                  <tr
+                    class="border-t border-zinc-800 {i === 0 ? 'bg-emerald-950/40' : ''}"
+                  >
+                    <td class="px-3 py-2 font-mono text-xs">{m.model}</td>
+                    <td class="px-2 py-2 text-right">{pct(m.map_50)}</td>
+                    <td class="px-2 py-2 text-right">{pct(m.map_50_95)}</td>
+                    <td class="px-2 py-2 text-right">{pct(m.mean_iou)}</td>
+                    <td class="px-2 py-2 text-right">{pct(m.precision)}</td>
+                    <td class="px-2 py-2 text-right">{pct(m.recall)}</td>
+                    <td class="px-2 py-2 text-right">{pct(m.f1)}</td>
+                    <td class="px-2 py-2 text-right text-zinc-400"
+                      >{m.latency_ms.toFixed(0)}</td
+                    >
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+          <p class="mt-2 text-xs text-zinc-500">
+            Percent; top row (green) leads on mAP@.5:.95.
+          </p>
+        {:else if selected}
+          <p class="text-sm text-zinc-500">
+            No results for {selected} yet (still running?).
+          </p>
+        {:else}
+          <p class="text-sm text-zinc-500">Select a run to view its results.</p>
+        {/if}
+      </main>
+    </div>
+  {/if}
 </div>
