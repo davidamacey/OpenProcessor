@@ -559,4 +559,16 @@ See [ATTRIBUTION.md](ATTRIBUTION.md) for complete licensing information.
 
 ---
 
+## License
+
+This project is licensed under the **GNU Affero General Public License
+v3.0 or later (AGPL-3.0-or-later)** — see [LICENSE](LICENSE). It was
+previously MIT-badged; it is re-badged AGPL-3.0-or-later because it
+vendors an AGPL-3.0 Ultralytics fork (`src/ultralytics_patches/`) whose
+copyleft terms propagate to the combined work. Third-party components
+retain their own licenses (BSD, Apache-2.0, MIT, and others) — see
+[ATTRIBUTION.md](ATTRIBUTION.md) for the full per-component table.
+
+---
+
 **Built for maximum throughput** - Process 100K+ images in minutes, visual search in milliseconds.

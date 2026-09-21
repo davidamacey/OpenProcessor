@@ -26,7 +26,7 @@ FROM python:3.13-slim-trixie
 LABEL org.opencontainers.image.title="OpenProcessor Curation Evaluator" \
       org.opencontainers.image.description="On-demand detector bake-off harness runner" \
       org.opencontainers.image.vendor="OpenProcessor" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
 # hadolint ignore=DL3008
