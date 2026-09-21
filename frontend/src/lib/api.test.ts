@@ -1272,6 +1272,23 @@ describe('getCurationSettings / putCurationDefaults', () => {
     expect(result.defaults).toEqual({ sort: 'uncertainty_entropy' });
   });
 
+  it('putCurationDefaults accepts null to clear an axis, sending the literal null', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        defaults: {},
+        updated_at: '2026-09-21T00:00:00+00:00',
+        updated_by: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await putCurationDefaults({ sort: null });
+
+    const [, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledInit.body).toBe(JSON.stringify({ defaults: { sort: null } }));
+    expect(result.defaults).toEqual({});
+  });
+
   it('getCurationSettings THROWS on 404 (unlike getMethods, which falls back)', async () => {
     const fetchMock = vi
       .fn()

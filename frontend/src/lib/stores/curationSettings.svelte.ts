@@ -127,6 +127,35 @@ class CurationSettingsStore {
       this.saving = null;
     }
   }
+
+  /**
+   * Clear one axis's pinned shared default, falling back to that axis's
+   * own built-in default. Sends `{[axis]: null}` — see
+   * `putCurationDefaults`'s docstring for the backend's clear contract.
+   *
+   * Same advisory-axis guard as `saveDefault()`: there is nothing to
+   * clear on an axis this build never let you pin in the first place.
+   */
+  async clearDefault(axis: string): Promise<void> {
+    const spec = axisSpec(axis);
+    if (!spec) throw new Error(`unknown settings axis: ${axis}`);
+    if (spec.kind !== 'settable') {
+      throw new Error(`axis '${axis}' is advisory — there is no pinned default to clear`);
+    }
+    this.saving = axis;
+    try {
+      this.settings = await putCurationDefaults({ [axis]: null });
+      this.error = null;
+      this.supported = true;
+    } catch (e) {
+      if ((e as Error)?.name !== 'AbortError') {
+        this.error = (e as Error)?.message ?? 'failed to clear setting';
+      }
+      throw e;
+    } finally {
+      this.saving = null;
+    }
+  }
 }
 
 export const curationSettingsStore = new CurationSettingsStore();

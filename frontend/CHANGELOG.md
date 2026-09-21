@@ -20,14 +20,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `prompt_pack`, as a read-only "Advertised but not yet wired" section —
   no dropdown, no Save button — because no backend request path reads a
   shared default for either one yet, and offering a control that silently
-  does nothing would be worse than not offering one. A known backend gap
-  (H-1): once a shared review-sort default is pinned, there is currently
-  no way to un-pin it through this API — "each tab uses its own default"
-  is a state no `PUT` can re-express — so every save goes through an
-  explicit confirm dialog, with a stronger warning on the sort control
-  specifically. Against a backend that predates this endpoint, the page
-  degrades to an explicit "not supported" note with no controls rendered,
-  rather than erroring or guessing.
+  does nothing would be worse than not offering one. Against a backend
+  that predates this endpoint, the page degrades to an explicit "not
+  supported" note with no controls rendered, rather than erroring or
+  guessing.
+- The `/settings` page now has a **Clear** control next to **Save** for
+  every settable axis, sending `PUT {defaults: {[axis]: null}}` to
+  remove that axis's pinned override entirely — every caller falls back
+  to its own built-in default afterward. This closes the backend gap
+  (H-1) noted when the page first shipped: once a shared review-sort
+  default was pinned, there was no way to un-pin it through this API at
+  all, since a `PUT` had to name a currently-advertised id and "each tab
+  uses its own default" wasn't one. The backend added a `null`-clears
+  contract for exactly this; every save and every clear still goes
+  through the same explicit confirm dialog, since both remain
+  deployment-wide, no-undo-visible writes. Live-verified against a real
+  backend: pinned a sort default out of band, cleared it through the UI,
+  confirmed `GET /settings` reflects the clear.
 - Deployment operators can now register their own annotation slot —
   without forking the repo or touching a single line of application
   code — by dropping an `annotation-profiles.json` file next to the

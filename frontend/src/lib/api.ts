@@ -343,11 +343,19 @@ export async function getCurationSettings(
  * elided — the caller should re-sync `/methods` rather than rely on
  * parsing that string (see the store's `saveDefault`).
  *
+ * A `null` value for an axis CLEARS that axis's shared override — the
+ * backend drops it from the stored record entirely, so the next GET's
+ * `defaults` map omits that key and callers fall back to the axis's own
+ * built-in default. This is the fix for the gap once tracked as H-1 in
+ * docs/design/curation-settings-ui-plan-2026-09-21.md (a pinned default
+ * used to be permanent, since PUT only merged and every value had to be
+ * a currently-advertised id).
+ *
  * Returns the FULL merged record. Always adopt this; never
  * optimistically construct the post-save state client-side.
  */
 export async function putCurationDefaults(
-  defaults: Record<string, string>,
+  defaults: Record<string, string | null>,
   signal?: AbortSignal,
 ): Promise<CurationSettings> {
   const raw = await apiFetch<unknown>(

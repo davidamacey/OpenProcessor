@@ -70,4 +70,17 @@ describe('/settings deployment-defaults page', () => {
   it('contains no bare /curation or /curation literal', () => {
     expect(src).not.toMatch(/(?:['"`]|\})\/(?:op|curation)(?:[/'"`]|\$)/);
   });
+
+  it('renders a Clear control wired to curationSettingsStore.clearDefault, gated on `pinned`', () => {
+    expect(src).toMatch(/>\s*Clear\s*<|Clear(?:ing…)?/);
+    expect(src).toMatch(/disabled=\{!pinned/);
+    expect(src).toMatch(/clearDefault/);
+  });
+
+  it('the advisory branch still contains no Clear button', () => {
+    const start = src.indexOf('Advertised but not yet wired');
+    const sectionCloseIdx = src.indexOf('{/if}', start);
+    const slice = src.slice(start, sectionCloseIdx === -1 ? undefined : sectionCloseIdx);
+    expect(slice).not.toMatch(/>\s*Clear\s*</);
+  });
 });

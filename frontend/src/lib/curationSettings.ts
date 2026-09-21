@@ -89,8 +89,12 @@ export interface SettingsAxisSpec {
    *  that nothing changes. */
   blurb: string;
   /**
-   * Extra confirm-dialog copy for an axis whose pin cannot be undone
-   * (H-1, plan §1.4). `null` when pinning is effectively reversible.
+   * Extra confirm-dialog copy for an axis whose pin cannot be undone.
+   * `null` for every axis today — the backend's `PUT {defaults:
+   * {[axis]: null}}` clear path (see `putCurationDefaults`'s docstring)
+   * closed the one gap that used to justify this field (H-1, plan §1.4:
+   * `sort` had no way to un-pin once set). Kept as a field, not deleted,
+   * in case a future axis reintroduces a genuinely irreversible pin.
    */
   irreversibleWarning: string | null;
 }
@@ -118,10 +122,9 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
       'Applied to every /review tab that does not request its own sort — which is ' +
       'every tab on a fresh load. This REPLACES each tab’s own tuned default ' +
       '(Uncertainty, Model Disagreements, COCO Blind Spots, Plates).',
-    irreversibleWarning:
-      'There is no way to clear a shared sort default through this API. Unset means ' +
-      '"each tab uses its own default", and no PUT can express that state — you ' +
-      'will be able to change this to another sort, but not go back to per-tab defaults.',
+    // Was irreversible (H-1) until the backend added a clear path; the
+    // page's "Clear" button now covers this axis like any other.
+    irreversibleWarning: null,
   },
   {
     axis: 'detection_profile',

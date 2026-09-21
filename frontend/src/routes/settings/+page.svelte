@@ -5,11 +5,15 @@
    * docs/design/curation-settings-ui-plan-2026-09-21.md §5.
    *
    * A dedicated route, not a StrategyBar/AssistScopeBar chip (plan §2):
-   * this write is deployment-wide and, for `sort`, irreversible (H-1),
-   * the categorical opposite of those bars' per-session/reset-any-time
-   * contract. It never renders a control for `settableAxes()` by
-   * hardcoded axis id — always by iterating the shared `SETTINGS_AXES`
-   * table, so a future flip of an axis's `kind` needs no page edit.
+   * this write is deployment-wide, the categorical opposite of those
+   * bars' per-session/reset-any-time contract — every save (and every
+   * clear) is gated behind an explicit confirm dialog for that reason,
+   * even though the backend's null-clear path (added after this plan
+   * was written) closed the one case that used to be genuinely
+   * irreversible (H-1: a pinned `sort` default). It never renders a
+   * control for `settableAxes()` by hardcoded axis id — always by
+   * iterating the shared `SETTINGS_AXES` table, so a future flip of an
+   * axis's `kind` needs no page edit.
    */
 
   import { ApiError } from '$lib/api';
@@ -46,6 +50,9 @@
 
   let confirmSpec = $state<SettingsAxisSpec | null>(null);
   let pendingId = $state<string | null>(null);
+  /** Distinguishes the confirm dialog's two possible actions — 'clear'
+   *  sends `{[axis]: null}` instead of `{[axis]: pendingId}`. */
+  let confirmMode = $state<'set' | 'clear'>('set');
 
   function currentSelection(spec: SettingsAxisSpec): string | null {
     return (
@@ -68,11 +75,19 @@
     if (value == null) return;
     confirmSpec = spec;
     pendingId = value;
+    confirmMode = 'set';
+  }
+
+  function openConfirmClear(spec: SettingsAxisSpec): void {
+    confirmSpec = spec;
+    pendingId = null;
+    confirmMode = 'clear';
   }
 
   function closeConfirm(): void {
     confirmSpec = null;
     pendingId = null;
+    confirmMode = 'set';
   }
 
   function reload(): void {
@@ -81,12 +96,18 @@
     void strategiesStore.init();
   }
 
-  async function confirmSave(): Promise<void> {
-    if (!confirmSpec || pendingId == null) return;
+  async function confirmAction(): Promise<void> {
+    if (!confirmSpec) return;
+    if (confirmMode === 'set' && pendingId == null) return;
     const spec = confirmSpec;
     const id = pendingId;
+    const mode = confirmMode;
     try {
-      await curationSettingsStore.saveDefault(spec.axis, id);
+      if (mode === 'clear') {
+        await curationSettingsStore.clearDefault(spec.axis);
+      } else {
+        await curationSettingsStore.saveDefault(spec.axis, id as string);
+      }
       const nextSelections = { ...selections };
       delete nextSelections[spec.axis];
       selections = nextSelections;
@@ -99,9 +120,15 @@
       // from this same record (plan §4.3) — invalidate the cache so the
       // next mount of any StrategyBar/AssistScopeBar consumer re-fetches.
       strategiesStore.reset();
-      toastStore.success(`Shared ${spec.label} default set to ${id}`);
+      toastStore.success(
+        mode === 'clear'
+          ? `Shared ${spec.label} default cleared`
+          : `Shared ${spec.label} default set to ${id}`,
+      );
     } catch (e) {
-      const message = (e as Error)?.message ?? 'failed to save settings';
+      const message =
+        (e as Error)?.message ??
+        (mode === 'clear' ? 'failed to clear setting' : 'failed to save settings');
       saveErrors = { ...saveErrors, [spec.axis]: message };
       toastStore.error(message);
       // Drop the rejected local pick — the control must revert to
@@ -120,6 +147,7 @@
     } finally {
       confirmSpec = null;
       pendingId = null;
+      confirmMode = 'set';
     }
   }
 
@@ -204,7 +232,19 @@
                   curationSettingsStore.saving === spec.axis}
                 onclick={() => openConfirm(spec)}
               >
-                {curationSettingsStore.saving === spec.axis ? 'Saving…' : 'Save'}
+                {curationSettingsStore.saving === spec.axis && confirmMode === 'set'
+                  ? 'Saving…'
+                  : 'Save'}
+              </button>
+              <button
+                type="button"
+                class="btn"
+                disabled={!pinned || curationSettingsStore.saving === spec.axis}
+                onclick={() => openConfirmClear(spec)}
+              >
+                {curationSettingsStore.saving === spec.axis && confirmMode === 'clear'
+                  ? 'Clearing…'
+                  : 'Clear'}
               </button>
             {/if}
           </div>
@@ -266,17 +306,25 @@
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
     >
       <h3 class="mb-3 text-base font-semibold">
-        Set shared default: {confirmSpec.label}
+        {confirmMode === 'clear' ? 'Clear shared default' : 'Set shared default'}: {confirmSpec.label}
       </h3>
       <p class="mb-3 text-sm text-zinc-300">
         {effectiveDefaultId(
           curationSettingsStore.settings,
           strategiesStore.methods,
           confirmSpec,
-        ) ?? '(none)'} → <strong>{pendingId}</strong>
+        ) ?? '(none)'} →
+        <strong
+          >{confirmMode === 'clear' ? "each caller's own default" : pendingId}</strong
+        >
       </p>
       <p class="mb-3 text-xs text-zinc-400">{confirmSpec.blurb}</p>
-      {#if confirmSpec.irreversibleWarning}
+      {#if confirmMode === 'clear'}
+        <p class="mb-3 text-xs text-zinc-400">
+          Removes this axis's pinned override entirely — every caller that reads it falls
+          back to its own built-in default instead of the shared one.
+        </p>
+      {:else if confirmSpec.irreversibleWarning}
         <div
           class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
         >
@@ -285,7 +333,11 @@
       {/if}
       <div class="flex justify-end gap-2">
         <button type="button" class="btn" onclick={closeConfirm}>Cancel</button>
-        <button type="button" class="btn btn-primary" onclick={() => void confirmSave()}>
+        <button
+          type="button"
+          class="btn btn-primary"
+          onclick={() => void confirmAction()}
+        >
           Confirm
         </button>
       </div>

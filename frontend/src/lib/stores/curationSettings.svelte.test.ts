@@ -212,6 +212,58 @@ describe('curationSettingsStore', () => {
     expect(curationSettingsStore.settings).toEqual(before);
   });
 
+  it('clearDefault sends exactly {"defaults":{"sort":null}} via PUT to ${API_PREFIX}/settings', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        defaults: {},
+        updated_at: '2026-09-21T00:00:00+00:00',
+        updated_by: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await curationSettingsStore.clearDefault('sort');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain(`${API_PREFIX}/settings`);
+    expect(calledInit.method).toBe('PUT');
+    expect(calledInit.body).toBe(JSON.stringify({ defaults: { sort: null } }));
+  });
+
+  it('clearDefault adopts the response — a cleared axis disappears from defaults', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          defaults: { cluster: 'ivf' },
+          updated_at: '2026-09-21T00:00:00+00:00',
+          updated_by: null,
+        }),
+      ),
+    );
+
+    await curationSettingsStore.clearDefault('sort');
+
+    expect(curationSettingsStore.settings.defaults).toEqual({ cluster: 'ivf' });
+  });
+
+  it('clearDefault for an advisory axis throws before any fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(curationSettingsStore.clearDefault('detection_profile')).rejects.toThrow(
+      /advisory/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('clearDefault for an unknown axis throws "unknown settings axis"', async () => {
+    await expect(curationSettingsStore.clearDefault('nonsense')).rejects.toThrow(
+      'unknown settings axis: nonsense',
+    );
+  });
+
   it('saveDefault for an advisory axis throws before any fetch — detection_profile and prompt_pack', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

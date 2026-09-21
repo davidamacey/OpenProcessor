@@ -76,9 +76,11 @@ describe('SETTINGS_AXES', () => {
     }
   });
 
-  it('sort has a non-null irreversibleWarning (H-1); cluster does not', () => {
-    expect(axisSpec('sort')?.irreversibleWarning).not.toBeNull();
-    expect(axisSpec('cluster')?.irreversibleWarning).toBeNull();
+  it('no settable axis has an irreversibleWarning now that the backend supports clearing', () => {
+    // H-1 (plan §1.4) is closed — see putCurationDefaults' null-clear docstring.
+    for (const spec of settableAxes()) {
+      expect(spec.irreversibleWarning).toBeNull();
+    }
   });
 });
 
