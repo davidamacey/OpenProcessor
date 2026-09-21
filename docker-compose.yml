@@ -344,6 +344,102 @@ services:
     networks:
       - triton_net
 
+  # ===================================================================
+  # Training pipeline — opt-in via `--profile training` (G3).
+  #
+  # `POST {api_prefix}/train/start` writes /jobs/<id>.job.json; the
+  # trainer below claims it, trains, and writes status/manifest files
+  # back into the same volume. The API never RPCs the trainer — the
+  # whole contract is those files (src/services/training/jobs.py <->
+  # docker/trainer/trainer.py).
+  #
+  # Kept out of the `curation` profile deliberately: a training run
+  # takes a GPU for hours, so starting one must be an explicit act.
+  #   docker compose --profile training up -d
+  # ===================================================================
+
+  curation-trainer:
+    image: davidamacey/openprocessor-trainer:latest
+    container_name: curation-trainer
+    build:
+      context: .
+      dockerfile: docker/trainer/Dockerfile
+    profiles:
+      - training
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+    volumes:
+      # Shared job-file protocol with yolo-api (OP_TRAIN_JOBS_DIR).
+      - openprocessor-jobs:/jobs
+      # Run outputs (OP_TRAIN_RUNS_ROOT) + bake-off job drop. This MUST be
+      # mounted at the same absolute path here and in yolo-api: the trainer
+      # records `checkpoint_path` verbatim and promote resolves that exact
+      # string from the API container.
+      - openprocessor-state:/var/lib/openprocessor
+      # Frozen dataset exports. Mounted at the same path yolo-api uses so the
+      # absolute `dataset_export_dir` in job.json resolves identically.
+      - ./data:/app/data:ro
+      # Triton model repo, read-only — only so the incumbent comparison can
+      # read a served model's labels.txt (OP_TRITON_MODEL_REPO).
+      - ./models:/models:ro
+    environment:
+      - OP_TRAIN_JOBS_DIR=/jobs
+      - OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
+      # MUST match `device_ids` below, in the same order: the job spec names
+      # HOST gpu ids, which appear inside the container as positional local
+      # indices. See docker/trainer/trainer.py::resolve_local_device.
+      - OP_TRAIN_GPU_ORDER=0
+      - OP_API_BASE_URL=http://yolo-api:8000
+      - OP_API_PREFIX=${OP_API_PREFIX:-/curation}
+      - OP_TRITON_HTTP_URL=http://triton-server:8000
+      - OP_TRITON_MODEL_REPO=/models
+      - MLFLOW_TRACKING_URI=http://curation-mlflow:5000
+      - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-openprocessor}
+    shm_size: 8g
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities:
+                - gpu
+    depends_on:
+      - yolo-api
+    networks:
+      - triton_net
+
+  # Experiment tracking for training runs. Optional: every MLflow hook in
+  # docker/trainer/mlflow_callbacks.py degrades to a warning when this is
+  # unreachable, so a deployment that doesn't want it can leave it stopped.
+  curation-mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.19.0
+    container_name: curation-mlflow
+    profiles:
+      - training
+    restart: unless-stopped
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --default-artifact-root=/mlflow/artifacts
+    volumes:
+      - mlflow_data:/mlflow
+    ports:
+      - 4609:5000
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    networks:
+      - triton_net
+
   triton-sdk:
     image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
     container_name: triton-sdk
@@ -536,3 +632,4 @@ volumes:
   opensearch_dashboards_data:
   openprocessor-state:
   openprocessor-jobs:
+  mlflow_data:

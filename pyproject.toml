@@ -100,7 +100,17 @@ target-version = "py312"
 line-length = 100
 
 # Directories to include/exclude
-include = ["src/**/*.py", "export/**/*.py", "dali/**/*.py", "scripts/**/*.py", "tests/**/*.py"]
+include = [
+    "src/**/*.py",
+    "export/**/*.py",
+    "dali/**/*.py",
+    "scripts/**/*.py",
+    "tests/**/*.py",
+    # Side-car container sources (trainer watcher, test harness fakes). They
+    # ship as their own images rather than as part of the app package, but
+    # they are first-party code and held to the same lint bar.
+    "docker/**/*.py",
+]
 exclude = [
     ".git",
     ".venv",
