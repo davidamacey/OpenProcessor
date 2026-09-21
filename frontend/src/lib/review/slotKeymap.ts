@@ -100,3 +100,19 @@ export function buildSlotKeymap(
 export function singleCharCombos(entries: KeymapEntry[]): string[] {
   return entries.map((e) => e.combo).filter((c) => c.length === 1);
 }
+
+/**
+ * The on-screen glyph for a slot's reject/"no {label} visible" action —
+ * the review-tab hint strip used to hardcode this to the literal `"D"`
+ * regardless of what the active slot's own keymap actually binds, which
+ * silently went wrong for any slot whose `queue.keymap.reject` isn't
+ * `['d']` (dispatch itself was never wrong — `buildSlotKeymap` above
+ * already reads `queue.keymap` correctly; only the hint text had a
+ * second, hardcoded copy). Reads the exact same `keymap.reject` lookup
+ * `buildSlotKeymap` uses — first bound combo, uppercased for display —
+ * so there is only ever one place a slot's reject key is declared.
+ */
+export function rejectKeyGlyph(spec: SlotSpec): string {
+  const combo = spec.capabilities.queue?.keymap.reject?.[0];
+  return (combo ?? 'd').toUpperCase();
+}

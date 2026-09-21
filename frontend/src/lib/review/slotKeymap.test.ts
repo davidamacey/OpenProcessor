@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildSlotKeymap, singleCharCombos } from './slotKeymap';
+import { buildSlotKeymap, rejectKeyGlyph, singleCharCombos } from './slotKeymap';
 import { licensePlateSlot } from '../annotations/profiles/licensePlate';
 import { aircraftTailNumberSlot } from '../annotations/profiles/aircraftTailNumber';
+import type { SlotSpec } from '../annotations/types';
 
 const plateHandlers = {
   confirm: vi.fn(),
@@ -85,5 +86,36 @@ describe('buildSlotKeymap — aircraftTailNumberSlot (second-slot case, no false
   it('single-char combos never include f for a slot with no falsePositiveState', () => {
     const entries = buildSlotKeymap(aircraftTailNumberSlot, false, tailHandlers);
     expect(singleCharCombos(entries).sort()).toEqual(['d', 'e']);
+  });
+});
+
+describe('rejectKeyGlyph', () => {
+  // review/+page.svelte's hint strip used to hardcode "D" for every
+  // slot's reject action instead of reading the active slot's own
+  // `queue.keymap.reject` — the same lookup `buildSlotKeymap` already
+  // used correctly for real key dispatch. This fixture's only purpose
+  // is proving the hint glyph tracks a keymap that binds reject
+  // somewhere other than 'd'.
+  const rBoundSlot: SlotSpec = {
+    ...licensePlateSlot,
+    capabilities: {
+      ...licensePlateSlot.capabilities,
+      queue: {
+        ...licensePlateSlot.capabilities.queue!,
+        keymap: { ...licensePlateSlot.capabilities.queue!.keymap, reject: ['r'] },
+      },
+    },
+  };
+
+  it('is behavior-neutral for licensePlateSlot — still "D"', () => {
+    expect(rejectKeyGlyph(licensePlateSlot)).toBe('D');
+  });
+
+  it('is behavior-neutral for aircraftTailNumberSlot — still "D"', () => {
+    expect(rejectKeyGlyph(aircraftTailNumberSlot)).toBe('D');
+  });
+
+  it('tracks a slot whose keymap binds reject to a different key', () => {
+    expect(rejectKeyGlyph(rBoundSlot)).toBe('R');
   });
 });

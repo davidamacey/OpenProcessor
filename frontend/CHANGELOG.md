@@ -318,6 +318,16 @@ check`/`test`/`lint`/`build` all green.
 
 ### Fixed
 
+- `/review`'s keyboard-shortcut hint strip hardcoded the reject/"no
+  {label} visible" glyph to the literal `"D"` for every slot, instead of
+  reading the active slot's own `capabilities.queue.keymap.reject` —
+  the same lookup `buildSlotKeymap()` already used correctly for real
+  key dispatch, so pressing the actual bound key always worked even
+  though the on-screen hint could lie. New `rejectKeyGlyph()`
+  (`src/lib/review/slotKeymap.ts`) resolves the displayed glyph from
+  that one keymap declaration, so a slot bound to something other than
+  `d` shows its real key. Behavior-neutral for `licensePlateSlot`
+  (still shows "D").
 - `scripts/playwright_round_trip.py` — composes its four backend URLs
   through a configurable `--api-prefix` instead of a hardcoded `/curation`;
   picks its target cluster via `GET {prefix}/clusters` rather than the

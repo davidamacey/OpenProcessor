@@ -25,7 +25,7 @@
   import { describeEnvelope, PLATE_SHAPE_ENVELOPE } from '$lib/shapeGate';
   import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
   import { AbortRegistry } from '$lib/review/abortRegistry';
-  import { buildSlotKeymap } from '$lib/review/slotKeymap';
+  import { buildSlotKeymap, rejectKeyGlyph } from '$lib/review/slotKeymap';
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
   import { computeViewBox } from '$lib/review/viewBox';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
@@ -1458,7 +1458,7 @@
         <kbd>↑↓←→</kbd> nudge · <kbd>[ ]</kbd> right edge · <kbd>Enter</kbd> save ·
         <kbd>Esc</kbd> cancel
       {:else if activeSlot}
-        <kbd>Enter</kbd> confirm · <kbd>D</kbd> reject
+        <kbd>Enter</kbd> confirm · <kbd>{rejectKeyGlyph(activeSlot)}</kbd> reject
         {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
           · <kbd>F</kbd> false-pos
         {/if}
