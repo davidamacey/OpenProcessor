@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Segmenter container (`docker/segmenter/`)**: a reference
+  implementation of the detection cascade's segmenter leg — a FastAPI
+  service wrapping Meta's SAM 3 that answers `POST
+  /sam3/segment_plate` (alias `POST /segment`) and
+  `/segment/batch` with candidate boxes in the submitted image's
+  normalized frame. `text_prompt` is required per request with no
+  server-side default, so the service carries no domain of its own.
+  Ships behind its own `segmenter` compose profile (it needs a GPU and
+  a HuggingFace token); the leg remains optional — an empty `SAM3_URL`
+  still makes it a clean no-op. See
+  [`docker/segmenter/README.md`](docker/segmenter/README.md).
+
 ## [0.3.0] - 2026-09-21
 
 ### Added
