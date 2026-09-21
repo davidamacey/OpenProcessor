@@ -13,19 +13,25 @@ import hashlib
 import os
 import shutil
 import subprocess  # nosec B404 - only used with a fixed argv + resolved executable, see _code_sha
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from src.core.logging import get_logger
 
 
 if TYPE_CHECKING:
+    import random
+    from collections.abc import Callable
+
     from src.clients.curation_opensearch import RegistryClassEntry
     from src.config import CurationConfig
 
 
 logger = get_logger(__name__)
+
+_T = TypeVar('_T')
 
 
 @dataclass
@@ -67,6 +73,55 @@ def hash_split(key: str, seed: int, train_ratio: float, val_ratio: float) -> str
     if frac < train_ratio + val_ratio:
         return 'val'
     return 'test'
+
+
+def even_stratified_sample(
+    rows: list[_T], n: int | None, key_fn: Callable[[_T], str], rng: random.Random
+) -> list[_T]:
+    """Round-robin cap ``rows`` to ~``n`` with EVEN per-stratum representation.
+
+    A *sampler*, not a splitter — the counterpart to :func:`stratified_split`,
+    which answers a different question (which split does each kept row land
+    in). Each stratum (the ``key_fn`` value, e.g. an item's class id)
+    contributes one row per pass, so small strata survive a cap intact and
+    large strata are the ones trimmed. Plain ``rows[:n]`` truncation instead
+    lets whatever sorts first monopolize the budget and can drop a rare
+    stratum entirely.
+
+    Args:
+        rows: Candidate rows to sample from.
+        n: Target count. ``None`` or ``>= len(rows)`` keeps everything.
+        key_fn: Maps a row to its stratum key.
+        rng: Seeded RNG, so the same export seed reproduces the same sample.
+
+    Returns:
+        At most ``n`` rows, every non-empty stratum represented as long as
+        ``n >= `` the number of strata.
+    """
+    if n is None or n >= len(rows):
+        return list(rows)
+    if n <= 0:
+        return []
+    buckets: dict[str, list[_T]] = defaultdict(list)
+    for row in rows:
+        buckets[key_fn(row)].append(row)
+    for bucket in buckets.values():
+        rng.shuffle(bucket)
+    order = list(buckets)
+    rng.shuffle(order)  # no key-order bias on the final, partial pass
+    picked: list[_T] = []
+    while len(picked) < n:
+        progressed = False
+        for key in order:
+            bucket = buckets[key]
+            if bucket:
+                picked.append(bucket.pop())
+                progressed = True
+                if len(picked) >= n:
+                    break
+        if not progressed:  # pragma: no cover - unreachable: n < len(rows)
+            break
+    return picked
 
 
 def stratified_split(
@@ -289,6 +344,7 @@ def _code_sha() -> str:
 
 __all__ = [
     'dataset_checksum',
+    'even_stratified_sample',
     'hash_split',
     'stratified_split',
 ]
