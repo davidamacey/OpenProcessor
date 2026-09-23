@@ -10,7 +10,7 @@
 #
 # ultralytics pinned to the exact version validated in production with the
 # patch. Bump deliberately, never with a range.
-ultralytics==8.3.253
+ultralytics==8.4.156
 
 # CPU-only torch is sufficient here: the ONNX export traces on CPU and the
 # TensorRT engine build talks to the GPU through the tensorrt wheels below,
