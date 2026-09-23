@@ -37,7 +37,7 @@ dependencies = [
     "onnxscript",
     "onnxruntime-gpu",
     "onnx-graphsurgeon",
-    "tensorrt-cu13==11.1.0.106",
+    "tensorrt-cu13==11.3.0.99",
     "nvidia-modelopt[onnx]",
     "torch",
     "torchvision",
