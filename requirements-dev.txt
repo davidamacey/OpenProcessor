@@ -21,7 +21,7 @@ numpy>=1.26.0
 matplotlib>=3.9.0
 
 # Image handling (for client-side image manipulation if needed)
-opencv-python>=4.8.0
+opencv-python>=5.0.0.93
 Pillow>=10.0.0
 
 # ONNX Runtime for local model testing (requires >=1.19 for IR version 12)
