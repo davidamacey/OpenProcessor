@@ -14,7 +14,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build - Install Python dependencies with compilation tools
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie AS builder
+FROM python:3.14-slim-trixie AS builder
 
 WORKDIR /build
 
@@ -52,7 +52,7 @@ RUN python -m venv /opt/venv-y11 \
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal image with only runtime dependencies
 # -----------------------------------------------------------------------------
-FROM python:3.13-slim-trixie
+FROM python:3.14-slim-trixie
 
 LABEL org.opencontainers.image.title="OpenProcessor FastAPI Service" \
       org.opencontainers.image.description="Visual AI API with object detection, face recognition, embeddings, and OCR" \
