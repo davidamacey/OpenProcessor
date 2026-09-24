@@ -102,6 +102,19 @@ export function createPlateGalleryController() {
   let suspectedFpView = $state<boolean>(false);
   let suspectedFpThreshold = $state<number>(0.35);
 
+  // M3 (docs/design/interactive-pass-2026-09-24.md): the bucket-card grid
+  // below only ever showed real AHC region clusters — when the only
+  // cluster is the permanent false-positive bucket (the common case
+  // before "Cluster plates" has been run over the good plates), every
+  // other plate was unreachable from this view: no "unclustered" entry
+  // and no fallback flat grid. `viewingAllPlates` opens the same flat
+  // gallery `selectedPlateCluster !== null` already renders, but with no
+  // `region_cluster_id` filter, so every plate — clustered or not — is
+  // browsable. Kept independent of `selectedPlateCluster` (rather than
+  // reusing it with a sentinel id) so `plateQuery` never needs to
+  // distinguish "filter to real cluster 0" from "no filter".
+  let viewingAllPlates = $state<boolean>(false);
+
   // Filter sidebar state — only active on the plates view.
   let plateDetectorFilter = $state<string>('');
   let plateVerifiedOnly = $state<boolean>(false);
@@ -328,12 +341,26 @@ export function createPlateGalleryController() {
 
   function openPlateCluster(id: number): void {
     suspectedFpView = false;
+    viewingAllPlates = false;
     plateSubTab = null;
     plateRefineMsg = null;
     // Clear the previous gallery synchronously so the render between selecting
     // the bucket and its data arriving doesn't group a stale mixed-bucket list.
     platePager.items = [];
     selectedPlateCluster = id;
+  }
+
+  /** M3: browse every plate with no `region_cluster_id` filter — the
+   *  entry point for plates that aren't in any AHC bucket yet (or when
+   *  the only bucket that exists is the false-positive one). */
+  function openAllPlates(): void {
+    suspectedFpView = false;
+    plateSubTab = null;
+    plateRefineMsg = null;
+    platePager.items = [];
+    selectedPlateCluster = null;
+    viewingAllPlates = true;
+    void loadPlatesFirst();
   }
 
   function selectPlateSubTab(sub: string | null): void {
@@ -344,6 +371,7 @@ export function createPlateGalleryController() {
 
   function backToPlateClusters(): void {
     selectedPlateCluster = null;
+    viewingAllPlates = false;
     plateSubTab = null;
     plateRefineMsg = null;
     plateSel.clear();
@@ -493,6 +521,9 @@ export function createPlateGalleryController() {
     get suspectedFpView() {
       return suspectedFpView;
     },
+    get viewingAllPlates() {
+      return viewingAllPlates;
+    },
     get suspectedFpThreshold() {
       return suspectedFpThreshold;
     },
@@ -540,6 +571,7 @@ export function createPlateGalleryController() {
     runClusterPlates,
     runRefinePlateCluster,
     openPlateCluster,
+    openAllPlates,
     selectPlateSubTab,
     backToPlateClusters,
     togglePlateSelect,
