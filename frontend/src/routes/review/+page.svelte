@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     cancelSelect,
-    reviewDismissCrop,
     reviewUndismissCrop,
     getCrop,
     getCrops,
@@ -10,7 +9,6 @@
     getSourceImageWithBbox,
     getThumbUrl,
     locateInReviewQueue,
-    putCropLabel,
     selectDiverse,
     setSlotBox,
     patchSlotMeta,
@@ -26,6 +24,7 @@
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
   import { pushUndo, removeUndo, popUndo, reinsertAt } from '$lib/review/slotQueueOps';
   import { AbortRegistry } from '$lib/review/abortRegistry';
+  import { createReviewQueueController } from '$lib/review/reviewController.svelte';
   import { buildSlotKeymap, rejectKeyGlyph } from '$lib/review/slotKeymap';
   import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
   import { computeViewBox } from '$lib/review/viewBox';
@@ -65,7 +64,6 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
-  import { undoStore } from '$stores/undo.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
@@ -337,6 +335,23 @@
   // rollback and on undo-restore. Not $state: only loadMore reads it, and
   // that read is inside an async callback, never in a reactive context.
   const handledIds = new Set<string>();
+
+  // Queue action controller (assign / discard / skip / undo) — extracted
+  // to src/lib/review/reviewController.svelte.ts (P1-4,
+  // docs/design/test-audit-2026-09-24.md) so the optimistic-remove +
+  // rollback-on-failure logic is unit-testable off the page. `queue`,
+  // `cursor` and `handledIds` stay owned here (shared with slot-tab
+  // actions and arrow-key nav below) and are handed in by
+  // reference/accessor.
+  const queueController = createReviewQueueController({
+    queue,
+    handledIds,
+    getCursor: () => cursor,
+    setCursor: (v) => {
+      cursor = v;
+    },
+    maybePrefetch: () => maybePrefetch(),
+  });
 
   // Filter bar. `sourceFilter` sends `source` to {API_PREFIX}/review/{tab} (item
   // 14/G3, 2026-09-24 logic-moves — renamed off the old `hdd_source`
@@ -713,45 +728,18 @@
   }
 
   /**
-   * Optimistically drop an item from the queue and advance.
-   *
-   * Returns the undo closure that puts it back at the same index with the
-   * same cursor. EVERY caller must invoke it when the API call fails —
-   * otherwise the item vanishes from the operator's queue while the server
-   * still holds it unchanged, and it is never seen again this session.
+   * Optimistically drop an item from the queue and advance. Thin wrapper
+   * around the controller's `removeFromQueue` — kept under this name
+   * because slot actions (confirmSlot/rejectSlot/markFalsePositive) below
+   * still call it directly.
    */
   function _removeFromQueue(item: ReviewItem): () => void {
-    const found = queue.items.findIndex((x) => x.id === item.id);
-    const removedIdx = found >= 0 ? found : cursor;
-    const priorCursor = cursor;
-    queue.items = queue.items.filter((x) => x.id !== item.id);
-    queue.total = Math.max(0, queue.total - 1);
-    cursor = Math.min(cursor, Math.max(0, queue.items.length - 1));
-    handledIds.add(item.id);
-    maybePrefetch();
-    return () => {
-      handledIds.delete(item.id);
-      const at = Math.min(removedIdx, queue.items.length);
-      queue.items = [...queue.items.slice(0, at), item, ...queue.items.slice(at)];
-      queue.total += 1;
-      cursor = priorCursor;
-    };
+    return queueController.removeFromQueue(item);
   }
 
   async function assign(classId: number): Promise<void> {
     if (!current) return;
-    const item = current;
-    const cls = classesStore.byId(classId);
-    // Optimistic: drop from list and advance.
-    const restore = _removeFromQueue(item);
-    try {
-      await putCropLabel(item.id, classId);
-      undoStore.recordWrites([item.id]);
-      toastStore.success(`Labeled "${cls?.name ?? classId}".`);
-    } catch (e) {
-      restore();
-      toastStore.error(`Label failed: ${(e as Error).message}`);
-    }
+    await queueController.assign(current, classId);
   }
 
   async function confirmAndAdvance(): Promise<void> {
@@ -778,8 +766,7 @@
   }
 
   function skip(): void {
-    cursor = Math.min(queue.items.length - 1, cursor + 1);
-    maybePrefetch();
+    queueController.skip();
   }
 
   async function discard(): Promise<void> {
@@ -787,22 +774,9 @@
     // Discard = "permanently dismiss this crop from every review queue."
     // Stamps review_dismissed_at on the backend; the review queue's
     // must_not filter excludes any crop with that field set. The crop's
-    // class / plate state is left intact — this is NOT an unlabel.
-    //
-    // Deliberately does NOT push an undoStore entry: Z undoes a *label*
-    // write (PUT the prior class, or restore the model suggestion), which
-    // is a different action from a dismiss. Reversing a dismiss instead
-    // goes through reviewUndismissCrop, surfaced via the "Dismissed"
-    // panel below — see openDismissedPanel/undismiss.
-    const item = current;
-    const restore = _removeFromQueue(item);
-    try {
-      await reviewDismissCrop(item.id);
-      toastStore.success('Dismissed from review (permanent).');
-    } catch (e) {
-      restore();
-      toastStore.error(`Discard failed: ${(e as Error).message}`);
-    }
+    // class / plate state is left intact — this is NOT an unlabel. See
+    // reviewController.svelte.ts's `discard` for the undo-entry note.
+    await queueController.discard(current);
   }
 
   // -- dismissed-crops panel (un-dismiss) --------------------------------
@@ -1197,29 +1171,13 @@
   }
 
   async function undoLast(): Promise<void> {
-    const crops = await undoStore.undoLast();
-    if (crops.length === 0) return;
-    // The item(s) were removed from the queue by assign/discard, so
-    // re-insert each restored item at the cursor so the operator can see
-    // (and re-verify) what the undo brought back.
-    for (const crop of crops) {
-      handledIds.delete(crop.id);
-      // `crop` (from POST {API_PREFIX}/crops/{id}/label/undo or
-      // .../label/undo_batch) already carries its own served
-      // proposed_class_id/_name (item 11, 2026-09-24 logic-moves) — no
-      // client fill-in. `reason` is the only field this page adds; every
-      // other queue-only field has no meaningful value for a restored
-      // item.
-      const restored: ReviewItem = {
-        ...crop,
-        reason: 'restored by undo',
-      };
-      const without = queue.items.filter((it) => it.id !== crop.id);
-      const at = Math.min(cursor, without.length);
-      queue.total += without.length === queue.items.length ? 1 : 0;
-      queue.items = [...without.slice(0, at), restored, ...without.slice(at)];
-      cursor = at;
-    }
+    // `crop` (from POST {API_PREFIX}/crops/{id}/label/undo or
+    // .../label/undo_batch) already carries its own served
+    // proposed_class_id/_name (item 11, 2026-09-24 logic-moves) — no
+    // client fill-in. `reason` is the only field the controller adds;
+    // every other queue-only field has no meaningful value for a
+    // restored item.
+    await queueController.undoLast();
   }
 
   // Keyboard shortcuts. Per-class letter hotkeys (configured on /classes)

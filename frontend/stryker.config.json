@@ -22,7 +22,8 @@
     "src/lib/curationSettings.ts",
     "src/lib/strategies.ts",
     "src/lib/classPicker.ts",
-    "src/lib/annotations/readSlot.ts"
+    "src/lib/annotations/readSlot.ts",
+    "src/lib/review/reviewController.svelte.ts"
   ],
   "concurrency": 4,
   "incremental": true,
