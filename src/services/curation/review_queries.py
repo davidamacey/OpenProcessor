@@ -63,6 +63,9 @@ def build_tab_query(
         # dismiss_from_review, or the legacy review_dismiss) stay out of
         # every queue until undone / POST /crops/{id}/review_undismiss.
         {'exists': {'field': 'review_dismissed_at'}},
+        # F-4: an excluded item (POST /crops/{id}/exclude) must never
+        # reappear in any review tab, regardless of what else flags it.
+        {'term': {'class_excluded': True}},
     ]
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
@@ -145,7 +148,7 @@ def build_tab_query(
         # label_validated=true. High-confidence triple-agreement crops are
         # already ``label_validated=true`` and skip this queue entirely.
         must.append({'exists': {'field': fields.bbox_norm}})
-        must_not = []
+        must_not = [{'term': {'class_excluded': True}}]
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
         # Already auto-confirmed by the SAM worker — no human needed.
@@ -191,7 +194,7 @@ def build_tab_query(
         must.append({'term': {'class_validated': True}})
         must.append({'exists': {'field': 'probe_pred_class'}})
         # Override the default must_not — we WANT validated crops here.
-        must_not = []
+        must_not = [{'term': {'class_excluded': True}}]
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
         # Inequality requires a script — the index is small enough at
@@ -251,7 +254,6 @@ def build_tab_query(
                 }
             }
         )
-        must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'primary_low_conf_default' — see review_sorts.py.
         reason = 'largest subject — classifier unsure or missed'
     elif tab == 'coco_blind_spots':
@@ -261,7 +263,6 @@ def build_tab_query(
         # proposal score lives in ``confidence``.
         must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
-        must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
     elif tab == 'new_class_proposals':

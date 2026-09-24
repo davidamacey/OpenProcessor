@@ -86,6 +86,7 @@ def _build_filter(
         # /review tab (review_queries.build_tab_query's own must_not).
         must_not.append({'term': {'class_validated': True}})
         must_not.append({'exists': {'field': 'review_dismissed_at'}})
+        must_not.append({'term': {'class_excluded': True}})
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
         if max_rank is not None:

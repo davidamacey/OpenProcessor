@@ -56,6 +56,8 @@ def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
     assert {'term': {'class_validated': True}} in must_not
     assert {'exists': {'field': 'review_dismissed_at'}} in must_not
     assert {'term': {'test_holdout': True}} in must_not
+    # F-4: an excluded item must never surface in semantic search either.
+    assert {'term': {'class_excluded': True}} in must_not
 
 
 def test_build_filter_include_test_keeps_holdout_crops():
