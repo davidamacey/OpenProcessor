@@ -38,3 +38,6 @@ lpr-error-disaply-review.png
 # is supplied per-deployment; only the .example.json is tracked, exactly
 # like .env / .env.example above.
 static/annotation-profiles.json
+
+# Validated local artifacts kept out of /tmp (evidence, exports); never committed.
+artifacts_local/
