@@ -281,7 +281,7 @@ async def test_get_cached_projection_never_triggers_a_fit(
                             'viz_y': 2.0,
                             'cluster_id': 10173,
                             'class_name': '',
-                            'class_source': 'gemma_unmatched',
+                            'class_source': 'vlm_unmatched',
                         },
                     },
                 ]
@@ -301,7 +301,7 @@ async def test_get_cached_projection_never_triggers_a_fit(
             'y': 2.0,
             'cluster_id': 10173,
             'class_name': '',
-            'class_source': 'gemma_unmatched',
+            'class_source': 'vlm_unmatched',
         }
     ]
 

@@ -130,15 +130,15 @@ class TestCombinedClassUpdateResetsProvenance:
     def test_resolved_class_resets_label_source_and_validated(self) -> None:
         reply = VlmCombinedReply(img_id='crop-1', class_id=0, class_confidence='high')
         update = _combined_class_update(reply, ['adventurebike'], name_to_id={'adventurebike': 1})
-        assert update['class_source'] == 'gemma'
-        assert update['label_source'] == 'gemma'
+        assert update['class_source'] == 'vlm'
+        assert update['label_source'] == 'vlm'
         assert update['class_validated'] is False
 
-    def test_gemma_unmatched_also_resets_provenance(self) -> None:
+    def test_vlm_unmatched_also_resets_provenance(self) -> None:
         reply = VlmCombinedReply(img_id='crop-1', class_id=-1, class_confidence='low')
         update = _combined_class_update(reply, ['adventurebike'])
-        assert update['class_source'] == 'gemma_unmatched'
-        assert update['label_source'] == 'gemma'
+        assert update['class_source'] == 'vlm_unmatched'
+        assert update['label_source'] == 'vlm'
         assert update['class_validated'] is False
 
     def test_classify_skipped_leaves_class_fields_untouched(self) -> None:
@@ -167,8 +167,8 @@ class TestCombinedClassUpdateResetsProvenance:
         )
         update = _combined_class_update(reply, None)
         assert update[get_region_fields().visible] is True
-        assert update['gemma_vehicle_make'] == 'Honda'
-        assert update['gemma_vehicle_model'] == 'CBR'
+        assert update['vlm_item_make'] == 'Honda'
+        assert update['vlm_item_model'] == 'CBR'
         assert 'class_source' not in update
 
 
@@ -333,7 +333,7 @@ class TestIsHumanOwnedClassPredicate:
     def test_false_for_machine_sources(self) -> None:
         from src.clients.occ import is_human_owned_class
 
-        assert is_human_owned_class({'class_source': 'gemma'}) is False
+        assert is_human_owned_class({'class_source': 'vlm'}) is False
         assert is_human_owned_class({'class_source': 'v6_model'}) is False
         assert is_human_owned_class({}) is False
 
@@ -344,8 +344,8 @@ class TestStripClassWriteFields:
 
         update = {
             'class_id': 5,
-            'class_source': 'gemma',
-            'label_source': 'gemma',
+            'class_source': 'vlm',
+            'label_source': 'vlm',
             'class_validated': False,
             'region_status': 'detected',
             'region_bbox_norm': [0.1, 0.1, 0.2, 0.2],
@@ -382,7 +382,7 @@ class TestVlmLabelBatchHumanGuard:
         (tmp_path / f'{crop_id}.jpg').write_bytes(buf.getvalue())
 
         import src.routers.curation.vlm as vlm_mod
-        from src.routers.curation._common import VlmLabelBatchRequest
+        from src.routers.curation.vlm import VlmLabelBatchRequest
 
         fake_labeler = AsyncMock()
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])
@@ -451,8 +451,8 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         t.update_doc = {
             'class_id': 9,
             'class_name': 'camaro',
-            'class_source': 'gemma',
-            'label_source': 'gemma',
+            'class_source': 'vlm',
+            'label_source': 'vlm',
             'region_status': 'detected',
             'region_bbox_norm': [0.2, 0.2, 0.3, 0.3],
         }
@@ -492,7 +492,7 @@ class TestDetectionWorkerBulkWriterHumanGuard:
             class_name='audi',
             group='cars',
         )
-        t.update_doc = {'class_id': 9, 'class_source': 'gemma', 'region_status': 'detected'}
+        t.update_doc = {'class_id': 9, 'class_source': 'vlm', 'region_status': 'detected'}
 
         opensearch = AsyncMock()
         opensearch.mget = AsyncMock(

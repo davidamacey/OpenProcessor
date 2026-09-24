@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.config.region_fields import get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     CropBatchLabelRequest,
@@ -23,11 +22,12 @@ from src.routers.curation._common import (
     RegistryDep,
     _ensure_indexes,
     _now_iso,
-    config,
     get_class_registry,
     logger,
     router,
 )
+from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
+from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.detection.cascade_detect import class_provenance
 
 
@@ -43,11 +43,27 @@ def _human_class_provenance() -> dict[str, Any]:
     )
 
 
-@router.get('/crops', response_model=CropsPageResponse)
+@router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
 async def list_crops(
     opensearch: OpenSearchDep,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
+    # Annotated defaults (not `= Query(...)`) so direct Python callers such
+    # as GET /classes/{id}/crops get real values, not FieldInfo objects.
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=500)] = 50,
+    limit: Annotated[
+        int | None, Query(ge=1, le=500, description='Alias for page_size; wins when both set.')
+    ] = None,
+    sort: Annotated[
+        str | None,
+        Query(
+            description=(
+                "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
+                'updated_at, created_at, confidence, classifier_raw_confidence, '
+                'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, '
+                'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
+            )
+        ),
+    ] = None,
     class_id: int | None = None,
     cluster_id: int | None = None,
     label_source: str | None = None,
@@ -56,19 +72,27 @@ async def list_crops(
     hdd_source: str | None = None,
     include_test: bool = False,
     include_excluded: bool = False,
-    max_rank: int | None = Query(None, ge=1),
-    min_blur_ratio: float | None = Query(None, ge=0.0),
-    v6_conf_lt: float | None = Query(None, ge=0.0, le=1.0),
-    order: str = Query(
-        'default',
-        description=(
-            "'outliers' ranks a cluster's members farthest-from-centroid first. "
-            "'diverse' ranks the matched pool by k-center-greedy coverage "
-            '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
-            'order value when the flag is off).'
+    max_rank: Annotated[int | None, Query(ge=1)] = None,
+    min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
+    classifier_conf_lt: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    conf_min: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    conf_max: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    order: Annotated[
+        str,
+        Query(
+            description=(
+                "'outliers' ranks a cluster's members farthest-from-centroid first. "
+                "'diverse' ranks the matched pool by k-center-greedy coverage "
+                '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
+                'order value when the flag is off).'
+            )
         ),
-    ),
-) -> CropsPageResponse:
+    ] = 'default',
+    k: Annotated[
+        int | None,
+        Query(ge=1, le=10_000, description='order=diverse only: rank just the first k picks.'),
+    ] = None,
+) -> dict[str, Any]:
     """Paginated crop browse with the standard filter set.
 
     ``test_holdout=true`` rows are filtered out unless ``include_test``.
@@ -79,15 +103,24 @@ async def list_crops(
     ``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``
     (e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops
     at or above a clarity threshold (the labeler slider); crops with no blur
-    score are NOT dropped. ``v6_conf_lt`` mines the "model wasn't sure" pool —
-    crops whose ``v6_raw_confidence`` is below the value OR that have no v6
+    score are NOT dropped. ``classifier_conf_lt`` mines the "model wasn't sure" pool —
+    crops whose ``classifier_raw_confidence`` is below the value OR that have no classifier
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
+    if limit is not None:
+        page_size = limit
+    try:
+        sort_clause = parse_crop_sort(sort)
+        conf_clause = confidence_band(conf_min, conf_max)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     must: list[dict[str, Any]] = []
     # Filter-context clauses (cached bitsets, no scoring) for the new
     # primary-subject filters.
     filt: list[dict[str, Any]] = []
+    if conf_clause is not None:
+        filt.append(conf_clause)
     if class_id is not None:
         must.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
@@ -124,15 +157,15 @@ async def list_crops(
                 }
             }
         )
-    if v6_conf_lt is not None:
+    if classifier_conf_lt is not None:
         # Low-confidence band OR no v6 prediction at all (COCO/VLM-only
         # blind spots) — not silently dropped by a plain range clause.
         filt.append(
             {
                 'bool': {
                     'should': [
-                        {'range': {'v6_raw_confidence': {'lt': v6_conf_lt}}},
-                        {'bool': {'must_not': {'exists': {'field': 'v6_raw_confidence'}}}},
+                        {'range': {'classifier_raw_confidence': {'lt': classifier_conf_lt}}},
+                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
                     ],
                     'minimum_should_match': 1,
                 }
@@ -149,13 +182,13 @@ async def list_crops(
         'from': (page - 1) * page_size,
         'size': page_size,
         'query': query_clause,
-        'sort': [{'updated_at': {'order': 'desc'}}],
+        'sort': sort_clause,
         # Exact total (not the default 10k cap) so the labeler shows real
         # queue sizes for filtered views — one count pass per query, fine at
         # this scale and matches the /curation/review endpoint.
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors to the card grid.
-        '_source': {'excludes': ['pe_embedding', 'v6_embedding']},
+        '_source': {'excludes': item_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -175,7 +208,7 @@ async def list_crops(
         if ordered_ids is not None:
             page_ids = ordered_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
             crops = await _crops_by_ids(opensearch, page_ids)
-            return CropsPageResponse(
+            return crops_page(
                 total=len(ordered_ids),
                 page=page,
                 page_size=page_size,
@@ -192,12 +225,12 @@ async def list_crops(
         from src.routers.curation.select import compute_diverse_order
 
         diverse_ids = await compute_diverse_order(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total)
+            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total), k=k
         )
         if diverse_ids is not None:
             page_ids = diverse_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
             crops = await _crops_by_ids(opensearch, page_ids)
-            return CropsPageResponse(
+            return crops_page(
                 total=len(diverse_ids),
                 page=page,
                 page_size=page_size,
@@ -207,92 +240,45 @@ async def list_crops(
             )
 
     hits = (resp.get('hits') or {}).get('hits') or []
-    crops = [_src_to_crop_doc(h.get('_source') or {}, h.get('_id', '')) for h in hits]
-    return CropsPageResponse(total=int(total), page=page, page_size=page_size, crops=crops)
+    crops = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
+    return crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
 
 
-def _src_to_crop_doc(src: dict[str, Any], fallback_id: str) -> ItemDoc:
-    """Build an ItemDoc from an OpenSearch ``_source`` (shared by both the
-    default and outlier-ordered list paths)."""
-    fields = get_region_fields()
-    crop_id = src.get('crop_id') or fallback_id
-    return ItemDoc(
-        crop_id=crop_id,
-        image_id=src.get('image_id', ''),
-        image_path=src.get('image_path', ''),
-        bbox_norm=src.get('bbox_norm') or [],
-        class_id=src.get('class_id'),
-        class_name=src.get('class_name', ''),
-        class_source=src.get('class_source', ''),
-        confidence=float(src.get('confidence') or 0.0),
-        cluster_id=src.get('cluster_id'),
-        cluster_distance=src.get('cluster_distance'),
-        cluster_subid=src.get('cluster_subid'),
-        # Legacy `label_validated` derived for frontend compat.
-        label_validated=bool(
-            src.get('class_validated')
-            or src.get(fields.validated)
-            or src.get('label_validated', False)
-        ),
-        label_source=src.get('label_source', ''),
-        plate_bbox_norm=src.get(fields.bbox_norm),
-        plate_score=src.get(fields.score),
-        plate_status=src.get(fields.status),
-        plate_text=src.get(fields.text),
-        plate_text_source=src.get(fields.text_source),
-        plate_text_confidence=src.get(fields.text_confidence),
-        plate_rejection_reason=src.get(fields.rejection_reason),
-        plate_detector=src.get(fields.detector),
-        plate_detector_version=src.get(fields.detector_version),
-        plate_verified=src.get(fields.verified),
-        plate_verified_at=src.get(fields.verified_at),
-        plate_verifier=src.get(fields.verifier),
-        plate_label_source=src.get(fields.label_source),
-        test_holdout=bool(src.get('test_holdout', False)),
-        crop_rank_in_image=src.get('crop_rank_in_image'),
-        crop_area_norm=src.get('crop_area_norm'),
-        blur_lap_ratio=src.get('blur_lap_ratio'),
-        coco_proposal_name=src.get('coco_proposal_name'),
-        thumbnail_url=f'{config.api_prefix}/crops/{crop_id}/thumbnail',
-    )
-
-
-async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[ItemDoc]:
+async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]:
     """mget item docs preserving the supplied id order (drops missing)."""
     if not ids:
         return []
     resp = await opensearch.mget(
         index=CURATION_ITEMS_INDEX,
         body={'ids': ids},
-        _source_excludes=['pe_embedding', 'v6_embedding'],
+        _source_excludes=item_source_excludes(),
     )
     return [
-        _src_to_crop_doc(d.get('_source') or {}, d.get('_id', ''))
+        serialize_item(d.get('_source') or {}, d.get('_id', ''))
         for d in (resp.get('docs') or [])
         if d.get('found')
     ]
 
 
-@router.get('/crops/{crop_id}', response_model=ItemDoc)
+@router.get('/crops/{crop_id}', response_model=None, responses={200: {'model': ItemDoc}})
 async def get_crop(
     crop_id: str,
     opensearch: OpenSearchDep,
-) -> ItemDoc:
+) -> dict[str, Any]:
     """Return the authoritative item document by id.
 
     Used by the labeler's review-queue "Back" path so the operator sees
-    what was actually persisted (not a stale local snapshot). Returns
-    the frozen ``ItemDoc`` wire contract (``plate_*`` names) — same
-    translation ``GET /crops`` uses via ``_src_to_crop_doc`` — never the
-    raw OpenSearch ``_source``, whose keys follow ``RegionFields`` (e.g.
-    ``region_*`` by default) and are not part of the HTTP contract.
+    what was actually persisted (not a stale local snapshot). Same wire
+    item as ``GET /crops`` and ``GET /review/{tab}`` — never the raw
+    OpenSearch ``_source``, whose region keys follow ``RegionFields``
+    storage names.
     """
     try:
         resp = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
-    return _src_to_crop_doc(src, crop_id)
+    return serialize_item(src, crop_id)
 
 
 @router.put('/crops/{crop_id}/label')

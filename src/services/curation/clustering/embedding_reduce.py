@@ -91,11 +91,11 @@ RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_emb
 # OP_* config):
 #   {secondary}_model — the ingest classifier labeled it above its floor
 #                       ({primary}_model too when the primary assigns_class)
-#   gemma             — the VLM matched a registered class name
+#   vlm               — the VLM matched a registered class name
 #   human             — human-validated label
 #
-# Everything else (low-conf / unlabeled proposals, gemma_unmatched,
-# gemma_new_class_pending, null) is residual and goes into the cluster.
+# Everything else (low-conf / unlabeled proposals, vlm_unmatched,
+# vlm_new_class_pending, null) is residual and goes into the cluster.
 CONFIDENT_CLASS_SOURCES = confident_class_sources()
 
 UMapMode = Literal['transform', 'refit']
@@ -156,7 +156,7 @@ async def fetch_residual_v6_embeddings(
     must: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
     # Exclude confidently-labeled crops from the residual pool. The
     # previous filter (class_validated != true) only caught the 102
-    # human-validated rows because v6_model and gemma writers don't
+    # human-validated rows because item_model and gemma writers don't
     # set class_validated; the 2026-05-23 IVF run pulled all 347k
     # crops including 219k labeled ones and started overwriting their
     # cluster_id=class_id mappings before cancel. CONFIDENT_CLASS_SOURCES

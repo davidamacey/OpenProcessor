@@ -108,7 +108,7 @@ async def _try_combined_class_region(
     """Run the primary-detector-missed combined VLM call. Returns True on success.
 
     On success populates ``task.update_doc`` with class fields, region
-    fields, and ``gemma_verify_completed_at`` so downstream pipelines
+    fields, and ``vlm_verify_completed_at`` so downstream pipelines
     know class+region were resolved in one round-trip. On parse failure
     returns False and the caller falls back to the legacy two-call path.
     """
@@ -142,7 +142,7 @@ async def _try_combined_class_region(
             auto = await _auto_confirm_or_pending(
                 sam_score=candidate_score,
                 bbox_in_crop=candidate_in_crop,
-                gemma_high_conf=high_conf,
+                vlm_high_conf=high_conf,
             )
             task.update_doc = _combined_write_doc(
                 reply=reply,

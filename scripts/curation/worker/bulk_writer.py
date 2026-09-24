@@ -18,13 +18,14 @@ from src.clients.occ import (
     occ_skip_on_conflict_bulk,
     strip_class_write_fields,
 )
-from src.config import get_region_fields
+from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.history import (
     MAX_PLATE_CHAIN_ENTRIES,
     append_plate_chain_entry,
     record_class_history,
 )
+from src.services.curation.wire import region_event_payload
 
 
 logger = get_logger('curation_worker')
@@ -173,17 +174,17 @@ async def _publish_region_events(written: list[_ItemTask]) -> None:
     if _EVENT_CLIENT is None:
         _EVENT_CLIENT = httpx.AsyncClient(timeout=2.0)
     F = get_region_fields()
-    url = f'{_EVENT_API_URL}/curation/events/publish'
+    url = f'{_EVENT_API_URL}{get_curation_config().api_prefix}/events/publish'
     for t in written:
-        plate_status = (t.update_doc or {}).get(F.status)
-        if not plate_status:
+        region_status = (t.update_doc or {}).get(F.status)
+        if not region_status:
             continue
-        body = {
-            'type': 'crop.region_verified',
-            'topic': 'region_status',
-            'crop_id': t.crop_id,
-            F.status: plate_status,
-        }
+        # Read under the storage name, publish under the fixed wire name
+        # (_PublishEvent.region_status) — posting the storage key made the
+        # API drop the status whenever the two differed.
+        body = region_event_payload(
+            t.crop_id, region_status=region_status, region_text=(t.update_doc or {}).get(F.text)
+        )
         with contextlib.suppress(Exception):  # nosec B110 — advisory; never fail the worker
             await _EVENT_CLIENT.post(url, json=body, timeout=2.0)
 

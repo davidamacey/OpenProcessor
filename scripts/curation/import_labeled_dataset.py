@@ -99,6 +99,7 @@ from scripts.curation.yolo_dataset import (
     load_samples,
     stratified_sample,
 )
+from src.config import get_curation_config
 
 
 logger = logging.getLogger('import_labeled_dataset')
@@ -493,7 +494,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     p.add_argument('--dataset', required=True, type=Path, help='data.yaml or dataset root')
-    p.add_argument('--api-base', default='http://localhost:4603/curation')
+    p.add_argument('--api-base', default=f'http://localhost:4603{get_curation_config().api_prefix}')
     p.add_argument('--splits', default=None, help='Comma-separated subset (default: all found)')
     p.add_argument(
         '--path-map',

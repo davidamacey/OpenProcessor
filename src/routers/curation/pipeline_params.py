@@ -14,13 +14,13 @@ from src.services.curation.strategy_defaults import UnknownStrategyError, resolv
 # Shared description for the run_auto_promote query param so both
 # /start and /pipeline_auto_label entry points say the same thing.
 AUTO_PROMOTE_DESC = (
-    'Run the auto-promote stage (v6 + cluster-majority agreement). '
-    'Defaults False: the rule had no v6 confidence floor and was '
-    'auto-validating low-confidence v6 predictions into class clusters. '
+    'Run the auto-promote stage (classifier + cluster-majority agreement). '
+    'Defaults False: the rule had no classifier confidence floor and was '
+    'auto-validating low-confidence classifier predictions into class clusters. '
     'Opt-in only after a confidence-gated rewrite.'
 )
 
-RUN_GEMMA_DESC = (
+RUN_VLM_DESC = (
     'Run the VLM labeling stage. Defaults to False — the '
     'detection worker now labels crops on the drain path; this '
     'stage just duplicates that work. Opt-in for a one-off '

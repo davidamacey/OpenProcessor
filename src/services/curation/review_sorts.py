@@ -98,7 +98,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             status='stable',
             description=(
                 'Most recently touched crop first. Legacy default for the '
-                'mismatches and gemma_low_conf tabs.'
+                'mismatches and vlm_low_conf tabs.'
             ),
         ),
         ReviewSort(
@@ -255,7 +255,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                     }
                 },
                 {
-                    'v6_raw_confidence': {
+                    'classifier_raw_confidence': {
                         'order': 'asc',
                         'missing': '_last',
                         'unmapped_type': 'double',
@@ -307,7 +307,7 @@ def get_review_sorts() -> dict[str, ReviewSort]:
 _TAB_DEFAULTS: dict[str, str] = {
     'all': 'atypicality',
     'mismatches': 'recent',
-    'gemma_low_conf': 'recent',
+    'vlm_low_conf': 'recent',
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
     'regions': 'region_score',

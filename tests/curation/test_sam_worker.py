@@ -339,7 +339,7 @@ class TestRouting:
         assert task.update_doc[F.detector] == 'sam3'
         chain = task.update_doc.get(F.detector_chain) or []
         assert any('paddleocr_rec_trt:text_hint:hit' in s for s in chain)
-        assert any('sam3:text_hint:gemma_verify_ok' in s for s in chain)
+        assert any('sam3:text_hint:vlm_verify_ok' in s for s in chain)
 
 
 # =============================================================================
@@ -404,10 +404,10 @@ class TestProvenance:
         assert F.detected_at in task.update_doc
         # Verifier fields should be present (VLM verified).
         assert task.update_doc[F.verifier] == 'gemma-4-e4b'
-        # Chain captures the cascade: hit + gemma_verify_ok.
+        # Chain captures the cascade: hit + vlm_verify_ok.
         chain = task.update_doc.get(F.detector_chain) or []
         assert any('lpr_nanov11_640:hit' in s for s in chain)
-        assert any('gemma_verify_ok' in s for s in chain)
+        assert any('vlm_verify_ok' in s for s in chain)
 
     @pytest.mark.asyncio
     async def test_sam3_write_carries_sam3_detector(self) -> None:

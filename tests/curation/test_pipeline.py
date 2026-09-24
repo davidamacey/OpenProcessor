@@ -15,10 +15,10 @@ import pytest
 
 class TestPipelineSkipFilter:
     """``_run_chunk``'s query must exclude crops with a recent
-    ``gemma_verify_completed_at``."""
+    ``vlm_verify_completed_at``."""
 
     def test_unvalidated_query_excludes_recent_combined_writes(self) -> None:
-        """Verify the must_not includes a range filter on gemma_verify_completed_at."""
+        """Verify the must_not includes a range filter on vlm_verify_completed_at."""
         # Inspect the source — the query block is constructed inline in
         # ``pipeline_auto_label``; rather than invoking the endpoint
         # against a live OS, we assert on the source string. This pins
@@ -26,18 +26,18 @@ class TestPipelineSkipFilter:
         from src.routers.curation import pipeline
 
         src = Path(pipeline.__file__).read_text()
-        assert "'gemma_verify_completed_at'" in src
+        assert "'vlm_verify_completed_at'" in src
         # Must appear inside the must_not block, not just in a comment.
         # Heuristic: a range query keyed on the marker.
         assert 'range' in src
-        assert 'gemma_verify_completed_at' in src
+        assert 'vlm_verify_completed_at' in src
 
     def test_pipeline_skips_gemma_for_completed_crops(self) -> None:
         """The skip filter is purely time-based (24h window) and therefore
         applies to ANY crop class_source whose combined call set
-        ``gemma_verify_completed_at`` within the last 24h. Pin the cutoff
+        ``vlm_verify_completed_at`` within the last 24h. Pin the cutoff
         window and the range operator so a narrowing change (e.g. adding
-        ``class_source == 'gemma'`` to the must clause) trips this test.
+        ``class_source == 'vlm'`` to the must clause) trips this test.
         """
         from src.routers.curation import pipeline
 
@@ -48,7 +48,7 @@ class TestPipelineSkipFilter:
         # The filter is structured as a bare range against the marker,
         # NOT nested inside a class_source bool — so any source that
         # writes the marker is excluded.
-        marker_idx = src.find("'gemma_verify_completed_at'")
+        marker_idx = src.find("'vlm_verify_completed_at'")
         assert marker_idx > 0
         # Walk back to the enclosing must_not block; ensure no
         # class_source narrowing wraps the marker.
@@ -80,7 +80,7 @@ class _FakeRegistry:
 
 class _FakeOpenSearch:
     """Minimal fake covering exactly what ``pipeline_auto_label`` touches
-    on the ``run_gemma=True`` path when ``mget`` always reports "not
+    on the ``run_vlm=True`` path when ``mget`` always reports "not
     found" (so the labeler is never actually invoked -- see
     ``_run_chunk``'s ``if not crops: return 0, 0, []`` short-circuit).
 
@@ -158,12 +158,12 @@ class TestPipelineClassIdScoping:
             train_clusters=False,
             promote_min_purity=0.85,
             promote_min_members=4,
-            gemma_batch_size=32,
-            gemma_concurrency=8,
-            max_gemma_crops=0,
-            v6_confidence_skip_gemma=0.80,
+            vlm_batch_size=32,
+            vlm_concurrency=8,
+            max_vlm_crops=0,
+            classifier_confidence_skip_vlm=0.80,
             clustering_method=None,
-            run_gemma=True,
+            run_vlm=True,
             recluster_unvalidated=False,
             reassign_only=False,
             run_auto_promote=False,
@@ -198,12 +198,12 @@ class TestPipelineClassIdScoping:
             train_clusters=False,
             promote_min_purity=0.85,
             promote_min_members=4,
-            gemma_batch_size=32,
-            gemma_concurrency=8,
-            max_gemma_crops=0,
-            v6_confidence_skip_gemma=0.80,
+            vlm_batch_size=32,
+            vlm_concurrency=8,
+            max_vlm_crops=0,
+            classifier_confidence_skip_vlm=0.80,
             clustering_method=None,
-            run_gemma=True,
+            run_vlm=True,
             recluster_unvalidated=False,
             reassign_only=False,
             run_auto_promote=False,

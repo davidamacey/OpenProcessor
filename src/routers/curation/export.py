@@ -1,21 +1,18 @@
 """Curation export endpoints — split out of pipeline.py for the file-size gate.
 
-Backs ``POST /curation/export/yolo`` with the generic
-:class:`~src.services.curation.export.GenericYoloExportService` (plan
-§3.5/§5 Chunk 9 — the generic half of the reference export router). The
-reference implementation's standalone single-class region-dataset
-export (``POST /legacy/export/lpr``) is backed by a domain-specific export
-service (plan §1's Bucket B — proprietary dataset-family logic, never
-ported anywhere in this plan) — so that endpoint is intentionally not
-ported here.
+Backs ``POST {prefix}/export/yolo`` with the generic
+:class:`~src.services.curation.export.GenericYoloExportService` and lists
+every materialized dataset (multi-class and single-class) for the train
+page. The narrowed single-class export lives in
+:mod:`src.routers.curation.export_single_class`.
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
 
 from src.routers.curation._common import (
@@ -83,50 +80,127 @@ async def export_yolo(
     }
 
 
-@router.get('/export/datasets')
-async def list_export_datasets() -> dict[str, Any]:
-    """List every materialized dataset version on disk, newest first.
+# Dataset kinds on the wire — the same ids the /methods `export` axis
+# advertises for POST /export/{kind}.
+MULTI_CLASS_DATASET_KIND = 'yolo'
+SINGLE_CLASS_DATASET_KIND = 'single_class'
 
-    Scans the export root for ``manifest.json`` so the train page can let
-    the operator pick ANY past export (a small sample, a larger subset, or
-    the full set) rather than only the latest — the prerequisite for
-    retraining / upsizing the model on the exact same data.
-    """
-    from src.config import get_curation_config
+
+def _read_manifest(d: Path) -> dict[str, Any] | None:
     from src.services.curation.export import ARTIFACT_FILENAMES
 
-    cfg = get_curation_config()
+    manifest = d / ARTIFACT_FILENAMES['manifest']
+    if not manifest.is_file():
+        return None
     try:
-        current = str(resolve_current_export_dir(cfg))
+        meta = json.loads(manifest.read_text(encoding='utf-8'))
+    except (OSError, ValueError) as exc:
+        logger.warning('export_manifest_skip', dir=str(d), error=str(exc))
+        return None
+    return meta if isinstance(meta, dict) else None
+
+
+def _dataset_row(
+    d: Path, meta: dict[str, Any], *, kind: str, profile_name: str | None, current: str | None
+) -> dict[str, Any]:
+    return {
+        'kind': kind,
+        'profile_name': profile_name,
+        'export_dir': str(d),
+        'version_tag': meta.get('version_tag') or '',
+        'image_count': meta.get('image_count'),
+        'split_counts': meta.get('split_counts'),
+        'dataset_sha': meta.get('dataset_sha'),
+        'exported_at': meta.get('exported_at') or meta.get('started_at'),
+        'class_count': meta.get('class_count'),
+        'is_current': current is not None and str(d) == current,
+    }
+
+
+def _scan_export_datasets() -> list[dict[str, Any]]:
+    """Every materialized dataset version under the export root.
+
+    Multi-class versions live directly under the root
+    (``<root>/<version>/manifest.json``). Single-class exports live one
+    level down under their profile's own root
+    (``<root>/<profile_name>/<version>/manifest.json``), each with its own
+    ``current`` symlink, so a root child without a manifest is scanned as
+    a profile root.
+    """
+    from src.config import get_curation_config
+    from src.services.curation.export_single_class import (
+        SingleClassExportProfile,
+        resolve_current_single_class_dir,
+    )
+
+    cfg = get_curation_config()
+    root = cfg.export_root
+    if not root.is_dir():
+        return []
+    try:
+        current: str | None = str(resolve_current_export_dir(cfg))
     except FileNotFoundError:
         current = None
-
-    datasets: list[dict[str, Any]] = []
-    root = cfg.export_root
-    if root.is_dir():
-        for d in root.iterdir():
-            if not d.is_dir() or d.name == 'current':
-                continue
-            manifest = d / ARTIFACT_FILENAMES['manifest']
-            if not manifest.is_file():
-                continue
-            try:
-                meta = json.loads(manifest.read_text(encoding='utf-8'))
-            except (OSError, ValueError) as exc:
-                logger.warning('export_manifest_skip', dir=str(d), error=str(exc))
-                continue
-            datasets.append(
-                {
-                    'export_dir': str(d),
-                    'version_tag': meta.get('version_tag') or '',
-                    'image_count': meta.get('image_count'),
-                    'split_counts': meta.get('split_counts'),
-                    'dataset_sha': meta.get('dataset_sha'),
-                    'exported_at': meta.get('exported_at') or meta.get('started_at'),
-                    'class_count': meta.get('class_count'),
-                    'is_current': current is not None and str(d) == current,
-                }
+    rows: list[dict[str, Any]] = []
+    for d in sorted(root.iterdir()):
+        if not d.is_dir() or d.name == 'current':
+            continue
+        meta = _read_manifest(d)
+        if meta is not None:
+            rows.append(
+                _dataset_row(
+                    d, meta, kind=MULTI_CLASS_DATASET_KIND, profile_name=None, current=current
+                )
             )
+            continue
+        profile = SingleClassExportProfile(name=d.name)
+        try:
+            profile_current: str | None = str(resolve_current_single_class_dir(profile, cfg))
+        except FileNotFoundError:
+            profile_current = None
+        for v in sorted(d.iterdir()):
+            if not v.is_dir() or v.name == profile.current_link_name:
+                continue
+            vmeta = _read_manifest(v)
+            if vmeta is None:
+                continue
+            rows.append(
+                _dataset_row(
+                    v,
+                    vmeta,
+                    kind=SINGLE_CLASS_DATASET_KIND,
+                    profile_name=d.name,
+                    current=profile_current,
+                )
+            )
+    return rows
+
+
+@router.get('/export/datasets')
+async def list_export_datasets(
+    kind: Annotated[
+        str | None,
+        Query(description=f"'{MULTI_CLASS_DATASET_KIND}' or '{SINGLE_CLASS_DATASET_KIND}'"),
+    ] = None,
+    profile_name: Annotated[
+        str | None, Query(description='Only this single-class export profile.')
+    ] = None,
+) -> dict[str, Any]:
+    """List every materialized dataset version on disk, newest first.
+
+    Lets the train page pick ANY past export (a small sample, a larger
+    subset, or the full set) rather than only the latest — the
+    prerequisite for retraining / upsizing on the exact same data. Each
+    row carries ``kind`` (``yolo`` multi-class / ``single_class``) and
+    ``profile_name`` (``null`` for multi-class); ``is_current`` is judged
+    against the row's own ``current`` symlink (the multi-class root's, or
+    that single-class profile's).
+    """
+    datasets = _scan_export_datasets()
+    if kind is not None:
+        datasets = [d for d in datasets if d['kind'] == kind]
+    if profile_name is not None:
+        datasets = [d for d in datasets if d['profile_name'] == profile_name]
     datasets.sort(key=lambda x: x.get('exported_at') or '', reverse=True)
     return {'datasets': datasets, 'count': len(datasets)}
 

@@ -3,7 +3,7 @@
 Extracted from the orchestrator module alongside the disable-by-default
 change in the ingest pipeline. Disabled because the v6-confidence-
 floor-less rule contaminated class clusters with visually wrong crops
-via ``class_source='cluster_v6_majority_agreement'``. Kept here as an
+via ``class_source='cluster_majority_agreement'``. Kept here as an
 opt-in path so the eventual confidence-gated rewrite has a home.
 
 A crop is promoted only when v6's class call already matches the
@@ -33,6 +33,10 @@ from src.core.logging import get_logger
 # practice. Do not "fix" this cycle.
 from src.services.curation.clustering.orchestrator import ITEMS_INDEX
 from src.services.curation.history import record_class_history
+from src.services.curation.ingest_class_sources import (
+    CLUSTER_MAJORITY_CLASS_SOURCE,
+    classifier_class_sources,
+)
 
 
 if TYPE_CHECKING:
@@ -175,7 +179,7 @@ async def auto_promote_clusters(
             'bool': {
                 'must': [
                     {'term': {'cluster_id': cluster_id}},
-                    {'term': {'class_source': 'v6_model'}},
+                    {'terms': {'class_source': sorted(classifier_class_sources())}},
                     {'term': {'class_name': top_name}},
                 ],
                 'must_not': [
@@ -214,8 +218,8 @@ async def auto_promote_clusters(
                 return {}
             update: dict[str, Any] = {
                 'class_validated': True,
-                'class_source': 'cluster_v6_majority_agreement',
-                'label_source': 'cluster_v6_majority_agreement',
+                'class_source': CLUSTER_MAJORITY_CLASS_SOURCE,
+                'label_source': CLUSTER_MAJORITY_CLASS_SOURCE,
                 'updated_at': now,
             }
             update['class_id_history'] = record_class_history(current, writer='auto_promote')

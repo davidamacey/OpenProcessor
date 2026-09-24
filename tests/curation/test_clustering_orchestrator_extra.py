@@ -152,10 +152,11 @@ class _FakeAutoPromoteClient:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures('reference_ingest_profiles')
 async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     """3 buckets: pure (promote) / mixed (skip) / unlabelled (skip).
 
-    The only auto-promotion path is the ``cluster_v6_majority_agreement``
+    The only auto-promotion path is the ``cluster_majority_agreement``
     write — crops where v6 already chose the cluster's dominant class
     get ``class_validated=True`` set. Unlabeled crops are left for the
     VLM + the review queue. This avoids the prototype-era pattern of
@@ -189,8 +190,8 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     assert len(client.update_calls) == 10
     written = client.update_calls[0]['doc']
     assert written['class_validated'] is True
-    assert written['class_source'] == 'cluster_v6_majority_agreement'
-    assert written['label_source'] == 'cluster_v6_majority_agreement'
+    assert written['class_source'] == 'cluster_majority_agreement'
+    assert written['label_source'] == 'cluster_majority_agreement'
     # Every promoted crop now snapshots its pre-write v6_model state into
     # class_id_history.
     history = written['class_id_history']
@@ -204,7 +205,7 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
     must = scroll_init_call['query']['bool']['must']
     must_not = scroll_init_call['query']['bool']['must_not']
     assert {'term': {'cluster_id': 1}} in must
-    assert {'term': {'class_source': 'v6_model'}} in must
+    assert {'terms': {'class_source': ['v6_model']}} in must
     assert {'term': {'class_name': 'cruiserbike'}} in must
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'test_holdout': True}} in must_not

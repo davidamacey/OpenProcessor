@@ -162,7 +162,7 @@ def test_auto_promote_apply_validates_only_the_high_purity_cluster(
     for crop_id in promotable:
         src = get_doc(opensearch, INDEXES['items'], crop_id)['_source']
         assert src['class_validated'] is True, crop_id
-        assert src['class_source'] == 'cluster_v6_majority_agreement'
+        assert src['class_source'] == 'cluster_majority_agreement'
         assert src['class_id_history'][-1]['writer'] == 'auto_promote'
     for crop_id in untouched:
         src = get_doc(opensearch, INDEXES['items'], crop_id)['_source']

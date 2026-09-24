@@ -40,11 +40,11 @@ if TYPE_CHECKING:
 # Pre-existing items-index field names (see module docstring) — named
 # after the VLM integration that first wrote them. Referenced only through
 # these constants so a future schema rename is a one-line change.
-RAW_LABEL_FIELD = 'gemma_raw_label'
-CLUSTER_ID_FIELD = 'gemma_label_cluster_id'
-CLUSTER_NAME_FIELD = 'gemma_label_cluster_name'
-CLUSTER_DISTANCE_FIELD = 'gemma_label_cluster_distance'
-UNMATCHED_CLASS_SOURCE = 'gemma_unmatched'
+RAW_LABEL_FIELD = 'vlm_raw_label'
+CLUSTER_ID_FIELD = 'vlm_label_cluster_id'
+CLUSTER_NAME_FIELD = 'vlm_label_cluster_name'
+CLUSTER_DISTANCE_FIELD = 'vlm_label_cluster_distance'
+UNMATCHED_CLASS_SOURCE = 'vlm_unmatched'
 
 
 @dataclass(frozen=True)

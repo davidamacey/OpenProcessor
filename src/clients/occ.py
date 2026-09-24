@@ -125,7 +125,7 @@ async def occ_update_one(
         refresh: OpenSearch refresh policy. ``True`` for immediate
             visibility (human PUTs), ``False`` for batch writes.
         writer_id: Identifier for structured logs (``human``, ``sam_worker``,
-            ``gemma_pipeline``, etc.).
+            ``vlm_pipeline``, etc.).
 
     Raises:
         OCCFinalConflictError: when retries are exhausted.
@@ -322,9 +322,9 @@ def _is_human_marker(value: Any) -> bool:
     containing the substring ``human``.
 
     Matches the in-codebase markers ``human``, ``human_move``, and
-    ``gemma_human_confirmed`` (legacy_crops, legacy_plates, legacy_clustering).
-    Non-human writers use ``ingest``, ``v6_model``, ``coco_yolo11``,
-    ``gemma``, ``cluster_v6_majority_agreement``, etc.
+    ``vlm_human_confirmed`` (legacy_crops, legacy_plates, legacy_clustering).
+    Non-human writers use ``ingest``, ``item_model``, ``coco_yolo11``,
+    ``gemma``, ``cluster_majority_agreement``, etc.
     """
     return isinstance(value, str) and 'human' in value
 
@@ -363,10 +363,10 @@ CLASS_WRITE_FIELDS = frozenset(
         'class_validated',
         'cluster_id',
         'cluster_subid',
-        'gemma_confidence',
-        'gemma_raw_class',
-        'gemma_raw_label',
-        'gemma_proposed_class',
+        'vlm_confidence',
+        'vlm_raw_class',
+        'vlm_raw_label',
+        'vlm_proposed_class',
         'needs_new_class',
         'class_detector',
         'class_detector_version',
@@ -661,7 +661,7 @@ def _merge_preserving_human(
 
     A guard "fires" only when the existing doc's value matches the
     ``_is_human_marker`` predicate — i.e. a string containing ``human``.
-    Non-human source values (``ingest``, ``v6_model``, ``gemma``, etc.)
+    Non-human source values (``ingest``, ``item_model``, ``gemma``, etc.)
     do not trip preservation; ingest is free to overwrite them with its
     fresh-pass value.
 

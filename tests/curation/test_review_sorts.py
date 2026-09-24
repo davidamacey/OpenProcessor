@@ -20,7 +20,7 @@ from src.services.curation import review_sorts
 LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
     'all': [{'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'mismatches': [{'updated_at': {'order': 'desc'}}],
-    'gemma_low_conf': [{'updated_at': {'order': 'desc'}}],
+    'vlm_low_conf': [{'updated_at': {'order': 'desc'}}],
     'outliers': [
         {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
@@ -33,7 +33,13 @@ LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
     ],
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {'v6_raw_confidence': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
+        {
+            'classifier_raw_confidence': {
+                'order': 'asc',
+                'missing': '_last',
+                'unmapped_type': 'double',
+            }
+        },
     ],
     'coco_blind_spots': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
@@ -47,7 +53,7 @@ LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
 EXPECTED_DEFAULT_IDS: dict[str, str] = {
     'all': 'atypicality',
     'mismatches': 'recent',
-    'gemma_low_conf': 'recent',
+    'vlm_low_conf': 'recent',
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
     'regions': 'region_score',

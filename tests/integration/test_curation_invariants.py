@@ -291,7 +291,7 @@ async def test_invariant_4_history_preserved_across_two_relabels() -> None:
             'crop_id': doc_id,
             'class_id': 1,
             'class_name': 'sedan',
-            'class_source': 'v6_model',
+            'class_source': 'item_model',
             'label_source': 'ingest',
             'confidence': 0.81,
             'class_id_history': [],

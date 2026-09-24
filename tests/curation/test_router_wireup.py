@@ -397,7 +397,7 @@ def test_health_reports_degraded_when_vlm_down(
     body = r.json()
     assert body['status'] in ('ok', 'degraded', 'down')
     # Triton + OpenSearch up, VLM down -> degraded.
-    assert body['gemma']['reachable'] is False
+    assert body['vlm']['reachable'] is False
 
 
 def test_health_reports_down_when_opensearch_unreachable(

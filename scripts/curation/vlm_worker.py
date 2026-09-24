@@ -18,7 +18,7 @@ Operations
 ----------
 - Idempotent: every successful Gemma response writes one of the class_source
   values that the worker's must_not query excludes (``gemma``,
-  ``v6_gemma_agreement``, ``gemma_unmatched``, ``gemma_new_class_pending``),
+  ``classifier_vlm_agreement``, ``vlm_unmatched``, ``vlm_new_class_pending``),
   so the crop drops out of the next poll's query.
 - Auto-exits when ``--idle-stop-after`` consecutive empty polls happen,
   so it can be chained after an ingest run without a sentinel signal.
@@ -50,6 +50,8 @@ import httpx
 
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
+# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
+API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
 # This script polls OpenSearch directly (bypassing yolo-api), so it needs
 # the same override the src/ modules read via
@@ -65,45 +67,48 @@ ITEM_EMBEDDING_FIELD = 'pe_embedding'
 # worker and the on-demand pipeline make the same decisions.
 # Skip Gemma classify when v6 model already labeled the crop with at
 # least this confidence. Raised 0.70 -> 0.80 to align with
-# pipeline.v6_confidence_skip_gemma and the detection worker's combined
+# pipeline.classifier_confidence_skip_vlm and the detection worker's combined
 # path's own low-confidence threshold. The 0.70-0.80 band was sending high-v6 crops
-# to Gemma and surfacing them in the gemma_low_conf review tab as
+# to Gemma and surfacing them in the vlm_low_conf review tab as
 # "v6 95.9 %, gemma medium" — noise the human review queue doesn't need.
 # See docs/design/plate_detection_strategy.md Wave 1 chained tuning.
 DEFAULT_V6_CONF_SKIP = 0.80
 
 
 def _build_pending_query(v6_skip_conf: float) -> dict:
-    """Crops that need Gemma right now.
+    """Crops that need the VLM right now.
 
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
     crops the on-demand pipeline would process are picked up by the worker.
     """
+    # Lazy: keeps the module import light; src.config is all this pulls in.
+    from src.services.curation.ingest_class_sources import classifier_class_sources
+
     return {
         'bool': {
             'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
             'must_not': [
                 {'term': {'class_validated': True}},
-                # v6 already confident
+                # classifier already confident
                 {
                     'bool': {
                         'must': [
-                            {'term': {'class_source': 'v6_model'}},
+                            {'terms': {'class_source': sorted(classifier_class_sources())}},
                             {'range': {'confidence': {'gte': v6_skip_conf}}},
                         ],
                     },
                 },
                 # Plan §1.5: prototype + ensemble_proto_rescue + ensemble_consensus
                 # class_source values are gone. Surviving auto-validation
-                # path is class_source='v6_gemma_agreement' (A-PR2 ensemble
+                # path is class_source='classifier_vlm_agreement' (A-PR2 ensemble
                 # writer; this query excludes already-labeled rows).
                 # Gemma already labeled successfully
-                {'term': {'class_source': 'gemma'}},
-                {'term': {'class_source': 'v6_gemma_agreement'}},
-                {'term': {'class_source': 'cluster_v6_majority_agreement'}},
+                {'term': {'class_source': 'vlm'}},
+                {'term': {'class_source': 'classifier_vlm_agreement'}},
+                {'term': {'class_source': 'cluster_majority_agreement'}},
                 # Gemma already failed once — won't help to retry
-                {'term': {'class_source': 'gemma_unmatched'}},
-                {'term': {'class_source': 'gemma_new_class_pending'}},
+                {'term': {'class_source': 'vlm_unmatched'}},
+                {'term': {'class_source': 'vlm_new_class_pending'}},
             ],
         },
     }
@@ -143,7 +148,7 @@ async def label_batch(
 ) -> dict:
     """Call /curation/vlm/label_batch for one chunk."""
     r = await client.post(
-        f'{api}/curation/vlm/label_batch',
+        f'{api}{API_PREFIX}/vlm/label_batch',
         json={'crop_ids': crop_ids},
         timeout=300.0,
     )
@@ -431,10 +436,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        '--classifier-conf-skip',
         '--v6-conf-skip',
+        dest='v6_conf_skip',
         type=float,
         default=DEFAULT_V6_CONF_SKIP,
-        help='Skip Gemma for v6_model crops at or above this confidence.',
+        help='Skip the VLM for classifier-labeled crops at or above this confidence.',
     )
     # GPU arbiter sentinel — design §14.5. The trainer touches this file
     # before a single-GPU run starts; the worker pauses while it exists

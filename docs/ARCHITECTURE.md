@@ -113,11 +113,11 @@ consumer among anticipated others) is documented in
     `verify_rejected` / `no_region_box` / `no_region_visible` /
     `detection_failed`, plus a human-settable `false_positive`).
 - **HTTP wire contract is independent of backend storage field names.**
-  Pydantic request/response model attribute names (e.g.
-  `ItemDoc.plate_bbox_norm`) are frozen and never renamed by this
-  genericization; only the *OpenSearch field* a handler reads/writes
-  internally is routed through `RegionFields`. See
-  `curation_api_contract.md` for the full frozen-vs-configurable split.
+  The wire uses one generic vocabulary (`region_<attr>` for every
+  `RegionFields` attribute, `vlm_*`, `classifier_*`), fixed regardless
+  of any `OP_REGION_FIELD_*` storage override; one serializer
+  (`src/services/curation/wire.py`) translates storage→wire at the
+  boundary. See `curation_api_contract.md`.
 - **Services before routers, leaves before trunks.** The service layer
   (`src/services/curation/`, `src/services/detection/`,
   `src/services/labeling/`, `src/services/training/`) has no FastAPI

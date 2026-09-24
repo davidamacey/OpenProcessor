@@ -20,12 +20,13 @@ from fastapi import HTTPException
 from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
 
 
 KNOWN_TABS: tuple[str, ...] = (
     'all',
     'mismatches',
-    'gemma_low_conf',
+    'vlm_low_conf',
     'outliers',
     'uncertainty',
     'model_disagreements',
@@ -70,15 +71,15 @@ def build_tab_query(
             {
                 'bool': {
                     'should': [
-                        {'term': {'class_source': 'gemma_unmatched'}},
-                        {'term': {'class_source': 'gemma_new_class_pending'}},
-                        {'terms': {'gemma_confidence': ['medium', 'low']}},
+                        {'term': {'class_source': 'vlm_unmatched'}},
+                        {'term': {'class_source': 'vlm_new_class_pending'}},
+                        {'terms': {'vlm_confidence': ['medium', 'low']}},
                         # NOTE: outlier_flagged is never written anywhere in the repo — permanent no-op; see below.
                         {'term': {'outlier_flagged': True}},
                         {'range': {'cluster_distance': {'gte': 0.35}}},
                         {'exists': {'field': 'probe_pred_entropy'}},
                         # Crops with no class assigned at all (YOLO11 found a
-                        # vehicle but neither v6 nor Gemma got a usable label)
+                        # vehicle but neither the classifier nor the VLM got a usable label)
                         {
                             'bool': {
                                 'must_not': [{'exists': {'field': 'class_id'}}],
@@ -94,19 +95,19 @@ def build_tab_query(
         # then unsorted) — see review_sorts.py.
         reason = 'needs human review'
     elif tab == 'mismatches':
-        # Crops where Gemma's class_source is gemma_unmatched, or where v6
-        # disagreed with Gemma. The cheapest proxy: class_source == 'gemma'
-        # AND confidence in {medium,low} → flagged because v6 didn't match.
-        must.append({'term': {'class_source': 'gemma_unmatched'}})
-        reason = "gemma's reply did not match any registry class"
-    elif tab == 'gemma_low_conf':
-        must.append({'terms': {'gemma_confidence': ['medium', 'low']}})
-        # Trust v6 when it was very confident — sending those crops to the
-        # human queue (with reason "gemma confidence below high") is noise.
-        # Matches the v6_confidence_skip_gemma=0.80 default in legacy_pipeline
+        # Crops where the VLM's class_source is vlm_unmatched, or where the classifier
+        # disagreed with the VLM. The cheapest proxy: class_source == 'vlm'
+        # AND confidence in {medium,low} → flagged because the classifier didn't match.
+        must.append({'term': {'class_source': 'vlm_unmatched'}})
+        reason = "VLM's reply did not match any registry class"
+    elif tab == 'vlm_low_conf':
+        must.append({'terms': {'vlm_confidence': ['medium', 'low']}})
+        # Trust the classifier when it was very confident — sending those crops to the
+        # human queue (with reason "VLM confidence below high") is noise.
+        # Matches the classifier_confidence_skip_vlm=0.80 default in legacy_pipeline
         # and the _V6_LOW_CONF_THRESHOLD=0.80 in sam_worker/combined.py.
         must.append({'range': {'confidence': {'lt': 0.80}}})
-        reason = 'gemma confidence below high'
+        reason = 'VLM confidence below high'
     elif tab == 'outliers':
         # NOTE: outlier_flagged is never written anywhere in the repo, so this queue is effectively cluster_distance >= 0.35 only.
         must.append(
@@ -163,7 +164,7 @@ def build_tab_query(
         # Default sort: region score desc, so the high-confidence detections
         # are reviewed first (likely accept), low-score later (more
         # corrections expected) — see review_sorts.py.
-        reason = 'plate detected — needs human confirmation'
+        reason = 'region detected — needs human confirmation'
     elif tab == 'model_disagreements':
         # Active-learning loop (design §15.6 / 17 Phase 5): after a
         # promote, /curation/pipeline/auto_label re-scores crops with the new
@@ -216,19 +217,19 @@ def build_tab_query(
         # right, human was wrong" cases — see review_sorts.py.
         reason = 'new model disagrees with the validated label'
     elif tab == 'primary_low_conf':
-        # Largest primary subjects where v6 was unsure or never fired — the
+        # Largest primary subjects where the classifier was unsure or never fired — the
         # highest-value labels for the next training pass. Confidence is a
         # band, not a floor: target everything below the 0.75 ingest floor
-        # (or no v6 box at all) and let rank + the clarity slider strip the
-        # junk, so a large clear crop v6 whiffed on at 0.05 still surfaces.
+        # (or no classifier box at all) and let rank + the clarity slider strip the
+        # junk, so a large clear crop the classifier whiffed on at 0.05 still surfaces.
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
         must.append(
             {
                 'bool': {
                     'should': [
-                        {'range': {'v6_raw_confidence': {'lt': 0.75}}},
-                        {'bool': {'must_not': {'exists': {'field': 'v6_raw_confidence'}}}},
-                        {'term': {'class_source': 'v6_low_conf'}},
+                        {'range': {'classifier_raw_confidence': {'lt': 0.75}}},
+                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
+                        {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
                     ],
                     'minimum_should_match': 1,
                 }
@@ -236,23 +237,23 @@ def build_tab_query(
         )
         must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'primary_low_conf_default' — see review_sorts.py.
-        reason = 'largest subject — v6 unsure or missed'
+        reason = 'largest subject — classifier unsure or missed'
     elif tab == 'coco_blind_spots':
-        # The cleanest blind spot: COCO YOLO11 detected a vehicle that v6
+        # The cleanest blind spot: the item detector proposed an item that the classifier
         # missed entirely, on a primary subject. class_source is the exact
-        # signal (ingest restricts COCO proposals to vehicle classes). The
-        # stored COCO detection score lives in ``confidence``.
-        must.append({'term': {'class_source': 'coco_yolo11_proposal'}})
+        # signal: an ingest proposal nothing classified. The stored
+        # proposal score lives in ``confidence``.
+        must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
         must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
-        reason = 'COCO found a vehicle v6 missed (blind spot)'
+        reason = 'detector proposed an item the classifier missed (blind spot)'
     else:
         raise HTTPException(
             status_code=400,
             detail=(
                 f'unknown review tab: {tab}. '
-                'Must be one of: all, mismatches, gemma_low_conf, outliers, '
+                'Must be one of: all, mismatches, vlm_low_conf, outliers, '
                 'uncertainty, model_disagreements, regions, primary_low_conf, '
                 'coco_blind_spots'
             ),

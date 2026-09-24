@@ -1,6 +1,6 @@
 """Curation router sub-module — region-of-interest browse + human edit endpoints.
 
-Ported from the reference ``legacy_plates.py`` (622 LOC). Covers browsing
+Ported from the reference implementation's region router. Covers browsing
 items that carry a region-of-interest sub-bbox (filtered by
 provenance/score/text), the curated training-cohort picker, and the
 human-edit endpoints for setting/clearing/patching that sub-bbox.
@@ -25,10 +25,10 @@ from src.routers.curation._common import (
     OpenSearchDep,
     _ensure_indexes,
     _now_iso,
-    config,
     logger,
     router,
 )
+from src.services.curation.wire import item_source_excludes, region_wire_key, serialize_item
 from src.services.detection.cascade_detect import region_provenance
 from src.services.detection.profile_registry import region_profile_or_neutral
 
@@ -43,48 +43,13 @@ _TRAINING_CANDIDATE_MODES = (
 
 
 def _region_item(src: dict[str, Any], crop_id: str) -> dict[str, Any]:
-    """Flat region serialization for /regions + /regions/training_candidates."""
-    F = get_region_fields()
-    return {
-        'crop_id': crop_id,
-        'id': crop_id,
-        'image_path': src.get('image_path', ''),
-        'source_image_path': src.get('image_path', ''),
-        'bbox_norm': src.get('bbox_norm') or [],
-        'plate_bbox_norm': src.get(F.bbox_norm),
-        'plate_score': src.get(F.score),
-        'plate_status': src.get(F.status),
-        'plate_verified': src.get(F.verified),
-        'plate_validated': src.get(F.validated),
-        'plate_detector': src.get(F.detector),
-        'plate_detector_version': src.get(F.detector_version),
-        'plate_detector_chain': src.get(F.detector_chain),
-        'plate_bbox_frame': src.get(F.bbox_frame),
-        'plate_detected_at': src.get(F.detected_at),
-        'plate_verifier': src.get(F.verifier),
-        'plate_verifier_version': src.get(F.verifier_version),
-        'plate_verified_at': src.get(F.verified_at),
-        'plate_rejection_reason': src.get(F.rejection_reason),
-        'plate_visible': src.get(F.visible),
-        'plate_text': src.get(F.text),
-        'plate_text_source': src.get(F.text_source),
-        'plate_text_confidence': src.get(F.text_confidence),
-        'class_id': src.get('class_id'),
-        'class_name': src.get('class_name'),
-        'cluster_id': src.get('cluster_id'),
-        'crop_rank_in_image': src.get('crop_rank_in_image'),
-        'crop_area_norm': src.get('crop_area_norm'),
-        'plate_cluster_id': src.get(F.cluster_id),
-        'plate_cluster_subid': src.get(F.cluster_subid),
-        'plate_cluster_distance': src.get(F.cluster_distance),
-        'updated_at': src.get('updated_at', ''),
-        'thumbnail_url': f'{config.api_prefix}/crops/{crop_id}/thumbnail',
-        'plate_thumbnail_url': f'{config.api_prefix}/crops/{crop_id}/region_thumbnail',
-    }
+    """Wire item for /regions + /regions/training_candidates — the shared
+    item serializer, identical to /crops and /review."""
+    return serialize_item(src, crop_id)
 
 
 # Large embedding fields (1024 floats) — excluded from browse _source.
-_REGION_SOURCE_EXCLUDES = ['pe_embedding', 'v6_embedding', get_region_fields().embedding]
+_REGION_SOURCE_EXCLUDES = item_source_excludes()
 
 
 def _fp_cluster_fields(region_status: str | None) -> dict[str, Any]:
@@ -109,18 +74,18 @@ def _fp_cluster_fields(region_status: str | None) -> dict[str, Any]:
 
 
 @router.get('/regions')
-async def list_plates(
+async def list_regions(
     opensearch: OpenSearchDep,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     class_id: int | None = Query(None),
     cluster_id: int | None = Query(None),
-    plate_cluster_id: int | None = Query(None, description='Filter by plate_cluster_id bucket.'),
-    plate_cluster_subid: str | None = Query(None, description='Filter by AHC plate sub-cluster.'),
+    region_cluster_id: int | None = Query(None, description='Filter by region_cluster_id bucket.'),
+    region_cluster_subid: str | None = Query(None, description='Filter by AHC region sub-cluster.'),
     sort_by_subid: bool = Query(
         False,
         description=(
-            'Within a bucket, order by plate_cluster_subid so AHC sub-clusters '
+            'Within a bucket, order by region_cluster_subid so AHC sub-clusters '
             'come back contiguous across pages (the UI groups them with '
             'separators). Overrides the default outliers-first ordering.'
         ),
@@ -131,8 +96,8 @@ async def list_plates(
     min_score: float | None = Query(None, ge=0.0, le=1.0),
     max_score: float | None = Query(None, ge=0.0, le=1.0),
     verified: bool | None = Query(None),
-    detector: str | None = Query(None, description='Filter by plate_detector keyword.'),
-    text: str | None = Query(None, description='Substring search on plate_text.'),
+    detector: str | None = Query(None, description='Filter by region_detector keyword.'),
+    text: str | None = Query(None, description='Substring search on region_text.'),
     include_test: bool = False,
 ) -> dict[str, Any]:
     """Browse crops that have a region bbox, filtered by provenance/score/text.
@@ -151,10 +116,10 @@ async def list_plates(
         must.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
         must.append({'term': {'cluster_id': cluster_id}})
-    if plate_cluster_id is not None:
-        must.append({'term': {F.cluster_id: plate_cluster_id}})
-    if plate_cluster_subid is not None:
-        must.append({'term': {F.cluster_subid: plate_cluster_subid}})
+    if region_cluster_id is not None:
+        must.append({'term': {F.cluster_id: region_cluster_id}})
+    if region_cluster_subid is not None:
+        must.append({'term': {F.cluster_subid: region_cluster_subid}})
     if max_rank is not None:
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
     if min_score is not None or max_score is not None:
@@ -177,7 +142,7 @@ async def list_plates(
     _distance_sort = {
         F.cluster_distance: {'order': 'desc', 'missing': '_last', 'unmapped_type': 'float'}
     }
-    if plate_cluster_id is not None and sort_by_subid:
+    if region_cluster_id is not None and sort_by_subid:
         sort = [
             {
                 F.cluster_subid: {
@@ -188,7 +153,7 @@ async def list_plates(
             },
             _distance_sort,
         ]
-    elif plate_cluster_id is not None:
+    elif region_cluster_id is not None:
         sort = [_distance_sort]
     else:
         sort = [{F.detected_at: {'order': 'desc', 'missing': '_last'}}]
@@ -346,6 +311,7 @@ async def training_candidates(
     body: dict[str, Any] = {
         'from': (page - 1) * page_size,
         'size': page_size,
+        '_source': {'excludes': _REGION_SOURCE_EXCLUDES},
         'query': query,
         'sort': [{F.detected_at: {'order': 'desc', 'missing': '_last'}}],
         'track_total_hits': True,
@@ -393,7 +359,7 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
     F = get_region_fields()
     human = region_profile_or_neutral()
     now = _now_iso()
-    if payload.bbox_norm is None:
+    if payload.region_bbox_norm is None:
         # Human says "no region visible" — preserve that against re-runs of
         # detection. region score=null distinguishes it from a
         # yet-to-detect item (where score and bbox are simply missing).
@@ -402,7 +368,7 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
                 F.bbox_norm: None,
                 F.score: None,
                 F.status: RegionStatus.NO_REGION_VISIBLE,
-                F.label_source: payload.label_source,
+                F.label_source: payload.region_label_source,
                 F.detector: human.human_detector_name,
                 F.detector_version: human.human_detector_version,
                 F.verifier: human.human_detector_name,
@@ -419,13 +385,13 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
         }
     # Human writes are exempt from the sanity gate (operators can
     # intentionally set unusual boxes).
-    _validate_bbox_norm(payload.bbox_norm)
+    _validate_bbox_norm(payload.region_bbox_norm)
     return {
         'doc': {
-            F.bbox_norm: list(payload.bbox_norm),
+            F.bbox_norm: list(payload.region_bbox_norm),
             F.score: 1.0,  # human-set boxes are ground truth
             F.status: RegionStatus.DETECTED,
-            F.label_source: payload.label_source,
+            F.label_source: payload.region_label_source,
             F.verified: True,
             # Human confirmation is terminal — region signal only.
             # RegionFields.validated isolates region edits from class
@@ -446,17 +412,17 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
 
 
 @router.put('/crops/{crop_id}/region')
-async def set_crop_plate(
+async def set_crop_region(
     crop_id: str,
     payload: ItemRegionRequest,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
     """Set or clear the region sub-bbox on a single crop.
 
-    ``bbox_norm`` is in the **source-image** coordinate frame. The
-    labeler converts crop-frame → source-frame before POSTing; the API
-    never sees crop-frame coords. ``None`` body clears the box and
-    marks the crop as ``plate_status='no_region_visible'``.
+    ``region_bbox_norm`` is in the **source-image** coordinate frame. The
+    client converts crop-frame → source-frame before sending; the API
+    never sees crop-frame coords. ``None`` clears the box and marks the
+    crop ``region_status='no_region_visible'``.
     """
     F = get_region_fields()
     body = _region_doc(payload)
@@ -467,7 +433,7 @@ async def set_crop_plate(
             doc_id=crop_id,
             merger=lambda _current: region_doc,
             refresh=True,
-            writer_id='human:set_crop_plate',
+            writer_id='human:set_crop_region',
         )
     except OCCFinalConflictError:
         raise
@@ -475,13 +441,13 @@ async def set_crop_plate(
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     return {
         'crop_id': crop_id,
-        'plate_bbox_norm': payload.bbox_norm,
-        'plate_status': region_doc[F.status],
+        region_wire_key('bbox_norm'): payload.region_bbox_norm,
+        region_wire_key('status'): region_doc[F.status],
     }
 
 
 @router.patch('/crops/{crop_id}/region_meta')
-async def patch_crop_plate_meta(
+async def patch_crop_region_meta(
     crop_id: str,
     payload: ItemRegionMetaRequest,
     opensearch: OpenSearchDep,
@@ -494,53 +460,51 @@ async def patch_crop_plate_meta(
     """
     F = get_region_fields()
     fields_set = payload.model_fields_set
-    if not (fields_set - {'label_source'}):
+    if not (fields_set - {'region_label_source'}):
         raise HTTPException(
             status_code=400,
-            detail='at least one of plate_text, plate_status, '
-            'plate_rejection_reason must be provided',
+            detail='at least one of region_text, region_status, '
+            'region_rejection_reason must be provided',
         )
 
     doc: dict[str, Any] = {'updated_at': _now_iso()}
-    # Wire-contract (plate_*) names of the fields this request actually
-    # changed — reported back in the response instead of `doc.keys()`,
-    # which are internal RegionFields storage keys (region_* by default)
-    # and must never leak onto the HTTP contract.
+    # Wire names of the fields this request changed — never `doc.keys()`,
+    # which are RegionFields storage keys.
     wire_fields: list[str] = []
-    if 'plate_text' in fields_set:
+    if 'region_text' in fields_set:
         # Human-typed text is the ground truth; mark the source so the
         # region thumbnail / OCR pipeline knows not to overwrite it.
-        doc[F.text] = payload.plate_text
+        doc[F.text] = payload.region_text
         doc[F.text_source] = 'human'
         # Human OCR is by definition 1.0 confidence — null would imply
         # "unknown" which is misleading when a human typed it.
-        doc[F.text_confidence] = 1.0 if payload.plate_text else None
-        wire_fields.append('plate_text')
-    if 'plate_status' in fields_set:
+        doc[F.text_confidence] = 1.0 if payload.region_text else None
+        wire_fields.append('region_text')
+    if 'region_status' in fields_set:
         if (
-            payload.plate_status is not None
-            and payload.plate_status not in HUMAN_REGION_STATUS_VALUES
+            payload.region_status is not None
+            and payload.region_status not in HUMAN_REGION_STATUS_VALUES
         ):
             raise HTTPException(
                 status_code=400,
-                detail=f'plate_status must be one of {sorted(HUMAN_REGION_STATUS_VALUES)}; '
-                f'got {payload.plate_status!r}',
+                detail=f'region_status must be one of {sorted(HUMAN_REGION_STATUS_VALUES)}; '
+                f'got {payload.region_status!r}',
             )
-        doc[F.status] = payload.plate_status
-        doc[F.label_source] = payload.label_source
+        doc[F.status] = payload.region_status
+        doc[F.label_source] = payload.region_label_source
         # Route FP marks into the permanent FP bucket (and release on un-mark).
-        # Only when plate_status is in the payload — never clobber the cluster
-        # id on a text-only edit.
-        doc.update(_fp_cluster_fields(payload.plate_status))
-        wire_fields.append('plate_status')
-    if 'plate_rejection_reason' in fields_set:
-        doc[F.rejection_reason] = payload.plate_rejection_reason
-        wire_fields.append('plate_rejection_reason')
+        # Only when region_status is in the payload — never clobber the
+        # cluster id on a text-only edit.
+        doc.update(_fp_cluster_fields(payload.region_status))
+        wire_fields.append('region_status')
+    if 'region_rejection_reason' in fields_set:
+        doc[F.rejection_reason] = payload.region_rejection_reason
+        wire_fields.append('region_rejection_reason')
 
     # Operator-initiated edits are terminal — keep the row out of the
-    # /review?tab=plates queue. AI-source patches (auto-relabel jobs) skip
+    # /review/regions queue. AI-source patches (auto-relabel jobs) skip
     # this so they remain reviewable. Region signal only.
-    if (payload.label_source or '').lower().startswith('human'):
+    if (payload.region_label_source or '').lower().startswith('human'):
         doc[F.validated] = True
 
     try:
@@ -549,7 +513,7 @@ async def patch_crop_plate_meta(
             doc_id=crop_id,
             merger=lambda _current: doc,
             refresh=True,
-            writer_id='human:patch_plate_meta',
+            writer_id='human:patch_region_meta',
         )
     except OCCFinalConflictError:
         raise
@@ -559,7 +523,7 @@ async def patch_crop_plate_meta(
 
 
 @router.put('/crops/batch_region')
-async def batch_set_crop_plate(
+async def batch_set_crop_region(
     payload: ItemBatchRegionRequest,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
@@ -573,8 +537,8 @@ async def batch_set_crop_plate(
     F = get_region_fields()
     if not payload.crop_ids:
         return {'updated': 0, 'conflicts': []}
-    if payload.bbox_norm is not None:
-        _validate_bbox_norm(payload.bbox_norm)
+    if payload.region_bbox_norm is not None:
+        _validate_bbox_norm(payload.region_bbox_norm)
 
     doc_body = _region_doc(payload)['doc']
 
@@ -588,7 +552,7 @@ async def batch_set_crop_plate(
                 merger=lambda _current: doc_body,
                 max_retries=2,
                 refresh=True,
-                writer_id='human:batch_set_crop_plate',
+                writer_id='human:batch_set_crop_region',
             )
             updated += 1
         except OCCFinalConflictError:
@@ -599,45 +563,45 @@ async def batch_set_crop_plate(
                 current_source = None
             conflicts.append({'crop_id': crop_id, 'current_source': current_source})
         except Exception as exc:
-            logger.warning('legacy_batch_plate_update_failed', crop_id=crop_id, error=str(exc))
+            logger.warning('batch_region_update_failed', crop_id=crop_id, error=str(exc))
             conflicts.append({'crop_id': crop_id, 'current_source': None})
     return {'updated': updated, 'conflicts': conflicts}
 
 
 @router.post('/regions/batch_status')
-async def batch_set_plate_status(
+async def batch_set_region_status(
     payload: CropBatchStatusRequest,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
     """Bulk-set region status over many crops — the cluster-view triage op.
 
     Mark regions ``false_positive`` / ``no_region_visible`` in one call, or
-    bulk-confirm with ``plate_status='detected'`` + ``plate_verified=True``.
-    Mirrors ``patch_crop_plate_meta`` (human edits are terminal →
-    ``plate_validated=True`` so they leave the /review queue).
+    bulk-confirm with ``region_status='detected'`` + ``region_verified=True``.
+    Mirrors ``patch_crop_region_meta`` (human edits are terminal →
+    ``region_validated=True`` so they leave the /review queue).
     """
     F = get_region_fields()
     if not payload.crop_ids:
         return {'updated': 0, 'conflicts': []}
-    if payload.plate_status not in HUMAN_REGION_STATUS_VALUES:
+    if payload.region_status not in HUMAN_REGION_STATUS_VALUES:
         raise HTTPException(
             status_code=400,
-            detail=f'plate_status must be one of {sorted(HUMAN_REGION_STATUS_VALUES)}; '
-            f'got {payload.plate_status!r}',
+            detail=f'region_status must be one of {sorted(HUMAN_REGION_STATUS_VALUES)}; '
+            f'got {payload.region_status!r}',
         )
 
     doc: dict[str, Any] = {
-        F.status: payload.plate_status,
-        F.label_source: payload.label_source,
+        F.status: payload.region_status,
+        F.label_source: payload.region_label_source,
         'updated_at': _now_iso(),
     }
-    if payload.plate_verified is not None:
-        doc[F.verified] = payload.plate_verified
+    if payload.region_verified is not None:
+        doc[F.verified] = payload.region_verified
     # Operator-initiated status changes are terminal (keep out of /review).
-    if (payload.label_source or '').lower().startswith('human'):
+    if (payload.region_label_source or '').lower().startswith('human'):
         doc[F.validated] = True
     # Route FP marks into the permanent FP bucket (and release on un-mark).
-    doc.update(_fp_cluster_fields(payload.plate_status))
+    doc.update(_fp_cluster_fields(payload.region_status))
 
     updated = 0
     conflicts: list[dict[str, Any]] = []
@@ -649,17 +613,17 @@ async def batch_set_plate_status(
                 merger=lambda _current: doc,
                 max_retries=2,
                 refresh=False,
-                writer_id='human:batch_set_plate_status',
+                writer_id='human:batch_set_region_status',
             )
             updated += 1
         except OCCFinalConflictError:
             conflicts.append({'crop_id': crop_id, 'current_source': None})
         except Exception as exc:
-            logger.warning('legacy_batch_plate_status_failed', crop_id=crop_id, error=str(exc))
+            logger.warning('batch_region_status_failed', crop_id=crop_id, error=str(exc))
             conflicts.append({'crop_id': crop_id, 'current_source': None})
     if updated:
         try:
             await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
         except Exception as exc:
-            logger.debug('legacy_batch_plate_status_refresh_failed', error=str(exc))
+            logger.debug('batch_region_status_refresh_failed', error=str(exc))
     return {'updated': updated, 'conflicts': conflicts}

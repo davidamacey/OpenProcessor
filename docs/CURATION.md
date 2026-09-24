@@ -47,7 +47,7 @@ a genuinely new region type.
 | Dataclass | File | What it configures |
 |---|---|---|
 | `CurationConfig` | `src/config/curation.py` | OpenSearch index names (via `IndexRole` + `index_name()`), filesystem roots (class registry, exported datasets, crop cache, state dir), the API mount prefix, embedding-dimension/HNSW tuning. |
-| `RegionFields` | `src/config/region_fields.py` | Per-attribute OpenSearch field-name overrides for the region-of-interest sub-annotation (e.g. rename `region_status` to `plate_status` if your existing data already uses that name) — lets storage field names diverge from the frozen HTTP wire-contract field names with zero reindex. |
+| `RegionFields` | `src/config/region_fields.py` | Per-attribute OpenSearch field-name overrides for the region-of-interest sub-annotation (e.g. store `region_status` under a different name if your existing data already uses one) — storage names may diverge from the fixed `region_*` HTTP wire names with zero reindex; the wire never changes. |
 | `DetectionProfile` | `src/config/detection_profile.py` | One detectable region-of-interest type as data: aspect-ratio/area heuristics, text-hint pattern and length range, which Triton models back detection/segmentation/OCR for it, their input sizes and confidence floors. One region profile is active per process (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`; none by default). |
 | `RegionStatus` | `src/config/region_state.py` | The canonical region-status state-machine enum (`pending_detection` → `detected`/`verify_rejected`/`no_region_box`; `pending_verification` → `detected`/`no_region_visible`; any path → `detection_failed`; plus a human-settable `false_positive` that preserves the box for hard-negative training). |
 

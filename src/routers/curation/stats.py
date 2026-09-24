@@ -25,6 +25,15 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.ingest_class_sources import (
+    CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
+    CLUSTER_MAJORITY_CLASS_SOURCE,
+    DEFAULT_PROPOSAL_CLASS_SOURCE,
+    VLM_CLASS_SOURCE,
+    classifier_class_sources,
+    unlabeled_proposal_class_sources,
+)
+from src.services.detection.profile_registry import region_profile_or_neutral
 
 
 @router.get('/stats/classes')
@@ -88,12 +97,14 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
 # rollup which is already computed from class_validated / the region
 # validated flag.
 _HUMAN_SOURCE_PREFIXES = ('human',)
-# Legacy CLIP-prototype provenance. Any rows that still carry it are
-# bucketed under 'other'.
-_LEGACY_PIPELINE_SOURCES = (
-    'coco_yolo11',
-    'coco_yolo11_proposal',
-)
+
+
+def _sum_prefixed(buckets: dict[str, int], prefix: str) -> int:
+    """Sum bucket counts whose key starts with ``prefix``. An empty prefix
+    (e.g. no detector configured) matches nothing rather than everything."""
+    if not prefix:
+        return 0
+    return sum(cnt for k, cnt in buckets.items() if k.startswith(prefix))
 
 
 def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
@@ -104,29 +115,33 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     (e.g. 'human', 'human_move'). A majority-agreement auto-validator
     also sets ``class_validated=True`` but that's auto-validation, not a
     human label — using the validated flag here would inflate by_human.
-    Region-detector breakdown (e.g. lpr/sam3/vlm-ocr) is computed
+    Region-detector breakdown (detector / segmenter / human) is computed
     separately by the caller via region-detector aggregations.
     """
+    classifier_sources = classifier_class_sources() | {
+        CLUSTER_MAJORITY_CLASS_SOURCE,
+        CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
+    }
+    proposal_sources = unlabeled_proposal_class_sources() | {DEFAULT_PROPOSAL_CLASS_SOURCE}
     by_human = 0
     by_vlm = 0
-    by_v6 = 0
-    by_yolo11_proposal = 0
+    by_classifier = 0
+    by_proposal = 0
     by_other = 0
     for b in buckets:
         key = str(b.get('key', ''))
         cnt = int(b.get('doc_count', 0))
         if key.startswith(_HUMAN_SOURCE_PREFIXES):
             by_human += cnt
-        elif key.startswith(('gemma', 'vlm')):
+        elif key.startswith(VLM_CLASS_SOURCE):
             by_vlm += cnt
-        elif key.startswith(('v6', 'cluster_v6')):
-            by_v6 += cnt
-        elif key.startswith(('coco_yolo11', 'yolo11')):
-            # A generic detector proposed this crop as an object of
-            # interest but the secondary classifier hasn't reached
-            # majority confidence yet. These are awaiting-classification,
-            # not "other unknown".
-            by_yolo11_proposal += cnt
+        elif key in classifier_sources:
+            by_classifier += cnt
+        elif key in proposal_sources:
+            # The item detector proposed this crop as an object of
+            # interest but nothing has classified it yet: awaiting
+            # classification, not "other unknown".
+            by_proposal += cnt
         else:
             # Truly unknown / future provenance — surface in 'other'
             # rather than dropping.
@@ -134,8 +149,8 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     return {
         'by_human': by_human,
         'by_vlm': by_vlm,
-        'by_v6': by_v6,
-        'by_yolo11_proposal': by_yolo11_proposal,
+        'by_classifier': by_classifier,
+        'by_proposal': by_proposal,
         'other': by_other,
     }
 
@@ -254,10 +269,10 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                     'missing': '__none__',
                 },
             },
-            # region-detector breakdown — distinct from class_source. LPR /
-            # SAM3 / human region detections show up here. The dashboard
-            # surfaces "LPR found N regions" from this, NOT from
-            # class_source (which never carries an lpr value).
+            # region-detector breakdown — distinct from class_source. primary detector /
+            # segmenter / human region detections show up here. The dashboard
+            # surfaces "detector found N regions" from this, NOT from
+            # class_source (which never carries a region-detector value).
             'region_detectors': {
                 'terms': {'field': fields.detector, 'size': 16},
             },
@@ -328,7 +343,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     New fields for the dashboard:
 
     - ``as_of`` — ISO8601 timestamp of the query.
-    - ``labeled.{by_human, by_vlm, by_v6, other}`` — rolled-up counts
+    - ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts
       derived from ``class_source`` plus the ``class_validated`` /
       region-validated flags.
     - ``unlabeled.{pending_detection, pending_verification, no_label_source}`` —
@@ -351,31 +366,28 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
 
     rollup = _rollup_class_sources((aggs.get('class_sources') or {}).get('buckets') or [])
 
-    # Region-detector rollup — separate from class label rollup. by_lpr
-    # counts crops where an LPR-family detector found a region (NOT crops
-    # with class_source='lpr', which never happens). region_total is the
-    # denominator for "% of crops with a region detection".
+    # Region-detector rollup — separate from class label rollup.
+    # by_detector counts crops where the profile's primary region detector
+    # found the region; by_segmenter where its secondary segmenter did.
+    # region_total is the denominator for "% of crops with a region detection".
+    profile = region_profile_or_neutral()
     region_detector_buckets: dict[str, int] = {}
     for b in (aggs.get('region_detectors') or {}).get('buckets') or []:
         region_detector_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
-    regions_by_lpr = sum(cnt for k, cnt in region_detector_buckets.items() if k.startswith('lpr'))
-    regions_by_sam3 = sum(cnt for k, cnt in region_detector_buckets.items() if k.startswith('sam3'))
-    regions_by_human_drew = sum(
-        cnt for k, cnt in region_detector_buckets.items() if k.startswith('human')
-    )
+    regions_by_detector = _sum_prefixed(region_detector_buckets, profile.detector_model)
+    regions_by_segmenter = _sum_prefixed(region_detector_buckets, profile.segmenter_name)
+    regions_by_human_drew = _sum_prefixed(region_detector_buckets, profile.human_detector_name)
     region_total_detected = sum(region_detector_buckets.values())
 
     # region-verifier rollup — distinct attribution of who confirmed the
-    # region, regardless of who detected the bbox.
+    # region, regardless of who detected the bbox. A region is verified
+    # either by a human or by the VLM (whose verifier value is the VLM's
+    # model id, so "not human" is the only deployment-neutral test).
     region_verifier_buckets: dict[str, int] = {}
     for b in (aggs.get('region_verifiers') or {}).get('buckets') or []:
         region_verifier_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
-    regions_verified_by_human = sum(
-        cnt for k, cnt in region_verifier_buckets.items() if k.startswith('human')
-    )
-    regions_verified_by_vlm = sum(
-        cnt for k, cnt in region_verifier_buckets.items() if k.startswith(('gemma', 'vlm'))
-    )
+    regions_verified_by_human = _sum_prefixed(region_verifier_buckets, profile.human_detector_name)
+    regions_verified_by_vlm = sum(region_verifier_buckets.values()) - regions_verified_by_human
 
     # Validated-by-human union (drew the bbox OR confirmed an AI bbox).
     # This is the honest "you reviewed N regions" count for the dashboard.
@@ -416,12 +428,12 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             # Class-label provenance (denominator = total_crops).
             # by_human counts class_source startswith 'human' — the actual
             # "human labeled the class" signal. Auto-validation (majority
-            # agreement) lives in by_v6, not by_human.
+            # agreement) lives in by_classifier, not by_human.
             **rollup,
         },
         # Region-detection provenance (denominator = total_crops).
         #
-        # - ``by_lpr`` / ``by_sam3`` / ``by_human_drew`` are the
+        # - ``by_detector`` / ``by_segmenter`` / ``by_human_drew`` are the
         #   *detector* counts (who created the bbox). by_human_drew is
         #   the strict 'operator drew a new bbox from scratch' count.
         # - ``verified_by_human`` / ``verified_by_vlm`` are the
@@ -430,7 +442,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         #   operator touched, whether they drew the bbox or confirmed an
         #   AI-proposed one. This is the honest 'I reviewed N regions'
         #   number the dashboard surfaces to the operator.
-        'plates': {
+        'regions': {
             # boxed = crops with a region bbox right now (the honest
             # "crops with a region" count). confirmed = the pipeline said
             # it's a real region (region status == 'detected').
@@ -440,14 +452,14 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             'boxed': int((aggs.get('region_boxed') or {}).get('doc_count', 0)),
             'confirmed': region_status_buckets.get(RegionStatus.DETECTED, 0),
             'total_detected': region_total_detected,
-            'by_lpr': regions_by_lpr,
-            'by_sam3': regions_by_sam3,
+            'by_detector': regions_by_detector,
+            'by_segmenter': regions_by_segmenter,
             # Kept under the legacy name so older labeler bundles keep
             # rendering something; new label is ``by_human_drew``.
             'by_human': regions_by_human_drew,
             'by_human_drew': regions_by_human_drew,
             'verified_by_human': regions_verified_by_human,
-            'verified_by_gemma': regions_verified_by_vlm,
+            'verified_by_vlm': regions_verified_by_vlm,
             'validated_by_human': regions_validated_by_human,
         },
         'unlabeled': {

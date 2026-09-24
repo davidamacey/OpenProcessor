@@ -151,7 +151,7 @@ def build_item_doc(
         # kept even when a secondary/ensemble detector or human relabel
         # later overrides class_id/class_name, so mismatches stay
         # auditable.
-        doc['coco_proposal_name'] = item.proposal_name
+        doc['proposal_name'] = item.proposal_name
     if item.cluster_id is not None:
         doc['cluster_id'] = item.cluster_id
         doc['cluster_distance'] = item.cluster_distance

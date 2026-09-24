@@ -26,14 +26,11 @@ from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation import review_queries
+from src.services.curation.wire import item_source_excludes, serialize_item
 
 
 logger = get_logger(__name__)
 
-# Never ship the raw embedding vectors to the labeler — mirrors
-# crops.py / review.py's `_source.excludes` convention, extended with the
-# region embedding (not excluded by either of those two call sites today,
-# but this endpoint can return region-bearing items too).
 DEFAULT_KNN_FIELD = 'pe_embedding'
 
 # How many nearest neighbors to over-fetch from the knn clause before
@@ -44,7 +41,8 @@ _MAX_K = 2000
 
 
 def _source_excludes(fields: RegionFields) -> list[str]:
-    return ['pe_embedding', 'v6_embedding', fields.embedding]
+    """Never ship raw embedding vectors — same list every item endpoint uses."""
+    return item_source_excludes(fields)
 
 
 class SemanticSearchDisabledError(RuntimeError):
@@ -162,43 +160,15 @@ def build_knn_query(
 
 
 def _hydrate_item(hit: dict[str, Any], fields: RegionFields, api_prefix: str) -> dict[str, Any]:
-    """Project one OpenSearch hit onto the labeler's item-list shape.
-
-    Mirrors ``review.review_queue``'s per-item field set (same field
-    names the labeler's ``mapRawCrop`` already knows how to consume) plus
-    a ``semantic_score`` (the raw kNN cosine-similarity ``_score``) so the
-    UI can render a relevance chip.
+    """Project one OpenSearch hit onto the shared wire item (same keys as
+    ``/crops`` and ``/review``) plus a ``semantic_score`` (the raw kNN
+    cosine-similarity ``_score``) so the UI can render a relevance chip.
     """
-    src = hit.get('_source') or {}
-    crop_id = src.get('crop_id') or hit.get('_id', '')
-    return {
-        'id': crop_id,
-        'crop_id': crop_id,
-        'source_image_path': src.get('image_path', ''),
-        'image_path': src.get('image_path', ''),
-        'bbox_norm': src.get('bbox_norm') or [],
-        'class_id': src.get('class_id'),
-        'class_name': src.get('class_name', ''),
-        'class_source': src.get('class_source', ''),
-        'confidence': float(src.get('confidence') or 0.0),
-        'label_source': src.get('label_source', ''),
-        'label_validated': bool(
-            src.get('class_validated')
-            or src.get(fields.validated)
-            or src.get('label_validated', False)
-        ),
-        'cluster_id': src.get('cluster_id'),
-        'cluster_distance': src.get('cluster_distance'),
-        'region_bbox_norm': src.get(fields.bbox_norm),
-        'region_score': src.get(fields.score),
-        'test_holdout': bool(src.get('test_holdout', False)),
-        'crop_rank_in_image': src.get('crop_rank_in_image'),
-        'crop_area_norm': src.get('crop_area_norm'),
-        'blur_lap_ratio': src.get('blur_lap_ratio'),
-        'updated_at': src.get('updated_at', ''),
-        'thumbnail_url': f'{api_prefix}/crops/{crop_id}/thumbnail',
-        'semantic_score': hit.get('_score'),
-    }
+    item = serialize_item(
+        hit.get('_source') or {}, hit.get('_id', ''), storage=fields, api_prefix=api_prefix
+    )
+    item['semantic_score'] = hit.get('_score')
+    return item
 
 
 async def semantic_text_search(

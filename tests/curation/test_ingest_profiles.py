@@ -222,14 +222,14 @@ def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> No
     clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
     assert cs.unlabeled_proposal_class_sources() == {'proposer_proposal', 'proposer_low_conf'}
     assert cs.classifier_class_sources() == frozenset()
-    assert cs.confident_class_sources() == ('gemma', 'human')
+    assert cs.confident_class_sources() == ('human', 'vlm')
 
     clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'clf')
     clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'clf')
     assert cs.classifier_class_sources() == {'clf_model'}
     clean_env.setenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS', '1')
     assert cs.classifier_class_sources() == {'clf_model', 'proposer_model'}
-    assert cs.confident_class_sources() == ('clf_model', 'gemma', 'human', 'proposer_model')
+    assert cs.confident_class_sources() == ('clf_model', 'human', 'proposer_model', 'vlm')
 
 
 def test_worker_cohort_gate_uses_configured_names(clean_env: pytest.MonkeyPatch) -> None:
@@ -268,4 +268,4 @@ def test_confident_sources_resolved_from_env_at_import(clean_env: pytest.MonkeyP
         text=True,
         check=True,
     )
-    assert out.stdout.strip().splitlines()[-1] == 'clf_model,gemma,human'
+    assert out.stdout.strip().splitlines()[-1] == 'clf_model,human,vlm'

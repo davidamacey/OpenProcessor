@@ -35,7 +35,7 @@ class TestRecordClassHistory:
         src = {
             'class_id': 47,
             'class_name': 'pickup_truck',
-            'class_source': 'v6_model',
+            'class_source': 'item_model',
             'label_source': '',
             'confidence': 0.91,
         }
@@ -44,7 +44,7 @@ class TestRecordClassHistory:
         entry = result[0]
         assert entry['class_id'] == 47
         assert entry['class_name'] == 'pickup_truck'
-        assert entry['class_source'] == 'v6_model'
+        assert entry['class_source'] == 'item_model'
         assert entry['confidence'] == 0.91
         assert entry['writer'] == 'ingest'
         assert entry['at'] == '2026-05-15T00:00:00+00:00'
@@ -55,12 +55,12 @@ class TestRecordClassHistory:
             'class_name': 'pickup_truck',
             'class_source': 'vlm',
             'class_id_history': [
-                {'class_id': 47, 'class_source': 'v6_model', 'writer': 'ingest'},
+                {'class_id': 47, 'class_source': 'item_model', 'writer': 'ingest'},
             ],
         }
         result = record_class_history(src, writer='vlm_pipeline')
         assert len(result) == 2
-        assert result[0]['class_source'] == 'v6_model'
+        assert result[0]['class_source'] == 'item_model'
         assert result[1]['class_source'] == 'vlm'
         assert result[1]['writer'] == 'vlm_pipeline'
 
@@ -108,7 +108,7 @@ class TestRecordClassHistory:
     def test_no_append_when_class_unchanged(self):
         # Call twice with the same class_id/class_source. Before the fix,
         # the second call always appends, producing length 2.
-        src = {'class_id': 47, 'class_source': 'v6_model', 'class_id_history': []}
+        src = {'class_id': 47, 'class_source': 'item_model', 'class_id_history': []}
         history_after_first = record_class_history(src, writer='ingest')
         assert len(history_after_first) == 1
 
@@ -121,7 +121,7 @@ class TestRecordClassHistory:
     def test_append_when_source_changes_but_class_does_not(self):
         # The inverse of test_no_append_when_class_unchanged: class_id is
         # the same but class_source changed — must still append.
-        src = {'class_id': 47, 'class_source': 'v6_model', 'class_id_history': []}
+        src = {'class_id': 47, 'class_source': 'item_model', 'class_id_history': []}
         history_after_first = record_class_history(src, writer='ingest')
         assert len(history_after_first) == 1
 
@@ -130,7 +130,7 @@ class TestRecordClassHistory:
         src_second_call['class_id_history'] = history_after_first
         history_after_second = record_class_history(src_second_call, writer='vlm_pipeline')
         assert len(history_after_second) == 2
-        assert history_after_second[0]['class_source'] == 'v6_model'
+        assert history_after_second[0]['class_source'] == 'item_model'
         assert history_after_second[1]['class_source'] == 'vlm'
 
     def test_append_when_class_changes_but_source_does_not(self):
@@ -274,7 +274,7 @@ class _FakeAutoPromoteOS:
         source = {
             'class_id': 7,
             'class_name': 'honda',
-            'class_source': 'v6_model',
+            'class_source': 'item_model',
             'class_validated': False,
             'test_holdout': False,
         }
@@ -314,7 +314,7 @@ async def test_auto_promote_appends_history() -> None:
     assert history, 'auto_promote: no class_id_history entry was written'
     assert history[-1]['writer'] == 'auto_promote'
     assert history[-1]['class_id'] == 7
-    assert history[-1]['class_source'] == 'v6_model'
+    assert history[-1]['class_source'] == 'item_model'
 
 
 # =============================================================================
@@ -348,8 +348,8 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
     t.update_doc = {
         'class_id': 9,
         'class_name': 'camaro',
-        'class_source': 'gemma',
-        'label_source': 'gemma',
+        'class_source': 'vlm',
+        'label_source': 'vlm',
         'class_validated': False,
         F.status: 'detected',
         F.bbox_norm: [0.2, 0.2, 0.3, 0.3],
@@ -358,7 +358,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
     source = {
         'class_id': 5,
         'class_name': 'honda',
-        'class_source': 'v6_model',
+        'class_source': 'item_model',
         'class_validated': False,
     }
 
@@ -384,7 +384,7 @@ async def test_curation_worker_appends_history() -> None:
     assert history, 'curation worker: no class_id_history entry was written'
     assert history[-1]['writer'] == 'sam_worker'
     assert history[-1]['class_id'] == 5
-    assert history[-1]['class_source'] == 'v6_model'
+    assert history[-1]['class_source'] == 'item_model'
 
 
 # =============================================================================
@@ -433,7 +433,7 @@ class _FakeMergeOS:
         source = {
             'class_id': 3,
             'class_name': 'sedan',
-            'class_source': 'v6_model',
+            'class_source': 'item_model',
             'class_validated': False,
             'test_holdout': False,
         }
@@ -482,7 +482,7 @@ async def test_merge_class_appends_history(monkeypatch: pytest.MonkeyPatch) -> N
     assert history, 'class_merge: no class_id_history entry was written'
     assert history[-1]['writer'] == 'class_merge'
     assert history[-1]['class_id'] == 3
-    assert history[-1]['class_source'] == 'v6_model'
+    assert history[-1]['class_source'] == 'item_model'
 
 
 if __name__ == '__main__':

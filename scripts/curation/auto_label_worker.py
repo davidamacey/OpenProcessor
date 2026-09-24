@@ -289,7 +289,7 @@ def _ivf_retrain_trigger() -> dict[str, Any]:
             'train_clusters': True,
             'clustering_method': 'ivf',
             'recluster_unvalidated': True,
-            'run_gemma': False,
+            'run_vlm': False,
             'run_auto_promote': False,
         },
     }

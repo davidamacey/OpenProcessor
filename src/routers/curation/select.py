@@ -169,8 +169,8 @@ _ORDER_CACHE: dict[str, dict[str, Any]] = {}
 _CACHE_TTL_S = float(os.getenv('OP_SELECT_CACHE_TTL_S', '600'))
 
 
-def _cache_key(index: str, query: dict[str, Any]) -> str:
-    return f'diverse|{index}|{EMBEDDING_FIELD}|{json.dumps(query, sort_keys=True)}'
+def _cache_key(index: str, query: dict[str, Any], k: int | None = None) -> str:
+    return f'diverse|{index}|{EMBEDDING_FIELD}|k={k}|{json.dumps(query, sort_keys=True)}'
 
 
 async def compute_diverse_order(
@@ -179,10 +179,12 @@ async def compute_diverse_order(
     query: dict[str, Any],
     *,
     current_count: int | None = None,
+    k: int | None = None,
 ) -> list[str] | None:
-    """Return every matching crop's ``_id``, ordered by k-center-greedy
-    selection order (index 0 = the seed, the rest in decreasing
-    "how much new coverage did picking this add" order).
+    """Return matching crop ``_id``s ordered by k-center-greedy selection
+    order (index 0 = the seed, the rest in decreasing "how much new
+    coverage did picking this add" order) — every match, or only the
+    first ``k`` picks when ``k`` is given.
 
     Returns ``None`` when diversity selection is disabled, the pool
     exceeds the inline cap, or there are no embeddings to rank — callers
@@ -193,7 +195,7 @@ async def compute_diverse_order(
         return None
 
     inline_max = _get_diverse_inline_max()
-    key = _cache_key(index, query)
+    key = _cache_key(index, query, k)
     now = time.monotonic()
     cached = _ORDER_CACHE.get(key)
     if (
@@ -209,7 +211,8 @@ async def compute_diverse_order(
     if not ids:
         return []
 
-    order_idx = k_center_greedy(l2_normalize(embeddings), len(ids))
+    n_pick = len(ids) if k is None else min(k, len(ids))
+    order_idx = k_center_greedy(l2_normalize(embeddings), n_pick)
     order = [ids[i] for i in order_idx.tolist()]
     _ORDER_CACHE[key] = {'order': order, 'count': len(order), 'at': now}
     return order

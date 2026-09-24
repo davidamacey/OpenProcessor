@@ -127,7 +127,7 @@ async def curation_health(
         status=overall,
         triton=triton_status,
         opensearch=os_status,
-        gemma=vlm_status,
+        vlm=vlm_status,
         registry=registry_status,
     )
 

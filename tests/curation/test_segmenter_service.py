@@ -428,7 +428,7 @@ class TestCascadeWithTheShippedSegmenter:
         assert task.update_doc[F.bbox_norm] == pytest.approx([0.40, 0.60, 0.60, 0.68])
         chain = task.update_doc.get(F.detector_chain) or []
         assert 'sam3:hit' in chain
-        assert 'sam3:gemma_verify_ok' in chain
+        assert 'sam3:vlm_verify_ok' in chain
         assert served.prompt_calls == [_PROMPT]
 
 

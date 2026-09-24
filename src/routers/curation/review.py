@@ -6,7 +6,6 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Path as PathParam, Query
 
-from src.config.region_fields import get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -31,6 +30,7 @@ from src.services.curation.raw_label_clusters import (
     RAW_LABEL_FIELD,
     UNMATCHED_CLASS_SOURCE,
 )
+from src.services.curation.wire import item_source_excludes, serialize_item
 
 
 @router.get('/review/unmatched_terms')
@@ -38,9 +38,9 @@ async def review_unmatched_terms(
     opensearch: OpenSearchDep,
     size: int = Query(100, ge=1, le=1000),
 ) -> dict[str, Any]:
-    """Aggregate Gemma's raw labels across every ``gemma_unmatched`` crop.
+    """Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.
 
-    Returns the top-N most common raw labels Gemma produced for crops the
+    Returns the top-N most common raw labels the VLM produced for crops the
     registry could not resolve. This is the main input to growing the
     registry: high-count labels are obvious candidates for new
     :py:class:`LegacyClassEntry` entries (or new ``SYNONYMS`` mappings if the
@@ -63,11 +63,11 @@ async def review_unmatched_terms(
     await _ensure_indexes(opensearch)
     body = {
         'size': 0,
-        'query': {'term': {'class_source': 'gemma_unmatched'}},
+        'query': {'term': {'class_source': 'vlm_unmatched'}},
         'aggs': {
             'top_raw': {
                 'terms': {
-                    'field': 'gemma_raw_label',
+                    'field': 'vlm_raw_label',
                     'size': size,
                     # Push rare/unknowns to the bottom and avoid empty buckets.
                     'min_doc_count': 1,
@@ -95,7 +95,7 @@ async def review_raw_label_clusters(
     size: int = Query(50, ge=1, le=500),
     samples_per_cluster: int = Query(5, ge=1, le=20),
 ) -> dict[str, Any]:
-    """Top-N hierarchical clusters of ``gemma_raw_label`` for the labeler UI.
+    """Top-N hierarchical clusters of ``vlm_raw_label`` for the labeler UI.
 
     Surfaces the output of ``scripts/curation/cluster_raw_labels.py``
     (field contract: :mod:`src.services.curation.raw_label_clusters`) so
@@ -106,11 +106,11 @@ async def review_raw_label_clusters(
        ``ford_pickup`` → suggested registry parent ``pickup``).
     2. Surface candidate registry promotions ranked by crop volume.
     3. Let curators bulk-relabel a whole cluster at once instead of
-       clicking through individual ``gemma_unmatched`` crops.
+       clicking through individual ``vlm_unmatched`` crops.
 
     The endpoint runs purely against the configured items index — no clustering
     happens here, only aggregation. Cluster ids / names are written by
-    the offline script; if no crops have ``gemma_label_cluster_id`` yet
+    the offline script; if no crops have ``vlm_label_cluster_id`` yet
     the endpoint returns an empty list with a populated ``hint``.
 
     NOTE on route ordering: this endpoint MUST be declared before the
@@ -120,7 +120,7 @@ async def review_raw_label_clusters(
 
     Args:
         size: Number of clusters to return (default 50).
-        samples_per_cluster: How many ``gemma_raw_label`` samples to
+        samples_per_cluster: How many ``vlm_raw_label`` samples to
             include per cluster (default 5 — enough to read at a glance).
 
     Returns:
@@ -149,7 +149,7 @@ async def review_raw_label_clusters(
                     'unmatched': {'filter': {'term': {'class_source': UNMATCHED_CLASS_SOURCE}}},
                     # Most common already-resolved class within the cluster — used
                     # as the ``parent_class_suggestion`` hint. If the cluster is
-                    # 100% gemma_unmatched the bucket is empty and we return None.
+                    # 100% vlm_unmatched the bucket is empty and we return None.
                     'parent': {
                         # ``class_name`` is mapped ``keyword`` directly on the
                         # live index — no ``.keyword`` subfield exists (the
@@ -211,7 +211,7 @@ async def review_queue(
         str,
         PathParam(
             description=(
-                'One of: all | mismatches | gemma_low_conf | outliers | '
+                'One of: all | mismatches | vlm_low_conf | outliers | '
                 'uncertainty | model_disagreements | regions | '
                 'primary_low_conf | coco_blind_spots'
             )
@@ -224,8 +224,8 @@ async def review_queue(
     text: str | None = Query(
         None,
         description=(
-            'Plate-tab only: case-insensitive substring search on '
-            'plate_text. Ignored on other tabs.'
+            'Regions-tab only: case-insensitive substring search on '
+            'region_text. Ignored on other tabs.'
         ),
     ),
     # max_rank: keep crop_rank_in_image <= this (primary tabs default 2).
@@ -259,7 +259,6 @@ async def review_queue(
     where the new model thinks the human was wrong).
     """
     await _ensure_indexes(opensearch)
-    fields = get_region_fields()
 
     # Per-tab must/must_not/reason construction lives in review_queries.py
     # (split out so this file stays under the 700-LOC pre-commit ceiling —
@@ -335,7 +334,7 @@ async def review_queue(
         # one extra count pass per search — fine at typical deployment QPS.
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors to the review grid.
-        '_source': {'excludes': ['pe_embedding', 'v6_embedding']},
+        '_source': {'excludes': item_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -348,106 +347,14 @@ async def review_queue(
     items: list[dict[str, Any]] = []
     for h in hits:
         src = h.get('_source') or {}
-        crop_id = src.get('crop_id') or h.get('_id', '')
-        proposed_id = src.get('gemma_proposed_class_id') or src.get('class_id')
-        proposed_name = (
-            src.get('gemma_proposed_class')
-            or src.get('gemma_raw_class')
-            or src.get('class_name')
-            or ''
+        item = serialize_item(src, h.get('_id', ''))
+        # Review-only extras on top of the shared wire item.
+        item['reason'] = reason
+        item['proposed_class_id'] = src.get('vlm_proposed_class_id') or src.get('class_id')
+        item['proposed_class_name'] = (
+            src.get('vlm_proposed_class') or src.get('vlm_raw_class') or src.get('class_name') or ''
         )
-        items.append(
-            {
-                # LegacyCrop fields the labeler ReviewItem extends.
-                'id': crop_id,
-                'crop_id': crop_id,
-                'source_image_path': src.get('image_path', ''),
-                'image_path': src.get('image_path', ''),
-                'bbox_norm': src.get('bbox_norm') or [],
-                'class_id': src.get('class_id'),
-                'class_name': src.get('class_name', ''),
-                'class_source': src.get('class_source', ''),
-                'confidence': float(src.get('confidence') or 0.0),
-                # Categorical Gemma confidence (high/medium/low) shown alongside
-                # the numeric v6 confidence — labeler renders "v6: 95.9 %,
-                # gemma: medium" so the rows aren't ambiguous.
-                'gemma_confidence': src.get('gemma_confidence'),
-                'label_source': src.get('label_source', ''),
-                # Plan §1.3, A-PR2: legacy label_validated derived; expose
-                # the split fields directly so Slice C can migrate.
-                'label_validated': bool(
-                    src.get('class_validated')
-                    or src.get(fields.validated)
-                    or src.get('label_validated', False)
-                ),
-                'class_validated': bool(src.get('class_validated', False)),
-                'plate_validated': bool(src.get(fields.validated, False)),
-                'cluster_id': src.get('cluster_id'),
-                'cluster_distance': src.get('cluster_distance'),
-                'plate_bbox_norm': src.get(fields.bbox_norm),
-                'plate_score': src.get(fields.score),
-                'test_holdout': bool(src.get('test_holdout', False)),
-                # Primary-subject rank + blur + COCO hint for the new tabs.
-                'crop_rank_in_image': src.get('crop_rank_in_image'),
-                'crop_area_norm': src.get('crop_area_norm'),
-                'blur_lap_ratio': src.get('blur_lap_ratio'),
-                'v6_raw_confidence': src.get('v6_raw_confidence'),
-                'coco_proposal_name': src.get('coco_proposal_name'),
-                'updated_at': src.get('updated_at', ''),
-                'thumbnail_url': f'/curation/crops/{crop_id}/thumbnail',
-                # ReviewItem extras.
-                'reason': reason,
-                'proposed_class_id': proposed_id,
-                'proposed_class_name': proposed_name,
-                # Phase 5 active-learning loop: surfaces in the
-                # model_disagreements tab so the user sees what the new
-                # model thought (and how confident it was).
-                'probe_pred_class': src.get('probe_pred_class'),
-                'probe_pred_entropy': src.get('probe_pred_entropy'),
-                # Region-detection outputs — needed by the `regions` review tab
-                # so the labeler can render the bbox on the source image
-                # for human confirmation.
-                # Frozen plate_* wire names (docs/design/curation_api_contract.md) —
-                # `fields.*` on the right-hand side only picks the OpenSearch
-                # storage key to read from; the JSON key itself must never be
-                # RegionFields-indirected or it leaks the storage field name
-                # (region_* by default) onto the HTTP contract.
-                'plate_status': src.get(fields.status),
-                'plate_verified': src.get(fields.verified),
-                # Region provenance (Wave 1) — labeler chips render which
-                # detector + verifier produced the stored bbox.
-                'plate_detector': src.get(fields.detector),
-                'plate_detector_version': src.get(fields.detector_version),
-                'plate_detector_chain': src.get(fields.detector_chain),
-                'plate_bbox_frame': src.get(fields.bbox_frame),
-                'plate_detected_at': src.get(fields.detected_at),
-                'plate_verifier': src.get(fields.verifier),
-                'plate_verifier_version': src.get(fields.verifier_version),
-                'plate_verified_at': src.get(fields.verified_at),
-                'plate_rejection_reason': src.get(fields.rejection_reason),
-                'plate_visible': src.get(fields.visible),
-                # Region OCR (Wave 2b — fields may be absent until that
-                # phase ships; pass through unconditionally).
-                'plate_text': src.get(fields.text),
-                'plate_text_raw': src.get(fields.text_raw),
-                'plate_text_source': src.get(fields.text_source),
-                'plate_text_confidence': src.get(fields.text_confidence),
-                'plate_text_engine_version': src.get(fields.text_engine_version),
-                # Class provenance (Wave 1).
-                'class_detector': src.get('class_detector'),
-                'class_detector_version': src.get('class_detector_version'),
-                'class_labeled_at': src.get('class_labeled_at'),
-                'class_labeler': src.get('class_labeler'),
-                # Curation-score overlays (Phase 3, review_sorts.py) — pass
-                # through unconditionally; absent on any crop no scoring
-                # job has touched yet.
-                'mistakenness_score': src.get('mistakenness_score'),
-                'uniqueness_score': src.get('uniqueness_score'),
-                'dup_group_id': src.get('dup_group_id'),
-                'dup_group_size': src.get('dup_group_size'),
-                'dup_is_representative': src.get('dup_is_representative'),
-            }
-        )
+        items.append(item)
     return {
         'total': int(total),
         'page': page,

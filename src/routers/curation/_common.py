@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field
 from src.clients.curation_opensearch import (
     ClassRegistry,
     create_curation_indexes,
-    ensure_items_gemma_raw_label_fields,
     ensure_items_history_fields,
     ensure_items_label_cluster_fields,
     ensure_items_pe_v6_embedding_fields,
@@ -29,6 +28,7 @@ from src.clients.curation_opensearch import (
     ensure_items_score_fields,
     ensure_items_validation_split_fields,
     ensure_items_viz_fields,
+    ensure_items_vlm_raw_label_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
 from src.config.region_state import RegionStatus
@@ -99,9 +99,9 @@ async def _ensure_indexes(opensearch: Any) -> None:
     try:
         await create_curation_indexes(opensearch, force_recreate=False)
         try:
-            await ensure_items_gemma_raw_label_fields(opensearch)
+            await ensure_items_vlm_raw_label_fields(opensearch)
         except Exception as exc:
-            logger.warning('curation_gemma_raw_label_migration_failed', error=str(exc))
+            logger.warning('curation_vlm_raw_label_migration_failed', error=str(exc))
         try:
             await ensure_items_label_cluster_fields(opensearch)
         except Exception as exc:
@@ -187,7 +187,7 @@ class IngestImageResponse(BaseModel):
     image_path: str
     imohash: str = ''
     n_crops: int = 0
-    n_plates: int = 0
+    n_regions: int = 0
     error: str | None = None
 
 
@@ -226,57 +226,91 @@ class ImportLabelsBatchRequest(BaseModel):
 
 
 class ItemDoc(BaseModel):
+    """The wire item every item-returning endpoint emits.
+
+    Documentation/OpenAPI model only: handlers return
+    ``src.services.curation.wire.serialize_item`` output directly (a test
+    pins this model's fields to that serializer's keys), so a stored value
+    of an unexpected type never 500s a browse page. Region attributes use
+    the fixed ``region_<attr>`` wire names regardless of any
+    ``OP_REGION_FIELD_*`` storage override.
+    """
+
+    id: str
     crop_id: str
     image_id: str = ''
     image_path: str = ''
+    source_image_path: str = ''
     bbox_norm: list[float] = Field(default_factory=list)
     class_id: int | None = None
     class_name: str | None = ''
     class_source: str | None = ''
     confidence: float = 0.0
+    classifier_raw_confidence: float | None = None
+    # label_source is nullable: VLM writers set it to None when
+    # overwriting a prior validation tag.
+    label_source: str | None = ''
+    # Derived: class_validated OR region_validated.
+    label_validated: bool = False
+    class_validated: bool = False
+    class_detector: str | None = None
+    class_detector_version: str | None = None
+    class_labeled_at: str | None = None
+    class_labeler: str | None = None
+    vlm_confidence: str | None = None
     cluster_id: int | None = None
     cluster_distance: float | None = None
-    # AHC sub-cluster id (e.g. "47a"). Populated only after refine ran.
-    # Cleared whenever cluster_id changes (move / batch_label / merge /
-    # residual recluster) because subid is cluster-local.
+    # AHC sub-cluster id (e.g. "47a"); cleared whenever cluster_id changes.
     cluster_subid: str | None = None
-    label_validated: bool = False
-    # label_source is nullable: VLM writers + the revert script set it
-    # to None when overwriting a prior validation tag (e.g. clearing a
-    # stale auto_promote 'cluster_v6_majority_agreement' string).
-    label_source: str | None = ''
-    # Frozen HTTP wire-model attribute names — see
-    # docs/design/curation_api_contract.md and the RegionFields scope
-    # described in docs/design/curation_design_rationale.md §3-4. These
-    # are the generic curation API's JSON contract (Cropwright is one
-    # consumer among anticipated others) and are NOT indirected through
-    # RegionFields (that governs OpenSearch document keys only).
-    plate_bbox_norm: list[float] | None = None
-    plate_score: float | None = None
-    # Round-trip counterparts of what PATCH /crops/{id}/region_meta and
-    # PUT /crops/{id}/region write (RegionFields.status/text/etc on the
-    # storage side) — added so a GET after either write actually reflects
-    # it instead of silently dropping the region metadata (the frontend's
-    # review-queue "Back" path and mapRawCrop() need these back).
-    plate_status: str | None = None
-    plate_text: str | None = None
-    plate_text_source: str | None = None
-    plate_text_confidence: float | None = None
-    plate_rejection_reason: str | None = None
-    plate_detector: str | None = None
-    plate_detector_version: str | None = None
-    plate_verified: bool | None = None
-    plate_verified_at: str | None = None
-    plate_verifier: str | None = None
-    plate_label_source: str | None = None
     test_holdout: bool = False
-    # Primary-subject rank (1 = largest crop in its photo) + blur quality.
-    # Drive the "largest / 2nd-largest" toggle and clarity slider in the UI.
     crop_rank_in_image: int | None = None
     crop_area_norm: float | None = None
     blur_lap_ratio: float | None = None
-    coco_proposal_name: str | None = None
+    proposal_name: str | None = None
+    probe_pred_class: Any = None
+    probe_pred_entropy: float | None = None
+    mistakenness_score: float | None = None
+    mistakenness_method: str | None = None
+    mistakenness_version: str | None = None
+    mistakenness_scored_at: str | None = None
+    uniqueness_score: float | None = None
+    dup_group_id: Any = None
+    dup_group_size: int | None = None
+    dup_is_representative: bool | None = None
+    updated_at: str = ''
     thumbnail_url: str = ''
+    region_thumbnail_url: str = ''
+    region_bbox_norm: list[float] | None = None
+    region_bbox_frame: str | None = None
+    region_bbox_correct: bool | None = None
+    region_status: str | None = None
+    region_score: float | None = None
+    region_confidence: Any = None
+    region_reason: str | None = None
+    region_rejection_reason: str | None = None
+    region_text: str | None = None
+    region_text_raw: str | None = None
+    region_text_confidence: float | None = None
+    region_text_source: str | None = None
+    region_text_engine_version: str | None = None
+    region_validated: bool | None = None
+    region_verified: bool | None = None
+    region_verified_at: str | None = None
+    region_verifier: str | None = None
+    region_verifier_version: str | None = None
+    region_visible: bool | None = None
+    region_detector: str | None = None
+    region_detector_version: str | None = None
+    region_detector_chain: list[str] | None = None
+    region_detected_at: str | None = None
+    region_cluster_id: int | None = None
+    region_cluster_subid: str | None = None
+    region_cluster_distance: float | None = None
+    region_class_id: int | None = None
+    region_label_source: str | None = None
+    region_source: str | None = None
+    region_pairing: Any = None
+    region_skip_verify: bool | None = None
 
 
 class CropsPageResponse(BaseModel):
@@ -332,30 +366,34 @@ class CropUnexcludeRequest(BaseModel):
 class ItemRegionRequest(BaseModel):
     """Set or clear the region-of-interest sub-bbox on a single item.
 
-    ``bbox_norm`` is in the **source-image** coordinate frame; the
-    labeler is responsible for converting from crop-frame to
-    source-frame before POSTing. ``None`` clears the box and marks the
-    item as ``plate_status='no_region_visible'`` (a deliberate human
-    decision, distinct from "not yet detected").
+    ``region_bbox_norm`` is in the **source-image** coordinate frame; the
+    client converts from crop-frame to source-frame before sending.
+    ``None`` clears the box and marks the item
+    ``region_status='no_region_visible'`` (a deliberate human decision,
+    distinct from "not yet detected").
     """
 
-    bbox_norm: tuple[float, float, float, float] | None
-    label_source: str = 'human'
+    model_config = {'extra': 'forbid'}
+
+    region_bbox_norm: tuple[float, float, float, float] | None
+    region_label_source: str = 'human'
 
 
 class ItemBatchRegionRequest(BaseModel):
     """Bulk variant of ItemRegionRequest (e.g. "mark these N items as no
     region present")."""
 
+    model_config = {'extra': 'forbid'}
+
     crop_ids: list[str]
-    bbox_norm: tuple[float, float, float, float] | None
-    label_source: str = 'human'
+    region_bbox_norm: tuple[float, float, float, float] | None
+    region_label_source: str = 'human'
 
 
-# Whitelist of plate_status values an operator is allowed to write from
-# the labeler. The detector / verify pipeline writes additional values
-# ('pending_detection', 'pending_verification', 'detection_failed') that
-# represent transient pipeline state — humans never set those by hand.
+# Whitelist of region status values an operator may write. The detector /
+# verify pipeline writes additional values ('pending_detection',
+# 'pending_verification', 'detection_failed') that represent transient
+# pipeline state — humans never set those by hand.
 HUMAN_REGION_STATUS_VALUES = frozenset(
     {
         RegionStatus.DETECTED,
@@ -367,42 +405,44 @@ HUMAN_REGION_STATUS_VALUES = frozenset(
 
 
 class CropBatchStatusRequest(BaseModel):
-    """Bulk-set ``plate_status`` over many items (the cluster-view triage op).
+    """Bulk-set ``region_status`` over many items (the cluster-view triage op).
 
     Lets an operator select an outlier sub-cluster and mark every region
     ``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm
-    good regions (``plate_status='detected'`` + ``plate_verified=True``).
-    ``plate_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
+    good regions (``region_status='detected'`` + ``region_verified=True``).
+    ``region_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
     """
 
+    model_config = {'extra': 'forbid'}
+
     crop_ids: list[str]
-    plate_status: str
-    plate_verified: bool | None = None
-    label_source: str = 'human'
+    region_status: str
+    region_verified: bool | None = None
+    region_label_source: str = 'human'
 
 
 class ItemRegionMetaRequest(BaseModel):
-    """Patch the region metadata fields without touching ``plate_bbox_norm``.
+    """Patch region metadata without touching ``region_bbox_norm``.
 
-    Use this for operator corrections like fixing an OCR'd region text or
+    Use this for operator corrections like fixing a region's OCR text or
     changing the status to ``verify_rejected``. To set or clear the bbox
-    itself, use ``PUT /crops/{crop_id}/region`` — that endpoint owns the
-    geometry contract.
+    itself, use ``PUT /crops/{crop_id}/region``.
 
     Every field is optional; only the provided ones are written. ``None``
-    on ``plate_text`` clears the text, on ``plate_rejection_reason``
-    clears the reason. ``plate_status`` must be one of
+    on ``region_text`` clears the text, on ``region_rejection_reason``
+    clears the reason. ``region_status`` must be one of
     ``HUMAN_REGION_STATUS_VALUES`` when present.
     """
 
-    plate_text: str | None = None
-    plate_status: str | None = None
-    plate_rejection_reason: str | None = None
-    label_source: str = 'human'
-
-    # Pydantic v2: explicit fields that were *set* in the request, so we
-    # can distinguish ``plate_text=None`` (clear) from "not in payload".
+    # extra='forbid' so a stale key 422s instead of silently no-opping;
+    # model_fields_set distinguishes ``region_text=None`` (clear) from
+    # "not in payload".
     model_config = {'extra': 'forbid'}
+
+    region_text: str | None = None
+    region_status: str | None = None
+    region_rejection_reason: str | None = None
+    region_label_source: str = 'human'
 
 
 class ClassEntry(BaseModel):
@@ -447,66 +487,6 @@ class ClassMergeRequest(BaseModel):
     target_id: int
 
 
-class VlmLabelBatchRequest(BaseModel):
-    crop_ids: list[str]
-
-
-class VlmVerifyRegionsRequest(BaseModel):
-    crop_ids: list[str]
-
-
-class VlmVerifyRegionBatchItem(BaseModel):
-    """One item in a batched region-verify request.
-
-    Mirrors the single-crop verify-region shape. The caller is
-    responsible for cropping the region out of its source crop and
-    base64-encoding the JPEG bytes — the API does not re-derive the
-    region JPEG from OpenSearch on this path so the batch endpoint can
-    serve callers (workers, training scripts) that already hold the
-    JPEG in memory.
-    """
-
-    crop_id: str
-    plate_image_b64: str = Field(
-        ...,
-        description='Base64-encoded JPEG of the region-of-interest crop (no data: prefix).',
-    )
-    candidate_text: str | None = Field(
-        default=None,
-        description=(
-            'Optional OCR-decoded region text from the upstream detector. '
-            'Surfaced back in the response so callers can correlate without '
-            'a second lookup; not currently used in the prompt.'
-        ),
-    )
-
-
-class VlmVerifyRegionBatchRequest(BaseModel):
-    """Request body for the batched region-verify endpoint."""
-
-    items: list[VlmVerifyRegionBatchItem]
-
-
-class VlmRegionVisibleBatchItem(BaseModel):
-    crop_id: str
-    image_b64: str = Field(
-        ...,
-        description='Base64-encoded JPEG of the item crop (no data: prefix).',
-    )
-
-
-class VlmRegionVisibleBatchRequest(BaseModel):
-    """Request body for the batched region-visibility endpoint."""
-
-    items: list[VlmRegionVisibleBatchItem]
-
-
-class VlmRegionVisibleBatchResponse(BaseModel):
-    """``{crop_id: bool}`` mapping — True means a region is visible."""
-
-    visible: dict[str, bool]
-
-
 class TestHoldoutFreezeRequest(BaseModel):
     percent: int = Field(default=10, ge=1, le=50)
     # No longer used: selection is deterministic (SHA1-of-crop_id per
@@ -528,7 +508,7 @@ class HealthResponse(BaseModel):
     status: Literal['ok', 'degraded', 'down']
     triton: dict[str, Any]
     opensearch: dict[str, Any]
-    gemma: dict[str, Any]
+    vlm: dict[str, Any]
     registry: dict[str, Any]
 
 
@@ -655,15 +635,22 @@ class CurationSettingsUpdateRequest(BaseModel):
 
 
 class _PublishEvent(BaseModel):
-    """Event-publish payload — used by out-of-process workers."""
+    """Event-publish payload — used by out-of-process workers.
+
+    ``extra='forbid'``: a publisher posting an unknown key (e.g. a storage
+    field name instead of the wire ``region_status``) gets a 422 instead
+    of an event silently stripped of its payload.
+    """
+
+    model_config = {'extra': 'forbid'}
 
     type: str
     crop_id: str | None = None
     class_id: int | None = None
     class_name: str | None = None
     class_source: str | None = None
-    plate_status: str | None = None
-    plate_text: str | None = None
+    region_status: str | None = None
+    region_text: str | None = None
     image_path: str | None = None
     topic: str | None = None
     extra: dict[str, Any] | None = None

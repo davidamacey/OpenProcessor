@@ -20,6 +20,7 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
     region_provenance,
 )
+from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
 
 
@@ -79,7 +80,11 @@ async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) ->
 # ``DetectionProfile.auto_confirm_aspect`` / ``.auto_confirm_area_frac``)
 # are intentionally loose to admit near-square regions, angled / partial
 # regions, and small far-away regions.
-_SKIP_VLM_VERIFY_SECONDARY_SCORE = float(os.environ.get('SAM3_SKIP_GEMMA_VERIFY_SCORE', '0.95'))
+_SKIP_VLM_VERIFY_SECONDARY_SCORE = float(
+    os.environ.get('SAM3_SKIP_VLM_VERIFY_SCORE')
+    or os.environ.get('SAM3_SKIP_GEMMA_VERIFY_SCORE')
+    or '0.95'
+)
 # Skip the VLM verify roundtrip when the secondary segmenter is very
 # confident AND the bbox passes the same shape sanity check the VLM
 # would do anyway. The VLM verify in this pipeline catches detector
@@ -93,7 +98,7 @@ _SKIP_VLM_VERIFY_SECONDARY_SCORE = float(os.environ.get('SAM3_SKIP_GEMMA_VERIFY_
 # load from this worker substantially and lets the shared VLM serve
 # other queues (e.g. class labeling) instead.
 #
-# Override at runtime: SAM3_SKIP_GEMMA_VERIFY_SCORE=0.99 to be more
+# Override at runtime: SAM3_SKIP_VLM_VERIFY_SCORE=0.99 to be more
 # conservative, or 0.90 for more aggressive skipping. Set to 1.01 to
 # disable the skip entirely (everything still goes through the VLM).
 
@@ -129,7 +134,7 @@ def _region_write_doc(
     plate_status: str = RegionStatus.DETECTED,
     plate_verified: bool = True,
     plate_validated: bool = False,
-    verifier: str | None = 'gemma-4-e4b',
+    verifier: str | None = VLM_MODEL_ID,
     verifier_version: str | None = '1',
     plate_text: str | None = None,
     plate_text_confidence: str | None = None,
@@ -163,7 +168,7 @@ def _region_write_doc(
     if plate_text:
         doc[F.text] = plate_text
         doc[F.text_raw] = plate_text
-        doc[F.text_source] = plate_text_source or 'gemma-4-e4b'
+        doc[F.text_source] = plate_text_source or VLM_MODEL_ID
         doc[F.text_engine_version] = '1'
         if plate_text_confidence:
             doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(plate_text_confidence, 0.70)
@@ -211,10 +216,10 @@ def _combined_class_update(
 ) -> dict[str, Any]:
     """Build the class-side update dict from a combined VLM reply.
 
-    Always-applicable fields (make/model/plate_visible/gemma_verify_completed_at)
+    Always-applicable fields (make/model/plate_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
     ``class_name`` only land when the reply contains a usable index into
-    ``class_names``; otherwise the row is marked ``gemma_unmatched`` so the
+    ``class_names``; otherwise the row is marked ``vlm_unmatched`` so the
     curator queue can grow the registry — same convention
     ``combined._try_combined_class_region`` uses.
 
@@ -243,23 +248,23 @@ def _combined_class_update(
             {
                 'class_id': cid,
                 'class_name': cname,
-                'class_source': 'gemma',
+                'class_source': 'vlm',
                 # Clearing label_source/class_validated: when this write
                 # overwrites a prior class_source (e.g. a stale
-                # 'v6_model'/'cluster_v6_majority_agreement' cohort), a
+                # 'item_model'/'cluster_majority_agreement' cohort), a
                 # stale label_source='human'/class_validated=true would
                 # otherwise persist and the doc would look like real
                 # human ground truth even though the VLM now owns the
                 # class.
-                'label_source': 'gemma',
+                'label_source': 'vlm',
                 'class_validated': False,
                 'cluster_id': cid,
-                'gemma_confidence': reply.class_confidence or 'low',
-                'gemma_raw_label': cname,
+                'vlm_confidence': reply.class_confidence or 'low',
+                'vlm_raw_label': cname,
                 **class_provenance(
-                    detector='gemma-4-e4b',
+                    detector=VLM_MODEL_ID,
                     detector_version='1',
-                    labeler='gemma-4-e4b',
+                    labeler=VLM_MODEL_ID,
                     labeled_at=ts,
                 ),
             }
@@ -268,23 +273,23 @@ def _combined_class_update(
         # We asked the VLM to classify and it returned -1 / null / out of range.
         update.update(
             {
-                'class_source': 'gemma_unmatched',
-                'label_source': 'gemma',
+                'class_source': 'vlm_unmatched',
+                'label_source': 'vlm',
                 'class_validated': False,
-                'gemma_confidence': reply.class_confidence or 'low',
+                'vlm_confidence': reply.class_confidence or 'low',
             }
         )
     # else: caller asked the VLM to SKIP classification — leave the
     # existing class fields untouched.
     if reply.make:
-        update['gemma_vehicle_make'] = reply.make
+        update['vlm_item_make'] = reply.make
     if reply.model:
-        update['gemma_vehicle_model'] = reply.model
+        update['vlm_item_model'] = reply.model
     update[get_region_fields().visible] = bool(reply.plate_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream
     # pipeline stages read this to skip a redundant class call.
-    update['gemma_verify_completed_at'] = ts
+    update['vlm_verify_completed_at'] = ts
     return update
 
 
@@ -327,7 +332,7 @@ async def _auto_confirm_or_pending(
     *,
     sam_score: float,
     bbox_in_crop: tuple[float, float, float, float],
-    gemma_high_conf: bool,
+    vlm_high_conf: bool,
 ) -> bool:
     """Decide whether the worker can auto-confirm without human review.
 
@@ -346,7 +351,7 @@ async def _auto_confirm_or_pending(
     # sufficient regardless of in-crop bbox area (the VLM already saw
     # the region). The shape check is a sanity gate for the
     # lower-confidence fallbacks below.
-    if gemma_high_conf:
+    if vlm_high_conf:
         return True
     if not _bbox_shape_is_plausible(bbox_in_crop):
         return False

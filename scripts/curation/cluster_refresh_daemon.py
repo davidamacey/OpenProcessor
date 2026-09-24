@@ -40,6 +40,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 
 DEFAULT_API = 'http://localhost:4603'
+# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
+API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = 'http://localhost:4607'
 # curation items index — see vlm_worker.py's
 # identical constant for the full explanation.
@@ -88,7 +90,7 @@ async def _crop_count(client: httpx.AsyncClient, opensearch: str) -> int:
 
 async def _trigger_auto_promote(client: httpx.AsyncClient, api: str) -> dict[str, Any]:
     r = await client.post(
-        f'{api}/curation/clusters/auto_promote',
+        f'{api}{API_PREFIX}/clusters/auto_promote',
         json={},
         # A cold-start pass (daemon restart resets in-process last_count to
         # 0, so the very next poll always re-triggers over the *full* pool,
@@ -105,7 +107,7 @@ async def _trigger_auto_promote(client: httpx.AsyncClient, api: str) -> dict[str
 
 async def _trigger_auto_label(client: httpx.AsyncClient, api: str) -> dict[str, Any]:
     r = await client.post(
-        f'{api}/curation/pipeline/auto_label',
+        f'{api}{API_PREFIX}/pipeline/auto_label',
         json={},
         timeout=900.0,
     )
