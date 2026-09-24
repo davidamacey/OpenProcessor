@@ -557,7 +557,21 @@
             <th class="px-3 py-2 font-medium">Group</th>
             <th class="px-3 py-2 text-center font-medium">Hotkey</th>
             <th class="px-3 py-2 text-right font-medium">Validated</th>
-            <th class="px-3 py-2 text-right font-medium">Total</th>
+            <!-- DQ-m9 (docs/design/data-quality-pass-2026-09-24.md): this
+                 "Total" is `sample_count` from GET /classes — the
+                 class-cluster bucket size (what /clusters/{id} shows as
+                 "in cluster"), NOT the same number as /export's "Total"
+                 column (GET /stats/classes, every crop with that
+                 class_id). They can legitimately disagree a lot —
+                 license_plate is 1,000 here (plate sub-boxes counted in
+                 the cluster bucket) but 0 on /export (no crop's own
+                 class_id is literally "license_plate"). -->
+            <th
+              class="px-3 py-2 text-right font-medium"
+              title="Class-cluster bucket size (sample_count) — matches the per-cluster page's &quot;in cluster&quot; count. Not the same as /export's Total column."
+            >
+              Total (in cluster)
+            </th>
             <th class="px-3 py-2 font-medium">Added</th>
             <th class="px-3 py-2"></th>
           </tr>
