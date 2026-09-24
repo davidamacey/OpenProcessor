@@ -9,12 +9,12 @@ the *stored* candidate-source vocabulary — see
 from __future__ import annotations
 
 from scripts.curation.worker.region_text_stage import candidate_detector
-from scripts.curation.worker.state import (
+from scripts.curation.worker.state import _ItemTask
+from src.config.region_source import (
     CANDIDATE_DETECTOR,
     CANDIDATE_DETECTOR_EXISTING,
     CANDIDATE_SEGMENTER,
     CANDIDATE_SEGMENTER_TEXT_HINT,
-    _ItemTask,
 )
 
 

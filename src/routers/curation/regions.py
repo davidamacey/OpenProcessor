@@ -30,6 +30,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
+from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.region_writes import (
     RegionWriteError,
     human_status_fields,
@@ -420,6 +421,21 @@ async def region_statuses() -> dict[str, Any]:
     ``false_positive_status`` values. Generated from
     ``src/config/region_state.py``; the human writers enforce it."""
     return region_status_catalog()
+
+
+@router.get('/regions/vocabulary')
+async def regions_vocabulary() -> dict[str, Any]:
+    """The deployment-configured detector/segmenter/verifier vocabulary
+    (W0: naming sweep finding m9).
+
+    ``{detectors: [{id, label, role, filterable}], region_sources:
+    [{id, label, role}], chain_actors: [{id, label, role}]}``. Built from
+    the active region profile / ingest profiles / ``OP_VLM_MODEL`` --
+    never a hardcoded model id. ``filterable`` marks the values that can
+    appear in stored ``region_detector`` (the detector filter's exact
+    option list). The frontend renders this instead of hardcoding a
+    label/palette map keyed on private model ids."""
+    return region_vocabulary_catalog()
 
 
 @router.put('/crops/{crop_id}/region')

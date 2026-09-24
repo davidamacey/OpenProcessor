@@ -280,6 +280,15 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get('/review/tabs')
+async def review_tabs() -> dict[str, list[dict[str, str]]]:
+    """Every review tab's ``id``/``label``/``description`` (W0: naming
+    sweep finding m9) — the frontend renders this instead of hardcoding
+    tab labels. Must be registered before ``GET /review/{tab}`` so it
+    isn't shadowed as ``tab='tabs'``."""
+    return {'tabs': review_queries.review_tab_catalog()}
+
+
 @router.get('/review/{tab}')
 async def review_queue(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],

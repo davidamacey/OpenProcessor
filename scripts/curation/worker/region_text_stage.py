@@ -23,14 +23,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.cascade import _crop_region_jpeg, _expand_bbox
-from scripts.curation.worker.state import (
+from scripts.curation.worker.verify import _region_reject_doc, _region_write_doc
+from src.config import get_region_fields
+from src.config.region_source import (
     CANDIDATE_DETECTOR,
     CANDIDATE_DETECTOR_EXISTING,
     CANDIDATE_SEGMENTER,
     CANDIDATE_SEGMENTER_TEXT_HINT,
 )
-from scripts.curation.worker.verify import _region_reject_doc, _region_write_doc
-from src.config import get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.item_text import item_text_update
 from src.services.detection.cascade_detect import is_plausible_region_bbox

@@ -40,6 +40,48 @@ KNOWN_TABS: tuple[str, ...] = (
     'new_class_proposals',
 )
 
+# W0: a display label + description per tab, so the frontend stops
+# hardcoding them (F7's "Classifier blind spots" for coco_blind_spots in
+# particular -- the id itself is renamed in a later wave). Served by
+# ``GET {prefix}/review/tabs``.
+TAB_LABELS: dict[str, tuple[str, str]] = {
+    'all': ('All', 'Unified queue: every crop a human should look at, most-uncertain first'),
+    'mismatches': ('Mismatches', "The VLM's reply did not match any registry class"),
+    'vlm_low_conf': ('VLM low confidence', 'VLM confidence below high'),
+    'outliers': ('Outliers', 'Far from cluster centroid'),
+    'uncertainty': ('Uncertainty', 'High active-learning probe entropy'),
+    'model_disagreements': (
+        'Model disagreements',
+        'Validated crops where the new model disagrees with the human label',
+    ),
+    'regions': ('Regions', 'Region detected — needs human confirmation'),
+    'primary_low_conf': (
+        'Primary low confidence',
+        'Largest subject — classifier unsure or missed',
+    ),
+    'coco_blind_spots': (
+        'Classifier blind spots',
+        'Detector proposed an item the classifier missed entirely',
+    ),
+    'new_class_proposals': (
+        'New class proposals',
+        'Needs a class the registry does not have yet',
+    ),
+}
+
+
+def review_tab_catalog() -> list[dict[str, str]]:
+    """``[{id, label, description}, ...]`` for every ``KNOWN_TABS`` entry.
+
+    Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
+    a matching ``TAB_LABELS`` entry -- the same "one source of truth"
+    contract ``test_class_sources.py`` enforces for ``class_source``.
+    """
+    return [
+        {'id': tab, 'label': TAB_LABELS[tab][0], 'description': TAB_LABELS[tab][1]}
+        for tab in KNOWN_TABS
+    ]
+
 
 def _escape_wildcard(text: str) -> str:
     """Escape wildcard-query metacharacters so user text matches literally."""
@@ -306,4 +348,4 @@ def build_tab_query(
     return must, must_not, reason
 
 
-__all__ = ['KNOWN_TABS', 'build_tab_query']
+__all__ = ['KNOWN_TABS', 'TAB_LABELS', 'build_tab_query', 'review_tab_catalog']

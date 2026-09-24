@@ -27,13 +27,10 @@ if TYPE_CHECKING:
 
 logger = get_logger('curation_worker')
 
-# S3: stored ``region_source`` / ``candidate_source`` provenance values.
-# Every writer of these fields must go through these constants so the
-# stored vocabulary cannot drift.
-CANDIDATE_SEGMENTER = 'segmenter'
-CANDIDATE_SEGMENTER_TEXT_HINT = 'segmenter_text_hint'
-CANDIDATE_DETECTOR = 'detector'
-CANDIDATE_DETECTOR_EXISTING = 'detector_existing'
+# S3: stored ``region_source`` / ``candidate_source`` provenance values are
+# defined in src/config/region_source.py (imported above) so both this
+# worker and the API router (region_vocabulary.py) share one source of
+# truth without a scripts -> src layering violation.
 
 _config = get_curation_config()
 

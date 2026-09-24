@@ -64,10 +64,6 @@ from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
     _PENDING_VERIFICATION_ALIASES,
     _TERMINAL_STATUSES,
-    CANDIDATE_DETECTOR,
-    CANDIDATE_DETECTOR_EXISTING,
-    CANDIDATE_SEGMENTER,
-    CANDIDATE_SEGMENTER_TEXT_HINT,
     _crop_jpeg_for_task,
     _is_secondary_shape,
     _ItemTask,
@@ -81,6 +77,12 @@ from scripts.curation.worker.verify import (
     _combined_class_update,
     _combined_write_doc,
     _region_write_doc,
+)
+from src.config.region_source import (
+    CANDIDATE_DETECTOR,
+    CANDIDATE_DETECTOR_EXISTING,
+    CANDIDATE_SEGMENTER,
+    CANDIDATE_SEGMENTER_TEXT_HINT,
 )
 
 
