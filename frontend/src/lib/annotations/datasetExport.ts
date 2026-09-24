@@ -57,7 +57,7 @@ function nonEmptyString(v: unknown): string | undefined {
 
 /**
  * The slot's declared dataset export, or `undefined` when it declares
- * none (every slot but `license_plate` today) or declares a malformed
+ * none or declares a malformed
  * one.
  *
  * `options[]` is deliberately NOT read here — `/train` still renders its
@@ -99,7 +99,7 @@ export function datasetExportForSlot(slot: SlotSpec): DatasetExportSpec | undefi
     raw.regionClassName === undefined ? undefined : nonEmptyString(raw.regionClassName);
   if (raw.regionClassName !== undefined && !regionClassName) return undefined;
   // Prefix-relative only. An absolute URL here would bypass apiBase and
-  // API_PREFIX both, which is the bug class plateThumbUrl.test.ts exists
+  // API_PREFIX both, which is the bug class regionThumbUrl.test.ts exists
   // to prevent on the image side.
   if (!buildPath.startsWith('/') || !statusPath.startsWith('/')) return undefined;
 

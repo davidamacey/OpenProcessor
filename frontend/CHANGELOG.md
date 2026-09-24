@@ -474,6 +474,35 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
 
 ### Changed
 
+- **Domain-neutral source, steps 1-6 of
+  `docs/design/domain-neutral-audit-2026-09-24.md`.** Generic code no
+  longer names one data domain:
+  - Plate-named identifiers and files are renamed with one scheme:
+    `/regions` API wrappers use `Region` (`getPlates` -> `getRegions`,
+    `PlateBrowseItem` -> `RegionBrowseItem`, `batchPlateStatus` ->
+    `batchRegionStatus(slot, ids, status: string)`, ...), the view layer
+    uses `Slot` or no prefix (`plateGalleryController` ->
+    `slotGalleryController`, `platePager` -> `pager`, ...). Nothing on
+    the wire changes.
+  - `createSlotGalleryController(slot)` is bound to the slot it's given
+    (browse path, lifecycle states, slot key) instead of importing the
+    built-in profile; `/clusters` creates one per slot and pins one
+    inventory card per registered slot with a browse endpoint.
+    `SlotCard`/`SlotBboxEditor` require their `slot` prop; the gallery's
+    text filter reads the slot's `textFilter`; `parseSlotConfig`'s
+    default keys/keymap derive from the tier-1 slots.
+  - Every "plate"/"Plates"/"LPR" string in a generic surface now reads
+    the slot's label, the served tab label or the export spec's blurb.
+    Comments are neutral, and the private-origin lines (a private crop
+    id, private dataset counts) are gone.
+  - Tests use a neutral widget/tag fixture domain
+    (`src/lib/test/fixtures/regionSlot.ts`), and the stale prompt-pack
+    fixture id `vehicle_plate_v1` is now `generic_item_v1`.
+  - New `src/lib/domainNeutral.scan.test.ts` fails on a plate noun,
+    `legacy`, `/curation` or a private dataset number anywhere under `src/`
+    outside a per-file allow-list (the example profiles and what audit
+    steps 7-11 remove).
+
 - OpenProcessor 1327181 naming sweep, F6/F9: `DatasetStats.in_progress`'s
   `sam_drain_total_unfinished` field is renamed
   `region_drain_total_unfinished` (`DatasetStats.svelte`'s in-flight-
@@ -1211,6 +1240,22 @@ class`) so an operator can see where a crop lives before relabeling
 - Back-to-all-clusters link on `/clusters/[id]`'s header.
 
 ### Fixed
+
+- `CropCard`'s region ring and edit button: the card looked up its slot
+  by the crop's own class, which is never the region's class, so the
+  ring never drew on a region-bearing item and the always-visible ✎
+  opened an editor whose save did nothing. The slot is now chosen by the
+  crop's region evidence (else the only registered sub-box slot), and ✎
+  renders only when there is a slot to edit.
+- The `/clusters` region gallery was hardwired to the built-in profile,
+  so a second slot's class filter showed the first slot's regions and
+  wrote through its spec.
+- `scripts/playwright_backend_integration.py` steps 7-8 and
+  `scripts/capture_docs_screenshots.py`'s fixtures still used the
+  retired `/plates`, `/crops/{id}/plate`, `/plate_meta` routes and
+  `plate_*` fields; they now use `/regions`, `/crops/{id}/region`,
+  `/region_meta` and `region_*`. The runbook's region gallery class comes
+  from `--region-class`/`REGION_CLASS`.
 
 - `/train`'s augmentation preset picker offered five ids the trainer
   doesn't have (`outdoor_traffic`, `motorcycle_tilt`, `plates`,

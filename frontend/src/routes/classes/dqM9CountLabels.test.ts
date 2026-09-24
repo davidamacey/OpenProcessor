@@ -3,8 +3,9 @@
  * the same "Total" label was used for two different served numbers —
  * `/classes`' `sample_count` (the class-cluster bucket size) and
  * `/export`'s per-class `stats/classes` count (every crop with that
- * class_id). They can disagree wildly (license_plate: 1,000 vs 0) because
- * plates are sub-boxes on vehicle crops, never a crop's own class_id.
+ * class_id). They can disagree wildly (a region-bound class: thousands vs
+ * 0) because regions are sub-boxes on other items, never a crop's own
+ * class_id.
  * Fixed by labeling each column for what it actually counts.
  */
 import { readFileSync } from 'node:fs';

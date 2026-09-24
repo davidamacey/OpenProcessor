@@ -107,7 +107,7 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
     blurb:
       'Applied only to /review tabs that have no tuned default of their own (today: ' +
       'All, New Class Proposals). Uncertainty, Model Disagreements, COCO Blind Spots ' +
-      'and Plates keep applying their own default sort regardless of this setting.',
+      'and every region tab keep applying their own default sort regardless of this setting.',
     // Was irreversible (H-1) until the backend added a clear path; the
     // page's "Clear" button now covers this axis like any other.
     irreversibleWarning: null,

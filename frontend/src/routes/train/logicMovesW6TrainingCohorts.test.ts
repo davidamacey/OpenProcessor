@@ -2,7 +2,7 @@
  * W6 training cohorts (docs/design/logic-moves-adoption-plan-2026-09-24.md
  * item 13) — /train's cohort picker sources its definitions from
  * `GET {API_PREFIX}/training_cohorts?class_id=`, not the client-only
- * `cohortsForClass()` (CORE_COHORTS + hardcoded licensePlateSlot modes).
+ * `cohortsForClass()` (CORE_COHORTS + a slot's hand-declared modes).
  * This repo has no component-mount harness (see
  * clusters/[id]/clusterMoveRace.test.ts's doc comment), so this is a
  * static source scan, same convention as datasetExportGate.test.ts.

@@ -8,9 +8,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotCard from './SlotCard.svelte';
-import type { PlateBrowseItem } from '$lib/api';
+import type { RegionBrowseItem } from '$lib/api';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 
-function fakePlateItem(overrides: Partial<PlateBrowseItem> = {}): PlateBrowseItem {
+function fakeRegionItem(overrides: Partial<RegionBrowseItem> = {}): RegionBrowseItem {
   return {
     crop_id: 'c1',
     id: 'c1',
@@ -21,7 +22,7 @@ function fakePlateItem(overrides: Partial<PlateBrowseItem> = {}): PlateBrowseIte
     region_status: 'detected',
     region_verified: true,
     region_validated: true,
-    region_detector: 'lpr_nanov11_640',
+    region_detector: 'tag_detector_v1',
     region_detector_version: null,
     region_detector_chain: null,
     region_bbox_frame: 'source',
@@ -31,7 +32,7 @@ function fakePlateItem(overrides: Partial<PlateBrowseItem> = {}): PlateBrowseIte
     region_verified_at: null,
     region_rejection_reason: null,
     region_visible: true,
-    region_text: 'ABC123',
+    region_text: 'TAG-001',
     region_text_source: 'ocr',
     region_text_confidence: 0.8,
     class_id: 3,
@@ -39,16 +40,16 @@ function fakePlateItem(overrides: Partial<PlateBrowseItem> = {}): PlateBrowseIte
     cluster_id: null,
     updated_at: '',
     ...overrides,
-  } as PlateBrowseItem;
+  } as RegionBrowseItem;
 }
 
 let target: HTMLDivElement;
 let instance: unknown;
 
-function renderCard(crop: PlateBrowseItem) {
+function renderCard(crop: RegionBrowseItem) {
   target = document.createElement('div');
   document.body.appendChild(target);
-  instance = mount(SlotCard, { target, props: { crop } });
+  instance = mount(SlotCard, { target, props: { crop, slot: widgetTagSlot } });
   flushSync();
   return target;
 }
@@ -63,17 +64,17 @@ afterEach(() => {
 
 describe('SlotCard — reader disagreement flag', () => {
   it('renders the ⚠ disagree chip when region_text_disagreement is true', () => {
-    const el = renderCard(fakePlateItem({ region_text_disagreement: true } as never));
+    const el = renderCard(fakeRegionItem({ region_text_disagreement: true } as never));
     expect(el.textContent).toContain('⚠ disagree');
   });
 
   it('does not render the chip when region_text_disagreement is false', () => {
-    const el = renderCard(fakePlateItem({ region_text_disagreement: false } as never));
+    const el = renderCard(fakeRegionItem({ region_text_disagreement: false } as never));
     expect(el.textContent).not.toContain('⚠ disagree');
   });
 
   it('does not render the chip when region_text_disagreement is absent', () => {
-    const el = renderCard(fakePlateItem());
+    const el = renderCard(fakeRegionItem());
     expect(el.textContent).not.toContain('⚠ disagree');
   });
 });

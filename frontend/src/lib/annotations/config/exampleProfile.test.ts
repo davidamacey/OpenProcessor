@@ -15,7 +15,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseProfileDocument } from './parseSlotConfig';
 import { resolveSlotRegistry } from '../registry';
 import { builtinSlots } from '../registeredSlots';
-import { licensePlateSlot } from '../profiles/licensePlate';
 import { buildReviewTabs } from '../../reviewTabs';
 import { buildSlotKeymap } from '../../review/slotKeymap';
 import { reservedHotkeyLetters } from '../../classHotkey';
@@ -45,8 +44,10 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
 
   it('2. merges over the built-in without disturbing it (identity, not equality)', () => {
     expect(mergeWarnings).toEqual([]);
-    expect(registry.all).toHaveLength(2);
-    expect(registry.byKey('license_plate')).toBe(licensePlateSlot);
+    expect(registry.all).toHaveLength(builtinSlots.length + 1);
+    for (const builtin of builtinSlots) {
+      expect(registry.byKey(builtin.key)).toBe(builtin);
+    }
     expect(registry.byKey('pallet_label')).toBeDefined();
   });
 
@@ -60,7 +61,9 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
   const tabs = buildReviewTabs(registry.all);
 
   it('4. buildReviewTabs produces two tabs, the new one shaped correctly', () => {
-    expect(tabs).toHaveLength(2);
+    expect(tabs).toHaveLength(
+      builtinSlots.filter((s) => s.capabilities.queue).length + 1,
+    );
     const palletTab = tabs.find((t) => t.id === 'slot:pallet_label');
     expect(palletTab).toBeDefined();
     expect(palletTab!.urlId).toBe('pallet_labels');
@@ -125,7 +128,7 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
       label_text: '000123456700000000',
       label_text_source: 'gemma',
       label_detector: 'sam3',
-      label_detector_chain: ['lpr_nanov11_640:miss', 'sam3:hit'],
+      label_detector_chain: ['tag_detector_v1:miss', 'sam3:hit'],
       label_status: 'false_positive',
       label_verified: false,
     };

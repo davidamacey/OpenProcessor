@@ -33,12 +33,12 @@ afterEach(() => {
 
 const PAYLOAD = {
   detectors: [
-    { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
+    { id: 'tag_detector_v1', label: 'Tag detector', role: 'detector', filterable: true },
     { id: 'sam3', label: 'SAM3', role: 'segmenter', filterable: true },
     { id: 'human', label: 'Human', role: 'human', filterable: false },
   ],
   region_sources: [
-    { id: 'lpr_frozen_test_sample', label: 'LPR frozen test', role: 'human' },
+    { id: 'tag_holdout_sample', label: 'Tag holdout sample', role: 'human' },
   ],
   chain_actors: [{ id: 'gemma-4-e4b', label: 'Gemma', role: 'verifier' }],
 };
@@ -61,7 +61,7 @@ describe('regionVocabularyStore.init', () => {
     await regionVocabularyStore.init();
 
     expect(regionVocabularyStore.filterableDetectors.map((d) => d.id)).toEqual([
-      'lpr_nanov11_640',
+      'tag_detector_v1',
       'sam3',
     ]);
   });
@@ -71,8 +71,8 @@ describe('regionVocabularyStore.init', () => {
 
     await regionVocabularyStore.init();
 
-    expect(regionVocabularyStore.labelFor('lpr_nanov11_640')).toBe('LPR');
-    expect(regionVocabularyStore.roleFor('lpr_nanov11_640')).toBe('detector');
+    expect(regionVocabularyStore.labelFor('tag_detector_v1')).toBe('Tag detector');
+    expect(regionVocabularyStore.roleFor('tag_detector_v1')).toBe('detector');
     // chain_actors entry
     expect(regionVocabularyStore.labelFor('gemma-4-e4b')).toBe('Gemma');
     expect(regionVocabularyStore.roleFor('gemma-4-e4b')).toBe('verifier');

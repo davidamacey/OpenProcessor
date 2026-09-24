@@ -32,19 +32,20 @@ from typing import Any
 import pytest
 
 from conftest import is_allowlisted_bad_response
+from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID
 
 # (path, a selector proving the route actually mounted its real content,
 # not just an empty shell / loading spinner).
 ROUTES: list[tuple[str, str]] = [
     ("/dashboard", 'h1:has-text("Dashboard")'),
     ("/clusters", 'h1:has-text("Clusters")'),
-    ("/clusters?class=license_plate", 'h1:has-text("Clusters")'),
+    (f"/clusters?class={REGION_CLASS}", 'h1:has-text("Clusters")'),
     ("/review?tab=all", '[data-testid="queue-counter"]'),
     ("/review?tab=uncertainty", '[data-testid="queue-counter"]'),
     ("/review?tab=model_disagreements", '[data-testid="queue-counter"]'),
     ("/review?tab=coco_blind_spots", '[data-testid="queue-counter"]'),
     ("/review?tab=new_class_proposals", '[data-testid="queue-counter"]'),
-    ("/review?tab=plates", '[data-testid="queue-counter"]'),
+    (f"/review?tab={REGION_TAB_URL_ID}", '[data-testid="queue-counter"]'),
     ("/classes", 'h1:has-text("Class management")'),
     ("/export", 'h1:has-text("Export dataset")'),
     ("/train", 'h1:has-text("Train model")'),

@@ -3,8 +3,8 @@ import { validatePathTemplate, renderPathTemplate } from './templatePath';
 
 describe('validatePathTemplate', () => {
   it('accepts a plain prefix-relative path', () => {
-    const r = validatePathTemplate('/crops/x/plate');
-    expect(r.template).toBe('/crops/x/plate');
+    const r = validatePathTemplate('/crops/x/tag');
+    expect(r.template).toBe('/crops/x/tag');
     expect(r.placeholders).toEqual([]);
   });
 
@@ -60,7 +60,7 @@ describe('renderPathTemplate', () => {
   });
 
   it('encodeURIComponents a hostile crop id', () => {
-    const t = '/crops/{cropId}/plate';
-    expect(renderPathTemplate(t, { cropId: 'a/b?c' })).toBe('/crops/a%2Fb%3Fc/plate');
+    const t = '/crops/{cropId}/tag';
+    expect(renderPathTemplate(t, { cropId: 'a/b?c' })).toBe('/crops/a%2Fb%3Fc/tag');
   });
 });

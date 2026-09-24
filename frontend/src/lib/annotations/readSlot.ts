@@ -116,7 +116,7 @@ export function readSlot(
     const frame: SlotFrame =
       frameRaw === 'parent' || frameRaw === 'source' ? frameRaw : cap.subBox.storedFrame;
     // Prefer the server's own parent-frame projection when it sent one
-    // (plates: region_bbox_in_parent) over projecting rawXyxy ourselves —
+    // (regions: region_bbox_in_parent) over projecting rawXyxy ourselves —
     // one less place client and server geometry can disagree.
     const servedParentXyxy = cap.subBox.bboxInParentField
       ? asXyxy(pick(raw, cap.subBox.bboxInParentField))

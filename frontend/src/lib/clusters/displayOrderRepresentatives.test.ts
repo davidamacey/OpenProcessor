@@ -25,7 +25,7 @@ describe('idsNeedingRepresentatives (DQ-M4)', () => {
     expect(idsNeedingRepresentatives(displayOrder, 0, 4)).toEqual([40, 30]);
   });
 
-  it('never asks for the synthetic license_plate card (no real cluster_id to query)', () => {
+  it('never asks for the synthetic widget_tag card (no real cluster_id to query)', () => {
     const list = [card(1, [], true), card(2)];
     expect(idsNeedingRepresentatives(list, 0, 2)).toEqual([2]);
   });

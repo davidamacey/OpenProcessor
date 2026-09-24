@@ -36,7 +36,7 @@ describe('StrategyBar.svelte', () => {
 describe('routes wired to <StrategyBar> keep their keydown listener count unchanged', () => {
   it('review/+page.svelte still has exactly the one pre-existing window keydown forward', () => {
     // Pre-existing (not introduced by this phase): forwards arrow/[/]/
-    // Backspace keys into the plate bbox canvas while in edit mode. If
+    // Backspace keys into the region bbox canvas while in edit mode. If
     // wiring in <StrategyBar> ever adds a second window.addEventListener
     // call here, this catches it.
     const src = read('../../routes/review/+page.svelte');

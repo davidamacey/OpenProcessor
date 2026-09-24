@@ -54,9 +54,8 @@
   let mergePreviewBusy = $state<boolean>(false);
 
   // ---- reserved-hotkey conflicts ------------------------------------------
-  // A class's bound hotkey can predate a later reservation (live example,
-  // 2026-09-24: `bmw` is bound to `b`, which the backend now reserves for
-  // the license_plate slot's keymap). The backend keeps the existing
+  // A class's bound hotkey can predate a later reservation (e.g. a class
+  // bound to `b` before the backend reserved `b` for a slot's keymap). The backend keeps the existing
   // binding rather than silently clearing it, so surface it here instead of
   // hiding the conflict.
   const reservedConflicts = $derived.by(() => {
@@ -664,10 +663,10 @@
                  class-cluster bucket size (what /clusters/{id} shows as
                  "in cluster"), NOT the same number as /export's "Total"
                  column (GET /stats/classes, every crop with that
-                 class_id). They can legitimately disagree a lot —
-                 license_plate is 1,000 here (plate sub-boxes counted in
-                 the cluster bucket) but 0 on /export (no crop's own
-                 class_id is literally "license_plate"). -->
+                 class_id). They can legitimately disagree a lot — a
+                 region-bound class can count region boxes (sub-boxes
+                 counted in the cluster bucket) here but 0 on /export (no
+                 crop's own class_id is the region class). -->
             <th
               class="px-3 py-2 text-right font-medium"
               title="Class-cluster bucket size (sample_count) — matches the per-cluster page's &quot;in cluster&quot; count. Not the same as /export's Total column."

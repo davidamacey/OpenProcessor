@@ -151,7 +151,7 @@
     hpPatience = (def.patience as number | undefined) ?? null;
   }
 
-  // The LPR export is single-class (nc=1, license_plate). Collapse to one
+  // A single-class export (nc=1) is one class. Collapse to one
   // class so the run never depends on the multi-class registry.
   $effect(() => {
     if (singleClassExport) singleCls = true;
@@ -195,9 +195,9 @@
       model_size: modelSize,
       profile: profileName,
       cuda_visible_devices: cudaDevices || undefined,
-      // The LPR export is already a single-class (class 0) dataset, so never
-      // filter it by the multi-class registry ids (e.g. license_plate=80) —
-      // that drops every label. Send no class subset for LPR runs.
+      // A single-class export is already a class-0 dataset, so never filter
+      // it by the multi-class registry ids — that drops every label. Send
+      // no class subset for single-class runs.
       include_classes: singleClassExport ? null : selectedClasses,
       single_cls: singleClassExport ? true : singleCls,
       hyperparameters: buildHyperparameters(),
@@ -379,7 +379,7 @@
        single-class export (`include_classes`/`single_cls` are already
        forced above regardless of any selection here), so it showed "All
        84 classes · N validated crops" for the vehicle registry even
-       while training the single-class LPR plate dataset. Replaced with a
+       while training a single-class dataset. Replaced with a
        plain note instead of an interactive picker that has no effect. -->
   {#if singleClassExport}
     <p

@@ -16,7 +16,7 @@
  * which string someone reaches for. Keep both — neither subsumes the
  * other.
  *
- * Sibling guard: `plateThumbUrlScan.test.ts` pins the region-thumbnail
+ * Sibling guard: `regionThumbUrlScan.test.ts` pins the region-thumbnail
  * path *segment*. Different concern, different exclusions.
  */
 
@@ -116,9 +116,7 @@ describe('no bare /curation literal composes a URL outside api.ts', () => {
     expect(scanned).toContain(path.join('lib', 'api.ts'));
     expect(scanned).toContain(path.join('lib', 'sse.ts'));
     expect(scanned).toContain(path.join('routes', 'export', '+page.svelte'));
-    expect(scanned).toContain(
-      path.join('lib', 'annotations', 'profiles', 'licensePlate.ts'),
-    );
+    expect(scanned).toContain(path.join('lib', 'annotations', 'registeredSlots.ts'));
   });
 
   it('finds zero offenders', () => {

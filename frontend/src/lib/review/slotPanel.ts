@@ -18,9 +18,7 @@ import type { RegionStatusEntry } from '../api';
  * deployment's `GET {API_PREFIX}/regions/statuses` vocabulary (`served`)
  * is available — falling back to the profile's own declared
  * `capabilities.lifecycle.states` only when it isn't (endpoint absent,
- * or `regionStatusesStore` hasn't loaded yet). Replaces
- * review/+page.svelte's PLATE_STATUS_OPTIONS, which read a
- * directly-imported licensePlateSlot regardless of the active tab.
+ * or `regionStatusesStore` hasn't loaded yet).
  */
 export function humanWritableStates(
   spec: SlotSpec,
@@ -60,9 +58,9 @@ export function statusClearsBox(
  * `served` is available; otherwise falls back to the profile's role ===
  * 'rejected' | 'absent' heuristic.
  *
- * For licensePlateSlot the fallback yields exactly {verify_rejected,
- * no_plate_visible} — pinned in slotPanel.test.ts as the no-regression
- * proof.
+ * For a slot declaring the standard region lifecycle the fallback yields
+ * exactly {verify_rejected, no_region_visible} — pinned in
+ * slotPanel.test.ts.
  */
 export function statusWantsRejectionReason(
   spec: SlotSpec,

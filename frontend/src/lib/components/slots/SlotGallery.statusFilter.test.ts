@@ -1,5 +1,5 @@
 /**
- * dq-region (2026-09-24): SlotGallery's plate-gallery gained a Status
+ * dq-region (2026-09-24): SlotGallery's region-gallery gained a Status
  * filter backed by `GET {API_PREFIX}/regions?status=` — options are the
  * served region-status vocabulary (`GET {API_PREFIX}/regions/statuses`,
  * `regionStatusesStore`), not a hardcoded list, mirroring the Detector
@@ -9,15 +9,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotGallery from './SlotGallery.svelte';
-import { createPlateGalleryController } from '../../../routes/clusters/plateGalleryController.svelte';
+import { createSlotGalleryController } from '../../../routes/clusters/slotGalleryController.svelte';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 vi.mock('$lib/api', async () => {
   const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
-  return { ...actual, getPlateClusters: vi.fn(), getPlates: vi.fn() };
+  return { ...actual, getRegionClusters: vi.fn(), getRegions: vi.fn() };
 });
-import { getPlateClusters } from '$lib/api';
+import { getRegionClusters } from '$lib/api';
 
 let target: HTMLDivElement;
 let instance: unknown;
@@ -34,7 +35,7 @@ function resetStores(): void {
   regionStatusesStore.loaded = false;
 }
 
-function renderGallery(gallery: ReturnType<typeof createPlateGalleryController>) {
+function renderGallery(gallery: ReturnType<typeof createSlotGalleryController>) {
   target = document.createElement('div');
   document.body.appendChild(target);
   instance = mount(SlotGallery, { target, props: { gallery } } as never);
@@ -87,9 +88,9 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
         wants_reason: false,
       },
     ];
-    vi.mocked(getPlateClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createPlateGalleryController();
-    await gallery.loadPlateClusters();
+    vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    await gallery.loadClusters();
     const el = renderGallery(gallery);
 
     const select = statusSelect(el);
@@ -100,16 +101,16 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
   });
 
   it('renders only the "any" option when the status vocabulary is empty', async () => {
-    vi.mocked(getPlateClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createPlateGalleryController();
-    await gallery.loadPlateClusters();
+    vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    await gallery.loadClusters();
     const el = renderGallery(gallery);
 
     const select = statusSelect(el);
     expect([...select.options].map((o) => o.value)).toEqual(['']);
   });
 
-  it('picking a status sets gallery.plateStatusFilter (the value plateQuery forwards to ?status=)', async () => {
+  it('picking a status sets gallery.statusFilter (the value browseQuery forwards to ?status=)', async () => {
     regionStatusesStore.list = [
       {
         value: 'verify_rejected',
@@ -121,9 +122,9 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
         wants_reason: false,
       },
     ];
-    vi.mocked(getPlateClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createPlateGalleryController();
-    await gallery.loadPlateClusters();
+    vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    await gallery.loadClusters();
     const el = renderGallery(gallery);
 
     const select = statusSelect(el);
@@ -131,6 +132,6 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
     select.dispatchEvent(new Event('change'));
     flushSync();
 
-    expect(gallery.plateStatusFilter).toBe('verify_rejected');
+    expect(gallery.statusFilter).toBe('verify_rejected');
   });
 });

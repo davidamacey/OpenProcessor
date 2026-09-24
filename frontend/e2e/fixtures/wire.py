@@ -37,6 +37,17 @@ REGION_STATUS_VALUES = [
 
 _BBOX = [0.1, 0.2, 0.6, 0.8]
 
+# The region slot as the app build registers it: its bound class name and
+# its review tab's `?tab=` bookmark id. These are the built-in example
+# profile's values until audit steps 9-10
+# (docs/design/domain-neutral-audit-2026-09-24.md) replace the built-in
+# with the served `widget_tag` region profile; this is the one place e2e
+# names them. The tab's LABEL is served (conftest.py's default
+# `/review/tabs`), so tests find the tab by REGION_TAB_LABEL.
+REGION_CLASS = "license_plate"
+REGION_TAB_URL_ID = "plates"
+REGION_TAB_LABEL = "Widget tags"
+
 # Every non-default value below is distinct on purpose (same rationale as
 # makeItem.ts): a mapping bug that drops a field to a hardcoded default is
 # visible via a plain equality check on the field, not just "the UI looked
@@ -90,7 +101,7 @@ _EXPLICIT: dict[str, Any] = {
     "excluded_reason": None,
     "excluded_at": None,
     "review_dismissed_at": None,
-    "source": "lpr_frozen_test_sample",
+    "source": "tag_holdout_sample",
     "test_holdout": False,
     "crop_rank_in_image": 2,
     "crop_area_norm": 0.19,
@@ -119,44 +130,44 @@ _EXPLICIT: dict[str, Any] = {
     "region_confidence": 0.91,
     "region_reason": "uncertainty",
     "region_rejection_reason": None,
-    "region_text": "ABC123",
-    "region_text_raw": "ABC-123",
+    "region_text": "TAG-001",
+    "region_text_raw": "TAG 001",
     "region_text_confidence": 0.66,
     "region_text_source": "vlm",
-    "region_text_engine_version": "gemma-4-e4b",
-    "region_text_vlm": "ABC123",
-    "region_text_ocr": "ABC128",
+    "region_text_engine_version": "tag_reader-1",
+    "region_text_vlm": "TAG-001",
+    "region_text_ocr": "TAG-008",
     "region_text_disagreement": True,
     "region_validated": True,
     "region_verified": True,
     "region_verified_at": "2026-04-05T06:07:08Z",
-    "region_verifier": "gemma-4-e4b",
+    "region_verifier": "tag_verifier",
     "region_verifier_version": "1.0.0",
     "region_visible": True,
-    "region_detector": "lpr_nanov11_640",
+    "region_detector": "tag_detector_v1",
     "region_detector_version": "11.0.2",
-    "region_detector_chain": ["lpr_nanov11_640:miss", "sam3:hit", "sam3:vlm_verify_ok"],
+    "region_detector_chain": ["tag_detector_v1:miss", "tag_segmenter:hit", "tag_segmenter:vlm_verify_ok"],
     "region_detected_at": "2026-05-06T07:08:09Z",
     "region_cluster_id": 23,
     "region_cluster_subid": "9b",
     "region_cluster_distance": 0.41,
     "region_class_id": 42,
     "region_label_source": "human",
-    "region_source": "lpr_frozen_test_sample",
+    "region_source": "tag_holdout_sample",
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
     # Backend main f7171cc (dq-region), adopted on the frontend by
-    # readSlot/licensePlateSlot (SlotData.text.choice/invalidReason,
+    # readSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
     # autoConfirmed) and /review's candidate-box confirm flow. See
-    # test_plate_verify_rejected_confirm.py / test_plate_status_filter.py.
+    # test_region_verify_rejected_confirm.py / test_region_gallery_status_filter.py.
     "region_text_choice": "vlm_preferred",  # one of region_text.TEXT_CHOICES
     "region_text_vlm_invalid": None,
     "region_auto_confirmed": True,
     "region_candidate_bbox_norm": _BBOX,
     "region_candidate_score": 0.42,
-    "region_candidate_detector": "sam3",
+    "region_candidate_detector": "tag_segmenter",
     "region_candidate_detector_version": "3.0.0",
     "region_candidate_source": "segmenter",
     "region_candidate_bbox_in_parent": _BBOX,

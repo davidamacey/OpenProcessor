@@ -19,29 +19,29 @@ function cls(over: Partial<RegistryClass> & { id: number; name: string }): Regis
   };
 }
 
-describe('classesStore.topNForCluster — license_plate is a normal class', () => {
+describe('classesStore.topNForCluster — widget_tag is a normal class', () => {
   afterEach(() => {
     classesStore.classes = [];
   });
 
-  // Hiding license_plate here was reverted 2026-09-12 — it ranks like any
+  // Hiding widget_tag here was reverted 2026-09-12 — it ranks like any
   // other class now.
-  it('ranks license_plate by validated_count like any other class', () => {
+  it('ranks widget_tag by validated_count like any other class', () => {
     classesStore.classes = [
-      cls({ id: 80, name: 'license_plate', validated_count: 999_999 }),
+      cls({ id: 80, name: 'widget_tag', validated_count: 999_999 }),
       cls({ id: 8, name: 'bmw', validated_count: 6 }),
       cls({ id: 4, name: 'audi', validated_count: 2 }),
     ];
     const top = classesStore.topNForCluster(0, 10);
-    expect(top[0]?.name).toBe('license_plate');
+    expect(top[0]?.name).toBe('widget_tag');
   });
 
-  it('a direct by-id lookup resolves license_plate', () => {
+  it('a direct by-id lookup resolves widget_tag', () => {
     classesStore.classes = [
-      cls({ id: 80, name: 'license_plate', validated_count: 999_999 }),
+      cls({ id: 80, name: 'widget_tag', validated_count: 999_999 }),
     ];
-    expect(classesStore.byId(80)?.name).toBe('license_plate');
-    expect(classesStore.byName('license_plate')?.id).toBe(80);
+    expect(classesStore.byId(80)?.name).toBe('widget_tag');
+    expect(classesStore.byName('widget_tag')?.id).toBe(80);
   });
 });
 

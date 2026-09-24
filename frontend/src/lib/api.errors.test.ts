@@ -11,7 +11,7 @@ const body422 = {
     error: "unknown prompt_pack 'nope'",
     axis: 'prompt_pack',
     requested: 'nope',
-    valid_ids: ['generic_item_v1', 'vehicle_plate_v1'],
+    valid_ids: ['generic_item_v1', 'generic_item_v2'],
   },
 };
 
@@ -21,7 +21,7 @@ describe('structured API errors', () => {
     expect(unknownStrategyDetail(e)).toEqual({
       axis: 'prompt_pack',
       requested: 'nope',
-      valid_ids: ['generic_item_v1', 'vehicle_plate_v1'],
+      valid_ids: ['generic_item_v1', 'generic_item_v2'],
     });
   });
 

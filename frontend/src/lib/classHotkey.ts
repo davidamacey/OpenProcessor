@@ -27,9 +27,9 @@ import type { RegistryClass } from '$lib/types';
  * registered slot's keymap letters the server doesn't know about yet — a
  * tier-2 deployment profile registered purely client-side (no backend
  * checkout) has no way to tell the backend about its own keymap. That
- * union is redundant against the built-in `license_plate` slot today
- * (the server's `/abdefgmnuxz` already includes its `d`/`f`/`e`/`b`) but
- * is what keeps a *second*, backend-unaware slot safe without a human
+ * union is redundant for a slot the backend already knows (the server's
+ * reserved set already includes that slot's keymap letters) but is what
+ * keeps a *second*, backend-unaware slot safe without a human
  * re-auditing every class hotkey.
  */
 export function reservedHotkeyLetters(

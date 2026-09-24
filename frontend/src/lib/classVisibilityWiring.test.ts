@@ -1,5 +1,5 @@
 /**
- * Static source-scan regression test for the license_plate assignment-hiding
+ * Static source-scan regression test for the widget_tag assignment-hiding
  * feature. This repo has no @testing-library/svelte (see clusterMoveRace.test.ts
  * / EmbeddingPlot.test.ts for precedent), so wiring correctness is verified by
  * grepping the actual .svelte/.ts sources rather than mounting components.
@@ -10,7 +10,7 @@
  *      a <select> on the cluster-detail page or the embedding plot
  *  (c) the class-SUBSET picker (export/train) does NOT import classVisibility
  *      — an over-application guard, since that surface must keep offering
- *      license_plate for export/training per the task's explicit "do NOT
+ *      widget_tag for export/training per the task's explicit "do NOT
  *      touch" list
  *  (d) the review page's class FILTER dropdown logic is unchanged — it still
  *      filters only on `!c.deprecated`, not through classVisibility
@@ -38,7 +38,7 @@ const ASSIGNMENT_SURFACES = [
   'src/routes/+layout.svelte',
 ];
 
-describe('license_plate assignment-hiding wiring', () => {
+describe('widget_tag assignment-hiding wiring', () => {
   it.each(ASSIGNMENT_SURFACES)('%s imports from $lib/classVisibility', (rel) => {
     const src = read(rel);
     expect(src).toMatch(/from ['"]\$lib\/classVisibility['"]/);

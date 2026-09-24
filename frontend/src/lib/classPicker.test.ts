@@ -80,17 +80,16 @@ describe('searchClasses', () => {
   });
 });
 
-describe('searchClasses — license_plate is a normal assignable class', () => {
-  // Hiding license_plate from assignment search was reverted 2026-09-12
-  // (David: plates get relabeled/added to over time, and the goal is a
-  // future unified vehicle+plate model, so it should stay reachable).
-  it('finds license_plate like any other class', () => {
+describe('searchClasses — widget_tag is a normal assignable class', () => {
+  // Hiding a region-bound class from assignment search was reverted
+  // 2026-09-12: it stays reachable like any other class.
+  it('finds widget_tag like any other class', () => {
     const pool: RegistryClass[] = [
       cls({ id: 8, name: 'bmw', validated_count: 6 }),
-      cls({ id: 80, name: 'license_plate', validated_count: 72 }),
+      cls({ id: 80, name: 'widget_tag', validated_count: 72 }),
     ];
-    const results = searchClasses(pool, 'license_plate');
-    expect(results.map((c) => c.name)).toContain('license_plate');
+    const results = searchClasses(pool, 'widget_tag');
+    expect(results.map((c) => c.name)).toContain('widget_tag');
   });
 });
 

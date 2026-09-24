@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
  * be gated behind `{#if PRIMARY_TABS.includes(effectiveTab)}`, so they
  * appeared only on the Primary·Low-Conf preset chip and the COCO Blind Spots
  * tab and silently vanished everywhere else (All, Uncertainty, Model
- * Disagreements, Plates, Gemma-mismatches chip, Gemma-low-conf chip) — even
+ * Disagreements, Regions, Gemma-mismatches chip, Gemma-low-conf chip) — even
  * though the backend (`review.py`) always treats `max_rank` /
  * `min_blur_ratio` as tab-agnostic ("Both apply across tabs").
  *

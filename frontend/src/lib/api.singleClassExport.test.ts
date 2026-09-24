@@ -11,7 +11,7 @@ import {
   listDatasets,
 } from './api';
 import { datasetExportForSlot } from './annotations/datasetExport';
-import { licensePlateSlot } from './annotations/profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 
 const ok = (body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -23,7 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const spec = datasetExportForSlot(licensePlateSlot)!;
+const spec = datasetExportForSlot(widgetTagSlot)!;
 
 describe('single-class export wiring', () => {
   it("POSTs to the spec's buildPath with the slot's profile fields plus the options", async () => {
@@ -43,9 +43,9 @@ describe('single-class export wiring', () => {
     expect(url).toBe(`${API_PREFIX}/export/single_class`);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
-      profile_name: 'license_plate',
+      profile_name: 'widget_tag',
       box_source: 'region',
-      region_class_name: 'license_plate',
+      region_class_name: 'widget_tag',
       class_ids: [],
       image_mode: 'item_crop',
       img_max_side: 640,
@@ -58,7 +58,7 @@ describe('single-class export wiring', () => {
     vi.stubGlobal('fetch', fetchMock);
     await exportSingleClassStatus(spec);
     expect(fetchMock.mock.calls[0]![0]).toBe(
-      `${API_PREFIX}/export/single_class/status?profile_name=license_plate`,
+      `${API_PREFIX}/export/single_class/status?profile_name=widget_tag`,
     );
   });
 
@@ -67,10 +67,10 @@ describe('single-class export wiring', () => {
       .fn()
       .mockImplementation(() => Promise.resolve(ok({ datasets: [], count: 0 })));
     vi.stubGlobal('fetch', fetchMock);
-    await listDatasets({ kind: 'single_class', profile_name: 'license_plate' });
+    await listDatasets({ kind: 'single_class', profile_name: 'widget_tag' });
     await listDatasets();
     expect(fetchMock.mock.calls[0]![0]).toBe(
-      `${API_PREFIX}/export/datasets?kind=single_class&profile_name=license_plate`,
+      `${API_PREFIX}/export/datasets?kind=single_class&profile_name=widget_tag`,
     );
     expect(fetchMock.mock.calls[1]![0]).toBe(`${API_PREFIX}/export/datasets`);
   });

@@ -9,7 +9,7 @@
  *    the plan as an easy-to-miss regression: forgetting this leaves
  *    /clusters eating drops after the user backs out of search)
  *  - forcing the embedding-plot toggle off when search activates,
- *    mirroring the existing isLicensePlateFilter guard
+ *    mirroring the existing isSlotFilter guard
  *  - the mode-switch branch rendering before the existing card-grid
  *    `{:else}`, matching the showEmbeddingViz precedent
  *  - M (move) and AHC grouping are NOT wired for search-mode label
@@ -60,7 +60,7 @@ describe('/clusters search mode', () => {
     expect(body).toMatch(/return \(\) => \{\s*offDrop\(\);/);
   });
 
-  it('forces showEmbeddingViz off when search mode activates, same guard idiom as isLicensePlateFilter', () => {
+  it('forces showEmbeddingViz off when search mode activates, same guard idiom as isSlotFilter', () => {
     expect(src).toMatch(/if \(showEmbeddingViz\) showEmbeddingViz = false;/);
   });
 

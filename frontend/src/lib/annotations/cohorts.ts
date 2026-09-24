@@ -4,16 +4,14 @@
  * §9.2, addendum 2026-09-14). Deliberately NOT a general query
  * language: the union below has exactly two arms, and the `predicate`
  * arm's operator set is closed at the four operators every existing
- * LPR training-candidate mode actually uses (§9.1's mode table).
+ * region training-candidate mode actually uses (§9.1's mode table).
  *
  * Tier 1 (`endpoint`) requires NO backend change — it is today's
  * `?mode=` call (or `GET {API_PREFIX}/crops`'s existing class-agnostic params)
  * expressed as data. Tier 2 (`predicate`) is the H5 contract offer
  * (§9.4) and is gated at runtime, exactly like the `diverse`/
  * `viz_projection` overlays in `strategies.ts`: invisible until the
- * backend says it exists. **Nothing in this file is imported by
- * application code yet** — P2.12 ships the mechanism ahead of P2.13/14
- * wiring it into `licensePlateSlot` and `/train`.
+ * backend says it exists.
  */
 
 import type { SlotKey, SlotSpec, WireField } from './types';
@@ -59,8 +57,8 @@ export interface CohortPredicateQuery {
 export type CohortQuery = CohortEndpointQuery | CohortPredicateQuery;
 
 export interface CohortSpec {
-  /** Stable id. For the five LPR cohorts this MUST equal the existing
-   *  backend `mode` string so the call is byte-identical (§9.2.3). */
+  /** Stable id. For a region training-candidate cohort this MUST equal
+   *  the backend `mode` string so the call is byte-identical (§9.2.3). */
   id: string;
   label: string;
   description: string;
@@ -80,9 +78,9 @@ export interface CohortSpec {
 export interface TrainingCohortsCapability {
   /**
    * Explicit cohorts for this slot. These are REPLACEMENTS-by-id for
-   * anything `derivedCohorts()` would derive — which is how
-   * license_plate keeps its five hand-tuned server-side modes instead
-   * of getting the weaker generic versions.
+   * anything `derivedCohorts()` would derive — which is how a slot keeps
+   * its own hand-tuned server-side modes instead of getting the weaker
+   * generic versions.
    */
   cohorts: CohortSpec[];
   /**
@@ -283,17 +281,13 @@ function compiled(spec: CohortSpec, ctx: CohortContext): CohortSpec {
  * to answer today (§9.1's mode table + §9.2.2's CORE_COHORTS), keyed by
  * a compiled query's final path segment rather than the whole path.
  *
- * Replaces the former `path === '/plates/training_candidates'`
- * string-equality dispatch (Wave 2 C12,
- * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §10). That
- * check silently broke two ways: (1) it hardcoded the `/plates` base,
- * so the backend's `/plates` → `/regions` rename would have made every
- * license_plate cohort preview return `{total: 0, items: []}` with no
- * error; (2) a second slot's endpoint cohort under any other base path
- * (e.g. a tier-2 profile's `/widgets/training_candidates`) fell through
- * to the same silent empty result. Matching the last segment fixes both
- * — the dispatch no longer cares what the base path is, only what kind
- * of endpoint it names.
+ * Matching the last segment rather than the whole path (Wave 2 C12,
+ * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §10) means a
+ * backend base-path rename, or a second slot's endpoint cohort under
+ * another base path (e.g. a tier-2 profile's
+ * `/widgets/training_candidates`), still dispatches instead of silently
+ * returning `{total: 0, items: []}` — the dispatch cares only what kind
+ * of endpoint a path names.
  */
 export type CohortEndpointKind = 'training_candidates' | 'crops' | 'model_disagreements';
 

@@ -1,20 +1,20 @@
 /**
  * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
- * `savePlateBbox` used to re-PUT the box via `setCropPlate` even though
+ * `saveBox` used to re-PUT the box a second time even though
  * `SlotBboxEditor` had already saved it via `setSlotBox` — a redundant
- * double-write on every plate-gallery bbox save. It is now a pure local
+ * double-write on every region-gallery bbox save. It is now a pure local
  * patch off the server's own returned item: no network call, no `fetch`
- * stub needed, which is itself part of the proof (a lingering
- * `setCropPlate` call would require one), and no client-side
- * confirmed-vs-rejected derivation — it renders `item.slots.license_plate`
+ * stub needed, which is itself part of the proof (a lingering second
+ * write would require one), and no client-side
+ * confirmed-vs-rejected derivation — it renders `item.slots.widget_tag`
  * verbatim.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createPlateGalleryController } from './plateGalleryController.svelte';
-import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+import { createSlotGalleryController } from './slotGalleryController.svelte';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Crop } from '$lib/types';
 import type { SlotData } from '$lib/annotations/types';
-import type { PlateBrowseItem } from '$lib/api';
+import type { RegionBrowseItem } from '$lib/api';
 
 function fakeCropWithSlot(id: string, slot: SlotData): Crop {
   return {
@@ -22,7 +22,7 @@ function fakeCropWithSlot(id: string, slot: SlotData): Crop {
     source_image_path: '/img.jpg',
     bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
     class_id: 3,
-    class_name: 'license_plate',
+    class_name: 'widget_tag',
     class_source: null,
     label_source: 'human',
     label_validated: true,
@@ -32,11 +32,11 @@ function fakeCropWithSlot(id: string, slot: SlotData): Crop {
     cluster_subid: null,
     test_holdout: false,
     updated_at: '',
-    slots: { [licensePlateSlot.key]: slot },
+    slots: { [widgetTagSlot.key]: slot },
   } as Crop;
 }
 
-function fakePlateItem(id: string): PlateBrowseItem {
+function fakeRegionItem(id: string): RegionBrowseItem {
   return {
     crop_id: id,
     id,
@@ -61,24 +61,24 @@ function fakePlateItem(id: string): PlateBrowseItem {
     region_text_source: null,
     region_text_confidence: null,
     class_id: 3,
-    class_name: 'license_plate',
+    class_name: 'widget_tag',
     cluster_id: null,
     updated_at: '',
-  } as PlateBrowseItem;
+  } as RegionBrowseItem;
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('savePlateBbox — no redundant write', () => {
+describe('saveBox — no redundant write', () => {
   it('patches the local pager item from the returned item and never calls fetch', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const gallery = createPlateGalleryController();
-    gallery.editPlateCrop = fakeCropWithSlot('c1', {
-      key: licensePlateSlot.key,
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    gallery.editCrop = fakeCropWithSlot('c1', {
+      key: widgetTagSlot.key,
       subBox: {
         rawXyxy: [0.4, 0.45, 0.6, 0.55],
         frame: 'source',
@@ -97,13 +97,13 @@ describe('savePlateBbox — no redundant write', () => {
         boxCorrect: null,
       },
     });
-    gallery.platePager.items = [fakePlateItem('c1')];
+    gallery.pager.items = [fakeRegionItem('c1')];
 
-    gallery.savePlateBbox(gallery.editPlateCrop);
+    gallery.saveBox(gallery.editCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(gallery.editPlateCrop).toBeNull();
-    const patched = gallery.platePager.items.find((p) => p.crop_id === 'c1');
+    expect(gallery.editCrop).toBeNull();
+    const patched = gallery.pager.items.find((p) => p.crop_id === 'c1');
     expect(patched?.region_status).toBe('detected');
     expect(patched?.region_verified).toBe(true);
     expect(patched?.region_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
@@ -113,9 +113,9 @@ describe('savePlateBbox — no redundant write', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const gallery = createPlateGalleryController();
-    gallery.editPlateCrop = fakeCropWithSlot('c2', {
-      key: licensePlateSlot.key,
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    gallery.editCrop = fakeCropWithSlot('c2', {
+      key: widgetTagSlot.key,
       subBox: {
         rawXyxy: null,
         frame: 'source',
@@ -134,12 +134,12 @@ describe('savePlateBbox — no redundant write', () => {
         boxCorrect: null,
       },
     });
-    gallery.platePager.items = [fakePlateItem('c2')];
+    gallery.pager.items = [fakeRegionItem('c2')];
 
-    gallery.savePlateBbox(gallery.editPlateCrop);
+    gallery.saveBox(gallery.editCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    const patched = gallery.platePager.items.find((p) => p.crop_id === 'c2');
+    const patched = gallery.pager.items.find((p) => p.crop_id === 'c2');
     expect(patched?.region_status).toBe('no_region_visible');
     expect(patched?.region_bbox_norm).toBeNull();
   });

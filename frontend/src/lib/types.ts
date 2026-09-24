@@ -331,7 +331,7 @@ export interface Crop {
    *  Independent of region_validated — a crop can be
    *  `label_validated=true` (region validated) while `class_validated`
    *  is still false, e.g. a v6-model class label on a region a human
-   *  confirmed has no visible plate. */
+   *  confirmed has no visible region. */
   class_validated: boolean;
   label_confidence: number | null;
   /** Confidence of whoever set the *class label* (wire `class_confidence`,
@@ -446,7 +446,7 @@ export interface Crop {
 }
 
 /** Class clusters mirror class_id (0..80); candidate clusters land at
- *  10000+ from the residual AHC pass; unassigned is < 0. The plate view
+ *  10000+ from the residual AHC pass; unassigned is < 0. The region view
  *  also emits "false_positive" for the permanent FP bucket (-100). The
  *  backend derives this from cluster_id; the frontend NEVER recomputes it. */
 export type ClusterKind = 'class' | 'candidate' | 'unassigned' | 'false_positive';
@@ -499,8 +499,8 @@ export interface Cluster {
   is_unlabeled: boolean;
   representative_crop_ids: string[]; // up to 4
   // Optional explicit thumbnail URLs (one per representative_crop_ids
-  // entry, same order). Used by the synthetic license_plate card so its
-  // tiles show plate close-ups (API_PREFIX-relative /crops/{id}/region_thumbnail) rather
+  // entry, same order). Used by the synthetic region card so its
+  // tiles show region close-ups (API_PREFIX-relative /crops/{id}/region_thumbnail) rather
   // than the default vehicle-crop thumbnail. Regular clusters leave
   // this undefined; the grid then falls back to getThumbUrl().
   representative_thumb_urls?: string[];
@@ -511,7 +511,7 @@ export interface Cluster {
   sub_clusters?: number;
   centroid_sha?: string;
   updated_at: string | null;
-  /** Set only on the client-built license_plate inventory entry pinned
+  /** Set only on the client-built region inventory entry pinned
    *  atop `/clusters` (M4, docs/design/interactive-pass-2026-09-24.md) —
    *  it is not a real cluster (no purity, no cluster_kind), so the grid
    *  must not draw a pure/mixed/noisy badge for it or key it against a
@@ -567,11 +567,10 @@ export interface ApiHealth {
 // 'primary_low_conf' are no longer top-level UI tabs but still real
 // values here — they're driven by the All-tab preset chips instead (see
 // $lib/reviewTabs.ts's resolveEffectiveTab).
-// P2.8b (docs/genericization-plan-2026-09-13.md §9.5): 'plates' left this
-// union — a queue-capable slot's tab id is now the structural
-// `slot:${SlotKey}` template (SlotReviewTab) instead of a hand-maintained
-// literal per slot. 'plates' survives only as the `urlId` bookmark value
-// (see `$lib/reviewTabs.ts`'s `tabFromUrlId`), not as an internal id.
+// A queue-capable slot's tab id is the structural `slot:${SlotKey}`
+// template (SlotReviewTab), not a hand-maintained literal per slot. The
+// slot's own `urlId` is the bookmark value (see `$lib/reviewTabs.ts`'s
+// `tabFromUrlId`), not an internal id.
 export type SlotReviewTab = `slot:${string}`;
 
 export type CoreReviewTab =
@@ -673,7 +672,7 @@ export interface PaginatedResponse<T> {
  * existing tab-query builder) which can be pool-scale (the `all` tab is
  * ~320k crops), hence the job/poll contract below. `filters` only
  * supports term/terms filters server-side (`class_id`, `source`) —
- * NOT `conf_min`/`conf_max`/`min_blur_ratio`/`max_rank`/plate `text`.
+ * NOT `conf_min`/`conf_max`/`min_blur_ratio`/`max_rank`/region `text`.
  */
 export interface SelectDiverseScope {
   cluster_id?: number | null;

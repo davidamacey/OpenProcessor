@@ -1,9 +1,9 @@
-"""dq-region (2026-09-24): the /clusters plate gallery gains a Status
+"""dq-region (2026-09-24): the /clusters region gallery gains a Status
 filter (SlotGallery.svelte), backed by GET {API_PREFIX}/regions?status=
 (400 server-side on an unknown value). Options are the served
 GET {API_PREFIX}/regions/statuses vocabulary, not a hardcoded list —
 mirrors the Detector filter's served-vocabulary pattern
-(test_plate_gallery_detector_filter.py). Picking a status must forward
+(test_region_gallery_detector_filter.py). Picking a status must forward
 it as ?status= on the next GET {API_PREFIX}/regions call — proves the
 real browser-rendered <select> actually drives the query, not just
 that it renders.
@@ -11,11 +11,13 @@ that it renders.
 
 from __future__ import annotations
 
+from fixtures.wire import REGION_CLASS
+
 CLASSES = [
     {
         "id": 1,
-        "name": "license_plate",
-        "group": "vehicle",
+        "name": REGION_CLASS,
+        "group": "widgets",
         "hotkey_letter": "l",
         "count": 40,
         "validated_count": 12,
@@ -51,7 +53,7 @@ STATUSES = {
 }
 
 
-def test_plate_status_filter_lists_served_statuses_and_forwards_the_query_param(
+def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param(
     stub, page, app_url
 ):
     region_list_calls: list[str] = []
@@ -67,7 +69,7 @@ def test_plate_status_filter_lists_served_statuses_and_forwards_the_query_param(
 
     stub.on("GET", r"/regions(\?|$)", regions_handler)
 
-    page.goto(f"{app_url}/clusters?class=license_plate")
+    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
 
     select = page.locator('label:has-text("Status") select')
     select.wait_for(timeout=15000)
@@ -88,4 +90,4 @@ def test_plate_status_filter_lists_served_statuses_and_forwards_the_query_param(
     assert any("status=verify_rejected" in url for url in region_list_calls), region_list_calls
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected in the plate status-filter flow: {errors[:3]}"
+    assert not errors, f"no pageerror expected in the region status-filter flow: {errors[:3]}"

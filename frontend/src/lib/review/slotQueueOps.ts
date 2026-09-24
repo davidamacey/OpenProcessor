@@ -1,9 +1,9 @@
 /**
  * Pure queue-mutation helpers extracted from `review/+page.svelte`'s
- * Plates-tab undo/back-navigation logic (P0.1,
+ * slot-tab undo/back-navigation logic (P0.1,
  * docs/genericization-plan-2026-09-13.md §5.1/§5a).
  *
- * These were inline closures over `plateUndoStack`/`queue.items` state;
+ * These were inline closures over the page's undo stack/`queue.items` state;
  * extracted as pure functions so they're independently testable and so
  * Phase 2 can parameterize them by slot without touching the review
  * page's control flow. Behavior is unchanged — every function here is a

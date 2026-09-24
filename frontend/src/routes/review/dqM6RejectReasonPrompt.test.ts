@@ -1,6 +1,6 @@
 /**
  * DQ-m6 (docs/design/data-quality-pass-2026-09-24.md §7 FRONTEND item 7):
- * two findings against the plates/slot review tab.
+ * two findings against the regions/slot review tab.
  *
  *  - "D rejects with no reason prompt" — rejectSlot() DID call
  *    window.prompt() (added by phase-A's m5), but the audit's

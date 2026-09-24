@@ -2,7 +2,7 @@
 
 Takes the first `verify_rejected` crop id off the live backend (skips if
 there is none right now — a live dataset's cohort can be empty),
-opens `/review?tab=plates&region_status=verify_rejected&crop_id=<id>`
+opens `/review?tab=<region tab>&region_status=verify_rejected&crop_id=<id>`
 and asserts the page resolves it: the "Locating crop…" placeholder
 clears, no "not in this review queue" toast appears, and the queue
 counter shows a real rank (not the empty "—" placeholder).
@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from conftest import api_get, wait_for_stable_text
+from fixtures.wire import REGION_TAB_URL_ID
 
 
 def test_deep_link_lands_on_the_requested_crop(guarded_page: Any, live_url: str) -> None:
@@ -26,7 +27,7 @@ def test_deep_link_lands_on_the_requested_crop(guarded_page: Any, live_url: str)
 
     page = guarded_page.page
     page.goto(
-        f"{live_url}/review?tab=plates&region_status=verify_rejected&crop_id={crop_id}",
+        f"{live_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected&crop_id={crop_id}",
         wait_until="domcontentloaded",
     )
 
