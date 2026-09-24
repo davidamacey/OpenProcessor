@@ -89,7 +89,7 @@ def build_cohort_query() -> dict[str, Any]:
     """
     return {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {'class_validated': True}},
                 {'term': {'class_source': 'human'}},
             ]
@@ -108,7 +108,7 @@ async def scan_stratum_crop_ids(
     """
     stratum_query = {
         'bool': {
-            'must': [
+            'filter': [
                 cohort_query,
                 _equals_or_missing('class_id', class_id, _MISSING_CLASS_ID_STRATUM),
                 _equals_or_missing('hdd_source', hdd_source, _MISSING_HOLDOUT_SOURCE_STRATUM),

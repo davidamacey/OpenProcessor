@@ -147,12 +147,12 @@ def _make_search_dispatcher(
             buckets, after_key = strata_pages[idx]
             return _strata_response(buckets, after_key=after_key)
 
-        must = body['query']['bool']['must']
+        filt = body['query']['bool']['filter']
         class_id = next(
-            m['term']['class_id'] for m in must if 'term' in m and 'class_id' in m['term']
+            m['term']['class_id'] for m in filt if 'term' in m and 'class_id' in m['term']
         )
         hdd_source = next(
-            m['term']['hdd_source'] for m in must if 'term' in m and 'hdd_source' in m['term']
+            m['term']['hdd_source'] for m in filt if 'term' in m and 'hdd_source' in m['term']
         )
         if body.get('search_after') is not None:
             return {'hits': {'hits': []}}
@@ -193,7 +193,7 @@ def test_freeze_selects_human_validated_cohort(app_client: Any, fake_opensearch:
     body = call.kwargs['body']
     assert body['query'] == {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {'class_validated': True}},
                 {'term': {'class_source': 'human'}},
             ]
@@ -487,9 +487,9 @@ async def test_fetch_cohort_strata_missing_class_id_and_hdd_source_get_a_stratum
             )
         # Per-stratum scan for the missing-key bucket: assert it queries by
         # must_not exists rather than a literal term match on the sentinel.
-        must = body['query']['bool']['must']
-        assert {'bool': {'must_not': [{'exists': {'field': 'class_id'}}]}} in must
-        assert {'bool': {'must_not': [{'exists': {'field': 'hdd_source'}}]}} in must
+        filt = body['query']['bool']['filter']
+        assert {'bool': {'must_not': [{'exists': {'field': 'class_id'}}]}} in filt
+        assert {'bool': {'must_not': [{'exists': {'field': 'hdd_source'}}]}} in filt
         return {
             'hits': {
                 'hits': [

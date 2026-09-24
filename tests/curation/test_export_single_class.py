@@ -75,7 +75,8 @@ class _FakeOpenSearch:
         """
         if 'function_score' in query:
             query = query['function_score']['query']
-        clauses = query.get('bool', {}).get('must', [])
+        # F-19: status/class_id predicates now live in filter context.
+        clauses = query.get('bool', {}).get('filter', [])
         wanted: set[str] = set()
         for clause in clauses:
             for field_name, values in clause.get('terms', {}).items():
@@ -504,8 +505,8 @@ async def test_region_mode_filters_by_parent_class_ids(tmp_path):
 
     # The parent-class narrowing is pushed into OpenSearch, not applied
     # after scrolling the whole index.
-    must = fake.queries[0]['bool']['must']
-    assert {'terms': {'class_id': [0, 2]}} in must
+    filt = fake.queries[0]['bool']['filter']
+    assert {'terms': {'class_id': [0, 2]}} in filt
 
 
 @pytest.mark.asyncio

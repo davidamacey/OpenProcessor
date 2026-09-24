@@ -290,7 +290,7 @@ class GenericYoloExportService:
         started_at = datetime.now(UTC).isoformat()
         query = {
             'bool': {
-                'must': [{'term': {'class_validated': True}}],
+                'filter': [{'term': {'class_validated': True}}],
                 'must_not': [{'exists': {'field': 'review_dismissed_at'}}],
             }
         }

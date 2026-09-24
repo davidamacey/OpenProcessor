@@ -125,7 +125,7 @@ class RowCollector:
             index=self.config.items_index,
             query={
                 'bool': {
-                    'must': [{'term': {'class_validated': True}}],
+                    'filter': [{'term': {'class_validated': True}}],
                     'must_not': [{'exists': {'field': 'review_dismissed_at'}}],
                 }
             },
@@ -238,10 +238,10 @@ class RowCollector:
 
     def _region_query(self, status_clause: dict[str, Any]) -> dict[str, Any]:
         """Region-status clause, narrowed to the profile's parent classes."""
-        must: list[dict[str, Any]] = [status_clause]
+        filt: list[dict[str, Any]] = [status_clause]
         if self.profile.class_ids:
-            must.append({'terms': {'class_id': list(self.profile.class_ids)}})
-        return {'bool': {'must': must}}
+            filt.append({'terms': {'class_id': list(self.profile.class_ids)}})
+        return {'bool': {'filter': filt}}
 
     def _build_region_rows(
         self, hits: list[dict[str, Any]], *, image_mode: ImageMode
