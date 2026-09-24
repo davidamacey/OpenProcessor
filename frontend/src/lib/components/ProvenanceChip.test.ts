@@ -93,3 +93,25 @@ describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', 
     expect(span.className).toContain('opacity-60');
   });
 });
+
+describe('ProvenanceChip — DQ-p2: long unrecognized ids stay inside the chip, not overflowing it', () => {
+  it('caps the detector/label span with a max-width + truncate rather than letting it render at full nowrap width', () => {
+    const el = renderChip({
+      raw: 'combined_verify_reject:region_visible_elsewhere',
+    });
+    const chip = el.querySelector('span.chip') as HTMLElement;
+    const labelSpan = chip.children[0] as HTMLElement;
+    const tagSpan = chip.children[1] as HTMLElement;
+
+    expect(labelSpan.className).toContain('truncate');
+    expect(labelSpan.className).toMatch(/max-w-\[/);
+    expect(tagSpan.className).toContain('truncate');
+    expect(tagSpan.className).toMatch(/max-w-\[/);
+  });
+
+  it('still carries the full untruncated string in title, for hover', () => {
+    const el = renderChip({ detector: 'combined_verify_reject' });
+    const chip = el.querySelector('span.chip') as HTMLElement;
+    expect(chip.getAttribute('title')).toBe('combined_verify_reject');
+  });
+});

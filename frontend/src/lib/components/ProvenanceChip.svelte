@@ -67,14 +67,30 @@
   const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
 </script>
 
+<!-- DQ-p2 (docs/design/data-quality-pass-2026-09-24.md): the raw form
+     (`raw="combined_verify_reject:region_visible_elsewhere"`, from
+     `region_detector_chain`) renders whatever the vocabulary doesn't
+     recognize verbatim — a long snake_case actor/tag id, sized against
+     the shared `.chip` class's `white-space: nowrap` with no cap, so it
+     overflowed the card edge ("COMBIN…" clipped by the card's own
+     `overflow-hidden`, not a graceful in-chip ellipsis). `max-w-*
+     truncate` on each inner span caps and ellipsizes long text WITHIN
+     the chip's own border instead — the full string is still available
+     via `title` on hover. Scoped to these two inner spans rather than
+     the shared `.chip` class itself, which many short, never-overflowing
+     chips elsewhere (StrategyBar, filter chips) also use. -->
 <span
   class="chip {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
     ? 'opacity-60'
     : ''}"
   title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}
 >
-  <span>{regionVocabularyStore.labelFor(parsed.detector)}</span>
+  <span class="max-w-[140px] truncate"
+    >{regionVocabularyStore.labelFor(parsed.detector)}</span
+  >
   {#if parsed.tag}
-    <span class="text-[9px] uppercase tracking-wide opacity-80">{parsed.tag}</span>
+    <span class="max-w-[140px] truncate text-[9px] uppercase tracking-wide opacity-80">
+      {parsed.tag}
+    </span>
   {/if}
 </span>
