@@ -16,6 +16,13 @@ reports/
 .stryker-tmp/
 __pycache__/
 
+# Stubbed-backend Playwright/pytest e2e suite (docs/design/
+# test-audit-2026-09-24.md recommendation 5) — its own per-project venv,
+# never installed on the host.
+e2e/.venv/
+e2e/.pytest_cache/
+test-results/
+
 # Diagnostic image dumps from /diagnostics scripts (generated per run,
 # not part of the source tree). Keep the scripts and any READMEs.
 diagnostics/**/audit_out/

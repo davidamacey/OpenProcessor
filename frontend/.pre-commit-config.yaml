@@ -53,6 +53,18 @@ repos:
         language: system
         types_or: [javascript, ts, svelte]
 
+  # scripts/ and e2e/ are runbooks and the e2e suite — nothing else lints
+  # or compiles them, so a syntax error would otherwise ship silently
+  # (docs/design/test-audit-2026-09-24.md recommendation 8 / R3 / P2-3).
+  - repo: local
+    hooks:
+      - id: py-compile
+        name: py_compile (scripts/ and e2e/)
+        entry: python3 -m py_compile
+        language: system
+        types: [python]
+        files: ^(scripts|e2e)/.*\.py$
+
   # Contract drift — only when a commit could plausibly introduce drift
   # (the vendored snapshot itself, or the one file that composes every
   # backend URL). Skips harmlessly when ../openprocessor isn't checked out

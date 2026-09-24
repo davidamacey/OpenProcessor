@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- A stubbed-backend end-to-end suite, `e2e/` (pytest + Playwright, its own
+  gitignored `e2e/.venv/`), gated in CI by a new `e2e-stubbed` job and
+  runnable locally via `npm run test:e2e`
+  (docs/design/test-audit-2026-09-24.md recommendations 5 and 8).
+  - `e2e/conftest.py`'s `Stub` fixture routes every `{API_PREFIX}` request
+    and fails **closed**: an unstubbed path gets `501` and is recorded, a
+    request to the retired `/curation/` prefix is intercepted and flagged, and
+    every test asserts at teardown that nothing went unhandled and that
+    at least one stub actually fired — the old
+    `scripts/playwright_*.py` stubs' catch-all `return ok({})` (and their
+    silent fall-through to the real network for anything outside
+    `**/curation/**`) is what let them drift to `/curation/**` for weeks
+    without anyone noticing.
+  - `e2e/fixtures/wire.py`'s `make_item()` builds a full item-wire payload
+    from `contracts/openprocessor/json/item_wire.json` instead of a
+    hand-copied shape, and fails at import time if the vendored contract
+    grows a key it doesn't cover.
+  - Ported and rewrote `scripts/playwright_labeling_flow.py`,
+    `playwright_assist_scope.py`, `playwright_curation_settings.py` and
+    `playwright_tier2_profile.py` as real pytest tests under
+    `e2e/stubbed/` (expectations updated against the current UI; the
+    scripts are deleted).
+  - New coverage that had none before: `/review` Enter-assign then
+    Z-undo (`test_review_actions.py`), `/clusters/[id]` D-discard
+    (`test_cluster_discard.py`), the `/train` GPU picker rendering
+    `GET /train/gpus` (`test_train_gpus.py`), and `/dashboard` rendering
+    "Stats unavailable" on a stats-fetch error without a page error
+    (`test_dashboard_stats.py`).
+- A `py_compile` gate for `scripts/*.py` and `e2e/**/*.py`, in both
+  pre-commit (`py-compile` local hook) and CI (`check` job) — nothing
+  previously compiled or linted the runbook scripts, so a syntax error
+  shipped silently.
+
 ### Changed
 
 - A pre-push hook runs the full vitest suite (`vitest-pre-push` in

@@ -1,0 +1,77 @@
+"""New coverage (docs/design/test-audit-2026-09-24.md recommendation 5):
+`/train` renders the GPU picker from `GET {API_PREFIX}/train/gpus`
+(TrainForm.svelte). A restricted allowlist renders one radio per option,
+preselecting the server's `default: true` entry.
+"""
+
+from __future__ import annotations
+
+CLASSES = [
+    {"id": 1, "name": "ducati", "group": "moto", "hotkey_letter": "k", "count": 10, "validated_count": 5, "cluster_size": 12, "deprecated": False},
+]
+
+GPU_OPTIONS = {
+    "options": [
+        {"value": "1", "gpu_ids": [1], "label": "GPU 1 (RTX 3080 Ti)", "advisory": None, "stops_containers": [], "default": False},
+        {"value": "2", "gpu_ids": [2], "label": "GPU 2 (RTX A6000)", "advisory": "stops the openprocessor container", "stops_containers": ["openprocessor"], "default": True},
+    ],
+    "allowed_ids": [1, 2],
+    "unrestricted": False,
+}
+
+
+def register_train_mount(stub):
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/methods(\?|$)", {"strategies": [], "flags": {}})
+    stub.on("GET", r"/export/status(\?|$)", {"status": "success", "last_run": "2026-09-01T00:00:00Z", "export_dir": "/nas/exports/2026-09-01"})
+    stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
+    stub.on("GET", r"/train/profiles(\?|$)", {"profiles": []})
+    stub.on("GET", r"/train/presets(\?|$)", {"class_subset_presets": []})
+    stub.on("GET", r"/train/runs(\?|$)", {"items": [], "total": 0})
+    stub.on("GET", r"/train/gpus(\?|$)", GPU_OPTIONS)
+    stub.on("GET", r"/train/status(\?|$)", (200, None))
+    stub.on("GET", r"/training_cohorts(\?|$)", {"cohorts": []})
+    stub.on("POST", r"/train/preflight(\?|$)", {"blocked": False, "checks": [], "summary": None})
+
+
+def test_train_gpu_options(stub, page, app_url):
+    register_train_mount(stub)
+
+    page.goto(f"{app_url}/train")
+    page.get_by_text("GPUs", exact=True).first.wait_for(timeout=15000)
+    page.wait_for_timeout(300)
+
+    radios = page.get_by_role("radio")
+    assert radios.count() == 2, f"exactly 2 GPU radios expected, got {radios.count()}"
+    assert page.get_by_text("GPU 1 (RTX 3080 Ti)").count() > 0
+    assert page.get_by_text("GPU 2 (RTX A6000)").count() > 0
+
+    checked = [i for i in range(radios.count()) if radios.nth(i).is_checked()]
+    assert len(checked) == 1, f"exactly one GPU radio should be preselected: {checked}"
+    assert radios.nth(checked[0]).get_attribute("value") == "2", (
+        "the server's default:true option (GPU 2) should be preselected"
+    )
+
+    assert page.get_by_text("stops the openprocessor container").count() > 0, (
+        "the selected option's advisory text should render"
+    )
+
+    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
+    assert not errors, f"no pageerror expected: {errors[:3]}"
+
+
+def test_train_gpu_options_unrestricted(stub, page, app_url):
+    register_train_mount(stub)
+    stub.on("GET", r"/train/gpus(\?|$)", {"options": [], "allowed_ids": [], "unrestricted": True})
+
+    page.goto(f"{app_url}/train")
+    page.locator("input[aria-label='CUDA visible devices']").wait_for(timeout=15000)
+    page.wait_for_timeout(200)
+
+    assert page.locator("input[aria-label='CUDA visible devices']").count() == 1, (
+        "an unrestricted backend should show the free-text CUDA-devices field"
+    )
+    assert page.get_by_role("radio").count() == 0
+
+    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
+    assert not errors, f"no pageerror expected: {errors[:3]}"

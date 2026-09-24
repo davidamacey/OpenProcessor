@@ -573,6 +573,33 @@ npm run check  # svelte-check + tsc
 npm run build  # SvelteKit → /build (static)
 ```
 
+### End-to-end tests (`e2e/`)
+
+`npm run test:e2e` — creates/reuses a per-project venv at `e2e/.venv/`
+(never installed on the host), installs `e2e/requirements.txt` and a
+chromium browser if missing (`scripts/run-e2e.mjs`), then runs
+`e2e/stubbed/` (`npm run build` + `vite preview`, driven by pytest +
+Playwright). Covers the flows a plain `npm test` (jsdom, no real
+browser) can't: keyboard-driven `/review` assign/undo, `/clusters/[id]`
+drag/hotkey/discard, the `/settings` and dashboard assist-scope
+wire-composition round trips, tier-2 annotation-profile loading, and
+that every top-level route still mounts. Never runs against a live
+OpenProcessor backend — `e2e/conftest.py`'s `Stub` fixture routes every
+`{API_PREFIX}` request itself.
+
+**Fail-closed, on purpose** (see docs/design/test-audit-2026-09-24.md
+recommendation 5 — this replaced the old `scripts/playwright_*.py`
+runbooks, which drifted to a stale `/curation/**` prefix for weeks because
+their catch-all stub silently answered `200 {}`): a request under
+`{API_PREFIX}` that no test registered gets `501` and is recorded in
+`stub.unhandled`; a request to the retired `/curation/` prefix is intercepted
+and recorded in `stub.op_hits`; every test asserts at teardown that both
+are empty and that at least one stub actually fired. An API-prefix
+change or a route rename fails the test outright instead of the page
+silently rendering empty. CI runs this in the `e2e-stubbed` job on every
+push/PR; a `py_compile` pre-commit hook (and CI step) gates
+`scripts/*.py` and `e2e/**/*.py` syntax separately from this suite.
+
 ### Mutation testing
 
 `npm run test:mutation` (Stryker, `stryker.config.json`) runs mutation

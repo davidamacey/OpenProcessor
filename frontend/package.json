@@ -22,7 +22,8 @@
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
     "contract:sync": "node scripts/contract-sync.mjs",
-    "contract:check": "node scripts/contract-sync.mjs --check"
+    "contract:check": "node scripts/contract-sync.mjs --check",
+    "test:e2e": "node scripts/run-e2e.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

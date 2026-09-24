@@ -38,6 +38,37 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: py_compile scripts/ and e2e/
+        run: python3 -m py_compile scripts/*.py e2e/*.py e2e/stubbed/*.py e2e/fixtures/*.py
+
+  e2e-stubbed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: e2e/requirements.txt
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Ensure the browser dependencies apt needs are present
+        run: |
+          python3 -m venv e2e/.venv
+          e2e/.venv/bin/pip install -q -r e2e/requirements.txt
+          e2e/.venv/bin/playwright install --with-deps chromium
+
+      - name: Stubbed e2e suite (fail-closed against a built preview server)
+        run: npm run test:e2e
+
   changelog:
     runs-on: ubuntu-latest
     steps:
