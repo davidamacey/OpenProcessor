@@ -256,7 +256,9 @@ async def review_queue(
     explain why the crop landed in this queue. Items already validated by
     a human are excluded from every tab — except ``model_disagreements``,
     where validated crops are exactly the input set (we want to know
-    where the new model thinks the human was wrong).
+    where the new model thinks the human was wrong), and ``regions``,
+    which reviews the region annotation independently of the item's
+    class validation.
     """
     await _ensure_indexes(opensearch)
 
