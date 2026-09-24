@@ -74,6 +74,7 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+        always_run: true
 
   # Secret detection
   - repo: https://github.com/gitleaks/gitleaks
