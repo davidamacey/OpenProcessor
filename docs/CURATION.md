@@ -283,6 +283,14 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    the API container can mount, use `scripts/curation/ingest_upload.py`
    instead — it reads the files locally and uploads the bytes to
    `POST /curation/ingest/upload` (resume = server-side content dedup).
+   To bring in an **already-labeled** YOLO dataset, use
+   `scripts/curation/import_labeled_dataset.py`: it ingests each image
+   with its `.txt` in one call, checks the dataset's class names against
+   the registry first, and writes a disagreement report (where the
+   detector missed a label, fired on a background image, or chose a
+   different class). Seed the registry from the detector itself with
+   `scripts/curation/seed_class_registry.py --model <detector.onnx>` so
+   class ids cannot drift from the model's class order.
 6. Optionally bring up the async workers (`--profile curation`) so
    detection/labeling/clustering keep running without you driving each
    step by hand.

@@ -112,23 +112,44 @@ class FakeRegistry:
 
 
 class FakeOpenSearch:
-    """Just enough of AsyncOpenSearch for ingest + /crops + /ingest/status."""
+    """Just enough of AsyncOpenSearch for ingest + /crops + /ingest/status.
 
-    def __init__(self) -> None:
+    ``near_real_time=True`` models OpenSearch's refresh semantics: a
+    document written by ``bulk`` is invisible to ``search``/``msearch``
+    until ``indices.refresh`` runs (``get``/``mget`` stay real-time, as in
+    OpenSearch). The default keeps every write immediately searchable.
+    """
+
+    def __init__(self, *, near_real_time: bool = False) -> None:
         self.images: dict[str, dict[str, Any]] = {}
         self.items: dict[str, dict[str, Any]] = {}
         self.labels: dict[str, dict[str, Any]] = {}
-        self.indices = self._Indices()
+        self.near_real_time = near_real_time
+        self._searchable: dict[str, set[str]] = {'images': set(), 'items': set()}
+        self.refresh_calls: list[str] = []
+        self.indices = self._Indices(self)
 
     class _Indices:
+        def __init__(self, outer: FakeOpenSearch) -> None:
+            self._outer = outer
+
         async def exists(self, index: str) -> bool:  # noqa: ARG002
             return True
 
         async def create(self, index: str, body: dict) -> dict:  # noqa: ARG002
             return {'acknowledged': True}
 
-        async def refresh(self, index: str) -> dict:  # noqa: ARG002
+        async def refresh(self, index: str) -> dict:
+            self._outer.refresh_calls.append(index)
+            self._outer._searchable['images'] = set(self._outer.images)
+            self._outer._searchable['items'] = set(self._outer.items)
             return {'_shards': {}}
+
+    def _view(self, store: str) -> dict[str, dict[str, Any]]:
+        docs = self.images if store == 'images' else self.items
+        if not self.near_real_time:
+            return docs
+        return {k: d for k, d in docs.items() if k in self._searchable[store]}
 
     def _items_index(self) -> str:
         from src.config import get_curation_config
@@ -139,7 +160,7 @@ class FakeOpenSearch:
         query = body.get('query') or {}
         term = (query.get('term') or {}).get('imohash')
         if term is not None:
-            store = self.images
+            store = self._view('images')
             hits = [
                 {'_id': d.get('image_id', k), '_source': d}
                 for k, d in store.items()
@@ -153,7 +174,7 @@ class FakeOpenSearch:
             wanted = set(path_terms)
             hits = [
                 {'_id': d.get('image_id', k), '_source': d}
-                for k, d in self.images.items()
+                for k, d in self._view('images').items()
                 if d.get('image_path') in wanted
             ]
             return {'hits': {'hits': hits}}
@@ -161,7 +182,7 @@ class FakeOpenSearch:
         if path_term is not None:
             hits = [
                 {'_id': d.get('image_id', k), '_source': d}
-                for k, d in self.images.items()
+                for k, d in self._view('images').items()
                 if d.get('image_path') == path_term
             ]
             return {'hits': {'hits': hits[:1]}}
@@ -173,13 +194,13 @@ class FakeOpenSearch:
         if image_id is not None:
             hits = [
                 {'_id': k, '_source': d}
-                for k, d in self.items.items()
+                for k, d in self._view('items').items()
                 if d.get('image_id') == image_id and not d.get('test_holdout')
             ]
             return {'hits': {'hits': hits, 'total': {'value': len(hits)}}}
         # /curation/crops style query -- return every non-holdout item.
         if index == self._items_index():
-            hits = [{'_id': k, '_source': d} for k, d in self.items.items()]
+            hits = [{'_id': k, '_source': d} for k, d in self._view('items').items()]
             size = body.get('size', len(hits))
             return {
                 'hits': {'hits': hits[:size], 'total': {'value': len(hits)}},
@@ -193,7 +214,7 @@ class FakeOpenSearch:
             term = ((line.get('query') or {}).get('term') or {}).get('imohash')
             hits = [
                 {'_id': d.get('image_id', k), '_source': d}
-                for k, d in self.images.items()
+                for k, d in self._view('images').items()
                 if d.get('imohash') == term
             ]
             responses.append({'hits': {'hits': hits[:1]}})

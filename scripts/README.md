@@ -64,6 +64,7 @@ see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
 |---|---|
 | `ingest_walker.py`, `_fast_walk.py` | Parallel bulk-directory ingest: `os.scandir` walker → reader threads → bounded queue → concurrent `POST /curation/ingest/batch`, with a resumable progress file. |
 | `ingest_upload.py` | Byte-upload bulk ingest for storage the API container cannot mount: walker → reader thread pool → bounded queue → concurrent multipart `POST /curation/ingest/upload`. Resumes via `/ingest/path_lookup` pre-filter + server-side content-hash (imohash) dedup. |
+| `import_labeled_dataset.py` | Bulk import of an existing YOLO-labeled dataset (images + paired `.txt`, per split) through `POST /curation/ingest/batch` with `label_txt_path` + `detect_mismatches`; writes a model-vs-label disagreement report (class mismatches, missed labels, unmatched detections incl. detections on background images) and per-split checkpoints for resume. Preflights the dataset's class names against the server registry. |
 | `vlm_worker.py` | Long-lived VLM labeling/verification loop (`curation-vlm-worker` service). |
 | `auto_label_worker.py` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process (`curation-auto-label-worker` service). |
 | `cluster_refresh_daemon.py` | Periodic residual-clustering retrain/refresh (`curation-cluster-refresh` service). |

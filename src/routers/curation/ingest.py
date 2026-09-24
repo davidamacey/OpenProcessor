@@ -45,6 +45,7 @@ from src.routers.curation._common import (
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.label_import import (
     DEFAULT_LABEL_SOURCE,
+    count_disagreements,
     import_labels_batch,
     import_yolo_labels,
 )
@@ -177,11 +178,15 @@ async def curation_ingest_batch(
                 IngestImageResponse(status='failed', image_path=item.path, error=str(exc))
             )
 
+    # The service stamps one source per call; honour the per-item tag when
+    # the batch agrees on one (the common case — a driver tags a whole run).
+    sources = {item.source for item in body.items}
     batch_result = (
         await service.ingest_batch(
             images,
             paths,
             label_paths=label_paths if any(label_paths) else None,
+            source=sources.pop() if len(sources) == 1 else 'batch',
             label_source=body.label_source,
             detect_mismatches=body.detect_mismatches,
         )
@@ -216,6 +221,8 @@ def _batch_response(
         summary.crops_indexed += batch_result.summary.crops_indexed
         summary.labels_imported += batch_result.summary.labels_imported
         summary.mismatches += batch_result.summary.mismatches
+        summary.missed_labels += batch_result.summary.missed_labels
+        summary.unmatched_detections += batch_result.summary.unmatched_detections
 
     if summary.failed == 0:
         status: Any = 'success'
@@ -223,7 +230,12 @@ def _batch_response(
         status = 'error'
     else:
         status = 'partial'
-    return _BatchIngestResponse(status=status, summary=summary, results=results)
+    return _BatchIngestResponse(
+        status=status,
+        summary=summary,
+        results=results,
+        disagreements=list(batch_result.disagreements) if batch_result is not None else [],
+    )
 
 
 MAX_UPLOAD_IMAGES = 128
@@ -325,7 +337,7 @@ async def curation_import_labels(
         detect_mismatches=body.detect_mismatches,
         mismatch_sink=mismatches,
     )
-    return {'labels_imported': n, 'mismatches': len(mismatches)}
+    return {'labels_imported': n, **count_disagreements(mismatches)}
 
 
 @router.post('/import_labels/batch')
@@ -333,19 +345,29 @@ async def curation_import_labels_batch(
     body: ImportLabelsBatchRequest,
     opensearch: OpenSearchDep,
     registry: RegistryDep,
-) -> dict[str, int]:
-    """Batch-import YOLO ``.txt`` label files against already-ingested images."""
+) -> dict[str, Any]:
+    """Batch-import YOLO ``.txt`` label files against already-ingested images.
+
+    With ``detect_mismatches`` the response also carries the per-label
+    ``disagreements`` records (same shape as ``POST /ingest/batch``).
+    """
     await _ensure_indexes(opensearch)
     pairs = [(Path(i.image_path), Path(i.label_txt_path)) for i in body.items]
     label_source = body.items[0].label_source if body.items else DEFAULT_LABEL_SOURCE
     detect_mismatches = any(i.detect_mismatches for i in body.items)
-    return await import_labels_batch(
-        pairs,
-        registry,
-        opensearch,
-        label_source=label_source,
-        detect_mismatches=detect_mismatches,
+    disagreements: list[dict[str, Any]] = []
+    summary: dict[str, Any] = dict(
+        await import_labels_batch(
+            pairs,
+            registry,
+            opensearch,
+            label_source=label_source,
+            detect_mismatches=detect_mismatches,
+            disagreement_sink=disagreements,
+        )
     )
+    summary['disagreements'] = disagreements
+    return summary
 
 
 @router.get('/ingest/status')

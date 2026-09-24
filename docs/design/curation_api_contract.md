@@ -105,8 +105,9 @@ disagree, and see D3 for the plan to close that gap.
 
 - `IngestImageRequest`: `path`, `source`
 - `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_plates`, `error`
-- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `labels_imported`, `crops_indexed`
-- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`
+- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`
+- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`, `disagreements` (with `detect_mismatches`: one record per model-vs-label disagreement, `kind` = `class_mismatch`/`missed_label`/`unmatched_detection`; also returned by `POST /import_labels/batch`)
+- `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
 - `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source`
 - `ImportLabelsBatchRequest`: `items`
 

@@ -63,6 +63,28 @@ LABEL_IOU_MATCH = 0.5
 
 DEFAULT_LABEL_SOURCE = 'external_label'
 
+# ``kind`` values of the model-vs-label disagreement records produced when
+# ``detect_mismatches`` is on.
+#   class_mismatch       — label and detector box overlap (IoU >= LABEL_IOU_MATCH)
+#                          but the detector said a different class.
+#   missed_label         — a label no detector box overlaps: the detector missed it.
+#   unmatched_detection  — a detector box no label overlaps: a false positive
+#                          (on a background image with an empty/absent label
+#                          file, every detection is one).
+DISAGREEMENT_CLASS_MISMATCH = 'class_mismatch'
+DISAGREEMENT_MISSED_LABEL = 'missed_label'
+DISAGREEMENT_UNMATCHED_DETECTION = 'unmatched_detection'
+
+
+def count_disagreements(records: list[dict[str, Any]]) -> dict[str, int]:
+    """``{mismatches, missed_labels, unmatched_detections}`` counts for a record list."""
+    kinds = [r.get('kind') for r in records]
+    return {
+        'mismatches': kinds.count(DISAGREEMENT_CLASS_MISMATCH),
+        'missed_labels': kinds.count(DISAGREEMENT_MISSED_LABEL),
+        'unmatched_detections': kinds.count(DISAGREEMENT_UNMATCHED_DETECTION),
+    }
+
 
 def _images_index() -> str:
     return get_curation_config().images_index
@@ -254,15 +276,19 @@ async def import_yolo_labels(
         registry: ClassRegistry (used for deprecated/unmapped checks + class_name).
         opensearch: AsyncOpenSearch client.
         label_source: stored on each labels_confirmed row + item update.
-        detect_mismatches: When true, an IoU-matched item whose existing
-            detector ``class_id`` disagrees with the ground-truth label
-            is stamped ``class_mismatch=true`` (plus the detector's class
-            and confidence) on its ``labels_confirmed`` row, and appended
-            to ``mismatch_sink``. This is the model-vs-ground-truth
-            disagreement report for a re-ingest-and-verify pass; it never
+        detect_mismatches: When true, build the model-vs-ground-truth
+            disagreement report for a re-ingest-and-verify pass. An
+            IoU-matched item whose existing detector ``class_id``
+            disagrees with the label is stamped ``class_mismatch=true``
+            (plus the detector's class and confidence) on its
+            ``labels_confirmed`` row; every disagreement — see the
+            ``DISAGREEMENT_*`` kinds — is appended to ``mismatch_sink``.
+            An empty or absent label file is treated as a background
+            image, so every detector item on it is reported. It never
             changes which class is written — the label always wins.
-        mismatch_sink: Optional list that mismatch records are appended
-            to, so a caller can count/inspect them without re-querying.
+        mismatch_sink: Optional list that disagreement records (each
+            carrying a ``kind``) are appended to, so a caller can
+            count/inspect them without re-querying.
 
     Returns:
         Number of label rows indexed.
@@ -274,7 +300,7 @@ async def import_yolo_labels(
 
     image_id = image_doc.get('image_id') or image_doc.get('_id')
     parsed = _parse_yolo_txt(label_txt_path, registry)
-    if not parsed:
+    if not parsed and not detect_mismatches:
         return 0
 
     reg = registry.load()
@@ -283,6 +309,8 @@ async def import_yolo_labels(
     now = _now_iso()
 
     bulk_body: list[dict[str, Any]] = []
+    disagreements: list[dict[str, Any]] = []
+    matched_crop_ids: set[str] = set()
 
     for cls_id, bbox_norm in parsed:
         class_entry = classes_by_id.get(cls_id)
@@ -310,10 +338,12 @@ async def import_yolo_labels(
         mismatch: dict[str, Any] | None = None
         if best_crop is not None and best_iou >= LABEL_IOU_MATCH:
             target_crop_id = str(best_crop.get('crop_id') or best_crop['_id'])
+            matched_crop_ids.add(target_crop_id)
             if detect_mismatches:
                 detector_class_id = best_crop.get('class_id')
                 if detector_class_id is not None and int(detector_class_id) != cls_id:
                     mismatch = {
+                        'kind': DISAGREEMENT_CLASS_MISMATCH,
                         'crop_id': target_crop_id,
                         'image_path': str(image_path),
                         'bbox_norm': bbox_norm,
@@ -325,8 +355,7 @@ async def import_yolo_labels(
                         'detector_confidence': best_crop.get('confidence'),
                         'iou': best_iou,
                     }
-                    if mismatch_sink is not None:
-                        mismatch_sink.append(mismatch)
+                    disagreements.append(mismatch)
                     logger.info(
                         'label_import_class_mismatch',
                         crop_id=target_crop_id,
@@ -351,6 +380,18 @@ async def import_yolo_labels(
             # No matching item — the detector missed this object; keep
             # the human label as the source of truth.
             target_crop_id = _crop_id_for(str(image_id), bbox_norm)
+            if detect_mismatches:
+                disagreements.append(
+                    {
+                        'kind': DISAGREEMENT_MISSED_LABEL,
+                        'crop_id': target_crop_id,
+                        'image_path': str(image_path),
+                        'bbox_norm': bbox_norm,
+                        'label_class_id': cls_id,
+                        'label_class_name': class_name,
+                        'best_iou': best_iou,
+                    }
+                )
             bulk_body.append({'index': {'_index': _items_index(), '_id': target_crop_id}})
             bulk_body.append(
                 {
@@ -395,6 +436,28 @@ async def import_yolo_labels(
             }
         )
 
+    if detect_mismatches:
+        for crop in existing_crops:
+            crop_id = str(crop.get('crop_id') or crop['_id'])
+            # Validated rows are earlier labels (a prior import or a human),
+            # not detector output — never report them as detections.
+            if crop_id in matched_crop_ids or crop.get('class_validated'):
+                continue
+            disagreements.append(
+                {
+                    'kind': DISAGREEMENT_UNMATCHED_DETECTION,
+                    'crop_id': crop_id,
+                    'image_path': str(image_path),
+                    'bbox_norm': crop.get('bbox_norm'),
+                    'detector_class_id': crop.get('class_id'),
+                    'detector_class_name': crop.get('class_name'),
+                    'detector_class_source': crop.get('class_source'),
+                    'detector_confidence': crop.get('confidence'),
+                }
+            )
+        if mismatch_sink is not None:
+            mismatch_sink.extend(disagreements)
+
     if not bulk_body:
         return 0
 
@@ -418,6 +481,7 @@ async def import_labels_batch(
     opensearch: AsyncOpenSearch,
     label_source: str = DEFAULT_LABEL_SOURCE,
     detect_mismatches: bool = False,
+    disagreement_sink: list[dict[str, Any]] | None = None,
 ) -> dict[str, int]:
     """Batch-import many image+label pairs.
 
@@ -427,17 +491,23 @@ async def import_labels_batch(
         opensearch: AsyncOpenSearch client.
         label_source: passed to :func:`import_yolo_labels`.
         detect_mismatches: passed to :func:`import_yolo_labels`; the
-            per-file mismatch records are aggregated into the returned
-            ``mismatches`` count.
+            per-file disagreement records are counted by kind into the
+            returned summary.
+        disagreement_sink: Optional list the per-file disagreement
+            records are appended to.
 
     Returns:
-        ``{labels_imported, files_processed, files_failed, mismatches}``.
+        ``{labels_imported, files_processed, files_failed, mismatches,
+        missed_labels, unmatched_detections}`` (``mismatches`` counts
+        class disagreements only).
     """
     summary = {
         'labels_imported': 0,
         'files_processed': 0,
         'files_failed': 0,
         'mismatches': 0,
+        'missed_labels': 0,
+        'unmatched_detections': 0,
     }
     for image_path, label_path in pairs:
         try:
@@ -452,7 +522,10 @@ async def import_labels_batch(
                 mismatch_sink=sink,
             )
             summary['labels_imported'] += n
-            summary['mismatches'] += len(sink)
+            for key, value in count_disagreements(sink).items():
+                summary[key] += value
+            if disagreement_sink is not None:
+                disagreement_sink.extend(sink)
             summary['files_processed'] += 1
         except Exception as exc:
             logger.warning(
@@ -467,7 +540,11 @@ async def import_labels_batch(
 
 __all__ = [
     'DEFAULT_LABEL_SOURCE',
+    'DISAGREEMENT_CLASS_MISMATCH',
+    'DISAGREEMENT_MISSED_LABEL',
+    'DISAGREEMENT_UNMATCHED_DETECTION',
     'LABEL_IOU_MATCH',
+    'count_disagreements',
     'import_labels_batch',
     'import_yolo_labels',
 ]

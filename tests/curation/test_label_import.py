@@ -223,3 +223,137 @@ class TestImportLabelsBatch:
         assert summary['labels_imported'] == 3
         assert summary['files_processed'] == 3
         assert summary['files_failed'] == 0
+
+
+def _detector_item(image_id: str, bbox: list[float], class_id: int | None = 0) -> dict[str, Any]:
+    crop_id = _crop_id_for(image_id, bbox)
+    return {
+        'crop_id': crop_id,
+        'image_id': image_id,
+        'bbox_norm': bbox,
+        'class_id': class_id,
+        'class_name': 'widget' if class_id == 0 else None,
+        'class_source': 'detector',
+        'confidence': 0.8,
+        'class_validated': False,
+    }
+
+
+class TestDisagreementReport:
+    """``detect_mismatches`` reports every way the detector and the labels
+    disagree — not just class flips — so a re-ingest of a labeled dataset
+    yields misses and false positives too."""
+
+    @pytest.mark.asyncio
+    async def test_missed_label_and_unmatched_detection(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        hit = _detector_item('img1', [0.41, 0.41, 0.59, 0.59])
+        fp = _detector_item('img1', [0.0, 0.0, 0.1, 0.1])
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'}},
+            items={hit['crop_id']: hit, fp['crop_id']: fp},
+        )
+        txt = tmp_path / 'a.txt'
+        # One label matching `hit`, one label nothing overlaps.
+        txt.write_text('0 0.5 0.5 0.2 0.2\n0 0.85 0.85 0.1 0.1\n')
+        sink: list[dict[str, Any]] = []
+        n = await import_yolo_labels(
+            Path('/tmp/a.jpg'), txt, registry, os_fake, detect_mismatches=True, mismatch_sink=sink
+        )
+        assert n == 2
+        kinds = sorted(r['kind'] for r in sink)
+        assert kinds == ['missed_label', 'unmatched_detection']
+        missed = next(r for r in sink if r['kind'] == 'missed_label')
+        assert missed['bbox_norm'] == pytest.approx([0.8, 0.8, 0.9, 0.9])
+        assert missed['label_class_id'] == 0
+        unmatched = next(r for r in sink if r['kind'] == 'unmatched_detection')
+        assert unmatched['crop_id'] == fp['crop_id']
+        assert unmatched['detector_confidence'] == 0.8
+
+    @pytest.mark.asyncio
+    async def test_empty_label_file_reports_every_detection(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        """A background image (empty .txt) with detections: all are FPs."""
+        fp1 = _detector_item('img1', [0.1, 0.1, 0.2, 0.2])
+        fp2 = _detector_item('img1', [0.5, 0.5, 0.7, 0.7], class_id=None)
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/bg.jpg'}},
+            items={fp1['crop_id']: fp1, fp2['crop_id']: fp2},
+        )
+        txt = tmp_path / 'bg.txt'
+        txt.write_text('')
+        sink: list[dict[str, Any]] = []
+        n = await import_yolo_labels(
+            Path('/tmp/bg.jpg'), txt, registry, os_fake, detect_mismatches=True, mismatch_sink=sink
+        )
+        assert n == 0
+        assert os_fake.bulk_calls == []  # nothing to write for a background
+        assert sorted(r['crop_id'] for r in sink) == sorted([fp1['crop_id'], fp2['crop_id']])
+        assert {r['kind'] for r in sink} == {'unmatched_detection'}
+
+    @pytest.mark.asyncio
+    async def test_clean_background_reports_nothing(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/bg.jpg'}}
+        )
+        sink: list[dict[str, Any]] = []
+        n = await import_yolo_labels(
+            Path('/tmp/bg.jpg'),
+            tmp_path / 'absent.txt',
+            registry,
+            os_fake,
+            detect_mismatches=True,
+            mismatch_sink=sink,
+        )
+        assert n == 0
+        assert sink == []
+
+    @pytest.mark.asyncio
+    async def test_validated_items_are_not_detections(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        prior = _detector_item('img1', [0.1, 0.1, 0.2, 0.2])
+        prior['class_validated'] = True
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'}},
+            items={prior['crop_id']: prior},
+        )
+        txt = tmp_path / 'a.txt'
+        txt.write_text('')
+        sink: list[dict[str, Any]] = []
+        await import_yolo_labels(
+            Path('/tmp/a.jpg'), txt, registry, os_fake, detect_mismatches=True, mismatch_sink=sink
+        )
+        assert sink == []
+
+    @pytest.mark.asyncio
+    async def test_batch_counts_by_kind(self, tmp_path: Path, registry: ClassRegistry) -> None:
+        flip = _detector_item('img1', [0.41, 0.41, 0.59, 0.59], class_id=0)
+        fp = _detector_item('img2', [0.1, 0.1, 0.2, 0.2])
+        os_fake = FakeLabelOpenSearch(
+            images={
+                'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'},
+                'img2': {'image_id': 'img2', 'image_path': '/tmp/b.jpg'},
+            },
+            items={flip['crop_id']: flip, fp['crop_id']: fp},
+        )
+        a = tmp_path / 'a.txt'
+        a.write_text('1 0.5 0.5 0.2 0.2\n0 0.85 0.85 0.1 0.1\n')  # class flip + miss
+        b = tmp_path / 'b.txt'
+        b.write_text('')  # background with one detection
+        records: list[dict[str, Any]] = []
+        summary = await import_labels_batch(
+            [(Path('/tmp/a.jpg'), a), (Path('/tmp/b.jpg'), b)],
+            registry,
+            os_fake,
+            detect_mismatches=True,
+            disagreement_sink=records,
+        )
+        assert summary['mismatches'] == 1
+        assert summary['missed_labels'] == 1
+        assert summary['unmatched_detections'] == 1
+        assert len(records) == 3
