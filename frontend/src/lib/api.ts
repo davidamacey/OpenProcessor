@@ -724,6 +724,10 @@ export interface PlatesQuery {
   detector?: string;
   text?: string;
   include_test?: boolean;
+  /** Region lifecycle status (`GET {API_PREFIX}/regions/statuses` for the
+   *  deployment's vocabulary) — the backend 400s on an unknown value.
+   *  Independent of `verified`, which is a boolean, not a status. */
+  status?: string;
 }
 
 /** `browsePath` is the slot's declared browse collection
@@ -2029,10 +2033,36 @@ export interface RegionVocabularyEntry {
   filterable?: boolean;
 }
 
+/** The active deployment's region-text validity rules (dq-region,
+ *  2026-09-24) — `GET {API_PREFIX}/regions/vocabulary`'s `text_rules`, null
+ *  without a region profile. Informational only: the frontend never
+ *  re-implements these rules client-side, it just has somewhere to show
+ *  them (e.g. next to a `region_text_vlm_invalid` badge). */
+export interface RegionTextRules {
+  uppercase: boolean;
+  charset: string;
+  len_min: number;
+  len_max: number;
+  format: string;
+  reject_sequences: boolean;
+  placeholders: string[];
+  no_reading_words: string[];
+  invalid_reasons: string[];
+}
+
 export interface RegionVocabularyResponse {
   detectors: RegionVocabularyEntry[];
   region_sources: RegionVocabularyEntry[];
   chain_actors: RegionVocabularyEntry[];
+  /** `region_text_choice` values (dq-region, 2026-09-24) — plain ids,
+   *  e.g. `readers_agree` / `vlm_preferred` / `vlm_only` / `ocr_only` /
+   *  `ocr_mode` / `vlm_invalid` / `no_valid_reading` / `human`. No
+   *  served label yet; the UI titlecases the id as a placeholder (see
+   *  `regionVocabularyStore.textChoiceLabel`). */
+  text_choices: string[];
+  /** The active profile's region-text validity rules, or `null` without
+   *  a region profile. */
+  text_rules: RegionTextRules | null;
 }
 
 /** The deployment-configured detector/segmenter/verifier vocabulary
@@ -2051,6 +2081,8 @@ export async function getRegionVocabulary(
     detectors: res.detectors ?? [],
     region_sources: res.region_sources ?? [],
     chain_actors: res.chain_actors ?? [],
+    text_choices: res.text_choices ?? [],
+    text_rules: res.text_rules ?? null,
   };
 }
 

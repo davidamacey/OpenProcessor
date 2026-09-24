@@ -798,6 +798,7 @@
     void plateGallery.plateVerifiedOnly;
     void plateGallery.plateMinScore;
     void plateGallery.plateTextQuery;
+    void plateGallery.plateStatusFilter;
     void plateGallery.plateMaxRank;
     void plateGallery.selectedPlateCluster;
     if (isLicensePlateFilter) {
