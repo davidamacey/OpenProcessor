@@ -32,7 +32,9 @@
     "build/**",
     ".svelte-kit/**",
     "reports/**",
-    "docs/**"
+    "docs/**",
+    ".claude/**",
+    "artifacts_local/**"
   ],
   "concurrency": 4,
   "incremental": true,
