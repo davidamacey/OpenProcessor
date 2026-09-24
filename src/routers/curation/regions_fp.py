@@ -152,7 +152,9 @@ async def list_region_clusters(
                     'reps': {
                         'top_hits': {
                             'size': per_cluster,
-                            '_source': ['crop_id'],
+                            # crop_id == _id here; only _id is ever read
+                            # below (F-15) — no need to decompress _source.
+                            '_source': False,
                             'sort': [
                                 {
                                     F.cluster_distance: {

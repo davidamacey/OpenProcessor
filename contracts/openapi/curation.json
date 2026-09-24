@@ -4831,6 +4831,33 @@
               ],
               "title": "Class Source"
             }
+          },
+          {
+            "description": "Offset into the card list for representatives",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Offset into the card list for representatives",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cards to compute representatives for",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Cards to compute representatives for",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5012,7 +5039,7 @@
     },
     "/curation/clusters/representatives": {
       "get": {
-        "description": "Return up to ``per_cluster`` representative crop_ids for every cluster.\n\nSingle OpenSearch query using ``terms`` aggregation on ``cluster_id`` with a\n``top_hits`` sub-aggregation sorted by ascending cluster_distance (i.e.,\nclosest to centroid first). Designed for the labeler's clusters grid so it\ncan render all card thumbnails without N round-trips.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
+        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nF-15 / D-4: the cluster id list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster ids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
         "operationId": "cluster_representatives_curation_clusters_representatives_get",
         "parameters": [
           {
@@ -5057,6 +5084,19 @@
               ],
               "description": "Restrict to clusters containing this class",
               "title": "Class Id"
+            }
+          },
+          {
+            "description": "Offset into the _count-desc cluster list",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Offset into the _count-desc cluster list",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],

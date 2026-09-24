@@ -362,6 +362,46 @@ promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
 denominator (it used to count only the top-5 classes, overstating purity
 on many-class clusters).
 
+**Representatives are now paged (F-15 / D-4, breaking change).**
+`GET /clusters` used to attach representative crops to *every* returned
+card via a `top_hits` sub-aggregation, which decompressed stored
+`_source` for every representative across every bucket in the response
+regardless of what the client actually displayed. It now returns every
+card (still up to `max_clusters`, still carrying `size`/`purity`/etc.)
+but only fills in `representatives` for cards in the
+`[representatives_offset, representatives_offset + representatives_limit)`
+window of the *returned, kind-filtered, `_count`-desc-ordered* card
+list — new query params `offset` (default `0`) and `limit` (default
+`50`, max `500`). Cards outside that window still carry the
+`representatives` key, but as an empty list `[]` — the field never
+disappears, so existing clients that only read `card.representatives`
+degrade to "no thumbnails for this card" rather than a KeyError. The
+response also now reports `representatives_offset` /
+`representatives_limit` so the frontend knows which window was served.
+Passing `per_cluster=0` (as before) skips representative computation
+entirely — no `_msearch` is issued.
+
+Representatives are computed by one `_msearch` (one query per cluster
+in the window, each `{size: per_cluster, query: {bool: {filter:
+[{term: {cluster_id}}], must_not: [{term: {class_excluded: true}}]}},
+_source: [crop_id, cluster_distance, class_name, cluster_subid], sort:
+[{cluster_distance: asc}, {crop_id: asc}]}`) instead of a per-bucket
+`top_hits` sub-agg on the cards aggregation itself.
+
+**Frontend action required:** paginate the cluster grid by requesting
+successive `offset`/`limit` windows (matching whatever page of cards is
+actually rendered) rather than assuming every card in one `GET
+/clusters` response already carries thumbnails.
+
+`GET /clusters/representatives` has the same shape change: the
+`clusters` dict in the response now only contains keys for cluster ids
+in the `[offset, offset + max_clusters)` window (ordered by member
+count desc) — call again with a larger `offset` for the next page. New
+`offset` query param (default `0`); response gains `offset` and
+`max_clusters` fields. Previously this endpoint returned representatives
+for every cluster (up to `max_clusters` total) in one response with no
+paging concept at all.
+
 `GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
 50), `limit` (1–500; alias for `page_size`, wins when both are set),
 `sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
