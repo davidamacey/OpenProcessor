@@ -25,6 +25,7 @@
    * the gap between polls.
    */
   import { apiBase } from '$lib/api';
+  import { sortClassBalance } from '$lib/dashboard/classBalance';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { healthStore } from '$stores/health.svelte';
@@ -180,8 +181,15 @@
   const balance = $derived.by(() => {
     if (!legacyStats?.per_class) return [];
     const max = Math.max(1, ...legacyStats.per_class.map((c) => c.validated_count));
-    return [...legacyStats.per_class]
-      .sort((a, b) => b.validated_count - a.validated_count)
+    // DQ-m11 (docs/design/data-quality-pass-2026-09-24.md): plain
+    // `sort(validated_count desc)` degenerates to the server's own
+    // per_class order (alphabetical) whenever every class ties at 0
+    // validated — the live state throughout the audit — which cut the
+    // top-30 slice to the first 30 names alphabetically and hid `pickup`
+    // (557 crops) and `suv` behind small early-alphabet classes.
+    // sortClassBalance() breaks that tie by total crop count instead, so
+    // the classes actually worth a curator's attention surface first.
+    return sortClassBalance(legacyStats.per_class)
       .slice(0, 30)
       .map((c) => ({
         ...c,

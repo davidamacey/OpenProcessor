@@ -470,13 +470,28 @@
             </span>
             <span class="text-xs text-zinc-500">of crops have a box</span>
           </div>
+          <!-- DQ-m11 (docs/design/data-quality-pass-2026-09-24.md): this
+               used to assert "(includes rejected/failed attempts)" about
+               `total_detected` as fact. The field's own contract
+               (DatasetStats.regions.total_detected in api.ts) says it
+               should be a superset of `boxed` — but live, it equals
+               `boxed` exactly (1,000 both), so 741 verify-rejected and
+               204 no-box crops that DID go through a detector aren't
+               reflected in it. Rather than assert something the served
+               number doesn't actually demonstrate, state what `boxed` is
+               (the honest, verified count) and flag total_detected as a
+               credit tally that may not include every rejected/no-box
+               attempt on this deployment — not a confident inclusion
+               claim. -->
           <p class="mt-2 text-xs text-zinc-500">
             {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} Gemma-confirmed).
             The remaining
             {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (Gemma
-            pre-filter said no) or the LPR/SAM3 detectors haven't reached them yet. A detector
-            ran on
-            {fmt(p?.total_detected ?? 0)} crops total (includes rejected/failed attempts).
+            pre-filter said no), were rejected after detection, or the LPR/SAM3 detectors haven't
+            reached them yet.
+            {fmt(p?.total_detected ?? 0)} crops carry detector credit (<code
+              class="font-mono">regions.total_detected</code
+            >) — this may not cover every rejected or box-less attempt.
           </p>
         </div>
       </div>
