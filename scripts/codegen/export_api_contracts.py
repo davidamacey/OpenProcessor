@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -117,21 +118,38 @@ def render_item_wire_json(facts: dict[str, Any]) -> str:
     )
 
 
-def ts_type(schema: dict[str, Any]) -> str:
+_DEF_REF_PREFIX = '#/$defs/'
+_TS_IDENT = re.compile(r'^[A-Za-z_$][A-Za-z0-9_$]*$')
+
+
+def ts_type(schema: dict[str, Any], refs: set[str] | None = None) -> str:
     """TypeScript type for one JSON-schema node (the subset pydantic emits
-    for ``ItemDoc``). Unknown shapes raise rather than guess."""
+    for ``ItemDoc``). Unknown shapes raise rather than guess.
+
+    A ``#/$defs/<Name>`` reference renders as ``Name`` and, when ``refs``
+    is given, records ``Name`` so the caller emits its interface.
+    """
+    if '$ref' in schema:
+        ref = schema['$ref']
+        name = ref[len(_DEF_REF_PREFIX) :] if ref.startswith(_DEF_REF_PREFIX) else ''
+        if refs is None or not _TS_IDENT.match(name):
+            raise ValueError(f'unsupported schema node for TS export: {schema}')
+        refs.add(name)
+        return name
+    if 'allOf' in schema and len(schema['allOf']) == 1:
+        return ts_type(schema['allOf'][0], refs)
     if 'anyOf' in schema:
         parts: list[str] = []
         for sub in schema['anyOf']:
-            t = ts_type(sub)
+            t = ts_type(sub, refs)
             if t not in parts:
                 parts.append(t)
         return ' | '.join(parts)
     if 'prefixItems' in schema:
-        return '[' + ', '.join(ts_type(s) for s in schema['prefixItems']) + ']'
+        return '[' + ', '.join(ts_type(s, refs) for s in schema['prefixItems']) + ']'
     kind = schema.get('type')
     if kind is None:
-        if '$ref' in schema or 'allOf' in schema or 'oneOf' in schema:
+        if 'allOf' in schema or 'oneOf' in schema:
             raise ValueError(f'unsupported schema node for TS export: {schema}')
         return 'unknown'
     simple = {'string': 'string', 'integer': 'number', 'number': 'number'}
@@ -139,11 +157,37 @@ def ts_type(schema: dict[str, Any]) -> str:
     if kind in simple:
         return simple[kind]
     if kind == 'array':
-        inner = ts_type(schema.get('items', {}))
+        inner = ts_type(schema.get('items', {}), refs)
         return f'({inner})[]' if ' | ' in inner else f'{inner}[]'
     if kind == 'object':
         return 'Record<string, unknown>'
     raise ValueError(f'unsupported JSON schema type for TS export: {kind!r}')
+
+
+def ts_interfaces(schema: dict[str, Any], roots: set[str]) -> list[str]:
+    """``export interface`` blocks for every ``$defs`` entry reachable from
+    ``roots`` (transitively), sorted by name. Keys follow the model's field
+    order and are always present, matching what the serializers emit."""
+    defs = schema.get('$defs', {})
+    pending = set(roots)
+    rendered: dict[str, list[str]] = {}
+    while pending:
+        name = pending.pop()
+        if name in rendered:
+            continue
+        if name not in defs:
+            raise ValueError(f'$ref to undefined $defs entry: {name}')
+        found: set[str] = set()
+        body = [f'export interface {name} {{']
+        for key, prop in defs[name].get('properties', {}).items():
+            body.append(f'  {key}: {ts_type(prop, found)};')
+        body.append('}')
+        rendered[name] = body
+        pending |= found - set(rendered)
+    lines: list[str] = []
+    for name in sorted(rendered):
+        lines.extend([*rendered[name], ''])
+    return lines
 
 
 def _ts_string_array(name: str, values: list[str], type_name: str | None = None) -> list[str]:
@@ -155,16 +199,20 @@ def _ts_string_array(name: str, values: list[str], type_name: str | None = None)
 
 
 def render_item_wire_ts(facts: dict[str, Any]) -> str:
-    props = facts['json_schema']['properties']
+    schema = facts['json_schema']
+    props = schema['properties']
+    refs: set[str] = set()
+    fields = [f'  {key}: {ts_type(props[key], refs)};' for key in facts['item_keys']]
     lines = [
         _ts_header('src/routers/curation/_common.py (ItemDoc), src/services/curation/wire.py'),
+        *ts_interfaces(schema, refs),
         '/**',
         ' * The wire item every item-returning curation endpoint emits. Every key is',
         ' * always present; a missing stored value is sent as null or the default.',
         ' */',
         'export interface ItemWire {',
     ]
-    lines.extend(f'  {key}: {ts_type(props[key])};' for key in facts['item_keys'])
+    lines.extend(fields)
     lines.append('}')
     lines.append('')
     lines.append('export type ItemWireKey = keyof ItemWire;')
