@@ -885,13 +885,9 @@ def test_presets_endpoint(app_client: TestClient) -> None:
     body = r.json()
     assert 'class_subset_presets' in body
     names = {p['name'] for p in body['class_subset_presets']}
-    assert {
-        'all_vehicles',
-        'plates_only',
-        'vehicles_and_plates',
-        'cars_only',
-        'bikes_only',
-    }.issubset(names)
+    # Neutral by default: no region profile configured in this test app,
+    # so only the generic 'all' preset is served.
+    assert names == {'all'}
 
 
 # =============================================================================

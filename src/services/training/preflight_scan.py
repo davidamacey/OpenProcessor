@@ -1,11 +1,10 @@
 """Real preflight label-file scan checks.
 
-Ported from a private reference vehicle/license-plate curation stack's
-training pipeline. ``/curation/train/preflight``'s ``empty_labels`` and
-``plate_pairing`` checks used to be hardcoded to always report ``'ok'``
--- stubbed, never implemented. This module does the real work: scan an
-export's label ``.txt`` files once (cached per export dir + manifest
-hash, since exports are immutable once written) and compute:
+``/curation/train/preflight``'s ``empty_labels`` and ``region_pairing``
+checks used to be hardcoded to always report ``'ok'`` -- stubbed, never
+implemented. This module does the real work: scan an export's label
+``.txt`` files once (cached per export dir + manifest hash, since
+exports are immutable once written) and compute:
 
 * how many images have zero label rows once a subset ``include_classes``
   filter is applied (catches "the requested subset excludes every class in
@@ -13,26 +12,16 @@ hash, since exports are immutable once written) and compute:
   scan runs against the export's DENSE ids, so a subset filter is
   translated through ``export_id_map`` before comparing, matching the
   trainer's own subsetting logic.
-* how many ``license_plate`` boxes have no matching parent vehicle box in
-  the same image (a pairing/parity signal).
+* how many region-of-interest boxes (the active region profile's
+  ``region_class_name``, e.g. a license plate) have no matching parent
+  item box in the same image (a pairing/parity signal). With no active
+  region profile, or one whose ``region_class_name`` is empty, this
+  check is not applicable: ``region_boxes`` / ``unpaired_region_boxes``
+  stay ``0`` rather than guessing a class to pair against.
 
-NOTE (oss port): this module's parent/child-box pairing check is scoped
-to the reference dataset's ``license_plate`` vocabulary
-(``_license_plate_export_id`` / ``ScanResult.plate_boxes`` /
-``unpaired_plate_boxes``). That is a real domain-specific leftover --
-kept as-is rather than renamed here because
-``src/routers/curation_train.py`` (ported in a separate, parallel unit of
-this same chunk) reads these exact field names and check semantics; the
-``RegionFields`` scope described in
-``docs/design/curation_design_rationale.md`` §4 governs OpenSearch
-document *field names*, not dataclass attribute names or
-class-vocabulary strings like this, so there is no leak-scan or
-RegionFields requirement forcing a rename. Flagged as a follow-up
-genericization opportunity, not done in this port.
-
-Vehicle-only. Single-class exports are handled entirely by the router's
-own additive ``dataset_kind == 'single_class'`` branch -- this module
-never reads a single-class export.
+Item-class-only. Single-class exports are handled entirely by the
+router's own additive ``dataset_kind == 'single_class'`` branch -- this
+module never reads a single-class export.
 """
 
 from __future__ import annotations
@@ -68,8 +57,8 @@ class ScanResult:
     status: str  # 'ok' | 'unknown'
     total_images: int = 0
     empty_label_images: int = 0
-    plate_boxes: int = 0
-    unpaired_plate_boxes: int = 0
+    region_boxes: int = 0
+    unpaired_region_boxes: int = 0
     reason: str | None = None  # populated only when status == 'unknown'
 
 
@@ -88,16 +77,19 @@ def _manifest_fingerprint(export_dir: Path) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _license_plate_export_id(class_registry_payload: dict) -> int | None:
-    """Resolve ``license_plate``'s DENSE export id from a loaded
-    ``class_registry.json`` payload. ``None`` if this export has no
-    ``license_plate`` class, or predates the ``export_id_map`` field."""
+def _region_export_id(class_registry_payload: dict, class_name: str) -> int | None:
+    """Resolve ``class_name``'s DENSE export id from a loaded
+    ``class_registry.json`` payload. ``None`` if ``class_name`` is empty,
+    this export has no such class, or the payload predates the
+    ``export_id_map`` field."""
+    if not class_name:
+        return None
     export_id_map = class_registry_payload.get('export_id_map')
     if not isinstance(export_id_map, dict):
         return None
     registry_id: int | None = None
     for entry in class_registry_payload.get('classes') or []:
-        if isinstance(entry, dict) and entry.get('class_name') == 'license_plate':
+        if isinstance(entry, dict) and entry.get('class_name') == class_name:
             try:
                 registry_id = int(entry['class_id'])
             except (KeyError, TypeError, ValueError):
@@ -110,18 +102,18 @@ def _license_plate_export_id(class_registry_payload: dict) -> int | None:
 
 
 def _box_center_inside(
-    vehicle_box: tuple[float, float, float, float], plate_cx: float, plate_cy: float
+    parent_box: tuple[float, float, float, float], region_cx: float, region_cy: float
 ) -> bool:
-    """True if the plate box's center falls inside the vehicle box.
+    """True if the region box's center falls inside the parent item box.
 
     Cheap containment heuristic (normalized YOLO cx/cy/w/h) rather than a
-    full IoU -- a plate is "paired" with a vehicle when it visually sits on
-    that vehicle's box, which containment approximates well enough for a
-    preflight parity signal (not a training-time correctness gate).
+    full IoU -- a region is "paired" with a parent item when it visually
+    sits on that item's box, which containment approximates well enough
+    for a preflight parity signal (not a training-time correctness gate).
     """
-    vcx, vcy, vw, vh = vehicle_box
-    return (vcx - vw / 2) <= plate_cx <= (vcx + vw / 2) and (vcy - vh / 2) <= plate_cy <= (
-        vcy + vh / 2
+    pcx, pcy, pw, ph = parent_box
+    return (pcx - pw / 2) <= region_cx <= (pcx + pw / 2) and (pcy - ph / 2) <= region_cy <= (
+        pcy + ph / 2
     )
 
 
@@ -131,7 +123,7 @@ def scan_export_labels(
     include_classes: list[int] | None = None,
     scan_cap: int = DEFAULT_SCAN_CAP,
 ) -> ScanResult:
-    """Scan a vehicle export's label files once, cached per export.
+    """Scan an export's label files once, cached per export.
 
     ``include_classes`` (if given) is a REGISTRY id list, translated
     through this export's own ``class_registry.json:export_id_map`` before
@@ -172,7 +164,11 @@ def scan_export_labels(
         if isinstance(export_id_map_raw, dict)
         else {}
     )
-    plate_export_id = _license_plate_export_id(registry_payload)
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    active_profile = get_active_region_profile()
+    region_class_name = active_profile.region_class_name if active_profile else ''
+    region_export_id = _region_export_id(registry_payload, region_class_name)
 
     keep_dense_ids: set[int] | None = None
     if include_classes:
@@ -180,7 +176,7 @@ def scan_export_labels(
 
     total = 0
     empty = 0
-    plate_boxes = 0
+    region_boxes = 0
     unpaired = 0
     for txt in label_files:
         total += 1
@@ -206,20 +202,20 @@ def scan_export_labels(
             empty += 1
             continue
 
-        if plate_export_id is not None:
-            plates = [box for cid, box in rows if cid == plate_export_id]
-            vehicles = [box for cid, box in rows if cid != plate_export_id]
-            plate_boxes += len(plates)
-            for pcx, pcy, _pw, _ph in plates:
-                if not any(_box_center_inside(vb, pcx, pcy) for vb in vehicles):
+        if region_export_id is not None:
+            regions = [box for cid, box in rows if cid == region_export_id]
+            parents = [box for cid, box in rows if cid != region_export_id]
+            region_boxes += len(regions)
+            for rcx, rcy, _rw, _rh in regions:
+                if not any(_box_center_inside(pb, rcx, rcy) for pb in parents):
                     unpaired += 1
 
     result = ScanResult(
         'ok',
         total_images=total,
         empty_label_images=empty,
-        plate_boxes=plate_boxes,
-        unpaired_plate_boxes=unpaired,
+        region_boxes=region_boxes,
+        unpaired_region_boxes=unpaired,
     )
     _scan_cache[cache_key] = result
     return result

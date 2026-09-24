@@ -162,8 +162,12 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 }
             },
         )
+        from src.services.detection.profile_registry import get_active_region_profile
+
+        active_profile = get_active_region_profile()
+        region_class_name = (active_profile.region_class_name if active_profile else '').lower()
         for c in reg.classes:
-            if (c.class_name or '').lower() == 'license_plate':
+            if region_class_name and (c.class_name or '').lower() == region_class_name:
                 # All three counts share the region inventory total: the
                 # region lives as a sub-bbox, not as its own cluster, so
                 # there's no separate FAISS bucket to count.
