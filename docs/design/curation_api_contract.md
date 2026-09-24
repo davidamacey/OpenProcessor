@@ -162,8 +162,13 @@ the training preflight and served wherever a client shows class counts:
 
 ```json
 "thresholds": {"block_below": 20, "warn_below": 500, "min_test_per_class": 5,
+               "min_train_per_class": 1, "min_val_per_class": 1,
                "aug_target_min": 500, "aug_target_max": 3000}
 ```
+
+`min_train_per_class` / `min_val_per_class` are the per-class instance
+minimums of the `export_class_split_coverage` preflight check (see
+"Export" below).
 
 - `adequacy` (`ok` / `warn` / `block`) of a class's validated count:
   `< block_below` → `block` (preflight refuses), `< warn_below` → `warn`,
@@ -178,6 +183,32 @@ the training preflight and served wherever a client shows class counts:
 | `GET /stats/classes` | `thresholds`; per row `adequacy`, `aug_target`, `aug_gap` |
 | `GET /classes` | `thresholds`; per class `adequacy` |
 | `GET /test_holdout/stats` | `min_test_per_class`; per `by_class` bucket `deficient` (`doc_count < min_test_per_class`) |
+
+### Augmentation presets — `GET /train/augmentation_presets`
+
+The one preset catalog is `src/services/training/augmentation_presets.py`;
+the trainer image copies that file next to `docker/trainer/augment.py`,
+which builds its `PRESETS` from it. Response
+(`AugmentationPresetsResponse`): `presets[]` of `{id, label, description,
+orientation_sensitive}` (in display order) and `default`
+(`"balanced_default"`, used when a job omits `augmentation.preset`).
+`orientation_sensitive: true` means horizontal flip is off for the whole
+run. A client renders this list and never hardcodes ids.
+
+An enabled `augmentation` block naming any other `preset`:
+
+- `POST /train/preflight` → check `augmentation_preset`, severity
+  `block`, message `unknown augmentation preset '<id>'; valid presets:
+  none, balanced_default, …`, `detail: {preset, valid_presets}`
+  (otherwise `ok`; a disabled block isn't judged);
+- `POST /train/start` and `POST /train/start_campaign` → `422` with
+  `detail: {message, field: "augmentation.preset", valid_presets}`,
+  even with `force=true`, before any GPU claim or job write.
+
+The other `AugmentationSpec` fields aren't enumerable here:
+`albumentations` override keys are Albumentations transform names (the
+trainer logs and skips unknown ones), and `multiplier` is range-checked
+(`1..20`) by the model.
 
 ### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
 
@@ -670,8 +701,14 @@ matched, matched_ids, updated, updated_ids, conflicts:
 `POST /crops/label/undo_batch` on `updated_ids`, same as
 `PUT /crops/batch_label`.
 
-- `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
-- `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`
+- `TestHoldoutFreezeRequest`: `percent` only (`1`–`50`, default `10`). Unknown fields are
+  rejected (`extra='forbid'`): there is no seed — selection is deterministic — so a request
+  carrying `seed` is a `422` instead of being silently ignored.
+- `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`,
+  `per_class_counts`, `selection` (always `"sha1_per_class"`: per class, the crops with the
+  smallest `sha1(crop_id)`, `max(min_per_class, round(n * percent / 100))` of them, capped at the
+  class size), `percent` (echoed), `min_per_class` (`5`). A client shows the method, not a
+  Seed input.
 
 ### Shared curation-strategy defaults
 
@@ -713,18 +750,64 @@ and `current` keeps pointing at the previous export. Every manifest
 records `items_index: {index, uuid, created_at}` — the items index it was
 read from (`null` if it could not be read).
 
-`POST /train/preflight` adds two checks (see
+`POST /train/preflight` adds these export checks (see
 `src/services/curation/export_readiness.py`):
 
 | Check | `block` when | `unknown` when |
 |---|---|---|
 | `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` | no readable manifest / no count |
+| `export_splits_nonempty` | `split_counts.train` or `split_counts.val` is `0` (message names the empty split(s); `detail.empty_splits`) | the manifest records no train/val counts |
+| `export_class_split_coverage` | a class the run trains on (`include_classes`, else every class in `class_split_counts`) has fewer than `min_train_per_class` (`1`) train or `min_val_per_class` (`1`) val instances — message lists each as `name (class id): train=N, val=N`; `detail.classes[]` carries `class_id`, `class_name`, `train`, `val`, `test`, `missing_splits`. Always `ok` ("not applicable") for a single-class export, which `export_splits_nonempty` already covers | the manifest has no `class_split_counts` (exported before they were recorded — re-export) |
 | `export_generation` | the manifest's `items_index.uuid` differs from the live items index's (the index was rebuilt since the export); for an unstamped export, its `exported_at` is before the live index's creation | the live index can't be read, or the manifest has neither a stamp nor `exported_at` |
 
 The index `uuid` is the staleness signal because it changes on every
 index creation and is immune to clock skew; label edits after an export
 are deliberately not "stale" (exports are snapshots, and retraining on a
 past one is supported).
+
+**Split assignment** (`stratified_split` in
+`src/services/curation/export_support.py`; the manifest records
+`group_key` and `seed`):
+
+- **Group = source image** (`group_key: "image_id"`; an item with no
+  `image_id` is its own group). Items cut from one image never straddle
+  train/val/test. `cluster_id` is not a leakage unit — class clusters
+  have `cluster_id == class_id`, so grouping on it made each class one
+  group. Crop-level `dup_group_id` is not used either: it is written only
+  by an opt-in scorer run, only for items in a multi-member group, and
+  its ids (`dup_<n>`) are numbered per run, so two runs can reuse an id
+  for unrelated items. Whole-frame near-duplicate bursts are handled
+  before the split by the export's `dedup_threshold`.
+- **Frozen holdout**: every `test_holdout` item goes to `test`, together
+  with its same-image mates (any class).
+- **Strata**: each remaining group counts toward its most common class.
+  Within a class, groups are ordered by `sha256(seed:class:group)`, so
+  the same data and seed always give the same split.
+- **Per-class allocation of the `n` remaining groups**: a class with at
+  least one frozen holdout item uses the holdout as its test set and
+  splits the rest train : val = `train_ratio : val_ratio` (0.8 : 0.1); a
+  class with no holdout item splits train / val / test at 0.8 / 0.1 /
+  0.1. Every split with a positive ratio gets one group before any
+  gets a second (priority train → val → test); the rest follow the
+  ratio. So `n = 0` → the class appears only in test (its holdout);
+  `n = 1` → train; `n = 2` → one train + one val; `n >= 3` → at least
+  one train and one val (and, with no holdout, at least one test).
+
+The multi-class manifest's `class_split_counts` lists every class in the
+export (`class_id` registry id, `export_id` dense id, `class_name`,
+`train`, `val`, `test` instance counts), including classes with no
+instances. `label_stats.json` keeps its flat `{class_name: count}` shape.
+
+**`GET /export/status`** (`ExportStatusResponse`) serves the last
+completed multi-class export — the `current` symlink's manifest:
+`status` (`idle` / `unknown` / `success`), `path` (resolved export dir;
+`export_dir` is the same value), `last_run` (finish, else start time),
+`version_tag`, `dataset_sha`, `seed`, `group_key`, `image_count`,
+`class_count`, `split_counts` (`{train, val, test}`), and
+`class_split_counts` (rows as in the manifest; `null` for an export
+written before they were recorded). `idle` sets every other field to
+`null`; `unknown` (manifest missing/unreadable) sets only `path` /
+`export_dir`.
 
 ### Capability discovery — `GET /methods`
 
