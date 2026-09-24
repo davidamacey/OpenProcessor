@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/bakeoff_lpr_paper/`.
 
 ### Added
+- `scripts/curation/backfill_region_embeddings.py` (dry-run default) and a
+  shared region-embedding encode helper, so region false-positive clustering
+  has embeddings to work with.
 - `GET /curation/train/gpus` — served training GPU picker (values, human
   labels, stop advisories, and the resolved default), so the frontend no
   longer hardcodes GPU ids/labels. `OP_GPU_ARBITER_CONTAINERS` entries may
@@ -125,6 +128,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`resolve_class_remap`): without it, promoting a subset run silently
   wrote a `labels.txt` from the full class registry, mislabeling every
   class the served model emits.
+- The curation VLM worker never processed anything (bare-script import
+  failure swallowed); it now runs as a module and exits loudly on an
+  unhandled task exception.
+- Training runs failed at the final step because MLflow's artifact root was
+  a local path the trainer couldn't write; artifacts now proxy through the
+  tracking server (`--serve-artifacts`), and the trainer's MLflow client is
+  pinned to the server's major version.
+- Promoted Triton models could land outside the mounted model repository;
+  the repo path/URL are resolved from env at promoter construction, and
+  promoted models are reloaded on API startup after a Triton restart.
+- Auto-promote validated classifier labels via class clusters (purity 1.0 by
+  construction); it now only considers candidate clusters, skips excluded
+  items, and reports a correct dry-run count. Operator repair script:
+  `scripts/curation/revert_class_cluster_promotions.py`.
+- Region false-positive distances were squared L2 read as plain L2, loosening
+  every FP-clustering threshold; region k-means centroids are re-normalized.
+- The GPU-arbiter pause sentinel writer and readers used different paths.
+- `id_normalize` pulled excluded items back into their class cluster.
+- The GPU arbiter fell back to a sentinel-only pause when it could not stop a
+  container sharing the claimed GPU; `/train/start` and
+  `/train/start_campaign` now refuse with 409 and preflight blocks
+  (`gpu_arbiter` check). The `docker` SDK is now a dependency.
+- cuML kNN graph self-loops dropped (parity with sklearn).
 
 ### Removed
 - `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`
