@@ -53,31 +53,14 @@ export const EMPTY_CURATION_SETTINGS: CurationSettings = {
 };
 
 /**
- * How this UI is allowed to treat one axis.
- *
- * `'settable'`  — the backend both accepts a default AND honors it on a
- *                 real per-request code path. Gets a working control.
- * `'advisory'`  — the backend accepts and stores a default, and
- *                 `/methods` reflects it, but NO per-request call site
- *                 consults it, so setting one changes nothing an
- *                 operator would observe. Gets a read-only display, never
- *                 a control.
- *
- * THIS TABLE IS THE HONESTY BOUNDARY OF THE WHOLE FEATURE. Verified
- * 2026-09-21 by grepping every `resolve_effective_default` call site in
- * wt-oss-hardening (see docs/design/curation-settings-ui-plan-2026-09-21.md
- * §1.3.1) and cross-checked against that repo's own
- * `docs/design/curation_api_contract.md`, which documents the same two
- * gaps as "a known, deliberate gap rather than an oversight."
- *
- * When the backend grows a per-request `detection_profile` /
- * `prompt_pack` selection call site, flip that axis's `kind` to
- * `'settable'` here and NOWHERE ELSE — the page, the store guard, and
- * every test read this table.
+ * Presentation for one settings axis. WHETHER an axis gets a control is
+ * not decided here: it is the server's per-entry `settable` flag on
+ * `GET {API_PREFIX}/methods` (see `isAxisSettable`), so this table can
+ * never drift from what the backend actually honors. `PUT /settings`
+ * also 422s a non-settable axis, so the server is the final authority.
  */
 export interface SettingsAxisSpec {
   axis: SettingsAxis;
-  kind: 'settable' | 'advisory';
   /** Operator-facing name. The backend sends raw ids as labels for the
    *  two advisory axes (`'label': profile.name`), so the section heading
    *  has to supply the human words. */
@@ -102,7 +85,6 @@ export interface SettingsAxisSpec {
 export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
   {
     axis: 'cluster',
-    kind: 'settable',
     label: 'Clustering method',
     bucket: 'cluster_methods',
     blurb:
@@ -115,7 +97,6 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
   },
   {
     axis: 'sort',
-    kind: 'settable',
     label: 'Review queue sort',
     bucket: 'review_sorts',
     blurb:
@@ -128,7 +109,6 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
   },
   {
     axis: 'detection_profile',
-    kind: 'advisory',
     label: 'Detection profile',
     bucket: 'detection_profiles',
     blurb:
@@ -139,7 +119,6 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
   },
   {
     axis: 'prompt_pack',
-    kind: 'settable',
     label: 'VLM prompt pack',
     bucket: 'prompt_packs',
     // Verified 2026-09-23 on OpenProcessor main 80dd097: both auto_label's
@@ -152,12 +131,21 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
   },
 ];
 
-export function settableAxes(): SettingsAxisSpec[] {
-  return SETTINGS_AXES.filter((a) => a.kind === 'settable');
+/** True when the server marks any of this axis's `/methods` entries
+ *  `settable`. */
+export function isAxisSettable(
+  methods: OpMethodsResponse,
+  spec: SettingsAxisSpec,
+): boolean {
+  return (methods[spec.bucket] as MethodInfoBase[]).some((e) => e.settable === true);
 }
 
-export function advisoryAxes(): SettingsAxisSpec[] {
-  return SETTINGS_AXES.filter((a) => a.kind === 'advisory');
+export function settableAxes(methods: OpMethodsResponse): SettingsAxisSpec[] {
+  return SETTINGS_AXES.filter((a) => isAxisSettable(methods, a));
+}
+
+export function advisoryAxes(methods: OpMethodsResponse): SettingsAxisSpec[] {
+  return SETTINGS_AXES.filter((a) => !isAxisSettable(methods, a));
 }
 
 export function axisSpec(axis: string): SettingsAxisSpec | null {

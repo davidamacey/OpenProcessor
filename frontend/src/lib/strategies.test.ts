@@ -998,3 +998,24 @@ describe('isScopedAssistAvailable', () => {
     expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(true);
   });
 });
+
+describe('settable flag on /methods entries', () => {
+  it('keeps a boolean settable and drops anything else', () => {
+    const parsed = parseKbMethodsResponse({
+      strategies: [
+        { id: 'ivf', axis: 'cluster', label: 'IVF', status: 'stable', settable: true },
+        {
+          id: 'lp',
+          axis: 'detection_profile',
+          label: 'LP',
+          status: 'stable',
+          settable: false,
+        },
+        { id: 'p', axis: 'prompt_pack', label: 'P', status: 'stable', settable: 'yes' },
+      ],
+    });
+    expect(parsed.cluster_methods[0]!.settable).toBe(true);
+    expect(parsed.detection_profiles[0]!.settable).toBe(false);
+    expect(parsed.prompt_packs[0]!.settable).toBeUndefined();
+  });
+});

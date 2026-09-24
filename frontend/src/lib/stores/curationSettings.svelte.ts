@@ -94,12 +94,10 @@ class CurationSettingsStore {
    * is authoritative about the merge result, and adopting it is what
    * keeps an axis this build doesn't know about visible in the record.
    *
-   * Refuses an advisory axis BEFORE any network call. The backend would
-   * happily accept `detection_profile`/`prompt_pack` (they are in
-   * `SETTABLE_DEFAULT_AXES`) and store a value nothing honors — a 200
-   * that means nothing changed is strictly worse than a 422. This guard
-   * is what makes the honesty boundary structural rather than a
-   * rendering choice; `SETTINGS_AXES` is its single source of truth.
+   * Only an axis this build knows (`SETTINGS_AXES`) is sent. Whether the
+   * axis is settable at all is the server's call: `/settings` only offers
+   * a control for axes `/methods` marks `settable`, and `PUT /settings`
+   * 422s any other.
    *
    * Rethrows on failure after recording `error`, so the caller can toast
    * the server's own `detail`.
@@ -107,12 +105,6 @@ class CurationSettingsStore {
   async saveDefault(axis: string, id: string): Promise<void> {
     const spec = axisSpec(axis);
     if (!spec) throw new Error(`unknown settings axis: ${axis}`);
-    if (spec.kind !== 'settable') {
-      throw new Error(
-        `axis '${axis}' is advertised but not honored by any backend code ` +
-          `path yet — Cropwright will not write a default that does nothing`,
-      );
-    }
     this.saving = axis;
     try {
       this.settings = await putCurationDefaults({ [axis]: id });
@@ -133,15 +125,11 @@ class CurationSettingsStore {
    * own built-in default. Sends `{[axis]: null}` — see
    * `putCurationDefaults`'s docstring for the backend's clear contract.
    *
-   * Same advisory-axis guard as `saveDefault()`: there is nothing to
-   * clear on an axis this build never let you pin in the first place.
+   * Same known-axis guard as `saveDefault()`.
    */
   async clearDefault(axis: string): Promise<void> {
     const spec = axisSpec(axis);
     if (!spec) throw new Error(`unknown settings axis: ${axis}`);
-    if (spec.kind !== 'settable') {
-      throw new Error(`axis '${axis}' is advisory — there is no pinned default to clear`);
-    }
     this.saving = axis;
     try {
       this.settings = await putCurationDefaults({ [axis]: null });

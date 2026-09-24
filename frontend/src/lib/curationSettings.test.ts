@@ -64,25 +64,55 @@ describe('SETTINGS_AXES', () => {
     );
   });
 
-  // prompt_pack flipped 2026-09-23: OpenProcessor main's auto_label
-  // resolves the shared default per run (resolve_run_selection).
-  it('settableAxes() ids are exactly cluster/sort/prompt_pack — the honesty ratchet', () => {
-    expect(settableAxes().map((a) => a.axis)).toEqual(['cluster', 'sort', 'prompt_pack']);
-  });
-
-  it('advisoryAxes() ids are exactly detection_profile, and its blurb says Display only', () => {
-    const advisory = advisoryAxes();
-    expect(advisory.map((a) => a.axis)).toEqual(['detection_profile']);
-    for (const a of advisory) {
-      expect(a.blurb).toContain('Display only');
-    }
-  });
-
-  it('no settable axis has an irreversibleWarning now that the backend supports clearing', () => {
+  it('no axis has an irreversibleWarning now that the backend supports clearing', () => {
     // H-1 (plan §1.4) is closed — see putCurationDefaults' null-clear docstring.
-    for (const spec of settableAxes()) {
+    for (const spec of SETTINGS_AXES) {
       expect(spec.irreversibleWarning).toBeNull();
     }
+  });
+});
+
+// Settable-ness is the server's per-entry `settable` flag, never this
+// build's opinion — mirrors OpenProcessor main after (B): cluster, sort
+// and prompt_pack settable; detection_profile display-only.
+describe('settableAxes / advisoryAxes', () => {
+  const entry = (id: string, settable?: boolean) => ({
+    id,
+    label: id,
+    status: 'stable' as const,
+    ...(settable === undefined ? {} : { settable }),
+  });
+  const methods = {
+    cluster_methods: [entry('ivf', true)],
+    review_sorts: [entry('recent', true)],
+    detection_profiles: [entry('license_plate', false)],
+    prompt_packs: [entry('generic_item_v1', true)],
+  } as unknown as OpMethodsResponse;
+
+  it('follows the server flag', () => {
+    expect(settableAxes(methods).map((a) => a.axis)).toEqual([
+      'cluster',
+      'sort',
+      'prompt_pack',
+    ]);
+    expect(advisoryAxes(methods).map((a) => a.axis)).toEqual(['detection_profile']);
+  });
+
+  it('treats an absent flag as not settable', () => {
+    const old = {
+      ...methods,
+      prompt_packs: [entry('generic_item_v1')],
+    } as OpMethodsResponse;
+    expect(settableAxes(old).map((a) => a.axis)).not.toContain('prompt_pack');
+    expect(advisoryAxes(old).map((a) => a.axis)).toContain('prompt_pack');
+  });
+
+  it('flips with the server, with no table edit', () => {
+    const flipped = {
+      ...methods,
+      detection_profiles: [entry('license_plate', true)],
+    } as OpMethodsResponse;
+    expect(settableAxes(flipped).map((a) => a.axis)).toContain('detection_profile');
   });
 });
 

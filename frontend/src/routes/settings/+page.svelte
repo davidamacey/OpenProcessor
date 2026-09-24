@@ -10,10 +10,9 @@
    * clear) is gated behind an explicit confirm dialog for that reason,
    * even though the backend's null-clear path (added after this plan
    * was written) closed the one case that used to be genuinely
-   * irreversible (H-1: a pinned `sort` default). It never renders a
-   * control for `settableAxes()` by hardcoded axis id — always by
-   * iterating the shared `SETTINGS_AXES` table, so a future flip of an
-   * axis's `kind` needs no page edit.
+   * irreversible (H-1: a pinned `sort` default). Which axes get a
+   * control is the server's per-entry `settable` flag on `/methods`
+   * (`settableAxes`), never a hardcoded axis id.
    */
 
   import { ApiError } from '$lib/api';
@@ -152,7 +151,9 @@
   }
 
   const advisoryVisible = $derived(
-    advisoryAxes().some((a) => axisOptions(strategiesStore.methods, a).length > 0),
+    advisoryAxes(strategiesStore.methods).some(
+      (a) => axisOptions(strategiesStore.methods, a).length > 0,
+    ),
   );
 </script>
 
@@ -195,7 +196,7 @@
         {/if}
       </div>
 
-      {#each settableAxes() as spec (spec.axis)}
+      {#each settableAxes(strategiesStore.methods) as spec (spec.axis)}
         {@const options = axisOptions(strategiesStore.methods, spec)}
         {@const effective = effectiveDefaultId(
           curationSettingsStore.settings,
@@ -274,7 +275,7 @@
           them from its startup config. Setting a default here would change what /methods
           displays and nothing else, so Cropwright does not offer one.
         </p>
-        {#each advisoryAxes() as spec (spec.axis)}
+        {#each advisoryAxes(strategiesStore.methods) as spec (spec.axis)}
           {@const options = axisOptions(strategiesStore.methods, spec)}
           {#if options.length > 0}
             <div class="flex flex-wrap items-center gap-2 text-sm">

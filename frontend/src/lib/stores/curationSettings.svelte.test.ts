@@ -248,34 +248,34 @@ describe('curationSettingsStore', () => {
     expect(curationSettingsStore.settings.defaults).toEqual({ cluster: 'ivf' });
   });
 
-  it('clearDefault for an advisory axis throws before any fetch', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(curationSettingsStore.clearDefault('detection_profile')).rejects.toThrow(
-      /advisory/,
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   it('clearDefault for an unknown axis throws "unknown settings axis"', async () => {
     await expect(curationSettingsStore.clearDefault('nonsense')).rejects.toThrow(
       'unknown settings axis: nonsense',
     );
   });
 
-  it('saveDefault for an advisory axis throws before any fetch — detection_profile', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+  // The server owns settable-ness: a non-settable axis comes back as its
+  // 422, surfaced with the server's own detail.
+  it('saveDefault surfaces the server 422 for a non-settable axis', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            { detail: "axis 'detection_profile' is not settable" },
+            { status: 422 },
+          ),
+        ),
+    );
 
     await expect(
-      curationSettingsStore.saveDefault('detection_profile', 'grounding_v2'),
-    ).rejects.toThrow(/advertised but not honored/);
-
-    expect(fetchMock).not.toHaveBeenCalled();
+      curationSettingsStore.saveDefault('detection_profile', 'license_plate'),
+    ).rejects.toThrow(/not settable/);
+    expect(curationSettingsStore.error).toMatch(/not settable/);
   });
 
-  it('saveDefault for prompt_pack (settable since auto_label honors it) reaches the wire', async () => {
+  it('saveDefault for prompt_pack reaches the wire', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         defaults: { prompt_pack: 'generic_item_v1' },

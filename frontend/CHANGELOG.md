@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- `/settings` decides which axes get a control from the server's
+  per-entry `settable` flag on `/methods`, not from a hardcoded
+  `SETTINGS_AXES.kind`. The table now carries only labels, buckets and
+  blurbs, so it can't drift from what the backend honors. The store's
+  client-side "advisory axis" guard is gone too: OpenProcessor rejects a
+  non-settable axis with a 422, and that detail is surfaced.
+
 ### Fixed
 
 - `/settings`'s prompt-pack blurb understated its effect. The shared

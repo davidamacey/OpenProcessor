@@ -61,6 +61,10 @@ export interface MethodInfoBase {
   label: string;
   status: MethodStatus;
   description?: string | null;
+  /** Whether `PUT {API_PREFIX}/settings` accepts this entry as the shared
+   *  default for its axis — the server's own record of which axes a
+   *  default actually changes. Absent is treated as not settable. */
+  settable?: boolean;
 }
 
 export interface ClusterMethodInfo extends MethodInfoBase {
@@ -245,6 +249,7 @@ function normalizeBase(raw: unknown): MethodInfoBase | null {
   const base: MethodInfoBase = { id, label, status: normalizeMethodStatus(raw.status) };
   const description = optString(raw.description);
   if (description !== undefined) base.description = description;
+  if (typeof raw.settable === 'boolean') base.settable = raw.settable;
   return base;
 }
 
