@@ -1261,9 +1261,10 @@ class`) so an operator can see where a crop lives before relabeling
   doesn't have (`outdoor_traffic`, `motorcycle_tilt`, `plates`,
   `plates_aggressive`, `custom`). Picking one failed the run with
   "unknown augmentation preset", but only after it had started and
-  stopped the VLM. It now lists the trainer's own ids. A contract test
-  (`src/lib/contract/augmentPresets.test.ts`) compares them against the
-  backend checkout's `docker/trainer/augment.py`.
+  stopped the VLM. It now lists the trainer's own ids. (Superseded by
+  the OpenProcessor 6c77deb adoption below, which replaces the pinned
+  id list with the served `GET {API_PREFIX}/train/augmentation_presets`
+  catalog.)
 - Four bugs found by the `train-smoke` live UI smoke test
   (`artifacts_local/cw-live/train-smoke/`):
   - **`/export`** — after a successful export the "frozen multi-class
