@@ -77,6 +77,7 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
         text_ocr='plate_text_ocr',
         text_disagreement='plate_text_disagreement',
         validated='plate_validated',
+        auto_confirmed='plate_auto_confirmed',
         verified='plate_verified',
         verified_at='plate_verified_at',
         verifier='plate_verifier',

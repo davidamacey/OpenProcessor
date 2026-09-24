@@ -1946,6 +1946,17 @@
             "title": "Proposed Class Name",
             "type": "string"
           },
+          "region_auto_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Auto Confirmed"
+          },
           "region_bbox_correct": {
             "anyOf": [
               {

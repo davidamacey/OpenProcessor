@@ -867,7 +867,6 @@ async def run(args: argparse.Namespace) -> int:
                             detector_version=region_profile().segmenter_version,
                             chain=t.detection_trace,
                             plate_verified=False,
-                            plate_validated=False,
                             verifier=None,
                             verifier_version=None,
                             extra={F.skip_verify: True},
@@ -1156,7 +1155,7 @@ async def run(args: argparse.Namespace) -> int:
                                 detector_version=_det[1],
                                 chain=t.detection_trace,
                                 class_names=effective_class_names,
-                                plate_validated=auto or False,
+                                auto_confirmed=bool(auto),
                                 name_to_id=name_to_id,
                             )
                             # Preserve the candidate_source marker for

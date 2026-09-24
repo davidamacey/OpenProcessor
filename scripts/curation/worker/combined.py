@@ -162,7 +162,7 @@ async def _try_combined_class_region(
                 detector_version=detector_version,
                 chain=task.detection_trace,
                 class_names=list(class_names),
-                plate_validated=auto or False,
+                auto_confirmed=bool(auto),
                 name_to_id=name_to_id,
             )
             return True

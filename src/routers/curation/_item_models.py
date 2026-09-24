@@ -123,7 +123,11 @@ class ItemDoc(BaseModel):
     region_text_vlm: str | None = None
     region_text_ocr: str | None = None
     region_text_disagreement: bool | None = None
+    # Human validation only (a human confirmed / drew / rejected it).
     region_validated: bool | None = None
+    # The worker's auto-confirm policy accepted the box: an accepted but
+    # not human-reviewed region (it stays in the region review queue).
+    region_auto_confirmed: bool | None = None
     region_verified: bool | None = None
     region_verified_at: str | None = None
     region_verifier: str | None = None

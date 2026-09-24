@@ -146,6 +146,7 @@ def detection_fields(fields: RegionFields | None = None) -> tuple[str, ...]:
         F.verified_at,
         F.verifier,
         F.verifier_version,
+        F.auto_confirmed,
         F.visible,
         F.detector,
         F.detector_version,

@@ -192,7 +192,6 @@ async def accept_without_vlm(
         detector_version=version,
         chain=t.detection_trace,
         plate_verified=False,
-        plate_validated=False,
         verifier=None,
         verifier_version=None,
     )

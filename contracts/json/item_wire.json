@@ -86,6 +86,7 @@
     "region_text_ocr",
     "region_text_disagreement",
     "region_validated",
+    "region_auto_confirmed",
     "region_verified",
     "region_verified_at",
     "region_verifier",
@@ -608,6 +609,18 @@
         "default": "",
         "title": "Proposed Class Name",
         "type": "string"
+      },
+      "region_auto_confirmed": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Auto Confirmed"
       },
       "region_bbox_correct": {
         "anyOf": [
@@ -1241,6 +1254,7 @@
     "region_text_ocr",
     "region_text_disagreement",
     "region_validated",
+    "region_auto_confirmed",
     "region_verified",
     "region_verified_at",
     "region_verifier",

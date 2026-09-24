@@ -68,7 +68,13 @@ class RegionFields:
     text_ocr: str = 'region_text_ocr'
     text_disagreement: str = 'region_text_disagreement'
 
+    # Human validation only: a human confirmed (or drew / rejected) the
+    # region. Machine verdicts never set it.
     validated: str = 'region_validated'
+    # The worker's auto-confirm policy accepted the box (detector and
+    # verifier agreed strongly enough to accept it without a human). An
+    # accepted-but-unreviewed region: it stays in the human review queue.
+    auto_confirmed: str = 'region_auto_confirmed'
     verified: str = 'region_verified'
     verified_at: str = 'region_verified_at'
     verifier: str = 'region_verifier'

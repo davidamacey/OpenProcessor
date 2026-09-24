@@ -732,8 +732,8 @@ answered. An empty answer leaves every class field as it was (it is **not**
 carries it in `vlm_raw_class`). Such items appear in the `all` review tab and
 stay out of the VLM selectors for 24 h.
 
-Region keys (39, one per `RegionFields` attribute except `embedding`,
-`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_candidate_bbox_norm`, `region_candidate_score`, `region_candidate_detector`, `region_candidate_detector_version`, `region_candidate_source`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+Region keys (40, one per `RegionFields` attribute except `embedding`,
+`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_candidate_bbox_norm`, `region_candidate_score`, `region_candidate_detector`, `region_candidate_detector_version`, `region_candidate_source`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
 
 Derived keys (computed by the serializer, never stored):
 
@@ -763,6 +763,15 @@ Derived keys (computed by the serializer, never stored):
   key — the retired `hdd_source` storage key is gone, S2).
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
+
+`region_validated` is **human** validation only: a human confirmed, drew
+or rejected the region. The detection worker never sets it. When the
+worker's auto-confirm policy accepts a box (detector and verifier agree
+strongly enough) it sets `region_auto_confirmed=true` instead: the region
+is accepted (`detected`, exported as a positive) but unreviewed, so it stays
+in the `regions` review tab. Rows an older worker stamped
+`region_validated=true` without a human are re-labelled by
+`scripts/curation/repair_region_validation.py` (dry run by default).
 `thumbnail_url` / `region_thumbnail_url` are built from the configured
 `api_prefix` (`{prefix}/crops/{crop_id}/thumbnail` and
 `…/region_thumbnail`), so `OP_API_PREFIX` and the frontend's proxy prefix

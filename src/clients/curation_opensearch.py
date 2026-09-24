@@ -245,8 +245,11 @@ def _region_text_reader_mapping() -> dict[str, Any]:
 
 def _region_review_mapping() -> dict[str, Any]:
     """Region fields that keep machine verdicts reviewable: the candidate
-    box a verifier rejected (see ``RegionFields.candidate_bbox_norm``)."""
+    box a verifier rejected (see ``RegionFields.candidate_bbox_norm``) and
+    the worker's auto-confirm (``RegionFields.auto_confirmed``), kept apart
+    from human validation."""
     return {
+        F.auto_confirmed: {'type': 'boolean'},
         F.candidate_bbox_norm: {'type': 'float'},
         F.candidate_score: {'type': 'float'},
         F.candidate_detector: {'type': 'keyword'},
