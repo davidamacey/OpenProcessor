@@ -5,6 +5,7 @@
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotIsPresent } from '$lib/annotations/types';
+  import { classSourcesStore } from '$stores/classSources.svelte';
 
   interface Props {
     crop: Crop;
@@ -14,18 +15,31 @@
 
   const vlmConf = $derived<string | null>(crop.vlm_confidence ?? null);
   const classSource = $derived<string | null>(crop.class_source ?? null);
+  // DQ-M8: served role, not a hardcoded string match against class_source
+  // — the catalog (GET {API_PREFIX}/class_sources, classSourcesStore) is
+  // the deployment's actual vocabulary (sourceBadge.ts uses the same
+  // role.startsWith('vlm') check for the label-source badge).
+  const isVlmSourced = $derived(
+    (classSourcesStore.roleFor(classSource) ?? '').startsWith('vlm'),
+  );
 
-  // Slot(s) bound to this crop's class. A one-entry map built from the
-  // crop's own class_id/class_name is all forClass() needs — this panel
-  // has no other source of a classesById lookup, and every crop already
-  // carries the one class name that matters for its own binding check.
-  const boundSlots = $derived(
-    crop.class_id != null
-      ? slotRegistry.forClass(
-          crop.class_id,
-          new Map([[crop.class_id, crop.class_name ?? '']]),
-        )
-      : [],
+  // DQ-m7 (docs/design/data-quality-pass-2026-09-24.md): this used to be
+  // `slotRegistry.forClass(crop.class_id, ...)` — slots bound to the
+  // crop's OWN class. That's the wrong question for a sub-box slot like
+  // license_plate: a plate box lives on a VEHICLE crop (class "sedan",
+  // "suv", ...), never on a crop literally classified "license_plate", so
+  // forClass() here was structurally guaranteed to return nothing for
+  // every real plate-bearing crop — the modal showed item text and class
+  // history but never the plate's status, chosen text, VLM/OCR
+  // candidates, disagreement flag or detector chain, on every crop
+  // (00000000 included) regardless of whether it actually had plate
+  // data. The correct question is "does this crop carry evidence for
+  // this slot" (slotIsPresent(slotOf(crop, spec))) — the same check
+  // every other slot-generic surface in this app uses (review/+page.svelte,
+  // SlotCard.svelte) — evaluated over every REGISTERED slot, not just the
+  // one (if any) bound to the crop's own class.
+  const presentSlots = $derived(
+    slotRegistry.all.filter((spec) => slotIsPresent(slotOf(crop, spec))),
   );
 
   function pct(value: number | null | undefined): string {
@@ -124,14 +138,22 @@
     {/if}
   </dd>
 
-  <dt class="text-zinc-500">Confidence</dt>
-  <dd class="font-mono">
-    {pct(crop.label_confidence)}
-    {#if vlmConf}
-      <span class="ml-2 text-zinc-500">VLM:</span>
-      <span class="text-zinc-200">{vlmConf}</span>
-    {/if}
-  </dd>
+  <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md): `label_confidence`
+       (wire `confidence`) is the vehicle-detector/v6 score on EVERY row,
+       including ones the VLM labeled — never the VLM's own confidence.
+       Calling it plain "Confidence" next to a VLM-sourced label reads as
+       the VLM's certainty (the design doc's repro: "Confidence 94.6%"
+       under "Current label dumptruck (vlm)"). Label it for what it is
+       whenever the class came from the VLM, and show the VLM's own
+       categorical confidence (`vlm_confidence`, served separately) as
+       its own row instead of folding it in as a same-row detail. -->
+  <dt class="text-zinc-500">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
+  <dd class="font-mono">{pct(crop.label_confidence)}</dd>
+
+  {#if vlmConf}
+    <dt class="text-zinc-500">VLM confidence</dt>
+    <dd class="font-mono text-zinc-200">{vlmConf}</dd>
+  {/if}
 
   {#if crop.vlm_suggested_class_id != null}
     <dt class="text-zinc-500">VLM proposed</dt>
@@ -175,7 +197,7 @@
   {/if}
 </dl>
 
-{#each boundSlots as spec (spec.key)}
+{#each presentSlots as spec (spec.key)}
   {@const data = slotOf(crop, spec)}
   {#if slotIsPresent(data)}
     <div class="mt-4 border-t border-zinc-800 pt-3">
