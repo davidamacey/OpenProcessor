@@ -27,7 +27,11 @@ from scripts.curation.worker.client import Sam3Client
 from src.config import get_region_fields
 
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [
+    pytest.mark.asyncio,
+    # The cascade needs an active region profile; the default is none.
+    pytest.mark.usefixtures('reference_region_profile'),
+]
 
 
 def _make_jpeg(width: int = 320, height: int = 240) -> bytes:

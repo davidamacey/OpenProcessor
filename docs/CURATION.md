@@ -38,10 +38,11 @@ All curation routes are mounted under a single configurable prefix
 A new deployment configures the subsystem for its own domain through
 four dataclasses instead of forking code. All four support
 `from_env()` so most of a deployment can be configured purely through
-environment variables (see the env var table below); `DetectionProfile`
-is the one place you will likely also want to construct an explicit
-instance for a genuinely new region type, since its shipped defaults
-describe the reference license-plate domain.
+environment variables (see the env var table below), including the
+region `DetectionProfile` (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`).
+The `DetectionProfile` dataclass field defaults still describe the
+reference license-plate domain's OCR/segmenter wiring, so review them for
+a genuinely new region type.
 
 | Dataclass | File | What it configures |
 |---|---|---|
@@ -104,29 +105,25 @@ trainer. A deployment supplies:
   Swapping in a different embedding model means keeping that same Triton
   model name and tensor contract, and matching the preprocessing in
   `src/services/detection/pe_preprocess.py`.
-- **A region-of-interest detector** — any Triton model whose name you
-  set as `DetectionProfile.detector_model` (via `OP_DETECTION_*` env
-  vars or a constructed instance). Ingest returns `503` until one is
-  configured and loaded. **Note:** `GET /methods` advertises exactly
-  one built-in `detection_profile` out of the box, named
-  `license_plate` with `detector_model=lpr_nanov11_640` — this is
-  `cascade_detect.py`'s `REFERENCE_LICENSE_PLATE_PROFILE` (named for what
-  it is since work item B2, though it is still the profile registered
-  with `default=True` until a domain-neutral default exists), kept
-  byte-identical to the original reference deployment's constants so that
-  deployment's
-  existing call sites (which never pass a profile explicitly) keep
-  working unchanged across this genericization. It is **not** a
-  suggested starting point for a new, non-LPR deployment. Setting your
-  own `OP_DETECTION_*` env vars configures the profile ingest actually
-  uses (`_get_detection_profile()` in `routers/curation/ingest.py`),
-  but does **not** by itself make it appear on `GET /methods` — that
-  registry is populated only by explicit
-  `src.services.detection.profile_registry.register_profile()` calls
-  (see that module's docstring); there is no config-driven
-  auto-registration yet. A deployment that wants its own profile
-  advertised alongside (or instead of) `license_plate` needs a small
-  amount of startup code calling `register_profile()`.
+- **An item detector for ingest** — any Triton model whose name you set
+  as the ingest `DetectionProfile.detector_model` (via `OP_DETECTION_*`
+  env vars, read by `_get_detection_profile()` in
+  `routers/curation/ingest.py`). It proposes the item crops in each
+  image. Ingest returns `503` until one is configured and loaded.
+- **Optionally, a region-of-interest profile** — the sub-region the
+  detection worker's cascade looks for *inside* each item crop.
+  **Neutral by default:** with nothing configured no region profile is
+  active, `GET /methods` advertises an empty `detection_profile` axis,
+  and the worker idles instead of running the cascade. Select one with
+  `OP_REGION_PROFILE=<name>` (a profile your startup code registered via
+  `src.services.detection.profile_registry.register_profile()`, or a
+  built-in reference profile — today `license_plate`, which reproduces
+  the original reference deployment's constants and is an example, not a
+  suggested starting point), and/or override individual fields with
+  `OP_REGION_DETECTION_<FIELD>` (e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`,
+  `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`). The resolved profile is
+  registered automatically, so it is exactly what `GET /methods`
+  advertises. An unknown `OP_REGION_PROFILE` name fails at startup.
 - **A dual-head detector, if you want the backbone embedding**
   (`v6_embedding`). Residual clustering, the embedding visualization,
   item scores and the OCC conflict handler all read that field, and it
@@ -317,7 +314,8 @@ be changed at runtime once the app has started.
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
 | Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BBOX_NORM`) — see `RegionFields` for the full attribute list |
-| Detection profile | `OP_DETECTION_<FIELD>` (e.g. `OP_DETECTION_NAME`, `OP_DETECTION_ASPECT_MIN`, `OP_DETECTION_OCR_REC_MODEL`, `OP_DETECTION_DETECTOR_MODEL`) — tuple/frozenset fields take a comma-separated value |
+| Ingest item-detector profile | `OP_DETECTION_<FIELD>` (e.g. `OP_DETECTION_DETECTOR_MODEL`, `OP_DETECTION_INPUT_SIZE`, `OP_DETECTION_CONFIDENCE_FLOOR`) — tuple/frozenset fields take a comma-separated value |
+| Region detection profile (off by default) | `OP_REGION_PROFILE` (select by name, e.g. `license_plate`), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
 | Ingest | `OP_MAX_INGEST_CONCURRENCY` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |
 | Item-scores tuning | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |

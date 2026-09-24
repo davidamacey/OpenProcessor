@@ -29,7 +29,8 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE, region_provenance
+from src.services.detection.cascade_detect import region_provenance
+from src.services.detection.profile_registry import region_profile_or_neutral
 
 
 _TRAINING_CANDIDATE_MODES = (
@@ -211,10 +212,16 @@ async def list_plates(
 
 
 def _training_candidate_query(
-    mode: str, profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE
+    mode: str, profile: DetectionProfile | None = None
 ) -> tuple[dict[str, Any], str]:
-    """Return the OpenSearch query body + selection_reason for a mode."""
+    """Return the OpenSearch query body + selection_reason for a mode.
+
+    ``profile`` defaults to the deployment's active region profile; with
+    none configured the detector-keyed modes simply match nothing.
+    """
     F = get_region_fields()
+    if profile is None:
+        profile = region_profile_or_neutral()
     if mode == 'detector_blind_spots':
         # Primary detector missed but the secondary segmenter found a
         # region, the VLM verified. These are the high-signal training
@@ -384,6 +391,7 @@ def _validate_bbox_norm(bbox: tuple[float, float, float, float]) -> None:
 def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str, Any]:
     """Build the OpenSearch ``doc`` body for a region set/clear update."""
     F = get_region_fields()
+    human = region_profile_or_neutral()
     now = _now_iso()
     if payload.bbox_norm is None:
         # Human says "no region visible" — preserve that against re-runs of
@@ -395,10 +403,10 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
                 F.score: None,
                 F.status: RegionStatus.NO_REGION_VISIBLE,
                 F.label_source: payload.label_source,
-                F.detector: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-                F.detector_version: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
-                F.verifier: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-                F.verifier_version: REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+                F.detector: human.human_detector_name,
+                F.detector_version: human.human_detector_version,
+                F.verifier: human.human_detector_name,
+                F.verifier_version: human.human_detector_version,
                 F.verified_at: now,
                 F.detected_at: now,
                 F.bbox_frame: 'source',
@@ -424,11 +432,11 @@ def _region_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str
             # edits (audit: SAM-worker class-clobber bug).
             F.validated: True,
             **region_provenance(
-                detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-                detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+                detector=human.human_detector_name,
+                detector_version=human.human_detector_version,
                 bbox_frame='source',
-                verifier=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-                verifier_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+                verifier=human.human_detector_name,
+                verifier_version=human.human_detector_version,
                 detected_at=now,
                 verified_at=now,
             ),

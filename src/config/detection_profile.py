@@ -14,7 +14,7 @@ detection-cascade code.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
 
@@ -64,7 +64,13 @@ class DetectionProfile:
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
 
     @classmethod
-    def from_env(cls, prefix: str = 'OP_DETECTION_', *, name: str = 'region') -> DetectionProfile:
+    def from_env(
+        cls,
+        prefix: str = 'OP_DETECTION_',
+        *,
+        name: str = 'region',
+        base: DetectionProfile | None = None,
+    ) -> DetectionProfile:
         """Build a :class:`DetectionProfile` from ``{prefix}*`` env vars,
         mirroring :meth:`CurationConfig.from_env` / :meth:`RegionFields.from_env`.
 
@@ -79,9 +85,13 @@ class DetectionProfile:
         ``tuple`` from a comma-separated list (each element converted to
         the tuple's own element type), and a ``frozenset`` from a
         comma-separated list of strings.
+
+        ``base``, when given, supplies the fallback value for every field
+        instead of the dataclass defaults (including ``name``) — used to
+        layer env overrides on top of a selected named profile.
         """
-        defaults = cls(name=name)
-        overrides: dict[str, Any] = {'name': name}
+        defaults = base if base is not None else cls(name=name)
+        overrides: dict[str, Any] = {'name': defaults.name}
         for f in fields(defaults):
             raw = os.environ.get(f'{prefix}{f.name.upper()}')
             if raw is None:
@@ -102,4 +112,9 @@ class DetectionProfile:
                 )
             else:
                 overrides[f.name] = raw
-        return cls(**overrides)
+        return replace(defaults, **overrides)
+
+    @classmethod
+    def env_overrides_present(cls, prefix: str) -> bool:
+        """``True`` if any ``{prefix}<FIELD>`` env var is set."""
+        return any(f'{prefix}{f.name.upper()}' in os.environ for f in fields(cls))

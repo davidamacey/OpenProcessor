@@ -296,10 +296,10 @@ async def label_crop(
     entry = reg.get(payload.class_id)
     class_name = entry.class_name if entry is not None else ''
     from src.services.curation.history import record_class_history
-    from src.services.detection.cascade_detect import (
-        REFERENCE_LICENSE_PLATE_PROFILE,
-        class_provenance,
-    )
+    from src.services.detection.cascade_detect import class_provenance
+    from src.services.detection.profile_registry import region_profile_or_neutral
+
+    human = region_profile_or_neutral()
 
     def _merge_label(current: dict[str, Any]) -> dict[str, Any]:
         history = record_class_history(current, writer='human:label_crop')
@@ -322,8 +322,8 @@ async def label_crop(
             # AHC sub-cluster grouping no longer applies.
             'cluster_subid': None,
             **class_provenance(
-                detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-                detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+                detector=human.human_detector_name,
+                detector_version=human.human_detector_version,
                 labeler='human',
             ),
             'updated_at': _now_iso(),

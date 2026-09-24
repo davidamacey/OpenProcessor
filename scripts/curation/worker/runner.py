@@ -27,12 +27,12 @@ from src.services.curation.metrics import (
     LEGACY_STAGE_LPR_DURATION_SECONDS,
 )
 from src.services.detection.cascade_detect import (
-    REFERENCE_LICENSE_PLATE_PROFILE,
     PaddleOcrTextRecognizer,
     RegionDetector,
     crop_norm_to_source_norm,
     is_plausible_region_bbox,
 )
+from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 
 
@@ -55,6 +55,7 @@ from scripts.curation.worker.state import (
     _is_secondary_shape,
     _ItemTask,
     _wait_for_sentinel_clear,
+    region_profile,
 )
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
@@ -176,9 +177,26 @@ async def run(args: argparse.Namespace) -> int:
     # (and friends) still intercept calls made from this split-out runner.
     from scripts.curation import sam_worker_main as _wkr
 
+    # Neutral default: with no region profile configured there is no
+    # region cascade to run. Idle (continuous/daemon mode, so the container
+    # stays healthy instead of restart-looping) or exit 0 (one-shot mode)
+    # without touching Triton/OpenSearch/the segmenter.
+    profile = get_active_region_profile()
+    if profile is None:
+        logger.warning(
+            'region_profile_not_configured',
+            detail=(
+                'region detection is disabled; set OP_REGION_PROFILE or '
+                'OP_REGION_DETECTION_* to enable it'
+            ),
+        )
+        if args.continuous:
+            await stop_event.wait()
+        return 0
+
     pool = _wkr.AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
     await pool.initialize()
-    lpr = RegionDetector(pool)
+    lpr = RegionDetector(pool, profile)
     # text-hinted re-pass: when the primary detector + secondary
     # segmenter both globally miss but the VLM confirmed the crop has a
     # region of interest, run the OCR pipeline (det + rec) on the whole
@@ -187,13 +205,24 @@ async def run(args: argparse.Namespace) -> int:
     # the final geometry — the OCR-detection bbox is never trusted as a
     # region bbox source (it's too loose; produced visibly-oversized
     # regions).
-    ocr_recognizer = PaddleOcrTextRecognizer(pool)
+    ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
     # D5: the segmenter leg is optional. An empty ``--sam3-url``/``SAM3_URL``
     # constructs a disabled Sam3Client — segment_plate() then always
     # returns None (the same "no candidate" result callers already
     # handle) without attempting any HTTP call. A deployment with no
     # segmentation service of its own leaves this unset.
-    sam3 = _wkr.Sam3Client(args.sam3_url)
+    # The segmenter is prompt-driven; the prompt is region-type config
+    # (OP_REGION_DETECTION_SAM_TEXT_PROMPT). A segmenter URL with no prompt
+    # would be rejected by the service on every call, so disable the leg.
+    sam3_url = args.sam3_url
+    if sam3_url and not profile.sam_text_prompt:
+        logger.warning(
+            'segmenter_disabled_no_text_prompt',
+            profile=profile.name,
+            detail='set OP_REGION_DETECTION_SAM_TEXT_PROMPT to use the segmenter leg',
+        )
+        sam3_url = ''
+    sam3 = _wkr.Sam3Client(sam3_url, text_prompt=profile.sam_text_prompt)
     gemma = _wkr.VlmLabeler(base_url=args.gemma_url) if args.gemma_url else _wkr.VlmLabeler()
     # B-PR5: populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
@@ -729,17 +758,15 @@ async def run(args: argparse.Namespace) -> int:
                         projected = crop_norm_to_source_norm(
                             sam_candidate.bbox_norm, t.vehicle_bbox_norm
                         )
+                        t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
                         t.detection_trace.append(
-                            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:hit'
-                        )
-                        t.detection_trace.append(
-                            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:skip_gemma_verify'
+                            f'{region_profile().segmenter_name}:skip_gemma_verify'
                         )
                         t.update_doc = _region_write_doc(
                             plate_in_source=projected,
                             score=sam_candidate.score,
-                            detector=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
-                            detector_version=REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
+                            detector=region_profile().segmenter_name,
+                            detector_version=region_profile().segmenter_version,
                             chain=t.detection_trace,
                             plate_verified=False,
                             plate_validated=False,
@@ -776,9 +803,7 @@ async def run(args: argparse.Namespace) -> int:
                     ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
                 )
                 if ocr_pick is not None:
-                    t.detection_trace.append(
-                        f'{REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model}:text_hint:hit'
-                    )
+                    t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:hit')
                     sub_cand, _sub_box = await _resegment_from_text_hint(
                         t.crop_jpeg, ocr_pick.bbox_norm, sam3
                     )
@@ -794,17 +819,13 @@ async def run(args: argparse.Namespace) -> int:
                         await combined_q.put(t)
                         sam_q.task_done()
                         continue
-                    t.detection_trace.append(
-                        f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:text_hint:miss'
-                    )
+                    t.detection_trace.append(f'{region_profile().segmenter_name}:text_hint:miss')
                 elif ocr_regions:
                     t.detection_trace.append(
-                        f'{REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model}:text_hint:no_plate_shape'
+                        f'{region_profile().ocr_rec_model}:text_hint:no_plate_shape'
                     )
                 else:
-                    t.detection_trace.append(
-                        f'{REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model}:text_hint:miss'
-                    )
+                    t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:miss')
 
                 # Nothing found by any detector → no_region_box.
                 t.update_doc = {
@@ -990,8 +1011,8 @@ async def run(args: argparse.Namespace) -> int:
                             # canonical detector name used in provenance.
                             _det = {
                                 'sam3': (
-                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
-                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
+                                    region_profile().segmenter_name,
+                                    region_profile().segmenter_version,
                                 ),
                                 # OCR-hinted re-pass: bbox came from the
                                 # secondary segmenter too, just on a
@@ -1000,16 +1021,16 @@ async def run(args: argparse.Namespace) -> int:
                                 # text-hint trace lives on the detector
                                 # chain.
                                 'sam3_text_hint': (
-                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
-                                    REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
+                                    region_profile().segmenter_name,
+                                    region_profile().segmenter_version,
                                 ),
                                 'lpr': (
-                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
-                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+                                    region_profile().detector_model,
+                                    region_profile().detector_version,
                                 ),
                                 'lpr_existing': (
-                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
-                                    REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+                                    region_profile().detector_model,
+                                    region_profile().detector_version,
                                 ),
                             }.get(
                                 t.candidate_source,
@@ -1040,9 +1061,7 @@ async def run(args: argparse.Namespace) -> int:
                                 rc = t.candidate_text_confidence or 0.0
                                 t.update_doc[F.text] = t.candidate_text
                                 t.update_doc[F.text_raw] = t.candidate_text
-                                t.update_doc[F.text_source] = (
-                                    REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model
-                                )
+                                t.update_doc[F.text_source] = region_profile().ocr_rec_model
                                 t.update_doc[F.text_engine_version] = '1'
                                 # Map numeric rec_score -> VLM confidence
                                 # bin so downstream consumers treat

@@ -427,17 +427,16 @@ def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]
     Reads :mod:`src.services.detection.profile_registry` -- a real,
     process-lifetime registry a deployment can add more than one profile
     to (e.g. a license-plate profile AND a shipping-label profile) --
-    rather than hardcoding the single ``REFERENCE_LICENSE_PLATE_PROFILE`` here. Today
-    exactly one profile is ever registered (importing
-    ``src.services.detection.cascade_detect`` registers its own
-    ``REFERENCE_LICENSE_PLATE_PROFILE`` as the default), so this axis lists exactly one
-    entry, but the mechanism is not limited to one.
+    rather than hardcoding any one profile here. Neutral by default: an
+    unconfigured deployment registers nothing, so this axis is empty; the
+    env-selected profile (``OP_REGION_PROFILE`` / ``OP_REGION_DETECTION_*``)
+    plus anything startup code registers is listed.
 
     ``default_id`` is :func:`resolve_effective_default`'s answer for the
     ``'detection_profile'`` axis (falls back to
     ``get_default_profile_name()`` with no shared-settings override)."""
-    # Import triggers cascade_detect's module-level `register_profile`
-    # call if it hasn't run yet in this process.
+    # Import triggers cascade_detect's module-level env resolution if it
+    # hasn't run yet in this process.
     from src.services.detection import cascade_detect  # noqa: F401
     from src.services.detection.profile_registry import get_profiles
 

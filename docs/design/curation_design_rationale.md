@@ -355,11 +355,14 @@ end to end:**
    `data/class_registry.example.json` for a worked warehouse/pallet
    registry.
 2. Define a `DetectionProfile` for the region type you want the
-   cascade to find (e.g. a pallet ID tag) and register it via
+   cascade to find (e.g. a pallet ID tag) — purely via env
+   (`OP_REGION_DETECTION_NAME=pallet_tag`,
+   `OP_REGION_DETECTION_DETECTOR_MODEL=...`,
+   `OP_REGION_DETECTION_SAM_TEXT_PROMPT=...`), or register it via
    `src.services.detection.profile_registry.register_profile()` at
-   process startup, or construct it directly wherever the detection
-   cascade is wired for your deployment — mirror
-   `cascade_detect.REFERENCE_LICENSE_PLATE_PROFILE`'s shape.
+   process startup and select it with `OP_REGION_PROFILE`. Mirror
+   `reference_profiles.REFERENCE_LICENSE_PLATE_PROFILE`'s shape. With
+   no region profile configured (the default) region detection is off.
 3. Write a `PromptPack` JSON file describing the pallet vocabulary —
    copy `data/prompt_pack.example.json` (a worked warehouse/pallet
    pack) and edit its prompts/`class_descriptions`/`synonyms`.

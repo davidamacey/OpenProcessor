@@ -245,16 +245,27 @@ def test_export_axis_advertises_yolo_and_single_class_and_omits_lpr(
     assert 'lpr' not in export_entries
 
 
-def test_detection_profile_axis_advertises_the_registered_default(
+def test_detection_profile_axis_is_empty_by_default(app_client: TestClient) -> None:
+    """Neutral default: with no region profile configured, nothing is
+    advertised -- the built-in reference plate profile is selectable by
+    name but no longer self-registers as the default."""
+    from src.services.detection import profile_registry
+
+    profile_registry._reset_registry_for_tests()
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    body = r.json()
+    assert [s for s in body['strategies'] if s['axis'] == 'detection_profile'] == []
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_detection_profile_axis_advertises_the_selected_profile(
     app_client: TestClient,
 ) -> None:
-    """Labeling-assist plan task (b): today exactly one ``DetectionProfile``
-    is ever constructed (``cascade_detect.REFERENCE_LICENSE_PLATE_PROFILE``, registered as
-    the default the moment that module is imported -- see
-    ``src.services.detection.profile_registry``). This axis must list it,
-    keyed by the profile's own ``name`` field, as the sole stable/default
-    entry."""
-    from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
+    """``OP_REGION_PROFILE=license_plate`` selects the built-in reference
+    profile; the axis lists it, keyed by its ``name``, as the sole
+    stable/default entry."""
+    from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 
     r = app_client.get('/curation/methods')
     assert r.status_code == 200

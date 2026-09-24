@@ -48,7 +48,6 @@ from scripts.curation.worker.state import (  # noqa: F401
     DEFAULT_SAM3_URLS,
     DEFAULT_TRITON,
     JPEG_QUALITY,
-    SECONDARY_SHAPE_GROUPS,
     STATUS_PENDING_DETECTION,
     STATUS_PENDING_VERIFICATION,
 )
