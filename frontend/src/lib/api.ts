@@ -1169,9 +1169,28 @@ type RawCluster = {
   dominant_class_id: number | null;
   dominant_class_name: string | null;
   dominant_count: number;
+  /** DQ-M2 fix (dq-queues cutover, 2026-09-24): the share of the
+   *  `purity_n` members the cluster-geometry pass measured for this
+   *  cluster whose NEAREST CLUSTER CENTROID is this cluster's own —
+   *  independent of the labels that placed them, so a class cluster is
+   *  no longer 1.0 by construction. Null when no member has been
+   *  measured. */
   purity: number | null;
+  /** How many members `purity` was computed over (the geometry pass's
+   *  coverage for this cluster) — purity is noisy at low n. */
+  purity_n?: number | null;
+  /** Always `'nearest_centroid'` today; served so the frontend never
+   *  hardcodes what `purity` means. */
+  purity_basis?: string | null;
   /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
   purity_tier: 'pure' | 'mixed' | 'noisy' | null;
+  /** Largest-class share among LABELLED members (the old label-based
+   *  "purity" — always 1.0 for a class cluster by construction, which is
+   *  exactly why it stopped being called `purity`). `promotable` uses
+   *  this, not the geometry-based `purity` above. */
+  label_purity?: number | null;
+  /** Share of this cluster's members that have any label at all. */
+  labelled_share?: number | null;
   /** Server's auto-promote eligibility gate for this cluster. */
   promotable: boolean;
   is_unlabeled: boolean;
@@ -1222,7 +1241,11 @@ function _rawClusterToCluster(
     dominant_class_name: c.dominant_class_name,
     dominant_pct: c.purity,
     purity: c.purity,
+    purity_n: c.purity_n ?? null,
+    purity_basis: c.purity_basis ?? null,
     purity_tier: c.purity_tier ?? null,
+    label_purity: c.label_purity ?? null,
+    labelled_share: c.labelled_share ?? null,
     promotable: !!c.promotable,
     core_similarity_min: coreSimilarityMin,
     is_unlabeled: c.is_unlabeled,

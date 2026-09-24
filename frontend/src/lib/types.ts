@@ -403,11 +403,27 @@ export interface Cluster {
   dominant_class_id: number | null;
   dominant_class_name: string | null;
   dominant_pct: number | null;
-  purity: number | null; // 0..1, null when no labelled members
+  /** DQ-M2 fix (dq-queues cutover, 2026-09-24): nearest-centroid geometry
+   *  purity — the share of `purity_n` measured members whose nearest
+   *  cluster centroid is this cluster's own. Independent of labels, so a
+   *  class cluster is no longer 1.0 by construction. 0..1, null when no
+   *  member has been measured. */
+  purity: number | null;
+  /** How many members `purity` was measured over — show alongside
+   *  `purity` (it's noisy at low n). */
+  purity_n?: number | null;
+  /** Always `'nearest_centroid'` today — served, never hardcoded. */
+  purity_basis?: string | null;
   /** Server-banded purity — drives the card's pure/mixed/noisy badge and
    *  border color. Null only for the client-only "cluster card lookup
    *  failed" stub in `getCluster`. */
   purity_tier: PurityTier | null;
+  /** Largest-class share among labelled members (the pre-cutover
+   *  label-based "purity" — 1.0 for a class cluster by construction).
+   *  `promotable` is gated on this, not the geometry-based `purity`. */
+  label_purity?: number | null;
+  /** Share of this cluster's members that carry any label at all. */
+  labelled_share?: number | null;
   /** Server's auto-promote eligibility for this cluster (purity +
    *  member-count + labelled-share gate — `purity_thresholds` on the
    *  `{API_PREFIX}/clusters` response). */

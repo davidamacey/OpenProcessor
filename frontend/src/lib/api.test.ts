@@ -1966,6 +1966,111 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
 });
 
 /**
+ * DQ-M2 fix (dq-queues cutover, 2026-09-24): `purity` is now
+ * nearest-centroid geometry purity (`purity_basis: 'nearest_centroid'`,
+ * `purity_n` members measured), independent of `label_purity`
+ * (the old label-based number, always 1.0 for a class cluster) and
+ * `labelled_share`. `getClusters` must map all four verbatim.
+ */
+describe('getClusters purity_n/purity_basis/label_purity/labelled_share (DQ-M2)', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('maps purity_n/purity_basis/label_purity/labelled_share verbatim', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [
+          {
+            cluster_id: 43,
+            cluster_kind: 'class',
+            size: 24,
+            validated_count: 0,
+            labelled_count: 24,
+            dominant_class_id: 43,
+            dominant_class_name: 'motardbike',
+            dominant_count: 24,
+            purity: 0.29,
+            purity_n: 24,
+            purity_basis: 'nearest_centroid',
+            purity_tier: 'noisy',
+            label_purity: 1.0,
+            labelled_share: 1.0,
+            promotable: false,
+            is_unlabeled: false,
+            n_subclusters: 0,
+            updated_at: null,
+            representatives: [],
+          },
+        ],
+        total: 1,
+        total_class_clusters: 1,
+        total_candidate_clusters: 0,
+        cluster_id_offset: 10000,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getClusters();
+
+    expect(res.items[0]).toMatchObject({
+      id: 43,
+      purity: 0.29,
+      purity_n: 24,
+      purity_basis: 'nearest_centroid',
+      label_purity: 1.0,
+      labelled_share: 1.0,
+    });
+    // The whole point of DQ-M2: purity and label_purity must be able to
+    // disagree (a class cluster is no longer 1.0-purity by construction).
+    expect(res.items[0].purity).not.toBe(res.items[0].label_purity);
+  });
+
+  it('leaves the new fields null when the server omits them (older backend)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [
+          {
+            cluster_id: 67,
+            cluster_kind: 'class',
+            size: 10,
+            validated_count: 0,
+            labelled_count: 10,
+            dominant_class_id: 67,
+            dominant_class_name: 'suv',
+            dominant_count: 10,
+            purity: 1.0,
+            purity_tier: 'pure',
+            promotable: false,
+            is_unlabeled: false,
+            n_subclusters: 0,
+            updated_at: null,
+            representatives: [],
+          },
+        ],
+        total: 1,
+        total_class_clusters: 1,
+        total_candidate_clusters: 0,
+        cluster_id_offset: 10000,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getClusters();
+    expect(res.items[0].purity_n ?? null).toBeNull();
+    expect(res.items[0].purity_basis ?? null).toBeNull();
+    expect(res.items[0].label_purity ?? null).toBeNull();
+    expect(res.items[0].labelled_share ?? null).toBeNull();
+  });
+});
+
+/**
  * D-4 (docs/design/curation_query_performance_audit.md): `/clusters`
  * representatives are paged by offset/limit independent of the card list
  * itself. `getClusters` forwards `representatives_offset`/

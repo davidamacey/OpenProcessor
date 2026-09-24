@@ -857,6 +857,26 @@
         size {cluster.size.toLocaleString()} · dominant
         <strong class="text-zinc-200">{cluster.dominant_class_name ?? '—'}</strong>
       </span>
+      <!-- DQ-M2 fix (dq-queues cutover, 2026-09-24): purity is now the
+           nearest-centroid geometry share — purity_tier stays the badge
+           elsewhere (the sidebar/card border), this is the number + its
+           basis/n, with label_purity/labelled_share in the tooltip so an
+           operator can tell "geometrically coherent" from "the labels we
+           have agree with each other". -->
+      {#if cluster.purity != null}
+        <span
+          class="font-mono text-xs text-zinc-500"
+          title="label purity {cluster.label_purity != null
+            ? `${(cluster.label_purity * 100).toFixed(0)}%`
+            : '—'} · labelled share {cluster.labelled_share != null
+            ? `${(cluster.labelled_share * 100).toFixed(0)}%`
+            : '—'}"
+        >
+          · purity ({cluster.purity_basis ?? 'nearest-centroid'})
+          {(cluster.purity * 100).toFixed(0)}%
+          {#if cluster.purity_n != null}· n={cluster.purity_n}{/if}
+        </span>
+      {/if}
     {/if}
     {#if clsForCluster}
       <!-- Triage progress: how much of this cluster bucket has been

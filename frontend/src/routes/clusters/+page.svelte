@@ -952,7 +952,7 @@
          has to mouse over each card to figure out what the colors mean. -->
     <div
       class="flex items-center gap-2 text-[10px] text-zinc-500"
-      title="Card border color encodes cluster purity"
+      title="Card border color encodes cluster purity — nearest-centroid geometry purity (DQ-M2), not label agreement. See each card's purity chip tooltip for n and label_purity/labelled_share."
     >
       <span class="flex items-center gap-1">
         <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"></span>
@@ -1222,11 +1222,27 @@
                   {:else}
                     <span class="text-sm font-semibold">#{c.id}</span>
                     {#if pb}
+                      <!-- DQ-M2 fix (dq-queues cutover, 2026-09-24): purity is now
+                           nearest-centroid geometry purity, not the tautological
+                           label-based number (always 1.0 for a class cluster) —
+                           shown with its basis and n (it's noisy at low n), plus
+                           label_purity/labelled_share in the tooltip so an
+                           operator can tell the two apart. -->
                       <span
                         class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
+                        title="{c.purity_basis ??
+                          'nearest-centroid'} purity, n={c.purity_n ??
+                          '—'} · label purity {c.label_purity != null
+                          ? `${(c.label_purity * 100).toFixed(0)}%`
+                          : '—'} · labelled share {c.labelled_share != null
+                          ? `${(c.labelled_share * 100).toFixed(0)}%`
+                          : '—'}"
                       >
                         {pb.text}
                         {((c.purity ?? 0) * 100).toFixed(0)}
+                        {#if c.purity_n != null}
+                          <span class="opacity-70">· n={c.purity_n}</span>
+                        {/if}
                       </span>
                     {/if}
                   {/if}
