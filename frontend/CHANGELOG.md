@@ -1128,6 +1128,13 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- `/review`'s served enum filter bar forwards only the params the active
+  tab's `filter_specs` declare, so an unrelated or stale URL param never
+  reaches `GET {API_PREFIX}/review/{tab}`. A deep link carrying one
+  (`/review?tab=plates&region_status=verify_rejected`) now actually
+  filters the queue: before, when `/review/tabs` loaded after the first
+  queue fetch, the page showed the unfiltered queue. The refetch now
+  keys on the params actually sent (`activeEnumParams`).
 - FRONTEND fixes from the 2026-09-24 interactive-pass follow-up
   (`docs/design/interactive-pass-2026-09-24.md` §6):
   - **M1** — the `/review` Dismissed panel sent `sort=recent`, which

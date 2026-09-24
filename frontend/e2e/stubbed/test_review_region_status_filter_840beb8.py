@@ -179,3 +179,35 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected in the region_status filter flow: {errors[:3]}"
+
+
+def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_url):
+    # Live regression (2026-09-24): loading /review?tab=plates&region_status=
+    # verify_rejected directly showed the unfiltered queue. _filter() only
+    # forwards params the tab's served filter_specs declare, and the refetch
+    # effect keyed on the raw URL-seeded values, so when /review/tabs landed
+    # after the first queue fetch nothing refetched with the param.
+    region_calls: list[str] = []
+
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/review/tabs(\?|$)", REVIEW_TABS)
+    stub.on("GET", r"/regions/vocabulary(\?|$)", VOCABULARY)
+    stub.on("GET", r"/crops/[^/]+/image$", (200, b"", "image/jpeg"))
+
+    def review_handler(request, _match):
+        region_calls.append(request.url)
+        return (
+            200,
+            {"items": [needs_human_item()], "total": 1, "page": 1, "page_size": 30},
+        )
+
+    stub.on("GET", r"/review/regions(\?|$)", review_handler)
+
+    page.goto(f"{app_url}/review?tab=plates&region_status=verify_rejected")
+    page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
+    page.wait_for_timeout(1500)
+
+    assert region_calls, "the plates queue must be fetched"
+    assert "region_status=verify_rejected" in region_calls[-1], region_calls
+    select = page.locator('label:has-text("Status") select')
+    assert select.input_value() == "verify_rejected"

@@ -426,6 +426,18 @@
   const activeFilterSpecs = $derived(
     reviewTabsVocabularyStore.filterSpecsFor(activeTabEndpointId),
   );
+  // Exactly the enum params _filter() sends: only those the active tab's
+  // served filter_specs declare. The refetch effect keys on this, not on
+  // enumFilterValues, so a URL-seeded ?region_status= that arrives before
+  // /review/tabs has loaded still triggers a refetch once the spec lands.
+  const activeEnumParams = $derived.by<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const spec of activeFilterSpecs) {
+      const value = enumFilterValues[spec.param];
+      if (value) out[spec.param] = value;
+    }
+    return out;
+  });
   function setEnumFilter(param: string, value: string): void {
     enumFilterValues = { ...enumFilterValues, [param]: value };
     const url = new URL(page.url);
@@ -480,10 +492,7 @@
     // seeded from every URL param, so an unrelated or stale one (e.g.
     // ?region_status= on a tab without that spec) must not reach the
     // backend, which 400s on filters a tab doesn't honor.
-    for (const spec of activeFilterSpecs) {
-      const value = enumFilterValues[spec.param];
-      if (value) f[spec.param] = value;
-    }
+    Object.assign(f, activeEnumParams);
     Object.assign(f, strategyBar.toQueryParams());
     return f;
   }
@@ -689,7 +698,7 @@
     void strategyBar.minMistakenness;
     void strategyBar.hideNearDuplicates;
     void strategyBar.k;
-    void enumFilterValues;
+    void activeEnumParams;
     const key = JSON.stringify([
       sourceFilter,
       plateTextQuery,
@@ -699,7 +708,7 @@
       strategyBar.minMistakenness,
       strategyBar.hideNearDuplicates,
       strategyBar.k,
-      enumFilterValues,
+      activeEnumParams,
     ]);
     // The first run only records the starting filters: the immediate
     // effect above already loads page 1, and fetching it a second time

@@ -30,12 +30,13 @@ describe('840beb8: generic served-enum filter bar (no tab/param-specific code)',
   it('_filter() forwards only params the active tab declares in filter_specs', () => {
     const filterFnStart = src.indexOf('function _filter()');
     const filterFnBody = src.slice(filterFnStart, src.indexOf('\n  }\n', filterFnStart));
-    expect(filterFnBody).toMatch(
-      /for \(const spec of activeFilterSpecs\) \{\s*const value = enumFilterValues\[spec\.param\];\s*if \(value\) f\[spec\.param\] = value;\s*\}/,
-    );
+    expect(filterFnBody).toMatch(/Object\.assign\(f, activeEnumParams\);/);
     // enumFilterValues is seeded from every URL param, so iterating it
     // directly would forward unrelated/stale params to the backend.
-    expect(filterFnBody).not.toMatch(/Object\.entries\(enumFilterValues\)/);
+    expect(filterFnBody).not.toMatch(/enumFilterValues/);
+    expect(src).toMatch(
+      /for \(const spec of activeFilterSpecs\) \{\s*const value = enumFilterValues\[spec\.param\];\s*if \(value\) out\[spec\.param\] = value;\s*\}/,
+    );
   });
 
   it('setEnumFilter persists the value in the URL (like preset)', () => {
@@ -55,12 +56,18 @@ describe('840beb8: generic served-enum filter bar (no tab/param-specific code)',
     expect(nearby).toMatch(/enumFilterValues = \{\};/);
   });
 
-  it('the debounced filter effect tracks enumFilterValues, so a select change refetches', () => {
+  it('the debounced filter effect keys on activeEnumParams, so a select change or a late-loading spec refetches', () => {
+    // Keying on the raw enumFilterValues missed the case where a
+    // URL-seeded ?region_status= was set before /review/tabs loaded: the
+    // spec arriving changes what _filter() sends but not enumFilterValues.
+    // e2e test_region_status_from_the_url_reaches_the_queue_request
+    // covers the behavior; this pins the wiring.
     const effectIdx = src.indexOf('let lastFilterKey: string | null = null;');
     expect(effectIdx).toBeGreaterThan(-1);
     const effectBody = src.slice(effectIdx, effectIdx + 1500);
-    expect(effectBody).toMatch(/void enumFilterValues;/);
-    expect(effectBody).toMatch(/enumFilterValues,\s*\]\);/);
+    expect(effectBody).toMatch(/void activeEnumParams;/);
+    expect(effectBody).toMatch(/activeEnumParams,\s*\]\);/);
+    expect(effectBody).not.toMatch(/void enumFilterValues;/);
   });
 });
 
