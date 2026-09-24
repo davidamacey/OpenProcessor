@@ -27,6 +27,14 @@ if TYPE_CHECKING:
 
 logger = get_logger('curation_worker')
 
+# S3: stored ``region_source`` / ``candidate_source`` provenance values.
+# Every writer of these fields must go through these constants so the
+# stored vocabulary cannot drift.
+CANDIDATE_SEGMENTER = 'segmenter'
+CANDIDATE_SEGMENTER_TEXT_HINT = 'segmenter_text_hint'
+CANDIDATE_DETECTOR = 'detector'
+CANDIDATE_DETECTOR_EXISTING = 'detector_existing'
+
 _config = get_curation_config()
 
 CURATION_ITEMS_INDEX = _config.items_index
@@ -145,7 +153,9 @@ class _ItemTask:
     crop_jpeg: bytes | None = None
     # Two-stage pipeline state — Stage A (primary/secondary/OCR-det)
     # writes these, Stage B (VLM verify) consumes them.
-    candidate_source: str = ''  # 'lpr' / 'lpr_existing' / 'sam3' / 'paddle' / 'paddleocr_rec' / ''
+    candidate_source: str = (
+        ''  # 'detector' / 'detector_existing' / 'segmenter' / 'segmenter_text_hint' / ''
+    )
     candidate_in_crop: tuple[float, float, float, float] | None = None
     candidate_in_source: tuple[float, float, float, float] | None = None
     candidate_score: float = 0.0

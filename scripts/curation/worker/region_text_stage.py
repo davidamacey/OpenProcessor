@@ -23,6 +23,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.cascade import _crop_region_jpeg, _expand_bbox
+from scripts.curation.worker.state import (
+    CANDIDATE_DETECTOR,
+    CANDIDATE_DETECTOR_EXISTING,
+    CANDIDATE_SEGMENTER,
+    CANDIDATE_SEGMENTER_TEXT_HINT,
+)
 from scripts.curation.worker.verify import _region_reject_doc, _region_write_doc
 from src.config import get_region_fields
 from src.core.logging import get_logger
@@ -58,12 +64,12 @@ def candidate_detector(t: _ItemTask, profile: DetectionProfile) -> tuple[str, st
     seg = (profile.segmenter_name, profile.segmenter_version)
     det = (profile.detector_model, profile.detector_version)
     return {
-        'sam3': seg,
+        CANDIDATE_SEGMENTER: seg,
         # OCR-hinted re-pass: the box still comes from the segmenter (on a
         # tighter sub-crop); the text hint lives on the chain.
-        'sam3_text_hint': seg,
-        'lpr': det,
-        'lpr_existing': det,
+        CANDIDATE_SEGMENTER_TEXT_HINT: seg,
+        CANDIDATE_DETECTOR: det,
+        CANDIDATE_DETECTOR_EXISTING: det,
     }.get(t.candidate_source, (t.candidate_source or 'unknown', '1'))
 
 
