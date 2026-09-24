@@ -1321,8 +1321,25 @@ export type RawCrop = {
   class_name?: string | null;
   class_source?: string;
   confidence?: number;
+  /** Confidence of whoever set the label: VLM high/medium/low map to
+   *  0.92/0.70/0.40, classifier labels carry their own score, human
+   *  labels are null (dq-queues cutover, 2026-09-24). Distinct from
+   *  `confidence`, which is always the detector/classifier score. */
+  class_confidence?: number | null;
+  /** `'vlm' | 'model' | null` — which pipeline set `class_confidence`. */
+  class_confidence_source?: string | null;
+  /** The VLM's verbatim class answer, even when it didn't match a
+   *  registry class or wasn't auto-applied. */
+  vlm_raw_class?: string | null;
+  vlm_class_attempted_at?: string | null;
+  /** `no_answer | no_match | invalid_index | unparseable | null`. */
+  vlm_class_empty_reason?: string | null;
   cluster_id?: number | null;
   cluster_distance?: number | null;
+  /** Nearest cluster centroid id when it differs from `cluster_id` (the
+   *  item has left its cluster) — null together with cluster_distance/
+   *  cluster_similarity/cluster_is_core in that case. */
+  cluster_nearest_id?: number | null;
   /** Server-computed cosine similarity to this crop's cluster centroid
    *  (0..1) — the served replacement for the old client `1 -
    *  cluster_distance` estimate. Null when the backend hasn't computed
@@ -1388,8 +1405,14 @@ export const RAW_CROP_KEYS = [
   'class_name',
   'class_source',
   'confidence',
+  'class_confidence',
+  'class_confidence_source',
+  'vlm_raw_class',
+  'vlm_class_attempted_at',
+  'vlm_class_empty_reason',
   'cluster_id',
   'cluster_distance',
+  'cluster_nearest_id',
   'cluster_similarity',
   'cluster_is_core',
   'cluster_subid',
@@ -1465,7 +1488,14 @@ function mapRawCrop(c: RawCrop): Crop {
     label_validated: !!c.label_validated,
     class_validated: !!c.class_validated,
     label_confidence: c.confidence ?? null,
+    class_confidence: c.class_confidence ?? null,
+    class_confidence_source: c.class_confidence_source ?? null,
+    vlm_raw_class: c.vlm_raw_class ?? null,
+    vlm_class_attempted_at: c.vlm_class_attempted_at ?? null,
+    vlm_class_empty_reason: c.vlm_class_empty_reason ?? null,
     cluster_id: c.cluster_id ?? null,
+    cluster_distance: c.cluster_distance ?? null,
+    cluster_nearest_id: c.cluster_nearest_id ?? null,
     // Served directly — no client 1-cosine-distance estimate.
     similarity_to_centroid: c.cluster_similarity ?? null,
     cluster_is_core: c.cluster_is_core ?? null,
@@ -2007,6 +2037,15 @@ export interface ReviewTabVocabularyEntry {
   id: string;
   label: string;
   description?: string;
+  /** Query parameters this tab honours (dq-queues cutover, 2026-09-24) —
+   *  a parameter not listed is accepted and ignored server-side. Drives
+   *  which filter-bar controls render for the active tab. Absent/empty
+   *  means "unknown" — the frontend then shows every control, same as
+   *  before this endpoint carried the field. */
+  filters?: string[];
+  /** Values the tab applies when a filter is omitted, e.g.
+   *  `{max_rank: 2}` for the two primary-subject tabs. */
+  filter_defaults?: Record<string, unknown>;
 }
 
 /** Every review tab's served `id`/`label`/`description`, in `KNOWN_TABS`
@@ -2021,9 +2060,22 @@ export async function getReviewTabsVocabulary(
     {},
     signal,
   );
-  return (res.tabs ?? []).filter(
-    (t) => typeof t?.id === 'string' && t.id.length > 0 && typeof t.label === 'string',
-  );
+  return (res.tabs ?? [])
+    .filter(
+      (t) => typeof t?.id === 'string' && t.id.length > 0 && typeof t.label === 'string',
+    )
+    .map((t) => ({
+      id: t.id,
+      label: t.label,
+      description: t.description,
+      filters: Array.isArray(t.filters)
+        ? t.filters.filter((f): f is string => typeof f === 'string')
+        : undefined,
+      filter_defaults:
+        t.filter_defaults && typeof t.filter_defaults === 'object'
+          ? t.filter_defaults
+          : undefined,
+    }));
 }
 
 /**

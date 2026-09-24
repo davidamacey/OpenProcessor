@@ -50,6 +50,29 @@ class ReviewTabsVocabularyStore {
   descriptionFor(endpointId: string): string | null {
     return this.#byId.get(endpointId)?.description ?? null;
   }
+
+  /** Query params this tab's served entry honours; `null` when the
+   *  endpoint is absent, not yet loaded, or didn't serve `filters` —
+   *  callers treat `null` as "unknown, show every control" rather than
+   *  hiding everything on a stale/older backend. */
+  filtersFor(endpointId: string): string[] | null {
+    return this.#byId.get(endpointId)?.filters ?? null;
+  }
+
+  /** Whether a given query param is in this tab's served `filters` list.
+   *  Defaults to `true` (visible) when `filters` is unknown, so a
+   *  missing/older `GET {API_PREFIX}/review/tabs` never hides a control that
+   *  used to always render. */
+  filterSupported(endpointId: string, param: string): boolean {
+    const filters = this.filtersFor(endpointId);
+    return filters == null || filters.includes(param);
+  }
+
+  /** This tab's served `filter_defaults[key]`, or `null` when absent. */
+  filterDefault(endpointId: string, key: string): unknown | null {
+    const v = this.#byId.get(endpointId)?.filter_defaults?.[key];
+    return v === undefined ? null : v;
+  }
 }
 
 export const reviewTabsVocabularyStore = new ReviewTabsVocabularyStore();

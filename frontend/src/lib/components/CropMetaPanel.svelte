@@ -46,6 +46,15 @@
     return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
   }
 
+  // Served verbatim, never inferred client-side: 'vlm' | 'model' | null.
+  const classConfidenceSourceLabel = $derived<string>(
+    crop.class_confidence_source === 'vlm'
+      ? 'VLM'
+      : crop.class_confidence_source === 'model'
+        ? 'Model'
+        : '',
+  );
+
   // -- History (G7) — lazy, fetched once per crop.id, never blocks the
   // rest of the panel from rendering. ------------------------------------
   let historyEntries = $state<CropHistoryEntry[] | null>(null);
@@ -153,6 +162,29 @@
   {#if vlmConf}
     <dt class="text-zinc-500">VLM confidence</dt>
     <dd class="font-mono text-zinc-200">{vlmConf}</dd>
+  {/if}
+
+  <!-- dq-queues cutover (2026-09-24): `class_confidence` is the served
+       confidence of whoever set the LABEL (VLM categorical mapped to a
+       number, or the classifier's own score) — distinct from
+       `label_confidence` above, which is always the detector score. Null
+       for human labels, so this row is omitted then. -->
+  {#if crop.class_confidence != null}
+    <dt class="text-zinc-500">Label confidence</dt>
+    <dd class="font-mono text-zinc-200">
+      {classConfidenceSourceLabel}
+      {pct(crop.class_confidence)}
+    </dd>
+  {/if}
+
+  {#if crop.vlm_raw_class}
+    <dt class="text-zinc-500">VLM said</dt>
+    <dd class="text-zinc-300">{crop.vlm_raw_class}</dd>
+  {/if}
+
+  {#if crop.vlm_class_empty_reason}
+    <dt class="text-zinc-500">VLM empty reason</dt>
+    <dd class="text-orange-300">{crop.vlm_class_empty_reason}</dd>
   {/if}
 
   {#if crop.vlm_suggested_class_id != null}

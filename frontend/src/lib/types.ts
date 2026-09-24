@@ -272,6 +272,19 @@ export interface Crop {
    *  confirmed has no visible plate. */
   class_validated: boolean;
   label_confidence: number | null;
+  /** Confidence of whoever set the *class label* (wire `class_confidence`,
+   *  dq-queues cutover 2026-09-24) — distinct from `label_confidence`
+   *  (the detector/classifier score). VLM high/medium/low map to
+   *  0.92/0.70/0.40 server-side; classifier labels carry their own
+   *  score; human labels are null. */
+  class_confidence?: number | null;
+  /** `'vlm' | 'model' | null` — which pipeline produced `class_confidence`. */
+  class_confidence_source?: string | null;
+  /** The VLM's verbatim class answer, even when unmatched/unapplied. */
+  vlm_raw_class?: string | null;
+  vlm_class_attempted_at?: string | null;
+  /** `no_answer | no_match | invalid_index | unparseable | null`. */
+  vlm_class_empty_reason?: string | null;
   /** The VLM's registry-matched class for this crop when it did not
    *  auto-apply it (wire `vlm_proposed_class_id`/`_name`). Drives the
    *  accept-suggestion chip and the `G`/`Shift+Enter` keys. */
@@ -283,6 +296,12 @@ export interface Crop {
    *  `cluster_similarity` — no client 1−cosine-distance computation. */
   cluster_id: number | null;
   similarity_to_centroid: number | null;
+  /** Distance to this crop's cluster centroid, null when the item has
+   *  left the cluster it's measured against (dq-queues cutover). */
+  cluster_distance?: number | null;
+  /** Nearest cluster centroid id, only meaningful together with
+   *  cluster_distance/similarity_to_centroid/cluster_is_core. */
+  cluster_nearest_id?: number | null;
   /** Server-computed: this crop's `cluster_similarity` is at/above the
    *  cluster response's `core_similarity_min`. Null when the backend
    *  hasn't computed a similarity for this crop yet. Drives the

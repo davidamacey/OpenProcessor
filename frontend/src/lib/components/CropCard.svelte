@@ -303,7 +303,34 @@
     <span class="grow truncate text-xs text-zinc-300" title={crop.class_name ?? ''}>
       {crop.class_name ?? '—'}
     </span>
+    {#if crop.class_confidence != null}
+      <span
+        class="shrink-0 font-mono text-[10px] text-zinc-500"
+        title="{crop.class_confidence_source === 'vlm'
+          ? 'VLM'
+          : crop.class_confidence_source === 'model'
+            ? 'Model'
+            : ''} label confidence"
+      >
+        {(crop.class_confidence * 100).toFixed(0)}%
+      </span>
+    {/if}
   </div>
+
+  {#if crop.vlm_class_empty_reason}
+    <div
+      class="border-t border-zinc-800 bg-orange-500/5 px-2 py-1 text-[10px] text-orange-300"
+    >
+      VLM empty: {crop.vlm_class_empty_reason}
+    </div>
+  {:else if crop.vlm_raw_class && crop.vlm_raw_class !== crop.class_name}
+    <div
+      class="border-t border-zinc-800 px-2 py-1 text-[10px] text-zinc-500"
+      title={crop.vlm_raw_class}
+    >
+      VLM said: {crop.vlm_raw_class}
+    </div>
+  {/if}
 
   {#if crop.vlm_suggested_class_id != null && !crop.class_validated}
     <div

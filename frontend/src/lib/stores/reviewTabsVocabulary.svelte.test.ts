@@ -97,3 +97,67 @@ describe('reviewTabsVocabularyStore.init', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+// dq-queues cutover (2026-09-24): GET {API_PREFIX}/review/tabs now serves
+// per-tab `filters`/`filter_defaults` — the /review filter bar renders
+// only the controls a tab's served `filters` lists, seeded from
+// `filter_defaults`.
+const FILTERS_PAYLOAD = {
+  tabs: [
+    {
+      id: 'primary_low_conf',
+      label: 'Primary low-conf',
+      filters: ['class_id', 'source', 'max_rank'],
+      filter_defaults: { max_rank: 2 },
+    },
+    {
+      id: 'regions',
+      label: 'Plates',
+      filters: ['class_id', 'source', 'text'],
+      filter_defaults: {},
+    },
+    // No `filters` at all — an older backend response shape.
+    { id: 'all', label: 'All' },
+  ],
+};
+
+describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault', () => {
+  it('filtersFor returns the served list for a tab that has one', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, FILTERS_PAYLOAD)));
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.filtersFor('primary_low_conf')).toEqual([
+      'class_id',
+      'source',
+      'max_rank',
+    ]);
+  });
+
+  it('filterSupported is true only for a param in the served list', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, FILTERS_PAYLOAD)));
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.filterSupported('regions', 'text')).toBe(true);
+    expect(reviewTabsVocabularyStore.filterSupported('regions', 'max_rank')).toBe(false);
+  });
+
+  it('filterSupported defaults to true (unknown) when the tab has no served filters list', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, FILTERS_PAYLOAD)));
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.filterSupported('all', 'max_rank')).toBe(true);
+    expect(reviewTabsVocabularyStore.filterSupported('nonexistent_tab', 'max_rank')).toBe(
+      true,
+    );
+  });
+
+  it('filterDefault returns the served default value, null when absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, FILTERS_PAYLOAD)));
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.filterDefault('primary_low_conf', 'max_rank')).toBe(
+      2,
+    );
+    expect(reviewTabsVocabularyStore.filterDefault('regions', 'max_rank')).toBeNull();
+  });
+});

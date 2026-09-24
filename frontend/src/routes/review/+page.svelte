@@ -113,6 +113,21 @@
   // every reload/share, silently dropping the filter.
   let preset = $state<ReviewPresetId | null>(deepLink.preset);
   const effectiveTab = $derived<ReviewTab>(resolveEffectiveTab(tab, preset));
+  // dq-queues cutover (2026-09-24): GET {API_PREFIX}/review/tabs now serves each
+  // tab's `filters`/`filter_defaults` — the filter bar renders only the
+  // controls the active tab's served entry lists, and the subject/
+  // max_rank control's "unset" label reflects the served default
+  // instead of a hardcoded "Top 2". `null` (endpoint absent/older
+  // backend) means "unknown" and every control still renders, same as
+  // before this landed.
+  const activeTabEndpointId = $derived(endpointForTab(effectiveTab));
+  function filterVisible(param: string): boolean {
+    return reviewTabsVocabularyStore.filterSupported(activeTabEndpointId, param);
+  }
+  const servedMaxRankDefault = $derived.by<number | null>(() => {
+    const v = reviewTabsVocabularyStore.filterDefault(activeTabEndpointId, 'max_rank');
+    return typeof v === 'number' ? v : null;
+  });
   function togglePreset(id: ReviewPresetId): void {
     preset = preset === id ? null : id;
     const url = new URL(page.url);
@@ -1603,54 +1618,60 @@
     <!-- GET /review/{tab} accepts class_id/source/conf_min/conf_max as of
          the 2026-09-24 logic-moves cutover (item 14/G3) — re-enabled,
          server-side, unconditionally (no client-side filtering here). -->
-    <label class="flex shrink-0 items-center gap-1.5">
-      <span class="text-zinc-400">Source</span>
-      <input
-        type="text"
-        bind:value={sourceFilter}
-        placeholder="any"
-        class="input-sm w-32"
-      />
-    </label>
+    {#if filterVisible('source')}
+      <label class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">Source</span>
+        <input
+          type="text"
+          bind:value={sourceFilter}
+          placeholder="any"
+          class="input-sm w-32"
+        />
+      </label>
+    {/if}
 
-    <label class="flex shrink-0 items-center gap-1.5">
-      <span class="text-zinc-400">Class</span>
-      <select bind:value={classFilter} class="select-sm">
-        <option value={null}>any</option>
-        {#each filterableClasses as cls (cls.id)}
-          <option value={cls.id}>{cls.name}</option>
-        {/each}
-      </select>
-    </label>
+    {#if filterVisible('class_id')}
+      <label class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">Class</span>
+        <select bind:value={classFilter} class="select-sm">
+          <option value={null}>any</option>
+          {#each filterableClasses as cls (cls.id)}
+            <option value={cls.id}>{cls.name}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
 
-    <label
-      class="flex shrink-0 items-center gap-1.5"
-      class:opacity-40={diverseMode}
-      title={diverseMode ? 'not applied to diverse selection' : undefined}
-    >
-      <span class="text-zinc-400">Conf</span>
-      <input
-        type="number"
-        min="0"
-        max="1"
-        step="0.05"
-        bind:value={confMin}
-        disabled={diverseMode}
-        class="input-sm w-16"
-      />
-      <span class="text-zinc-500">..</span>
-      <input
-        type="number"
-        min="0"
-        max="1"
-        step="0.05"
-        bind:value={confMax}
-        disabled={diverseMode}
-        class="input-sm w-16"
-      />
-    </label>
+    {#if filterVisible('conf_min') || filterVisible('conf_max')}
+      <label
+        class="flex shrink-0 items-center gap-1.5"
+        class:opacity-40={diverseMode}
+        title={diverseMode ? 'not applied to diverse selection' : undefined}
+      >
+        <span class="text-zinc-400">Conf</span>
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.05"
+          bind:value={confMin}
+          disabled={diverseMode}
+          class="input-sm w-16"
+        />
+        <span class="text-zinc-500">..</span>
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.05"
+          bind:value={confMax}
+          disabled={diverseMode}
+          class="input-sm w-16"
+        />
+      </label>
+    {/if}
 
-    {#if activeSlot?.capabilities.queue?.textFilter}
+    {#if activeSlot?.capabilities.queue?.textFilter && filterVisible(activeSlot.capabilities.queue.textFilter.param)}
       <label
         class="flex shrink-0 items-center gap-1.5"
         class:opacity-40={diverseMode}
@@ -1682,17 +1703,25 @@
       class:pointer-events-none={diverseMode}
       title={diverseMode ? 'not applied to diverse selection' : undefined}
     >
-      <SubjectScopeToggle
-        bind:value={subjectScope}
-        labels={['Top 2', 'Largest', '+2nd']}
-        label="subject"
-      />
-      <BlurSlider
-        bind:value={blurSlider}
-        oncommit={commitBlur}
-        max={BLUR_MAX}
-        title="Hide crops blurrier than this"
-      />
+      {#if filterVisible('max_rank')}
+        <SubjectScopeToggle
+          bind:value={subjectScope}
+          labels={[
+            servedMaxRankDefault != null ? `Top ${servedMaxRankDefault}` : 'All ranks',
+            'Largest',
+            '+2nd',
+          ]}
+          label="subject"
+        />
+      {/if}
+      {#if filterVisible('min_blur_ratio')}
+        <BlurSlider
+          bind:value={blurSlider}
+          oncommit={commitBlur}
+          max={BLUR_MAX}
+          title="Hide crops blurrier than this"
+        />
+      {/if}
     </div>
 
     {#if tab === 'all'}
@@ -1982,6 +2011,33 @@
             {#if current.vlm_confidence}
               <dt class="text-zinc-500">VLM confidence</dt>
               <dd class="font-mono text-zinc-200">{current.vlm_confidence}</dd>
+            {/if}
+
+            <!-- dq-queues cutover (2026-09-24): `class_confidence` is the
+                 confidence of whoever set the CLASS label (VLM categorical
+                 mapped to a number, or the classifier's own score) — null
+                 for human labels, so this row is omitted then. Distinct
+                 from `label_confidence` above (always the detector score). -->
+            {#if current.class_confidence != null}
+              <dt class="text-zinc-500">Label confidence</dt>
+              <dd class="font-mono text-zinc-200">
+                {current.class_confidence_source === 'vlm'
+                  ? 'VLM'
+                  : current.class_confidence_source === 'model'
+                    ? 'Model'
+                    : ''}
+                {(current.class_confidence * 100).toFixed(1)}%
+              </dd>
+            {/if}
+
+            {#if current.vlm_raw_class}
+              <dt class="text-zinc-500">VLM said</dt>
+              <dd class="text-zinc-300">{current.vlm_raw_class}</dd>
+            {/if}
+
+            {#if current.vlm_class_empty_reason}
+              <dt class="text-zinc-500">VLM empty reason</dt>
+              <dd class="text-orange-300">{current.vlm_class_empty_reason}</dd>
             {/if}
 
             {#if current.proposal_name}

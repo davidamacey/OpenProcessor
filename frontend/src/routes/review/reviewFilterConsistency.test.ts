@@ -11,10 +11,17 @@ import { describe, expect, it } from 'vitest';
  * tab and silently vanished everywhere else (All, Uncertainty, Model
  * Disagreements, Plates, Gemma-mismatches chip, Gemma-low-conf chip) — even
  * though the backend (`review.py`) always treats `max_rank` /
- * `min_blur_ratio` as tab-agnostic ("Both apply across tabs"). This is a
- * static source-scan (no @testing-library/svelte in this repo — see
- * clusterMoveRace.test.ts for the established precedent) proving the gate is
- * gone and these controls/filters are unconditional like Conf/Class/HDD
+ * `min_blur_ratio` as tab-agnostic ("Both apply across tabs").
+ *
+ * dq-queues cutover (2026-09-24): `GET {API_PREFIX}/review/tabs` now serves
+ * each tab's own `filters` list, so every filter-bar control (including
+ * these two) is gated again — but on `filterVisible(param)`
+ * (reviewTabsVocabularyStore.filterSupported, keyed off the served list,
+ * defaulting to visible when unknown), never on a hardcoded
+ * PRIMARY_TABS/effectiveTab tab-id list. This is a static source-scan (no
+ * @testing-library/svelte in this repo — see clusterMoveRace.test.ts for
+ * the established precedent) proving the gate is the served-filter one and
+ * these controls/filters are tab-list-agnostic like Conf/Class/HDD
  * source.
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -45,13 +52,21 @@ describe('review page: rank-scope + blur controls are tab-agnostic (no PRIMARY_T
     }
   });
 
-  it('renders BlurSlider unconditionally alongside SubjectScopeToggle', () => {
+  it('gates SubjectScopeToggle/BlurSlider on filterVisible(...), never on PRIMARY_TABS/effectiveTab', () => {
     const scopeIdx = src.indexOf('<SubjectScopeToggle');
     const blurIdx = src.indexOf('<BlurSlider', scopeIdx);
     expect(blurIdx).toBeGreaterThan(scopeIdx);
-    // No {/if} closing the gate should sit between the two components.
     const between = src.slice(scopeIdx, blurIdx);
-    expect(between).not.toMatch(/\{\/if\}/);
+    // A gate may sit between them now (each control has its own served-
+    // filter check), but it must be the filterVisible one, not a
+    // hardcoded tab-id list.
+    expect(between).not.toMatch(/PRIMARY_TABS/);
+    expect(between).not.toMatch(/includes\(effectiveTab\)/);
+
+    const scopeBlock = src.slice(src.lastIndexOf('{#if', scopeIdx), scopeIdx);
+    expect(scopeBlock).toMatch(/filterVisible\('max_rank'\)/);
+    const blurBlock = src.slice(src.lastIndexOf('{#if', blurIdx), blurIdx);
+    expect(blurBlock).toMatch(/filterVisible\('min_blur_ratio'\)/);
   });
 
   it('applies max_rank whenever subjectScope is set, regardless of tab (no PRIMARY_TABS.includes guard in _filter)', () => {
@@ -95,10 +110,40 @@ describe('review page: class/source/conf filters are sent unconditionally (no se
     expect(filterFnBody).toMatch(/if \(confMax < 1\) f\.conf_max = confMax;/);
   });
 
-  it('the Class/Source/Conf filter bar controls render unconditionally (no #if wrapper)', () => {
-    const idx = src.indexOf(
-      '<label class="flex shrink-0 items-center gap-1.5">\n      <span class="text-zinc-400">Source</span>',
-    );
+  it("the Source filter bar control is gated on filterVisible('source'), not a hardcoded tab check", () => {
+    const idx = src.indexOf('<span class="text-zinc-400">Source</span>');
     expect(idx).toBeGreaterThan(-1);
+    const gate = src.slice(src.lastIndexOf('{#if', idx), idx);
+    expect(gate).toMatch(/filterVisible\('source'\)/);
+    expect(gate).not.toMatch(/PRIMARY_TABS/);
+    expect(gate).not.toMatch(/includes\(effectiveTab\)/);
+  });
+});
+
+/**
+ * dq-queues cutover (2026-09-24): the subject/max_rank control's "unset"
+ * label used to hardcode "Top 2" — false on any tab whose served
+ * `filter_defaults.max_rank` isn't 2 (or is absent). It now reads
+ * `servedMaxRankDefault`, sourced from
+ * `reviewTabsVocabularyStore.filterDefault(activeTabEndpointId, 'max_rank')`.
+ */
+describe('review page: subject-scope "unset" label reflects the served max_rank default', () => {
+  it('computes servedMaxRankDefault from the served filter_defaults, not a literal 2', () => {
+    expect(src).toMatch(
+      /const servedMaxRankDefault = \$derived\.by<number \| null>\(\(\) => \{/,
+    );
+    expect(src).toMatch(
+      /reviewTabsVocabularyStore\.filterDefault\(activeTabEndpointId, 'max_rank'\)/,
+    );
+  });
+
+  it('labels[0] is built from servedMaxRankDefault, with a generic fallback when null', () => {
+    const idx = src.indexOf('<SubjectScopeToggle');
+    const closeIdx = src.indexOf('/>', idx);
+    const block = src.slice(idx, closeIdx);
+    expect(block).toMatch(
+      /servedMaxRankDefault != null \? `Top \$\{servedMaxRankDefault\}` : 'All ranks'/,
+    );
+    expect(block).not.toMatch(/^\s*labels=\{\['Top 2'/m);
   });
 });

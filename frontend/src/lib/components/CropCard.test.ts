@@ -125,3 +125,38 @@ describe('CropCard — VLM suggestion chip', () => {
     expect(el.textContent).not.toContain('VLM: hatchback');
   });
 });
+
+describe('CropCard — dq-queues cutover: class_confidence / vlm_raw_class', () => {
+  it('renders class_confidence as a percentage next to the class name', () => {
+    const el = renderCard({
+      crop: baseCrop({ class_confidence: 0.92, class_confidence_source: 'vlm' }),
+    });
+    expect(el.textContent).toContain('92%');
+  });
+
+  it('omits the class_confidence chip when null (e.g. a human label)', () => {
+    const el = renderCard({
+      crop: baseCrop({ class_confidence: null }),
+    });
+    expect(el.textContent).not.toMatch(/\d+%/);
+  });
+
+  it('shows "VLM said: <raw>" when vlm_raw_class differs from the applied class', () => {
+    const el = renderCard({
+      crop: baseCrop({ class_name: 'sedan', vlm_raw_class: 'coupe' }),
+    });
+    expect(el.textContent).toContain('VLM said: coupe');
+  });
+
+  it('shows the VLM empty reason instead of "VLM said" when set', () => {
+    const el = renderCard({
+      crop: baseCrop({
+        class_name: 'sedan',
+        vlm_raw_class: null,
+        vlm_class_empty_reason: 'no_match',
+      }),
+    });
+    expect(el.textContent).toContain('VLM empty: no_match');
+    expect(el.textContent).not.toContain('VLM said');
+  });
+});
