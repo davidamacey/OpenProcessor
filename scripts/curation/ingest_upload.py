@@ -72,6 +72,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.curation._fast_walk import iter_image_paths
+from src.config import get_curation_config
 
 
 if TYPE_CHECKING:
@@ -367,7 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--root', required=True, type=Path, help='Directory to walk')
     p.add_argument(
         '--api-base',
-        default='http://localhost:4603/curation',
+        default=f'http://localhost:4603{get_curation_config().api_prefix}',
         help='Curation API base URL including the api prefix (no trailing slash)',
     )
     p.add_argument('--source', default='upload', help='Provenance tag for every image')
