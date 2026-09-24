@@ -162,6 +162,7 @@
           }
           if (s.status === 'success') {
             toastStore.success(`Export complete: ${s.export_dir ?? 'see manifest'}`);
+            await loadAll();
           } else if (s.status === 'failed') {
             toastStore.error(`Export failed: ${s.error ?? 'unknown'}`);
           }
@@ -172,18 +173,44 @@
     }, 5000);
   }
 
+  // `POST {API_PREFIX}/export/yolo` is synchronous (see `ExportResult`'s
+  // doc comment in `$lib/types` — the OpenProcessor handler `await`s the
+  // export before responding, there is no queued-job ack) — the response
+  // IS the finished export, not a "started" acknowledgement. Render its
+  // own served `status` directly instead of assuming `running` and
+  // polling; only fall back to polling when the backend itself reports
+  // the job still `running`/`pending` (a future async backend, or a slow
+  // one that didn't finish inline).
   async function runExport(): Promise<void> {
     exportRunning = true;
     exportModalOpen = true;
     try {
       const res = await exportYolo({ version_tag: versionTag.trim() || undefined });
-      toastStore.info(`Export started: ${res.job_id ?? res.status}`);
       exportState = {
-        status: 'running',
-        last_run: new Date().toISOString(),
-        job_id: res.job_id,
+        status: res.status,
+        last_run: res.finished_at ?? res.started_at ?? new Date().toISOString(),
+        export_dir: res.export_dir ?? null,
+        error: res.status === 'failed' ? (res.message ?? 'unknown error') : null,
+        message: res.message ?? null,
       };
-      startPolling();
+      if (res.status === 'running' || res.status === 'pending') {
+        toastStore.info(`Export started: ${res.status}`);
+        startPolling();
+        return;
+      }
+      exportRunning = false;
+      if (res.status === 'success') {
+        toastStore.success(`Export complete: ${res.export_dir ?? res.status}`);
+        // Bug 1: the "frozen multi-class export" card/registry download
+        // buttons are gated on `hasMulticlassExport`, which only
+        // `loadAll()` (re-fetching `{API_PREFIX}/export/datasets`) can
+        // set — reload now instead of waiting for the user to hit Refresh.
+        await loadAll();
+      } else if (res.status === 'failed') {
+        toastStore.error(`Export failed: ${res.message ?? 'unknown error'}`);
+      } else {
+        toastStore.info(`Export: ${res.status}`);
+      }
     } catch (e) {
       exportRunning = false;
       toastStore.error(`Export failed: ${(e as Error).message}`);

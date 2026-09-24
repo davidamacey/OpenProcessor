@@ -1128,6 +1128,45 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- Four bugs found by the `train-smoke` live UI smoke test
+  (`artifacts_local/cw-live/train-smoke/`):
+  - **`/export`** — after a successful export the "frozen multi-class
+    export" card and the three registry download buttons
+    (`class_registry.json`/`data.yaml`/`manifest.json`) stayed on "No
+    frozen multi-class export yet" / disabled until the operator
+    clicked Refresh. `runExport()` now re-fetches `GET
+{API_PREFIX}/export/datasets` (via the page's existing `loadAll()`)
+    once the export completes, the same as clicking Refresh.
+  - **`/export`** — `POST {API_PREFIX}/export/yolo` is synchronous (the
+    response IS the finished export, see `ExportResult`'s doc comment),
+    but the page assumed it was a queued-job acknowledgement, forced
+    `exportState.status = 'running'`, and polled `GET
+{API_PREFIX}/export/status` — so the modal showed "Running…" (and
+    the toast read "Export started: success") even though the backend
+    had already finished. The page now renders the POST response's own
+    served `status` directly and only falls back to polling when the
+    backend itself reports `running`/`pending`; the toast wording
+    ("Export complete: …" / "Export failed: …") now matches the served
+    status too.
+  - **`/export`** — the test-holdout "N classes below N test crops"
+    badge flagged every class with no `GET {API_PREFIX}/test_holdout/
+stats` bucket at all (i.e. never validated/sampled into the
+    holdout) as deficient, comparing its absent count against the
+    served `min_test_per_class` — live evidence: 79 of 84 classes
+    showed a red "below 5 test crops" badge although the server's own
+    `by_class` list only ever covered the 5 classes it actually
+    considered, all `deficient: false`. `buildExportRows` now only
+    falls back to a local count-vs-`min_test_per_class` comparison when
+    a bucket exists but omits the `deficient` flag (an older backend);
+    a class absent from `by_class` entirely is never flagged.
+  - **`/clusters/[id]`** — the header's "N validated · N labeled · N in
+    cluster" chip (backed by `classesStore`'s per-class
+    `validated_count`/`count`) stayed stale after a successful label
+    write through the page (label/drop/VLM-accept/undo), only updating
+    on a hard reload. Every write path in `clusterController.svelte.ts`
+    now calls `classesStore.refresh()` on success (and undo) so the
+    header reflects the server's own count without a reload.
+
 - The dashboard's "Last clustering" card showed `clusters.cluster_count`
   as "Clusters", but until OpenProcessor b7231e6 that was the last
   auto-label run's own count (1), not the index total (106). It now reads

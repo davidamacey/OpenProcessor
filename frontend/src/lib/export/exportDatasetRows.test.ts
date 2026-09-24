@@ -95,6 +95,20 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
     expect(rows[0]?.testDeficient).toBe(false);
   });
 
+  it('a class absent from by_class entirely (0 validated crops, never sampled) is NOT deficient, even with a real min_test_per_class — the live /export bug (79/84 classes wrongly red-badged)', () => {
+    const holdout: TestHoldoutStats = {
+      total: 25,
+      min_test_per_class: 5,
+      by_class: [{ key: 44, doc_count: 5, deficient: false }],
+    };
+    // class_id 8 (bmw) has never been validated/frozen, so it has no
+    // bucket in `by_class` at all — it must not inherit class 44's
+    // min_test_per_class comparison.
+    const rows = buildExportRows(perClass({ class_id: 8 }), holdout);
+    expect(rows[0]?.testDeficient).toBe(false);
+    expect(rows[0]?.test_count).toBe(0);
+  });
+
   it('m16: surfaces the served adequacy tier verbatim, null when unserved', () => {
     const rows = buildExportRows(perClass({ adequacy: 'warn' }), null);
     expect(rows[0]?.adequacy).toBe('warn');

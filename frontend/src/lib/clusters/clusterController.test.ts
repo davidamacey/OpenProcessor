@@ -217,6 +217,37 @@ describe('assignClassToSelected', () => {
     expect(errorSpy).toHaveBeenCalledWith('Unknown class id 999');
     expect(putCropLabel).not.toHaveBeenCalled();
   });
+
+  // Bug 4 (live smoke: /clusters/[id] header stayed "0 validated" after
+  // labeling 34 crops through the page, only updating on reload). The
+  // header chip reads `classesStore`'s server-owned `validated_count` —
+  // a successful write must re-fetch it rather than leave it stale.
+  it('refreshes classesStore after a successful label write so the header count is current', async () => {
+    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
+    const a = crop('a');
+    const { sel, controller } = setup([a]);
+    sel.ids = new Set(['a']);
+
+    await controller.assignClassToSelected(3);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT refresh classesStore when the label write fails', async () => {
+    vi.mocked(putCropLabel).mockRejectedValue(new Error('boom'));
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
+    const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
+    const a = crop('a');
+    const { sel, controller } = setup([a]);
+    sel.ids = new Set(['a']);
+
+    await controller.assignClassToSelected(3);
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------
@@ -870,6 +901,32 @@ describe('undoLast branch coverage', () => {
 
     expect(cropPager.items.map((x) => x.id)).toEqual(['a']);
     expect(cropPager.total).toBe(1);
+  });
+
+  // Bug 4: undo also reverses a server-owned label write, so it must
+  // refresh classesStore too — but only when something was actually
+  // undone (a no-op undo must not fire a needless request).
+  it('refreshes classesStore when something was actually undone', async () => {
+    const restored = crop('a');
+    vi.spyOn(undoStore, 'undoLast').mockResolvedValue([restored]);
+    const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
+    const a = crop('a');
+    const { controller } = setup([a]);
+
+    await controller.undoLast();
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh classesStore when there is nothing to undo', async () => {
+    vi.spyOn(undoStore, 'undoLast').mockResolvedValue([]);
+    const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
+    const a = crop('a');
+    const { controller } = setup([a]);
+
+    await controller.undoLast();
+
+    expect(refreshSpy).not.toHaveBeenCalled();
   });
 });
 
