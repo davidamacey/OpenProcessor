@@ -22,12 +22,14 @@ import inspect
 
 import pytest
 
-from src.services.curation.clustering.auto_promote import _scroll_cluster_buckets
-
 # Import via `orchestrator` (not `auto_promote` directly) — the two
 # modules have a top/bottom circular import between them that only
 # resolves cleanly when `orchestrator` is the first of the pair loaded.
 from src.services.curation.clustering.orchestrator import auto_promote_clusters  # noqa: F401
+
+
+# isort: split
+from src.services.curation.clustering.auto_promote import _scroll_cluster_buckets
 
 
 pytestmark = pytest.mark.integration

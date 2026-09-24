@@ -42,6 +42,7 @@ from src.routers.curation._common import (
     _PathLookupResponse,
     router,
 )
+from src.services.curation.image_serving import UNSERVABLE_PATH_ERROR, is_servable_image_path
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.label_import import (
     DEFAULT_LABEL_SOURCE,
@@ -131,6 +132,8 @@ async def curation_ingest_image(
     registry: RegistryDep,
 ) -> IngestImageResponse:
     """Ingest a single image from a path already reachable inside the container."""
+    if not is_servable_image_path(body.path):
+        raise HTTPException(status_code=422, detail=f'{body.path}: {UNSERVABLE_PATH_ERROR}')
     await _ensure_indexes(opensearch)
     path = Path(body.path)
     try:
@@ -176,6 +179,13 @@ async def curation_ingest_batch(
     label_paths: list[str | None] = []
     failed_early: list[IngestImageResponse] = []
     for item in body.items:
+        if not is_servable_image_path(item.path):
+            failed_early.append(
+                IngestImageResponse(
+                    status='failed', image_path=item.path, error=UNSERVABLE_PATH_ERROR
+                )
+            )
+            continue
         try:
             images.append(Path(item.path).read_bytes())
             paths.append(item.path)

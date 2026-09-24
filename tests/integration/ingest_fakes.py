@@ -10,7 +10,9 @@ ingest), ``test_ingest_upload.py`` (byte upload) and
 from __future__ import annotations
 
 import io
+import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -333,6 +335,13 @@ def curation_app(
     # lifespan startup below unconditionally (re)builds both -- so these
     # must be patched AFTER entering the TestClient context, not before.
     monkeypatch.setattr(main_module, 'get_async_triton_pool', lambda: fake_triton)
+    # These tests ingest images written under the system temp dir; declare it
+    # the deployment's source root, as a real deployment declares its image
+    # store (OP_SOURCE_ROOT), so path-based ingest accepts them.
+    from src.services.curation import image_serving
+
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (temp_root,))  # noqa: ARG005
 
     try:
         with TestClient(main_module.app) as c:
