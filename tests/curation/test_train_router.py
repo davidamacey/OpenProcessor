@@ -250,6 +250,32 @@ def test_training_volume_mount_sane_false_when_same_device_as_root(
     assert _training_volume_mount_sane('/data/train_staging') is False
 
 
+def test_training_volume_mount_sane_checks_nearest_existing_ancestor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fresh volume has no staging dir yet; the verdict must come from the
+    mounted parent, not a stat() OSError read as 'same filesystem as root'."""
+    from pathlib import Path
+
+    from src.routers.curation_train import _training_volume_mount_sane
+
+    class _Stat:
+        def __init__(self, dev: int) -> None:
+            self.st_dev = dev
+
+    devices = {'/': 1, '/var/lib/app': 2}
+
+    def _fake_stat(self: Path, *, follow_symlinks: bool = True) -> object:
+        if str(self) in devices:
+            return _Stat(devices[str(self)])
+        raise FileNotFoundError(str(self))
+
+    monkeypatch.setattr(Path, 'stat', _fake_stat)
+    assert _training_volume_mount_sane('/var/lib/app/training_staging') is True
+    devices['/var/lib/app'] = 1
+    assert _training_volume_mount_sane('/var/lib/app/training_staging') is False
+
+
 def test_training_volume_mount_sane_true_for_distinct_device(tmp_path: Any) -> None:
     from src.routers.curation_train import _training_volume_mount_sane
 
