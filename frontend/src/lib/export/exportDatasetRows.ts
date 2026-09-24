@@ -6,9 +6,9 @@
  * logic-moves-adoption-plan-2026-09-24.md` §1.7) — this module never
  * clamps or derives them from `validated_count`. Likewise `testDeficient`
  * prefers the server's per-bucket `deficient` flag
- * (`GET {API_PREFIX}/test_holdout/stats`) and only falls back to comparing
- * against the served `min_test_per_class` when a bucket omits the flag —
- * never a hardcoded "< 5".
+ * (`GET {API_PREFIX}/test_holdout/stats`). A class with no holdout bucket
+ * has zero test crops, which is compared against the served
+ * `min_test_per_class`. With no holdout stats at all nothing is flagged.
  */
 import type { StatsSummary, TestHoldoutStats } from '$lib/types';
 
@@ -18,19 +18,18 @@ export interface ExportRow {
   total: number;
   validated: number;
   aug_target: number;
-  gap: number;
+  /** Served `aug_gap`; null when the server didn't send one. */
+  gap: number | null;
   test_count: number;
   testDeficient: boolean;
 }
-
-const DEFAULT_MIN_TEST_PER_CLASS = 5;
 
 export function buildExportRows(
   perClass: StatsSummary['per_class'] | undefined,
   holdout: TestHoldoutStats | null,
 ): ExportRow[] {
   if (!perClass) return [];
-  const minTest = holdout?.min_test_per_class ?? DEFAULT_MIN_TEST_PER_CLASS;
+  const minTest = holdout?.min_test_per_class ?? null;
   const testMap = new Map<number, { count: number; deficient?: boolean }>();
   for (const b of holdout?.by_class ?? []) {
     testMap.set(b.key, { count: b.doc_count, deficient: b.deficient });
@@ -45,9 +44,9 @@ export function buildExportRows(
       total: c.count ?? 0,
       validated,
       aug_target: target,
-      gap: c.aug_gap ?? target - validated,
+      gap: c.aug_gap ?? null,
       test_count: test?.count ?? 0,
-      testDeficient: test?.deficient ?? (test?.count ?? 0) < minTest,
+      testDeficient: test?.deficient ?? (minTest != null && (test?.count ?? 0) < minTest),
     };
   });
 }

@@ -68,20 +68,6 @@ describe('getClasses', () => {
     expect(res.reserved_hotkeys).toContain('b');
     expect(res.reserved_hotkeys).toHaveLength(12);
   });
-
-  it('degrades to empty thresholds/reserved_hotkeys (never a crash) on a bare-array legacy response', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          ok([{ class_id: 1, class_name: 'sedan', validated_count: 0 }]),
-        ),
-    );
-    const res = await getClasses();
-    expect(res.classes).toHaveLength(1);
-    expect(res.reserved_hotkeys).toEqual([]);
-  });
 });
 
 describe('previewClassMerge', () => {

@@ -1059,11 +1059,12 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     hotkey_letter?: string | null;
     adequacy?: string;
   };
-  const res = await apiFetch<
-    | { classes: RawClass[]; thresholds?: ClassThresholds; reserved_hotkeys?: string[] }
-    | RawClass[]
-  >(`${API_PREFIX}/classes`, {}, signal);
-  const raw = Array.isArray(res) ? res : (res.classes ?? []);
+  const res = await apiFetch<{
+    classes: RawClass[];
+    thresholds?: ClassThresholds;
+    reserved_hotkeys?: string[];
+  }>(`${API_PREFIX}/classes`, {}, signal);
+  const raw = res.classes ?? [];
   const classes = raw.map((c) => ({
     id: c.class_id ?? c.id ?? -1,
     name: c.class_name ?? c.name ?? '',
@@ -1081,22 +1082,14 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
   // an empty threshold/reserved set just means the adequacy chip and the
   // hotkey guard render as "unknown" until a real response arrives, never
   // a crash or a client-invented number.
-  const thresholds: ClassThresholds = Array.isArray(res)
-    ? {
-        block_below: 0,
-        warn_below: 0,
-        min_test_per_class: 0,
-        aug_target_min: 0,
-        aug_target_max: 0,
-      }
-    : (res.thresholds ?? {
-        block_below: 0,
-        warn_below: 0,
-        min_test_per_class: 0,
-        aug_target_min: 0,
-        aug_target_max: 0,
-      });
-  const reserved_hotkeys = Array.isArray(res) ? [] : (res.reserved_hotkeys ?? []);
+  const thresholds: ClassThresholds = res.thresholds ?? {
+    block_below: 0,
+    warn_below: 0,
+    min_test_per_class: 0,
+    aug_target_min: 0,
+    aug_target_max: 0,
+  };
+  const reserved_hotkeys = res.reserved_hotkeys ?? [];
   return { classes, thresholds, reserved_hotkeys };
 }
 

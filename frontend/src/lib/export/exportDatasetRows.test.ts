@@ -30,9 +30,14 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
     expect(rows[0]).toMatchObject({ aug_target: 50, gap: 42 });
   });
 
-  it('derives gap from aug_target - validated only when the server omits aug_gap', () => {
+  it('never derives a gap client-side: an omitted aug_gap is null, not aug_target - validated', () => {
     const rows = buildExportRows(perClass({ aug_target: 500, aug_gap: undefined }), null);
-    expect(rows[0]?.gap).toBe(500 - 8);
+    expect(rows[0]?.gap).toBeNull();
+  });
+
+  it('flags nothing when there are no holdout stats at all', () => {
+    const rows = buildExportRows(perClass({}), null);
+    expect(rows[0]?.testDeficient).toBe(false);
   });
 
   it('prefers the server per-bucket "deficient" flag over any local count comparison', () => {

@@ -356,14 +356,18 @@
                 {row.aug_target.toLocaleString()}
               </td>
               <td class="px-3 py-1.5 text-right">
-                <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
-                    row.gap,
-                  )}"
-                  title={row.gap <= 0 ? 'on target' : `${row.gap} more crops needed`}
-                >
-                  {row.gap > 0 ? '+' : ''}{row.gap.toLocaleString()}
-                </span>
+                {#if row.gap == null}
+                  <span class="font-mono text-xs text-zinc-500">—</span>
+                {:else}
+                  <span
+                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+                      row.gap,
+                    )}"
+                    title={row.gap <= 0 ? 'on target' : `${row.gap} more crops needed`}
+                  >
+                    {row.gap > 0 ? '+' : ''}{row.gap.toLocaleString()}
+                  </span>
+                {/if}
               </td>
               <td class="px-3 py-1.5 text-right">
                 <span
