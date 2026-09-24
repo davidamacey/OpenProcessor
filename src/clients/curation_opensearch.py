@@ -16,9 +16,12 @@ index *names* are deployment data, not hardcoded here):
 - ``items`` (default ``op_items``) — one document per detected item
   crop (with embedding, class label, region-of-interest sub-bbox,
   holdout flag).
-- ``labels_confirmed`` (default ``op_labels_confirmed``) — confirmed
-  YOLO-style ground-truth labels (no embedding). Source of truth for
-  export → trainer.
+- ``labels_confirmed`` (default ``op_labels_confirmed``) — provenance
+  ledger of imported YOLO-style ground-truth labels (no embedding),
+  written only by label import. NOT the export source: export and
+  training select ``class_validated=true`` items from ``items``, which
+  every labeling path (human label/move, auto-promote, label import)
+  sets — see ``tests/curation/test_labels_export_roundtrip.py``.
 - ``classes`` (default ``op_classes``) — read-projection of
   ``class_registry.json`` for fast term filters / dashboards. The JSON
   file is the canonical source; this index is rebuilt from it via
