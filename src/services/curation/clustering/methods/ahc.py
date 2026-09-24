@@ -55,6 +55,14 @@ async def _build_knn_graph(
     def _gpu_knn() -> Any:
         from cuml.neighbors import NearestNeighbors as cuNN  # type: ignore[import-not-found]
 
+        # CM-8: cuML's kneighbors_graph includes each point as its own
+        # nearest neighbor (n_neighbors=k+1 asks for k *other* points
+        # plus self); sklearn's CPU path below passes include_self=False
+        # instead. Left in, the self-loop is an always-1.0-similarity
+        # edge on every node's row, silently thickening the GPU graph's
+        # connectivity relative to the CPU graph for the same k -- drop
+        # the diagonal so both backends produce the same connectivity
+        # shape for the same embeddings.
         nn = cuNN(n_neighbors=k + 1, metric='cosine')
         nn.fit(embeddings)
         graph = nn.kneighbors_graph(embeddings, mode='connectivity')
@@ -64,6 +72,8 @@ async def _build_knn_graph(
             import scipy.sparse as sp
 
             graph = sp.csr_matrix(graph)
+            graph.setdiag(0)
+            graph.eliminate_zeros()
             return 0.5 * (graph + graph.T)
         except Exception:
             return graph
