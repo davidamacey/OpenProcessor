@@ -25,8 +25,11 @@ def test_defaults_are_empty_and_permissive() -> None:
     cfg = GpuArbiterConfig()
     assert cfg.allowed_gpu_ids == frozenset()
     assert cfg.containers == ()
+    assert cfg.container_gpus == ()
     assert cfg.trainer_container is None
     assert cfg.bakeoff_jobs_dir is None
+    assert cfg.gpu_labels == {}
+    assert cfg.default_train_gpus is None
 
 
 def test_is_gpu_allowed_permissive_when_unset() -> None:
@@ -73,6 +76,8 @@ _ARBITER_ENV_VARS = (
     'OP_GPU_ARBITER_CONTAINERS',
     'OP_GPU_ARBITER_TRAINER_CONTAINER',
     'OP_BAKEOFF_JOBS_DIR',
+    'OP_GPU_LABELS',
+    'OP_TRAIN_DEFAULT_GPUS',
 )
 
 
@@ -93,14 +98,46 @@ def test_from_env_unset_is_permissive_default(clean_arbiter_env: pytest.MonkeyPa
 
 def test_from_env_parses_every_field(clean_arbiter_env: pytest.MonkeyPatch) -> None:
     clean_arbiter_env.setenv('OP_GPU_ALLOWED_IDS', ' 2, 0 ,')
-    clean_arbiter_env.setenv('OP_GPU_ARBITER_CONTAINERS', 'vlm-server, region-worker')
+    clean_arbiter_env.setenv('OP_GPU_ARBITER_CONTAINERS', 'vlm-server@2, region-worker')
     clean_arbiter_env.setenv('OP_GPU_ARBITER_TRAINER_CONTAINER', 'trainer')
     clean_arbiter_env.setenv('OP_BAKEOFF_JOBS_DIR', '/var/lib/openprocessor/bakeoff_jobs')
+    clean_arbiter_env.setenv('OP_GPU_LABELS', '0=RTX A6000,2=RTX A6000')
+    clean_arbiter_env.setenv('OP_TRAIN_DEFAULT_GPUS', '2')
     cfg = GpuArbiterConfig.from_env()
     assert cfg.allowed_gpu_ids == frozenset({0, 2})
     assert cfg.containers == ('vlm-server', 'region-worker')
+    assert cfg.container_gpus == (('vlm-server', frozenset({2})), ('region-worker', None))
     assert cfg.trainer_container == 'trainer'
     assert cfg.bakeoff_jobs_dir == '/var/lib/openprocessor/bakeoff_jobs'
+    assert cfg.gpu_labels == {0: 'RTX A6000', 2: 'RTX A6000'}
+    assert cfg.default_train_gpus == '2'
+
+
+def test_from_env_scoped_container_multi_gpu(clean_arbiter_env: pytest.MonkeyPatch) -> None:
+    clean_arbiter_env.setenv('OP_GPU_ARBITER_CONTAINERS', 'segmenter@0/2')
+    cfg = GpuArbiterConfig.from_env()
+    assert cfg.container_gpus == (('segmenter', frozenset({0, 2})),)
+
+
+@pytest.mark.parametrize(
+    'raw',
+    ['name@', 'name@x', 'name@-1', 'name@0/-1', '@2', 'name@0/x'],
+)
+def test_from_env_malformed_container_scope_raises(
+    clean_arbiter_env: pytest.MonkeyPatch, raw: str
+) -> None:
+    clean_arbiter_env.setenv('OP_GPU_ARBITER_CONTAINERS', raw)
+    with pytest.raises(ValueError, match='OP_GPU_ARBITER_CONTAINERS'):
+        GpuArbiterConfig.from_env()
+
+
+@pytest.mark.parametrize('raw', ['badentry', '0=', '-1=A6000', 'x=A6000'])
+def test_from_env_malformed_gpu_labels_raises(
+    clean_arbiter_env: pytest.MonkeyPatch, raw: str
+) -> None:
+    clean_arbiter_env.setenv('OP_GPU_LABELS', raw)
+    with pytest.raises(ValueError, match='OP_GPU_LABELS'):
+        GpuArbiterConfig.from_env()
 
 
 def test_from_env_empty_strings_mean_unset(clean_arbiter_env: pytest.MonkeyPatch) -> None:
