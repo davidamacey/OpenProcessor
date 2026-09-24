@@ -38,11 +38,24 @@ class ClassesStore {
   #timer: ReturnType<typeof setInterval> | null = null;
   #abort: AbortController | null = null;
   #refCount = 0;
+  #stopHandle: ReturnType<typeof setTimeout> | null = null;
 
-  /** Increment subscriber count; first subscriber starts polling. */
+  /** Increment subscriber count; first subscriber starts polling.
+   *
+   * m26 (2026-09-24 interactive pass): the root layout's mount/release/
+   * remount during app boot (verified live: acquire() fires repeatedly
+   * with refCount back at 0 each time — an SPA-boot quirk, not a bug in
+   * this store) used to tear down and immediately restart polling each
+   * time, aborting an in-flight fetch and refiring a new one. A pending
+   * teardown is now cancelled by a same-tick-or-soon re-acquire instead
+   * of actually running. */
   acquire(): () => void {
+    if (this.#stopHandle) {
+      clearTimeout(this.#stopHandle);
+      this.#stopHandle = null;
+    }
     this.#refCount += 1;
-    if (this.#refCount === 1) {
+    if (this.#refCount === 1 && !this.#timer) {
       void this.refresh();
       this.#timer = setInterval(() => void this.refresh(), REFRESH_INTERVAL_MS);
     }
@@ -51,11 +64,15 @@ class ClassesStore {
 
   #release(): void {
     this.#refCount = Math.max(0, this.#refCount - 1);
-    if (this.#refCount === 0) {
-      if (this.#timer) clearInterval(this.#timer);
-      this.#timer = null;
-      this.#abort?.abort();
-      this.#abort = null;
+    if (this.#refCount === 0 && !this.#stopHandle) {
+      this.#stopHandle = setTimeout(() => {
+        this.#stopHandle = null;
+        if (this.#refCount !== 0) return;
+        if (this.#timer) clearInterval(this.#timer);
+        this.#timer = null;
+        this.#abort?.abort();
+        this.#abort = null;
+      }, 0);
     }
   }
 

@@ -142,6 +142,11 @@ def test_assist_scope(stub, page, app_url):
 
     starts1.clear()
     start_btn.first.click()
+    # p2 (2026-09-24 interactive pass): "Recluster now" opens an in-page
+    # confirm dialog before it actually starts the run.
+    confirm_btn = page.get_by_role("button", name="Start")
+    confirm_btn.first.wait_for(timeout=5000)
+    confirm_btn.first.click()
     page.wait_for_timeout(500)
     assert len(starts1) == 1, f"exactly one POST to auto_label/start expected: {starts1}"
     qs = query_of(starts1[0])
@@ -193,6 +198,9 @@ def test_assist_scope(stub, page, app_url):
 
     starts2.clear()
     scoped_btn.first.click()
+    confirm_btn2 = page.get_by_role("button", name="Start")
+    confirm_btn2.first.wait_for(timeout=5000)
+    confirm_btn2.first.click()
     page.wait_for_timeout(500)
     assert len(starts2) == 1, f"exactly one scoped POST to auto_label/start expected: {starts2}"
     qs = query_of(starts2[0])

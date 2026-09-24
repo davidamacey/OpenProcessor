@@ -20,16 +20,33 @@ class HealthStore {
   #timer: ReturnType<typeof setInterval> | null = null;
   #abort: AbortController | null = null;
   #refCount = 0;
+  #stopHandle: ReturnType<typeof setTimeout> | null = null;
 
   acquire(): () => void {
+    // m26 (2026-09-24 interactive pass): the root layout's mount/
+    // release/remount during app boot (verified live: acquire() fires
+    // 3x, refCount 0 each time — an SPA-boot quirk, not a bug in this
+    // store) used to tear down and immediately restart polling each
+    // time, aborting an in-flight /health request and refiring a new
+    // one. A pending #stop() is now cancelled by a same-tick-or-soon
+    // re-acquire instead of actually running.
+    if (this.#stopHandle) {
+      clearTimeout(this.#stopHandle);
+      this.#stopHandle = null;
+    }
     this.#refCount += 1;
-    if (this.#refCount === 1) this.#start();
+    if (this.#refCount === 1 && !this.#timer) this.#start();
     return () => this.#release();
   }
 
   #release(): void {
     this.#refCount = Math.max(0, this.#refCount - 1);
-    if (this.#refCount === 0) this.#stop();
+    if (this.#refCount === 0 && !this.#stopHandle) {
+      this.#stopHandle = setTimeout(() => {
+        this.#stopHandle = null;
+        if (this.#refCount === 0) this.#stop();
+      }, 0);
+    }
   }
 
   #start(): void {

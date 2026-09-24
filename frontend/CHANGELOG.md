@@ -1081,6 +1081,15 @@ which the old check (`combo === 'shift+\``) never matched — fixed
     reject/false-positive call from the plate gallery) — a field the
     backend ignores. The key is now omitted entirely unless the caller
     actually sets it.
+  - **m26** — every page load fired `/health` and `/classes` 3x each
+    (2 and 1 respectively aborted), verified live via
+    `healthStore.acquire()`/`classesStore.acquire()` tracing: the root
+    layout mounts/releases/remounts during app boot (an SPA-boot
+    quirk), and `#release()` tore down polling (aborting the in-flight
+    request) synchronously on every cycle, even when immediately
+    followed by a re-acquire. Both stores now defer the actual teardown
+    by one macrotask, cancelled by a re-acquire before it fires — a
+    burst of release-then-reacquire now coalesces into a no-op.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —
