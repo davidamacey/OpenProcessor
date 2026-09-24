@@ -6575,7 +6575,7 @@
     },
     "/curation/crops/{crop_id}/region": {
       "put": {
-        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. Returns ``item``, the post-write\nwire item.",
+        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. A box equal to the stored one\n(within float noise) confirms the region: status, verified, validated\nand verifier are written, the detector / version / score / detection\ntime are kept. A different box is human geometry (detector = human,\nscore 1.0). Returns ``item``, the post-write wire item.",
         "operationId": "set_crop_region_curation_crops__crop_id__region_put",
         "parameters": [
           {

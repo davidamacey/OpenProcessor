@@ -34,7 +34,7 @@ from src.services.curation.region_writes import (
     human_status_fields,
     parent_to_source_bbox,
     post_write_item,
-    region_box_doc,
+    region_box_write,
     validate_bbox_norm,
 )
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
@@ -381,7 +381,8 @@ async def _write_one(
 
 def _box_builder(payload: ItemRegionRequest | ItemBatchRegionRequest) -> Any:
     """Merger body for a box write. Range errors are a 400 up front; a
-    parent-frame box is projected per item inside the merger."""
+    parent-frame box is projected per item inside the merger, and a box
+    equal to the stored one is a confirmation (detector provenance kept)."""
     box = None if payload.region_bbox_norm is None else list(payload.region_bbox_norm)
     if box is not None:
         try:
@@ -390,13 +391,12 @@ def _box_builder(payload: ItemRegionRequest | ItemBatchRegionRequest) -> Any:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     now = _now_iso()
     source = payload.region_label_source
-    if box is None or payload.frame == 'source':
-        doc = region_box_doc(box, label_source=source, now=now)
-        return lambda _current: doc
 
     def _build(current: dict[str, Any]) -> dict[str, Any]:
-        projected = parent_to_source_bbox(box, current.get('bbox_norm'))
-        return region_box_doc(projected, label_source=source, now=now)
+        target = box
+        if box is not None and payload.frame != 'source':
+            target = parent_to_source_bbox(box, current.get('bbox_norm'))
+        return region_box_write(current, target, label_source=source, now=now)
 
     return _build
 
@@ -421,8 +421,11 @@ async def set_crop_region(
 
     ``region_bbox_norm`` is in ``frame`` (``source`` default, or
     ``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop
-    ``region_status='no_region_visible'``. Returns ``item``, the post-write
-    wire item.
+    ``region_status='no_region_visible'``. A box equal to the stored one
+    (within float noise) confirms the region: status, verified, validated
+    and verifier are written, the detector / version / score / detection
+    time are kept. A different box is human geometry (detector = human,
+    score 1.0). Returns ``item``, the post-write wire item.
     """
     F = get_region_fields()
     rec = _Recorder(_box_builder(payload), 'human:set_crop_region')
