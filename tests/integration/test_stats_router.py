@@ -62,7 +62,7 @@ def _fake_dataset_search_response() -> dict[str, Any]:
             'region_status': {'buckets': [{'key': 'detected', 'doc_count': 3}]},
             'region_boxed': {'doc_count': 3},
             'no_label_source': {'doc_count': 0},
-            'distinct_clusters': {'value': 5},
+            'distinct_clusters': {'doc_count': 9, 'n': {'value': 5}},
             'noise_clusters': {'doc_count': 0},
         },
     }
@@ -195,3 +195,37 @@ def test_stats_dataset_legacy_keys_preserved(app_client: TestClient) -> None:
         assert isinstance(b, dict)
         assert 'key' in b
         assert 'doc_count' in b
+
+
+def test_cluster_count_is_the_current_total_not_the_last_run(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``clusters.cluster_count`` is how many (non-noise) clusters the index
+    holds now. The last auto-label run's own count -- often a residual pass
+    that made a single cluster -- is served separately as
+    ``last_run_cluster_count`` so a dashboard never shows it as the total."""
+    from src.services.curation.autolabel import job
+
+    monkeypatch.setattr(
+        job,
+        'get_state',
+        lambda: {
+            'finished_at': 1_790_000_000,
+            'result': {'stages': {'cluster_residuals': {'method': 'ivf', 'n_clusters': 1}}},
+        },
+    )
+    body = app_client.get('/curation/stats/dataset').json()
+    clusters = body['clusters']
+    assert clusters['cluster_count'] == 5
+    assert clusters['last_run_cluster_count'] == 1
+
+
+def test_cluster_count_query_excludes_noise_ids() -> None:
+    """Negative cluster ids are noise, not clusters: the current-total agg
+    counts distinct ids >= 0 only."""
+    from src.config import get_region_fields
+    from src.routers.curation.stats import _build_dataset_query_body
+
+    agg = _build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
+    assert agg['filter'] == {'range': {'cluster_id': {'gte': 0}}}
+    assert agg['aggs']['n']['cardinality']['field'] == 'cluster_id'

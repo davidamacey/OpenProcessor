@@ -1195,7 +1195,12 @@ via `POST /events/publish`.
   `human_detector_name`; `verified_by_vlm` counts every non-human
   verifier, because the VLM stamps its own model id)
 - unchanged: `as_of`, `total_crops`, `validated`, `test_holdout`,
-  `by_source`, `unlabeled`, `in_progress`, `clusters`
+  `by_source`, `unlabeled`, `in_progress`
+- `clusters`: `cluster_count` is the number of distinct non-noise
+  `cluster_id`s in the index now; `last_run_cluster_count` is the last
+  auto-label run's own count (`null` if none recorded — a residual-only
+  pass reports just the clusters it made); `last_run_at`, `method`,
+  `residual_count`, `noise_count` describe that run
 
 ### `GET /export/datasets`
 

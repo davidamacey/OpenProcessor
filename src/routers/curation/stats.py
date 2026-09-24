@@ -168,8 +168,10 @@ def _read_auto_label_clusters_meta(
 ) -> dict[str, Any]:
     """Best-effort read of the auto_label_job persisted state file.
 
-    Returns a dict with ``last_run_at``, ``cluster_count``,
-    ``residual_count``, ``noise_count``, ``method``. Any read / parse
+    Returns a dict with ``last_run_at``, ``cluster_count`` (the run's own
+    count; the caller replaces it with the index total and moves this to
+    ``last_run_cluster_count``), ``residual_count``, ``noise_count``,
+    ``method``. Any read / parse
     failure falls back to (None, 0, fallback_residual, fallback_noise,
     None) — the stats endpoint must never 500 because the on-disk
     state file is missing or malformed.
@@ -324,10 +326,13 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                     }
                 }
             },
-            # cluster_id cardinality — fallback when we don't have a
-            # persisted auto_label result.
+            # How many clusters the index holds now (noise ids < 0 are
+            # not clusters).
             'distinct_clusters': {
-                'cardinality': {'field': 'cluster_id', 'precision_threshold': 4000},
+                'filter': {'range': {'cluster_id': {'gte': 0}}},
+                'aggs': {
+                    'n': {'cardinality': {'field': 'cluster_id', 'precision_threshold': 4000}}
+                },
             },
             # Negative cluster_id is reserved for noise (legacy HDBSCAN
             # convention; AHC doesn't emit -1 today but the agg stays so
@@ -422,8 +427,12 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
         fallback_residual=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
         fallback_noise=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
     )
-    if cluster_meta['cluster_count'] == 0:
-        cluster_meta['cluster_count'] = int((aggs.get('distinct_clusters') or {}).get('value', 0))
+    # The last run's own count (often a residual pass) is not the index's
+    # total, so serve both under explicit names.
+    cluster_meta['last_run_cluster_count'] = cluster_meta['cluster_count'] or None
+    cluster_meta['cluster_count'] = int(
+        ((aggs.get('distinct_clusters') or {}).get('n') or {}).get('value', 0)
+    )
 
     return {
         'as_of': _now_iso(),
