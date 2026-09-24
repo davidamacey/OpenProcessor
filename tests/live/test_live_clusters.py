@@ -51,7 +51,7 @@ def _v6_crop_ids(opensearch: Any, cluster_id: int, limit: int = 5) -> list[str]:
             'bool': {
                 'must': [
                     {'term': {'cluster_id': cluster_id}},
-                    {'term': {'class_source': 'item_model'}},
+                    {'term': {'class_source': 'v6_model'}},
                 ],
                 'must_not': [{'term': {'class_validated': True}}],
             }
@@ -167,7 +167,7 @@ def test_auto_promote_apply_validates_only_the_high_purity_cluster(
     for crop_id in untouched:
         src = get_doc(opensearch, INDEXES['items'], crop_id)['_source']
         assert src['class_validated'] is False, crop_id
-        assert src['class_source'] == 'item_model'
+        assert src['class_source'] == 'v6_model'
 
 
 # ---------------------------------------------------------------------------

@@ -266,7 +266,7 @@ class ItemDoc(BaseModel):
     crop_rank_in_image: int | None = None
     crop_area_norm: float | None = None
     blur_lap_ratio: float | None = None
-    coco_proposal_name: str | None = None
+    proposal_name: str | None = None
     probe_pred_class: Any = None
     probe_pred_entropy: float | None = None
     mistakenness_score: float | None = None

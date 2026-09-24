@@ -621,6 +621,9 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
 
     total = coverage.get(_COVERAGE_TOTAL_KEY)
     for entry in strategies:
+        # Whether PUT /settings (and any per-run override) can select this
+        # axis; read-only axes (e.g. detection_profile) only report state.
+        entry['settable'] = entry['axis'] in SETTABLE_DEFAULT_AXES
         field = entry.get('requires_field')
         if field:
             entry['field_coverage'] = coverage.get(field)

@@ -136,7 +136,7 @@ def _decode(profile: DetectionProfile, classes: list[int]) -> list[Any]:
 
 
 def test_primary_class_ids_filter_which_detections_become_items() -> None:
-    narrowed = DetectionProfile(name='item', class_ids=frozenset({2, 7}))
+    narrowed = DetectionProfile(name='item', assigns_class=True, class_ids=frozenset({2, 7}))
     items = _decode(narrowed, [0, 2, 7, 15])
     assert sorted(item.class_id for item in items) == [2, 7]
 
@@ -144,3 +144,128 @@ def test_primary_class_ids_filter_which_detections_become_items() -> None:
 def test_primary_without_class_ids_keeps_every_class() -> None:
     items = _decode(DetectionProfile(name='item'), [0, 2, 7, 15])
     assert len(items) == 4
+
+
+# =============================================================================
+# assigns_class: a generic proposer never labels from its own class ids
+# =============================================================================
+
+
+class _DomainRegistry:
+    """A domain taxonomy whose ids collide with the proposer's ids."""
+
+    class _Entry:
+        def __init__(self, name: str) -> None:
+            self.class_name = name
+
+    def get(self, class_id: int) -> Any:
+        return self._Entry(f'domain_class_{class_id}')
+
+
+def test_default_primary_does_not_assign_class(tmp_path: Any) -> None:
+    labels = tmp_path / 'labels.txt'
+    labels.write_text('person\nbicycle\ncar\n')
+    profile = DetectionProfile(name='item', labels_path=str(labels))
+    detector = WholeImageDetector(triton_pool=None, registry=_DomainRegistry(), profile=profile)
+    items = detector.decode_primary_row(
+        np.array([2]),
+        np.array([[0.1, 0.1, 0.5, 0.5]] * 2, dtype=np.float32),
+        np.array([0.99, 0.2], dtype=np.float32),
+        np.array([2, 7], dtype=np.float32),
+        1.0,
+        (0.0, 0.0),
+        640,
+    )
+    assert [i.class_id for i in items] == [None, None]
+    assert [i.class_name for i in items] == [None, None]
+    assert [i.class_source for i in items] == ['item_proposal', 'item_proposal']
+    # The proposer's own label, not the registry entry sharing its id;
+    # an id past the labels file falls back to the bare id.
+    assert [i.proposal_name for i in items] == ['car', '7']
+
+
+def test_assigning_primary_keeps_registry_labelling() -> None:
+    profile = DetectionProfile(name='item', assigns_class=True)
+    detector = WholeImageDetector(triton_pool=None, registry=_DomainRegistry(), profile=profile)
+    items = detector.decode_primary_row(
+        np.array([1]),
+        np.array([[0.1, 0.1, 0.5, 0.5]], dtype=np.float32),
+        np.array([0.99], dtype=np.float32),
+        np.array([2], dtype=np.float32),
+        1.0,
+        (0.0, 0.0),
+        640,
+    )
+    assert items[0].class_id == 2
+    assert items[0].class_name == 'domain_class_2'
+    assert items[0].class_source == 'item_model'
+
+
+def test_assigns_class_and_labels_path_from_env(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS', 'true')
+    clean_env.setenv('OP_INGEST_PRIMARY_LABELS_PATH', '/models/proposer/labels.txt')
+    profile = ingest_router._get_detection_profile()
+    assert profile.assigns_class is True
+    assert profile.labels_path == '/models/proposer/labels.txt'
+    clean_env.delenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS')
+    assert ingest_router._get_detection_profile().assigns_class is False
+
+
+# =============================================================================
+# class_source vocabulary derives from the configured profile names
+# =============================================================================
+
+
+def test_class_sources_follow_profile_names(clean_env: pytest.MonkeyPatch) -> None:
+    from src.services.curation import ingest_class_sources as cs
+
+    clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
+    assert cs.unlabeled_proposal_class_sources() == {'proposer_proposal', 'proposer_low_conf'}
+    assert cs.classifier_class_sources() == frozenset()
+    assert cs.confident_class_sources() == ('human', 'vlm')
+
+    clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'clf')
+    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'clf')
+    assert cs.classifier_class_sources() == {'clf_model'}
+    clean_env.setenv('OP_INGEST_PRIMARY_ASSIGNS_CLASS', '1')
+    assert cs.classifier_class_sources() == {'clf_model', 'proposer_model'}
+    assert cs.confident_class_sources() == ('clf_model', 'human', 'proposer_model', 'vlm')
+
+
+def test_worker_cohort_gate_uses_configured_names(clean_env: pytest.MonkeyPatch) -> None:
+    from scripts.curation.worker.combined import _is_combined_cohort
+
+    clean_env.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
+    clean_env.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'clf')
+    clean_env.setenv('OP_INGEST_SECONDARY_NAME', 'clf')
+    assert _is_combined_cohort('proposer_proposal', 0.99)
+    assert _is_combined_cohort('proposer_low_conf', 0.99)
+    assert _is_combined_cohort('clf_model', 0.5)
+    assert not _is_combined_cohort('clf_model', 0.95)
+    # A name from some other deployment is not special.
+    assert not _is_combined_cohort('coco_yolo11_proposal', 0.99)
+
+
+def test_confident_sources_resolved_from_env_at_import(clean_env: pytest.MonkeyPatch) -> None:
+    import subprocess  # nosec B404 - this repo's interpreter on a fixed snippet
+    import sys
+    from pathlib import Path
+
+    snippet = (
+        'from src.services.curation.clustering import embedding_reduce as e\n'
+        'print(",".join(e.CONFIDENT_CLASS_SOURCES))\n'
+    )
+    env = {
+        **{k: v for k, v in os.environ.items() if not k.startswith('OP_INGEST_')},
+        'OP_INGEST_SECONDARY_DETECTOR_MODEL': 'clf',
+        'OP_INGEST_SECONDARY_NAME': 'clf',
+    }
+    out = subprocess.run(  # nosec B603
+        [sys.executable, '-c', snippet],
+        cwd=Path(__file__).resolve().parents[2],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.strip().splitlines()[-1] == 'clf_model,human,vlm'

@@ -25,11 +25,13 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.curation.class_sources import (
-    CLASSIFIER_CLASS_SOURCE_PREFIX,
+from src.services.curation.ingest_class_sources import (
     CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
     CLUSTER_MAJORITY_CLASS_SOURCE,
+    DEFAULT_PROPOSAL_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
+    classifier_class_sources,
+    unlabeled_proposal_class_sources,
 )
 from src.services.detection.profile_registry import region_profile_or_neutral
 
@@ -95,9 +97,6 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
 # rollup which is already computed from class_validated / the region
 # validated flag.
 _HUMAN_SOURCE_PREFIXES = ('human',)
-# class_source values for a detector proposal nothing has classified yet
-# (the ingest DetectedItem default, plus the older proposer-named values).
-_PROPOSAL_SOURCE_PREFIXES = ('unlabeled_proposal', 'coco_yolo11', 'yolo11')
 
 
 def _sum_prefixed(buckets: dict[str, int], prefix: str) -> int:
@@ -119,6 +118,11 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     Region-detector breakdown (detector / segmenter / human) is computed
     separately by the caller via region-detector aggregations.
     """
+    classifier_sources = classifier_class_sources() | {
+        CLUSTER_MAJORITY_CLASS_SOURCE,
+        CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
+    }
+    proposal_sources = unlabeled_proposal_class_sources() | {DEFAULT_PROPOSAL_CLASS_SOURCE}
     by_human = 0
     by_vlm = 0
     by_classifier = 0
@@ -131,15 +135,9 @@ def _rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
             by_human += cnt
         elif key.startswith(VLM_CLASS_SOURCE):
             by_vlm += cnt
-        elif key.startswith(
-            (
-                CLASSIFIER_CLASS_SOURCE_PREFIX,
-                CLUSTER_MAJORITY_CLASS_SOURCE,
-                CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
-            )
-        ):
+        elif key in classifier_sources:
             by_classifier += cnt
-        elif key.startswith(_PROPOSAL_SOURCE_PREFIXES):
+        elif key in proposal_sources:
             # The item detector proposed this crop as an object of
             # interest but nothing has classified it yet: awaiting
             # classification, not "other unknown".

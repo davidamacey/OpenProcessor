@@ -19,7 +19,7 @@ from fastapi import HTTPException
 
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
-from src.services.curation.class_sources import CLASSIFIER_LOW_CONF_CLASS_SOURCE
+from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
 
 
 KNOWN_TABS: tuple[str, ...] = (
@@ -228,7 +228,7 @@ def build_tab_query(
                     'should': [
                         {'range': {'classifier_raw_confidence': {'lt': 0.75}}},
                         {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
-                        {'term': {'class_source': CLASSIFIER_LOW_CONF_CLASS_SOURCE}},
+                        {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
                     ],
                     'minimum_should_match': 1,
                 }
@@ -240,9 +240,9 @@ def build_tab_query(
     elif tab == 'coco_blind_spots':
         # The cleanest blind spot: the item detector proposed an item that the classifier
         # missed entirely, on a primary subject. class_source is the exact
-        # signal (ingest restricts COCO proposals to vehicle classes). The
-        # stored COCO detection score lives in ``confidence``.
-        must.append({'term': {'class_source': 'coco_yolo11_proposal'}})
+        # signal: an ingest proposal nothing classified. The stored
+        # proposal score lives in ``confidence``.
+        must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
         must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.

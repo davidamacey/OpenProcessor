@@ -20,6 +20,10 @@ import structlog
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.ingest_class_sources import (
+    CLUSTER_MAJORITY_CLASS_SOURCE,
+    classifier_class_sources,
+)
 from src.services.curation.metrics import (
     LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS,
     LEGACY_STAGE_A_SAM_DURATION_SECONDS,
@@ -105,8 +109,7 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
 # combined call (the caller already has a trusted class). Same
 # threshold as the legacy cascade's combined-cohort gate
 # (combined.py: _V6_LOW_CONF_THRESHOLD).
-_CLASSIFIER_HIGH_CONF_CLASS_SOURCES = frozenset({'item_model', 'cluster_majority_agreement'})
-_CLASSIFIER_HIGH_CONF_THRESHOLD = 0.80
+_V6_HIGH_CONF_THRESHOLD = 0.80
 
 
 def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
@@ -131,8 +134,8 @@ def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
     if t.test_holdout:
         return False
     return not (
-        t.class_source in _CLASSIFIER_HIGH_CONF_CLASS_SOURCES
-        and t.class_confidence >= _CLASSIFIER_HIGH_CONF_THRESHOLD
+        t.class_source in (classifier_class_sources() | {CLUSTER_MAJORITY_CLASS_SOURCE})
+        and t.class_confidence >= _V6_HIGH_CONF_THRESHOLD
     )
 
 

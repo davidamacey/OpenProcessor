@@ -24,10 +24,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
 from src.core.logging import get_logger
-from src.services.curation.class_sources import (
-    CLASSIFIER_CLASS_SOURCE,
-    CLUSTER_MAJORITY_CLASS_SOURCE,
-)
 
 # Import order matters here — see orchestrator.py's bottom-of-file import
 # and plan §7 R11. orchestrator.py imports auto_promote_clusters from this
@@ -37,6 +33,10 @@ from src.services.curation.class_sources import (
 # practice. Do not "fix" this cycle.
 from src.services.curation.clustering.orchestrator import ITEMS_INDEX
 from src.services.curation.history import record_class_history
+from src.services.curation.ingest_class_sources import (
+    CLUSTER_MAJORITY_CLASS_SOURCE,
+    classifier_class_sources,
+)
 
 
 if TYPE_CHECKING:
@@ -179,7 +179,7 @@ async def auto_promote_clusters(
             'bool': {
                 'must': [
                     {'term': {'cluster_id': cluster_id}},
-                    {'term': {'class_source': CLASSIFIER_CLASS_SOURCE}},
+                    {'terms': {'class_source': sorted(classifier_class_sources())}},
                     {'term': {'class_name': top_name}},
                 ],
                 'must_not': [

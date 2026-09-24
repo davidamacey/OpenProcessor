@@ -133,3 +133,41 @@ def test_put_null_for_an_axis_with_no_prior_override_is_a_harmless_no_op(
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_put_rejects_detection_profile_as_read_only(app_client: TestClient) -> None:
+    """detection_profile is reported on GET /methods but not settable: the
+    region cascade runs on OP_REGION_PROFILE, so a stored default would be
+    a silent no-op."""
+    r = app_client.put(
+        '/curation/settings', json={'defaults': {'detection_profile': 'license_plate'}}
+    )
+    assert r.status_code == 422
+    assert 'detection_profile' in r.json()['detail']
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_methods_marks_settable_axes_and_reports_active_region_profile(
+    app_client: TestClient,
+) -> None:
+    from src.clients.curation_opensearch import CURATION_SETTINGS_DOC_ID
+    from src.config import get_curation_config
+
+    # A detection_profile override stored before the axis became read-only
+    # must not change what is reported as active.
+    app_client.fake_os._docs[  # type: ignore[attr-defined]
+        (get_curation_config().settings_index, CURATION_SETTINGS_DOC_ID)
+    ] = {'defaults': {'detection_profile': 'something_else'}}
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    entries = r.json()['strategies']
+    by_axis: dict[str, set[bool]] = {}
+    for e in entries:
+        by_axis.setdefault(e['axis'], set()).add(e['settable'])
+    assert by_axis['detection_profile'] == {False}
+    assert by_axis['prompt_pack'] == {True}
+    assert by_axis['cluster'] == {True}
+    assert by_axis['score'] == {False}
+    region = [e for e in entries if e['axis'] == 'detection_profile']
+    assert [(e['id'], e['default']) for e in region] == [('license_plate', True)]

@@ -117,7 +117,7 @@ def serialize_item(
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
-        'coco_proposal_name': src.get('coco_proposal_name'),
+        'proposal_name': src.get('proposal_name'),
         'probe_pred_class': src.get('probe_pred_class'),
         'probe_pred_entropy': src.get('probe_pred_entropy'),
         'mistakenness_score': src.get('mistakenness_score'),

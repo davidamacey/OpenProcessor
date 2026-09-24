@@ -19,15 +19,15 @@ from src.routers.curation._common import (
 from src.routers.curation.pipeline_params import (
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
-    DETECTION_PROFILE_DESC as _DETECTION_PROFILE_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
-    resolve_run_selection,
+    reject_detection_profile,
+    resolve_run_prompt_pack,
 )
 from src.routers.curation.vlm import _get_vlm_labeler
-from src.services.curation.class_sources import CLASSIFIER_CLASS_SOURCE
 from src.services.curation.event_hub import publish_crop_classified
+from src.services.curation.ingest_class_sources import classifier_class_sources
 
 
 @router.post('/pipeline/auto_label/start')
@@ -50,7 +50,7 @@ async def pipeline_auto_label_start(
     gate_min_blur_ratio: float | None = Query(None, ge=0.0),
     n_clusters: int | None = Query(None, ge=2, le=4096),
     class_id: int | None = Query(None, description=_CLASS_ID_DESC),
-    detection_profile: str | None = Query(None, description=_DETECTION_PROFILE_DESC),
+    detection_profile: str | None = Query(None, include_in_schema=False),
     prompt_pack: str | None = Query(None, description=_PROMPT_PACK_DESC),
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
@@ -62,9 +62,8 @@ async def pipeline_auto_label_start(
     from src.services.curation.autolabel import job as auto_label_job
 
     # Resolved here (422 before queueing) so the job args echo what runs.
-    detection_profile, prompt_pack = await resolve_run_selection(
-        opensearch, detection_profile, prompt_pack
-    )
+    reject_detection_profile(detection_profile)
+    prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
     try:
         return auto_label_job.start_job(
             pipeline_auto_label,
@@ -86,7 +85,6 @@ async def pipeline_auto_label_start(
                 'gate_min_blur_ratio': gate_min_blur_ratio,
                 'n_clusters': n_clusters,
                 'class_id': class_id,
-                'detection_profile': detection_profile,
                 'prompt_pack': prompt_pack,
             },
         )
@@ -134,7 +132,7 @@ async def pipeline_auto_label(
     gate_min_blur_ratio: float | None = Query(None, ge=0.0),
     n_clusters: int | None = Query(None, ge=2, le=4096),
     class_id: int | None = Query(None, description=_CLASS_ID_DESC),
-    detection_profile: str | None = Query(None, description=_DETECTION_PROFILE_DESC),
+    detection_profile: str | None = Query(None, include_in_schema=False),
     prompt_pack: str | None = Query(None, description=_PROMPT_PACK_DESC),
     progress: Any = None,
 ) -> dict[str, Any]:
@@ -157,17 +155,9 @@ async def pipeline_auto_label(
     from src.services.curation.image_serving import THUMBNAIL_CACHE
     from src.services.labeling.vlm_labeler import ItemCrop
 
-    # detection_profile is validated + recorded; no stage here runs region
-    # detection (that is the detection worker's cascade).
-    detection_profile, prompt_pack = await resolve_run_selection(
-        opensearch, detection_profile, prompt_pack
-    )
-    summary: dict[str, Any] = {
-        'stages': {},
-        'class_id': class_id,
-        'detection_profile': detection_profile,
-        'prompt_pack': prompt_pack,
-    }
+    reject_detection_profile(detection_profile)
+    prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
+    summary: dict[str, Any] = {'stages': {}, 'class_id': class_id, 'prompt_pack': prompt_pack}
 
     # Snapshot counts at entry for a real before/after.
     summary['baseline'] = await pipeline_health_snapshot(opensearch)
@@ -324,7 +314,7 @@ async def pipeline_auto_label(
                 {
                     'bool': {
                         'must': [
-                            {'term': {'class_source': CLASSIFIER_CLASS_SOURCE}},
+                            {'terms': {'class_source': sorted(classifier_class_sources())}},
                             {'range': {'confidence': {'gte': classifier_confidence_skip_vlm}}},
                         ],
                     },

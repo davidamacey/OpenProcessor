@@ -25,7 +25,7 @@ from fastapi import File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
-from src.config.detection_profile import reject_legacy_detection_env
+from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.routers.curation._common import (
     CURATION_IMAGES_INDEX,
     CURATION_ITEMS_INDEX,
@@ -82,31 +82,15 @@ class IngestBatchRequest(BaseModel):
     )
 
 
-INGEST_PRIMARY_ENV_PREFIX = 'OP_INGEST_PRIMARY_'
-INGEST_SECONDARY_ENV_PREFIX = 'OP_INGEST_SECONDARY_'
-
-
 def _get_detection_profile() -> DetectionProfile:
-    """The primary item-proposal detector profile for the ingest pipeline.
-
-    ``OP_INGEST_PRIMARY_<FIELD>`` (see ``DetectionProfile.from_env``) — a
-    deployment brings its own end2end detector by setting
-    ``OP_INGEST_PRIMARY_DETECTOR_MODEL`` at minimum, and can narrow which
-    of its classes become items with ``OP_INGEST_PRIMARY_CLASS_IDS``.
-    """
-    reject_legacy_detection_env()
-    return DetectionProfile.from_env(INGEST_PRIMARY_ENV_PREFIX, name='item')
+    """The primary item-proposal detector profile (``OP_INGEST_PRIMARY_*``,
+    see :func:`src.config.ingest_profiles.ingest_primary_profile`)."""
+    return ingest_primary_profile()
 
 
 def _get_secondary_profile() -> DetectionProfile | None:
-    """The optional secondary (raw-output ensemble) detector profile.
-
-    Configured via ``OP_INGEST_SECONDARY_<FIELD>``; ``None`` (secondary
-    stage off) unless ``OP_INGEST_SECONDARY_DETECTOR_MODEL`` is set. Its
-    ``name`` prefixes the ``class_source`` it writes (``{name}_model``).
-    """
-    profile = DetectionProfile.from_env(INGEST_SECONDARY_ENV_PREFIX, name='secondary')
-    return profile if profile.detector_model else None
+    """The optional secondary classifier profile (``OP_INGEST_SECONDARY_*``)."""
+    return ingest_secondary_profile()
 
 
 async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:

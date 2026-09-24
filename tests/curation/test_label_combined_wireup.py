@@ -11,7 +11,7 @@ Cohort detection criterion (mirrors ``combined._is_combined_cohort``):
 
 * ``task.class_source == 'coco_yolo11_proposal'`` (the primary
   classifier missed entirely), OR
-* ``task.class_source in {'item_model', 'cluster_majority_agreement'}``
+* ``task.class_source in {'v6_model', 'cluster_majority_agreement'}``
   AND ``task.class_confidence < 0.80`` (the primary classifier fired
   but low-confidence — class still needs VLM clarification),
 * AND a region candidate exists (either pending_verification with an
@@ -47,7 +47,7 @@ from src.services.labeling.vlm_labeler import VlmCombinedReply, VlmRegionVerdict
 
 
 # The cascade needs an active region profile; the default is none.
-pytestmark = pytest.mark.usefixtures('reference_region_profile')
+pytestmark = pytest.mark.usefixtures('reference_region_profile', 'reference_ingest_profiles')
 
 
 F = get_region_fields()
@@ -162,7 +162,7 @@ class TestCohortRouting:
         gemma = _gemma_with_combined(reply=reply)
         task = _make_task(
             crop_id='crop-low',
-            class_source='item_model',
+            class_source='v6_model',
             class_confidence=0.60,
             status='pending_verification',
             lpr_in_source=(0.20, 0.30, 0.30, 0.34),
@@ -194,7 +194,7 @@ class TestCohortRouting:
             )
         )
         task = _make_task(
-            class_source='item_model',
+            class_source='v6_model',
             class_confidence=0.95,
             status='pending_verification',
             lpr_in_source=(0.20, 0.30, 0.30, 0.34),
@@ -227,7 +227,7 @@ class TestCohortRouting:
         """
         gemma = _gemma_with_combined(reply=VlmCombinedReply(img_id='x', class_id=None))
         task = _make_task(
-            class_source='item_model',
+            class_source='v6_model',
             class_confidence=0.60,
             status='pending_detection',
             lpr_in_source=None,

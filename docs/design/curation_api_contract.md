@@ -261,9 +261,11 @@ Merges into the stored document; axes already set and not mentioned in
 the body are left untouched. Returns the full updated record, same
 shape as the `GET`. Each `axis` key must be one of
 `src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`
-(`cluster` / `sort` / `detection_profile` / `prompt_pack` today —
+(`cluster` / `sort` / `prompt_pack` today —
 `score`/`overlay`/`export` have no single-selectable-id "default"
-concept a shared override could apply to, so they 422 rather than
+concept a shared override could apply to, and `detection_profile` is
+read-only (the region cascade runs on the process's `OP_REGION_PROFILE`),
+so they 422 rather than
 silently accepting a value nothing will ever honor), and each `id` must
 be a currently-advertised id for that axis per `GET /methods` — either
 violation returns `422` with a message listing the valid axes/ids.
@@ -290,8 +292,8 @@ changes actual server behavior, not just what `GET /methods` displays:
 |---|---|
 | `cluster` | `src.services.curation.clustering.orchestrator.cluster_residuals` — resolves the effective cluster method when `?clustering_method` is omitted (feeds `POST /pipeline/auto_label*` and `POST /clusters/*`'s residual-clustering stage). |
 | `sort` | `src.services.curation.review_sorts.build_sort` — when `GET /review/{tab}`'s `?sort` is omitted or `'default'`, a valid shared override is tried before falling back to that tab's own hardcoded default. |
-| `detection_profile` | `POST /pipeline/auto_label` and `/pipeline/auto_label/start` — `?detection_profile=<id>` overrides the default for that one job (never written to settings; unknown id → `422` with `valid_ids`), omitted resolves via this function; the resolved id is echoed in the job `args` and the run summary. No auto-label stage runs region detection, so today it is validated and recorded, not consumed; the region cascade (detection worker) uses the process's active profile (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`). Neutral default: no profile registered → the axis is empty and the id resolves to `null`. |
-| `prompt_pack` | `POST /pipeline/auto_label*` — `?prompt_pack=<id>` selects the pack for that job's VLM labeling stage (same override/`422`/echo semantics); omitted resolves via this function. `POST /vlm/label_batch` and `/vlm/verify_regions` also use the effective default. Selectable ids: the built-in generic pack, every `OP_PROMPT_PACK_PATHS` pack, and the `OP_PROMPT_PACK_PATH` pack (the fallback default). `POST /vlm/verify_region_batch` and `/vlm/region_visible_batch` take no OpenSearch dependency and use the `OP_PROMPT_PACK_PATH` pack. |
+| `detection_profile` | **Read-only.** `GET /methods` lists the registered region profiles with the active one (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`) as `default: true` and `settable: false`; a stored settings override is ignored and `PUT /settings` with this axis is a `422`. `POST /pipeline/auto_label*` rejects `?detection_profile=` with a `422` (no auto-label stage runs region detection) rather than silently ignoring it. |
+| `prompt_pack` | `POST /pipeline/auto_label*` — `?prompt_pack=<id>` selects the pack for that job's VLM labeling stage (same override/`422`/echo semantics); omitted resolves via this function. Every VLM endpoint (`POST /vlm/label_batch`, `/vlm/verify_regions`, `/vlm/verify_region_batch`, `/vlm/region_visible_batch`) also uses the effective default. Selectable ids: the built-in generic pack, every `OP_PROMPT_PACK_PATHS` pack, and the `OP_PROMPT_PACK_PATH` pack (the fallback default). |
 
 Storage: a single OpenSearch document (not a full index of many rows),
 in its own small index (`IndexRole.SETTINGS`, default `op_curation_settings`,
@@ -320,7 +322,7 @@ always all present (a value is `null` when the stored doc has no value;
 `label_source`/`updated_at` to `""`, `confidence` to `0.0`,
 `label_validated`/`class_validated`/`test_holdout` to `false`).
 
-Item keys (40): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
+Item keys (40): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
 
 Region keys (31, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
@@ -378,12 +380,18 @@ single-class versions under `<export_root>/<profile_name>/<version>/`, and
 
 ### `class_source` values
 
-`human*` (human writes), `item_model` / `item_low_conf` (ingest's item
-detector, `f'{profile.name}_model'` with the ingest profile named
-`item` — see `src/services/curation/class_sources.py`), `vlm`,
-`vlm_unmatched`, `vlm_new_class_pending`, `vlm_reclassified`,
-`classifier_vlm_agreement`, `cluster_majority_agreement`,
-`unlabeled_proposal`.
+`human*` (human writes); ingest values derived from the configured
+ingest profile names (`src/services/curation/ingest_class_sources.py`,
+`OP_INGEST_PRIMARY_NAME` / `OP_INGEST_SECONDARY_NAME`):
+`{primary}_proposal`, `{primary}_low_conf`, `{primary}_model` (only
+when the primary assigns classes), `{secondary}_model`; and the fixed
+writer values `vlm`, `vlm_unmatched`, `vlm_new_class_pending`,
+`vlm_reclassified`, `classifier_vlm_agreement`,
+`cluster_majority_agreement`, `unlabeled_proposal`. The
+`classifier_confidence_skip_vlm` skip, auto-promote, the
+`primary_low_conf` / `coco_blind_spots` review tabs and the
+`/stats/dataset` rollup all filter on these derived sets, never on one
+deployment's detector names.
 
 ## What is explicitly NOT on the wire
 
@@ -501,7 +509,8 @@ backend rows of the frontend's contract audit
 | Stored doc field | `v6_raw_confidence` | `classifier_raw_confidence` |
 | `class_source` / `label_source` value | `gemma`, `gemma_unmatched`, `gemma_new_class_pending`, `gemma_reclassified`, `gemma_human_confirmed` | `vlm`, `vlm_unmatched`, `vlm_new_class_pending`, `vlm_reclassified`, `vlm_human_confirmed` |
 | `class_source` value | `v6_gemma_agreement`, `cluster_v6_majority_agreement` | `classifier_vlm_agreement`, `cluster_majority_agreement` |
-| `class_source` value (queried) | `v6_model`, `v6_low_conf` (hardcoded; never matched what generic ingest writes) | `item_model`, `item_low_conf` (what ingest writes) |
+| `class_source` value (queried) | hardcoded `v6_model`, `v6_low_conf`, `coco_yolo11_proposal` | the configured ingest profiles' values (`{secondary}_model`, `{primary}_proposal`, `{primary}_low_conf`, …) |
+| Item key + stored doc field | `coco_proposal_name` | `proposal_name` |
 | `region_detector_chain` entry | `<det>:gemma_verify_ok`, `<det>:gemma_reject`, `gemma_visible:yes` / `gemma_visible:no`, `<seg>:skip_gemma_verify` | `<det>:vlm_verify_ok`, `<det>:vlm_reject`, `vlm_visible:yes` / `vlm_visible:no`, `<seg>:skip_vlm_verify` |
 | Writer id (`class_id_history`) | `gemma_pipeline` | `vlm_pipeline` |
 | Review tab (`GET /review/{tab}`) | `gemma_low_conf` | `vlm_low_conf` |
@@ -527,10 +536,11 @@ backend rows of the frontend's contract audit
 | Route (new) | — | `GET /classes/{class_id}` |
 | Env var | `GEMMA_URL`, `GEMMA_IMAGES_PER_CALL`, `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE`, `SAM_WORKER_GEMMA_CONCURRENCY`, `SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY`, `SAM3_SKIP_GEMMA_VERIFY_SCORE` | `VLM_URL`, `VLM_IMAGES_PER_CALL`, `VLM_HTTPX_MAX_CONNECTIONS`, `VLM_HTTPX_KEEPALIVE`, `SAM_WORKER_VLM_CONCURRENCY`, `SAM_WORKER_VLM_VISIBLE_CONCURRENCY`, `SAM3_SKIP_VLM_VERIFY_SCORE` (old names still read as fallbacks) |
 
-Not renamed, deliberately: `coco_proposal_name` (an ingest-owned stored
-field), the internal-only `v6_embedding` storage field (never on the
-wire), Prometheus metric names, and the `needs_gemma_stop` Python alias
-in the GPU arbiter (not wire).
+Not renamed, deliberately: the internal-only `v6_embedding` storage
+field (never on the wire), Prometheus metric names, the
+`needs_gemma_stop` Python alias in the GPU arbiter (not wire), and the
+review tab id `coco_blind_spots` (a proposer-named tab id; left for the
+owners to decide, it now filters on the configured proposal sources).
 
 - This doc is the shared source of truth for the `/curation` API. Point
   any consumer's docs here instead of duplicating the field list.

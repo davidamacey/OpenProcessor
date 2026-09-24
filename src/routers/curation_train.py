@@ -92,7 +92,7 @@ class PreflightReport(BaseModel):
     summary: str = ''
 
 
-# Disk-space threshold (design §15.1: ≥50 GB free on /data).
+# Disk-space threshold (design §15.1: ≥50 GB free on the training-data volume).
 MIN_FREE_DISK_GB = 50
 
 # Per-class crop minimum thresholds (design §15.1: hard-fail at <20,
@@ -246,12 +246,11 @@ def _free_gb(path: str) -> float | None:
 def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
     """Pick the path to stat for the free-disk check (P2-8).
 
-    Previously hardcoded to ``/data`` — inside the yolo-api container,
-    only specific subpaths under ``/data`` (e.g.
-    a deployment-specific training-data mount, see the deployment's own
-    compose overlay)
-    are bind-mounted from the real training-data volume; ``/data``
-    itself resolves to the container's own overlay filesystem, which
+    Previously hardcoded to a host data-volume root — inside the yolo-api
+    container, only specific subpaths under that root (e.g. a
+    deployment-specific training-data mount, see the deployment's own
+    compose overlay) are bind-mounted from the real training-data volume;
+    the root itself resolves to the container's own overlay filesystem, which
     almost always has plenty of headroom regardless of whether the real
     training volume is anywhere near full. Prefer the export dir itself
     (guaranteed to be on the real volume once a job names one) and fall

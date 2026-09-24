@@ -77,7 +77,7 @@ def fake() -> QueryFakeOpenSearch:
             cluster_id=42,
             class_id=1,
             class_name='gadget',
-            class_source='item_model',
+            class_source='v6_model',
         )
     images = {'imp': {'image_id': 'imp', 'image_path': '/data/imp.jpg'}}
     return QueryFakeOpenSearch({ITEMS: items, IMAGES: images})
@@ -127,6 +127,7 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures('reference_ingest_profiles')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
     from src.services.curation.clustering.orchestrator import auto_promote_clusters
     from src.services.curation.label_import import import_yolo_labels

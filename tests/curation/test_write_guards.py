@@ -67,6 +67,7 @@ def _make_task(
 # =============================================================================
 
 
+@pytest.mark.usefixtures('reference_ingest_profiles')
 class TestShouldClassifyHumanGuard:
     def test_skips_human_sourced_crop(self) -> None:
         t = _make_task(class_source='human', class_validated=True)
@@ -83,17 +84,17 @@ class TestShouldClassifyHumanGuard:
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_skips_class_validated_true_regardless_of_source(self) -> None:
-        t = _make_task(class_source='item_model', class_confidence=0.2, class_validated=True)
+        t = _make_task(class_source='v6_model', class_confidence=0.2, class_validated=True)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_still_classifies_low_conf_v6_non_human_non_holdout(self) -> None:
         # Non-regression: the fix must not swallow the legitimate cohort
         # the worker exists to serve.
-        t = _make_task(class_source='item_model', class_confidence=0.3, class_validated=False)
+        t = _make_task(class_source='v6_model', class_confidence=0.3, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is True
 
     def test_still_skips_high_conf_v6_cohort(self) -> None:
-        t = _make_task(class_source='item_model', class_confidence=0.9, class_validated=False)
+        t = _make_task(class_source='v6_model', class_confidence=0.9, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_registry_not_loaded_always_skips(self) -> None:
@@ -108,7 +109,7 @@ class TestShouldClassifyHumanGuard:
 
 class TestShouldClassifyHoldoutGuard:
     def test_skips_test_holdout_crop(self) -> None:
-        t = _make_task(class_source='item_model', class_confidence=0.2, test_holdout=True)
+        t = _make_task(class_source='v6_model', class_confidence=0.2, test_holdout=True)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_holdout_crop_with_coco_source_also_skipped(self) -> None:
@@ -116,7 +117,7 @@ class TestShouldClassifyHoldoutGuard:
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_non_holdout_crop_unaffected(self) -> None:
-        t = _make_task(class_source='item_model', class_confidence=0.2, test_holdout=False)
+        t = _make_task(class_source='v6_model', class_confidence=0.2, test_holdout=False)
         assert _should_classify(t, registry_loaded=True) is True
 
 
@@ -333,7 +334,7 @@ class TestIsHumanOwnedClassPredicate:
         from src.clients.occ import is_human_owned_class
 
         assert is_human_owned_class({'class_source': 'vlm'}) is False
-        assert is_human_owned_class({'class_source': 'item_model'}) is False
+        assert is_human_owned_class({'class_source': 'v6_model'}) is False
         assert is_human_owned_class({}) is False
 
 
@@ -496,7 +497,7 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         opensearch = AsyncMock()
         opensearch.mget = AsyncMock(
             return_value=make_mget_response(
-                {'crop-1': {'class_source': 'item_model', 'class_validated': False}}
+                {'crop-1': {'class_source': 'v6_model', 'class_validated': False}}
             )
         )
         opensearch.bulk = AsyncMock(

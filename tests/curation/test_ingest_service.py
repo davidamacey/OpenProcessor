@@ -156,9 +156,11 @@ def _make_service(
         fail_on_batch_gt=fail_on_batch_gt,
     )
     reg = registry or FakeClassRegistry([_FakeClassEntry(1, 'widget')])
+    # These tests exercise a primary whose label space IS the registry.
     profile = DetectionProfile(
         name='primary',
         detector_model='primary_end2end',
+        assigns_class=True,
         detector_version=detector_version,
         input_size=320,
         confidence_floor=confidence_floor,
@@ -254,7 +256,7 @@ class TestIngestOne:
         assert 'class_id' not in doc
         assert doc['class_source'] == 'primary_low_conf'
         # Diagnostic lineage field still recorded even when unlabeled.
-        assert doc['coco_proposal_name'] == 'widget'
+        assert doc['proposal_name'] == 'widget'
 
     @pytest.mark.asyncio
     async def test_empty_bytes_fails_cleanly(self) -> None:
@@ -297,7 +299,7 @@ class TestClassProvenance:
 
     @pytest.mark.asyncio
     async def test_low_confidence_proposal_still_records_its_detector(self) -> None:
-        """The unlabeled proposal's ``coco_proposal_name`` came from this
+        """The unlabeled proposal's ``proposal_name`` came from this
         detector too — its provenance is recorded even with no class_id."""
         svc, os_fake, _ = _make_service(
             detections=[(0.05, 0.05, 0.6, 0.6, 0.1, 1)], confidence_floor=0.5
@@ -873,7 +875,11 @@ def _make_dual_service(
         triton_pool=triton,
         registry=_two_class_registry(),
         profile=DetectionProfile(
-            name='primary', detector_model='primary_end2end', input_size=320, batch_limit=8
+            name='primary',
+            detector_model='primary_end2end',
+            assigns_class=True,
+            input_size=320,
+            batch_limit=8,
         ),
         secondary_profile=DetectionProfile(
             name='secondary',

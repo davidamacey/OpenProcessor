@@ -73,21 +73,24 @@ DEFAULT_V6_CONF_SKIP = 0.80
 
 
 def _build_pending_query(v6_skip_conf: float) -> dict:
-    """Crops that need Gemma right now.
+    """Crops that need the VLM right now.
 
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
     crops the on-demand pipeline would process are picked up by the worker.
     """
+    # Lazy: keeps the module import light; src.config is all this pulls in.
+    from src.services.curation.ingest_class_sources import classifier_class_sources
+
     return {
         'bool': {
             'must': [{'exists': {'field': 'embedding'}}],
             'must_not': [
                 {'term': {'class_validated': True}},
-                # v6 already confident
+                # classifier already confident
                 {
                     'bool': {
                         'must': [
-                            {'term': {'class_source': 'item_model'}},
+                            {'terms': {'class_source': sorted(classifier_class_sources())}},
                             {'range': {'confidence': {'gte': v6_skip_conf}}},
                         ],
                     },
@@ -430,10 +433,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        '--classifier-conf-skip',
         '--v6-conf-skip',
+        dest='v6_conf_skip',
         type=float,
         default=DEFAULT_V6_CONF_SKIP,
-        help='Skip Gemma for item_model crops at or above this confidence.',
+        help='Skip the VLM for classifier-labeled crops at or above this confidence.',
     )
     # GPU arbiter sentinel — design §14.5. The trainer touches this file
     # before a single-GPU run starts; the worker pauses while it exists

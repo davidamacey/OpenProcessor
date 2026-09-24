@@ -12,21 +12,22 @@ import re
 import pytest
 from fastapi.routing import APIRoute
 
-from src.routers.curation.ingest import _get_detection_profile
 from src.routers.curation.stats import _rollup_class_sources
-from src.services.curation import class_sources
+from src.services.curation import ingest_class_sources
 from src.services.curation.review_queries import KNOWN_TABS
 
 
 _VENDOR_RE = re.compile(r'gemma|(^|_)v6(_|$)', re.IGNORECASE)
 
 
-def test_classifier_class_source_matches_ingest_profile() -> None:
-    """Queries filter on CLASSIFIER_CLASS_SOURCE; ingest writes
-    f'{profile.name}_model'. They must agree or the filters match nothing."""
-    name = _get_detection_profile().name
-    assert f'{name}_model' == class_sources.CLASSIFIER_CLASS_SOURCE
-    assert f'{name}_low_conf' == class_sources.CLASSIFIER_LOW_CONF_CLASS_SOURCE
+def test_non_ingest_class_sources_are_vendor_neutral() -> None:
+    for value in (
+        ingest_class_sources.VLM_CLASS_SOURCE,
+        ingest_class_sources.CLUSTER_MAJORITY_CLASS_SOURCE,
+        ingest_class_sources.CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
+    ):
+        assert not _VENDOR_RE.search(value)
+    assert ingest_class_sources.VLM_CLASS_SOURCE == 'vlm'
 
 
 def test_review_tab_is_vlm_low_conf() -> None:
@@ -34,23 +35,28 @@ def test_review_tab_is_vlm_low_conf() -> None:
     assert not any(_VENDOR_RE.search(t) for t in KNOWN_TABS)
 
 
-def test_class_source_rollup_buckets() -> None:
+def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Buckets follow the configured ingest profile names, not literals."""
+    monkeypatch.setenv('OP_INGEST_PRIMARY_NAME', 'proposer')
+    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'classifier')
+    monkeypatch.setenv('OP_INGEST_SECONDARY_NAME', 'clf')
     buckets = [
         {'key': 'human', 'doc_count': 1},
         {'key': 'vlm', 'doc_count': 2},
         {'key': 'vlm_unmatched', 'doc_count': 3},
-        {'key': 'item_model', 'doc_count': 4},
-        {'key': 'item_low_conf', 'doc_count': 5},
+        {'key': 'clf_model', 'doc_count': 4},
         {'key': 'cluster_majority_agreement', 'doc_count': 6},
         {'key': 'classifier_vlm_agreement', 'doc_count': 7},
+        {'key': 'proposer_proposal', 'doc_count': 5},
+        {'key': 'proposer_low_conf', 'doc_count': 10},
         {'key': 'unlabeled_proposal', 'doc_count': 8},
         {'key': 'something_else', 'doc_count': 9},
     ]
     assert _rollup_class_sources(buckets) == {
         'by_human': 1,
         'by_vlm': 5,
-        'by_classifier': 22,
-        'by_proposal': 8,
+        'by_classifier': 17,
+        'by_proposal': 23,
         'other': 9,
     }
 

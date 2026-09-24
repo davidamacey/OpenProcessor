@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.config.ingest_profiles import proposer_label
 from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
 from src.services.detection.geometry import (
@@ -211,7 +212,9 @@ class WholeImageDetector:
         A detection below ``profile.confidence_floor`` stays an unlabeled
         proposal: its class fields are left unset but the proposed name
         and raw score are kept for lineage. A non-empty
-        ``profile.class_ids`` drops detections of any other class.
+        ``profile.class_ids`` drops detections of any other class. With
+        ``profile.assigns_class`` false every detection is an unlabeled
+        ``{name}_proposal`` carrying the proposer's own label.
         """
         num_dets = int(num_dets_row[0])
         floor = self.profile.confidence_floor
@@ -238,6 +241,20 @@ class WholeImageDetector:
             )
             cls_id = int(cls)
             conf = float(score)
+            if not self.profile.assigns_class:
+                # Generic proposer: its class ids are not registry ids, so
+                # never label from them -- keep its own label for lineage.
+                out.append(
+                    DetectedItem(
+                        bbox_pixel=full,
+                        score=conf,
+                        class_source=f'{self.profile.name}_proposal',
+                        proposal_name=proposer_label(self.profile, cls_id),
+                        class_detector=self.profile.detector_model or self.profile.name,
+                        class_detector_version=self.profile.detector_version,
+                    )
+                )
+                continue
             entry = self.registry.get(cls_id)
             class_name = entry.class_name if entry is not None else None
             confident = conf >= floor
