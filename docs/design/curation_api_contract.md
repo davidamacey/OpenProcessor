@@ -208,7 +208,12 @@ else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
 `min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
 (inclusive band on `confidence`, `400` if min > max), `order`
 (`default`/`outliers`/`diverse`), `k` (1–10000, `order=diverse` only:
-rank just the first `k` k-center-greedy picks; `total` is then `k`).
+rank just the first `k` k-center-greedy picks; `total` is then `k`),
+`item_text` (≤200 chars; text read on the item crop — every letter/digit
+word of the query must be a case-insensitive prefix of one of the item's
+`item_text_tokens`, e.g. `smith mot` matches an item whose OCR read
+`Smith Motors`, `abc1234` matches `ABC-1234`; a query with no letter or
+digit is a `400`).
 
 ### Classes
 
@@ -384,16 +389,17 @@ read-modify-write round trip in application code.
 
 ## Item wire format
 
-Built by `serialize_item()` in `src/services/curation/wire.py`. 73 keys,
+Built by `serialize_item()` in `src/services/curation/wire.py`. 77 keys,
 always all present (a value is `null` when the stored doc has no value;
 `bbox_norm` defaults to `[]`, `class_name`/`class_source`/
 `label_source`/`updated_at` to `""`, `confidence` to `0.0`,
-`label_validated`/`class_validated`/`test_holdout` to `false`).
+`label_validated`/`class_validated`/`test_holdout` to `false`,
+`item_text_lines` to `[]`).
 
-Item keys (42): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
+Item keys (43): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`.
 
-Region keys (31, one per `RegionFields` attribute except `embedding`,
-`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+Region keys (34, one per `RegionFields` attribute except `embedding`,
+`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
 `thumbnail_url` / `region_thumbnail_url` are built from the configured
@@ -409,6 +415,56 @@ must match.
 | `GET /regions` | `items[]` | item |
 | `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
 | `GET /search/text` | `items[]` | item + `semantic_score` |
+
+### Region text — `region_text*`
+
+`region_text` is the chosen reading of the region's text. Which reader
+fills it is the region profile's `text_reader`
+(`OP_REGION_DETECTION_TEXT_READER`):
+
+| `text_reader` | Region OCR runs | `region_text` |
+|---|---|---|
+| `vlm` | only when no VLM is configured | the VLM's reading |
+| `ocr` | always | the OCR reading (VLM's if OCR read nothing) |
+| `vlm_then_ocr` (generic default) | when the VLM read nothing | VLM's, else OCR's |
+| `both` (reference `license_plate` profile) | always | VLM's, else OCR's |
+
+- `region_text_source`: `vlm` or `ocr` (a human edit writes `human`).
+- `region_text_engine_version`: the VLM model id, or the OCR det + rec
+  model ids for an OCR reading (`<det>:<ver>+<rec>:<ver>`).
+- `region_text_confidence`: VLM category mapped to 0.92/0.70/0.40, or the
+  minimum recognition score of the kept OCR lines.
+- `region_text_raw`: every line the OCR read on the region crop,
+  unfiltered, in reading order, joined by a space; the VLM's verbatim
+  reading when OCR did not run.
+- `region_text_vlm` / `region_text_ocr`: each reader's own reading
+  whenever it produced one (keyword).
+- `region_text_disagreement`: `true`/`false` when both readings exist,
+  compared after the profile's normalization; `null` otherwise (boolean).
+
+The OCR reader keeps the region's dominant text: lines at least
+`text_min_height_ratio` × the tallest line's height, not centered in the
+outer `text_border_margin` band of the crop, minus `text_stopwords`,
+ordered in rows top-to-bottom / left-to-right, normalized
+(`text_uppercase`, `text_charset`), joined with `text_join`, and accepted
+only within `text_len_min`..`text_len_max` and above
+`text_min_confidence`. With no VLM configured (no `VLM_URL` /
+`GEMMA_URL` / `OPENWEBUI_BASE_URL`) the worker never calls a VLM:
+detector regions are written `detected` with `region_verified=false`
+(`<src>:accepted_unverified` on the chain) and their text is read by OCR.
+
+### Item text — `item_text_lines`
+
+Every OCR line read on the item crop by the detection worker (gated by
+`OP_ITEM_TEXT_ENABLED`, default on when the region profile names an OCR
+pipeline; lines below `OP_ITEM_TEXT_MIN_CONFIDENCE`, default 0.5, are not
+stored): a list of `{text, box_norm, confidence, rel_height}` —
+`box_norm` is `[x1, y1, x2, y2]` normalized to the item crop,
+`rel_height` the line height over the crop height. Always present on the
+wire (`[]` when none or not yet read). The normalized search tokens
+(`item_text_tokens`, keyword array: each letter/digit word uppercased,
+plus each multi-word line with separators removed) are storage-only and
+back `GET /crops?item_text=`.
 
 ### `region_detector_chain` entries
 
@@ -430,6 +486,7 @@ detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
 | `<src>:combined_no_region_visible` | VLM sees no region at all |
 | `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
 | `<seg>:skip_vlm_verify` | high-score segmenter box written without a VLM call |
+| `<src>:accepted_unverified` | no VLM configured: box written `detected` with `region_verified=false` (text from OCR) |
 | `<ocr>:text_hint:hit` / `:miss` / `:no_region_shape`, `<seg>:text_hint:miss` | OCR-hinted segmenter re-pass |
 
 Readers match whole entries with `term` queries — e.g. `GET
