@@ -204,7 +204,7 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * `representative_thumb_urls` entry rendered through a shared helper).
  *
  * The backend intentionally emits relative `/curation/...` URLs in API
- * response bodies (e.g. `plate_thumbnail_url`, `representative_thumb_urls`)
+ * response bodies (e.g. `region_thumbnail_url`, `representative_thumb_urls`)
  * so the same payload works both same-origin (production nginx proxy,
  * empty `apiBase`) and cross-origin (a remote `PUBLIC_TRITON_API_URL`).
  * Resolving those against `apiBase` is the client's job — every render
@@ -607,24 +607,24 @@ export interface PlateBrowseItem {
   id: string;
   image_path: string;
   bbox_norm: number[];
-  plate_bbox_norm: number[] | null;
-  plate_score: number | null;
-  plate_status: string | null;
-  plate_verified: boolean | null;
-  plate_validated: boolean | null;
-  plate_detector: string | null;
-  plate_detector_version: string | null;
-  plate_detector_chain: string[] | null;
-  plate_bbox_frame: string | null;
-  plate_detected_at: string | null;
-  plate_verifier: string | null;
-  plate_verifier_version: string | null;
-  plate_verified_at: string | null;
-  plate_rejection_reason: string | null;
-  plate_visible: boolean | null;
-  plate_text: string | null;
-  plate_text_source: string | null;
-  plate_text_confidence: number | null;
+  region_bbox_norm: number[] | null;
+  region_score: number | null;
+  region_status: string | null;
+  region_verified: boolean | null;
+  region_validated: boolean | null;
+  region_detector: string | null;
+  region_detector_version: string | null;
+  region_detector_chain: string[] | null;
+  region_bbox_frame: string | null;
+  region_detected_at: string | null;
+  region_verifier: string | null;
+  region_verifier_version: string | null;
+  region_verified_at: string | null;
+  region_rejection_reason: string | null;
+  region_visible: boolean | null;
+  region_text: string | null;
+  region_text_source: string | null;
+  region_text_confidence: number | null;
   class_id: number | null;
   class_name: string | null;
   cluster_id: number | null;
@@ -632,12 +632,12 @@ export interface PlateBrowseItem {
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
   /** Plate clustering assignment (independent of vehicle cluster_id). */
-  plate_cluster_id?: number | null;
-  plate_cluster_subid?: string | null;
-  plate_cluster_distance?: number | null;
+  region_cluster_id?: number | null;
+  region_cluster_subid?: string | null;
+  region_cluster_distance?: number | null;
   updated_at: string;
   thumbnail_url?: string;
-  plate_thumbnail_url?: string;
+  region_thumbnail_url?: string;
   selection_reason?: string;
   /** Per-slot capability data — see `OpCrop.slots` in types.ts. Added by
    *  `getPlates` via `mapCropSlots`; absent on any row that predates this
@@ -660,9 +660,9 @@ export interface PlatesQuery {
   class_id?: number;
   cluster_id?: number;
   /** Plate clustering bucket (independent of the vehicle cluster_id). */
-  plate_cluster_id?: number;
+  region_cluster_id?: number;
   /** AHC plate sub-cluster id (e.g. "17a"). */
-  plate_cluster_subid?: string;
+  region_cluster_subid?: string;
   /** Order a bucket's plates by sub-cluster so AHC groups come back contiguous. */
   sort_by_subid?: boolean;
   /** Only plates on the top-N largest crops (crop_rank_in_image<=N). */
@@ -744,7 +744,7 @@ export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateCluste
   return apiFetch(`${API_PREFIX}${REGION_BASE}/cluster/status`, {}, signal);
 }
 
-/** Per-bucket AHC refine over plate_pe_embedding; writes plate_cluster_subid. */
+/** Per-bucket AHC refine over plate_pe_embedding; writes region_cluster_subid. */
 export function refinePlateCluster(
   clusterId: number,
   signal?: AbortSignal,
@@ -900,21 +900,21 @@ export interface DatasetStats {
   labeled: {
     by_human: number;
     by_vlm: number;
-    by_v6: number;
-    by_yolo11_proposal: number;
+    by_classifier: number;
+    by_proposal: number;
     other: number;
   };
-  plates: {
-    /** Crops with a plate_bbox_norm right now — the honest "crops with a
+  regions: {
+    /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  plate" count (matches the plate cluster view). */
     boxed?: number;
-    /** Crops Gemma confirmed are real plates (plate_status='detected'). */
+    /** Crops Gemma confirmed are real plates (region_status='detected'). */
     confirmed?: number;
-    /** Sum of plate_detector credit — includes rejected/failed attempts,
+    /** Sum of region_detector credit — includes rejected/failed attempts,
      *  so it OVERSTATES real plates. Kept for back-compat; not the headline. */
     total_detected: number;
-    by_lpr: number;
-    by_sam3: number;
+    by_detector: number;
+    by_segmenter: number;
     /** Legacy alias for ``by_human_drew``. */
     by_human: number;
     /** Crops where the operator drew a fresh plate bbox from scratch. */
@@ -922,7 +922,7 @@ export interface DatasetStats {
     /** Crops whose plate was verified by a human (Confirm Plate button). */
     verified_by_human?: number;
     /** Crops whose plate was verified by Gemma (auto-verify). */
-    verified_by_gemma?: number;
+    verified_by_vlm?: number;
     /**
      * Union: any plate the operator touched — drew the bbox OR
      * confirmed an AI-proposed one. The dashboard surfaces this as
@@ -1159,8 +1159,11 @@ type RawCrop = {
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
   blur_lap_ratio?: number | null;
-  v6_raw_confidence?: number | null;
-  coco_proposal_name?: string | null;
+  classifier_raw_confidence?: number | null;
+  proposal_name?: string | null;
+  vlm_confidence?: string | null;
+  vlm_proposed_class_id?: number | null;
+  vlm_proposed_class_name?: string | null;
   // Curation scores (Phase 3, docs/curation-strategy-plan-2026-09.md §4).
   // Optional/forward-tolerant: an un-backfilled pool just omits these.
   mistakenness_score?: number | null;
@@ -1180,7 +1183,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
     class_source: c.class_source ?? null,
-    label_source: (c.label_source || 'model') as OpCrop['label_source'],
+    label_source: c.label_source || 'unknown',
     label_validated: !!c.label_validated,
     label_confidence: c.confidence ?? null,
     cluster_id: c.cluster_id ?? null,
@@ -1195,8 +1198,11 @@ function mapRawCrop(c: RawCrop): OpCrop {
     crop_rank_in_image: c.crop_rank_in_image ?? null,
     crop_area_norm: c.crop_area_norm ?? null,
     blur_lap_ratio: c.blur_lap_ratio ?? null,
-    v6_raw_confidence: c.v6_raw_confidence ?? null,
-    coco_proposal_name: c.coco_proposal_name ?? null,
+    classifier_raw_confidence: c.classifier_raw_confidence ?? null,
+    proposal_name: c.proposal_name ?? null,
+    vlm_confidence: c.vlm_confidence ?? null,
+    vlm_suggested_class_id: c.vlm_proposed_class_id ?? null,
+    vlm_suggested_class_name: c.vlm_proposed_class_name ?? null,
     mistakenness_score: c.mistakenness_score ?? null,
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
@@ -1222,7 +1228,7 @@ export async function getCluster(
     classSource?: string | null;
     maxRank?: number | null;
     minBlurRatio?: number | null;
-    v6ConfLt?: number | null;
+    classifierConfLt?: number | null;
     /**
      * Forwarded verbatim to `/curation/crops?order=`. Only `'outliers'` is
      * special-cased server-side today (op_crops.py `order` query param —
@@ -1273,7 +1279,7 @@ export async function getCluster(
   if (opts.classSource) cropQuery.class_source = opts.classSource;
   if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
   if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
-  if (opts.v6ConfLt != null) cropQuery.v6_conf_lt = opts.v6ConfLt;
+  if (opts.classifierConfLt != null) cropQuery.classifier_conf_lt = opts.classifierConfLt;
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
   const [cropPage, clustersResp] = await Promise.all([
@@ -1403,9 +1409,9 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
  *
  * - Pass an `[x1, y1, x2, y2]` tuple in **source-image normalized**
  *   coordinates to set/replace the plate box (server records
- *   `plate_status='human_confirmed'`).
+ *   `region_status='human_confirmed'`).
  * - Pass `null` to clear the plate; the backend interprets this as
- *   `plate_status='no_region_visible'`.
+ *   `region_status='no_region_visible'`.
  *
  * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/region`
  * (renamed from `/plate`, Wave 2 C14), defined by backend task #32 to
@@ -1430,29 +1436,13 @@ export async function getCrop(cropId: string, signal?: AbortSignal): Promise<OpC
   return mapRawCrop(raw);
 }
 
-export function setCropPlate(
-  cropId: string,
-  bbox: [number, number, number, number] | null,
-  signal?: AbortSignal,
-): Promise<OpCrop> {
-  return apiFetch<OpCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ bbox_norm: bbox }),
-    },
-    signal,
-  );
-}
-
 /**
  * PUT a slot's sub-box via the spec's declared endpoint, or clear it
  * (`xyxy === null`) via `clearBox` when the profile declares a distinct
- * one, falling back to `setBox` with a null body otherwise (matching
- * `setCropPlate`'s existing "PUT with bbox_norm: null clears" contract —
- * licensePlateSlot doesn't declare a separate clearBox URL, so this
- * degrades to that same call for the one profile that's actually wired
- * today).
+ * one, falling back to `setBox` with a null box otherwise (the backend's
+ * "PUT with a null box clears" contract). The body key is the slot's own
+ * `subBox.bboxField`, so a slot's writes use the same wire name its reads
+ * do.
  */
 export function setSlotBox(
   spec: SlotSpec,
@@ -1463,14 +1453,15 @@ export function setSlotBox(
   const path =
     (xyxy === null ? spec.endpoints.clearBox?.(cropId) : undefined) ??
     spec.endpoints.setBox?.(cropId);
-  if (!path) {
+  const bboxField = spec.capabilities.subBox?.bboxField;
+  if (!path || !bboxField) {
     return Promise.reject(
-      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint`),
+      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint or subBox field`),
     );
   }
   return apiFetch<OpCrop>(
     `${API_PREFIX}${path}`,
-    { method: 'PUT', body: JSON.stringify({ bbox_norm: xyxy }) },
+    { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy }) },
     signal,
   );
 }
@@ -1479,8 +1470,8 @@ export function setSlotBox(
  * PATCH a slot's metadata fields (status / text / rejection reason)
  * without touching the bbox. The BODY KEYS are the spec's own wire
  * field names — for `licensePlateSlot` this produces a body
- * byte-identical to the old `PlateMetaPatch` (`plate_text` /
- * `plate_status` / `plate_rejection_reason`), pinned in api.test.ts.
+ * byte-identical to the old `PlateMetaPatch` (`region_text` /
+ * `region_status` / `region_rejection_reason`), pinned in api.test.ts.
  * Keys whose capability is absent, or whose value is `undefined`
  * (as opposed to `null`, which clears), are omitted.
  */
@@ -1517,7 +1508,7 @@ export function patchSlotMeta(
 }
 
 /**
- * Bulk-set plate_status over many crops. Backend: `POST /curation/regions/batch_status`
+ * Bulk-set region_status over many crops. Backend: `POST /curation/regions/batch_status`
  *   (renamed from `/curation/plates/batch_status`, Wave 2 C14).
  * The cluster-view triage op: select outlier plates → mark all false_positive,
  * or bulk-confirm good plates (status='detected' + plateVerified=true).
@@ -1540,29 +1531,31 @@ export function batchPlateStatus(
   conflicts: { crop_id: string; current_source: string | null }[];
 }> {
   const path = spec.endpoints.batchStatus?.() ?? `${REGION_BASE}/batch_status`;
+  const lc = spec.capabilities.lifecycle;
+  if (!lc) {
+    return Promise.reject(new Error(`slot "${spec.key}" has no lifecycle capability`));
+  }
+  const body: Record<string, unknown> = {
+    crop_ids: cropIds,
+    [lc.statusField]: plateStatus,
+  };
+  if (lc.verifiedField) body[lc.verifiedField] = opts.plateVerified ?? null;
+  if (lc.labelSourceField) body[lc.labelSourceField] = opts.labelSource ?? 'human';
   return apiFetch(
     `${API_PREFIX}${path}`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        crop_ids: cropIds,
-        plate_status: plateStatus,
-        plate_verified: opts.plateVerified ?? null,
-        label_source: opts.labelSource ?? 'human',
-      }),
-    },
+    { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
 }
 
-export async function runGemmaOnCluster(
+export async function runVlmOnCluster(
   clusterId: number,
   signal?: AbortSignal,
 ): Promise<{ predicted: number; updated: number; new_class_proposals?: unknown[] }> {
   // {API_PREFIX}/vlm/label_batch takes {crop_ids: [...]} (max 64) — the
   // backend renamed the path segment gemma → vlm when it swapped Gemma
   // for a pluggable VLM abstraction. The JSON field names (gemma_*) and
-  // the gemma_low_conf review-tab id are frozen wire contract and did
+  // the vlm_low_conf review-tab id are frozen wire contract and did
   // NOT move. Fetch the
   // unvalidated crops in this cluster first, then POST in chunks of 64.
   type CropPage = { crops: Array<{ crop_id: string }> };
@@ -1626,7 +1619,7 @@ export async function getReviewQueue(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<ReviewItem>> {
-  // The /curation/review API ships bbox_norm + plate_bbox_norm as
+  // The /curation/review API ships bbox_norm + region_bbox_norm as
   // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends OpCrop where
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
   // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmSlot all see the
@@ -2132,7 +2125,7 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
  *
  * Note the deliberate asymmetry with the JSON key: `/regions` responses
  *   (renamed from `/plates`, Wave 2 C14)
- * carry a field literally named `plate_thumbnail_url` whose *value* now
+ * carry a field literally named `region_thumbnail_url` whose *value* now
  * points at `…/region_thumbnail`. The key is frozen wire contract; only
  * the path inside it is generic. Do not "fix" the key to match.
  */
@@ -2161,7 +2154,7 @@ export function getSourceImageWithBbox(
   maxDim: number = 1280,
   cacheKey?: string | null,
 ): string {
-  // The server reads plate_bbox_norm from OpenSearch and burns the
+  // The server reads region_bbox_norm from OpenSearch and burns the
   // overlay into the JPEG. The crop_id alone produces an identical URL
   // across edits, so the browser cache returns the pre-edit JPEG and
   // the left-side preview lags the right-side canvas. Pass a key that
@@ -2343,10 +2336,10 @@ export interface AutoLabelStartParams {
   train_clusters?: boolean;
   promote_min_purity?: number;
   promote_min_members?: number;
-  gemma_batch_size?: number;
-  gemma_concurrency?: number;
-  max_gemma_crops?: number;
-  v6_confidence_skip_gemma?: number;
+  vlm_batch_size?: number;
+  vlm_concurrency?: number;
+  max_vlm_crops?: number;
+  classifier_confidence_skip_vlm?: number;
   /** When true, broaden the residual AHC pool to include items already
    *  in candidate clusters so smaller candidates can merge into bigger
    *  ones. Default false — only fresh / class-bucketed items are

@@ -9,16 +9,16 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 
+/** Who wrote a crop's current label. Same vocabulary as `class_source`
+ *  (curation_api_contract.md "class_source values"): `human*`, the fixed
+ *  VLM writer values, or an ingest detector's config-derived value — so
+ *  it stays an open string. */
 export type LabelSource =
-  | 'v6_original_label'
-  | 'hdd_user_label'
-  | 'model_suggestion'
-  | 'gemma_suggestion'
   | 'human'
   | 'human_confirmed'
-  | 'cluster_propagation'
-  | 'ensemble'
-  | 'unknown';
+  | 'vlm'
+  | 'vlm_human_confirmed'
+  | (string & {});
 
 export type ClassSource = 'registry' | 'derived' | 'imported';
 
@@ -184,18 +184,21 @@ export interface OpCrop {
   bbox_norm: BBoxNorm;
   class_id: number | null;
   class_name: string | null;
-  /** Where the class assignment came from: 'v6_model' / 'gemma' /
-   *  'human' / 'v6_low_conf' / 'gemma_unmatched' /
-   *  'coco_yolo11_proposal' / 'gemma_new_class_pending'.
+  /** Where the class assignment came from — `human*`, the fixed VLM
+   *  writer values (`vlm`, `vlm_unmatched`, …), or an ingest detector's
+   *  config-derived value (`{primary}_proposal`, `{secondary}_model`, …).
    *  Drives the per-source filter chip in the cluster view. */
   class_source: string | null;
   label_source: LabelSource;
   label_validated: boolean;
   label_confidence: number | null;
-  /** Gemma's most-recent suggestion if any. */
-  gemma_suggested_class_id?: number | null;
-  gemma_suggested_class_name?: string | null;
-  gemma_suggested_confidence?: number | null;
+  /** The VLM's registry-matched class for this crop when it did not
+   *  auto-apply it (wire `vlm_proposed_class_id`/`_name`). Drives the
+   *  accept-suggestion chip and the `G`/`Shift+Enter` keys. */
+  vlm_suggested_class_id?: number | null;
+  vlm_suggested_class_name?: string | null;
+  /** The VLM's categorical confidence: `high` | `medium` | `low`. */
+  vlm_confidence?: string | null;
   /** Cluster + similarity-to-centroid (0..1). */
   cluster_id: number | null;
   similarity_to_centroid: number | null;
@@ -230,11 +233,11 @@ export interface OpCrop {
    *  Drives the clarity slider. */
   blur_lap_ratio?: number | null;
   /** Raw v6 detection confidence (recorded even below the 0.75 floor). */
-  v6_raw_confidence?: number | null;
+  classifier_raw_confidence?: number | null;
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
-  coco_proposal_name?: string | null;
+  proposal_name?: string | null;
   // -- Curation scores (Phase 3 review-queue strategies, 2026-09) --------
-  // Provenance quad mirroring the plate_detector/plate_detector_version
+  // Provenance quad mirroring the region_detector/region_detector_version
   // pattern (docs/curation-strategy-plan-2026-09.md §4). `mistakenness`
   // is the only curation score that cleared the full validation gate as
   // of openprocessor/docs/design/curation_scores.md — representativeness/
@@ -302,22 +305,21 @@ export interface OpStats {
   }>;
 }
 
+/** `GET {API_PREFIX}/health`. `degraded` means a non-critical
+ *  dependency (e.g. the VLM) is down; labeling still works. */
 export interface OpHealth {
-  ok: boolean;
-  components: {
-    triton: 'ok' | 'degraded' | 'down';
-    opensearch: 'ok' | 'degraded' | 'down';
-    gemma_openwebui: 'ok' | 'degraded' | 'down';
-    class_registry_sha: string | null;
-  };
-  timestamp: string;
+  status: 'ok' | 'degraded' | 'down';
+  triton?: { reachable: boolean; detail?: string };
+  opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
+  vlm?: { reachable: boolean; model?: string | null };
+  registry?: { path?: string; exists?: boolean; mtime?: string | null };
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation
 // (3 live rows, functionally identical to the `atypicality` sort already
 // offered via the strategy bar) — its backend /curation/review/outliers query
 // is untouched, but nothing in the frontend calls it anymore, so the
-// literal is gone from this union too. 'mismatches' / 'gemma_low_conf' /
+// literal is gone from this union too. 'mismatches' / 'vlm_low_conf' /
 // 'primary_low_conf' are no longer top-level UI tabs but still real
 // values here — they're driven by the All-tab preset chips instead (see
 // $lib/reviewTabs.ts's resolveEffectiveTab).
@@ -331,7 +333,7 @@ export type SlotReviewTab = `slot:${string}`;
 export type CoreReviewTab =
   | 'all'
   | 'mismatches'
-  | 'gemma_low_conf'
+  | 'vlm_low_conf'
   | 'uncertainty'
   | 'model_disagreements'
   | 'primary_low_conf'
@@ -451,8 +453,8 @@ export interface CropFilter {
   max_rank?: number | null;
   /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
   min_blur_ratio?: number | null;
-  /** Mine the low-confidence pool: v6_raw_confidence < this OR no v6 box. */
-  v6_conf_lt?: number | null;
+  /** Mine the low-confidence pool: classifier_raw_confidence < this OR no v6 box. */
+  classifier_conf_lt?: number | null;
 }
 
 export interface ClusterFilter {

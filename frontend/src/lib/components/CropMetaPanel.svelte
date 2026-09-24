@@ -11,18 +11,8 @@
 
   let { crop }: Props = $props();
 
-  // Server emits a handful of fields that aren't yet in OpCrop's TS
-  // shape (gemma_confidence categorical, class_source string). Read
-  // them via a narrow cast so this panel doesn't need a public-type
-  // widening in the same PR.
-  const extra = $derived(
-    crop as unknown as {
-      gemma_confidence?: string | null;
-      class_source?: string | null;
-    },
-  );
-  const gemmaConf = $derived<string | null>(extra.gemma_confidence ?? null);
-  const classSource = $derived<string | null>(extra.class_source ?? null);
+  const vlmConf = $derived<string | null>(crop.vlm_confidence ?? null);
+  const classSource = $derived<string | null>(crop.class_source ?? null);
 
   // Slot(s) bound to this crop's class. A one-entry map built from the
   // crop's own class_id/class_name is all forClass() needs — this panel
@@ -66,20 +56,18 @@
   <dt class="text-zinc-500">Confidence</dt>
   <dd class="font-mono">
     {pct(crop.label_confidence)}
-    {#if gemmaConf}
-      <span class="ml-2 text-zinc-500">gemma:</span>
-      <span class="text-zinc-200">{gemmaConf}</span>
+    {#if vlmConf}
+      <span class="ml-2 text-zinc-500">VLM:</span>
+      <span class="text-zinc-200">{vlmConf}</span>
     {/if}
   </dd>
 
-  {#if crop.gemma_suggested_class_id != null}
-    <dt class="text-zinc-500">Gemma proposed</dt>
+  {#if crop.vlm_suggested_class_id != null}
+    <dt class="text-zinc-500">VLM proposed</dt>
     <dd class="text-yellow-200">
-      {crop.gemma_suggested_class_name ?? '—'}
-      {#if crop.gemma_suggested_confidence != null}
-        <span class="ml-1 font-mono text-yellow-400/70">
-          {pct(crop.gemma_suggested_confidence)}
-        </span>
+      {crop.vlm_suggested_class_name ?? '—'}
+      {#if crop.vlm_confidence}
+        <span class="ml-1 font-mono text-yellow-400/70">{crop.vlm_confidence}</span>
       {/if}
     </dd>
   {/if}

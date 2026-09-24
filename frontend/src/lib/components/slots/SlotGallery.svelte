@@ -32,7 +32,7 @@
 </script>
 
 <!-- Plates list view — backed by /curation/regions. Plates live as a
-     plate_bbox_norm sub-bbox on each vehicle crop (not as their
+     region_bbox_norm sub-bbox on each vehicle crop (not as their
      own cluster docs), so this view surfaces them directly with
      detector provenance + OCR text chips. -->
 <div class="flex min-h-0 flex-col gap-3">

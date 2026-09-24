@@ -37,7 +37,7 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
   });
 
   it('never renders the three collapsed queues as tabs (they are preset chips now)', () => {
-    const collapsed = ['mismatches', 'gemma_low_conf', 'primary_low_conf'];
+    const collapsed = ['mismatches', 'vlm_low_conf', 'primary_low_conf'];
     for (const id of collapsed) {
       expect(REVIEW_TABS.some((t) => t.id === id)).toBe(false);
     }
@@ -120,7 +120,7 @@ describe('tabFromUrlId (bookmark contract)', () => {
 describe('REVIEW_PRESETS (All-tab quick-filter chips)', () => {
   it('offers exactly the three collapsed queues', () => {
     expect(REVIEW_PRESETS.map((p) => p.id).sort()).toEqual(
-      ['gemma_low_conf', 'mismatches', 'primary_low_conf'].sort(),
+      ['vlm_low_conf', 'mismatches', 'primary_low_conf'].sort(),
     );
   });
 
@@ -137,7 +137,7 @@ describe('resolveEffectiveTab', () => {
     expect(resolveEffectiveTab('slot:license_plate', 'mismatches')).toBe(
       'slot:license_plate',
     );
-    expect(resolveEffectiveTab('coco_blind_spots', 'gemma_low_conf')).toBe(
+    expect(resolveEffectiveTab('coco_blind_spots', 'vlm_low_conf')).toBe(
       'coco_blind_spots',
     );
   });

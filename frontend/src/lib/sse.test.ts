@@ -1,7 +1,7 @@
 /**
  * C7 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
  * `subscribeKbEvents` used to hardcode a fixed KNOWN_EVENT_TYPES list
- * (`crop.created` / `crop.classified` / `crop.plate_verified`).
+ * (`crop.created` / `crop.classified` / `crop.region_verified`).
  * `EventSource.addEventListener` requires an exact type name, so any
  * event type NOT in that list is silently never dispatched — a second
  * queue-capable slot's own verify event (e.g. `crop.aircraft_tail_

@@ -711,7 +711,10 @@
           typeof params.label_validated === 'boolean'
             ? params.label_validated
             : undefined,
-        v6_conf_lt: typeof params.v6_conf_lt === 'number' ? params.v6_conf_lt : undefined,
+        classifier_conf_lt:
+          typeof params.classifier_conf_lt === 'number'
+            ? params.classifier_conf_lt
+            : undefined,
         limit: pageSize,
       });
       return { total: res.total, items: res.items };

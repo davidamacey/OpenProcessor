@@ -113,7 +113,7 @@
   });
 
   // This backend stores plates as a *sub-bbox* on each vehicle
-  // crop (`plate_bbox_norm`), NOT as standalone docs in the cluster
+  // crop (`region_bbox_norm`), NOT as standalone docs in the cluster
   // index. So filtering this page by a slot-bound class (e.g.
   // license_plate) always returns 0 / unlabeled clusters — confusing
   // operators who expect to see plate clusters here. Detect that case
@@ -415,7 +415,7 @@
         page_size: 12,
       });
       const withPlateBox = res.items.filter(
-        (p) => Array.isArray(p.plate_bbox_norm) && p.plate_bbox_norm.length === 4,
+        (p) => Array.isArray(p.region_bbox_norm) && p.region_bbox_norm.length === 4,
       );
       const reps = withPlateBox.slice(0, 4);
       lpCard = {

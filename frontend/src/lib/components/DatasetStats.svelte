@@ -105,7 +105,7 @@
   const labeledTotal = $derived.by(() => {
     const l = stats?.labeled;
     if (!l) return 0;
-    return l.by_human + l.by_vlm + l.by_v6 + l.by_yolo11_proposal + l.other;
+    return l.by_human + l.by_vlm + l.by_classifier + l.by_proposal + l.other;
   });
 
   const labeledRows = $derived.by(() => {
@@ -130,15 +130,15 @@
         tone: 'bg-blue-500',
       },
       {
-        key: 'by_v6',
-        label: 'v6 model',
-        count: l.by_v6,
+        key: 'by_classifier',
+        label: 'Classifier',
+        count: l.by_classifier,
         tone: 'bg-purple-500',
       },
       {
-        key: 'by_yolo11_proposal',
-        label: 'YOLO11 proposal',
-        count: l.by_yolo11_proposal,
+        key: 'by_proposal',
+        label: 'Proposal (unclassified)',
+        count: l.by_proposal,
         tone: 'bg-amber-500',
       },
       { key: 'other', label: 'Other', count: l.other, tone: 'bg-zinc-500' },
@@ -149,19 +149,14 @@
     }));
   });
 
-  // Plate-detection breakdown — separate from class labeling. LPR is the
-  // primary detector; SAM3 is a fallback; human placements come from the
-  // labeler UI. Denominator = total_crops (so % is "fraction of crops
-  // where a plate was detected"), not labeledTotal.
-  // by_lpr/by_sam3 stay hardcoded — the /curation/stats/dataset payload itself
-  // is LPR-shaped, and generalizing these rows needs either a per-slot
-  // rows descriptor (inventing a capability from one example) or a
-  // backend change. Neither is this commit's job (docs/design/
-  // slot-generic-crop-mapping-plan-2026-09-21.md §7.3); only the
-  // panel's TITLES and its lookup key are slot-generic below.
+  // Region-detection breakdown — separate from class labeling. The
+  // backend's `regions` block counts by role in the active detection
+  // profile (detector, segmenter fallback, human), so these rows are
+  // generic. Denominator = total_crops (so % is "fraction of crops where
+  // a region was detected"), not labeledTotal.
   const platesRows = $derived.by(() => {
     const p = statsSlot?.stats
-      ? (stats as unknown as Record<string, DatasetStats['plates'] | undefined>)?.[
+      ? (stats as unknown as Record<string, DatasetStats['regions'] | undefined>)?.[
           statsSlot.stats.key
         ]
       : undefined;
@@ -174,15 +169,15 @@
       tone: string;
     }> = [
       {
-        key: 'by_lpr',
-        label: 'LPR (nanov11)',
-        count: p.by_lpr,
+        key: 'by_detector',
+        label: 'Detector',
+        count: p.by_detector,
         tone: 'bg-cyan-500',
       },
       {
-        key: 'by_sam3',
-        label: 'SAM3 fallback',
-        count: p.by_sam3,
+        key: 'by_segmenter',
+        label: 'Segmenter fallback',
+        count: p.by_segmenter,
         tone: 'bg-teal-500',
       },
       {
@@ -407,7 +402,7 @@
     {#if statsSlot?.stats}
       {@const statsSpec = statsSlot.stats}
       {@const p = (
-        stats as unknown as Record<string, DatasetStats['plates'] | undefined>
+        stats as unknown as Record<string, DatasetStats['regions'] | undefined>
       )[statsSpec.key]}
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div class="surface p-4 lg:col-span-2">

@@ -29,21 +29,21 @@ describe('compileCohortQuery', () => {
       {
         kind: 'endpoint',
         path: '/crops',
-        params: { label_validated: true, v6_conf_lt: 0.5 },
+        params: { label_validated: true, classifier_conf_lt: 0.5 },
       },
       { classId: 1, className: 'x' },
     );
     expect(compiled).toEqual({
       kind: 'endpoint',
       path: '/crops',
-      params: { label_validated: true, v6_conf_lt: 0.5 },
+      params: { label_validated: true, classifier_conf_lt: 0.5 },
     });
   });
 
   it('passes tier-2 predicate queries through unchanged (no templates in that arm)', () => {
     const query: Parameters<typeof compileCohortQuery>[0] = {
       kind: 'predicate',
-      filters: [{ field: 'plate_score', op: 'lt', value: 0.6 }],
+      filters: [{ field: 'region_score', op: 'lt', value: 0.6 }],
       excludeTestHoldout: true,
     };
     expect(compileCohortQuery(query, { classId: 1, className: 'x' })).toBe(query);
@@ -116,7 +116,7 @@ describe('cohortsForClass — license_plate (declared cohorts override derived)'
     const cohorts = cohortsForClass(3, 'license_plate', registry, classesById, true);
     const disagreement = cohorts.find((c) => c.id === 'disagreement')!;
     // The derived version would hit a predicate query on
-    // plate_detector_chain — the declared one hits the real endpoint.
+    // region_detector_chain — the declared one hits the real endpoint.
     expect(disagreement.query.kind).toBe('endpoint');
     const falsePositives = cohorts.find((c) => c.id === 'false_positives')!;
     expect(falsePositives.query.kind).toBe('endpoint');

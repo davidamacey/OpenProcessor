@@ -15,7 +15,7 @@
    *   <ProvenanceChip raw="lpr_nanov11_640:miss" />
    *     → blue "LPR miss" chip with muted opacity
    *
-   * The `raw` form parses entries from `plate_detector_chain` so the
+   * The `raw` form parses entries from `region_detector_chain` so the
    * meta panel can render the full cascade story as a chip strip.
    *
    * Label/palette resolution is config-driven (P2.2,

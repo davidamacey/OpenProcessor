@@ -99,16 +99,16 @@ export interface SubBoxRing {
 }
 
 export interface SubBoxCapability {
-  /** Wire field holding the box as `[x1,y1,x2,y2]`. Plates: `plate_bbox_norm`. */
+  /** Wire field holding the box as `[x1,y1,x2,y2]`. Plates: `region_bbox_norm`. */
   bboxField: WireField;
   /** Frame the stored box uses when `frameField` is absent or unreadable. */
   storedFrame: SlotFrame;
-  /** Optional wire field carrying the frame per-row (plates: `plate_bbox_frame`).
+  /** Optional wire field carrying the frame per-row (plates: `region_bbox_frame`).
    *  When present and parseable it overrides `storedFrame` for that row. */
   frameField?: WireField;
-  /** Detector confidence 0..1. Plates: `plate_score`. */
+  /** Detector confidence 0..1. Plates: `region_score`. */
   scoreField?: WireField;
-  /** Boolean "the thing is visible in this crop". Plates: `plate_visible`. */
+  /** Boolean "the thing is visible in this crop". Plates: `region_visible`. */
   visibleField?: WireField;
   /** Shape gate. Omit to disable the warning badge entirely for this slot. */
   envelope?: ShapeEnvelope;
@@ -184,11 +184,14 @@ export interface SlotState {
 
 export interface LifecycleCapability {
   statusField: WireField;
-  /** Boolean "a human signed off". Plates: `plate_verified`. This — not a
+  /** Boolean "a human signed off". Plates: `region_verified`. This — not a
    *  status value — is the correct predicate for the confirmed ring
    *  (Finding C.3). */
   verifiedField?: WireField;
   rejectionReasonField?: WireField;
+  /** Who made a human write (e.g. `region_label_source`). Sent as
+   *  `'human'` on batch status writes when declared. */
+  labelSourceField?: WireField;
   states: SlotState[];
   confirmState: string;
   rejectState: string;

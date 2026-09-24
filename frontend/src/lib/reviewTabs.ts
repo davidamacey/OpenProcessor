@@ -147,7 +147,7 @@ export function endpointForTab(
   return tabs.find((t) => t.id === id)?.endpointId ?? id;
 }
 
-export type ReviewPresetId = 'mismatches' | 'gemma_low_conf' | 'primary_low_conf';
+export type ReviewPresetId = 'mismatches' | 'vlm_low_conf' | 'primary_low_conf';
 
 export interface ReviewPresetDef {
   id: ReviewPresetId;
@@ -166,13 +166,13 @@ export interface ReviewPresetDef {
 export const REVIEW_PRESETS: ReviewPresetDef[] = [
   {
     id: 'mismatches',
-    label: 'Gemma mismatches',
-    description: "Gemma's suggestion disagrees with the crop's current label",
+    label: 'VLM mismatches',
+    description: "The VLM's suggestion disagrees with the crop's current label",
   },
   {
-    id: 'gemma_low_conf',
-    label: 'Gemma low-conf',
-    description: "Gemma's suggestion confidence is below the review threshold",
+    id: 'vlm_low_conf',
+    label: 'VLM low-conf',
+    description: "The VLM's suggestion confidence is below the review threshold",
   },
   {
     id: 'primary_low_conf',

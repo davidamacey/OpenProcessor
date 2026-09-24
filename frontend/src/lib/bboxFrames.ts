@@ -2,7 +2,7 @@
  * Plate-bbox coordinate conversion between the source-image frame and the
  * vehicle-crop frame.
  *
- * The backend (openprocessor commit 38b316e) stores `plate_bbox_norm` in the
+ * The backend (openprocessor commit 38b316e) stores `region_bbox_norm` in the
  * **source-image** frame, while the labeler renders the vehicle crop as a
  * thumbnail. To draw the plate ring on the crop thumbnail (or to let the
  * user edit the plate box on top of the crop), we need to map between the

@@ -141,7 +141,7 @@
       // /classes since /clusters/{id} is the canonical view.
       if (cls) {
         // A class bound to a slot (e.g. license_plate) isn't a cluster —
-        // plates are sub-bboxes on vehicle crops (plate_bbox_norm). Route
+        // plates are sub-bboxes on vehicle crops (region_bbox_norm). Route
         // to the gallery branch backed by /curation/regions so the operator sees
         // every slot-bearing crop, not just the 1-2 rows whose PRIMARY
         // class matches the slot's bound class name. Driven by

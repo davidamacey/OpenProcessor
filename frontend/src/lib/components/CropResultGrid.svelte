@@ -35,8 +35,8 @@
      *  badge) — a snippet so the caller controls its own data lookups. */
     cornerBadge?: import('svelte').Snippet<[OpCrop]>;
     ondetail?: (crop: OpCrop) => void;
-    onacceptGemma?: (crop: OpCrop) => void;
-    onrejectGemma?: (crop: OpCrop) => void;
+    onacceptVlm?: (crop: OpCrop) => void;
+    onrejectVlm?: (crop: OpCrop) => void;
     /** Fired whenever the in-flight drag's captured id set changes
      *  (drag start / drag end) — mirrors `/clusters/[id]`'s `dragIds`. */
     ondragidschange?: (ids: string[]) => void;
@@ -48,8 +48,8 @@
     scoreOf,
     cornerBadge,
     ondetail,
-    onacceptGemma,
-    onrejectGemma,
+    onacceptVlm,
+    onrejectVlm,
     ondragidschange,
   }: Props = $props();
 
@@ -123,8 +123,8 @@
         {crop}
         selected={sel.has(crop.id)}
         onclick={(c, e) => clickSelect(c.id, e)}
-        onacceptGemma={(c) => onacceptGemma?.(c)}
-        onrejectGemma={(c) => onrejectGemma?.(c)}
+        onacceptVlm={(c) => onacceptVlm?.(c)}
+        onrejectVlm={(c) => onrejectVlm?.(c)}
         ondetail={(c) => ondetail?.(c)}
       />
       {#if scoreOf}

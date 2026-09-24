@@ -102,8 +102,8 @@ describe('SlotCard.svelte uses the shared helpers, not a bare fallback string', 
     expect(src).toMatch(/resolveApiUrl/);
   });
 
-  it('resolves the server-supplied plate_thumbnail_url through resolveApiUrl, not verbatim', () => {
-    expect(src).toMatch(/resolveApiUrl\(crop\.plate_thumbnail_url\)/);
+  it('resolves the server-supplied region_thumbnail_url through resolveApiUrl, not verbatim', () => {
+    expect(src).toMatch(/resolveApiUrl\(crop\.region_thumbnail_url\)/);
   });
 
   it('falls back to getRegionThumbUrl(crop.crop_id), never a bare template string', () => {

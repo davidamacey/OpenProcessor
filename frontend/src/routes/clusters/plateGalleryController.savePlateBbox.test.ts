@@ -36,24 +36,24 @@ function fakePlateItem(id: string): PlateBrowseItem {
     id,
     image_path: '/img.jpg',
     bbox_norm: [0.3, 0.3, 0.7, 0.7],
-    plate_bbox_norm: null,
-    plate_score: null,
-    plate_status: 'pending_verification',
-    plate_verified: false,
-    plate_validated: null,
-    plate_detector: null,
-    plate_detector_version: null,
-    plate_detector_chain: null,
-    plate_bbox_frame: null,
-    plate_detected_at: null,
-    plate_verifier: null,
-    plate_verifier_version: null,
-    plate_verified_at: null,
-    plate_rejection_reason: null,
-    plate_visible: null,
-    plate_text: null,
-    plate_text_source: null,
-    plate_text_confidence: null,
+    region_bbox_norm: null,
+    region_score: null,
+    region_status: 'pending_verification',
+    region_verified: false,
+    region_validated: null,
+    region_detector: null,
+    region_detector_version: null,
+    region_detector_chain: null,
+    region_bbox_frame: null,
+    region_detected_at: null,
+    region_verifier: null,
+    region_verifier_version: null,
+    region_verified_at: null,
+    region_rejection_reason: null,
+    region_visible: null,
+    region_text: null,
+    region_text_source: null,
+    region_text_confidence: null,
     class_id: 3,
     class_name: 'license_plate',
     cluster_id: null,
@@ -75,9 +75,9 @@ describe('savePlateBbox — no redundant write', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(gallery.editPlateCrop).toBeNull();
     const patched = gallery.platePager.items.find((p) => p.crop_id === 'c1');
-    expect(patched?.plate_status).toBe('detected');
-    expect(patched?.plate_verified).toBe(true);
-    expect(patched?.plate_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
+    expect(patched?.region_status).toBe('detected');
+    expect(patched?.region_verified).toBe(true);
+    expect(patched?.region_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
 
     vi.unstubAllGlobals();
   });
@@ -94,8 +94,8 @@ describe('savePlateBbox — no redundant write', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     const patched = gallery.platePager.items.find((p) => p.crop_id === 'c2');
-    expect(patched?.plate_status).toBe('no_region_visible');
-    expect(patched?.plate_bbox_norm).toBeNull();
+    expect(patched?.region_status).toBe('no_region_visible');
+    expect(patched?.region_bbox_norm).toBeNull();
 
     vi.unstubAllGlobals();
   });

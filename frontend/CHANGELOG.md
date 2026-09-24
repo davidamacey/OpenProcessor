@@ -8,6 +8,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **BREAKING (B3, ships with OpenProcessor's `cutover/wire-contract`):**
+  the frontend now speaks OpenProcessor's generic wire vocabulary, with
+  no fallback to the old names (deployments re-ingest fresh). Plan:
+  `docs/design/b3-wire-rename-frontend-plan-2026-09-23.md`.
+  - Every region attribute is read and written as `region_<attr>` (was
+    `plate_<attr>`), including `region_thumbnail_url` and the
+    `/regions` `region_cluster_id`/`region_cluster_subid` filters.
+    Region box and batch-status writes use the slot's own wire fields
+    (new optional `lifecycle.labelSourceField`), so writes and reads can
+    never use different names.
+  - `classifier_raw_confidence`, `proposal_name`, `classifier_conf_lt`.
+    The auto-label params and stage move to `vlm_*`, the review preset to
+    `vlm_low_conf`, and the stats rollups to
+    `labeled.by_classifier`/`by_proposal` plus a `regions` block
+    (`by_detector`/`by_segmenter`/`verified_by_vlm`) with generic row
+    labels. `OpHealth` models the real `{status, triton, opensearch, vlm,
+registry}` payload.
+  - The `/clusters/[id]` source filter offers B3's fixed writer values
+    (`human`, `vlm`, `vlm_unmatched`, `vlm_new_class_pending`,
+    `classifier_vlm_agreement`). `LabelSource` follows the same
+    vocabulary, and the crop badge shows `vlm?`/`vlm`.
+  - UI copy says "VLM" instead of "Gemma" wherever it describes the
+    pluggable VLM role.
+
+### Fixed
+
+- The accept-VLM-suggestion flow on `/clusters/[id]` (card chip, `G`,
+  `Shift+Enter`, meta-panel row) could never fire, because no field ever
+  populated the suggestion. `mapRawCrop` now maps `vlm_proposed_class_id`
+  / `vlm_proposed_class_name` and the categorical `vlm_confidence`. The
+  meta panel's VLM-confidence row, which read an unmapped field through a
+  cast, now renders too.
+
+### Changed
+
 - `/settings` decides which axes get a control from the server's
   per-entry `settable` flag on `/methods`, not from a hardcoded
   `SETTINGS_AXES.kind`. The table now carries only labels, buckets and

@@ -58,19 +58,12 @@ class HealthStore {
     const ctrl = new AbortController();
     this.#abort = ctrl;
     try {
-      const h = (await getHealth(ctrl.signal)) as OpHealth & {
-        status?: string;
-      };
+      const h = await getHealth(ctrl.signal);
       this.health = h;
-      // /curation/health returns {status: 'ok'|'degraded'|'down', triton, ...},
-      // while older /health returned {ok: bool, components}. Treat both
-      // 'ok' and 'degraded' as up — only 'down' or a network error
-      // should surface the red banner. Degraded means a non-critical
-      // dependency (e.g. Gemma) is intermittent; the labeler still works.
-      // Old /health: {ok: bool}. New /curation/health: {status: 'ok'|'degraded'|'down'}.
-      // 'degraded' (e.g. Gemma unavailable) still lets labeling work fine.
-      const status = h?.status;
-      this.ok = h?.ok !== undefined ? !!h.ok : status === 'ok' || status === 'degraded';
+      // Only 'down' or a network error surfaces the red banner: 'degraded'
+      // means a non-critical dependency (e.g. the VLM) is intermittent
+      // and labeling still works.
+      this.ok = h?.status === 'ok' || h?.status === 'degraded';
       this.error = null;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;

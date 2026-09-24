@@ -1658,14 +1658,14 @@
               : '—'}
           </dd>
 
-          {#if current.coco_proposal_name}
+          {#if current.proposal_name}
             <dt class="text-zinc-500">COCO hint</dt>
             <dd>
               <span
                 class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"
                 title="COCO YOLO11 detected a vehicle here that v6 missed. Coarse class — pick the make below (bicycle/motorcycle/boat may be near one-click)."
               >
-                {current.coco_proposal_name}
+                {current.proposal_name}
               </span>
             </dd>
           {/if}

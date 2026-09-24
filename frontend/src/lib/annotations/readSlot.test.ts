@@ -9,20 +9,20 @@ describe('readSlot / licensePlateSlot', () => {
 
   it('reads a full plate row into every capability', () => {
     const raw = {
-      plate_bbox_norm: [0.1, 0.08, 0.3, 0.12],
-      plate_bbox_frame: 'source',
-      plate_score: 0.91,
-      plate_visible: true,
-      plate_text: 'ABC123',
-      plate_text_raw: 'abc123',
-      plate_text_source: 'gemma',
-      plate_text_confidence: 0.8,
-      plate_detector: 'lpr_nanov11_640',
-      plate_detector_chain: ['lpr_nanov11_640:hit'],
-      plate_verifier: 'gemma-4-e4b',
-      plate_status: 'detected',
-      plate_verified: true,
-      plate_rejection_reason: null,
+      region_bbox_norm: [0.1, 0.08, 0.3, 0.12],
+      region_bbox_frame: 'source',
+      region_score: 0.91,
+      region_visible: true,
+      region_text: 'ABC123',
+      region_text_raw: 'abc123',
+      region_text_source: 'gemma',
+      region_text_confidence: 0.8,
+      region_detector: 'lpr_nanov11_640',
+      region_detector_chain: ['lpr_nanov11_640:hit'],
+      region_verifier: 'gemma-4-e4b',
+      region_status: 'detected',
+      region_verified: true,
+      region_rejection_reason: null,
     };
     const d = readSlot(raw, licensePlateSlot, parent);
     expect(slotIsPresent(d)).toBe(true);
@@ -37,7 +37,7 @@ describe('readSlot / licensePlateSlot', () => {
   });
 
   it('resolves an unknown lifecycle status to a null state without crashing (forward tolerance)', () => {
-    const raw = { plate_status: 'some_future_status' };
+    const raw = { region_status: 'some_future_status' };
     const d = readSlot(raw, licensePlateSlot, parent);
     expect(d.lifecycle?.status).toBe('some_future_status');
     expect(d.lifecycle?.state).toBeNull();
@@ -52,7 +52,7 @@ describe('readSlot / licensePlateSlot', () => {
 
   it('flags an implausible plate shape via the shared shape gate', () => {
     // aspect too narrow: w/vw small relative to h/vh
-    const raw = { plate_bbox_norm: [0.15, 0.02, 0.2, 0.18] };
+    const raw = { region_bbox_norm: [0.15, 0.02, 0.2, 0.18] };
     const d = readSlot(raw, licensePlateSlot, parent);
     expect(d.subBox?.shapeWarning).toBe(true);
   });
@@ -65,15 +65,13 @@ describe('readSlot / licensePlateSlot', () => {
         lifecycle: {
           ...licensePlateSlot.capabilities.lifecycle!,
           states: licensePlateSlot.capabilities.lifecycle!.states.map((s) =>
-            s.value === 'no_plate_visible'
-              ? { ...s, value: 'no_region_visible', aliases: ['no_plate_visible'] }
-              : s,
+            s.value === 'no_region_visible' ? { ...s, aliases: ['legacy_absent'] } : s,
           ),
         },
       },
     };
-    const d = readSlot({ plate_status: 'no_plate_visible' }, spec, parent);
-    expect(d.lifecycle?.status).toBe('no_plate_visible');
+    const d = readSlot({ region_status: 'legacy_absent' }, spec, parent);
+    expect(d.lifecycle?.status).toBe('legacy_absent');
     expect(d.lifecycle?.state?.value).toBe('no_region_visible');
     expect(d.lifecycle?.state?.role).toBe('absent');
   });
@@ -102,7 +100,7 @@ describe('projectFromParent — inverse of the private projectToParent', () => {
           subBox: { ...licensePlateSlot.capabilities.subBox!, storedFrame: frame },
         },
       };
-      const raw = { plate_bbox_norm: childSourceXyxy };
+      const raw = { region_bbox_norm: childSourceXyxy };
       const d = readSlot(raw, spec, parentXyxy);
       const parentFrameBox = d.subBox!.parent as BBoxNormLike;
       const back = projectFromParent(parentFrameBox, parentXyxy, frame);

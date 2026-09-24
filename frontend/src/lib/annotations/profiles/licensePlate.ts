@@ -22,11 +22,11 @@ export const licensePlateSlot: SlotSpec = {
 
   capabilities: {
     subBox: {
-      bboxField: 'plate_bbox_norm',
+      bboxField: 'region_bbox_norm',
       storedFrame: 'source',
-      frameField: 'plate_bbox_frame',
-      scoreField: 'plate_score',
-      visibleField: 'plate_visible',
+      frameField: 'region_bbox_frame',
+      scoreField: 'region_score',
+      visibleField: 'region_visible',
       envelope: PLATE_SHAPE_ENVELOPE,
       thumbnail: {
         path: (id, size) =>
@@ -43,11 +43,11 @@ export const licensePlateSlot: SlotSpec = {
     },
 
     text: {
-      valueField: 'plate_text',
-      rawField: 'plate_text_raw',
-      sourceField: 'plate_text_source',
-      confidenceField: 'plate_text_confidence',
-      engineVersionField: 'plate_text_engine_version',
+      valueField: 'region_text',
+      rawField: 'region_text_raw',
+      sourceField: 'region_text_source',
+      confidenceField: 'region_text_confidence',
+      engineVersionField: 'region_text_engine_version',
       label: 'Plate text',
       placeholder: 'ABC123',
       transform: 'uppercase',
@@ -55,20 +55,21 @@ export const licensePlateSlot: SlotSpec = {
     },
 
     provenance: {
-      detectorField: 'plate_detector',
-      detectorVersionField: 'plate_detector_version',
-      chainField: 'plate_detector_chain',
-      verifierField: 'plate_verifier',
-      verifierVersionField: 'plate_verifier_version',
-      verifiedAtField: 'plate_verified_at',
-      detectedAtField: 'plate_detected_at',
+      detectorField: 'region_detector',
+      detectorVersionField: 'region_detector_version',
+      chainField: 'region_detector_chain',
+      verifierField: 'region_verifier',
+      verifierVersionField: 'region_verifier_version',
+      verifiedAtField: 'region_verified_at',
+      detectedAtField: 'region_detected_at',
       showChainOnCard: true,
     },
 
     lifecycle: {
-      statusField: 'plate_status',
-      verifiedField: 'plate_verified',
-      rejectionReasonField: 'plate_rejection_reason',
+      statusField: 'region_status',
+      verifiedField: 'region_verified',
+      rejectionReasonField: 'region_rejection_reason',
+      labelSourceField: 'region_label_source',
       states: [
         {
           value: 'pending_detection',
@@ -95,23 +96,13 @@ export const licensePlateSlot: SlotSpec = {
           role: 'rejected',
         },
         {
-          // Wave 2 C14 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
-          // §8.4(ii)): OpenProcessor renamed this status value
-          // no_plate_box -> no_region_box (merged at b3f928d). `value`
-          // is what the UI now writes; `aliases` keeps the old value
-          // resolving to this same state on read forever, since
-          // existing OpenSearch documents may still carry it (the
-          // 347k-doc reindex this would otherwise require was WONTFIX'd).
           value: 'no_region_box',
-          aliases: ['no_plate_box'],
           label: 'no box found',
           humanWritable: false,
           role: 'absent',
         },
         {
-          // no_plate_visible -> no_region_visible, same rename/alias story.
           value: 'no_region_visible',
-          aliases: ['no_plate_visible'],
           label: 'no plate visible',
           humanWritable: true,
           role: 'absent',
@@ -305,7 +296,7 @@ export const licensePlateSlot: SlotSpec = {
   },
 
   stats: {
-    key: 'plates',
+    key: 'regions',
     panelTitle: 'Plate detections',
     coverageTitle: 'Plate coverage',
   },
