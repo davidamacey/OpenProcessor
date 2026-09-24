@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Path as PathParam, Query
 
+from src.config import get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -235,6 +236,7 @@ def _filters(
     source: str | None,
     conf_min: float | None,
     conf_max: float | None,
+    region_status: str | None,
 ) -> ReviewFilters:
     return ReviewFilters(
         include_test=include_test,
@@ -247,6 +249,7 @@ def _filters(
         source=source,
         conf_min=conf_min,
         conf_max=conf_max,
+        region_status=region_status,
     )
 
 
@@ -273,6 +276,17 @@ NearDupQ = Annotated[bool, Query(description='Hide non-representative near-dupli
 ClassIdQ = Annotated[int | None, Query(description='Only items of this class.')]
 SourceQ = Annotated[str | None, Query(description='Only items with this ingest source tag.')]
 ConfQ = Annotated[float | None, Query(ge=0.0, le=1.0, description='Inclusive confidence band.')]
+RegionStatusQ = Annotated[
+    str | None,
+    Query(
+        description=(
+            "Regions tab only (ignored elsewhere). One of 'all' (default: "
+            'accepted-but-unvalidated boxes plus a verifier-rejected '
+            "candidate that still has a box), 'detected', 'verify_rejected'. "
+            'See GET /review/tabs filter_options.region_status.'
+        )
+    ),
+]
 SortQ = Annotated[
     str | None,
     Query(
@@ -319,6 +333,7 @@ async def review_queue(
     conf_min: ConfQ = None,
     conf_max: ConfQ = None,
     sort: SortQ = None,
+    region_status: RegionStatusQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
 
@@ -343,6 +358,7 @@ async def review_queue(
         source,
         conf_min,
         conf_max,
+        region_status,
     )
     guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
@@ -375,15 +391,17 @@ async def review_queue(
             if not c.deprecated
         )
     items: list[dict[str, Any]] = []
+    region_fields = get_region_fields() if tab == 'regions' else None
     for h in hits:
         src = h.get('_source') or {}
         item = serialize_item(src, h.get('_id', ''))
         # Review-only extra on top of the shared wire item.
-        item['reason'] = (
-            review_queries.mismatch_reason(src, registry_names, req.reason)
-            if tab == 'mismatches'
-            else req.reason
-        )
+        if tab == 'mismatches':
+            item['reason'] = review_queries.mismatch_reason(src, registry_names, req.reason)
+        elif tab == 'regions':
+            item['reason'] = review_queries.region_reason(src, region_fields, req.reason)
+        else:
+            item['reason'] = req.reason
         items.append(item)
     return {
         'total': int(total),
@@ -414,6 +432,7 @@ async def review_locate(
     conf_min: ConfQ = None,
     conf_max: ConfQ = None,
     sort: SortQ = None,
+    region_status: RegionStatusQ = None,
 ) -> dict[str, Any]:
     """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
     for the same filters and sort.
@@ -436,6 +455,7 @@ async def review_locate(
         source,
         conf_min,
         conf_max,
+        region_status,
     )
     req = await _request(tab, filters, sort, opensearch)
     out: dict[str, Any] = {

@@ -42,7 +42,16 @@ LEGACY_SORT_CLAUSE = {
     'model_disagreements': [
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
-    'regions': [{'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
+    'regions': [
+        {'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
+        {
+            'region_candidate_score': {
+                'order': 'desc',
+                'missing': '_last',
+                'unmapped_type': 'double',
+            }
+        },
+    ],
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
         {

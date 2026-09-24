@@ -34,6 +34,7 @@ class ReviewFilters:
     source: str | None = None
     conf_min: float | None = None
     conf_max: float | None = None
+    region_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,11 @@ async def build_review_request(
     """Raises ``HTTPException(400)`` for an unknown tab, ``ValueError`` for
     a bad sort id or confidence band."""
     must, must_not, reason = review_queries.build_tab_query(
-        tab, include_test=filters.include_test, text=filters.text, max_rank=filters.max_rank
+        tab,
+        include_test=filters.include_test,
+        text=filters.text,
+        max_rank=filters.max_rank,
+        region_status=filters.region_status,
     )
     if filters.min_blur_ratio is not None:
         must.append(_null_safe_floor('blur_lap_ratio', filters.min_blur_ratio))

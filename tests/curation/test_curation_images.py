@@ -395,7 +395,14 @@ def test_fetch_crop_uses_source_includes_covering_every_caller_field() -> None:
     # image_path + bbox_norm: all three crops_router routes.
     # class_name: crop_full_image's overlay label.
     # region bbox field: crop_full_image overlay + crop_region_thumbnail.
-    for field in ('image_path', 'bbox_norm', 'class_name', get_region_fields().bbox_norm):
+    # candidate bbox field: crop_region_thumbnail's verify_rejected fallback.
+    for field in (
+        'image_path',
+        'bbox_norm',
+        'class_name',
+        get_region_fields().bbox_norm,
+        get_region_fields().candidate_bbox_norm,
+    ):
         assert field in includes, f'{field!r} missing from _source_includes: {includes}'
 
 
