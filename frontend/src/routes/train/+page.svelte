@@ -42,6 +42,7 @@
     type ServedTrainingCohort,
     type TrainingCohortMode,
   } from '$lib/api';
+  import { formatCount } from '$lib/formatCount';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
@@ -1012,11 +1013,13 @@
               {vehiclesExportState.class_count} classes
             </span>
           {/if}
-          {#if vehiclesExportState.image_count != null}
+          {#if vehiclesExportState.image_count != null || vehiclesExportState.object_count != null}
             <span
               class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
             >
-              {vehiclesExportState.image_count.toLocaleString()} images
+              {formatCount(vehiclesExportState.object_count)} objects in {formatCount(
+                vehiclesExportState.image_count,
+              )} images
               {#if vehiclesExportState.group_key}
                 <span class="text-zinc-500">(by {vehiclesExportState.group_key})</span>
               {/if}
@@ -1025,15 +1028,27 @@
           {#if vehiclesExportState.split_counts}
             <span
               class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
+              title="Images per split"
             >
-              train {vehiclesExportState.split_counts.train.toLocaleString()} · val {vehiclesExportState.split_counts.val.toLocaleString()}
+              images: train {vehiclesExportState.split_counts.train.toLocaleString()} · val
+              {vehiclesExportState.split_counts.val.toLocaleString()}
               · test {vehiclesExportState.split_counts.test.toLocaleString()}
+            </span>
+          {/if}
+          {#if vehiclesExportState.split_object_counts}
+            <span
+              class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
+              title="Objects (label lines) per split"
+            >
+              objects: train {vehiclesExportState.split_object_counts.train.toLocaleString()}
+              · val {vehiclesExportState.split_object_counts.val.toLocaleString()}
+              · test {vehiclesExportState.split_object_counts.test.toLocaleString()}
             </span>
           {/if}
         </div>
         <details class="mt-2 text-xs text-zinc-400">
           <summary class="cursor-pointer hover:text-zinc-200">
-            per-class split counts ({vehiclesExportState.class_split_counts.length})
+            per-class object counts ({vehiclesExportState.class_split_counts.length})
           </summary>
           <div class="mt-1 max-h-48 overflow-auto rounded border border-zinc-800">
             <table class="w-full text-xs">
@@ -1042,9 +1057,9 @@
               >
                 <tr>
                   <th class="px-2 py-1 font-medium">Class</th>
-                  <th class="px-2 py-1 text-right font-medium">Train</th>
-                  <th class="px-2 py-1 text-right font-medium">Val</th>
-                  <th class="px-2 py-1 text-right font-medium">Test</th>
+                  <th class="px-2 py-1 text-right font-medium">Train (objects)</th>
+                  <th class="px-2 py-1 text-right font-medium">Val (objects)</th>
+                  <th class="px-2 py-1 text-right font-medium">Test (objects)</th>
                 </tr>
               </thead>
               <tbody>

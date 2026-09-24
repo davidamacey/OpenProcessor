@@ -19,6 +19,7 @@
     isNothingExportable,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
+  import { formatCount } from '$lib/formatCount';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -42,6 +43,10 @@
 
   // Export
   let versionTag = $state<string>('');
+  // OpenProcessor d5343cb: opt-in — drop any exported image that still
+  // has an unlabeled object on it, rather than teaching the detector to
+  // treat that object as background.
+  let requireFullyLabeled = $state<boolean>(false);
   let exportRunning = $state<boolean>(false);
   let exportState = $state<ExportStatus | null>(null);
   let pollHandle: ReturnType<typeof setInterval> | null = null;
@@ -184,13 +189,25 @@
     exportRunning = true;
     exportModalOpen = true;
     try {
-      const res = await exportYolo({ version_tag: versionTag.trim() || undefined });
+      const res = await exportYolo({
+        version_tag: versionTag.trim() || undefined,
+        require_fully_labeled_images: requireFullyLabeled,
+      });
       exportState = {
         status: res.status,
         last_run: res.finished_at ?? res.started_at ?? new Date().toISOString(),
         export_dir: res.export_dir ?? null,
         error: res.status === 'failed' ? (res.message ?? 'unknown error') : null,
         message: res.message ?? null,
+        image_count: res.image_count ?? null,
+        object_count: res.object_count ?? null,
+        split_object_counts:
+          (res.split_object_counts as ExportStatus['split_object_counts']) ?? null,
+        require_fully_labeled_images: res.require_fully_labeled_images ?? null,
+        unlabeled_items_on_exported_images:
+          res.unlabeled_items_on_exported_images ?? null,
+        images_with_unlabeled_items: res.images_with_unlabeled_items ?? null,
+        images_dropped_not_fully_labeled: res.images_dropped_not_fully_labeled ?? null,
       };
       if (res.status === 'running' || res.status === 'pending') {
         toastStore.info(`Export started: ${res.status}`);
@@ -204,6 +221,9 @@
         // buttons are gated on `hasMulticlassExport`, which only
         // `loadAll()` (re-fetching `{API_PREFIX}/export/datasets`) can
         // set — reload now instead of waiting for the user to hit Refresh.
+        // loadAll() also re-fetches GET /export/status, which fills in
+        // class_count/class_split_counts/group_key — fields the
+        // synchronous POST response above doesn't carry.
         await loadAll();
       } else if (res.status === 'failed') {
         toastStore.error(`Export failed: ${res.message ?? 'unknown error'}`);
@@ -212,6 +232,8 @@
       }
     } catch (e) {
       exportRunning = false;
+      // 422 "nothing to export: <reason>" (e.g. require_fully_labeled_images
+      // dropped every candidate image) surfaces via ApiError's detail text.
       toastStore.error(`Export failed: ${(e as Error).message}`);
     }
   }
@@ -523,6 +545,17 @@
           class="input w-48"
         />
       </label>
+      <label
+        class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-zinc-300"
+        title="Drop any exported image that still has an unvalidated or otherwise unlabeled object on it, instead of letting the detector learn that object as background."
+      >
+        <input
+          type="checkbox"
+          bind:checked={requireFullyLabeled}
+          class="h-4 w-4 cursor-pointer accent-blue-500"
+        />
+        Only images whose every object is labeled
+      </label>
       <button
         type="button"
         class="btn btn-primary"
@@ -602,20 +635,29 @@
         </p>
       {/if}
 
-      <!-- Split counts + per-class table (OpenProcessor 6c77deb's
-           `GET {API_PREFIX}/export/status`, ExportStatusResponse) —
-           absent/null on a pre-6c77deb backend, so this whole block just
-           doesn't render rather than showing blanks. -->
-      {#if exportState.image_count != null || exportState.class_count != null || exportState.split_counts}
+      <!-- Image/object counts + per-class table (OpenProcessor d5343cb's
+           `GET {API_PREFIX}/export/status`, ExportStatusResponse — one
+           image + one label file per source image, one line per object).
+           `image_count`/`object_count` null on an export written before
+           6c77deb/d5343cb render "—", never 0 (formatCount). Absent on a
+           pre-6c77deb backend entirely, so this whole block just doesn't
+           render rather than showing blanks. -->
+      {#if exportState.image_count != null || exportState.object_count != null || exportState.class_count != null || exportState.split_counts}
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          {#if exportState.image_count != null}
+          {#if exportState.image_count != null || exportState.object_count != null}
             <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
-              <span class="text-zinc-500">images</span>
               <span class="ml-1 font-mono text-zinc-200"
-                >{exportState.image_count.toLocaleString()}</span
+                >{formatCount(exportState.object_count)}</span
               >
+              <span class="text-zinc-500">objects in</span>
+              <span class="ml-1 font-mono text-zinc-200"
+                >{formatCount(exportState.image_count)}</span
+              >
+              <span class="text-zinc-500">images</span>
               {#if exportState.group_key}
-                <span class="ml-1 text-zinc-500">(by {exportState.group_key})</span>
+                <span class="ml-1 text-zinc-500"
+                  >(grouped by {exportState.group_key})</span
+                >
               {/if}
             </span>
           {/if}
@@ -628,9 +670,62 @@
           {#if exportState.split_counts}
             <span
               class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1 font-mono"
+              title="Images per split"
             >
-              train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
+              images: train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
               · test {exportState.split_counts.test.toLocaleString()}
+            </span>
+          {/if}
+          {#if exportState.split_object_counts}
+            <span
+              class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1 font-mono"
+              title="Objects (label lines) per split"
+            >
+              objects: train {exportState.split_object_counts.train.toLocaleString()} · val
+              {exportState.split_object_counts.val.toLocaleString()}
+              · test {exportState.split_object_counts.test.toLocaleString()}
+            </span>
+          {/if}
+        </div>
+      {/if}
+
+      <!-- Partial-frame policy + counts (d5343cb) — null on an older
+           export (formatCount renders "—"); the whole block hides when
+           nothing here was ever recorded. -->
+      {#if exportState.require_fully_labeled_images != null || exportState.unlabeled_items_on_exported_images != null || exportState.images_with_unlabeled_items != null || exportState.images_dropped_not_fully_labeled != null}
+        <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+          {#if exportState.require_fully_labeled_images != null}
+            <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
+              require_fully_labeled_images: <span class="font-mono text-zinc-200"
+                >{exportState.require_fully_labeled_images ? 'true' : 'false'}</span
+              >
+            </span>
+          {/if}
+          {#if exportState.unlabeled_items_on_exported_images != null}
+            <span
+              class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+              title="Objects on exported images the export did not label — learned as background."
+            >
+              unlabeled objects on exported images: <span class="font-mono text-zinc-200"
+                >{formatCount(exportState.unlabeled_items_on_exported_images)}</span
+              >
+            </span>
+          {/if}
+          {#if exportState.images_with_unlabeled_items != null}
+            <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
+              images with an unlabeled object: <span class="font-mono text-zinc-200"
+                >{formatCount(exportState.images_with_unlabeled_items)}</span
+              >
+            </span>
+          {/if}
+          {#if exportState.images_dropped_not_fully_labeled != null}
+            <span
+              class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+              title="Images left out by require_fully_labeled_images (0 when it was off)."
+            >
+              images dropped (not fully labeled): <span class="font-mono text-zinc-200"
+                >{formatCount(exportState.images_dropped_not_fully_labeled)}</span
+              >
             </span>
           {/if}
         </div>
@@ -639,7 +734,7 @@
       {#if exportState.class_split_counts && exportState.class_split_counts.length > 0}
         <details class="mt-3 text-xs">
           <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
-            Per-class split counts ({exportState.class_split_counts.length})
+            Per-class object counts ({exportState.class_split_counts.length})
           </summary>
           <div class="mt-2 max-h-64 overflow-auto rounded border border-zinc-800">
             <table class="w-full text-xs">
@@ -648,9 +743,9 @@
               >
                 <tr>
                   <th class="px-2 py-1 font-medium">Class</th>
-                  <th class="px-2 py-1 text-right font-medium">Train</th>
-                  <th class="px-2 py-1 text-right font-medium">Val</th>
-                  <th class="px-2 py-1 text-right font-medium">Test</th>
+                  <th class="px-2 py-1 text-right font-medium">Train (objects)</th>
+                  <th class="px-2 py-1 text-right font-medium">Val (objects)</th>
+                  <th class="px-2 py-1 text-right font-medium">Test (objects)</th>
                 </tr>
               </thead>
               <tbody>
@@ -721,16 +816,24 @@
             {exportState.export_dir}
           </p>
         {/if}
-        {#if exportState.split_counts}
+        {#if exportState.split_counts || exportState.image_count != null || exportState.object_count != null}
           <p class="mb-3 font-mono text-xs text-zinc-300">
-            {exportState.image_count != null
-              ? `${exportState.image_count.toLocaleString()} images`
-              : ''}
+            {formatCount(exportState.object_count)} objects in {formatCount(
+              exportState.image_count,
+            )} images
             {exportState.class_count != null
               ? `· ${exportState.class_count} classes`
               : ''}
-            · train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
-            · test {exportState.split_counts.test.toLocaleString()}
+            {#if exportState.split_counts}
+              · images train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
+              · test {exportState.split_counts.test.toLocaleString()}
+            {/if}
+          </p>
+        {/if}
+        {#if exportState.images_dropped_not_fully_labeled}
+          <p class="mb-3 text-xs text-orange-300">
+            {formatCount(exportState.images_dropped_not_fully_labeled)} image(s) dropped — not
+            fully labeled.
           </p>
         {/if}
         <div class="flex flex-wrap gap-2">

@@ -2862,11 +2862,16 @@ export async function searchCrops(
  * manifest (Section L14). Server returns 202 + job id while it runs.
  */
 export function exportYolo(
-  opts: { version_tag?: string } = {},
+  opts: { version_tag?: string; require_fully_labeled_images?: boolean } = {},
   signal?: AbortSignal,
 ): Promise<ExportResult> {
   const body: Record<string, unknown> = {};
   if (opts.version_tag) body.version_tag = opts.version_tag;
+  // Default is false server-side — only send it when the operator opted
+  // in, so the payload stays minimal for the common case.
+  if (opts.require_fully_labeled_images) {
+    body.require_fully_labeled_images = true;
+  }
   return apiFetch<ExportResult>(
     `${API_PREFIX}/export/yolo`,
     { method: 'POST', body: JSON.stringify(body) },

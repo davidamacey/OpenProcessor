@@ -159,11 +159,29 @@ export interface ExportStatus {
   seed?: number | null;
   /** Row attribute the split grouped on (`'image_id'`). */
   group_key?: string | null;
+  /** Exported images (OpenProcessor d5343cb: one image + one label file
+   *  per source image, one line per object). */
   image_count?: number | null;
+  /** Exported objects (label lines) across all images. */
+  object_count?: number | null;
   class_count?: number | null;
+  /** Images per split. */
   split_counts?: ExportSplitCounts | null;
-  /** `null` for an export written before this was recorded. */
+  /** Objects (label lines) per split. */
+  split_object_counts?: ExportSplitCounts | null;
+  /** Objects per class per split. `null` for an export written before
+   *  this was recorded. */
   class_split_counts?: ExportClassSplitCounts[] | null;
+  /** Whether images with an unlabeled object were left out. */
+  require_fully_labeled_images?: boolean | null;
+  /** Objects on exported images the export did not label (unreviewed, or
+   *  on a class it leaves out); learned as background. */
+  unlabeled_items_on_exported_images?: number | null;
+  /** Exported images holding at least one unlabeled object. */
+  images_with_unlabeled_items?: number | null;
+  /** Images left out by `require_fully_labeled_images` (0 when it was
+   *  off). */
+  images_dropped_not_fully_labeled?: number | null;
 }
 
 /**
@@ -182,7 +200,24 @@ export interface ExportResult {
   version_tag?: string | null;
   manifest_path?: string | null;
   dataset_sha?: string | null;
+  /** Images per split. */
   split_counts?: Record<string, number> | null;
+  /** Exported images. */
+  image_count?: number | null;
+  /** Exported objects (label lines) across all images. */
+  object_count?: number | null;
+  /** Objects (label lines) per split. */
+  split_object_counts?: Record<string, number> | null;
+  /** Echoed from the request — whether images with an unlabeled object
+   *  were left out. */
+  require_fully_labeled_images?: boolean | null;
+  /** Objects on exported images the export did not label; learned as
+   *  background. */
+  unlabeled_items_on_exported_images?: number | null;
+  /** Exported images holding at least one unlabeled object. */
+  images_with_unlabeled_items?: number | null;
+  /** Images left out by `require_fully_labeled_images`. */
+  images_dropped_not_fully_labeled?: number | null;
   dedup?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
@@ -241,6 +276,8 @@ export interface ExportDataset {
   export_dir: string;
   version_tag: string;
   image_count?: number | null;
+  /** Exported objects (label lines) across all images. */
+  object_count?: number | null;
   split_counts?: Record<string, number> | null;
   dataset_sha?: string | null;
   exported_at?: string | null;

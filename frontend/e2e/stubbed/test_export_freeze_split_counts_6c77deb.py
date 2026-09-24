@@ -1,14 +1,20 @@
-"""OpenProcessor 6c77deb adoption ("export splits by source image,
-split-coverage preflight checks, honest holdout freeze, validated
-augmentation presets"):
+"""OpenProcessor 6c77deb + d5343cb adoption ("export splits by source
+image, split-coverage preflight checks, honest holdout freeze, validated
+augmentation presets" + "export one image + one label file per source
+image, partial-frame policy and counts"):
 
 1. `GET {API_PREFIX}/export/status` now serves `image_count`/
-   `class_count`/`split_counts`/`class_split_counts` on a successful
-   export — the page must render them, with a 0-train/0-val class row
-   highlighted using the served numbers only.
+   `class_count`/`split_counts`/`class_split_counts` (6c77deb) and
+   `object_count`/`split_object_counts`/`require_fully_labeled_images`/
+   partial-frame counts (d5343cb) on a successful export — the page must
+   render them, with a 0-train/0-val class row highlighted using the
+   served numbers only.
 2. `POST {API_PREFIX}/test_holdout/freeze`'s request body is `{percent}`
    only — no `seed`. The freeze modal must not offer a Seed field, and
    the actual request fired must carry no `seed` key.
+3. `POST {API_PREFIX}/export/yolo` accepts an opt-in
+   `require_fully_labeled_images` — checking "Only images whose every
+   object is labeled" must actually send it.
 """
 
 from __future__ import annotations
@@ -58,12 +64,33 @@ EXPORT_STATUS_SUCCESS = {
     "seed": None,
     "group_key": "image_id",
     "image_count": 500,
+    "object_count": 620,
     "class_count": 2,
     "split_counts": {"train": 400, "val": 80, "test": 20},
+    "split_object_counts": {"train": 500, "val": 100, "test": 20},
+    "require_fully_labeled_images": False,
+    "unlabeled_items_on_exported_images": 12,
+    "images_with_unlabeled_items": 9,
+    "images_dropped_not_fully_labeled": 0,
     "class_split_counts": [
         {"class_id": 1, "export_id": 0, "class_name": "bmw", "train": 200, "val": 40, "test": 10},
         {"class_id": 2, "export_id": 1, "class_name": "audi", "train": 0, "val": 40, "test": 10},
     ],
+}
+
+EXPORT_YOLO_RESULT = {
+    "status": "success",
+    "export_dir": "/exports/new",
+    "image_count": 500,
+    "object_count": 620,
+    "split_counts": {"train": 400, "val": 80, "test": 20},
+    "split_object_counts": {"train": 500, "val": 100, "test": 20},
+    "require_fully_labeled_images": True,
+    "unlabeled_items_on_exported_images": 0,
+    "images_with_unlabeled_items": 0,
+    "images_dropped_not_fully_labeled": 30,
+    "started_at": "2026-09-24T21:00:00Z",
+    "finished_at": "2026-09-24T21:00:05Z",
 }
 
 FREEZE_RESPONSE = {
@@ -92,17 +119,17 @@ def test_export_status_renders_served_split_counts_and_highlights_zero_classes(
     register_export_mount(stub)
 
     page.goto(f"{app_url}/export")
-    page.get_by_text("500", exact=False).first.wait_for(timeout=15000)
+    page.get_by_text("620", exact=False).first.wait_for(timeout=15000)
 
-    assert page.get_by_text("train 400", exact=False).count() > 0
-    assert page.get_by_text("val 80", exact=False).count() > 0
-    assert page.get_by_text("test 20", exact=False).count() > 0
+    assert page.get_by_text("objects in", exact=False).count() > 0
+    assert page.get_by_text("images: train 400", exact=False).count() > 0
+    assert page.get_by_text("objects: train 500", exact=False).count() > 0
 
-    summary = page.get_by_text("Per-class split counts", exact=False)
+    summary = page.get_by_text("Per-class object counts", exact=False)
     summary.wait_for(timeout=15000)
     summary.click()
 
-    details = page.locator("details", has_text="Per-class split counts")
+    details = page.locator("details", has_text="Per-class object counts")
     audi_row = details.locator("tr", has_text="audi")
     audi_row.wait_for(timeout=15000)
     assert "bg-red-500/10" in (audi_row.get_attribute("class") or ""), (
@@ -147,6 +174,38 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
     assert len(freeze_calls) == 1, f"expected exactly one freeze POST: {freeze_calls}"
     assert freeze_calls[0] == {"percent": 10}, (
         f"freeze body must be exactly {{'percent': 10}}, got {freeze_calls[0]}"
+    )
+
+    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
+    assert not errors, f"no pageerror expected: {errors[:3]}"
+
+
+def test_require_fully_labeled_images_checkbox_sends_the_flag(stub, page, app_url):
+    register_export_mount(stub)
+
+    export_calls: list[dict] = []
+
+    def export_handler(request, match):
+        export_calls.append(request.post_data_json or {})
+        return (200, EXPORT_YOLO_RESULT)
+
+    stub.on("POST", r"/export/yolo(\?|$)", export_handler)
+
+    page.goto(f"{app_url}/export")
+    checkbox = page.get_by_text("Only images whose every object is labeled", exact=False)
+    checkbox.wait_for(timeout=15000)
+    checkbox.click()
+
+    export_button = page.get_by_role("button", name="Re-export", exact=True)
+    if export_button.count() == 0:
+        export_button = page.get_by_role("button", name="Export", exact=True)
+    export_button.click()
+
+    page.get_by_text("Export complete.", exact=False).wait_for(timeout=15000)
+
+    assert len(export_calls) == 1, f"expected exactly one export POST: {export_calls}"
+    assert export_calls[0].get("require_fully_labeled_images") is True, (
+        f"checking the box must send require_fully_labeled_images: true, got {export_calls[0]}"
     )
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
