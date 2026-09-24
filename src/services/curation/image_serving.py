@@ -111,6 +111,32 @@ def _configured_roots(config: CurationConfig | None = None) -> tuple[Path, ...]:
     return (cfg.source_root, *cfg.source_path_aliases.values())
 
 
+def is_servable_image_path(path: str) -> bool:
+    """Whether the image server can later serve ``path`` as an item's
+    ``image_path``: an absolute path under one of the configured source
+    roots (:func:`_configured_roots`). Ingest refuses anything else so a
+    stored item never points at an image no route can return."""
+    if not path.startswith('/'):
+        return False
+    try:
+        candidate = Path(path).resolve()
+    except OSError:
+        return False
+    for root in _configured_roots():
+        try:
+            candidate.relative_to(root.resolve())
+        except ValueError:
+            continue
+        return True
+    return False
+
+
+UNSERVABLE_PATH_ERROR = (
+    'image path is not under a configured source root (OP_SOURCE_ROOT / '
+    'OP_SOURCE_PATH_ALIASES), so its images could not be served'
+)
+
+
 # =============================================================================
 # Path Resolution / Traversal Guard
 # =============================================================================
