@@ -599,6 +599,72 @@ envelope check that computed it — `shapeGate.ts`, `PLATE_SHAPE_ENVELOPE`,
 guard (`is_plausible_region_bbox`) is a different, server-side-only
 check with no client mirror.
 
+### Rejected candidates, auto-confirm, text choice (dq-region, 2026-09-24)
+
+OpenProcessor `main` f7171cc ("region verdict integrity") changed three
+things about the region wire shape, all adopted here:
+
+- **`verify_rejected` carries no `region_bbox_norm` at all.** The box
+  the detector proposed and the verifier rejected lives in
+  `region_candidate_bbox_norm`/`_score`/`_detector`/
+  `_detector_version`/`_source` (+ `_bbox_in_parent`) instead, kept for
+  human review and reversal — `region_rejection_reason` is set
+  (`region_visible_elsewhere` / `sanity_reject:<gate>` /
+  `verifier_no_verdict`). `SubBoxCapability` gained
+  `candidateBboxField`/`candidateBboxInParentField`/
+  `candidateScoreField`/`candidateDetectorField`/
+  `candidateDetectorVersionField`/`candidateSourceField`;
+  `readSlot`/`SlotData.subBox.candidate` populate it the same
+  server-projection-preferred way as the main box. **Confirming (or
+  marking false-positive on) a verify_rejected item promotes the
+  candidate into the region box server-side** (`region_writes.py`'s
+  `candidate_promotion`/`human_status_fields`) — the frontend never
+  computes that promotion; `/review`'s `_seedSlotFromCurrent` just seeds
+  `editedSlotBox` from the candidate's parent-frame box when the main
+  box is absent, so an unchanged Confirm still goes through the existing
+  boxUnchanged → status-only-PATCH path (see B2 above). The candidate
+  box renders **dashed** (`BboxCanvas`'s `dashed` prop) with a "rejected
+  candidate · confirm to accept" hint, the server's own rejection reason
+  verbatim in its tooltip — never worded as a model verdict, since
+  `verifier_no_verdict` means "needs human", not "wrong box"
+  (`region_bbox_correct === false` is the actual "model said wrong box"
+  signal, not yet rendered anywhere). `SlotCard` shows a matching amber
+  "candidate" badge; `CropMetaPanel` shows a Candidate row.
+- **`region_validated` is human-only; `region_auto_confirmed` is new.**
+  `region_verified` keeps its prior, distinct meaning ("a verification
+  pass ran", human or the VLM verifier) — it no longer doubles as "human
+  accepted this". `LifecycleCapability` gained `validatedField`/
+  `autoConfirmedField`; `/review`'s Status row, `SlotCard` and
+  `CropMetaPanel` all render a "human validated" / "auto-confirmed
+  (unreviewed)" badge off `lifecycle.validated`/`lifecycle.autoConfirmed`
+  rather than `lifecycle.verified`.
+- **`region_text_choice`/`region_text_vlm_invalid`.** `region_text` is
+  still the backend's chosen reading; `region_text_choice`
+  (`readers_agree`/`vlm_preferred`/`vlm_only`/`ocr_only`/`ocr_mode`/
+  `vlm_invalid`/`no_valid_reading`/`human`) says why it won, and
+  `region_text_vlm_invalid` (`placeholder`/`no_reading`/`sequence`/
+  `charset`/`too_short`/`too_long`/`format`) says why the VLM's own
+  reading was rejected as not text, when it was. `TextCapability` gained
+  `choiceField`/`invalidReasonField`; `SlotData.text.choice`/
+  `.invalidReason` render next to the plate text on `/review` and
+  `CropMetaPanel`.
+
+`regionVocabularyStore` (`GET {API_PREFIX}/regions/vocabulary`) gained
+`textChoices`/`textRules` (the served `region_text_choice` id list and
+the active profile's region-text validity rules) and three label
+helpers — `textChoiceLabel`/`invalidReasonLabel`/`rejectionReasonLabel`
+— all a titlecase-id placeholder today (the backend doesn't serve real
+labels for these three vocabularies yet; `openprocessor` fix #29 will add
+one for rejection reasons). Centralizing the lookup here, rather than
+inlining the raw id at each call site, is what lets a served label slot
+in later without touching `/review`/`SlotCard`/`CropMetaPanel`.
+
+`GET {API_PREFIX}/regions` also gained a `status=` filter (400 on an
+unknown value, `GET {API_PREFIX}/regions/statuses` for the vocabulary)
+— the `/clusters` plate gallery's `SlotGallery` renders it as a
+`<select>`, matching the existing Detector filter's served-vocabulary
+pattern (`plateGalleryController.plateStatusFilter`).
+
 **New shared components** (renamed off the license-plate-specific names
 during the genericization pass — see `docs/genericization-plan-2026-09-13.md`):
 

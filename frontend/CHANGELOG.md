@@ -8,6 +8,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adopted OpenProcessor `main` f7171cc (cutover/dq-region — region verdict
+  integrity: null≠reject, rejected candidates kept + reviewable,
+  auto-confirm split from human validation, region-text rules):
+  - **Rejected candidate boxes.** `verify_rejected` items no longer carry
+    `region_bbox_norm` at all — the box lives in
+    `region_candidate_bbox_norm`/`_score`/`_detector`/`_detector_version`/
+    `_source` (+ `_bbox_in_parent`) until a human accepts it. `SlotSpec`'s
+    `subBox` capability gained `candidateBboxField`/
+    `candidateBboxInParentField`/`candidateScoreField`/
+    `candidateDetectorField`/`candidateDetectorVersionField`/
+    `candidateSourceField`; `readSlot`/`SlotData.subBox.candidate` carry
+    it generically. `/review`'s slot panel seeds `editedSlotBox` from the
+    candidate when the main box is absent, so an unchanged Confirm still
+    promotes it server-side (the frontend never computes the promotion
+    itself); the candidate box renders dashed (`BboxCanvas`'s new
+    `dashed` prop) with a "rejected candidate · confirm to accept" hint
+    (the server's own rejection reason in its tooltip, never worded as a
+    model verdict). `SlotCard` gets a matching amber "candidate" badge.
+  - **Human-validated vs auto-confirmed.** `region_validated` is now
+    human-only; `region_auto_confirmed` is the new "machine accepted,
+    unreviewed" signal — `region_verified` keeps its prior, distinct
+    meaning ("a verification pass ran"). `LifecycleCapability` gained
+    `validatedField`/`autoConfirmedField`; `/review`, `SlotCard` and
+    `CropMetaPanel` all render a validated/auto-confirmed badge instead
+    of overloading `region_verified`.
+  - **Text choice / VLM-invalid reason.** `region_text_choice`
+    (`readers_agree`/`vlm_preferred`/`vlm_only`/`ocr_only`/`ocr_mode`/
+    `vlm_invalid`/`no_valid_reading`/`human`) and
+    `region_text_vlm_invalid` (`placeholder`/`no_reading`/`sequence`/
+    `charset`/`too_short`/`too_long`/`format`) render next to the plate
+    text on `/review` and `CropMetaPanel`, labeled through
+    `regionVocabularyStore`'s new `text_choices`/`text_rules` (from `GET
+{API_PREFIX}/regions/vocabulary`) — titlecased id placeholder until the
+    backend serves real labels.
+  - **Region-status filter.** `GET {API_PREFIX}/regions` gains a `status=`
+    filter (400 on an unknown value); the `/clusters` plate gallery's
+    `SlotGallery` renders it as a `<select>` sourced from
+    `regionStatusesStore.list`, matching the existing Detector filter's
+    served-vocabulary pattern.
+  - `regionVocabularyStore` gained `rejectionReasonLabel` — a single
+    lookup point for `region_rejection_reason` ids, currently a
+    titlecase-id placeholder (no served label yet; `openprocessor` fix #29
+    will add one) that deliberately never infers "wrong box" from
+    `verify_rejected` alone (`verifier_no_verdict` means "needs human",
+    not a model rejection — `region_bbox_correct === false` is the
+    actual "model said wrong box" signal).
 - Adopted OpenProcessor `main` 7254ec4 (cutover/dq-queues):
   - **Item confidence fields.** `class_confidence`/`class_confidence_source`
     (VLM high/medium/low mapped to 0.92/0.70/0.40 server-side, or the
