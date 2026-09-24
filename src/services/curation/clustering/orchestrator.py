@@ -7,7 +7,7 @@ This module is the thin orchestrator. The actual residual-pool algorithm
 implementations live in :py:mod:`src.services.curation.clustering.methods`
 behind a small registry (HDBSCAN by default on cuML GPU, AHC as a
 fallback). The refine endpoint still uses sklearn AHC directly because
-the per-cluster cap (``MAX_REFINE_MEMBERS=2000``) keeps it fast and the
+the per-cluster cap (``MAX_REFINE_MEMBERS``, default 8000) keeps it fast and the
 ``distance_threshold`` knob is the right tool for splitting an existing
 cluster.
 
@@ -33,7 +33,8 @@ Why complete + cosine + threshold (for the refine path):
 
 Skip-rules:
 
-- Refine: > 2000 members (skip+warn); < 50 members (skip+info).
+- Refine: > MAX_REFINE_MEMBERS (default 8000) members (skip+warn);
+  < MIN_REFINE_MEMBERS (4) members (skip+info).
 - Residual pool: < 32 residuals → no-op (return empty summary).
 """
 
@@ -133,7 +134,8 @@ async def _fetch_cluster_members(
 
     Reads ``embedding_field`` (default the vehicle residual field
     ``pe_embedding``; the region path passes ``RegionFields.embedding``),
-    1024x4B ≈ 4KB each, so 2000 members ≈ 8MB — safe to load into RAM. The
+    1024x4B ≈ 4KB each, so MAX_REFINE_MEMBERS (default 8000) members ≈
+    32MB — safe to load into RAM. The
     embedding is normalized to the ``'embedding'`` key so ``refine_cluster``
     stays field-name-agnostic.
     """
@@ -226,7 +228,8 @@ async def refine_cluster(
 
     Steps:
     1. Pull all crops in the cluster from ``index``.
-    2. Skip if < 50 members (too small) or > 2000 members (too expensive).
+    2. Skip if < MIN_REFINE_MEMBERS (4) members (too small) or
+       > MAX_REFINE_MEMBERS (default 8000) members (too expensive).
     3. ``AgglomerativeClustering(linkage='complete', distance_threshold=0.25,
        metric='cosine')`` over the embeddings.
     4. Bulk-write ``subid_field`` (e.g. ``"47a"``, ``"47b"``) back to each doc.
@@ -311,7 +314,7 @@ async def refine_cluster(
         metric=AHC_METRIC,
     )
     # Off-load to a worker thread so a large cluster (close to
-    # MAX_REFINE_MEMBERS=2000) doesn't block the FastAPI event loop —
+    # MAX_REFINE_MEMBERS, default 8000) doesn't block the FastAPI event loop —
     # refine_cluster runs in the yolo-api process, not the dedicated
     # worker container, so a sync fit_predict here would starve every
     # other request.
