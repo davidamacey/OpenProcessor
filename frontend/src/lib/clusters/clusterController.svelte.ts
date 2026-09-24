@@ -158,6 +158,13 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       }
       toastStore.success(`Labeled ${ids.length} crop${ids.length === 1 ? '' : 's'}.`);
       sel.ids = new Set();
+      // Bug 4 (live smoke: header stayed "0 validated" after 34 crops
+      // were labeled through this page, only updating on reload): the
+      // header's validated/labeled/cluster-total chip reads
+      // `classesStore` (per-class `validated_count`/`count`), which the
+      // server — not this optimistic write — owns. Re-fetch it instead
+      // of trying to derive the new count client-side.
+      void classesStore.refresh();
     } catch (e) {
       toastStore.error(`Label failed: ${(e as Error).message}`);
       for (const prior of priors) revertLocalLabel(prior);
@@ -227,6 +234,9 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       } else {
         toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
       }
+      // See assignClassToSelected's comment — refresh the server-owned
+      // per-class validated/labeled counts the header chip reads.
+      void classesStore.refresh();
     } catch (e) {
       // Revert the optimistic mutation on hard failure.
       exclusionGuard.release(ids);
@@ -257,6 +267,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       try {
         await putCropLabel(crop.id, targetClassId);
         undoStore.recordWrites([crop.id]);
+        void classesStore.refresh();
       } catch (e) {
         toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
         exclusionGuard.release([crop.id]);
@@ -269,6 +280,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     try {
       await putCropLabel(crop.id, targetClassId);
       undoStore.recordWrites([crop.id]);
+      void classesStore.refresh();
     } catch (e) {
       toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
       revertLocalLabel(crop);
@@ -352,6 +364,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     }
     if (failedIds.length === 0) {
       toastStore.success(`Accepted ${targets.length} suggestions.`);
+      void classesStore.refresh();
       return;
     }
     const restored: Crop[] = [];
@@ -372,6 +385,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     toastStore.error(
       `Accepted ${ok}, failed ${failedIds.length} (reverted)${lastError ? `: ${lastError}` : '.'}`,
     );
+    if (ok > 0) void classesStore.refresh();
   }
 
   /** D hotkey / toolbar action: discard the current selection. */
@@ -430,6 +444,9 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         cropPager.total += 1;
       }
     }
+    // Undo reverses a label write like the ones above — refresh the
+    // header's server-owned counts here too.
+    void classesStore.refresh();
   }
 
   async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
