@@ -293,6 +293,50 @@ async def test_unexclude_restores_a_live_candidate_cluster(crops, registry, ids)
     assert u['cluster_subid'] == '10003b'
 
 
+@pytest.mark.asyncio
+async def test_unexclude_returns_unvalidated_item_to_its_class_cluster(crops, ids) -> None:
+    """An unvalidated class-kind item (VLM label, sitting in its class
+    cluster) comes back to that class cluster, not the residual pool."""
+    doc = _proposal_doc('cv')
+    doc.update(
+        class_id=ids['widget'],
+        class_name='widget',
+        class_source='vlm',
+        label_source='vlm',
+        class_validated=False,
+        cluster_id=ids['widget'],
+        cluster_subid=f'{ids["widget"]}c',
+    )
+    fake = QueryFakeOpenSearch({ITEMS: {'cv': doc}})
+    await _exclude(crops, fake, ['cv'])
+    assert fake.docs(ITEMS)['cv']['cluster_id'] == -2
+    await _unexclude(crops, fake, ['cv'])
+    cv = fake.docs(ITEMS)['cv']
+    assert cv['class_excluded'] is False
+    assert cv['class_validated'] is False
+    assert cv['cluster_id'] == ids['widget']
+    assert cv['cluster_subid'] == f'{ids["widget"]}c'
+
+
+@pytest.mark.asyncio
+async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residual(
+    crops, ids
+) -> None:
+    """The class-cluster restore only applies to the item's own class."""
+    doc = _proposal_doc('oc')
+    doc.update(
+        class_id=ids['widget'],
+        class_name='widget',
+        class_source='vlm',
+        class_validated=False,
+        cluster_id=ids['gadget'],
+    )
+    fake = QueryFakeOpenSearch({ITEMS: {'oc': doc}})
+    await _exclude(crops, fake, ['oc'])
+    await _unexclude(crops, fake, ['oc'])
+    assert fake.docs(ITEMS)['oc']['cluster_id'] is None
+
+
 # =============================================================================
 # Bug C — moving into a candidate cluster is placement, not a class label
 # =============================================================================

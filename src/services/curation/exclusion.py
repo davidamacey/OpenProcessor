@@ -71,7 +71,9 @@ def unexclusion_update(
 
     A validated item returns to its class cluster (``cluster_id =
     class_id``), keeping its sub-cluster only if it was recorded in that
-    same cluster. An unvalidated item excluded from a candidate cluster
+    same cluster. An unvalidated item excluded from its own class cluster
+    (``prior == class_id``) returns there too. An unvalidated item
+    excluded from a candidate cluster
     that still has members (``live_candidate_ids``, resolved by the
     caller) returns to it. Anything else drops to the residual pool
     (``cluster_id=None``) for a fresh candidate assignment on the next
@@ -106,7 +108,7 @@ def unexclusion_update(
         'updated_at': now,
     }
     prior = current.get(PRIOR_CLUSTER_ID)
-    if validated:
+    if validated or (class_id is not None and cluster_kind(prior) == 'class' and prior == class_id):
         update['cluster_id'] = class_id
         if prior == class_id:
             update['cluster_subid'] = current.get(PRIOR_CLUSTER_SUBID)
