@@ -138,18 +138,25 @@
   // the header are NOT recomputed by this filter — the operator sees
   // the filter against the whole-cluster totals on purpose.
   let classSourceFilter = $state<string | null>(null);
+  // The backend's fixed writer values (curation_api_contract.md
+  // "class_source values"). The ingest detectors' values
+  // (`{primary}_proposal`, `{secondary}_model`, …) are named from each
+  // deployment's config and need a discovery source before they can be
+  // offered here (docs/design/b3-wire-rename-frontend-plan-2026-09-23.md G2).
   const CLASS_SOURCE_OPTIONS: { value: string | null; label: string; hint: string }[] = [
     { value: null, label: 'All', hint: 'Every source' },
-    { value: 'v6_model', label: 'v6', hint: 'v6 model, ≥0.75 confidence' },
-    { value: 'gemma', label: 'Gemma', hint: 'Gemma matched registry class' },
     { value: 'human', label: 'Human', hint: 'Human-validated' },
-    { value: 'v6_low_conf', label: 'v6 low', hint: 'v6 below 0.75; demoted' },
-    { value: 'gemma_unmatched', label: 'Gemma ?', hint: 'Gemma class not in registry' },
-    { value: 'coco_yolo11_proposal', label: 'COCO', hint: 'Raw yolo proposal' },
+    { value: 'vlm', label: 'VLM', hint: 'VLM matched a registry class' },
+    { value: 'vlm_unmatched', label: 'VLM ?', hint: 'VLM answer not in the registry' },
     {
-      value: 'gemma_new_class_pending',
+      value: 'vlm_new_class_pending',
       label: 'New cls',
-      hint: 'Gemma proposed new class',
+      hint: 'VLM proposed a new class',
+    },
+    {
+      value: 'classifier_vlm_agreement',
+      label: 'Agree',
+      hint: 'Classifier and VLM agreed',
     },
   ];
 

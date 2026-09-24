@@ -79,3 +79,18 @@ describe('legacyDetectorRegistry equivalence with DetectorChip.svelte', () => {
     expect(legacyDetectorRegistry.mutedTagPattern.test('hit')).toBe(false);
   });
 });
+
+// B3 renamed the VLM's chain entries (`vlm_visible:yes`,
+// `<det>:vlm_verify_ok`'s head is the detector) and its class_source to `vlm`.
+describe('B3 VLM vocabulary', () => {
+  it('colors vlm chain entries like the VLM model itself', () => {
+    expect(paletteForDetector(legacyDetectorRegistry, 'vlm_visible:yes')).toBe(
+      paletteForDetector(legacyDetectorRegistry, 'gemma-4-e4b'),
+    );
+    expect(paletteForDetector(legacyDetectorRegistry, 'vlm')).toBe(PALETTES.teal);
+  });
+
+  it('labels the vlm writer', () => {
+    expect(labelForDetector(legacyDetectorRegistry, 'vlm')).toBe('VLM');
+  });
+});

@@ -184,9 +184,9 @@ export interface OpCrop {
   bbox_norm: BBoxNorm;
   class_id: number | null;
   class_name: string | null;
-  /** Where the class assignment came from: 'v6_model' / 'gemma' /
-   *  'human' / 'v6_low_conf' / 'gemma_unmatched' /
-   *  'coco_yolo11_proposal' / 'gemma_new_class_pending'.
+  /** Where the class assignment came from — `human*`, the fixed VLM
+   *  writer values (`vlm`, `vlm_unmatched`, …), or an ingest detector's
+   *  config-derived value (`{primary}_proposal`, `{secondary}_model`, …).
    *  Drives the per-source filter chip in the cluster view. */
   class_source: string | null;
   label_source: LabelSource;
