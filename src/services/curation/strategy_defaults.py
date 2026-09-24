@@ -99,10 +99,11 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 # single-selectable-id "default" concept a shared override could apply to
 # today (score/overlay are additive, not mutually-exclusive choices; export
 # has exactly one kind), so PUT /curation/settings rejects them rather than
-# silently accepting a value nothing will ever honor.
-SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset(
-    {'cluster', 'sort', 'detection_profile', 'prompt_pack'}
-)
+# silently accepting a value nothing will ever honor. 'detection_profile'
+# is read-only for the same reason: the region cascade runs in the
+# detection worker on the process's OP_REGION_PROFILE, so a settings
+# override would change nothing that runs.
+SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset({'cluster', 'sort', 'prompt_pack'})
 
 
 async def resolve_effective_default(
@@ -140,6 +141,10 @@ async def resolve_effective_default(
     for the exact call sites.
     """
     hardcoded = _hardcoded_default_for_axis(axis)
+    if axis not in SETTABLE_DEFAULT_AXES:
+        # Read-only axis: a stored override (e.g. from before the axis
+        # became read-only) must not change what is reported as active.
+        return hardcoded
     if opensearch is None and settings_doc is None:
         return hardcoded
 

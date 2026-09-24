@@ -36,10 +36,14 @@ CLASS_ID_DESC = (
     'the full unvalidated cohort, unchanged from before this parameter existed.'
 )
 
-DETECTION_PROFILE_DESC = (
-    'Per-run detection_profile (an id from GET /methods axis=detection_profile). '
-    'Overrides the settings default for this job only; never written to settings. '
-    'Unset = settings default. Unknown id -> 422.'
+# detection_profile is NOT a per-run option: region detection runs in the
+# detection worker on OP_REGION_PROFILE and no auto-label stage uses it.
+# The param stays declared (hidden) only so an old client still sending it
+# gets a clear 422 instead of FastAPI silently ignoring an unknown param.
+DETECTION_PROFILE_REJECTED = (
+    'detection_profile is not a per-run auto_label option: no auto_label stage '
+    'runs region detection, and the detection worker uses the process region '
+    'profile (OP_REGION_PROFILE). Remove the parameter.'
 )
 
 PROMPT_PACK_DESC = (
@@ -49,10 +53,18 @@ PROMPT_PACK_DESC = (
 )
 
 
-async def resolve_run_selection(
-    opensearch: Any, detection_profile: Any, prompt_pack: Any
-) -> tuple[str | None, str | None]:
-    """Resolve the per-run ``detection_profile`` / ``prompt_pack`` ids.
+def reject_detection_profile(detection_profile: Any) -> None:
+    """422 for any explicit ``detection_profile`` value (see
+    :data:`DETECTION_PROFILE_REJECTED`). Non-``str`` means omitted."""
+    if isinstance(detection_profile, str):
+        raise HTTPException(
+            status_code=422,
+            detail={'error': DETECTION_PROFILE_REJECTED, 'param': 'detection_profile'},
+        )
+
+
+async def resolve_run_prompt_pack(opensearch: Any, prompt_pack: Any) -> str | None:
+    """Resolve the per-run ``prompt_pack`` id.
 
     Non-``str`` values (``None``, or an unfilled FastAPI ``Query`` default
     when the endpoint function is called directly) mean "omitted" and
@@ -60,12 +72,7 @@ async def resolve_run_selection(
     the valid ids — never a silent fallback.
     """
     try:
-        profile = await resolve_strategy_selection(
-            'detection_profile',
-            detection_profile if isinstance(detection_profile, str) else None,
-            opensearch,
-        )
-        pack = await resolve_strategy_selection(
+        return await resolve_strategy_selection(
             'prompt_pack', prompt_pack if isinstance(prompt_pack, str) else None, opensearch
         )
     except UnknownStrategyError as exc:
@@ -78,4 +85,3 @@ async def resolve_run_selection(
                 'valid_ids': exc.valid,
             },
         ) from exc
-    return profile, pack

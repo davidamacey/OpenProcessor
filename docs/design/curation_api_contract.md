@@ -257,9 +257,11 @@ Merges into the stored document; axes already set and not mentioned in
 the body are left untouched. Returns the full updated record, same
 shape as the `GET`. Each `axis` key must be one of
 `src.services.curation.strategy_defaults.SETTABLE_DEFAULT_AXES`
-(`cluster` / `sort` / `detection_profile` / `prompt_pack` today —
+(`cluster` / `sort` / `prompt_pack` today —
 `score`/`overlay`/`export` have no single-selectable-id "default"
-concept a shared override could apply to, so they 422 rather than
+concept a shared override could apply to, and `detection_profile` is
+read-only (the region cascade runs on the process's `OP_REGION_PROFILE`),
+so they 422 rather than
 silently accepting a value nothing will ever honor), and each `id` must
 be a currently-advertised id for that axis per `GET /methods` — either
 violation returns `422` with a message listing the valid axes/ids.
@@ -286,7 +288,7 @@ changes actual server behavior, not just what `GET /methods` displays:
 |---|---|
 | `cluster` | `src.services.curation.clustering.orchestrator.cluster_residuals` — resolves the effective cluster method when `?clustering_method` is omitted (feeds `POST /pipeline/auto_label*` and `POST /clusters/*`'s residual-clustering stage). |
 | `sort` | `src.services.curation.review_sorts.build_sort` — when `GET /review/{tab}`'s `?sort` is omitted or `'default'`, a valid shared override is tried before falling back to that tab's own hardcoded default. |
-| `detection_profile` | `POST /pipeline/auto_label` and `/pipeline/auto_label/start` — `?detection_profile=<id>` overrides the default for that one job (never written to settings; unknown id → `422` with `valid_ids`), omitted resolves via this function; the resolved id is echoed in the job `args` and the run summary. No auto-label stage runs region detection, so today it is validated and recorded, not consumed; the region cascade (detection worker) uses the process's active profile (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`). Neutral default: no profile registered → the axis is empty and the id resolves to `null`. |
+| `detection_profile` | **Read-only.** `GET /methods` lists the registered region profiles with the active one (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`) as `default: true` and `settable: false`; a stored settings override is ignored and `PUT /settings` with this axis is a `422`. `POST /pipeline/auto_label*` rejects `?detection_profile=` with a `422` (no auto-label stage runs region detection) rather than silently ignoring it. |
 | `prompt_pack` | `POST /pipeline/auto_label*` — `?prompt_pack=<id>` selects the pack for that job's VLM labeling stage (same override/`422`/echo semantics); omitted resolves via this function. Every VLM endpoint (`POST /vlm/label_batch`, `/vlm/verify_regions`, `/vlm/verify_region_batch`, `/vlm/region_visible_batch`) also uses the effective default. Selectable ids: the built-in generic pack, every `OP_PROMPT_PACK_PATHS` pack, and the `OP_PROMPT_PACK_PATH` pack (the fallback default). |
 
 Storage: a single OpenSearch document (not a full index of many rows),

@@ -1,10 +1,14 @@
-"""Per-run ``detection_profile`` / ``prompt_pack`` overrides on the auto-label
-endpoints (``POST /pipeline/auto_label/start`` and ``POST /pipeline/auto_label``).
+"""Per-run ``prompt_pack`` override on the auto-label endpoints
+(``POST /pipeline/auto_label/start`` and ``POST /pipeline/auto_label``).
 
 An explicit id overrides the settings-doc default for that one job (never
 written to settings); an unknown id is a 422 listing the valid ids; omitted
-keeps the settings default. The resolved ids are echoed in the job ``args``
-and actually reach the VLM labeler the job uses.
+keeps the settings default. The resolved id is echoed in the job ``args``
+and actually reaches the VLM labeler the job uses.
+
+``detection_profile`` is deliberately NOT a per-run option (no auto-label
+stage runs region detection); a client still sending it gets a 422, not a
+silent no-op.
 """
 
 from __future__ import annotations
@@ -89,25 +93,25 @@ def test_start_unknown_prompt_pack_is_422_listing_valid_ids(client: TestClient) 
 
 
 @pytest.mark.usefixtures('packs', 'job_dir', 'reference_region_profile')
-def test_start_unknown_detection_profile_is_422(client: TestClient) -> None:
-    r = client.post('/curation/pipeline/auto_label/start', params={'detection_profile': 'nope'})
+@pytest.mark.parametrize('value', ['license_plate', 'nope'])
+def test_start_rejects_any_detection_profile(client: TestClient, value: str) -> None:
+    """Even the active profile's id: accepting it would echo an override
+    that changes nothing."""
+    r = client.post('/curation/pipeline/auto_label/start', params={'detection_profile': value})
     assert r.status_code == 422
     detail = r.json()['detail']
-    assert detail['axis'] == 'detection_profile'
-    assert detail['valid_ids'] == ['license_plate']
+    assert detail['param'] == 'detection_profile'
+    assert 'OP_REGION_PROFILE' in detail['error']
 
 
-@pytest.mark.usefixtures('packs', 'reference_region_profile')
-def test_start_echoes_overrides_in_job_args(client: TestClient, job_dir: Path) -> None:
-    r = client.post(
-        '/curation/pipeline/auto_label/start',
-        params={'prompt_pack': 'food_v2', 'detection_profile': 'license_plate'},
-    )
+@pytest.mark.usefixtures('packs')
+def test_start_echoes_prompt_pack_override_in_job_args(client: TestClient, job_dir: Path) -> None:
+    r = client.post('/curation/pipeline/auto_label/start', params={'prompt_pack': 'food_v2'})
     assert r.status_code == 200, r.text
     args = r.json()['args']
     assert args['prompt_pack'] == 'food_v2'
-    assert args['detection_profile'] == 'license_plate'
-    # The worker runs from the trigger file -- it must carry the same ids.
+    assert 'detection_profile' not in args
+    # The worker runs from the trigger file -- it must carry the same id.
     trigger = json.loads((job_dir / 'trigger.json').read_text())
     assert trigger['args']['prompt_pack'] == 'food_v2'
 
@@ -116,9 +120,7 @@ def test_start_echoes_overrides_in_job_args(client: TestClient, job_dir: Path) -
 def test_start_omitted_resolves_to_settings_default(client: TestClient) -> None:
     r = client.post('/curation/pipeline/auto_label/start')
     assert r.status_code == 200, r.text
-    args = r.json()['args']
-    assert args['prompt_pack'] == 'pallet_v1'  # OP_PROMPT_PACK_PATH pack
-    assert args['detection_profile'] is None  # neutral: no region profile
+    assert r.json()['args']['prompt_pack'] == 'pallet_v1'  # OP_PROMPT_PACK_PATH pack
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')
@@ -215,7 +217,7 @@ async def test_job_omitted_pack_uses_default(labeler_spy: list[Any]) -> None:
         opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
     )
     assert summary['prompt_pack'] == 'pallet_v1'
-    assert summary['detection_profile'] is None
+    assert 'detection_profile' not in summary
     assert [inst._pack.name for inst in labeler_spy] == ['pallet_v1']
 
 
@@ -229,6 +231,21 @@ async def test_job_rejects_unknown_pack(labeler_spy: list[Any]) -> None:
     with pytest.raises(HTTPException) as info:
         await pipeline.pipeline_auto_label(
             opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope')
+        )
+    assert info.value.status_code == 422
+    assert labeler_spy == []
+
+
+@pytest.mark.usefixtures('packs')
+@pytest.mark.asyncio
+async def test_job_rejects_detection_profile(labeler_spy: list[Any]) -> None:
+    from fastapi import HTTPException
+
+    from src.routers.curation import pipeline
+
+    with pytest.raises(HTTPException) as info:
+        await pipeline.pipeline_auto_label(
+            opensearch=_FakeOpenSearch({}), **_run_kwargs(detection_profile='license_plate')
         )
     assert info.value.status_code == 422
     assert labeler_spy == []

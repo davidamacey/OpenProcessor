@@ -338,11 +338,13 @@ between the three dataclasses.
 **Discovery**: both are advertised on `GET {prefix}/methods`
 alongside the existing `cluster`/`score`/`sort`/`overlay`/`export` axes
 (`src/services/curation/strategy_registry.py`), in the same
-`{id, axis, label, status, default}` shape as the `export` axis. The
-`detection_profile` axis lists every profile in
-`src/services/detection/profile_registry.py` — empty by default (neutral:
-no region profile until `OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`
-configures one, or startup code calls `register_profile()`). The
+`{id, axis, label, status, default}` shape as the `export` axis, plus a
+per-entry `settable` flag. The `detection_profile` axis is read-only
+(`settable: false`): it lists every profile in
+`src/services/detection/profile_registry.py` with the active one as the
+default — empty by default (neutral: no region profile until
+`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*` configures one, or startup
+code calls `register_profile()`). The
 `prompt_pack` axis lists every pack `available_prompt_packs()` can load
 (the built-in generic pack, each `OP_PROMPT_PACK_PATHS` pack, and the
 `OP_PROMPT_PACK_PATH` default), keyed by pack `name`; the VLM labeler is
