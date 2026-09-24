@@ -3777,17 +3777,14 @@
         "type": "object"
       },
       "TestHoldoutFreezeRequest": {
+        "additionalProperties": false,
+        "description": "Selection is deterministic (SHA1 of each ``crop_id``, per class — see\n``src/services/curation/holdout.py``), so there is no seed: an unknown\nfield such as ``seed`` is a ``422`` rather than silently ignored.",
         "properties": {
           "percent": {
             "default": 10,
             "maximum": 50.0,
             "minimum": 1.0,
             "title": "Percent",
-            "type": "integer"
-          },
-          "seed": {
-            "default": 42,
-            "title": "Seed",
             "type": "integer"
           }
         },
@@ -3796,6 +3793,11 @@
       },
       "TestHoldoutFreezeResponse": {
         "properties": {
+          "min_per_class": {
+            "description": "Floor per class (all of a class smaller than this is frozen).",
+            "title": "Min Per Class",
+            "type": "integer"
+          },
           "n_classes_covered": {
             "title": "N Classes Covered",
             "type": "integer"
@@ -3811,6 +3813,18 @@
             "title": "Per Class Counts",
             "type": "object"
           },
+          "percent": {
+            "description": "Target holdout percent per class (from the request).",
+            "title": "Percent",
+            "type": "integer"
+          },
+          "selection": {
+            "const": "sha1_per_class",
+            "default": "sha1_per_class",
+            "description": "Per class, the crops with the smallest sha1(crop_id); no seed.",
+            "title": "Selection",
+            "type": "string"
+          },
           "test_holdout_sha": {
             "title": "Test Holdout Sha",
             "type": "string"
@@ -3819,7 +3833,9 @@
         "required": [
           "n_frozen",
           "n_classes_covered",
-          "test_holdout_sha"
+          "test_holdout_sha",
+          "percent",
+          "min_per_class"
         ],
         "title": "TestHoldoutFreezeResponse",
         "type": "object"
@@ -11529,7 +11545,7 @@
     },
     "/curation/test_holdout/freeze": {
       "post": {
-        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed: the same cohort always freezes the same set.\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
+        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed (a ``seed`` field is a ``422``): the same cohort\nalways freezes the same set. The response names the method in\n``selection`` (``sha1_per_class``).\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
         "operationId": "freeze_test_holdout_curation_test_holdout_freeze_post",
         "parameters": [
           {
