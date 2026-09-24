@@ -889,6 +889,13 @@ A VLM reply that sees a region but gives no box verdict
 (`region_bbox_correct` `null`, absent, or a quoted null) is not a reject:
 nothing is written and the item stays pending for a retry, so no chain
 entry is stored for it.
+Likewise an empty reply to the visibility pre-filter is no verdict (never
+`vlm_visible:no`): the item stays pending and is retried. `POST
+/vlm/region_visible_batch` leaves such crops out of its `visible` map.
+
+The combined call marks the candidate box with a red rectangle drawn just
+*outside* the box (so it never covers the region's own pixels) and its
+prompt says so.
 
 Readers match whole entries with `term` queries — e.g. `GET
 /regions/training_candidates?mode=detector_blind_spots` requires

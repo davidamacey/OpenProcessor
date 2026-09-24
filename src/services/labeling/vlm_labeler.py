@@ -388,12 +388,26 @@ def _b64_jpeg(data: bytes) -> str:
     return base64.b64encode(data).decode('ascii')
 
 
+# A 3-pixel-wide red rectangle is unambiguous against most backgrounds.
+_OVERLAY_WIDTH = 3
+# How a prompt names the drawn overlay (kept in step with _draw_bbox_overlay).
+OVERLAY_DESCRIPTION = (
+    'the candidate region is marked by a red rectangle drawn around it (the rectangle '
+    'is not part of the photo)'
+)
+
+
 def _draw_bbox_overlay(
     jpeg_bytes: bytes,
     bbox_norm: tuple[float, float, float, float],
 ) -> bytes | None:
-    """Render the candidate sub-region bbox as a colored rectangle on the crop
-    (visual conveyance for the combined VLM call).
+    """Render the candidate sub-region bbox as a red rectangle drawn *around*
+    the region on the crop (visual conveyance for the combined VLM call).
+
+    The outline sits just outside the box so it never paints over the
+    region itself: a typical region is ~25 px tall, and an outline drawn
+    inside the box hid a quarter of the text the VLM is asked to read and
+    of the edges it is asked to judge.
 
     Returns the re-encoded JPEG bytes on success, or None if the source is
     not a decodable image (caller falls back to coords-in-prompt).
@@ -407,16 +421,16 @@ def _draw_bbox_overlay(
             im = src.convert('RGB')
             w, h = im.size
             x1, y1, x2, y2 = bbox_norm
+            # PIL draws an outline inward from the given rectangle, so grow
+            # the rectangle by the line width to keep the region clear.
             box = (
-                max(0, int(x1 * w)),
-                max(0, int(y1 * h)),
-                min(w - 1, int(x2 * w)),
-                min(h - 1, int(y2 * h)),
+                max(0, int(x1 * w) - _OVERLAY_WIDTH),
+                max(0, int(y1 * h) - _OVERLAY_WIDTH),
+                min(w - 1, int(x2 * w) + _OVERLAY_WIDTH),
+                min(h - 1, int(y2 * h) + _OVERLAY_WIDTH),
             )
             draw = ImageDraw.Draw(im)
-            # 3-pixel-wide red rectangle is unambiguous against most
-            # backgrounds without obscuring detail underneath.
-            draw.rectangle(box, outline=(255, 0, 0), width=3)
+            draw.rectangle(box, outline=(255, 0, 0), width=_OVERLAY_WIDTH)
             out = BytesIO()
             im.save(out, format='JPEG', quality=90)
             return out.getvalue()
@@ -1315,7 +1329,7 @@ class VlmLabeler:
         if plate_bbox_norm is not None and not overlay_drawn:
             region_block = f'The proposed region bbox (normalized) is {list(plate_bbox_norm)}. '
         elif plate_bbox_norm is not None:
-            region_block = 'A candidate region bbox is drawn on the crop. '
+            region_block = f'In this image {OVERLAY_DESCRIPTION}. '
         else:
             region_block = 'No region-bbox candidate was provided. '
 
@@ -1483,7 +1497,7 @@ class VlmLabeler:
                 directive_class = 'skip classification (set ``class_id``=null)'
 
             if crop.plate_bbox_norm is not None and overlay_drawn:
-                directive_region = 'a candidate region bbox is drawn on the crop'
+                directive_region = OVERLAY_DESCRIPTION
             elif crop.plate_bbox_norm is not None:
                 directive_region = (
                     f'the proposed region bbox (normalized) is {list(crop.plate_bbox_norm)}'
@@ -1772,10 +1786,11 @@ class VlmLabeler:
         Returns ``{crop_id: bool}`` — ``True`` means the sub-region
         appears visible (continue to the detector), ``False`` means
         skip the detector and write a terminal "not visible" status
-        directly. On any parse / RPC failure for a crop the verdict
-        defaults to ``True`` so we never silently drop a crop that
-        might have a real sub-region — the existing detector path
-        remains the safety net.
+        directly. On an RPC failure or a garbled entry for a crop the
+        verdict defaults to ``True`` so we never silently drop a crop
+        that might have a real sub-region — the existing detector path
+        remains the safety net. A chunk the VLM answered with nothing is
+        absent from the result: no verdict, retry later.
         """
 
         if not crops:
@@ -1859,16 +1874,13 @@ class VlmLabeler:
     ) -> dict[str, bool]:
         """Parse the visibility batch reply into ``{crop_id: bool}``.
 
-        Fail-closed on empty response: an empty raw from the upstream
+        No verdict on an empty response: an empty raw from the upstream
         VLM almost always means the slot timed out or the request
-        aborted under heavy concurrent load. Marking those crops as
-        ``visible=False`` short-circuits the detect + verify cascade
-        instead of forcing them all through the detector, which
-        collapses the effective skip rate to near-zero under load —
-        the single biggest throughput regression observed when this
-        was fail-open at the response level. False negatives are
-        recoverable: an operator can re-queue a crop from a review
-        queue.
+        aborted under heavy concurrent load. The chunk's crops are left
+        out of the result, and the caller retries them later -- neither
+        sent through the detector (the throughput cost that once made
+        this fail-closed) nor stamped with a terminal "no region
+        visible" the VLM never said.
 
         Per-entry parse failures (missing img index, unparseable
         verdict) remain fail-open because at that point we have
@@ -1878,9 +1890,11 @@ class VlmLabeler:
         """
 
         if not raw:
-            logger.warning('vlm_labeler.plate_visible_parse_empty', chunk_size=len(chunk))
-            # Fail-closed on empty VLM response.
-            return dict.fromkeys((c.crop_id for c in chunk), False)
+            # No answer is no verdict: the caller retries these crops. It
+            # must not read as "no region visible" -- that is a terminal
+            # write a slot timeout would otherwise stamp on a whole chunk.
+            logger.warning('vlm_labeler.region_visible_parse_empty', chunk_size=len(chunk))
+            return {}
 
         # Default fail-open per-crop verdict (VLM responded but maybe
         # garbled a few entries — keep recall on those).

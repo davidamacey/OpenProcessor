@@ -411,6 +411,9 @@ async def run(args: argparse.Namespace) -> int:
         # to the secondary-segmenter stage. Together with skipped, lets
         # us compute the filter's skip rate at a glance.
         'gemma_visible_kept': 0,
+        # visible_no_verdict: crops the visibility VLM call answered with
+        # nothing (empty reply). Left pending for a retry.
+        'visible_no_verdict': 0,
         # combined_bbox_wrong: the VLM said the region IS visible but
         # the proposed bbox was wrong. We write verify_rejected and do
         # NOT re-loop the segmenter (avoids re-introducing a 2nd VLM
@@ -713,11 +716,12 @@ async def run(args: argparse.Namespace) -> int:
         this stage. Crops that come back ``True`` (or that the parser
         fails open on) advance to ``sam_q``.
 
-        Fail-OPEN semantics: any RPC error, any per-entry parse
-        failure, and any empty response is treated as ``visible=True``
-        so we never silently bin a real region when the VLM is flaky.
-        The cost is one extra segmenter round-trip on those crops —
-        the existing pipeline is the safety net.
+        Fail-OPEN semantics: any RPC error and any per-entry parse
+        failure is treated as ``visible=True`` so we never silently bin
+        a real region when the VLM is flaky. The cost is one extra
+        segmenter round-trip on those crops — the existing pipeline is
+        the safety net. An empty response is no verdict: those crops are
+        left pending and retried (never stamped "no region visible").
         """
 
         while True:
@@ -770,9 +774,16 @@ async def run(args: argparse.Namespace) -> int:
                             t.update_doc = unreadable_crop_update(t)
                             await out_q.put(t)
                             continue
-                        # Default True (fail-open) when the crop is
-                        # missing from the verdicts dict for any reason.
-                        is_visible = verdicts.get(t.crop_id, True)
+                        is_visible = verdicts.get(t.crop_id)
+                        if is_visible is None:
+                            # No verdict (the VLM answered the chunk with
+                            # nothing): not a "no region visible". Leave the
+                            # item pending -- drop it from in_flight so the
+                            # next producer poll retries it.
+                            metrics['visible_no_verdict'] += 1
+                            async with in_flight_lock:
+                                in_flight.discard(t.crop_id)
+                            continue
                         if is_visible:
                             metrics['gemma_visible_kept'] += 1
                             t.detection_trace.append('vlm_visible:yes')
@@ -1384,6 +1395,7 @@ async def run(args: argparse.Namespace) -> int:
                 gemma_visible_kept=metrics['gemma_visible_kept'],
                 gemma_visible_skipped=metrics['gemma_visible_skipped'],
                 gemma_visible_skip_rate=round(vis_skip_rate, 3),
+                visible_no_verdict=metrics['visible_no_verdict'],
                 combined_bbox_wrong=metrics['combined_bbox_wrong'],
                 combined_no_plate_visible=metrics['combined_no_plate_visible'],
                 combined_parse_failure=metrics['combined_parse_failure'],

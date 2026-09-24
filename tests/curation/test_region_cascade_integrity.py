@@ -401,10 +401,11 @@ async def _drive_worker(
     primary: RegionCandidate | None,
     segmenter: RegionCandidate | None,
     reply: VlmCombinedReply,
-    visible: bool = True,
+    visible: bool | None = True,
 ) -> dict[str, Any]:
     """Run the streaming worker in continuous mode until the item is
-    written plus several more polls, then stop it. Returns the mocks."""
+    written plus several more polls, then stop it. Returns the mocks.
+    ``visible=None``: the visibility pre-filter gives no verdict at all."""
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
 
@@ -431,7 +432,9 @@ async def _drive_worker(
         side_effect=lambda crops, **_kw: {c.crop_id: reply for c in crops}
     )
     vlm.plate_visible_batch = AsyncMock(
-        side_effect=lambda crops, **_kw: {c.crop_id: visible for c in crops}
+        side_effect=lambda crops, **_kw: (
+            {} if visible is None else {c.crop_id: visible for c in crops}
+        )
     )
     vlm_cls = MagicMock(return_value=vlm)
     monkeypatch.setattr(worker, 'VlmLabeler', vlm_cls)
