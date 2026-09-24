@@ -24,7 +24,9 @@ from src.services.curation.ingest_class_sources import (
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
+    is_classifier_class_source,
 )
+from src.services.detection.region_text import VLM_TEXT_CONFIDENCE
 
 
 VLM_UNMATCHED_CLASS_SOURCE = 'vlm_unmatched'
@@ -45,6 +47,19 @@ HUMAN_LABEL_SOURCES: tuple[str, ...] = get_args(HumanLabelSource)
 # Sources where the VLM picked a registry class that is still only a
 # machine suggestion (until class_validated flips).
 VLM_SUGGESTION_CLASS_SOURCES = frozenset({VLM_CLASS_SOURCE, VLM_RECLASSIFIED_CLASS_SOURCE})
+# Every source whose class decision came from a VLM reply, so the stored
+# ``vlm_confidence`` describes the current label.
+VLM_CLASS_SOURCES = frozenset(
+    {
+        VLM_CLASS_SOURCE,
+        VLM_UNMATCHED_CLASS_SOURCE,
+        VLM_NEW_CLASS_PENDING_CLASS_SOURCE,
+        VLM_RECLASSIFIED_CLASS_SOURCE,
+    }
+)
+# The VLM answers with a category; one shared category -> number table
+# (the same one region text uses) so a client can rank or threshold it.
+VLM_CATEGORY_SCORE: dict[str, float] = dict(VLM_TEXT_CONFIDENCE)
 
 CLASS_SOURCE_ROLES: tuple[str, ...] = (
     'proposal',
@@ -144,6 +159,32 @@ def vlm_suggestion_dismissed(src: dict[str, Any]) -> bool:
     return name is not None and src.get('vlm_dismissed_class_name') == name
 
 
+def class_confidence(src: dict[str, Any]) -> tuple[float | None, str | None]:
+    """``(class_confidence, class_confidence_source)`` for a stored item:
+    the confidence of the writer that set the current label (DQ-M8).
+
+    * a VLM source: the stored ``vlm_confidence`` category mapped through
+      :data:`VLM_CATEGORY_SCORE`, source ``'vlm'`` (``None`` for a missing
+      or unknown category, never a guess);
+    * a configured classifier source: the stored ``confidence`` score,
+      source ``'model'``;
+    * anything else (human, merge, import, cluster vote, an unclassified
+      proposal): ``(None, None)`` — no machine confidence applies.
+
+    ``confidence`` itself is always the detector/classifier score, whatever
+    wrote the label.
+    """
+    source = src.get('class_source')
+    if source in VLM_CLASS_SOURCES:
+        score = VLM_CATEGORY_SCORE.get(str(src.get('vlm_confidence') or ''))
+        return (score, 'vlm') if score is not None else (None, None)
+    if is_classifier_class_source(source):
+        raw = src.get('confidence')
+        if isinstance(raw, int | float) and not isinstance(raw, bool):
+            return float(raw), 'model'
+    return None, None
+
+
 def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     """``(class_id, class_name)`` the VLM suggests for a stored item.
 
@@ -163,11 +204,14 @@ __all__ = [
     'CLASS_SOURCE_ROLES',
     'HUMAN_LABEL_SOURCES',
     'HUMAN_MOVE_CLASS_SOURCE',
+    'VLM_CATEGORY_SCORE',
+    'VLM_CLASS_SOURCES',
     'VLM_NEW_CLASS_PENDING_CLASS_SOURCE',
     'VLM_RECLASSIFIED_CLASS_SOURCE',
     'VLM_SUGGESTION_CLASS_SOURCES',
     'VLM_UNMATCHED_CLASS_SOURCE',
     'HumanLabelSource',
+    'class_confidence',
     'class_source_catalog',
     'vlm_suggestion',
     'vlm_suggestion_dismissed',

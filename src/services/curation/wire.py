@@ -21,7 +21,11 @@ from typing import Any
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
-from src.services.curation.class_sources import vlm_suggestion, vlm_suggestion_dismissed
+from src.services.curation.class_sources import (
+    class_confidence,
+    vlm_suggestion,
+    vlm_suggestion_dismissed,
+)
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
 from src.services.curation.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 
@@ -158,6 +162,7 @@ def serialize_item(
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
     similarity = cluster_similarity(src.get('cluster_distance'))
+    label_conf, label_conf_source = class_confidence(src)
     item: dict[str, Any] = {
         'id': crop_id,
         'crop_id': crop_id,
@@ -168,7 +173,13 @@ def serialize_item(
         'class_id': src.get('class_id'),
         'class_name': src.get('class_name', ''),
         'class_source': src.get('class_source', ''),
+        # The detector/classifier score, whatever wrote the label.
         'confidence': float(src.get('confidence') or 0.0),
+        # The confidence of the writer that set the label (VLM category
+        # mapped to a number, or the classifier score); null for human /
+        # merge / import labels.
+        'class_confidence': label_conf,
+        'class_confidence_source': label_conf_source,
         'label_source': src.get('label_source', ''),
         # Derived: either the class or the region was confirmed.
         'label_validated': bool(

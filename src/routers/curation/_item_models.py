@@ -42,7 +42,13 @@ class ItemDoc(BaseModel):
     class_id: int | None = None
     class_name: str | None = ''
     class_source: str | None = ''
+    # The detector/classifier score, whatever wrote the label.
     confidence: float = 0.0
+    # Confidence of the writer that set the label: the VLM category mapped
+    # through high 0.92 / medium 0.70 / low 0.40 ('vlm'), or the classifier
+    # score ('model'); null for human / merge / import / proposal labels.
+    class_confidence: float | None = None
+    class_confidence_source: Literal['vlm', 'model'] | None = None
     # label_source is nullable: VLM writers set it to None when
     # overwriting a prior validation tag.
     label_source: str | None = ''

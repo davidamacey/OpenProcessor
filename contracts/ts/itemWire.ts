@@ -25,6 +25,8 @@ export interface ItemWire {
   class_name: string | null;
   class_source: string | null;
   confidence: number;
+  class_confidence: number | null;
+  class_confidence_source: string | null;
   label_source: string | null;
   label_validated: boolean;
   class_validated: boolean;
@@ -120,6 +122,8 @@ export const ITEM_WIRE_KEYS = [
   'class_name',
   'class_source',
   'confidence',
+  'class_confidence',
+  'class_confidence_source',
   'label_source',
   'label_validated',
   'class_validated',

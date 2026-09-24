@@ -23,6 +23,10 @@ VLM_CLASS_SOURCE = 'vlm'
 HUMAN_CLASS_SOURCE = 'human'
 CLUSTER_MAJORITY_CLASS_SOURCE = 'cluster_majority_agreement'
 CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE = 'classifier_vlm_agreement'
+# Every classifier-written source is ``{profile}{CLASSIFIER_SOURCE_SUFFIX}``
+# by construction, so a per-item reader can recognise one without
+# re-reading the profiles from the environment.
+CLASSIFIER_SOURCE_SUFFIX = '_model'
 # ItemDoc's default before any detector stamps a source.
 DEFAULT_PROPOSAL_CLASS_SOURCE = 'unlabeled_proposal'
 # Label import's default (callers may pass their own).
@@ -41,11 +45,17 @@ def classifier_class_sources() -> frozenset[str]:
     sources: set[str] = set()
     secondary = ingest_secondary_profile()
     if secondary is not None:
-        sources.add(f'{secondary.name}_model')
+        sources.add(f'{secondary.name}{CLASSIFIER_SOURCE_SUFFIX}')
     primary = ingest_primary_profile()
     if primary.assigns_class:
-        sources.add(f'{primary.name}_model')
+        sources.add(f'{primary.name}{CLASSIFIER_SOURCE_SUFFIX}')
     return frozenset(sources)
+
+
+def is_classifier_class_source(source: object) -> bool:
+    """True for a value :func:`classifier_class_sources` can produce, without
+    reading the profile env (cheap enough to call per served item)."""
+    return isinstance(source, str) and source.endswith(CLASSIFIER_SOURCE_SUFFIX)
 
 
 def confident_class_sources() -> tuple[str, ...]:
@@ -55,6 +65,7 @@ def confident_class_sources() -> tuple[str, ...]:
 
 
 __all__ = [
+    'CLASSIFIER_SOURCE_SUFFIX',
     'CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE',
     'CLUSTER_MAJORITY_CLASS_SOURCE',
     'DEFAULT_PROPOSAL_CLASS_SOURCE',
@@ -63,5 +74,6 @@ __all__ = [
     'VLM_CLASS_SOURCE',
     'classifier_class_sources',
     'confident_class_sources',
+    'is_classifier_class_source',
     'unlabeled_proposal_class_sources',
 ]

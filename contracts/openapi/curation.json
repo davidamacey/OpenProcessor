@@ -1558,6 +1558,32 @@
             ],
             "title": "Blur Lap Ratio"
           },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_confidence_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vlm",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence Source"
+          },
           "class_detector": {
             "anyOf": [
               {

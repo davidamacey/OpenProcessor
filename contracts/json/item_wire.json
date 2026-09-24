@@ -22,6 +22,8 @@
     "class_name",
     "class_source",
     "confidence",
+    "class_confidence",
+    "class_confidence_source",
     "label_source",
     "label_validated",
     "class_validated",
@@ -184,6 +186,34 @@
         ],
         "default": null,
         "title": "Blur Lap Ratio"
+      },
+      "class_confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Confidence"
+      },
+      "class_confidence_source": {
+        "anyOf": [
+          {
+            "enum": [
+              "vlm",
+              "model"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Confidence Source"
       },
       "class_detector": {
         "anyOf": [

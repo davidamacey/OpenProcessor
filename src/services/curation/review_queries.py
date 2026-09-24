@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
+from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.ingest_class_sources import (
     classifier_class_sources,
     unlabeled_proposal_class_sources,
@@ -47,7 +48,10 @@ KNOWN_TABS: tuple[str, ...] = (
 TAB_LABELS: dict[str, tuple[str, str]] = {
     'all': ('All', 'Unified queue: every crop a human should look at, most-uncertain first'),
     'mismatches': ('Mismatches', "The VLM's reply did not match any registry class"),
-    'vlm_low_conf': ('VLM low confidence', 'VLM confidence below high'),
+    'vlm_low_conf': (
+        'VLM low confidence',
+        "The VLM's own confidence in its label is medium or low",
+    ),
     'outliers': ('Outliers', 'Far from cluster centroid'),
     'uncertainty': ('Uncertainty', 'High active-learning probe entropy'),
     'model_disagreements': (
@@ -217,12 +221,13 @@ def build_tab_query(
         must.append({'term': {'class_source': 'vlm_unmatched'}})
         reason = "VLM's reply did not match any registry class"
     elif tab == 'vlm_low_conf':
+        # DQ-M8: select on the VLM's own confidence only. `confidence` is
+        # the detector/classifier score, not the VLM's -- gating on it hid
+        # every VLM-unsure item on a confidently-detected crop. The
+        # class_source clause keeps a stale vlm_confidence (the label has
+        # since been rewritten by a classifier or a human) out.
         must.append({'terms': {'vlm_confidence': ['medium', 'low']}})
-        # Trust the classifier when it was very confident — sending those crops to the
-        # human queue (with reason "VLM confidence below high") is noise.
-        # Matches the classifier_confidence_skip_vlm=0.80 default in legacy_pipeline
-        # and the _V6_LOW_CONF_THRESHOLD=0.80 in sam_worker/combined.py.
-        must.append({'range': {'confidence': {'lt': 0.80}}})
+        must.append({'terms': {'class_source': sorted(VLM_CLASS_SOURCES)}})
         reason = 'VLM confidence below high'
     elif tab == 'outliers':
         # D-1 (F-6): outlier_flagged is never written anywhere in the
