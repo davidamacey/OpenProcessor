@@ -383,8 +383,8 @@
     reg(
       'z',
       async () => {
-        const crop = await undoStore.undoLast();
-        if (crop) replaceSearchCrop(crop);
+        const crops = await undoStore.undoLast();
+        for (const crop of crops) replaceSearchCrop(crop);
       },
       'Undo last action',
     );

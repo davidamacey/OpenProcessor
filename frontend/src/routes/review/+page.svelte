@@ -1197,26 +1197,29 @@
   }
 
   async function undoLast(): Promise<void> {
-    const crop = await undoStore.undoLast();
-    if (!crop) return;
-    // The item was removed from the queue by assign/discard, so re-insert
-    // the restored item at the cursor so the operator can see (and
-    // re-verify) what the undo brought back.
-    handledIds.delete(crop.id);
-    // `crop` (from POST {API_PREFIX}/crops/{id}/label/undo) already carries its
-    // own served proposed_class_id/_name (item 11, 2026-09-24
-    // logic-moves) — no client fill-in. `reason` is the only field this
-    // page adds; every other queue-only field has no meaningful value
-    // for a restored item.
-    const restored: ReviewItem = {
-      ...crop,
-      reason: 'restored by undo',
-    };
-    const without = queue.items.filter((it) => it.id !== crop.id);
-    const at = Math.min(cursor, without.length);
-    queue.total += without.length === queue.items.length ? 1 : 0;
-    queue.items = [...without.slice(0, at), restored, ...without.slice(at)];
-    cursor = at;
+    const crops = await undoStore.undoLast();
+    if (crops.length === 0) return;
+    // The item(s) were removed from the queue by assign/discard, so
+    // re-insert each restored item at the cursor so the operator can see
+    // (and re-verify) what the undo brought back.
+    for (const crop of crops) {
+      handledIds.delete(crop.id);
+      // `crop` (from POST {API_PREFIX}/crops/{id}/label/undo or
+      // .../label/undo_batch) already carries its own served
+      // proposed_class_id/_name (item 11, 2026-09-24 logic-moves) — no
+      // client fill-in. `reason` is the only field this page adds; every
+      // other queue-only field has no meaningful value for a restored
+      // item.
+      const restored: ReviewItem = {
+        ...crop,
+        reason: 'restored by undo',
+      };
+      const without = queue.items.filter((it) => it.id !== crop.id);
+      const at = Math.min(cursor, without.length);
+      queue.total += without.length === queue.items.length ? 1 : 0;
+      queue.items = [...without.slice(0, at), restored, ...without.slice(at)];
+      cursor = at;
+    }
   }
 
   // Keyboard shortcuts. Per-class letter hotkeys (configured on /classes)

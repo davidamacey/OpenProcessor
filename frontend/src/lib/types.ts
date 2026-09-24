@@ -788,9 +788,11 @@ export interface UnloadModelResponse {
   warning: string | null;
 }
 
-/** One undoable human class write. What it restores is the backend's
- *  business: Z calls `POST /crops/{id}/label/undo` and renders the result. */
+/** One undoable user action — a single confirmed write, however many
+ *  crops it touched. What it restores is the backend's business: Z calls
+ *  `POST /crops/{id}/label/undo` (one id) or
+ *  `POST /crops/label/undo_batch` (several) and renders the result(s). */
 export interface UndoEntry {
-  crop_id: string;
+  crop_ids: string[];
   at: number;
 }

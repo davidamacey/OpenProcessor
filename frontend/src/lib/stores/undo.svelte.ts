@@ -1,13 +1,17 @@
 /**
- * UndoStore — ring buffer of the last 50 human class writes.
+ * UndoStore — ring buffer of the last 50 human class-write *actions*.
  *
- * Calling code records each crop a confirmed label write touched. Z pops
- * the newest and asks the backend to undo that crop's most recent human
- * class write; the backend owns what "undo" restores and returns the
- * restored item for the page to render.
+ * One entry per confirmed write, however many crops it touched — a bulk
+ * label, a move, or a new-class-proposal resolve over N crops is ONE
+ * entry, so one Z reverses the whole action. Calling code records the
+ * crop ids a confirmed write touched via `recordWrites(updatedIds)`; Z
+ * pops the newest entry and asks the backend to undo it (single-crop or
+ * batch route depending on how many ids it holds). The backend owns what
+ * "undo" restores and returns the restored item(s) for the page to
+ * render.
  */
 
-import { ApiError, undoCropLabel } from '$lib/api';
+import { ApiError, undoCropLabel, undoLabelBatch } from '$lib/api';
 import { toastStore } from '$stores/toast.svelte';
 import type { Crop, UndoEntry } from '$lib/types';
 
@@ -53,40 +57,58 @@ class UndoStore {
   }
 
   /**
-   * Record the crops a human class write just landed on. Call with the
-   * server's own `updated_ids` (never the request ids minus conflicts
-   * computed locally) — the served list is the only authoritative record
-   * of which crops the write actually reached.
+   * Record the crops a human class write just landed on, as ONE undo
+   * entry for the whole write. Call with the server's own `updated_ids`
+   * (never the request ids minus conflicts computed locally) — the
+   * served list is the only authoritative record of which crops the
+   * write actually reached. Skipped entirely when the write reached no
+   * crop (every id conflicted), so Z never pops a no-op entry.
    */
   recordWrites(updatedIds: string[]): void {
-    const at = Date.now();
-    for (const id of updatedIds) this.push({ crop_id: id, at });
+    if (updatedIds.length === 0) return;
+    this.push({ crop_ids: [...updatedIds], at: Date.now() });
   }
 
   /**
-   * Z: undo the newest entry on the server and return the restored crop,
-   * or null when there was nothing to undo or the call failed (both are
-   * toasted here). A failed call re-pushes the entry so Z stays
-   * retryable; a 409 does not, since the server has nothing left for it.
+   * Z: undo the newest entry on the server and return the restored
+   * crop(s) — a single id goes through `POST /crops/{id}/label/undo`, an
+   * entry with several goes through the batch
+   * `POST /crops/label/undo_batch` — or `[]` when there was nothing to
+   * undo or the call failed (both are toasted here). A failed call
+   * re-pushes the entry so Z stays retryable; a 409 (nothing left to
+   * undo, for either route) does not, since the server has nothing left
+   * for it.
    */
-  async undoLast(): Promise<Crop | null> {
+  async undoLast(): Promise<Crop[]> {
     const entry = this.pop();
     if (!entry) {
       toastStore.info('Nothing to undo.');
-      return null;
+      return [];
     }
     try {
-      const crop = await undoCropLabel(entry.crop_id);
-      toastStore.success('Reverted.');
-      return crop;
+      if (entry.crop_ids.length === 1) {
+        const crop = await undoCropLabel(entry.crop_ids[0]!);
+        toastStore.success('Reverted.');
+        return [crop];
+      }
+      const res = await undoLabelBatch(entry.crop_ids);
+      const parts = [`Reverted ${res.undone}.`];
+      if (res.nothing_to_undo.length > 0) {
+        parts.push(`${res.nothing_to_undo.length} nothing to undo.`);
+      }
+      if (res.conflicts.length > 0) {
+        parts.push(`${res.conflicts.length} conflict(s).`);
+      }
+      toastStore.success(parts.join(' '));
+      return res.items;
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        toastStore.info('Nothing left to undo for that crop.');
+        toastStore.info('Nothing left to undo.');
       } else {
         toastStore.error(`Undo failed: ${(e as Error).message}`);
         this.push(entry);
       }
-      return null;
+      return [];
     }
   }
 }

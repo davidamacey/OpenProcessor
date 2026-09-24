@@ -177,6 +177,24 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
     `POST {API_PREFIX}/crops/{id}/vlm_dismiss` and renders the returned
     item, instead of only clearing the suggestion locally. A 409 (no
     suggestion) shows an info toast.
+
+- **One Z now undoes one action, however many crops it touched**, not
+  one crop at a time. `UndoStore`'s `UndoEntry` is now `{ crop_ids:
+string[]; at: number }`; `recordWrites(updatedIds)` pushes ONE entry
+  per confirmed write (skipped when the write touched no crop), so a
+  bulk label, a move, or a new-class-proposal resolve over N crops is
+  one undo, not N. `undoLast()` routes a single-crop entry through
+  `POST {API_PREFIX}/crops/{id}/label/undo` (`undoCropLabel`) as before
+  and a multi-crop entry through the new
+  `POST {API_PREFIX}/crops/label/undo_batch` (`undoLabelBatch` in
+  `api.ts`), toasting "Reverted N." plus nothing-to-undo/conflict counts
+  when non-zero; a 409 on either route means nothing left to undo
+  (no re-push), a transport/5xx failure re-pushes the whole entry so Z
+  stays retryable. `clusters/+page.svelte` (search mode),
+  `clusters/[id]/+page.svelte` (grid replace/re-insert, releasing
+  `excludedCropIds` per restored crop), and `review/+page.svelte`
+  (re-inserting every restored item at the cursor) all now render the
+  array `undoLast()` returns instead of a single `Crop | null`.
   - `/review` gets a minimal "Dismissed" panel
     (`GET {API_PREFIX}/crops?review_dismissed=true` +
     `POST {API_PREFIX}/crops/{id}/review_undismiss`) so a permanent

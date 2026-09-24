@@ -600,16 +600,19 @@
   }
 
   async function undoLast(): Promise<void> {
-    const crop = await undoStore.undoLast();
-    if (!crop) return;
-    // Render whatever the backend restored. The crop may have left this
-    // cluster's grid (sidebar-drop labels remove it), so re-insert it.
-    excludedCropIds.delete(crop.id);
-    if (cropPager.items.some((c) => c.id === crop.id)) {
-      cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? crop : c));
-    } else {
-      cropPager.items = [crop, ...cropPager.items];
-      cropPager.total += 1;
+    const crops = await undoStore.undoLast();
+    if (crops.length === 0) return;
+    // Render whatever the backend restored, one crop at a time. Each crop
+    // may have left this cluster's grid (sidebar-drop labels remove it),
+    // so re-insert it rather than assume it's still present.
+    for (const crop of crops) {
+      excludedCropIds.delete(crop.id);
+      if (cropPager.items.some((c) => c.id === crop.id)) {
+        cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? crop : c));
+      } else {
+        cropPager.items = [crop, ...cropPager.items];
+        cropPager.total += 1;
+      }
     }
   }
 

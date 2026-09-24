@@ -304,10 +304,12 @@
   /**
    * Record the resolve's `updated_ids` for undo (same ring buffer + `Z`
    * behavior `bulkLabel`/`moveCropsToCluster` already use elsewhere in
-   * the app — one entry per crop, so `Z` reverts them one at a time),
-   * and toast the served counts. Never a client-computed count: `matched`
-   * only ever comes from the dry-run/real response, `updated`/
-   * `conflicts`/`skipped` only from the real resolve's response.
+   * the app — ONE entry for the whole resolve, so a single `Z` reverts
+   * every crop it touched, batched through `undo_batch` when there's
+   * more than one id), and toast the served counts. Never a
+   * client-computed count: `matched` only ever comes from the dry-run/
+   * real response, `updated`/`conflicts`/`skipped` only from the real
+   * resolve's response.
    */
   function reportResolve(res: ResolveNewClassResponse, verb: string): void {
     if (res.updated_ids.length > 0) undoStore.recordWrites(res.updated_ids);
