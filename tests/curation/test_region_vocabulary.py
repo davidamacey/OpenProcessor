@@ -147,3 +147,53 @@ def test_regions_vocabulary_serves_the_region_text_rules(client: TestClient) -> 
     assert 'NOTREADABLE' in rules['no_reading_words']
     assert 'placeholder' in rules['invalid_reasons']
     assert isinstance(rules['placeholders'], list)
+
+
+def test_regions_vocabulary_serves_the_rejection_reasons(client: TestClient) -> None:
+    from src.config.region_rejection import (
+        REJECT_REASON_NO_VERDICT,
+        REJECT_REASON_SANITY_PREFIX,
+        REJECT_REASON_VERIFIER,
+    )
+
+    reasons = client.get('/curation/regions/vocabulary').json()['rejection_reasons']
+    by_id = {r['id']: r for r in reasons}
+    assert set(by_id) == {
+        REJECT_REASON_VERIFIER,
+        REJECT_REASON_SANITY_PREFIX,
+        REJECT_REASON_NO_VERDICT,
+    }
+    assert by_id[REJECT_REASON_VERIFIER] == {
+        'id': 'region_visible_elsewhere',
+        'label': 'Verifier: the box is wrong (region is elsewhere)',
+        'kind': 'model_verdict',
+        'match': 'exact',
+        'label_template': None,
+    }
+    assert by_id[REJECT_REASON_SANITY_PREFIX]['match'] == 'prefix'
+    assert by_id[REJECT_REASON_SANITY_PREFIX]['kind'] == 'automatic'
+    assert by_id[REJECT_REASON_NO_VERDICT]['kind'] == 'needs_human'
+
+
+def test_regions_vocabulary_response_is_typed_in_openapi(client: TestClient) -> None:
+    """The frontend generates types from the OpenAPI contract: the route
+    declares its response shape, including the rejection-reason kinds."""
+    from src.config.region_rejection import REJECTION_REASON_KINDS
+
+    spec = client.get('/openapi.json').json()
+    ok = spec['paths']['/curation/regions/vocabulary']['get']['responses']['200']
+    ref = ok['content']['application/json']['schema']['$ref'].rsplit('/', 1)[-1]
+    schemas = spec['components']['schemas']
+    props = schemas[ref]['properties']
+    assert set(props) == {
+        'detectors',
+        'region_sources',
+        'chain_actors',
+        'text_rules',
+        'text_choices',
+        'rejection_reasons',
+    }
+    entry = schemas[props['rejection_reasons']['items']['$ref'].rsplit('/', 1)[-1]]
+    assert set(entry['properties']) == {'id', 'label', 'kind', 'match', 'label_template'}
+    assert set(entry['properties']['kind']['enum']) == set(REJECTION_REASON_KINDS)
+    assert set(entry['properties']['match']['enum']) == {'exact', 'prefix'}

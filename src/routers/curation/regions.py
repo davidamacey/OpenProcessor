@@ -23,6 +23,7 @@ from src.routers.curation._common import (
     guard_page_depth,
     router,
 )
+from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.review_queries import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
@@ -349,7 +350,7 @@ async def region_statuses() -> dict[str, Any]:
     return region_status_catalog()
 
 
-@router.get('/regions/vocabulary')
+@router.get('/regions/vocabulary', response_model=RegionVocabularyResponse)
 async def regions_vocabulary() -> dict[str, Any]:
     """The deployment-configured detector/segmenter/verifier vocabulary
     (W0: naming sweep finding m9).
