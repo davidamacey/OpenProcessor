@@ -497,6 +497,39 @@ def _echo_key(value: str) -> str:
     return ''.join(ch for ch in value.casefold() if ch.isalnum())
 
 
+def _unwrap_nested_combined_entry(entry: dict[str, Any], fields: RegionFields) -> dict[str, Any]:
+    """Unwrap a combined entry the VLM nested one level down under an invented key.
+
+    Live evidence: a reasoning model sometimes wraps the whole per-image
+    answer object under a made-up key instead of the flat shape the
+    prompt asks for, e.g.::
+
+        {"img": 2, "layout_analysis": {"region_visible": true, ...}}
+
+    Reading ``fields.visible`` straight off ``entry`` then finds nothing
+    and the caller's existing no-verdict handling fires even though the
+    VLM did answer -- it just filed the answer under the wrong key. Only
+    unwrap when the fix is unambiguous: ``entry`` lacks the top-level
+    answer field AND has exactly one dict-valued key (other than
+    ``img``) that itself carries that field. Zero or multiple such
+    candidates leaves ``entry`` untouched so the existing no-verdict
+    path applies rather than guessing.
+    """
+    if fields.visible in entry:
+        return entry
+    candidates = [
+        value
+        for key, value in entry.items()
+        if key != 'img' and isinstance(value, dict) and fields.visible in value
+    ]
+    if len(candidates) != 1:
+        return entry
+    unwrapped = dict(candidates[0])
+    if 'img' in entry and 'img' not in unwrapped:
+        unwrapped['img'] = entry['img']
+    return unwrapped
+
+
 def _combined_reply_from_entry(
     entry: dict[str, Any],
     *,
@@ -513,7 +546,11 @@ def _combined_reply_from_entry(
     unless it is a recognizable boolean, so only an explicit ``true``
     can accept a box and only an explicit ``false`` can reject one;
     ``None`` is no verdict.
+
+    Unwraps an unambiguous single-key nesting first (see
+    :func:`_unwrap_nested_combined_entry`) before reading any field.
     """
+    entry = _unwrap_nested_combined_entry(entry, fields)
     visible = _coerce_bool(entry.get(fields.visible))
     if visible is None:
         msg = f'{fields.visible} missing or not a boolean: {entry.get(fields.visible)!r}'

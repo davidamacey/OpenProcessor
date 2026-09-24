@@ -1024,6 +1024,12 @@ path have the same contract: a crop the VLM gave no verdict for is
 omitted (batch) or left untouched (single) rather than written as
 `is_region=False` / `verified=False`.
 
+A combined-reply entry that nests its answer fields one level down under
+an invented key (some reasoning-model replies do this instead of the flat
+shape the prompt asks for) is unwrapped when there is exactly one
+dict-valued key carrying the expected fields; two or more such candidates
+is ambiguous and the entry is left as a no-verdict.
+
 The combined call marks the candidate box with a red rectangle drawn just
 *outside* the box (so it never covers the region's own pixels) and its
 prompt says so.
