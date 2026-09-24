@@ -31,6 +31,7 @@ from src.routers.curation._common import (
 from src.services.curation.region_writes import (
     RegionWriteError,
     human_status_fields,
+    parent_to_source_bbox,
     post_write_item,
     region_box_doc,
     validate_bbox_norm,
@@ -370,14 +371,26 @@ async def _write_one(
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
 
 
-def _box_doc(payload: ItemRegionRequest | ItemBatchRegionRequest) -> dict[str, Any]:
+def _box_builder(payload: ItemRegionRequest | ItemBatchRegionRequest) -> Any:
+    """Merger body for a box write. Range errors are a 400 up front; a
+    parent-frame box is projected per item inside the merger."""
     box = None if payload.region_bbox_norm is None else list(payload.region_bbox_norm)
     if box is not None:
         try:
             validate_bbox_norm(box)
         except RegionWriteError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return region_box_doc(box, label_source=payload.region_label_source, now=_now_iso())
+    now = _now_iso()
+    source = payload.region_label_source
+    if box is None or payload.frame == 'source':
+        doc = region_box_doc(box, label_source=source, now=now)
+        return lambda _current: doc
+
+    def _build(current: dict[str, Any]) -> dict[str, Any]:
+        projected = parent_to_source_bbox(box, current.get('bbox_norm'))
+        return region_box_doc(projected, label_source=source, now=now)
+
+    return _build
 
 
 @router.get('/regions/statuses')
@@ -398,19 +411,18 @@ async def set_crop_region(
 ) -> dict[str, Any]:
     """Set or clear the region sub-bbox on a single crop.
 
-    ``region_bbox_norm`` is in the **source-image** coordinate frame.
-    ``None`` clears the box and marks the crop
+    ``region_bbox_norm`` is in ``frame`` (``source`` default, or
+    ``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop
     ``region_status='no_region_visible'``. Returns ``item``, the post-write
     wire item.
     """
     F = get_region_fields()
-    region_doc = _box_doc(payload)
-    rec = _Recorder(lambda _current: region_doc)
+    rec = _Recorder(_box_builder(payload))
     await _write_one(opensearch, crop_id, rec, 'human:set_crop_region')
     return {
         'crop_id': crop_id,
-        region_wire_key('bbox_norm'): region_doc[F.bbox_norm],
-        region_wire_key('status'): region_doc[F.status],
+        region_wire_key('bbox_norm'): rec.update[F.bbox_norm],
+        region_wire_key('status'): rec.update[F.status],
         'item': rec.item(crop_id),
     }
 
@@ -538,9 +550,8 @@ async def batch_set_crop_region(
     """
     if not payload.crop_ids:
         return {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
-    doc_body = _box_doc(payload)
     return await _batch_write(
-        opensearch, payload.crop_ids, lambda _current: doc_body, 'human:batch_set_crop_region'
+        opensearch, payload.crop_ids, _box_builder(payload), 'human:batch_set_crop_region'
     )
 
 

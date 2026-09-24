@@ -125,8 +125,8 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
-- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (source-image frame `[x1,y1,x2,y2]`, or `null` = "no region visible"), `region_label_source` (default `human`). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
-- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`. Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
+- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (`[x1,y1,x2,y2]` in `frame`, or `null` = "no region visible"), `region_label_source` (default `human`), `frame` (`source` default = source-image frame; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none). Stored boxes are always source-frame (`region_bbox_frame: "source"`). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
+- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`, `frame` (`parent` projects through each item's own box; items without one land in `invalid`). Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
 - `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_label_source`; `region_status` must be human-writable (see "Region lifecycle" below). `region_verified` is still accepted but **ignored** (deprecated): the server derives it. Response: `updated`, `conflicts` (`[{crop_id, current_source}]`), `invalid` (`[{crop_id, detail}]`, e.g. `detected` on a crop with no box), `items` (post-write wire items).
 - `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`), `item` (post-write wire item). `422` when the status write would break an invariant (`detected` with no box).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
@@ -427,6 +427,12 @@ Item keys (42): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, 
 
 Region keys (31, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+
+Derived keys (computed by the serializer, never stored):
+
+- `region_bbox_in_parent` — the region box in the item-crop frame
+  (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when there is no region or
+  the item has no usable `bbox_norm`. Draw it on the item thumbnail as-is.
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
 `thumbnail_url` / `region_thumbnail_url` are built from the configured

@@ -291,6 +291,9 @@ class ItemDoc(BaseModel):
     thumbnail_url: str = ''
     region_thumbnail_url: str = ''
     region_bbox_norm: list[float] | None = None
+    # Derived: the region box in the item-crop frame (xyxy, [0, 1]); null
+    # when there is no region or no usable item box.
+    region_bbox_in_parent: list[float] | None = None
     region_bbox_frame: str | None = None
     region_bbox_correct: bool | None = None
     region_status: str | None = None
@@ -382,8 +385,9 @@ class CropUndoBatchRequest(BaseModel):
 class ItemRegionRequest(BaseModel):
     """Set or clear the region-of-interest sub-bbox on a single item.
 
-    ``region_bbox_norm`` is in the **source-image** coordinate frame; the
-    client converts from crop-frame to source-frame before sending.
+    ``frame`` says which frame ``region_bbox_norm`` is in: ``'source'``
+    (the source image, the stored frame) or ``'parent'`` (the item crop;
+    the server projects it through the item's own ``bbox_norm``).
     ``None`` clears the box and marks the item
     ``region_status='no_region_visible'`` (a deliberate human decision,
     distinct from "not yet detected").
@@ -393,6 +397,7 @@ class ItemRegionRequest(BaseModel):
 
     region_bbox_norm: tuple[float, float, float, float] | None
     region_label_source: str = 'human'
+    frame: Literal['source', 'parent'] = 'source'
 
 
 class ItemBatchRegionRequest(BaseModel):
@@ -404,6 +409,8 @@ class ItemBatchRegionRequest(BaseModel):
     crop_ids: list[str]
     region_bbox_norm: tuple[float, float, float, float] | None
     region_label_source: str = 'human'
+    # 'parent' boxes are projected through each item's own bbox_norm.
+    frame: Literal['source', 'parent'] = 'source'
 
 
 # Region status values an operator may write — the lifecycle entries

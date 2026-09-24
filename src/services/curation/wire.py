@@ -64,6 +64,44 @@ def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> 
     return {region_wire_key(a): src.get(getattr(f, a)) for a in REGION_WIRE_ATTRS}
 
 
+_CROP_FRAMES = frozenset({'crop', 'item', 'parent'})
+
+
+def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
+    if not isinstance(value, list | tuple) or len(value) != 4:
+        return None
+    try:
+        x1, y1, x2, y2 = (float(v) for v in value)
+    except (TypeError, ValueError):
+        return None
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return x1, y1, x2, y2
+
+
+def region_bbox_in_parent(src: dict[str, Any], storage: RegionFields | None = None) -> Any:
+    """The stored region box in the item-crop frame (xyxy, clamped to
+    ``[0, 1]``), or ``None`` when there is no region or no usable item box."""
+    f = storage or get_region_fields()
+    region = _xyxy(src.get(f.bbox_norm))
+    if region is None:
+        return None
+    if src.get(f.bbox_frame) in _CROP_FRAMES:
+        return list(region)
+    parent = _xyxy(src.get('bbox_norm'))
+    if parent is None:
+        return None
+    px1, py1, px2, py2 = parent
+    pw, ph = px2 - px1, py2 - py1
+    rx1, ry1, rx2, ry2 = region
+    return [
+        min(max((rx1 - px1) / pw, 0.0), 1.0),
+        min(max((ry1 - py1) / ph, 0.0), 1.0),
+        min(max((rx2 - px1) / pw, 0.0), 1.0),
+        min(max((ry2 - py1) / ph, 0.0), 1.0),
+    ]
+
+
 def _api_prefix() -> str:
     from src.config import get_curation_config
 
@@ -139,6 +177,7 @@ def serialize_item(
         'region_thumbnail_url': f'{prefix}/crops/{crop_id}/region_thumbnail',
     }
     item.update(region_to_wire(src, f))
+    item['region_bbox_in_parent'] = region_bbox_in_parent(src, f)
     return item
 
 
@@ -174,6 +213,7 @@ __all__ = [
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
     'item_source_excludes',
+    'region_bbox_in_parent',
     'region_event_payload',
     'region_to_wire',
     'region_wire_key',
