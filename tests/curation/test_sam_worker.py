@@ -344,6 +344,64 @@ class TestRouting:
 
 
 # =============================================================================
+# No-verdict handling: absence of a VLM answer must never read as a reject
+# =============================================================================
+
+
+class TestNoVerdictLeavesItemPending:
+    @pytest.mark.asyncio
+    async def test_pending_verify_no_verdict_leaves_task_untouched(self) -> None:
+        """``verify_plate`` returning ``None`` (no usable answer) must not be
+        treated as a reject -- the crop is left pending for a retry rather
+        than falling through to the secondary segmenter or writing a
+        terminal status."""
+        gemma = MagicMock()
+        gemma.verify_plate = AsyncMock(return_value=None)
+        gemma.aclose = AsyncMock()
+        sam3 = _sam3_mock(RegionCandidate(bbox_norm=(0.4, 0.5, 0.6, 0.55), score=0.77))
+        task = _make_task(
+            status='pending_verify',
+            lpr_in_source=(0.2, 0.2, 0.3, 0.22),
+            lpr_score=0.7,
+            vehicle_bbox=(0.0, 0.0, 1.0, 1.0),
+        )
+        await worker._process_crop(
+            task,
+            lpr=_lpr_mock([]),
+            sam3=sam3,
+            ocr_recognizer=_ocr_recognizer_mock(),
+            gemma=gemma,
+        )
+        assert task.update_doc == {}
+        # The cascade bailed out immediately on the no-verdict -- it must
+        # not have fallen through to try the secondary segmenter.
+        sam3.segment_plate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pending_car_lpr_no_verdict_leaves_task_untouched(self) -> None:
+        F = get_region_fields()
+        lpr_cand = RegionCandidate(
+            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
+        )
+        gemma = MagicMock()
+        gemma.verify_plate = AsyncMock(return_value=None)
+        gemma.aclose = AsyncMock()
+        sam3 = _sam3_mock(RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79))
+        task = _make_task(
+            status='pending', class_name='audi', group='cars', vehicle_bbox=(0.0, 0.0, 1.0, 1.0)
+        )
+        await worker._process_crop(
+            task,
+            lpr=_lpr_mock([lpr_cand]),
+            sam3=sam3,
+            ocr_recognizer=_ocr_recognizer_mock(),
+            gemma=gemma,
+        )
+        assert F.status not in task.update_doc
+        sam3.segment_plate.assert_not_awaited()
+
+
+# =============================================================================
 # Coordinate re-projection
 # =============================================================================
 

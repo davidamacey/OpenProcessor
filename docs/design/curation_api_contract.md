@@ -530,11 +530,18 @@ auto-label params and the stats keys (see B3).
   and the pipeline's normalize do (DQ-m3) — the item no longer waits in its
   candidate or old class cluster for the next clustering run. Undo restores
   the prior placement.
-- `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`
+- `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`. A
+  crop_id the VLM gave no usable answer for (upstream failure, empty or
+  unparseable reply) is skipped — its verify state is left untouched for
+  a retry rather than written as `verified=False`.
 - `VlmVerifyRegionBatchItem`: `crop_id`, `region_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
 - `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
 - `VlmVerifyRegionBatchResult`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text`
-- `VlmVerifyRegionBatchResponse`: `results`
+- `VlmVerifyRegionBatchResponse`: `results` — a `crop_id` the VLM gave no
+  verdict for (whole-chunk upstream failure, empty/unparseable/misaligned
+  reply, or an individual crop missing from an otherwise-aligned reply)
+  is absent from `results` entirely, the same "omit, don't reject"
+  contract `/vlm/region_visible_batch` uses for its `visible` map.
 - `VlmRegionVisibleBatchItem`: `crop_id`, `image_b64`
 - `VlmRegionVisibleBatchRequest` (`POST /vlm/region_visible_batch`): `items`
 - `VlmRegionVisibleBatchResponse`: `visible` (`dict[str, bool]`, keyed by `crop_id`)
@@ -1012,6 +1019,16 @@ entry is stored for it.
 Likewise an empty reply to the visibility pre-filter is no verdict (never
 `vlm_visible:no`): the item stays pending and is retried. `POST
 /vlm/region_visible_batch` leaves such crops out of its `visible` map.
+`POST /vlm/verify_region_batch` and the single-crop `verify_regions`
+path have the same contract: a crop the VLM gave no verdict for is
+omitted (batch) or left untouched (single) rather than written as
+`is_region=False` / `verified=False`.
+
+A combined-reply entry that nests its answer fields one level down under
+an invented key (some reasoning-model replies do this instead of the flat
+shape the prompt asks for) is unwrapped when there is exactly one
+dict-valued key carrying the expected fields; two or more such candidates
+is ambiguous and the entry is left as a no-verdict.
 
 The combined call marks the candidate box with a red rectangle drawn just
 *outside* the box (so it never covers the region's own pixels) and its

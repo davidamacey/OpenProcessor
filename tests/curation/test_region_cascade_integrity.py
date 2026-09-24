@@ -240,16 +240,18 @@ class TestStandaloneVerify:
             }
         )
         v = VlmLabeler._parse_plate_response(raw, RegionCrop(crop_id='c1', jpeg_bytes=b''))
+        assert v is not None
         assert v.is_region is True
         assert v.text == 'DNV20'
 
     def test_single_quoted_false_is_a_reject(self) -> None:
         raw = json.dumps({'is_region': 'false', 'confidence': 'high', 'text': 'X'})
         v = VlmLabeler._parse_plate_response(raw, RegionCrop(crop_id='c1', jpeg_bytes=b''))
+        assert v is not None
         assert v.is_region is False
         assert v.text is None
 
-    def test_batch_misaligned_rejects_every_crop(self) -> None:
+    def test_batch_misaligned_yields_no_verdicts_not_rejects(self) -> None:
         crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]
         raw = json.dumps(
             [
@@ -258,7 +260,19 @@ class TestStandaloneVerify:
             ]
         )
         out = VlmLabeler._parse_plate_batch_response(raw, crops)
-        assert [v.is_region for v in out] == [False, False]
+        assert out == []
+
+    def test_batch_missing_entry_is_omitted_not_a_reject(self) -> None:
+        crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]
+        raw = json.dumps([{'img': 2, 'is_region': True, 'confidence': 'high', 'text': 'B2'}])
+        out = VlmLabeler._parse_plate_batch_response(raw, crops)
+        by_id = {v.crop_id: v for v in out}
+        assert 'c1' not in by_id
+        assert by_id['c2'].is_region is True
+
+    def test_batch_empty_reply_yields_no_verdicts(self) -> None:
+        crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]
+        assert VlmLabeler._parse_plate_batch_response('', crops) == []
 
     def test_batch_aligned_by_index(self) -> None:
         crops = [RegionCrop(crop_id=f'c{i}', jpeg_bytes=b'') for i in (1, 2)]

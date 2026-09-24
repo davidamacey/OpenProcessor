@@ -169,6 +169,100 @@ class TestCombinedClassAnswer:
         assert (reply.class_id, reply.class_raw) == (None, 'gadget')
 
 
+class TestCombinedNestedEntryUnwrap:
+    """Live evidence (2026-09-24): a reasoning model sometimes nests the
+    whole per-image answer one level down under an invented key instead
+    of the flat shape the prompt asks for, e.g.
+    ``{"img": 2, "layout_analysis": {"region_visible": true, ...}}``.
+    That read as "no region_visible answer" -- a no-verdict, retried
+    forever -- even though the VLM did answer, just under the wrong key.
+    """
+
+    def test_single_nested_key_is_unwrapped(self) -> None:
+        entry = {
+            'img': 2,
+            'layout_analysis': {
+                'class_id': None,
+                'class_confidence': None,
+                'region_visible': True,
+                'region_bbox_correct': None,
+                'region_text': '782CCB',
+                'region_confidence': 'high',
+                'make': None,
+                'model': None,
+            },
+        }
+        reply = _combined_reply_from_entry(
+            entry, img_id='c1', fields=get_region_fields(), class_names=None
+        )
+        assert reply.plate_visible is True
+        assert reply.plate_text == '782CCB'
+
+    def test_a_different_invented_key_name_is_also_unwrapped(self) -> None:
+        entry = {
+            'img': 6,
+            'interim_results': {
+                'class_id': 11,
+                'class_confidence': 'high',
+                'region_visible': True,
+                'region_bbox_correct': True,
+            },
+        }
+        reply = _combined_reply_from_entry(
+            entry,
+            img_id='c1',
+            fields=get_region_fields(),
+            class_names=[f'c{i}' for i in range(20)],
+        )
+        assert reply.plate_visible is True
+        assert reply.class_id == 11
+
+    def test_two_nested_candidates_is_ambiguous_stays_no_verdict(self) -> None:
+        entry = {
+            'img': 3,
+            'first_guess': {'region_visible': True},
+            'second_guess': {'region_visible': False},
+        }
+        with pytest.raises(ValueError, match='region_visible'):
+            _combined_reply_from_entry(
+                entry, img_id='c1', fields=get_region_fields(), class_names=None
+            )
+
+    def test_batch_parse_unwraps_nested_entries(self) -> None:
+        raw = json.dumps(
+            {
+                'results': [
+                    {
+                        'img': 1,
+                        'layout_analysis': {
+                            'region_visible': True,
+                            'region_text': '782CCB',
+                        },
+                    },
+                    {
+                        'img': 2,
+                        'interim_results': {
+                            'class_id': 0,
+                            'region_visible': True,
+                            'region_bbox_correct': True,
+                        },
+                    },
+                ]
+            }
+        )
+        chunk = [
+            CombinedCrop(crop_id='c1', jpeg_bytes=b'x'),
+            CombinedCrop(crop_id='c2', jpeg_bytes=b'x'),
+        ]
+        out = VlmLabeler._parse_combined_batch_response(
+            raw, chunk, get_region_fields(), class_names=['widget']
+        )
+        assert out['c1'] is not None
+        assert out['c1'].plate_text == '782CCB'
+        assert out['c2'] is not None
+        assert out['c2'].class_id == 0
+
+
 def test_batch_entry_failure_is_logged(monkeypatch: pytest.MonkeyPatch) -> None:
     import src.services.labeling.vlm_labeler as mod
 
