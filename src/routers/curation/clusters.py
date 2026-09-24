@@ -20,6 +20,7 @@ from src.services.curation.cluster_purity import (
     purity_tier,
 )
 from src.services.curation.clustering.orchestrator import MAX_REFINE_MEMBERS
+from src.services.curation.wire import current_cluster_distance
 
 
 CANDIDATE_DOMINANT_MIN_COUNT = 3
@@ -55,7 +56,14 @@ _REPS_SORT: list[dict[str, Any]] = [
     {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
     {'crop_id': 'asc'},
 ]
-_REPS_SOURCE = ['crop_id', 'cluster_distance', 'class_name', 'cluster_subid']
+_REPS_SOURCE = [
+    'crop_id',
+    'cluster_id',
+    'cluster_distance',
+    'cluster_distance_cluster_id',
+    'class_name',
+    'cluster_subid',
+]
 
 
 def _rep_msearch_body(cluster_id: int, per_cluster: int) -> dict[str, Any]:
@@ -88,7 +96,7 @@ def _reps_from_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
             reps.append(
                 {
                     'crop_id': crop_id,
-                    'cluster_distance': src.get('cluster_distance'),
+                    'cluster_distance': current_cluster_distance(src),
                     'class_name': src.get('class_name'),
                     'cluster_subid': src.get('cluster_subid'),
                 },

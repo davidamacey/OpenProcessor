@@ -466,7 +466,14 @@ use it to hydrate a `POST /select/diverse` page in one call),
 `include_test`, `include_excluded`, `max_rank`,
 `min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
 (inclusive band on `confidence`, `400` if min > max), `order`
-(`default`/`outliers`/`diverse`), `k` (1–10000, `order=diverse` only:
+(`default`/`outliers`/`core_first`/`diverse`; `outliers` and `core_first`
+need `cluster_id`: members farthest from / nearest to the centroid of the
+matched members first. Under `core_first` each served item's
+`cluster_distance` / `cluster_similarity` / `cluster_is_core` is recomputed
+against that same live centroid, so the cluster view's cut line — the
+first item with `cluster_is_core: false` — always matches the order;
+`method` reports the order that ran, and a pool too large to rank falls
+back to `sort`), `k` (1–10000, `order=diverse` only:
 rank just the first `k` k-center-greedy picks; `total` is then `k`),
 `item_text` (≤200 chars; text read on the item crop — every letter/digit
 word of the query must be a case-insensitive prefix of one of the item's
@@ -800,11 +807,19 @@ Derived keys (computed by the serializer, never stored):
 - `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
   without a distance); `cluster_is_core` — `cluster_similarity >=
   core_similarity_min` (served on `GET /clusters`, `0.75`).
-  `cluster_distance` is the cosine distance to the item's candidate-cluster
-  centroid, written by every residual clustering run whatever the method
-  (IVF's own centroids; otherwise the cluster's member-mean centroid). It
-  is `null` for noise and for items placed without a clustering pass
-  (class clusters via labeling, until they are clustered).
+  `cluster_distance` is the cosine distance to the item's cluster
+  centroid. Candidate clusters: written by every residual clustering run
+  whatever the method (IVF's own centroids; otherwise the cluster's
+  member-mean centroid). Class clusters (DQ-M3): written by the
+  cluster-geometry pass that follows every auto-label clustering stage
+  (`stages.cluster_residuals.cluster_geometry` in the job summary), as the
+  distance to the class cluster's member-mean centroid. Every writer also
+  stores the stored-only `cluster_distance_cluster_id` (the cluster it was
+  measured against); when that differs from the item's current
+  `cluster_id` (the item moved since), `cluster_distance`,
+  `cluster_similarity` and `cluster_is_core` are served `null` rather than
+  describing a cluster the item has left. `null` also for noise and for
+  items not yet measured.
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the

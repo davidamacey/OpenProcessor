@@ -5775,13 +5775,13 @@
             }
           },
           {
-            "description": "'outliers' ranks a cluster's members farthest-from-centroid first. 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' nearest-first, with each item's cluster_distance / cluster_similarity / cluster_is_core recomputed against the same live centroid (both need cluster_id). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
             "in": "query",
             "name": "order",
             "required": false,
             "schema": {
               "default": "default",
-              "description": "'outliers' ranks a cluster's members farthest-from-centroid first. 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' nearest-first, with each item's cluster_distance / cluster_similarity / cluster_is_core recomputed against the same live centroid (both need cluster_id). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
               "title": "Order",
               "type": "string"
             }

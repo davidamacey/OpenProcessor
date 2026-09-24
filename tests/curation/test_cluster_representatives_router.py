@@ -175,7 +175,16 @@ def test_cluster_representatives_msearch_only_covers_the_page(
             {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
             {'crop_id': 'asc'},
         ]
-        assert q['_source'] == ['crop_id', 'cluster_distance', 'class_name', 'cluster_subid']
+        # cluster_id + cluster_distance_cluster_id let a stale distance be
+        # nulled (DQ-M3).
+        assert q['_source'] == [
+            'crop_id',
+            'cluster_id',
+            'cluster_distance',
+            'cluster_distance_cluster_id',
+            'class_name',
+            'cluster_subid',
+        ]
 
 
 def test_cluster_representatives_offset_limits_page_size(

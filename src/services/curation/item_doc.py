@@ -155,6 +155,8 @@ def build_item_doc(
     if item.cluster_id is not None:
         doc['cluster_id'] = item.cluster_id
         doc['cluster_distance'] = item.cluster_distance
+        if item.cluster_distance is not None:
+            doc['cluster_distance_cluster_id'] = item.cluster_id
     if item.pe_embedding is not None:
         doc['pe_embedding'] = list(item.pe_embedding)
     if item.backbone_embedding is not None:

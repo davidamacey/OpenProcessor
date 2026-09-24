@@ -137,6 +137,16 @@ def _proposed_class(
     }
 
 
+def current_cluster_distance(src: dict[str, Any]) -> Any:
+    """The stored ``cluster_distance`` if it was measured against the item's
+    current cluster (``cluster_distance_cluster_id`` absent — written
+    before that field existed — or equal to ``cluster_id``), else ``None``."""
+    ref = src.get('cluster_distance_cluster_id')
+    if ref is not None and ref != src.get('cluster_id'):
+        return None
+    return src.get('cluster_distance')
+
+
 def _api_prefix() -> str:
     from src.config import get_curation_config
 
@@ -161,7 +171,8 @@ def serialize_item(
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
-    similarity = cluster_similarity(src.get('cluster_distance'))
+    distance = current_cluster_distance(src)
+    similarity = cluster_similarity(distance)
     label_conf, label_conf_source = class_confidence(src)
     item: dict[str, Any] = {
         'id': crop_id,
@@ -205,7 +216,8 @@ def serialize_item(
         'needs_new_class_note': src.get('needs_new_class_note'),
         'cluster_id': src.get('cluster_id'),
         'cluster_kind': cluster_kind(src.get('cluster_id')),
-        'cluster_distance': src.get('cluster_distance'),
+        # Null when measured against a cluster the item has since left.
+        'cluster_distance': distance,
         'cluster_similarity': similarity,
         'cluster_is_core': None if similarity is None else similarity >= CORE_SIMILARITY_MIN,
         'cluster_subid': src.get('cluster_subid'),
@@ -273,6 +285,7 @@ __all__ = [
     'SEARCH_EXTRA_KEYS',
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
+    'current_cluster_distance',
     'item_list_source_excludes',
     'item_source_excludes',
     'region_bbox_in_parent',

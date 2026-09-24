@@ -209,6 +209,9 @@ def _guarded_class_cluster_write(cid: int, dist: float | None) -> dict[str, Any]
                 " ctx._source['cluster_id'] = params.cid;"
                 " ctx._source.remove('cluster_subid');"
                 " ctx._source['cluster_distance'] = params.dist;"
+                # The cluster the distance was measured against (DQ-M3);
+                # a later move leaves it pointing at the old cluster.
+                " ctx._source['cluster_distance_cluster_id'] = params.cid;"
             ),
         }
     }
