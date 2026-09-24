@@ -1,4 +1,6 @@
-"""Curation router sub-module — undo of human class writes.
+"""Curation router sub-module — undo of human class writes, the other
+recorded per-item decisions (discard, VLM-suggestion dismissal) and the
+item's class history.
 
 Every human class write (``PUT /crops/{id}/label``, ``PUT
 /crops/batch_label``, ``POST /crops/move``) records the item's full
@@ -27,11 +29,13 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.exclusion import park_restored_state_while_excluded
 from src.services.curation.history import (
     CLASS_STATE_FIELDS,
     HUMAN_DISCARD_WRITER,
     HUMAN_UNLABEL_WRITER,
+    REVIEW_DISMISS_FIELDS,
     find_undo_snapshot,
     record_class_snapshot,
     restore_class_state,
@@ -277,3 +281,74 @@ async def discard_crops(
         'conflicts': by['conflicts'],
         'not_found': by['not_found'],
     }
+
+
+class _NoSuggestionError(Exception):
+    pass
+
+
+@router.post('/crops/{crop_id}/vlm_dismiss')
+async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """Reject the VLM's class suggestion on this item.
+
+    Records ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /
+    ``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,
+    ``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer
+    apply it. The class itself is untouched (label or discard it as a
+    separate write). Returns the post-write item; ``409`` when the item has
+    no VLM suggestion.
+    """
+
+    def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        class_id, class_name = vlm_suggestion(current)
+        if class_name is None:
+            raise _NoSuggestionError
+        return {
+            'vlm_dismissed_class_id': class_id,
+            'vlm_dismissed_class_name': class_name,
+            'vlm_dismissed_at': _now_iso(),
+            'updated_at': _now_iso(),
+        }
+
+    try:
+        await occ_update_one(
+            opensearch, doc_id=crop_id, merger=_merge, refresh=True, writer_id='human:vlm_dismiss'
+        )
+    except _NoSuggestionError as exc:
+        raise HTTPException(status_code=409, detail=f'no VLM suggestion on {crop_id}') from exc
+    except OCCFinalConflictError:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+    items = await _items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]
+
+
+_HISTORY_KEYS: tuple[str, ...] = (*CLASS_STATE_FIELDS, *REVIEW_DISMISS_FIELDS, 'writer', 'at')
+
+
+@router.get('/crops/{crop_id}/history')
+async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """The item's class history, oldest first: ``{crop_id, entries}``.
+
+    Each entry is the item's class state *before* one write
+    (``class_id``, ``class_name``, ``class_source``, ``label_source``,
+    ``confidence``, ``class_detector*``, ``class_labeler``,
+    ``class_labeled_at``, ``class_validated``, ``cluster_id``,
+    ``cluster_subid``; ``review_dismissed_*`` on discards) plus ``writer``
+    (who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and
+    ``at``. Keys a writer didn't record are ``null``.
+    """
+    try:
+        resp = await opensearch.get(
+            index=CURATION_ITEMS_INDEX, id=crop_id, _source_includes=['class_id_history']
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+    history = (resp.get('_source') or {}).get('class_id_history') or []
+    entries = [
+        {k: entry.get(k) for k in _HISTORY_KEYS} for entry in history if isinstance(entry, dict)
+    ]
+    return {'crop_id': crop_id, 'entries': entries}

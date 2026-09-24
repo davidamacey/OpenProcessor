@@ -215,6 +215,7 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
     },
 }
 
+# Exclusion plus the other per-item human review decisions.
 _EXCLUSION_MAPPING: dict[str, Any] = {
     'class_excluded': {'type': 'boolean'},
     'excluded_at': {'type': 'date'},
@@ -226,6 +227,10 @@ _EXCLUSION_MAPPING: dict[str, Any] = {
     # Review-queue dismissal (POST /crops/{id}/review_dismiss, /discard).
     'review_dismissed_at': {'type': 'date'},
     'review_dismissed_by': {'type': 'keyword'},
+    # Rejected VLM suggestion (POST /crops/{id}/vlm_dismiss).
+    'vlm_dismissed_class_id': {'type': 'integer'},
+    'vlm_dismissed_class_name': {'type': 'keyword'},
+    'vlm_dismissed_at': {'type': 'date'},
 }
 
 

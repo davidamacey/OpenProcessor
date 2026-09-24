@@ -20,7 +20,7 @@ from dataclasses import fields as dataclass_fields
 from typing import Any
 
 from src.config.region_fields import RegionFields, get_region_fields
-from src.services.curation.class_sources import vlm_suggestion
+from src.services.curation.class_sources import vlm_suggestion, vlm_suggestion_dismissed
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
 
 
@@ -108,6 +108,9 @@ def _proposed_class(
 ) -> dict[str, Any]:
     if vlm_class_name is not None:
         return {'proposed_class_id': vlm_class_id, 'proposed_class_name': vlm_class_name}
+    if vlm_suggestion_dismissed(src):
+        # The current class *is* the rejected VLM pick; confirming must not apply it.
+        return {'proposed_class_id': None, 'proposed_class_name': ''}
     return {
         'proposed_class_id': src.get('class_id'),
         'proposed_class_name': src.get('vlm_raw_class') or src.get('class_name') or '',

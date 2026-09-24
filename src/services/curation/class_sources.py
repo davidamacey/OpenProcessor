@@ -121,14 +121,7 @@ def class_source_catalog() -> list[dict[str, str]]:
     return out
 
 
-def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
-    """``(class_id, class_name)`` the VLM suggests for a stored item.
-
-    * ``vlm`` / ``vlm_reclassified`` and not ``class_validated``: the
-      registry class the VLM chose (the item's current class).
-    * ``vlm_new_class_pending``: ``(None, <proposed new class name>)``.
-    * anything else, or a human-validated class: ``(None, None)``.
-    """
+def _raw_vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     if src.get('class_validated'):
         return None, None
     source = src.get('class_source')
@@ -139,6 +132,29 @@ def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
         if isinstance(class_id, int) and not isinstance(class_id, bool):
             return class_id, (src.get('class_name') or None)
     return None, None
+
+
+def vlm_suggestion_dismissed(src: dict[str, Any]) -> bool:
+    """True when the operator rejected exactly the VLM's current suggestion
+    (``POST /crops/{id}/vlm_dismiss``); a different later one is live again."""
+    class_id, name = _raw_vlm_suggestion(src)
+    if class_id is not None:
+        return src.get('vlm_dismissed_class_id') == class_id
+    return name is not None and src.get('vlm_dismissed_class_name') == name
+
+
+def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
+    """``(class_id, class_name)`` the VLM suggests for a stored item.
+
+    * ``vlm`` / ``vlm_reclassified`` and not ``class_validated``: the
+      registry class the VLM chose (the item's current class).
+    * ``vlm_new_class_pending``: ``(None, <proposed new class name>)``.
+    * anything else, a human-validated class, or a suggestion the operator
+      dismissed: ``(None, None)``.
+    """
+    if vlm_suggestion_dismissed(src):
+        return None, None
+    return _raw_vlm_suggestion(src)
 
 
 __all__ = [
@@ -153,4 +169,5 @@ __all__ = [
     'HumanLabelSource',
     'class_source_catalog',
     'vlm_suggestion',
+    'vlm_suggestion_dismissed',
 ]

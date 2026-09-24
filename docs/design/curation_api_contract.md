@@ -268,6 +268,22 @@ Which one to call:
 | `DELETE /crops/{id}/label` | legacy undo (same restore; resets to unlabeled when nothing is on record) | no — it *is* an undo, so Z can't reverse it |
 | `POST /crops/{id}/review_dismiss` | legacy one-way review hide | no — use `discard` with `clear_class: false, dismiss_from_review: true` instead |
 
+- `POST /crops/{crop_id}/vlm_dismiss` — reject the VLM's class
+  suggestion: stores `vlm_dismissed_class_id` / `vlm_dismissed_class_name`
+  / `vlm_dismissed_at`; while the VLM's suggestion is that one, the
+  suggestion keys are `null` and `proposed_class_*` no longer apply it
+  (`null` / `""`). A different later VLM suggestion shows again. The class
+  itself is untouched (label or discard separately). Response: the item.
+  `409` no suggestion, `404` unknown crop.
+- `GET /crops/{crop_id}/history` → `{crop_id, entries}`: `class_id_history`
+  oldest first, each entry the class state *before* one write
+  (`class_id`, `class_name`, `class_source`, `label_source`, `confidence`,
+  `class_detector`, `class_detector_version`, `class_labeler`,
+  `class_labeled_at`, `class_validated`, `cluster_id`, `cluster_subid`,
+  `review_dismissed_at`, `review_dismissed_by`) + `writer` (e.g.
+  `human:label_crop`, `human:discard_crop`, `vlm_pipeline`) + `at`;
+  unrecorded keys are `null`.
+
 Cluster placement on restore: a restored validated class sits in its
 class cluster (`cluster_id == class_id`, keeping the recorded
 `cluster_subid` only if it belonged to that cluster); anything else goes
@@ -656,6 +672,10 @@ item's unrelated current `class_id`); a VLM-applied class reports the
 resolved registry `class_name` (was the raw VLM slug `vlm_raw_class` when
 the VLM's new-class answer matched a synonym); a stale `vlm_proposed_class`
 on an item that is no longer pending no longer overrides the name.
+
+`GET /regions/suspected_false_positives`: `threshold` is optional — omit it
+and the server applies `default_threshold` (`0.35`, served on every
+response next to the `threshold` actually used).
 
 `GET /regions` filter params: `page`, `page_size`, `class_id`,
 `cluster_id`, `region_cluster_id`, `region_cluster_subid`,
