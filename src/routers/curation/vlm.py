@@ -463,6 +463,7 @@ async def vlm_verify_regions(
 @router.post('/vlm/verify_region_batch', response_model=VlmVerifyRegionBatchResponse)
 async def vlm_verify_region_batch(
     payload: VlmVerifyRegionBatchRequest,
+    opensearch: OpenSearchDep,
 ) -> VlmVerifyRegionBatchResponse:
     """Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.
 
@@ -513,7 +514,7 @@ async def vlm_verify_region_batch(
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
         candidate_text_by_id[item.crop_id] = item.candidate_text
 
-    labeler = _get_vlm_labeler()
+    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     verdicts = await labeler.verify_plate_batch(crops)
 
     # Re-order to input order (verify_plate_batch already preserves it,
@@ -549,6 +550,7 @@ async def vlm_verify_region_batch(
 @router.post('/vlm/region_visible_batch', response_model=VlmRegionVisibleBatchResponse)
 async def vlm_region_visible_batch(
     payload: VlmRegionVisibleBatchRequest,
+    opensearch: OpenSearchDep,
 ) -> VlmRegionVisibleBatchResponse:
     """Pre-filter item crops by asking the VLM whether a sub-region is visible.
 
@@ -597,7 +599,7 @@ async def vlm_region_visible_batch(
             )
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
 
-    labeler = _get_vlm_labeler()
+    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     visible = await labeler.plate_visible_batch(crops)
     return VlmRegionVisibleBatchResponse(visible=visible)
 

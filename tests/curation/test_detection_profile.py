@@ -99,6 +99,8 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'SAM_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
         'CLASS_IDS': '2, 3,7',
+        'ASSIGNS_CLASS': 'true',
+        'LABELS_PATH': '/models/proposer/labels.txt',
     }
     prefix = 'OP_TEST_DETECTION_'
     for suffix, value in env_values.items():
@@ -144,6 +146,8 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.sam_text_prompt == 'env prompt'
     assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
     assert profile.class_ids == frozenset({2, 3, 7})
+    assert profile.assigns_class is True
+    assert profile.labels_path == '/models/proposer/labels.txt'
 
 
 def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:

@@ -47,7 +47,7 @@ from src.services.labeling.vlm_labeler import VlmCombinedReply, VlmRegionVerdict
 
 
 # The cascade needs an active region profile; the default is none.
-pytestmark = pytest.mark.usefixtures('reference_region_profile')
+pytestmark = pytest.mark.usefixtures('reference_region_profile', 'reference_ingest_profiles')
 
 
 F = get_region_fields()

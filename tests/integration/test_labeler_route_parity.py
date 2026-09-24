@@ -22,9 +22,9 @@ OpenSearch, no browser, no frontend checkout required at test time):
 Regenerating the fixture (frontend call sites may drift):
 
     rg -o "/legacy/[A-Za-z0-9_./{}$-]+" \\
-      /path/to/cropwright/src/lib/api.ts \\
-      /path/to/cropwright/src/lib/sse.ts \\
-      /path/to/cropwright/src/routes/export/+page.svelte \\
+      <cropwright-checkout>/src/lib/api.ts \\
+      <cropwright-checkout>/src/lib/sse.ts \\
+      <cropwright-checkout>/src/routes/export/+page.svelte \\
     | sort -u
 
 That one-liner over-matches (rg doesn't parse out comments/JSDoc), so the

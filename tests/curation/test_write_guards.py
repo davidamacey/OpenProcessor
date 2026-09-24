@@ -67,6 +67,7 @@ def _make_task(
 # =============================================================================
 
 
+@pytest.mark.usefixtures('reference_ingest_profiles')
 class TestShouldClassifyHumanGuard:
     def test_skips_human_sourced_crop(self) -> None:
         t = _make_task(class_source='human', class_validated=True)

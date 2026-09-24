@@ -68,10 +68,14 @@ A deployment describing a different region — a barcode on a package, a
 tag on livestock — constructs its own `DetectionProfile` instance
 instead of branching or forking the cascade code that consumes it.
 
-`DetectionProfile.from_env(prefix='OP_DETECTION_')` now exists, so a
-deployment can override individual fields via environment variable the
-same way it can for `CurationConfig` and `RegionFields` (see
-`env.template`'s `OP_DETECTION_*` block). **Known gap, still tracked:**
+`DetectionProfile.from_env(prefix)` lets a deployment set every field via
+environment variables, the same way it can for `CurationConfig` and
+`RegionFields`, under three separate prefixes: `OP_REGION_DETECTION_*`
+(the region cascade, optionally on top of a profile selected by name
+with `OP_REGION_PROFILE`), `OP_INGEST_PRIMARY_*` and
+`OP_INGEST_SECONDARY_*` (the ingest item detectors). The earlier shared
+`OP_DETECTION_*` prefix is retired and rejected with a rename message
+(see `env.template`). **Known gap, still tracked:**
 `DetectionProfile`'s *default* field values remain the reference
 deployment's tuned numbers (its aspect-ratio range, its text-length
 range, its OCR/segmenter model names) rather than domain-neutral
@@ -246,8 +250,9 @@ unfinished in these specific ways* lives somewhere durable.
   `env.template` for the current, complete surface.
 - **`DetectionProfile`'s shipped defaults are domain-tuned, not
   domain-neutral** (§2.3) — a new deployment should construct its own
-  instance (or override via `OP_DETECTION_*`) rather than relying on
-  the defaults describing a sensible generic region. Only one
+  instance (or override via `OP_REGION_DETECTION_*` /
+  `OP_INGEST_PRIMARY_*`) rather than relying on the defaults describing
+  a sensible generic region. Only one
   `DetectionProfile`/`PromptPack` is active per process; there is no
   per-request selection among several registered profiles yet.
 - **No authentication of any kind on the API** — see `SECURITY.md`.
@@ -333,11 +338,13 @@ between the three dataclasses.
 **Discovery**: both are advertised on `GET {prefix}/methods`
 alongside the existing `cluster`/`score`/`sort`/`overlay`/`export` axes
 (`src/services/curation/strategy_registry.py`), in the same
-`{id, axis, label, status, default}` shape as the `export` axis. The
-`detection_profile` axis lists every profile in
-`src/services/detection/profile_registry.py` — empty by default (neutral:
-no region profile until `OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`
-configures one, or startup code calls `register_profile()`). The
+`{id, axis, label, status, default}` shape as the `export` axis, plus a
+per-entry `settable` flag. The `detection_profile` axis is read-only
+(`settable: false`): it lists every profile in
+`src/services/detection/profile_registry.py` with the active one as the
+default — empty by default (neutral: no region profile until
+`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*` configures one, or startup
+code calls `register_profile()`). The
 `prompt_pack` axis lists every pack `available_prompt_packs()` can load
 (the built-in generic pack, each `OP_PROMPT_PACK_PATHS` pack, and the
 `OP_PROMPT_PACK_PATH` default), keyed by pack `name`; the VLM labeler is

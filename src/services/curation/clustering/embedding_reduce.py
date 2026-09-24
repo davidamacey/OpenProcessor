@@ -43,6 +43,7 @@ from src.services.curation.clustering.backend import (
     free_gpu_blocks,
     gpu_used_vram_mb,
 )
+from src.services.curation.ingest_class_sources import confident_class_sources
 
 
 if TYPE_CHECKING:
@@ -85,14 +86,17 @@ RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_emb
 # run on the unfiltered query overwrote ~129k labeled crops' cluster
 # ids before being cancelled).
 #
-# Specifically:
-#   v6_model — v6 prediction at ≥0.75 confidence (ingest floor)
-#   gemma    — Gemma matched a registered class name
-#   human    — human-validated label
+# Specifically (src.services.curation.ingest_class_sources, derived from
+# the configured ingest profiles -- resolved once at import like other
+# OP_* config):
+#   {secondary}_model — the ingest classifier labeled it above its floor
+#                       ({primary}_model too when the primary assigns_class)
+#   gemma             — the VLM matched a registered class name
+#   human             — human-validated label
 #
-# Everything else (v6_low_conf, gemma_unmatched, gemma_new_class_pending,
-# coco_yolo11_proposal, null) is residual and goes into the cluster.
-CONFIDENT_CLASS_SOURCES = ('v6_model', 'gemma', 'human')
+# Everything else (low-conf / unlabeled proposals, gemma_unmatched,
+# gemma_new_class_pending, null) is residual and goes into the cluster.
+CONFIDENT_CLASS_SOURCES = confident_class_sources()
 
 UMapMode = Literal['transform', 'refit']
 

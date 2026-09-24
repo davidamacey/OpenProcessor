@@ -156,9 +156,11 @@ def _make_service(
         fail_on_batch_gt=fail_on_batch_gt,
     )
     reg = registry or FakeClassRegistry([_FakeClassEntry(1, 'widget')])
+    # These tests exercise a primary whose label space IS the registry.
     profile = DetectionProfile(
         name='primary',
         detector_model='primary_end2end',
+        assigns_class=True,
         detector_version=detector_version,
         input_size=320,
         confidence_floor=confidence_floor,
@@ -873,7 +875,11 @@ def _make_dual_service(
         triton_pool=triton,
         registry=_two_class_registry(),
         profile=DetectionProfile(
-            name='primary', detector_model='primary_end2end', input_size=320, batch_limit=8
+            name='primary',
+            detector_model='primary_end2end',
+            assigns_class=True,
+            input_size=320,
+            batch_limit=8,
         ),
         secondary_profile=DetectionProfile(
             name='secondary',
