@@ -106,6 +106,14 @@
      *  default when the operator hasn't picked one, or a requested sort
      *  fell back). Omit on a route that doesn't have it yet. */
     appliedSort?: string | null;
+    /** `sort_fallback_reason` from `GET {API_PREFIX}/review/{tab}` (or its
+     *  `/locate`) — a human-readable string when the resolved sort (a
+     *  tab default or an explicit request) fell back because its field
+     *  has 0% coverage (M11, docs/design/interactive-pass-2026-09-24.md).
+     *  Shown right next to the `sort_applied` chip, not as a separate
+     *  banner, so the "what did the backend actually order by, and why"
+     *  story lives in one place. `null`/omitted renders nothing. */
+    fallbackReason?: string | null;
   }
 
   let {
@@ -118,6 +126,7 @@
     diverseKMax = 500,
     diverseMeta = null,
     appliedSort = null,
+    fallbackReason = null,
   }: Props = $props();
 
   // getMethods()/init() never throws (404 or any error degrades to
@@ -281,6 +290,14 @@
           → {appliedLabel}
         </span>
       {/if}
+      {#if fallbackReason}
+        <span
+          class="rounded border border-amber-500/60 bg-amber-500/15 px-1 text-[10px] text-amber-200"
+          title="The requested sort couldn't be honored server-side (0% field coverage) — showing the fallback order instead."
+        >
+          fallback: {fallbackReason}
+        </span>
+      {/if}
       {#if currentIsBeta}
         <span
           class="rounded border border-amber-500/60 bg-amber-500/15 px-1 text-[9px] uppercase tracking-wide text-amber-200"
@@ -304,6 +321,9 @@
       </label>
       {#if appliedLabel}
         <span class="text-zinc-500">applied: {appliedLabel}</span>
+      {/if}
+      {#if fallbackReason}
+        <span class="text-amber-300">fallback: {fallbackReason}</span>
       {/if}
     {:else}
       <!-- No alternate sorts reported yet (backend not deployed, or

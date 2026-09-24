@@ -30,6 +30,7 @@ import type {
   CropFilter,
   CropHistoryResponse,
   CropContextResponse,
+  CropRegionUndoBatchResult,
   CropUndoBatchResult,
   ItemTextLine,
   RegistryClass,
@@ -1177,6 +1178,11 @@ type RawClustersResp = {
   /** Similarity floor behind every crop's `cluster_is_core` — copied onto
    *  each mapped `Cluster` so `/clusters/[id]`'s cut line never hardcodes it. */
   core_similarity_min?: number | null;
+  /** D-4: the representatives window this response actually populated —
+   *  echoed back so a caller windowing successive calls can advance past
+   *  exactly what it got, not what it asked for. */
+  representatives_offset?: number;
+  representatives_limit?: number;
 };
 
 function _rawClusterToCluster(
@@ -1204,15 +1210,34 @@ function _rawClusterToCluster(
   };
 }
 
+export interface ClustersResponse extends PaginatedResponse<Cluster> {
+  /** D-4: the representatives window this response actually populated
+   *  (echoed straight off the raw response) — a caller paging through
+   *  windows advances by this, not by what it asked for. */
+  representatives_offset: number;
+  representatives_limit: number;
+}
+
 export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
-): Promise<PaginatedResponse<Cluster>> {
-  // Single round-trip. The backend's {API_PREFIX}/clusters aggregation already
+): Promise<ClustersResponse> {
+  // Single round-trip for the full (size-desc, size-capped-by-max_clusters)
+  // card list — the backend's {API_PREFIX}/clusters aggregation already
   // returns dominant class, purity, purity_tier, promotable,
-  // validated_count, n_subclusters, cluster_kind, and is_unlabeled. The
-  // frontend ONLY shapes the result into the labeler's Cluster type — no
-  // semantic compute here.
+  // validated_count, n_subclusters, cluster_kind, and is_unlabeled for
+  // EVERY card regardless of the representatives window. The frontend
+  // ONLY shapes the result into the labeler's Cluster type — no semantic
+  // compute here.
+  //
+  // D-4 (docs/design/curation_query_performance_audit.md): representatives
+  // (the per-card thumbnail crops, one `_msearch` each) are windowed by
+  // `offset`/`limit` — cards outside `[offset, offset+limit)` of the
+  // returned card list come back with `representatives: []`. The caller
+  // is responsible for requesting only the window it's actually going to
+  // render (see /clusters' `loadMoreRepresentatives`), not every card, so
+  // scrolling past the first screenful doesn't re-run the aggregation's
+  // representative lookup for clusters nobody has scrolled to yet.
   const raw = await apiFetch<RawClustersResp>(
     `${API_PREFIX}/clusters${qs({
       per_cluster: 4,
@@ -1226,6 +1251,8 @@ export async function getClusters(
       max_rank: filter.max_rank ?? undefined,
       min_blur_ratio: filter.min_blur_ratio ?? undefined,
       class_source: filter.class_source ?? undefined,
+      offset: filter.representatives_offset ?? undefined,
+      limit: filter.representatives_limit ?? undefined,
     })}`,
     {},
     signal,
@@ -1237,6 +1264,10 @@ export async function getClusters(
     total: raw.total ?? items.length,
     page: 1,
     page_size: items.length,
+    representatives_offset:
+      raw.representatives_offset ?? filter.representatives_offset ?? 0,
+    representatives_limit:
+      raw.representatives_limit ?? filter.representatives_limit ?? 50,
   };
 }
 
@@ -1796,6 +1827,75 @@ export async function vlmDismissCrop(
   return mapRawCrop(raw);
 }
 
+/**
+ * `POST {API_PREFIX}/crops/{id}/vlm_dismiss/undo` (M6, backend 07cc061):
+ * put `vlm_dismissed_*` back to its state before the latest
+ * `vlm_dismiss`, so the dismissed suggestion is live again. `409` means
+ * there was no dismissal to undo.
+ */
+export async function undoVlmDismiss(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/vlm_dismiss/undo`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
+/**
+ * `POST {API_PREFIX}/crops/{id}/region/undo` (M6, backend 07cc061):
+ * restore the region to its state before the most recent not-yet-undone
+ * human region write (confirm, reject, false positive, box edit, status
+ * or text change) — repeated calls step back further. Class fields are
+ * untouched. `409` means nothing is left to undo.
+ */
+export async function undoCropRegion(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region/undo`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
+/**
+ * `POST {API_PREFIX}/crops/region/undo_batch` — batch form of
+ * `undoCropRegion`: each crop is restored independently, so undoing a
+ * `PUT /crops/batch_region` or `POST /regions/batch_status` means passing
+ * the same ids that write touched. `409` when no crop in the batch had
+ * anything to undo.
+ */
+export async function undoCropRegionBatch(
+  cropIds: string[],
+  signal?: AbortSignal,
+): Promise<CropRegionUndoBatchResult> {
+  type Raw = {
+    items?: RawCrop[];
+    undone?: number;
+    nothing_to_undo?: string[];
+    conflicts?: string[];
+    not_found?: string[];
+  };
+  const raw = await apiFetch<Raw>(
+    `${API_PREFIX}/crops/region/undo_batch`,
+    { method: 'POST', body: JSON.stringify({ crop_ids: cropIds }) },
+    signal,
+  );
+  return {
+    items: (raw.items ?? []).map(mapRawCrop),
+    undone: raw.undone ?? 0,
+    nothing_to_undo: raw.nothing_to_undo ?? [],
+    conflicts: raw.conflicts ?? [],
+    not_found: raw.not_found ?? [],
+  };
+}
+
 export interface RegionStatusEntry {
   value: string;
   label: string;
@@ -2013,25 +2113,28 @@ export function runVlmOnCluster(
 }
 
 /**
- * Poll `{API_PREFIX}/pipeline/auto_label/status` until the job leaves
- * `running`, calling `onUpdate` with every intermediate state so a caller
- * can render stage/progress. Shared by every caller of `runVlmOnCluster`
- * (`/dashboard`, `/clusters/[id]`) instead of each page hand-rolling its
- * own `setTimeout` loop — `AutoLabelPanel` keeps its own poller since it
- * also needs to detect a daemon-fired run while idle, which this helper,
- * only ever started right after `runVlmOnCluster`, does not.
+ * Poll a job until it leaves `running`, calling `onUpdate` with every
+ * intermediate state so a caller can render stage/progress. Shared by
+ * every caller of `runVlmOnCluster` (`/dashboard`, `/clusters/[id]`)
+ * instead of each page hand-rolling its own `setTimeout` loop —
+ * `AutoLabelPanel` keeps its own poller since it also needs to detect a
+ * daemon-fired run while idle, which this helper, only ever started
+ * right after `runVlmOnCluster`, does not.
  *
- * `expectedJobId` (M7, docs/design/interactive-pass-2026-09-24.md): the
- * status endpoint has a single slot for "the current/most recent job",
- * not one per job. A caller that just started a job can otherwise poll
- * once, catch the *previous* job's already-terminal status in that same
- * tick (a real race, not hypothetical — observed live: a 1-crop cluster
- * run toasted "0 crops (0 updated)" because the read landed before the
- * new job had even flipped to `running`), and report its stale result as
- * its own. There is no `GET .../status/{job_id}` route yet (backend
- * gap — see the same doc's BE fix list item 8), so this is the frontend
- * half: skip any status whose `job_id` doesn't match, and bound the wait
- * so a backend that genuinely drops the job doesn't hang forever.
+ * `expectedJobId` (M7, docs/design/interactive-pass-2026-09-24.md): when
+ * given, polls `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}`
+ * (`getAutoLabelJobStatus`) for that exact job — the backend now serves
+ * this per-job (07cc061), so there's no more race against
+ * `{API_PREFIX}/pipeline/auto_label/status`'s single "current/most
+ * recent job" slot answering with the *previous* job's already-terminal
+ * status in the same tick a caller that just started a new one polls (a
+ * real race, not hypothetical — observed live: a 1-crop cluster run
+ * toasted "0 crops (0 updated)" because the read landed before the new
+ * job had even flipped to `running`). A `404` (job not yet visible, or
+ * never existed) is treated as "still waiting", bounded by `maxWaitMs` so
+ * a backend that genuinely drops the job doesn't hang forever. Without
+ * `expectedJobId`, falls back to `getAutoLabelStatus` (the "current job"
+ * slot) unconditionally, same as before.
  */
 export async function pollAutoLabelJob(
   onUpdate: (job: AutoLabelJobState) => void,
@@ -2042,8 +2145,11 @@ export async function pollAutoLabelJob(
 ): Promise<AutoLabelJobState> {
   const deadline = Date.now() + maxWaitMs;
   for (;;) {
-    const job = await getAutoLabelStatus(signal);
-    if (expectedJobId == null || job.job_id === expectedJobId) {
+    const job =
+      expectedJobId == null
+        ? await getAutoLabelStatus(signal)
+        : await getAutoLabelJobStatus(expectedJobId, signal);
+    if (job != null) {
       onUpdate(job);
       if (job.status !== 'running') return job;
     } else if (Date.now() > deadline) {
@@ -2155,6 +2261,10 @@ export interface ReviewLocateResult {
   total: number;
   reason: string | null;
   sort_applied: string | null;
+  /** M11: mirrors `PaginatedResponse.sort_fallback_reason` — set when the
+   *  sort `/locate` resolved (tab default, or the caller's own `sort`)
+   *  fell back because its field has 0% coverage. */
+  sort_fallback_reason: string | null;
 }
 
 export async function locateInReviewQueue(
@@ -2178,6 +2288,7 @@ export async function locateInReviewQueue(
     total: raw.total ?? 0,
     reason: raw.reason ?? null,
     sort_applied: raw.sort_applied ?? null,
+    sort_fallback_reason: raw.sort_fallback_reason ?? null,
   };
 }
 
@@ -3082,6 +3193,31 @@ export function getAutoLabelStatus(signal?: AbortSignal): Promise<AutoLabelJobSt
     {},
     signal,
   );
+}
+
+/**
+ * `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}` (M7,
+ * docs/design/interactive-pass-2026-09-24.md): poll the exact job a caller
+ * started, instead of the single "current/most recent job" slot
+ * `getAutoLabelStatus` reads. Returns `null` for a `404` — an id no job
+ * ever had (or not a 32-hex id) — so a caller can distinguish "not there
+ * yet / never existed" from a real fetch failure without inspecting
+ * `ApiError.status` itself.
+ */
+export async function getAutoLabelJobStatus(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<AutoLabelJobState | null> {
+  try {
+    return await apiFetch<AutoLabelJobState>(
+      `${API_PREFIX}/pipeline/auto_label/status/${encodeURIComponent(jobId)}`,
+      {},
+      signal,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
 
 export function cancelAutoLabel(

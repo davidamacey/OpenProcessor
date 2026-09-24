@@ -66,6 +66,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
@@ -452,6 +453,12 @@
         );
         return;
       }
+      // M11: /locate resolves the sort under the same rules {API_PREFIX}/review/{tab}
+      // does, and can hit the same 0%-coverage fallback — surface it the
+      // same way so a deep link doesn't silently jump using a different
+      // sort than what the bar shows.
+      sortApplied = loc.sort_applied ?? sortApplied;
+      sortFallbackReason = loc.sort_fallback_reason ?? sortFallbackReason;
       while (queue.loadedPages < loc.page && queue.hasMore) {
         await queue.loadMore();
       }
@@ -913,7 +920,7 @@
   async function slotBack(): Promise<void> {
     const { entry: last, rest } = popUndo(slotUndoStack);
     if (!last) {
-      toastStore.info('Nothing to go back to.');
+      toastStore.info('Nothing to step back to.');
       return;
     }
     slotUndoStack = rest;
@@ -1127,6 +1134,10 @@
       const idx = queue.items.findIndex((x) => x.id === id);
       if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
       editMode = false;
+      // M6: Z reverses a box edit the same way it reverses a confirm/
+      // reject/FP below — see undo.svelte.ts's header comment for why
+      // this shares the one undoStore stack (kind: 'region').
+      undoStore.recordRegionWrites([id]);
       toastStore.success('Bbox saved.');
     } catch (e) {
       toastStore.error(`Save failed: ${(e as Error).message}`);
@@ -1172,7 +1183,13 @@
       } else {
         await setSlotBox(activeSlot, item.id, tuple, 'parent');
       }
-      toastStore.success(`${activeSlot.label.title} confirmed. ← to go back.`);
+      // M6: Z reverses this write server-side (kind: 'region') —
+      // independent of the step-back stack above, which only re-queues
+      // the crop locally without touching what the server just saved.
+      undoStore.recordRegionWrites([item.id]);
+      toastStore.success(
+        `${activeSlot.label.title} confirmed. Press Z to undo, step back with ←.`,
+      );
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
@@ -1189,7 +1206,10 @@
     try {
       // null bbox = "not visible" per setSlotBox's clear contract.
       await setSlotBox(activeSlot, item.id, null);
-      toastStore.success(`${activeSlot.label.title} rejected. ← to go back.`);
+      undoStore.recordRegionWrites([item.id]);
+      toastStore.success(
+        `${activeSlot.label.title} rejected. Press Z to undo, step back with ←.`,
+      );
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
@@ -1214,7 +1234,10 @@
     const restore = _removeFromQueue(item);
     try {
       await patchSlotMeta(activeSlot, item.id, { status: fpState });
-      toastStore.success('Marked false positive (box kept). ← to go back.');
+      undoStore.recordRegionWrites([item.id]);
+      toastStore.success(
+        'Marked false positive (box kept). Press Z to undo, step back with ←.',
+      );
     } catch (e) {
       _removeSlotUndo(undoEntry);
       restore();
@@ -1418,6 +1441,7 @@
       bar={strategyBar}
       offerDiverse={diverseAvailable}
       appliedSort={sortApplied}
+      fallbackReason={sortFallbackReason}
       diverseKDefault={DIVERSE_K_DEFAULT}
       diverseKMax={DIVERSE_K_MAX}
       diverseMeta={diverseSelection
@@ -1428,14 +1452,9 @@
           }
         : null}
     />
-    {#if sortFallbackReason}
-      <span
-        class="text-[11px] text-amber-300"
-        title="The requested sort couldn't be honored server-side; showing the default order instead."
-      >
-        sort fallback: {sortFallbackReason}
-      </span>
-    {/if}
+    <!-- M11: sort_fallback_reason now renders inside StrategyBar's own
+         summary chip, next to sort_applied, instead of a separate banner
+         here — see fallbackReason above. -->
     {#if diverseMode}
       {#if diverseJobId}
         <span class="text-[11px] text-blue-300">
@@ -1996,9 +2015,9 @@
                   onclick={slotBack}
                   disabled={slotUndoStack.length === 0}
                   title="Re-open the most-recently confirmed {activeSlot.label
-                    .singular} (←)"
+                    .singular} (←) — only re-queues it locally, use Z to undo the server write"
                 >
-                  ← Back
+                  ← Step back
                 </button>
               {/if}
             </div>

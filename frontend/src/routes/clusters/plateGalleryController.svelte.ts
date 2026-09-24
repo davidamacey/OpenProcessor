@@ -39,6 +39,7 @@ import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
+import { undoStore } from '$stores/undo.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 
 // Sourced from the profile rather than hardcoded, so a lifecycle-state
@@ -426,6 +427,11 @@ export function createPlateGalleryController() {
       // and reported in the toast below.
       const byId = new Map(res.items.map((p) => [p.crop_id, p]));
       platePager.items = platePager.items.map((p) => byId.get(p.crop_id) ?? p);
+      // M6: Z reverses this bulk status write server-side — the server's
+      // own `items` list (not the request's `cropIds`) is what actually
+      // got written, same "server's ids, not the request's" rule as
+      // every other undoStore.record* call.
+      undoStore.recordRegionWrites(res.items.map((p) => p.crop_id));
       const conflictCount = res.conflicts?.length ?? 0;
       const invalid = res.invalid ?? [];
       if (conflictCount > 0 || invalid.length > 0) {
@@ -479,6 +485,40 @@ export function createPlateGalleryController() {
           }
         : p,
     );
+    // M6: the editor's write (setSlotBox, already completed by the time
+    // this fires — see the doc comment above) is undoable via Z too.
+    undoStore.recordRegionWrites([cropId]);
+  }
+
+  /**
+   * M6: Z on the plate gallery reverses the most recent region write
+   * (single-item bbox edit or bulk status change), the same way Z
+   * reverses a label write on the card-grid `/clusters` view — see
+   * `undo.svelte.ts`'s header comment for why this shares the ONE
+   * `undoStore` stack (kind: `'region'`) with every other undo entry
+   * rather than its own gallery-local stack.
+   */
+  function mergeUndoneItems(crops: Crop[]): void {
+    if (crops.length === 0) return;
+    const byId = new Map(crops.map((c) => [c.id, c]));
+    platePager.items = platePager.items.map((p) => {
+      const restored = byId.get(p.crop_id);
+      if (!restored) return p;
+      const slotData = restored.slots?.[licensePlateSlot.key];
+      return {
+        ...p,
+        region_status: slotData?.lifecycle?.status ?? p.region_status,
+        region_verified: slotData?.lifecycle?.verified ?? p.region_verified,
+        region_bbox_norm: slotData?.subBox?.rawXyxy ?? null,
+        region_bbox_frame: slotData?.subBox?.frame ?? p.region_bbox_frame,
+        region_thumbnail_url: getRegionThumbUrl(p.crop_id, 160, Date.now()),
+      };
+    });
+  }
+
+  async function undoLastPlateAction(): Promise<void> {
+    const crops = await undoStore.undoLast();
+    mergeUndoneItems(crops);
   }
 
   return {
@@ -579,6 +619,7 @@ export function createPlateGalleryController() {
     openPlateEditor,
     applyPlateStatus,
     savePlateBbox,
+    undoLastPlateAction,
   };
 }
 

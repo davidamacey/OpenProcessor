@@ -687,6 +687,15 @@ export interface ClusterFilter {
   max_rank?: number | null;
   min_blur_ratio?: number | null;
   class_source?: string | null;
+  /** D-4 (docs/design/curation_query_performance_audit.md): which window
+   *  of the (already-fully-returned, size-desc-ordered) card list gets a
+   *  populated `representatives` array — cards outside the window come
+   *  back with `representatives: []`, not omitted. Independent of
+   *  `page`/`page_size` above, which the endpoint ignores entirely (every
+   *  card up to `max_clusters` is always returned in one response); the
+   *  caller windows representatives to whatever's actually visible. */
+  representatives_offset?: number;
+  representatives_limit?: number;
 }
 
 export interface BulkLabelConflict {
@@ -755,6 +764,12 @@ export interface CropUndoBatchResult {
   not_found: string[];
 }
 
+/** `POST {API_PREFIX}/crops/region/undo_batch` response (M6) — same shape
+ *  as `CropUndoBatchResult`, kept as its own type since it's a distinct
+ *  wire contract (region writes, not class writes), not because the
+ *  fields differ. */
+export type CropRegionUndoBatchResult = CropUndoBatchResult;
+
 export interface ToastMessage {
   id: string;
   kind: 'info' | 'success' | 'warn' | 'error';
@@ -820,4 +835,19 @@ export interface UnloadModelResponse {
 export interface UndoEntry {
   crop_ids: string[];
   at: number;
+  /**
+   * Which backend undo route this entry reverses (M6,
+   * docs/design/interactive-pass-2026-09-24.md). Defaults to `'label'`
+   * when absent (every entry pushed before this field existed). Kept as
+   * ONE ring buffer with a kind tag, not a separate region/vlm_dismiss
+   * stack, so Z on `/clusters/[id]` — where a label write and a
+   * Reject-VLM (`vlm_dismiss`) can interleave in the same session —
+   * always reverses whatever the operator *actually did last*,
+   * chronologically, rather than "the last label write" while silently
+   * skipping a more recent dismiss. A page-scoped ignore/un-ignore
+   * history (`clusterController`'s `lastExcludedIds`) stays its own
+   * thing on purpose: it's bound to its own `X`/`U` keys, never `Z`, so
+   * there's no ordering question to get right by sharing a stack.
+   */
+  kind?: 'label' | 'region' | 'vlm_dismiss';
 }

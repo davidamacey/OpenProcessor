@@ -523,6 +523,32 @@ describe('rejectVlmForCrop', () => {
 
     expect(errorSpy).toHaveBeenCalledWith('Reject VLM suggestion failed: down');
   });
+
+  // M6/V1 (docs/design/interactive-pass-2026-09-24.md): Z must reverse a
+  // Reject-VLM the same way it reverses a label write.
+  it('records a vlm_dismiss undo entry on success, so Z can reverse it', async () => {
+    const updated = crop('a', { vlm_suggested_class_id: null });
+    vi.mocked(vlmDismissCrop).mockResolvedValue(updated);
+    const a = crop('a', { vlm_suggested_class_id: 9 });
+    const { controller } = setup([a]);
+    const recordSpy = vi.spyOn(undoStore, 'recordVlmDismiss');
+
+    await controller.rejectVlmForCrop(a);
+
+    expect(recordSpy).toHaveBeenCalledWith('a');
+  });
+
+  it('records no undo entry on a 409 (nothing was actually dismissed)', async () => {
+    vi.mocked(vlmDismissCrop).mockRejectedValue(new ApiError(409, '/x', {}));
+    vi.spyOn(toastStore, 'info').mockImplementation(() => 'x');
+    const a = crop('a');
+    const { controller } = setup([a]);
+    const recordSpy = vi.spyOn(undoStore, 'recordVlmDismiss');
+
+    await controller.rejectVlmForCrop(a);
+
+    expect(recordSpy).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------
