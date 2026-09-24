@@ -21,6 +21,7 @@ from typing import Any
 
 from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.class_sources import vlm_suggestion
+from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
 
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
@@ -102,6 +103,17 @@ def region_bbox_in_parent(src: dict[str, Any], storage: RegionFields | None = No
     ]
 
 
+def _proposed_class(
+    src: dict[str, Any], vlm_class_id: int | None, vlm_class_name: str | None
+) -> dict[str, Any]:
+    if vlm_class_name is not None:
+        return {'proposed_class_id': vlm_class_id, 'proposed_class_name': vlm_class_name}
+    return {
+        'proposed_class_id': src.get('class_id'),
+        'proposed_class_name': src.get('vlm_raw_class') or src.get('class_name') or '',
+    }
+
+
 def _api_prefix() -> str:
     from src.config import get_curation_config
 
@@ -126,6 +138,7 @@ def serialize_item(
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
+    similarity = cluster_similarity(src.get('cluster_distance'))
     item: dict[str, Any] = {
         'id': crop_id,
         'crop_id': crop_id,
@@ -154,15 +167,31 @@ def serialize_item(
         # proposed new class (name only). Null otherwise.
         'vlm_proposed_class_id': vlm_class_id,
         'vlm_proposed_class_name': vlm_class_name,
+        # The class a one-key confirm would apply: the VLM suggestion when
+        # there is one, else the current class (or the raw unmatched VLM
+        # answer as the name).
+        **_proposed_class(src, vlm_class_id, vlm_class_name),
+        # Human flagged "needs a class the registry doesn't have yet".
+        'needs_new_class': bool(src.get('needs_new_class', False)),
+        'needs_new_class_note': src.get('needs_new_class_note'),
         'cluster_id': src.get('cluster_id'),
+        'cluster_kind': cluster_kind(src.get('cluster_id')),
         'cluster_distance': src.get('cluster_distance'),
+        'cluster_similarity': similarity,
+        'cluster_is_core': None if similarity is None else similarity >= CORE_SIMILARITY_MIN,
         'cluster_subid': src.get('cluster_subid'),
+        'class_excluded': bool(src.get('class_excluded', False)),
+        'excluded_reason': src.get('excluded_reason'),
+        'excluded_at': src.get('excluded_at'),
+        # Ingest source tag (stored under the legacy ``hdd_source`` key).
+        'source': src.get('hdd_source') or src.get('source') or '',
         'test_holdout': bool(src.get('test_holdout', False)),
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
         'proposal_name': src.get('proposal_name'),
         'probe_pred_class': src.get('probe_pred_class'),
+        'probe_pred_class_id': src.get('probe_pred_class_id'),
         'probe_pred_entropy': src.get('probe_pred_entropy'),
         'mistakenness_score': src.get('mistakenness_score'),
         'mistakenness_method': src.get('mistakenness_method'),
@@ -185,7 +214,7 @@ ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''
 
 # Endpoint-specific keys layered on top of the shared item. Everything
 # else is identical across endpoints.
-REVIEW_EXTRA_KEYS = frozenset({'reason', 'proposed_class_id', 'proposed_class_name'})
+REVIEW_EXTRA_KEYS = frozenset({'reason'})
 TRAINING_CANDIDATE_EXTRA_KEYS = frozenset({'selection_reason'})
 SEARCH_EXTRA_KEYS = frozenset({'semantic_score'})
 

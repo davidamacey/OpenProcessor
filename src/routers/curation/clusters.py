@@ -7,28 +7,19 @@ from typing import Any, Literal
 from fastapi import HTTPException, Query
 
 from src.routers.curation._common import CURATION_ITEMS_INDEX, OpenSearchDep, router
-from src.services.curation.clustering.orchestrator import (
-    MAX_REFINE_MEMBERS,
+from src.services.curation.cluster_ids import (
+    CORE_SIMILARITY_MIN,
     RESIDUAL_CLUSTER_ID_OFFSET,
+    cluster_kind,
 )
-
-
-def _cluster_kind(cluster_id: int) -> Literal['class', 'candidate', 'unassigned']:
-    """Derive the cluster kind from its id.
-
-    * ``cluster_id < 0`` — unassigned (AHC noise / pre-clustering).
-    * ``0..RESIDUAL_CLUSTER_ID_OFFSET-1`` — class clusters
-      (cluster_id mirrors class_id for human/v6-labelled crops).
-    * ``>= RESIDUAL_CLUSTER_ID_OFFSET`` — candidate clusters from the
-      residual AHC pool. Need human or VLM assignment to a class.
-
-    Single source of truth — frontend never recomputes this.
-    """
-    if cluster_id < 0:
-        return 'unassigned'
-    if cluster_id >= RESIDUAL_CLUSTER_ID_OFFSET:
-        return 'candidate'
-    return 'class'
+from src.services.curation.cluster_purity import (
+    PROMOTE_MIN_MEMBERS,
+    PROMOTE_MIN_PURITY,
+    is_promotable,
+    purity_thresholds,
+    purity_tier,
+)
+from src.services.curation.clustering.orchestrator import MAX_REFINE_MEMBERS
 
 
 CANDIDATE_DOMINANT_MIN_COUNT = 3
@@ -208,7 +199,7 @@ async def list_clusters(
     total_candidate = 0
     for bucket in resp.get('aggregations', {}).get('clusters', {}).get('buckets', []):
         cid = int(bucket['key'])
-        ck = _cluster_kind(cid)
+        ck = cluster_kind(cid) or 'unassigned'
         if kind not in ('all', ck):
             continue
         size = int(bucket['doc_count'])
@@ -255,6 +246,9 @@ async def list_clusters(
                 'dominant_class_name': top_name,
                 'dominant_count': top_count,
                 'purity': purity,
+                # Same thresholds as the auto-promote gate.
+                'purity_tier': purity_tier(purity),
+                'promotable': is_promotable(members=size, labelled=labelled_total, purity=purity),
                 'is_unlabeled': is_unlabeled,
                 'n_subclusters': n_subclusters,
                 'updated_at': bucket.get('latest_update', {}).get('value_as_string'),
@@ -271,6 +265,8 @@ async def list_clusters(
         'total_class_clusters': total_class,
         'total_candidate_clusters': total_candidate,
         'cluster_id_offset': RESIDUAL_CLUSTER_ID_OFFSET,
+        'purity_thresholds': purity_thresholds(),
+        'core_similarity_min': CORE_SIMILARITY_MIN,
     }
 
 
@@ -392,8 +388,12 @@ async def refine_cluster_endpoint(
 @router.post('/clusters/auto_promote')
 async def auto_promote_clusters_endpoint(
     opensearch: OpenSearchDep,
-    min_purity: float = Query(0.85, ge=0.5, le=1.0, description='Min dominant-class share'),
-    min_members: int = Query(4, ge=2, le=1000, description='Skip clusters smaller than this'),
+    min_purity: float = Query(
+        PROMOTE_MIN_PURITY, ge=0.5, le=1.0, description='Min dominant-class share'
+    ),
+    min_members: int = Query(
+        PROMOTE_MIN_MEMBERS, ge=2, le=1000, description='Skip clusters smaller than this'
+    ),
     dry_run: bool = Query(False, description='Compute summary without writing'),
 ) -> dict[str, Any]:
     """Promote crops in high-purity clusters to ``label_validated=true``.

@@ -370,6 +370,8 @@ def _items_body() -> dict[str, Any]:
                 'class_labeled_at': {'type': 'date'},
                 'test_holdout': {'type': 'boolean'},
                 'probe_pred_class': {'type': 'keyword'},
+                # Registry id of probe_pred_class (null if not in the registry).
+                'probe_pred_class_id': {'type': 'integer'},
                 'probe_pred_entropy': {'type': 'float'},
                 # Probe-model provenance + real per-class posterior
                 # derivatives.
@@ -1295,6 +1297,7 @@ async def ensure_items_probe_fields(
     """
     index = config.items_index
     fields = [
+        'probe_pred_class_id',
         'probe_pred_confidence',
         'probe_disagreement',
         'probe_pred_margin',
@@ -1303,6 +1306,7 @@ async def ensure_items_probe_fields(
     ]
     body = {
         'properties': {
+            'probe_pred_class_id': {'type': 'integer'},
             'probe_pred_confidence': {'type': 'float'},
             'probe_disagreement': {'type': 'boolean'},
             'probe_pred_margin': {'type': 'float'},

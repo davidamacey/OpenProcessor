@@ -44,6 +44,9 @@ def _human_class_provenance() -> dict[str, Any]:
     )
 
 
+_MAX_IDS = 500
+
+
 def _batch_outcome(
     crop_ids: list[str], results: list[tuple[bool, dict[str, Any] | None]]
 ) -> dict[str, Any]:
@@ -81,6 +84,17 @@ async def list_crops(
     class_source: str | None = None,
     label_validated: bool | None = None,
     hdd_source: str | None = None,
+    source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
+    needs_new_class: bool | None = None,
+    ids: Annotated[
+        str | None,
+        Query(
+            description=(
+                'Comma-separated crop ids (max 500): return exactly these items in this '
+                'order, missing ids dropped. Every other filter is ignored.'
+            )
+        ),
+    ] = None,
     include_test: bool = False,
     include_excluded: bool = False,
     max_rank: Annotated[int | None, Query(ge=1)] = None,
@@ -119,6 +133,12 @@ async def list_crops(
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
+    if ids is not None:
+        wanted = list(dict.fromkeys(i for i in (x.strip() for x in ids.split(',')) if i))
+        if len(wanted) > _MAX_IDS:
+            raise HTTPException(status_code=400, detail=f'at most {_MAX_IDS} ids per request')
+        found = await _crops_by_ids(opensearch, wanted)
+        return crops_page(total=len(found), page=1, page_size=len(wanted), crops=found)
     if limit is not None:
         page_size = limit
     try:
@@ -146,8 +166,11 @@ async def list_crops(
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).
         must.append({'term': {'class_validated': label_validated}})
-    if hdd_source:
-        must.append({'term': {'hdd_source': hdd_source}})
+    if source or hdd_source:
+        must.append({'term': {'hdd_source': source or hdd_source}})
+    if needs_new_class is not None:
+        clause: dict[str, Any] = {'term': {'needs_new_class': True}}
+        must.append(clause if needs_new_class else {'bool': {'must_not': clause}})
     if not include_test:
         must.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
     if not include_excluded:

@@ -54,6 +54,10 @@ from src.config import get_curation_config, get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.clustering import ClusterIndex
+
+# Class clusters occupy cluster_id 0..OFFSET-1; candidate clusters produced
+# by ``cluster_residuals`` get the offset added so the namespaces never collide.
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.id_normalize import run_update_by_query_polled
 
 
@@ -525,13 +529,6 @@ async def should_retrain_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
         'min_interval_s': RETRAIN_MIN_INTERVAL_S,
     }
 
-
-# Class clusters occupy cluster_id 0..80 (one per v6 class). Candidate
-# clusters produced by ``cluster_residuals`` get this offset added so the
-# two namespaces never collide and the labeler can split its cluster list
-# into "class" vs "candidate" sections cleanly. Picked 10000 to leave the
-# v6 class space room to grow ~125x before another bump is needed.
-RESIDUAL_CLUSTER_ID_OFFSET = 10000
 
 # Crops parked by the primary-subject clustering gate (too small / too
 # blurry to train centroids or be assigned). Distinct from -1 (unassigned /

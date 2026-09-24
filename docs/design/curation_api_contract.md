@@ -249,6 +249,19 @@ candidate cluster (`cluster_id >= cluster_id_offset`)
 always `null` for candidates. Class clusters report their top class as
 before.
 
+Each card also carries `purity_tier` (`pure` / `mixed` / `noisy`, `null`
+with no labelled member) and `promotable` (the auto-promote gate: at least
+`promote_min_members` members, at least `promote_min_labelled_share` of
+them labelled, purity at least `pure_min`). The response serves the cut
+points: `purity_thresholds: {pure_min: 0.85, mixed_min: 0.6,
+promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
+`src/services/curation/cluster_purity.py`; `pure_min` *is* the gate, so a
+"pure" card is always one the gate would promote on purity) and
+`core_similarity_min: 0.75` (the cut line for the items' `cluster_is_core`).
+`POST /clusters/auto_promote` counts every labelled member in the purity
+denominator (it used to count only the top-5 classes, overstating purity
+on many-class clusters).
+
 `GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
 50), `limit` (1–500; alias for `page_size`, wins when both are set),
 `sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
@@ -257,7 +270,11 @@ before.
 `cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
 else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
 `cluster_id`, `label_source`, `class_source`, `label_validated`,
-`hdd_source`, `include_test`, `include_excluded`, `max_rank`,
+`hdd_source` / `source` (same filter; `source` is the wire name),
+`needs_new_class` (bool), `ids` (comma-separated, max 500: returns exactly
+those items in that order, missing ids dropped, every other filter ignored —
+use it to hydrate a `POST /select/diverse` page in one call),
+`include_test`, `include_excluded`, `max_rank`,
 `min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
 (inclusive band on `confidence`, `400` if min > max), `order`
 (`default`/`outliers`/`diverse`), `k` (1–10000, `order=diverse` only:
@@ -453,6 +470,20 @@ Derived keys (computed by the serializer, never stored):
 - `region_bbox_in_parent` — the region box in the item-crop frame
   (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when there is no region or
   the item has no usable `bbox_norm`. Draw it on the item thumbnail as-is.
+- `proposed_class_id` / `proposed_class_name` — the class a one-key confirm
+  applies, on **every** item endpoint (was `/review`-only): the VLM
+  suggestion when there is one, else `class_id` and `vlm_raw_class` or
+  `class_name` or `""` (see "VLM class suggestion").
+- `cluster_kind` — `class` / `candidate` / `unassigned` from `cluster_id`
+  (`null` without one); same rule as the cluster cards.
+- `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
+  without a distance); `cluster_is_core` — `cluster_similarity >=
+  core_similarity_min` (served on `GET /clusters`, `0.75`).
+- Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
+  `class_excluded` (bool), `excluded_reason`, `excluded_at`,
+  `probe_pred_class_id` (registry id of `probe_pred_class`, written by the
+  probe pass), `source` (ingest source tag; stored under the legacy
+  `hdd_source` key — the wire name is `source`).
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
 `thumbnail_url` / `region_thumbnail_url` are built from the configured
@@ -464,7 +495,7 @@ must match.
 |---|---|---|
 | `GET /crops`, `GET /classes/{class_id}/crops` | `crops[]` | item |
 | `GET /crops/{crop_id}` | body | item |
-| `GET /review/{tab}` | `items[]` | item + `reason`, `proposed_class_id`, `proposed_class_name` |
+| `GET /review/{tab}` | `items[]` | item + `reason` |
 | `GET /regions` | `items[]` | item |
 | `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
 | `GET /search/text` | `items[]` | item + `semantic_score` |
