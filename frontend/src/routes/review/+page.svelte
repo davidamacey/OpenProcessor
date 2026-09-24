@@ -408,6 +408,35 @@
   // the plates tab.
   let plateTextQuery = $state<string>('');
 
+  // Generic served-enum filter bar (840beb8 adoption) — one entry per
+  // `ReviewFilterSpec.param` the active tab declares (e.g. `region_status`
+  // on the Plates tab). No param-specific code here or in `_filter()`
+  // below: a future spec on any tab just works. Reset whenever the tab
+  // changes (see the immediate `$effect` below); seeded from the URL on
+  // first load so `?region_status=verify_rejected` is bookmarkable, the
+  // same pattern `preset` uses.
+  const NON_ENUM_FILTER_PARAMS = new Set(['tab', 'preset', 'crop_id']);
+  let enumFilterValues = $state<Record<string, string>>(
+    Object.fromEntries(
+      [...page.url.searchParams.entries()].filter(
+        ([k]) => !NON_ENUM_FILTER_PARAMS.has(k),
+      ),
+    ),
+  );
+  const activeFilterSpecs = $derived(
+    reviewTabsVocabularyStore.filterSpecsFor(activeTabEndpointId),
+  );
+  function setEnumFilter(param: string, value: string): void {
+    enumFilterValues = { ...enumFilterValues, [param]: value };
+    const url = new URL(page.url);
+    if (value) {
+      url.searchParams.set(param, value);
+    } else {
+      url.searchParams.delete(param);
+    }
+    replaceState(url, {});
+  }
+
   // Primary-subject controls (primary_low_conf / coco_blind_spots tabs).
   // subjectScope: 1 = largest only, 2 = largest + 2nd (the tabs default to 2
   // server-side when unset). Clarity slider commits on release.
@@ -443,6 +472,13 @@
     // which were never gated. Always available now, like those.
     if (subjectScope !== 0) f.max_rank = subjectScope;
     if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
+    // Generic served-enum filters (840beb8 adoption) — sent whenever the
+    // operator picked a value; the backend applies its own
+    // `filter_defaults` when a param is omitted, so an unset control
+    // never needs a client-side default to fall back to.
+    for (const [param, value] of Object.entries(enumFilterValues)) {
+      if (value) f[param] = value;
+    }
     Object.assign(f, strategyBar.toQueryParams());
     return f;
   }
@@ -648,6 +684,7 @@
     void strategyBar.minMistakenness;
     void strategyBar.hideNearDuplicates;
     void strategyBar.k;
+    void enumFilterValues;
     const key = JSON.stringify([
       sourceFilter,
       plateTextQuery,
@@ -657,6 +694,7 @@
       strategyBar.minMistakenness,
       strategyBar.hideNearDuplicates,
       strategyBar.k,
+      enumFilterValues,
     ]);
     // The first run only records the starting filters: the immediate
     // effect above already loads page 1, and fetching it a second time
@@ -693,6 +731,18 @@
   onMount(() => stopDiversePolling);
 
   const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
+  // 840beb8 adoption: a slot-tab item's own `region_rejection_reason`
+  // (when present) is the authoritative, kind-styled explanation — the
+  // generic per-item `reason` string (see the "Reason" row below) always
+  // says "verifier rejected this candidate (…)", wrong wording for a
+  // needs_human item. Only fall back to `current.reason` when there's no
+  // region_rejection_reason at all (core tabs, e.g. the mismatches
+  // preset, which don't carry one).
+  const currentSlotRejectionReason = $derived<string | null>(
+    activeSlot && current
+      ? (slotOf(current, activeSlot)?.lifecycle?.rejectionReason ?? null)
+      : null,
+  );
   // DQ-M8: served role (classSourcesStore, GET {API_PREFIX}/class_sources), not
   // a hardcoded string match — mirrors sourceBadge.ts's
   // role.startsWith('vlm') check for the label-source badge.
@@ -1515,6 +1565,13 @@
             url.searchParams.set('tab', t.urlId);
             url.searchParams.delete('crop_id');
             url.searchParams.delete('preset');
+            // Generic served-enum filters are per-tab — a param from the
+            // previous tab (e.g. Plates' `region_status`) never carries
+            // into the new one, in state or the URL.
+            for (const param of Object.keys(enumFilterValues)) {
+              url.searchParams.delete(param);
+            }
+            enumFilterValues = {};
             replaceState(url, {});
             // Presets only make sense on the All tab — switching to any
             // other tab (or re-landing on All from one) always starts
@@ -1706,6 +1763,30 @@
         />
       </label>
     {/if}
+
+    <!-- Generic served-enum filter bar (840beb8 adoption) — one <select>
+         per ReviewFilterSpec the active tab's GET {API_PREFIX}/review/tabs entry
+         declares (e.g. Plates' region_status: all / detected only /
+         verifier-rejected candidates only). No param-specific markup —
+         a future spec on any tab renders here unchanged. -->
+    {#each activeFilterSpecs as spec (spec.param)}
+      <label class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">{spec.label}</span>
+        <select
+          value={enumFilterValues[spec.param] ??
+            String(
+              reviewTabsVocabularyStore.filterDefault(activeTabEndpointId, spec.param) ??
+                '',
+            )}
+          onchange={(e) => setEnumFilter(spec.param, e.currentTarget.value)}
+          class="select-sm"
+        >
+          {#each spec.options as opt (opt.value)}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      </label>
+    {/each}
 
     <!-- Always available, on every tab and preset — matches Conf/Class/HDD
          source below/above, and the backend's own query builder already
@@ -1948,8 +2029,26 @@
              metadata/Details content is open. -->
         <div class="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
           <dl class="grid grid-cols-2 gap-y-1 text-xs">
-            <dt class="text-zinc-500">Reason</dt>
-            <dd class="text-zinc-200">{current.reason ?? '—'}</dd>
+            {#if currentSlotRejectionReason}
+              {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
+                currentSlotRejectionReason,
+              )}
+              <dt class="text-zinc-500">
+                {reasonKind === 'needs_human' ? 'Needs review' : 'Rejection'}
+              </dt>
+              <dd
+                class={reasonKind === 'model_verdict'
+                  ? 'text-red-300'
+                  : reasonKind === 'needs_human'
+                    ? 'text-zinc-200'
+                    : 'text-amber-300'}
+              >
+                {regionVocabularyStore.rejectionReasonLabel(currentSlotRejectionReason)}
+              </dd>
+            {:else}
+              <dt class="text-zinc-500">Reason</dt>
+              <dd class="text-zinc-200">{current.reason ?? '—'}</dd>
+            {/if}
 
             <dt class="text-zinc-500">Current label</dt>
             <dd class="text-zinc-200">
@@ -2173,6 +2272,17 @@
                     auto-confirmed
                   </span>
                 {/if}
+                <!-- 840beb8 adoption: region_bbox_correct is the
+                     verifier's own box-correctness verdict — folded into
+                     this row rather than a new one. -->
+                {#if slotData?.lifecycle?.boxCorrect === false}
+                  <span
+                    class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+                    title="The verifier judged this box incorrect"
+                  >
+                    model: box wrong
+                  </span>
+                {/if}
               </span>
               <span class="text-zinc-500">Detector</span>
               <span class="flex flex-wrap items-center gap-1.5">
@@ -2202,22 +2312,33 @@
                   />
                 {/if}
                 {#if editedSlotBoxIsCandidate && !editMode}
-                  <!-- dq-region: a verifier-rejected candidate box exists
-                       (no region box yet). Confirm (or F) promotes it —
-                       the raw reason renders verbatim, never worded as
-                       "model said wrong box" (verifier_no_verdict means
-                       the opposite: needs human review, not a model
-                       rejection — that's region_bbox_correct===false,
-                       not this reason id). -->
+                  {@const candidateKind = regionVocabularyStore.rejectionReasonKind(
+                    slotData?.lifecycle?.rejectionReason,
+                  )}
+                  <!-- dq-region / 840beb8 adoption: a verifier-rejected
+                       candidate box exists (no region box yet). Confirm
+                       (or F) promotes it. Styled/worded by the served
+                       kind — needs_human (verifier_no_verdict) must never
+                       read as "rejected", since that means the opposite:
+                       needs human review, not a model rejection (that's
+                       region_bbox_correct===false, not this reason id). -->
                   <span
-                    class="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200"
+                    class={`rounded border px-1.5 py-0.5 text-[10px] ${
+                      candidateKind === 'needs_human'
+                        ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
+                        : candidateKind === 'model_verdict'
+                          ? 'border-red-500/40 bg-red-500/15 text-red-200'
+                          : 'border-amber-500/40 bg-amber-500/15 text-amber-200'
+                    }`}
                     title={slotData?.lifecycle?.rejectionReason
                       ? regionVocabularyStore.rejectionReasonLabel(
                           slotData.lifecycle.rejectionReason,
                         )
                       : 'Rejected candidate — Confirm to accept, F for false positive'}
                   >
-                    rejected candidate · confirm to accept
+                    {candidateKind === 'needs_human'
+                      ? 'candidate · needs review'
+                      : 'rejected candidate · confirm to accept'}
                   </span>
                 {:else if !editedSlotBox && !editMode}
                   <span
