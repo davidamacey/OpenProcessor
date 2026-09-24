@@ -143,6 +143,41 @@ def test_cluster_representatives_query_shape(app_client: Any, fake_opensearch: A
     assert top_hits['_source'] == ['crop_id', 'cluster_distance', 'class_name', 'cluster_subid']
 
 
+def test_cluster_representatives_excludes_class_excluded_items(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    """F-12: excluded items must not surface as cluster representatives --
+    this endpoint had no class_excluded guard at all before."""
+    fake_opensearch.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
+
+    r = app_client.get('/curation/clusters/representatives')
+    assert r.status_code == 200, r.text
+
+    assert fake_opensearch.search.await_args is not None
+    body = fake_opensearch.search.await_args.kwargs['body']
+    assert body['query'] == {
+        'bool': {'filter': [], 'must_not': [{'term': {'class_excluded': True}}]}
+    }
+
+
+def test_cluster_representatives_class_id_filter_keeps_class_excluded_guard(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    fake_opensearch.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
+
+    r = app_client.get('/curation/clusters/representatives?class_id=7')
+    assert r.status_code == 200, r.text
+
+    assert fake_opensearch.search.await_args is not None
+    body = fake_opensearch.search.await_args.kwargs['body']
+    assert body['query'] == {
+        'bool': {
+            'filter': [{'term': {'class_id': 7}}],
+            'must_not': [{'term': {'class_excluded': True}}],
+        }
+    }
+
+
 def test_cluster_representatives_handles_empty_buckets(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:

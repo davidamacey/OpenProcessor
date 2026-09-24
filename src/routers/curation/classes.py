@@ -25,6 +25,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation.crops import list_crops
 from src.services.curation.class_sources import class_source_catalog
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
@@ -103,8 +104,21 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                         },
                     },
                 },
+                # F-12: restrict to class-kind cluster ids (cluster_id ==
+                # class_id by invariant) via a filter agg before
+                # terms-aggregating, so candidate/residual cluster ids
+                # (>= RESIDUAL_CLUSTER_ID_OFFSET, often far more numerous
+                # than the ~80 class ids) can't crowd real class buckets
+                # out of the size-1000 cap.
                 'by_cluster': {
-                    'terms': {'field': 'cluster_id', 'size': 1000},
+                    'filter': {
+                        'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}
+                    },
+                    'aggs': {
+                        'classes': {
+                            'terms': {'field': 'cluster_id', 'size': 1000},
+                        },
+                    },
                 },
             },
         }
@@ -114,7 +128,8 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             cid = int(bucket['key'])
             counts[cid] = int(bucket.get('doc_count', 0))
             validated[cid] = int((bucket.get('validated') or {}).get('doc_count', 0))
-        for bucket in aggs.get('by_cluster', {}).get('buckets', []):
+        by_cluster_buckets = (aggs.get('by_cluster') or {}).get('classes', {}).get('buckets', [])
+        for bucket in by_cluster_buckets:
             cid = int(bucket['key'])
             cluster_size[cid] = int(bucket.get('doc_count', 0))
     except Exception as exc:

@@ -133,11 +133,22 @@ async def list_clusters(
         # class_source is mapped keyword directly on the live index — no
         # .keyword subfield exists (same root cause as top_class below).
         gate_filter.append({'term': {'class_source': class_source}})
+    # F-12: push `kind` into the query as a bounded cluster_id range filter
+    # *before* aggregating, rather than terms-aggregating every kind
+    # together (size: max_clusters) and dropping mismatched-kind buckets
+    # in Python afterward. Without this, candidate cluster ids (>= the
+    # residual offset, often far more numerous than the ~80 class ids)
+    # can rank ahead of class buckets by _count desc and crowd them out of
+    # the truncated agg entirely -- a kind='class' request could come back
+    # missing real class clusters.
+    if kind == 'class':
+        gate_filter.append({'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}})
+    elif kind == 'candidate':
+        gate_filter.append({'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}})
     outer_query: dict[str, Any] = {
         'bool': {
-            'must': [_base_match],
+            'filter': [_base_match, *gate_filter],
             'must_not': [{'term': {'class_excluded': True}}],
-            **({'filter': gate_filter} if gate_filter else {}),
         }
     }
     cluster_terms_agg: dict[str, Any] = {
@@ -288,9 +299,14 @@ async def cluster_representatives(
     class so the agg only returns clusters that contain at least one
     member of the class — driving the labeler's class-sidebar filter.
     """
-    query: dict[str, Any] = (
-        {'term': {'class_id': class_id}} if class_id is not None else {'match_all': {}}
-    )
+    # F-12: excluded items must not surface as cluster representatives
+    # either -- this endpoint had no class_excluded guard at all before.
+    query: dict[str, Any] = {
+        'bool': {
+            'filter': [{'term': {'class_id': class_id}}] if class_id is not None else [],
+            'must_not': [{'term': {'class_excluded': True}}],
+        }
+    }
     body = {
         'size': 0,
         'query': query,

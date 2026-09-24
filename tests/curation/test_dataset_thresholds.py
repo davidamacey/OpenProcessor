@@ -137,6 +137,41 @@ def test_classes_list_serves_adequacy(monkeypatch: pytest.MonkeyPatch) -> None:
     }
 
 
+def test_classes_by_cluster_agg_is_filtered_to_class_kind_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-12: /classes' by_cluster agg must be wrapped in a filter restricted
+    to class-kind cluster ids (< RESIDUAL_CLUSTER_ID_OFFSET) before
+    terms-aggregating, so candidate/residual ids can't pollute class
+    cluster_size counts or crowd real class buckets out of the size-1000
+    cap. The response-side unwrap (aggs.by_cluster.classes.buckets) must
+    match the new nested agg shape."""
+    from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+
+    resp = {
+        'aggregations': {
+            'by_class': {'buckets': [{'key': 1, 'doc_count': 5, 'validated': {'doc_count': 5}}]},
+            'by_cluster': {
+                'doc_count': 5,
+                'classes': {'buckets': [{'key': 1, 'doc_count': 5}]},
+            },
+        }
+    }
+    client, fake = _client_with_fake(monkeypatch, resp)
+    r = client.get('/curation/classes')
+    assert r.status_code == 200, r.text
+
+    body = fake.search.call_args.kwargs['body']
+    by_cluster = body['aggs']['by_cluster']
+    assert by_cluster['filter'] == {
+        'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}
+    }
+    assert by_cluster['aggs']['classes']['terms']['field'] == 'cluster_id'
+
+    rows = {c['class_id']: c for c in r.json()['classes']}
+    assert rows[1]['cluster_size'] == 5
+
+
 def test_holdout_stats_flags_deficient_classes(monkeypatch: pytest.MonkeyPatch) -> None:
     resp = {
         'hits': {'total': {'value': 12}},
