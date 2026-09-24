@@ -11,6 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.services.detection.cascade_detect import class_provenance
+
+
+# ``class_labeler`` recorded on every ingest-written items doc — the same
+# id ``occ_upsert_bulk`` logs ingest writes under.
+INGEST_CLASS_LABELER = 'ingest'
+
 
 @dataclass
 class DetectedItem:
@@ -28,6 +35,10 @@ class DetectedItem:
     pe_embedding: Any | None = None  # np.ndarray | None, kept loose to avoid a numpy import here
     cluster_id: int | None = None
     cluster_distance: float | None = None
+    # Model name + version of whichever detector last set this item's
+    # class/proposal (primary, or a secondary that overrode it).
+    class_detector: str | None = None
+    class_detector_version: str | None = None
 
 
 def build_image_doc(
@@ -80,6 +91,11 @@ def build_item_doc(
     exactly — this is the first production writer of ``crop_area_norm``,
     ``crop_rank_in_image``, ``blur_lap_var``, ``blur_lap_ratio`` and
     ``pe_embedding`` on the items index.
+
+    When the item carries a ``class_detector``, the class-provenance
+    fields (``class_detector``, ``class_detector_version``,
+    ``class_labeler='ingest'``, ``class_labeled_at=now``) are stamped
+    with the same shape every other class writer uses.
     """
     doc: dict[str, Any] = {
         'crop_id': crop_id,
@@ -119,7 +135,16 @@ def build_item_doc(
         doc['cluster_distance'] = item.cluster_distance
     if item.pe_embedding is not None:
         doc['pe_embedding'] = list(item.pe_embedding)
+    if item.class_detector:
+        doc.update(
+            class_provenance(
+                item.class_detector,
+                item.class_detector_version or '1',
+                labeler=INGEST_CLASS_LABELER,
+                labeled_at=now,
+            )
+        )
     return doc
 
 
-__all__ = ['DetectedItem', 'build_image_doc', 'build_item_doc']
+__all__ = ['INGEST_CLASS_LABELER', 'DetectedItem', 'build_image_doc', 'build_item_doc']

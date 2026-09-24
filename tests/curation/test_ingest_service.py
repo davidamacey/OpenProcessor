@@ -139,6 +139,7 @@ def _make_service(
     confidence_floor: float = 0.5,
     batch_limit: int = 8,
     fail_on_batch_gt: int | None = None,
+    detector_version: str = '1',
 ) -> tuple[CurationIngestService, FakeIngestOpenSearch, FakeTritonPool]:
     os_fake = opensearch or FakeIngestOpenSearch()
     triton = FakeTritonPool(
@@ -149,6 +150,7 @@ def _make_service(
     profile = DetectionProfile(
         name='primary',
         detector_model='primary_end2end',
+        detector_version=detector_version,
         input_size=320,
         confidence_floor=confidence_floor,
         batch_limit=batch_limit,
@@ -266,6 +268,85 @@ class TestIngestOne:
         assert result.status == 'success'
         assert result.n_crops == 0
         assert len(os_fake.images) == 1
+
+
+class TestClassProvenance:
+    """N1 — ingest is the first writer of every items doc, so it must stamp
+    the same ``class_detector``/``class_detector_version``/``class_labeler``/
+    ``class_labeled_at`` provenance every other class writer records."""
+
+    @pytest.mark.asyncio
+    async def test_confident_detection_records_primary_detector(self) -> None:
+        svc, os_fake, _ = _make_service(detector_version='7')
+        await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
+
+        [doc] = list(os_fake.items.values())
+        assert doc['class_detector'] == 'primary_end2end'
+        assert doc['class_detector_version'] == '7'
+        assert doc['class_labeler'] == 'ingest'
+        assert doc['class_labeled_at'] == doc['created_at']
+
+    @pytest.mark.asyncio
+    async def test_low_confidence_proposal_still_records_its_detector(self) -> None:
+        """The unlabeled proposal's ``coco_proposal_name`` came from this
+        detector too — its provenance is recorded even with no class_id."""
+        svc, os_fake, _ = _make_service(
+            detections=[(0.05, 0.05, 0.6, 0.6, 0.1, 1)], confidence_floor=0.5
+        )
+        await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
+
+        [doc] = list(os_fake.items.values())
+        assert 'class_id' not in doc
+        assert doc['class_detector'] == 'primary_end2end'
+        assert doc['class_detector_version'] == '1'
+
+    @pytest.mark.asyncio
+    async def test_reingest_never_overwrites_human_class_provenance(self) -> None:
+        data = _jpeg_bytes()
+        svc, os_fake, _ = _make_service()
+        await svc.ingest_one(data, '/tmp/photo.jpg')
+        [crop_id] = list(os_fake.items.keys())
+
+        os_fake.items[crop_id].update(
+            {
+                'class_source': 'human',
+                'label_source': 'human',
+                'class_detector': 'human',
+                'class_detector_version': 'h1',
+                'class_labeler': 'human',
+                'class_labeled_at': '2020-01-01T00:00:00+00:00',
+            }
+        )
+        os_fake.images.clear()
+        await svc.ingest_one(data, '/tmp/photo.jpg')
+
+        doc = os_fake.items[crop_id]
+        assert doc['class_detector'] == 'human'
+        assert doc['class_detector_version'] == 'h1'
+        assert doc['class_labeler'] == 'human'
+        assert doc['class_labeled_at'] == '2020-01-01T00:00:00+00:00'
+
+    @pytest.mark.asyncio
+    async def test_reingest_does_not_invent_provenance_on_legacy_human_doc(self) -> None:
+        """A human-owned doc written before class provenance existed must
+        not gain the ingest detector's provenance on re-ingest — that would
+        claim a detector produced a human's label."""
+        data = _jpeg_bytes()
+        svc, os_fake, _ = _make_service()
+        await svc.ingest_one(data, '/tmp/photo.jpg')
+        [crop_id] = list(os_fake.items.keys())
+        doc = os_fake.items[crop_id]
+        for key in ('class_detector', 'class_detector_version', 'class_labeler'):
+            doc.pop(key, None)
+        doc.pop('class_labeled_at', None)
+        doc.update({'class_source': 'human', 'label_source': 'human'})
+        os_fake.images.clear()
+
+        await svc.ingest_one(data, '/tmp/photo.jpg')
+
+        doc = os_fake.items[crop_id]
+        assert 'class_detector' not in doc
+        assert 'class_labeler' not in doc
 
 
 class TestQualityGate:
@@ -416,7 +497,11 @@ class TestBatchedTritonInference:
 
         def _comparable(store: dict) -> list[dict]:
             out = [
-                {k: v for k, v in doc.items() if k not in {'created_at', 'updated_at'}}
+                {
+                    k: v
+                    for k, v in doc.items()
+                    if k not in {'created_at', 'updated_at', 'class_labeled_at'}
+                }
                 for doc in store.values()
             ]
             return sorted(out, key=lambda d: d['crop_id'])
@@ -504,6 +589,11 @@ class TestBatchLabelImport:
         assert result.summary.successful == 1
         assert result.summary.labels_imported == 1
         assert any(d.get('label_source') == 'ground_truth' for d in os_fake.items.values())
+        # The imported label replaced the detector's class, so the class
+        # provenance must follow — not keep claiming the detector.
+        [item] = list(os_fake.items.values())
+        assert item['class_detector'] == 'ground_truth'
+        assert item['class_labeler'] == 'label_import'
 
     @pytest.mark.asyncio
     async def test_batch_without_label_paths_imports_nothing(self, tmp_path: Any) -> None:

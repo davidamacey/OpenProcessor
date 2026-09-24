@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.history import record_class_history
+from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.geometry import crop_id as _geometry_crop_id, iou as _iou
 
 
@@ -281,6 +282,9 @@ async def import_yolo_labels(
     classes_by_id = {c.class_id: c for c in reg.classes}
     existing_crops = await _lookup_existing_crops(str(image_id), opensearch)
     now = _now_iso()
+    # The label file, not a detector, produced these classes — overwrite
+    # any detector provenance ingest stamped on an IoU-matched item.
+    label_prov = class_provenance(label_source, '1', labeler='label_import', labeled_at=now)
 
     bulk_body: list[dict[str, Any]] = []
 
@@ -342,6 +346,7 @@ async def import_yolo_labels(
                         'class_source': label_source,
                         'class_validated': True,
                         'label_source': label_source,
+                        **label_prov,
                         'updated_at': now,
                         'class_id_history': record_class_history(best_crop, writer='label_import'),
                     }
@@ -364,6 +369,7 @@ async def import_yolo_labels(
                     'confidence': 1.0,
                     'class_validated': True,
                     'label_source': label_source,
+                    **label_prov,
                     'test_holdout': False,
                     'created_at': now,
                     'updated_at': now,

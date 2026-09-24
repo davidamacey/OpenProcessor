@@ -209,6 +209,8 @@ class WholeImageDetector:
                         else f'{self.profile.name}_low_conf'
                     ),
                     proposal_name=class_name,
+                    class_detector=self.profile.detector_model or self.profile.name,
+                    class_detector_version=self.profile.detector_version,
                 )
             )
         return out
@@ -310,6 +312,8 @@ class WholeImageDetector:
             item.class_id = sec_cls
             item.class_name = entry.class_name if entry is not None else None
             item.class_source = f'{profile.name}_model'
+            item.class_detector = profile.detector_model or profile.name
+            item.class_detector_version = profile.detector_version
             item.score = sec_score
 
 

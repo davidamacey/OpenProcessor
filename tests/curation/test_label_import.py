@@ -153,6 +153,8 @@ class TestImportYoloLabels:
         assert item['class_name'] == 'widget'
         assert item['class_validated'] is True
         assert item['label_source'] == 'external_label'
+        assert item['class_detector'] == 'external_label'
+        assert item['class_labeler'] == 'label_import'
 
     @pytest.mark.asyncio
     async def test_iou_match_flips_existing_item_validated(
@@ -167,6 +169,8 @@ class TestImportYoloLabels:
                     'image_id': 'img1',
                     'bbox_norm': [0.41, 0.41, 0.59, 0.59],
                     'class_validated': False,
+                    'class_detector': 'some_detector',
+                    'class_labeler': 'ingest',
                 }
             },
         )
@@ -177,6 +181,9 @@ class TestImportYoloLabels:
         assert os_fake.items[existing_crop_id]['class_validated'] is True
         assert os_fake.items[existing_crop_id]['class_id'] == 1
         assert os_fake.items[existing_crop_id]['class_name'] == 'gadget'
+        # The label replaced the detector's class; provenance must follow.
+        assert os_fake.items[existing_crop_id]['class_detector'] == 'external_label'
+        assert os_fake.items[existing_crop_id]['class_labeler'] == 'label_import'
 
     @pytest.mark.asyncio
     async def test_label_source_is_stamped(self, tmp_path: Path, registry: ClassRegistry) -> None:
