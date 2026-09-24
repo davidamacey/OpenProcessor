@@ -27,7 +27,12 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
+from src.services.curation.crop_browse import (
+    classifier_low_confidence_clause,
+    confidence_band,
+    crops_page,
+    parse_crop_sort,
+)
 from src.services.curation.ingest_class_sources import HUMAN_CLASS_SOURCE
 from src.services.curation.item_text import item_text_query
 from src.services.curation.wire import item_source_excludes, serialize_item
@@ -74,7 +79,7 @@ async def list_crops(
         Query(
             description=(
                 "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
-                'updated_at, created_at, confidence, classifier_raw_confidence, '
+                'updated_at, created_at, confidence, '
                 'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, '
                 'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
             )
@@ -144,7 +149,7 @@ async def list_crops(
     (e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops
     at or above a clarity threshold (the labeler slider); crops with no blur
     score are NOT dropped. ``classifier_conf_lt`` mines the "model wasn't sure" pool —
-    crops whose ``classifier_raw_confidence`` is below the value OR that have no classifier
+    crops a classifier scored below the value (``confidence``) OR that have no classifier
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
@@ -216,19 +221,7 @@ async def list_crops(
             }
         )
     if classifier_conf_lt is not None:
-        # Low-confidence band OR no v6 prediction at all (COCO/VLM-only
-        # blind spots) — not silently dropped by a plain range clause.
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'classifier_raw_confidence': {'lt': classifier_conf_lt}}},
-                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
+        filt.append(classifier_low_confidence_clause(classifier_conf_lt))
 
     bool_q: dict[str, Any] = {}
     if must:

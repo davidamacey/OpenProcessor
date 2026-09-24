@@ -12,7 +12,6 @@ CROP_SORT_FIELDS: dict[str, str] = {
     'updated_at': 'date',
     'created_at': 'date',
     'confidence': 'float',
-    'classifier_raw_confidence': 'float',
     'crop_rank_in_image': 'integer',
     'crop_area_norm': 'float',
     'blur_lap_ratio': 'float',
@@ -70,6 +69,37 @@ def confidence_band(conf_min: float | None, conf_max: float | None) -> dict[str,
     if conf_max is not None:
         rng['lte'] = conf_max
     return {'range': {'confidence': rng}}
+
+
+def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
+    """``classifier_conf_lt`` filter (D-1 / F-6): ``classifier_raw_confidence``
+    is never written in production (only a seed/test harness writes it), so a
+    filter keyed on it was a permanent no-op. Points at the stored
+    ``confidence`` field instead, restricted to items a classifier actually
+    scored -- OR no classifier prediction at all (COCO/VLM-only blind spots),
+    not silently dropped by a plain range clause.
+    """
+    from src.services.curation.ingest_class_sources import (
+        classifier_class_sources,
+        unlabeled_proposal_class_sources,
+    )
+
+    return {
+        'bool': {
+            'should': [
+                {
+                    'bool': {
+                        'must': [
+                            {'terms': {'class_source': sorted(classifier_class_sources())}},
+                            {'range': {'confidence': {'lt': lt}}},
+                        ]
+                    }
+                },
+                {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
+            ],
+            'minimum_should_match': 1,
+        }
+    }
 
 
 def crops_page(

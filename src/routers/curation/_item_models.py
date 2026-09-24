@@ -43,7 +43,6 @@ class ItemDoc(BaseModel):
     class_name: str | None = ''
     class_source: str | None = ''
     confidence: float = 0.0
-    classifier_raw_confidence: float | None = None
     # label_source is nullable: VLM writers set it to None when
     # overwriting a prior validation tag.
     label_source: str | None = ''

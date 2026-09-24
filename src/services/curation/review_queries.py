@@ -17,10 +17,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from src.config.curation import ITEM_EMBEDDING_FIELD
+from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
-from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
+from src.services.curation.ingest_class_sources import (
+    classifier_class_sources,
+    unlabeled_proposal_class_sources,
+)
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 
 
@@ -102,10 +105,12 @@ def build_tab_query(
                         {'term': {'class_source': 'vlm_unmatched'}},
                         {'term': {'class_source': 'vlm_new_class_pending'}},
                         {'terms': {'vlm_confidence': ['medium', 'low']}},
-                        # NOTE: outlier_flagged is never written anywhere in the repo — permanent no-op; see below.
-                        {'term': {'outlier_flagged': True}},
                         {'range': {'cluster_distance': {'gte': 0.35}}},
-                        {'exists': {'field': 'probe_pred_entropy'}},
+                        # D-1 (F-6): `exists probe_pred_entropy` matches
+                        # almost every non-holdout item after one probe
+                        # run -- a no-op filter in practice. Gate on an
+                        # actual uncertainty threshold instead.
+                        {'range': {'probe_pred_entropy': {'gte': PROBE_ENTROPY_REVIEW_MIN}}},
                         # Crops with no class assigned at all (YOLO11 found a
                         # vehicle but neither the classifier nor the VLM got a usable label)
                         {
@@ -137,18 +142,9 @@ def build_tab_query(
         must.append({'range': {'confidence': {'lt': 0.80}}})
         reason = 'VLM confidence below high'
     elif tab == 'outliers':
-        # NOTE: outlier_flagged is never written anywhere in the repo, so this queue is effectively cluster_distance >= 0.35 only.
-        must.append(
-            {
-                'bool': {
-                    'should': [
-                        {'term': {'outlier_flagged': True}},
-                        {'range': {'cluster_distance': {'gte': 0.35}}},
-                    ],
-                    'minimum_should_match': 1,
-                },
-            }
-        )
+        # D-1 (F-6): outlier_flagged is never written anywhere in the
+        # repo -- deleted. This queue is cluster_distance >= 0.35 only.
+        must.append({'range': {'cluster_distance': {'gte': 0.35}}})
         # Default sort: 'atypicality' — see review_sorts.py.
         reason = 'outlier — far from cluster centroid'
     elif tab == 'uncertainty':
@@ -252,12 +248,23 @@ def build_tab_query(
         # (or no classifier box at all) and let rank + the clarity slider strip the
         # junk, so a large clear crop the classifier whiffed on at 0.05 still surfaces.
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
+        # D-1 (F-6): classifier_raw_confidence is never written in
+        # production -- point the "unsure" branch at the stored
+        # `confidence` field, restricted to items a classifier actually
+        # scored (unlabeled_proposal_class_sources() below already covers
+        # "no classifier box at all").
         must.append(
             {
                 'bool': {
                     'should': [
-                        {'range': {'classifier_raw_confidence': {'lt': LOW_CONFIDENCE_MAX}}},
-                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
+                        {
+                            'bool': {
+                                'must': [
+                                    {'terms': {'class_source': sorted(classifier_class_sources())}},
+                                    {'range': {'confidence': {'lt': LOW_CONFIDENCE_MAX}}},
+                                ]
+                            }
+                        },
                         {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
                     ],
                     'minimum_should_match': 1,

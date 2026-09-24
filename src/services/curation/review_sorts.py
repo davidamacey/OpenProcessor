@@ -255,7 +255,10 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                     }
                 },
                 {
-                    'classifier_raw_confidence': {
+                    # D-1 (F-6): classifier_raw_confidence is never written
+                    # in production -- sort on the stored `confidence`
+                    # field instead (ascending: least confident first).
+                    'confidence': {
                         'order': 'asc',
                         'missing': '_last',
                         'unmapped_type': 'double',

@@ -46,7 +46,7 @@ LEGACY_SORT_CLAUSE = {
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
         {
-            'classifier_raw_confidence': {
+            'confidence': {
                 'order': 'asc',
                 'missing': '_last',
                 'unmapped_type': 'double',

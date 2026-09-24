@@ -1619,17 +1619,6 @@
             "title": "Class Validated",
             "type": "boolean"
           },
-          "classifier_raw_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classifier Raw Confidence"
-          },
           "cluster_distance": {
             "anyOf": [
               {
@@ -5103,7 +5092,7 @@
     },
     "/curation/crops": {
       "get": {
-        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops whose ``classifier_raw_confidence`` is below the value OR that have no classifier\nprediction at all (blind spots).",
+        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops a classifier scored below the value (``confidence``) OR that have no classifier\nprediction at all (blind spots).",
         "operationId": "list_crops_curation_crops_get",
         "parameters": [
           {
@@ -5150,7 +5139,7 @@
             }
           },
           {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, classifier_raw_confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -5163,7 +5152,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, classifier_raw_confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
               "title": "Sort"
             }
           },

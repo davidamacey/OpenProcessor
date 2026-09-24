@@ -63,7 +63,6 @@ def _stored_doc(storage: RegionFields) -> dict[str, Any]:
         'class_name': 'thing',
         'class_source': 'vlm',
         'confidence': 0.42,
-        'classifier_raw_confidence': 0.4,
         'label_source': 'vlm',
         'class_validated': False,
         'vlm_confidence': 'medium',
@@ -183,7 +182,9 @@ def test_region_values_reach_the_wire(monkeypatch: pytest.MonkeyPatch) -> None:
     for attr, value in _region_values().items():
         assert crop[wire.region_wire_key(attr)] == value, attr
     assert crop['vlm_confidence'] == 'medium'
-    assert crop['classifier_raw_confidence'] == 0.4
+    # F-6 / D-1: classifier_raw_confidence is retired -- never written in
+    # production, so it must no longer appear on the wire at all.
+    assert 'classifier_raw_confidence' not in crop
 
 
 def test_vlm_suggestion_keys_on_every_item() -> None:

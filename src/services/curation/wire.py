@@ -154,7 +154,6 @@ def serialize_item(
         'class_name': src.get('class_name', ''),
         'class_source': src.get('class_source', ''),
         'confidence': float(src.get('confidence') or 0.0),
-        'classifier_raw_confidence': src.get('classifier_raw_confidence'),
         'label_source': src.get('label_source', ''),
         # Derived: either the class or the region was confirmed.
         'label_validated': bool(

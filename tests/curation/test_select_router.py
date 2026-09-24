@@ -104,8 +104,10 @@ def test_scope_query_review_tab_reuses_review_queries() -> None:
 
     q = _build_scope_query(SelectDiverseScope(review_tab='outliers'))
     # review_queries.build_tab_query's 'outliers' tab adds the
-    # outlier_flagged/cluster_distance should-clause verbatim.
-    assert any('should' in clause.get('bool', {}) for clause in q['bool']['must'])
+    # cluster_distance clause verbatim (F-6: outlier_flagged -- never
+    # written anywhere -- was deleted, so this is no longer wrapped in a
+    # should).
+    assert {'range': {'cluster_distance': {'gte': 0.35}}} in q['bool']['must']
 
 
 def test_scope_query_unknown_review_tab_raises_http_400() -> None:

@@ -41,6 +41,13 @@ BACKBONE_EMBEDDING_FIELD = 'v6_embedding'
 # generic ``embedding`` field.
 ITEM_EMBEDDING_FIELD = 'pe_embedding'
 
+# F-6: minimum active-learning probe entropy (nats) for the 'all' review
+# tab's catch-all clause. Before this, the tab matched on `exists
+# probe_pred_entropy`, which after one probe run matches almost every
+# non-holdout item -- a no-op filter in practice. Tune per-deployment;
+# 1.0 nats is a reasonable default for a handful-of-classes cohort.
+PROBE_ENTROPY_REVIEW_MIN = 1.0
+
 
 class IndexRole(str, Enum):
     """Logical role of a curation OpenSearch index.
