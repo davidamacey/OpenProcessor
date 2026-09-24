@@ -9,9 +9,9 @@ from typing import Any
 from fastapi import Query
 from fastapi.responses import StreamingResponse
 
-from src.config.region_fields import get_region_fields
 from src.routers.curation._common import _PublishEvent, router
 from src.services.curation.event_hub import get_event_hub
+from src.services.curation.wire import region_wire_key
 
 
 _SSE_HEARTBEAT_SECONDS = 15.0
@@ -80,11 +80,11 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
     that don't share the API process. Events from in-process callers
     (ingest, VLM label_batch) skip this endpoint and call the hub directly.
     """
-    fields = get_region_fields()
+    status_key = region_wire_key('status')
     event: dict[str, Any] = {
         'type': payload.type,
         'topic': payload.topic
-        or (fields.status if payload.type == 'crop.region_verified' else 'crop'),
+        or (status_key if payload.type == 'crop.region_verified' else 'crop'),
     }
     if payload.crop_id is not None:
         event['crop_id'] = payload.crop_id
@@ -94,10 +94,10 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
         event['class_name'] = payload.class_name
     if payload.class_source is not None:
         event['class_source'] = payload.class_source
-    if payload.plate_status is not None:
-        event[fields.status] = payload.plate_status
-    if payload.plate_text is not None:
-        event[fields.text] = payload.plate_text
+    if payload.region_status is not None:
+        event[status_key] = payload.region_status
+    if payload.region_text is not None:
+        event[region_wire_key('text')] = payload.region_text
     if payload.image_path is not None:
         event['image_path'] = payload.image_path
     if payload.extra:

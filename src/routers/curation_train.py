@@ -700,8 +700,8 @@ async def _run_preflight(
                 name='empty_labels',
                 severity='ok',
                 message=(
-                    f'LPR export: {positive} positive plate frames{background_note} — '
-                    'background/negative frames are expected for LPR, not scanned as '
+                    f'single-class export: {positive} positive frames{background_note} — '
+                    'background/negative frames are expected here, not scanned as '
                     "'empty labels'"
                 ),
             )
@@ -711,8 +711,8 @@ async def _run_preflight(
                 name='region_pairing',
                 severity='ok',
                 message=(
-                    'not applicable for this dataset kind (single-class plate export '
-                    'has no parent vehicle boxes by construction)'
+                    'not applicable for this dataset kind (a single-class export '
+                    'has no parent item boxes by construction)'
                 ),
             )
         )
@@ -786,7 +786,7 @@ async def _run_preflight(
                     PreflightCheck(
                         name='region_pairing',
                         severity='ok',
-                        message='no license_plate boxes in this export/subset',
+                        message='no region boxes in this export/subset',
                     )
                 )
             elif scan.unpaired_plate_boxes > 0:
@@ -795,8 +795,8 @@ async def _run_preflight(
                         name='region_pairing',
                         severity='warn',
                         message=(
-                            f'{scan.unpaired_plate_boxes}/{scan.plate_boxes} license_plate '
-                            'boxes have no matching parent vehicle box in the same image'
+                            f'{scan.unpaired_plate_boxes}/{scan.plate_boxes} region '
+                            'boxes have no matching parent item box in the same image'
                         ),
                         detail={
                             'region_boxes': scan.plate_boxes,
@@ -809,7 +809,7 @@ async def _run_preflight(
                     PreflightCheck(
                         name='region_pairing',
                         severity='ok',
-                        message=f'all {scan.plate_boxes} license_plate boxes are paired',
+                        message=f'all {scan.plate_boxes} region boxes are paired',
                     )
                 )
 
@@ -822,9 +822,9 @@ async def _run_preflight(
                     name='ingest_idle',
                     severity='warn',
                     message=(
-                        f'{pending:,} crops are still pending plate '
-                        'detection/verification. A dual-GPU run stops the SAM3 '
-                        'and Gemma containers, pausing that ingest until the run '
+                        f'{pending:,} crops are still pending region '
+                        'detection/verification. A dual-GPU run stops the segmenter '
+                        'and VLM containers, pausing that ingest until the run '
                         'finishes (it auto-resumes afterward).'
                     ),
                     detail={'pending_ingest': pending},
@@ -835,7 +835,7 @@ async def _run_preflight(
                 PreflightCheck(
                     name='ingest_idle',
                     severity='ok',
-                    message='No ingest backlog — safe to stop SAM3 + Gemma for training',
+                    message='No ingest backlog — safe to stop the segmenter + VLM for training',
                 )
             )
 

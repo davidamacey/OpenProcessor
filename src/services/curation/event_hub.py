@@ -34,8 +34,8 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any
 
-from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.wire import region_event_payload
 
 
 if TYPE_CHECKING:
@@ -206,16 +206,9 @@ def publish_region_verified(
     *,
     region_status: str,
     region_text: str | None = None,
-    fields: RegionFields | None = None,
 ) -> None:
-    """Convenience wrapper for sam-worker region updates."""
-    f = fields or get_region_fields()
+    """Convenience wrapper for sam-worker region updates. Payload keys are
+    the fixed wire names, never the storage field names."""
     get_event_hub().publish(
-        {
-            'type': 'crop.region_verified',
-            'topic': f.status,
-            'crop_id': crop_id,
-            f.status: region_status,
-            f.text: region_text,
-        }
+        region_event_payload(crop_id, region_status=region_status, region_text=region_text)
     )

@@ -381,7 +381,7 @@ class TestVlmLabelBatchHumanGuard:
         (tmp_path / f'{crop_id}.jpg').write_bytes(buf.getvalue())
 
         import src.routers.curation.vlm as vlm_mod
-        from src.routers.curation._common import VlmLabelBatchRequest
+        from src.routers.curation.vlm import VlmLabelBatchRequest
 
         fake_labeler = AsyncMock()
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])

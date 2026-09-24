@@ -1,6 +1,6 @@
 """Curation region-clustering + false-positive endpoints.
 
-Ported from the reference ``legacy_plates_fp.py`` (310 LOC). Split out of
+Ported from the reference implementation's region-FP router. Split out of
 ``regions.py`` to keep each router sub-module focused (and under the
 700-LOC gate). Covers the region-cluster *view* (coarse KMeans buckets
 + AHC refine), the permanent false-positive bucket, and the
@@ -36,8 +36,14 @@ from src.routers.curation._common import (
 from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES, _region_item
 
 
+# ``dominant_class_name`` for a non-FP region-cluster card. Region clusters
+# are single-class by construction (every member is a region), so the card
+# carries the generic region name rather than a domain class.
+REGION_CLUSTER_CLASS_NAME = 'region'
+
+
 @router.post('/regions/cluster')
-async def cluster_plates(
+async def cluster_regions(
     opensearch: OpenSearchDep,
     max_rank: int | None = Query(None, ge=1, description='Only top-N largest crops.'),
     auto_fp_threshold: float = Query(
@@ -74,7 +80,7 @@ async def cluster_plates(
 
 
 @router.get('/regions/cluster/status')
-async def plate_cluster_status() -> dict[str, Any]:
+async def region_cluster_status() -> dict[str, Any]:
     """Status of the background region-clustering job."""
     from src.services.curation.clustering.orchestrator import region_cluster_job_status
 
@@ -82,7 +88,7 @@ async def plate_cluster_status() -> dict[str, Any]:
 
 
 @router.post('/regions/clusters/refine/{cluster_id}')
-async def refine_plate_cluster_endpoint(
+async def refine_region_cluster_endpoint(
     cluster_id: int,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
@@ -97,8 +103,8 @@ async def refine_plate_cluster_endpoint(
     try:
         result = await refine_region_cluster(opensearch, cluster_id)
     except Exception as exc:
-        logger.error('legacy_plate_refine_failed', cluster_id=cluster_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f'plate refine failed: {exc}') from exc
+        logger.error('region_refine_failed', cluster_id=cluster_id, error=str(exc))
+        raise HTTPException(status_code=500, detail=f'region refine failed: {exc}') from exc
     # Anchor the re-partition TTL on good-bucket refines so a later one-click
     # recluster won't wipe this fresh sub-cluster work (the FP bucket is rebuilt
     # by its own centroid job, not protected here).
@@ -108,7 +114,7 @@ async def refine_plate_cluster_endpoint(
 
 
 @router.get('/regions/clusters')
-async def list_plate_clusters(
+async def list_region_clusters(
     opensearch: OpenSearchDep,
     max_clusters: int = Query(500, ge=1, le=2000),
     per_cluster: int = Query(4, ge=1, le=20),
@@ -178,7 +184,9 @@ async def list_plate_clusters(
                 'size': int(b['doc_count']),
                 'validated_count': int((b.get('validated') or {}).get('doc_count', 0)),
                 'dominant_class_id': None,
-                'dominant_class_name': RegionStatus.FALSE_POSITIVE if is_fp else 'license_plate',
+                'dominant_class_name': RegionStatus.FALSE_POSITIVE
+                if is_fp
+                else REGION_CLUSTER_CLASS_NAME,
                 'dominant_pct': None,
                 'purity': None,
                 'is_unlabeled': True,

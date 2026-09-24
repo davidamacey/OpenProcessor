@@ -6,7 +6,6 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Path as PathParam, Query
 
-from src.config.region_fields import get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -25,6 +24,7 @@ from src.services.curation.holdout import (
     persist_freeze_record,
     select_test_holdout,
 )
+from src.services.curation.wire import item_source_excludes, serialize_item
 
 
 @router.get('/review/unmatched_terms')
@@ -214,8 +214,8 @@ async def review_queue(
     text: str | None = Query(
         None,
         description=(
-            'Plate-tab only: case-insensitive substring search on '
-            'plate_text. Ignored on other tabs.'
+            'Regions-tab only: case-insensitive substring search on '
+            'region_text. Ignored on other tabs.'
         ),
     ),
     # max_rank: keep crop_rank_in_image <= this (primary tabs default 2).
@@ -249,7 +249,6 @@ async def review_queue(
     where the new model thinks the human was wrong).
     """
     await _ensure_indexes(opensearch)
-    fields = get_region_fields()
 
     # Per-tab must/must_not/reason construction lives in review_queries.py
     # (split out so this file stays under the 700-LOC pre-commit ceiling —
@@ -325,7 +324,7 @@ async def review_queue(
         # one extra count pass per search — fine at typical deployment QPS.
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors to the review grid.
-        '_source': {'excludes': ['pe_embedding', 'v6_embedding']},
+        '_source': {'excludes': item_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -338,103 +337,14 @@ async def review_queue(
     items: list[dict[str, Any]] = []
     for h in hits:
         src = h.get('_source') or {}
-        crop_id = src.get('crop_id') or h.get('_id', '')
-        proposed_id = src.get('vlm_proposed_class_id') or src.get('class_id')
-        proposed_name = (
+        item = serialize_item(src, h.get('_id', ''))
+        # Review-only extras on top of the shared wire item.
+        item['reason'] = reason
+        item['proposed_class_id'] = src.get('vlm_proposed_class_id') or src.get('class_id')
+        item['proposed_class_name'] = (
             src.get('vlm_proposed_class') or src.get('vlm_raw_class') or src.get('class_name') or ''
         )
-        items.append(
-            {
-                # LegacyCrop fields the labeler ReviewItem extends.
-                'id': crop_id,
-                'crop_id': crop_id,
-                'source_image_path': src.get('image_path', ''),
-                'image_path': src.get('image_path', ''),
-                'bbox_norm': src.get('bbox_norm') or [],
-                'class_id': src.get('class_id'),
-                'class_name': src.get('class_name', ''),
-                'class_source': src.get('class_source', ''),
-                'confidence': float(src.get('confidence') or 0.0),
-                # Categorical Gemma confidence (high/medium/low) shown alongside
-                # the numeric v6 confidence — labeler renders "v6: 95.9 %,
-                # gemma: medium" so the rows aren't ambiguous.
-                'vlm_confidence': src.get('vlm_confidence'),
-                'label_source': src.get('label_source', ''),
-                # Plan §1.3, A-PR2: legacy label_validated derived; expose
-                # the split fields directly so Slice C can migrate.
-                'label_validated': bool(
-                    src.get('class_validated')
-                    or src.get(fields.validated)
-                    or src.get('label_validated', False)
-                ),
-                'class_validated': bool(src.get('class_validated', False)),
-                'plate_validated': bool(src.get(fields.validated, False)),
-                'cluster_id': src.get('cluster_id'),
-                'cluster_distance': src.get('cluster_distance'),
-                'plate_bbox_norm': src.get(fields.bbox_norm),
-                'plate_score': src.get(fields.score),
-                'test_holdout': bool(src.get('test_holdout', False)),
-                # Primary-subject rank + blur + COCO hint for the new tabs.
-                'crop_rank_in_image': src.get('crop_rank_in_image'),
-                'crop_area_norm': src.get('crop_area_norm'),
-                'blur_lap_ratio': src.get('blur_lap_ratio'),
-                'classifier_raw_confidence': src.get('classifier_raw_confidence'),
-                'coco_proposal_name': src.get('coco_proposal_name'),
-                'updated_at': src.get('updated_at', ''),
-                'thumbnail_url': f'/curation/crops/{crop_id}/thumbnail',
-                # ReviewItem extras.
-                'reason': reason,
-                'proposed_class_id': proposed_id,
-                'proposed_class_name': proposed_name,
-                # Phase 5 active-learning loop: surfaces in the
-                # model_disagreements tab so the user sees what the new
-                # model thought (and how confident it was).
-                'probe_pred_class': src.get('probe_pred_class'),
-                'probe_pred_entropy': src.get('probe_pred_entropy'),
-                # Region-detection outputs — needed by the `regions` review tab
-                # so the labeler can render the bbox on the source image
-                # for human confirmation.
-                # Frozen plate_* wire names (docs/design/curation_api_contract.md) —
-                # `fields.*` on the right-hand side only picks the OpenSearch
-                # storage key to read from; the JSON key itself must never be
-                # RegionFields-indirected or it leaks the storage field name
-                # (region_* by default) onto the HTTP contract.
-                'plate_status': src.get(fields.status),
-                'plate_verified': src.get(fields.verified),
-                # Region provenance (Wave 1) — labeler chips render which
-                # detector + verifier produced the stored bbox.
-                'plate_detector': src.get(fields.detector),
-                'plate_detector_version': src.get(fields.detector_version),
-                'plate_detector_chain': src.get(fields.detector_chain),
-                'plate_bbox_frame': src.get(fields.bbox_frame),
-                'plate_detected_at': src.get(fields.detected_at),
-                'plate_verifier': src.get(fields.verifier),
-                'plate_verifier_version': src.get(fields.verifier_version),
-                'plate_verified_at': src.get(fields.verified_at),
-                'plate_rejection_reason': src.get(fields.rejection_reason),
-                'plate_visible': src.get(fields.visible),
-                # Region OCR (Wave 2b — fields may be absent until that
-                # phase ships; pass through unconditionally).
-                'plate_text': src.get(fields.text),
-                'plate_text_raw': src.get(fields.text_raw),
-                'plate_text_source': src.get(fields.text_source),
-                'plate_text_confidence': src.get(fields.text_confidence),
-                'plate_text_engine_version': src.get(fields.text_engine_version),
-                # Class provenance (Wave 1).
-                'class_detector': src.get('class_detector'),
-                'class_detector_version': src.get('class_detector_version'),
-                'class_labeled_at': src.get('class_labeled_at'),
-                'class_labeler': src.get('class_labeler'),
-                # Curation-score overlays (Phase 3, review_sorts.py) — pass
-                # through unconditionally; absent on any crop no scoring
-                # job has touched yet.
-                'mistakenness_score': src.get('mistakenness_score'),
-                'uniqueness_score': src.get('uniqueness_score'),
-                'dup_group_id': src.get('dup_group_id'),
-                'dup_group_size': src.get('dup_group_size'),
-                'dup_is_representative': src.get('dup_is_representative'),
-            }
-        )
+        items.append(item)
     return {
         'total': int(total),
         'page': page,

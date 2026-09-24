@@ -50,6 +50,8 @@ import httpx
 
 
 DEFAULT_API = os.environ.get('OP_API', 'http://localhost:4603')
+# Same env + default as CurationConfig.api_prefix, so the worker follows the API's mount.
+API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation').rstrip('/')
 DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
 # This script polls OpenSearch directly (bypassing yolo-api), so it needs
 # the same override the src/ modules read via
@@ -140,7 +142,7 @@ async def label_batch(
 ) -> dict:
     """Call /curation/vlm/label_batch for one chunk."""
     r = await client.post(
-        f'{api}/curation/vlm/label_batch',
+        f'{api}{API_PREFIX}/vlm/label_batch',
         json={'crop_ids': crop_ids},
         timeout=300.0,
     )
