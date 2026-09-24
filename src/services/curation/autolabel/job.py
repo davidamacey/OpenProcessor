@@ -45,6 +45,7 @@ Public API:
 
 * :func:`start_job` — write the trigger file, return a snapshot.
 * :func:`get_state` — read state.json (with stale-heartbeat repair).
+* :func:`get_job_state` — one job by id (current, or archived on replace).
 * :func:`cancel_job` — touch the cancel flag.
 * :func:`auto_label_changed_event` — asyncio.Event signalled whenever
   ``state.json`` is rewritten (driven by the inotify watcher below).
@@ -271,6 +272,19 @@ def get_state() -> dict[str, Any]:
     return state.to_dict()
 
 
+def get_job_state(job_id: str) -> dict[str, Any] | None:
+    """State of job ``job_id``: the live state if it is the current job,
+    else its archived final state; ``None`` for an id no job had."""
+    from src.services.curation.autolabel import job_history
+
+    if not job_history.valid_job_id(job_id):
+        return None
+    current = get_state()
+    if current.get('job_id') == job_id:
+        return current
+    return job_history.load(_STATE_DIR, job_id)
+
+
 class _Progress:
     """Progress reporter used by the worker. Writes through to the
     on-disk state file at every advance. Importable so test doubles can
@@ -447,6 +461,12 @@ def start_job(pipeline_fn: PipelineFn, kwargs: dict[str, Any]) -> dict[str, Any]
         _EXIT_CODE_FILE.unlink()
     with contextlib.suppress(FileNotFoundError):
         _HEARTBEAT_FILE.unlink()
+
+    # Keep the outgoing job answerable by id (GET .../status/{job_id}).
+    # get_state() first so a dead run is archived with its repaired status.
+    from src.services.curation.autolabel import job_history
+
+    job_history.archive(_STATE_DIR, get_state())
 
     pipeline_path = _pipeline_import_path(pipeline_fn)
     serializable_args = _serializable(kwargs)

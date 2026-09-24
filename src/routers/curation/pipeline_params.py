@@ -32,15 +32,22 @@ REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip 
 # Labeling-assist item selection (task d): scope a run to one registry class.
 CLASS_ID_DESC = (
     'Scope the VLM labeling stage to a single registry class (labeling-assist '
-    'item selection). Clustering and auto-promote are not scoped. Unset runs '
+    'item selection); its cluster-id upkeep touches only the selected items. '
+    'Clustering and auto-promote are not scoped. Unset runs '
     'the full unvalidated cohort, unchanged from before this parameter existed.'
 )
 
 CLUSTER_ID_DESC = (
-    'Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, '
-    "non-excluded member is labeled (the global sweep's cost skips do not apply). "
-    'POST /vlm/label_cluster/{cluster_id} starts exactly this run.'
+    'Scope the run to one cluster: every unvalidated, non-holdout, non-excluded '
+    "member is VLM-labeled (the global sweep's cost skips do not apply) and every "
+    'write stays on those members, so the index-wide clustering and auto-promote '
+    'stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.'
 )
+
+CLUSTER_SCOPED_SKIP: dict[str, object] = {
+    'skipped': True,
+    'reason': 'cluster-scoped run: index-wide stage not run',
+}
 
 # detection_profile is NOT a per-run option: region detection runs in the
 # detection worker on OP_REGION_PROFILE and no auto-label stage uses it.

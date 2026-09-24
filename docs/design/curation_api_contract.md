@@ -84,7 +84,7 @@ by router module; every path is relative to the configured
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
-| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
+| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `GET /pipeline/auto_label/status/{job_id}`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
 | `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
@@ -192,7 +192,23 @@ of members selected; on completion `result.stages.unvalidated_after_promote`
 is that count, `result.stages.vlm` `{predicted, updated, …}`, and
 `result.unvalidated_remaining` counts what is still unvalidated in the cluster.
 The same scope is available as `?cluster_id=` on `POST
-/pipeline/auto_label[/start]`.
+/pipeline/auto_label[/start]`. A cluster-scoped job writes **only** to the
+members it selected: the index-wide stages (`cluster_id_normalize`,
+`cluster_residuals`, `auto_promote`) are skipped even if requested
+(`result.stages.<stage>` = `{skipped: true, reason: "cluster-scoped run: …"}`),
+and the post-VLM `cluster_id = class_id` pass runs on the selected items
+only (same for a `?class_id=`-scoped VLM stage).
+
+### Auto-label job by id — `GET /pipeline/auto_label/status/{job_id}`
+
+Poll the job a client started with the `job_id` its start response
+returned. Same body as `GET /pipeline/auto_label/status` (`job_id`,
+`status` `queued|running|completed|failed|cancelled|interrupted`, `stage`,
+`processed`, `total`, `started_at`, `finished_at`, `error`,
+`error_detail`, `result`, `args`, `pipeline`, backend/VRAM telemetry,
+`stage_durations`, `eta_seconds`, `elapsed_seconds`). The current job is
+read live; a job replaced by a later start answers with its final state
+(the newest 50 are kept). `404` for an id no job had (or not a 32-hex id).
 
 ### Region shape warnings — deliberately none
 
