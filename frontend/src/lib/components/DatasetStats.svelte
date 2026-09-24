@@ -390,9 +390,15 @@
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Clusters</dt>
+            <dt class="text-zinc-400">Clusters (total now)</dt>
             <dd class="font-mono">{fmt(stats.clusters.cluster_count)}</dd>
           </div>
+          {#if stats.clusters.last_run_cluster_count != null}
+            <div class="flex justify-between">
+              <dt class="text-zinc-400">Made by last run</dt>
+              <dd class="font-mono">{fmt(stats.clusters.last_run_cluster_count)}</dd>
+            </div>
+          {/if}
           <div class="flex justify-between">
             <dt class="text-zinc-400">Residual</dt>
             <dd class="font-mono">{fmt(stats.clusters.residual_count)}</dd>

@@ -1128,6 +1128,11 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- The dashboard's "Last clustering" card showed `clusters.cluster_count`
+  as "Clusters", but until OpenProcessor b7231e6 that was the last
+  auto-label run's own count (1), not the index total (106). It now reads
+  "Clusters (total now)", plus a separate "Made by last run" row from the
+  new `last_run_cluster_count`.
 - `/review`'s served enum filter bar forwards only the params the active
   tab's `filter_specs` declare, so an unrelated or stale URL param never
   reaches `GET {API_PREFIX}/review/{tab}`. A deep link carrying one

@@ -1027,7 +1027,10 @@ export interface DatasetStats {
   };
   clusters: {
     last_run_at: string | null;
+    /** Current total of distinct non-noise clusters in the index. */
     cluster_count: number;
+    /** How many clusters the last auto-label run itself made (null: no run). */
+    last_run_cluster_count?: number | null;
     residual_count: number;
     noise_count: number;
     method: string | null;

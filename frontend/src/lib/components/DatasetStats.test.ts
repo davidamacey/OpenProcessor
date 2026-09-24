@@ -82,6 +82,34 @@ describe('DatasetStats', () => {
     expect(totalLabel).toBeTruthy();
   });
 
+  it('shows the current cluster total and, separately, what the last run made', () => {
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(DatasetStats, { target, props: {} });
+    flushSync();
+
+    capturedOpts?.onSnapshot?.(
+      {},
+      goodStats({
+        clusters: {
+          last_run_at: null,
+          cluster_count: 106,
+          last_run_cluster_count: 1,
+          residual_count: 0,
+          noise_count: 0,
+          method: null,
+        },
+      }) as unknown as Record<string, unknown>,
+    );
+    flushSync();
+
+    const rows = Array.from(target.querySelectorAll('dl div')).map((d) =>
+      d.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(rows).toContain('Clusters (total now) 106');
+    expect(rows).toContain('Made by last run 1');
+  });
+
   it('shows "Stats unavailable" on an {error} payload and keeps the last good values', () => {
     target = document.createElement('div');
     document.body.appendChild(target);
