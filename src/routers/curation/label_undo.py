@@ -19,6 +19,8 @@ from fastapi import HTTPException
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
+    CropDiscardBatchRequest,
+    CropDiscardRequest,
     CropUndoBatchRequest,
     OpenSearchDep,
     _now_iso,
@@ -27,6 +29,8 @@ from src.routers.curation._common import (
 )
 from src.services.curation.exclusion import park_restored_state_while_excluded
 from src.services.curation.history import (
+    CLASS_STATE_FIELDS,
+    HUMAN_DISCARD_WRITER,
     HUMAN_UNLABEL_WRITER,
     find_undo_snapshot,
     record_class_snapshot,
@@ -174,3 +178,102 @@ async def unlabel_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
     """
     await _undo_one(opensearch, crop_id, require_history=False)
     return {'crop_id': crop_id, 'reset': True}
+
+
+def _discard_merger(payload: CropDiscardRequest) -> Any:
+    def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        now = _now_iso()
+        update: dict[str, Any] = {
+            'class_id_history': record_class_snapshot(
+                current, writer=HUMAN_DISCARD_WRITER, restorable=True
+            ),
+            'updated_at': now,
+        }
+        if payload.clear_class:
+            update.update(dict.fromkeys(CLASS_STATE_FIELDS))
+            update['class_validated'] = False
+        if payload.dismiss_from_review:
+            update['review_dismissed_at'] = now
+            update['review_dismissed_by'] = 'human'
+        return update
+
+    return _merge
+
+
+def _require_effect(payload: CropDiscardRequest) -> None:
+    if not (payload.clear_class or payload.dismiss_from_review):
+        raise HTTPException(
+            status_code=422, detail='discard needs clear_class and/or dismiss_from_review'
+        )
+
+
+async def _discard_one(opensearch: Any, crop_id: str, payload: CropDiscardRequest) -> None:
+    try:
+        await occ_update_one(
+            opensearch,
+            doc_id=crop_id,
+            merger=_discard_merger(payload),
+            refresh=True,
+            writer_id=HUMAN_DISCARD_WRITER,
+        )
+    except OCCFinalConflictError:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+
+
+@router.post('/crops/{crop_id}/discard')
+async def discard_crop(
+    crop_id: str, payload: CropDiscardRequest, opensearch: OpenSearchDep
+) -> dict[str, Any]:
+    """Discard an item, as a recorded human write.
+
+    ``clear_class`` (default ``true``): the item doesn't belong in its
+    class/cluster — class, provenance and validation are cleared and it
+    drops to the residual pool (``cluster_id: null``).
+    ``dismiss_from_review`` (default ``false``): hide it from every
+    ``/review`` tab (``review_dismissed_at``). The pre-write state is
+    snapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it
+    exactly. Returns the post-write item. ``422`` when neither is set.
+    """
+    _require_effect(payload)
+    await _discard_one(opensearch, crop_id, payload)
+    items = await _items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]
+
+
+@router.post('/crops/discard_batch')
+async def discard_crops(
+    payload: CropDiscardBatchRequest, opensearch: OpenSearchDep
+) -> dict[str, Any]:
+    """Batch form of ``POST /crops/{crop_id}/discard``. Returns ``items``
+    (post-write wire items), ``discarded``, and ``conflicts`` /
+    ``not_found`` id lists. Undo with ``POST /crops/label/undo_batch``
+    passing the discarded ids."""
+    _require_effect(payload)
+    crop_ids = list(dict.fromkeys(payload.crop_ids))
+
+    async def _one(crop_id: str) -> str:
+        try:
+            await _discard_one(opensearch, crop_id, payload)
+        except OCCFinalConflictError:
+            return 'conflicts'
+        except HTTPException:
+            return 'not_found'
+        except Exception as exc:
+            logger.warning('discard_failed', crop_id=crop_id, error=str(exc))
+            return 'conflicts'
+        return 'discarded'
+
+    outcomes = await asyncio.gather(*(_one(cid) for cid in crop_ids))
+    by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': []}
+    for crop_id, outcome in zip(crop_ids, outcomes, strict=True):
+        by[outcome].append(crop_id)
+    return {
+        'items': await _items_by_ids(opensearch, by['discarded']),
+        'discarded': len(by['discarded']),
+        'conflicts': by['conflicts'],
+        'not_found': by['not_found'],
+    }

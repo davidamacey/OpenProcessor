@@ -35,6 +35,9 @@ from src.config import IndexRole, get_curation_config, index_name
 from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
+
+# Runtime import: pydantic resolves the Literal annotation from module globals.
+from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
 from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_LABEL_SOURCE
 
 
@@ -342,13 +345,14 @@ class CropsPageResponse(BaseModel):
 
 class CropLabelRequest(BaseModel):
     class_id: int
-    label_source: str = 'human'
+    # A human source only; the server writes class_source='human' itself.
+    label_source: HumanLabelSource = 'human'
 
 
 class CropBatchLabelRequest(BaseModel):
     crop_ids: list[str]
     class_id: int
-    label_source: str = 'human'
+    label_source: HumanLabelSource = 'human'
 
 
 class CropMoveRequest(BaseModel):
@@ -379,6 +383,21 @@ class CropUnexcludeRequest(BaseModel):
 class CropUndoBatchRequest(BaseModel):
     """Undo the most recent human class write on each crop."""
 
+    crop_ids: list[str]
+
+
+class CropDiscardRequest(BaseModel):
+    """Discard an item: clear its class (it doesn't belong where it is),
+    dismiss it from every review queue, or both. Recorded like a label
+    write, so ``POST /crops/{id}/label/undo`` reverses it."""
+
+    model_config = {'extra': 'forbid'}
+
+    clear_class: bool = True
+    dismiss_from_review: bool = False
+
+
+class CropDiscardBatchRequest(CropDiscardRequest):
     crop_ids: list[str]
 
 

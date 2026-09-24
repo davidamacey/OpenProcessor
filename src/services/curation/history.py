@@ -104,9 +104,17 @@ def record_class_history(
     return _cap(history, current_source)
 
 
-HUMAN_LABEL_WRITERS = frozenset({'human:label_crop', 'human:batch_label_crops', 'human:move_crops'})
-"""Writers whose class write the labeler's Undo (``DELETE /crops/{id}/label``)
+HUMAN_DISCARD_WRITER = 'human:discard_crop'
+
+HUMAN_LABEL_WRITERS = frozenset(
+    {'human:label_crop', 'human:batch_label_crops', 'human:move_crops', HUMAN_DISCARD_WRITER}
+)
+"""Writers whose write the labeler's Undo (``POST /crops/{id}/label/undo``)
 reverses."""
+
+REVIEW_DISMISS_FIELDS: tuple[str, ...] = ('review_dismissed_at', 'review_dismissed_by')
+"""Recorded only by the discard writer (the one human write that can change
+them), and restored only from an entry that carries them."""
 
 HUMAN_UNLABEL_WRITER = 'human:unlabel_crop'
 
@@ -162,6 +170,8 @@ def record_class_snapshot(
     if entry['class_id'] is not None:
         entry['class_id'] = int(entry['class_id'])
     entry['class_validated'] = bool(entry['class_validated'])
+    if writer == HUMAN_DISCARD_WRITER:
+        entry.update({f: current_source.get(f) for f in REVIEW_DISMISS_FIELDS})
     entry['restorable'] = restorable
     entry['writer'] = writer
     entry['at'] = now or _now_iso()
@@ -216,6 +226,9 @@ def restore_class_state(entry: dict[str, Any] | None) -> dict[str, Any]:
         if out['cluster_id'] != out['class_id']:
             out['cluster_subid'] = None
         out['cluster_id'] = out['class_id']
+    for f in REVIEW_DISMISS_FIELDS:
+        if f in snap:
+            out[f] = snap[f]
     return out
 
 
@@ -267,10 +280,12 @@ def merge_region_chain(existing: list[str] | None, new_entries: list[str] | None
 
 __all__ = [
     'CLASS_STATE_FIELDS',
+    'HUMAN_DISCARD_WRITER',
     'HUMAN_LABEL_WRITERS',
     'HUMAN_UNLABEL_WRITER',
     'MAX_HISTORY_ENTRIES',
     'MAX_REGION_CHAIN_ENTRIES',
+    'REVIEW_DISMISS_FIELDS',
     'find_undo_snapshot',
     'merge_region_chain',
     'normalize_region_chain_entry',

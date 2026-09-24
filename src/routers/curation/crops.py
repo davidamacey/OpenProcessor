@@ -27,6 +27,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
+from src.services.curation.ingest_class_sources import HUMAN_CLASS_SOURCE
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.detection.cascade_detect import class_provenance
 
@@ -41,6 +42,16 @@ def _human_class_provenance() -> dict[str, Any]:
         detector_version=human.human_detector_version,
         labeler='human',
     )
+
+
+def _batch_outcome(
+    crop_ids: list[str], results: list[tuple[bool, dict[str, Any] | None]]
+) -> dict[str, Any]:
+    """``updated_ids`` lists exactly the crops written (the ones an undo of
+    this batch should pass); ``conflicts`` the ones that were not."""
+    updated_ids = [cid for cid, (ok, _c) in zip(crop_ids, results, strict=True) if ok]
+    conflicts = [c for ok, c in results if not ok and c is not None]
+    return {'updated': len(updated_ids), 'updated_ids': updated_ids, 'conflicts': conflicts}
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -301,7 +312,7 @@ async def label_crop(
         return {
             'class_id': payload.class_id,
             'class_name': class_name,
-            'class_source': payload.label_source,
+            'class_source': HUMAN_CLASS_SOURCE,
             # Human class label. Sets class_validated; the region-side
             # validated flag is independent and unaffected.
             'class_validated': True,
@@ -355,7 +366,7 @@ async def batch_label_crops(
     class_name = entry.class_name if entry is not None else ''
 
     if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': []}
+        return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     from src.services.curation.history import record_class_snapshot
 
@@ -364,7 +375,7 @@ async def batch_label_crops(
         return {
             'class_id': payload.class_id,
             'class_name': class_name,
-            'class_source': payload.label_source,
+            'class_source': HUMAN_CLASS_SOURCE,
             'class_validated': True,
             'label_source': payload.label_source,
             'class_id_history': history,
@@ -407,9 +418,7 @@ async def batch_label_crops(
     # fine on a single index; this only ever runs on human-bounded
     # drag-drop sizes.
     results = await asyncio.gather(*(_label_one(cid) for cid in payload.crop_ids))
-    updated = sum(1 for ok, _ in results if ok)
-    conflicts = [c for ok, c in results if not ok and c is not None]
-    return {'updated': updated, 'conflicts': conflicts}
+    return _batch_outcome(payload.crop_ids, results)
 
 
 @router.post('/crops/move')
@@ -426,7 +435,7 @@ async def move_crops(
     should also mean "this is an X, validated by me".
     """
     if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': []}
+        return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     # Resolve the destination class so the crops also get relabeled.
     reg = get_class_registry()
@@ -477,9 +486,7 @@ async def move_crops(
             return False, {'crop_id': crop_id, 'current_source': None}
 
     results = await asyncio.gather(*(_move_one(cid) for cid in payload.crop_ids))
-    updated = sum(1 for ok, _ in results if ok)
-    conflicts = [c for ok, c in results if not ok and c is not None]
-    return {'updated': updated, 'conflicts': conflicts}
+    return _batch_outcome(payload.crop_ids, results)
 
 
 @router.post('/crops/flag_new_class')

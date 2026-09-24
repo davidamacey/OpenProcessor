@@ -119,9 +119,9 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 
 - `ItemDoc`: the shared wire item — see "Item wire format" below for the exact key list. Documentation/OpenAPI model only: handlers return the serializer's dict directly, so an unexpected stored value type never 500s a browse page.
 - `CropsPageResponse`: `total`, `page`, `page_size`, `crops` (list of items), `method`, `version`, `n_pool`
-- `CropLabelRequest`: `class_id`, `label_source`
-- `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source`
-- `CropMoveRequest`: `crop_ids`, `cluster_id`
+- `CropLabelRequest`: `class_id`, `label_source` (`human` default or `human_confirmed` — any other value is a `422`; the server always writes `class_source: "human"` for this write, so a client can't make a human label look machine-written)
+- `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` (same rule). Response: `updated`, `updated_ids` (exactly the crops written — the ids to pass to `undo_batch`), `conflicts` (`[{crop_id, current_source}]`, not written)
+- `CropMoveRequest`: `crop_ids`, `cluster_id`. Response: same shape as `batch_label` (`updated`, `updated_ids`, `conflicts`)
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
@@ -192,6 +192,26 @@ reverting — it calls undo and renders the returned item.
   but with nothing on record it resets the crop to unlabeled (class and
   provenance cleared, nothing invented) instead of `409`. Response:
   `crop_id`, `reset`.
+
+- `POST /crops/{crop_id}/discard` (`CropDiscardRequest`: `clear_class`
+  default `true`, `dismiss_from_review` default `false`; `422` if both are
+  false) — a **recorded** human write. `clear_class` clears class,
+  provenance and validation and drops the item to the residual pool
+  (`cluster_id: null`); `dismiss_from_review` stamps
+  `review_dismissed_at`/`review_dismissed_by` so every `/review` tab hides
+  it. Response: the post-write item. `POST /crops/discard_batch`
+  (`CropDiscardBatchRequest`: `crop_ids` + the same flags) → `items`,
+  `discarded`, `conflicts`, `not_found`.
+
+Which one to call:
+
+| Action | Route | Recorded (undoable)? |
+|---|---|---|
+| Label / confirm | `PUT /crops/{id}/label`, `PUT /crops/batch_label`, `POST /crops/move` | yes |
+| Discard (clear the class and/or hide from review) | `POST /crops/{id}/discard`, `POST /crops/discard_batch` | yes — undo restores class, placement and review visibility |
+| Undo the last recorded write | `POST /crops/{id}/label/undo`, `POST /crops/label/undo_batch` | is itself the undo; repeated calls step back |
+| `DELETE /crops/{id}/label` | legacy undo (same restore; resets to unlabeled when nothing is on record) | no — it *is* an undo, so Z can't reverse it |
+| `POST /crops/{id}/review_dismiss` | legacy one-way review hide | no — use `discard` with `clear_class: false, dismiss_from_review: true` instead |
 
 Cluster placement on restore: a restored validated class sits in its
 class cluster (`cluster_id == class_id`, keeping the recorded
@@ -502,8 +522,8 @@ keys are keyed off `class_source`, so a stale value never leaks.
 - Registry class (`vlm_proposed_class_id` not null): `PUT /crops/{crop_id}/label`
   `{"class_id": <vlm_proposed_class_id>}` (bulk: `PUT /crops/batch_label`
   `{"crop_ids": [...], "class_id": ...}`). Sets `class_validated=true`,
-  `class_source`/`label_source` = `human` (the body's `label_source`, default
-  `human`); both suggestion keys become `null`.
+  `class_source` = `human`, `label_source` = the body's `label_source`
+  (`human` default, or `human_confirmed` for an accepted suggestion); both suggestion keys become `null`.
 - New class (`vlm_proposed_class_id` null, name set): `POST /classes`
   `{"name": <vlm_proposed_class_name>}` -> `{"class_id": N, ...}` (`409` if
   the name exists — then use `GET /classes` to find its id), then
