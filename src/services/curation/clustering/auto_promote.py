@@ -52,6 +52,18 @@ logger = get_logger(__name__)
 
 _SCROLL_PAGE = 500
 
+_classifier_sources_empty_warned = False
+
+
+def _warn_classifier_sources_empty_once() -> None:
+    """Log once (not per cluster) that classifier_class_sources() is empty
+    in this environment, so the promote_query's classifier-source gate is
+    dropped rather than emitted as a dead terms:[] clause (F-11)."""
+    global _classifier_sources_empty_warned  # noqa: PLW0603 - warn-once flag
+    if not _classifier_sources_empty_warned:
+        _classifier_sources_empty_warned = True
+        logger.warning('auto_promote_classifier_sources_empty')
+
 
 async def _scroll_ids(
     client: AsyncOpenSearch,
@@ -187,13 +199,23 @@ async def auto_promote_clusters(
         # why the pipeline defaults to skipping this stage. A
         # confidence-gated rewrite is the prerequisite to enabling
         # ``run_auto_promote=true`` in production.
+        promote_must: list[dict[str, Any]] = [
+            {'term': {'cluster_id': cluster_id}},
+            {'term': {'class_name': top_name}},
+        ]
+        classifier_sources = sorted(classifier_class_sources())
+        if classifier_sources:
+            promote_must.append({'terms': {'class_source': classifier_sources}})
+        else:
+            # F-11: an empty terms:[] clause in `must` context matches
+            # nothing, so the write below would silently promote zero
+            # crops even though dry-run's total_promoted counted them.
+            # Drop the gate instead when no classifier sources are
+            # configured, and log once.
+            _warn_classifier_sources_empty_once()
         promote_query = {
             'bool': {
-                'must': [
-                    {'term': {'cluster_id': cluster_id}},
-                    {'terms': {'class_source': sorted(classifier_class_sources())}},
-                    {'term': {'class_name': top_name}},
-                ],
+                'must': promote_must,
                 'must_not': [
                     {'term': {'class_validated': True}},
                     # P0-3: never auto-promote a frozen test_holdout
