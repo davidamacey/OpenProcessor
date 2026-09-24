@@ -83,6 +83,23 @@ def _client(monkeypatch: pytest.MonkeyPatch, search_resp: dict[str, Any]) -> Tes
     return TestClient(app)
 
 
+def _client_with_fake(
+    monkeypatch: pytest.MonkeyPatch, search_resp: dict[str, Any]
+) -> tuple[TestClient, AsyncMock]:
+    """Same wiring as :func:`_client`, but also hands back the fake so a
+    test can assert on the request body it was called with (F-13)."""
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
+
+    fake = AsyncMock()
+    fake.search = AsyncMock(return_value=search_resp)
+    fake.count = AsyncMock(return_value={'count': 0})
+    monkeypatch.setattr('src.routers.curation.get_class_registry', lambda: _Reg())
+    app = FastAPI()
+    app.include_router(curation_router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    return TestClient(app), fake
+
+
 _BY_CLASS = {
     'aggregations': {
         'by_class': {
@@ -132,3 +149,19 @@ def test_holdout_stats_flags_deficient_classes(monkeypatch: pytest.MonkeyPatch) 
     body = r.json()
     assert body['min_test_per_class'] == T.MIN_TEST_CROPS_PER_CLASS
     assert {b['key']: b['deficient'] for b in body['by_class']} == {1: False, 2: True}
+
+
+def test_holdout_stats_tracks_total_hits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-13: without track_total_hits, OpenSearch silently caps the
+    reported total at 10000 even when more docs match -- add it to the
+    request so /test_holdout/stats never lies about the real count."""
+    resp = {
+        'hits': {'total': {'value': 12}},
+        'aggregations': {'by_class': {'buckets': []}},
+    }
+    client, fake = _client_with_fake(monkeypatch, resp)
+    r = client.get('/curation/test_holdout/stats')
+    assert r.status_code == 200, r.text
+
+    body = fake.search.call_args.kwargs['body']
+    assert body['track_total_hits'] is True

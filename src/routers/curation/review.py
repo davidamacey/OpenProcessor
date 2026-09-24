@@ -588,6 +588,7 @@ async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
         'size': 0,
         'query': {'term': {'test_holdout': True}},
         'aggs': {'by_class': {'terms': {'field': 'class_id', 'size': 1000}}},
+        'track_total_hits': True,
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)

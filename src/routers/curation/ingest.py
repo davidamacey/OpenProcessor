@@ -384,15 +384,25 @@ async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
     await _ensure_indexes(opensearch)
     body = {
         'size': 0,
+        'track_total_hits': True,
         'aggs': {
             'by_source': {
                 'terms': {'field': 'hdd_source', 'size': 64},
             },
+            # F-13: filter to the last 14 days in the query rather than
+            # date-histogramming the whole index and slicing to [:14] in
+            # Python -- the histogram used to run over every doc ever
+            # indexed just to keep the first 14 desc-sorted buckets.
             'by_day': {
-                'date_histogram': {
-                    'field': 'indexed_at',
-                    'calendar_interval': 'day',
-                    'order': {'_key': 'desc'},
+                'filter': {'range': {'indexed_at': {'gte': 'now-14d/d'}}},
+                'aggs': {
+                    'days': {
+                        'date_histogram': {
+                            'field': 'indexed_at',
+                            'calendar_interval': 'day',
+                            'order': {'_key': 'desc'},
+                        },
+                    },
                 },
             },
         },
@@ -406,7 +416,7 @@ async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
     return {
         'total': total,
         'by_source': (aggs.get('by_source') or {}).get('buckets', []),
-        'by_day': (aggs.get('by_day') or {}).get('buckets', [])[:14],
+        'by_day': ((aggs.get('by_day') or {}).get('days') or {}).get('buckets', []),
     }
 
 
