@@ -533,6 +533,13 @@ auto-label params and the stats keys (see B3).
 
 ### Review / holdout
 
+On the `mismatches` tab each item's `reason` says why it is there
+(DQ-m4): the default "VLM's reply did not match any registry class";
+`VLM named registry class '<answer>' at <vlm_confidence> confidence; not
+applied` when the VLM's answer (`vlm_raw_class`, else `vlm_raw_label`) is an
+active registry class name (a low-confidence answer the label path routes
+to review); `VLM gave no class answer` when none is stored.
+
 `vlm_low_conf` selects items whose label came from the VLM (a VLM
 `class_source`) and whose `vlm_confidence` is `medium` or `low`. It no
 longer also requires `confidence < 0.80` (that is the detector/classifier

@@ -129,6 +129,26 @@ def review_tab_catalog() -> list[dict[str, Any]]:
     ]
 
 
+def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default: str) -> str:
+    """Per-item reason on the ``mismatches`` tab (DQ-m4).
+
+    ``vlm_unmatched`` covers more than "the VLM named something outside
+    the registry": a low-confidence answer that *is* a registry class is
+    routed here unapplied, and legacy rows carry no answer at all. The
+    tab's generic reason was false for both. ``registry_names`` are the
+    normalized active class names.
+    """
+    from src.services.curation.new_class_terms import normalize_term
+
+    raw = str(src.get('vlm_raw_class') or src.get('vlm_raw_label') or '').strip()
+    if not raw:
+        return 'VLM gave no class answer'
+    if normalize_term(raw) in registry_names:
+        confidence = src.get('vlm_confidence') or 'unknown'
+        return f'VLM named registry class {raw!r} at {confidence} confidence; not applied'
+    return default
+
+
 def _escape_wildcard(text: str) -> str:
     """Escape wildcard-query metacharacters so user text matches literally."""
     return text.replace('\\', '\\\\').replace('*', '\\*').replace('?', '\\?')
@@ -410,6 +430,7 @@ __all__ = [
     'TAB_FILTER_DEFAULTS',
     'TAB_LABELS',
     'build_tab_query',
+    'mismatch_reason',
     'review_tab_catalog',
     'tab_filters',
 ]

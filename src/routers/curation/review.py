@@ -19,6 +19,7 @@ from src.routers.curation._common import (
     TestHoldoutFreezeResponse,
     _ensure_indexes,
     _now_iso,
+    get_class_registry,
     guard_page_depth,
     is_not_found,
     logger,
@@ -364,11 +365,25 @@ async def review_queue(
     total_obj = (resp.get('hits') or {}).get('total') or {}
     total = int(total_obj.get('value', 0))
     hits = (resp.get('hits') or {}).get('hits') or []
+    registry_names: frozenset[str] = frozenset()
+    if tab == 'mismatches':
+        from src.services.curation.new_class_terms import normalize_term
+
+        registry_names = frozenset(
+            normalize_term(c.class_name)
+            for c in get_class_registry().load().classes
+            if not c.deprecated
+        )
     items: list[dict[str, Any]] = []
     for h in hits:
-        item = serialize_item(h.get('_source') or {}, h.get('_id', ''))
+        src = h.get('_source') or {}
+        item = serialize_item(src, h.get('_id', ''))
         # Review-only extra on top of the shared wire item.
-        item['reason'] = req.reason
+        item['reason'] = (
+            review_queries.mismatch_reason(src, registry_names, req.reason)
+            if tab == 'mismatches'
+            else req.reason
+        )
         items.append(item)
     return {
         'total': int(total),
