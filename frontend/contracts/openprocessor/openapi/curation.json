@@ -6163,6 +6163,51 @@
         ]
       }
     },
+    "/curation/crops/{crop_id}/context": {
+      "get": {
+        "description": "The item's source image and every item detected in it.\n\n``{image: {image_id, image_path, width, height, source, indexed_at} |\nnull, items: [wire item, ...]}`` — items ordered by\n``crop_rank_in_image`` (largest first), at most 500. ``image`` is null\nwhen the images index has no record of the frame.",
+        "operationId": "crop_image_context_curation_crops__crop_id__context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Crop Image Context Curation Crops  Crop Id  Context Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crop Image Context",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/crops/{crop_id}/discard": {
       "post": {
         "description": "Discard an item, as a recorded human write.\n\n``clear_class`` (default ``true``): the item doesn't belong in its\nclass/cluster — class, provenance and validation are cleared and it\ndrops to the residual pool (``cluster_id: null``).\n``dismiss_from_review`` (default ``false``): hide it from every\n``/review`` tab (``review_dismissed_at``). The pre-write state is\nsnapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it\nexactly. Returns the post-write item. ``422`` when neither is set.",

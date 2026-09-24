@@ -647,7 +647,7 @@ export interface CropImageMeta {
   indexed_at: string | null;
 }
 
-export interface CropImageResponse {
+export interface CropContextResponse {
   image: CropImageMeta;
   items: Crop[];
 }

@@ -29,7 +29,7 @@ import type {
   ClusterFilter,
   CropFilter,
   CropHistoryResponse,
-  CropImageResponse,
+  CropContextResponse,
   CropUndoBatchResult,
   ItemTextLine,
   RegistryClass,
@@ -1596,22 +1596,21 @@ export function getCropHistory(
 }
 
 /**
- * `GET {API_PREFIX}/crops/{id}/image` — the crop's shared source image
+ * `GET {API_PREFIX}/crops/{id}/context` — the crop's shared source image
  * metadata plus every item cropped from it (siblings, including the
- * requested crop). `max_dim` isn't passed here — this call is for the
- * metadata/sibling list, not the burned-in-bbox preview image
- * (`getSourceImageWithBbox` already serves that).
+ * requested crop). The image itself is served by `/crops/{id}/image`
+ * (`getSourceImageWithBbox`).
  */
-export async function getCropImage(
+export async function getCropContext(
   cropId: string,
   signal?: AbortSignal,
-): Promise<CropImageResponse> {
+): Promise<CropContextResponse> {
   type Raw = {
-    image: CropImageResponse['image'];
+    image: CropContextResponse['image'];
     items: RawCrop[];
   };
   const raw = await apiFetch<Raw>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image`,
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/context`,
     {},
     signal,
   );

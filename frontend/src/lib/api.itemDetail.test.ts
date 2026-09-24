@@ -4,7 +4,7 @@
  * include_excluded / item_text crop-filter params.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, API_PREFIX, getCropHistory, getCropImage, getCrops } from './api';
+import { ApiError, API_PREFIX, getCropHistory, getCropContext, getCrops } from './api';
 import { makeItem } from './test/makeItem';
 
 function jsonResponse(body: unknown, status = 200) {
@@ -36,8 +36,8 @@ describe('getCropHistory', () => {
   });
 });
 
-describe('getCropImage', () => {
-  it('hits GET /crops/{id}/image and maps every sibling through mapRawCrop', async () => {
+describe('getCropContext', () => {
+  it('hits GET /crops/{id}/context and maps every sibling through mapRawCrop', async () => {
     const image = {
       image_id: 'img-1',
       image_path: '/nas/img-1.jpg',
@@ -50,10 +50,10 @@ describe('getCropImage', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ image, items: [raw] }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getCropImage('c1');
+    const res = await getCropContext('c1');
 
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_PREFIX}/crops/c1/image`);
+    expect(url).toBe(`${API_PREFIX}/crops/c1/context`);
     expect(res.image).toEqual(image);
     // Sibling went through mapRawCrop, not a raw pass-through — the wire
     // shape's `class_source` isn't a Crop field name collision, but

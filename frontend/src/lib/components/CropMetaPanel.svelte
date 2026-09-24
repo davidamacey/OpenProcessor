@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Crop, CropHistoryEntry, CropImageMeta } from '$lib/types';
-  import { getCropHistory, getCropImage, getThumbUrl } from '$lib/api';
+  import { getCropHistory, getCropContext, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
@@ -73,7 +73,7 @@
     imageError = null;
     imageLoading = true;
     const controller = new AbortController();
-    getCropImage(id, controller.signal)
+    getCropContext(id, controller.signal)
       .then((res) => {
         imageMeta = res.image;
         siblings = res.items.filter((it) => it.id !== id);
