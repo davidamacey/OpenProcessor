@@ -16,7 +16,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.curation import review_queries, review_sorts
+from src.services.curation import review_queries
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
     build_cohort_query,
@@ -30,6 +30,12 @@ from src.services.curation.raw_label_clusters import (
     CLUSTER_NAME_FIELD,
     RAW_LABEL_FIELD,
     UNMATCHED_CLASS_SOURCE,
+)
+from src.services.curation.review_request import (
+    ReviewFilters,
+    UnlocatableSortError,
+    before_query,
+    build_review_request,
 )
 from src.services.curation.wire import item_source_excludes, serialize_item
 
@@ -206,49 +212,84 @@ async def review_raw_label_clusters(
     }
 
 
+_TAB_DESCRIPTION = 'One of: ' + ' | '.join(review_queries.KNOWN_TABS)
+
+
+def _filters(
+    include_test: bool,
+    text: str | None,
+    max_rank: int | None,
+    min_blur_ratio: float | None,
+    min_mistakenness: float | None,
+    hide_near_duplicates: bool,
+    class_id: int | None,
+    source: str | None,
+    conf_min: float | None,
+    conf_max: float | None,
+) -> ReviewFilters:
+    return ReviewFilters(
+        include_test=include_test,
+        text=text,
+        max_rank=max_rank,
+        min_blur_ratio=min_blur_ratio,
+        min_mistakenness=min_mistakenness,
+        hide_near_duplicates=hide_near_duplicates,
+        class_id=class_id,
+        source=source,
+        conf_min=conf_min,
+        conf_max=conf_max,
+    )
+
+
+# Filter params shared by the queue and locate routes (Annotated defaults,
+# so direct Python callers get plain values).
+IncludeTest = Annotated[bool, Query()]
+TextQ = Annotated[
+    str | None,
+    Query(description='Regions tab only: case-insensitive substring search on region_text.'),
+]
+MaxRankQ = Annotated[int | None, Query(ge=1, description='Keep crop_rank_in_image <= this.')]
+BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
+MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]
+NearDupQ = Annotated[bool, Query(description='Hide non-representative near-duplicates.')]
+ClassIdQ = Annotated[int | None, Query(description='Only items of this class.')]
+SourceQ = Annotated[str | None, Query(description='Only items with this ingest source tag.')]
+ConfQ = Annotated[float | None, Query(ge=0.0, le=1.0, description='Inclusive confidence band.')]
+SortQ = Annotated[
+    str | None,
+    Query(
+        description=(
+            'Review-sort id from GET /curation/methods (axis=sort). Omitted or '
+            "'default': the tab's own default. Unknown / shadow / disabled -> 400."
+        )
+    ),
+]
+
+
+async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearch: Any) -> Any:
+    try:
+        return await build_review_request(tab, filters, sort, opensearch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get('/review/{tab}')
 async def review_queue(
-    tab: Annotated[
-        str,
-        PathParam(
-            description=(
-                'One of: all | mismatches | vlm_low_conf | outliers | '
-                'uncertainty | model_disagreements | regions | '
-                'primary_low_conf | coco_blind_spots'
-            )
-        ),
-    ],
+    tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     opensearch: OpenSearchDep,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=200),
-    include_test: bool = False,
-    text: str | None = Query(
-        None,
-        description=(
-            'Regions-tab only: case-insensitive substring search on '
-            'region_text. Ignored on other tabs.'
-        ),
-    ),
-    # max_rank: keep crop_rank_in_image <= this (primary tabs default 2).
-    # min_blur_ratio: clarity slider (null-safe). Both apply across tabs.
-    max_rank: int | None = Query(None, ge=1),
-    min_blur_ratio: float | None = Query(None, ge=0.0),
-    # min_mistakenness: null-safe floor on mistakenness_score, same
-    # missing-field-stays-visible pattern as min_blur_ratio above.
-    min_mistakenness: float | None = Query(None, ge=0.0),
-    # hide_near_duplicates: drops crops a near-dup scoring pass explicitly
-    # marked as a non-representative duplicate (dup_is_representative ==
-    # False). No-op wherever the field hasn't been backfilled yet — never
-    # hides a crop just because near-dup scoring hasn't run on it.
-    hide_near_duplicates: bool = False,
-    sort: str | None = Query(
-        None,
-        description=(
-            'Review-sort strategy id from GET /curation/methods (axis=sort). Omitted '
-            "or 'default' uses this tab's legacy default sort. An unknown, "
-            'shadow, or disabled id returns 400.'
-        ),
-    ),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 30,
+    include_test: IncludeTest = False,
+    text: TextQ = None,
+    max_rank: MaxRankQ = None,
+    min_blur_ratio: BlurQ = None,
+    min_mistakenness: MistakeQ = None,
+    hide_near_duplicates: NearDupQ = False,
+    class_id: ClassIdQ = None,
+    source: SourceQ = None,
+    conf_min: ConfQ = None,
+    conf_max: ConfQ = None,
+    sort: SortQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
 
@@ -256,85 +297,31 @@ async def review_queue(
     configured items index plus a ``reason`` string the labeler renders to
     explain why the crop landed in this queue. Items already validated by
     a human are excluded from every tab — except ``model_disagreements``,
-    where validated crops are exactly the input set (we want to know
-    where the new model thinks the human was wrong), and ``regions``,
+    where validated crops are exactly the input set, and ``regions``,
     which reviews the region annotation independently of the item's
-    class validation.
+    class validation. Order: the applied sort (``sort_applied``), then
+    ``crop_id``.
     """
     await _ensure_indexes(opensearch)
-
-    # Per-tab must/must_not/reason construction lives in review_queries.py
-    # (split out so this file stays under the 700-LOC pre-commit ceiling —
-    # see that module's docstring). Raises HTTPException(400) for an
-    # unrecognized tab, same as before the split.
-    must, must_not, reason = review_queries.build_tab_query(
-        tab, include_test=include_test, text=text, max_rank=max_rank
+    filters = _filters(
+        include_test,
+        text,
+        max_rank,
+        min_blur_ratio,
+        min_mistakenness,
+        hide_near_duplicates,
+        class_id,
+        source,
+        conf_min,
+        conf_max,
     )
-
-    # Clarity slider — applies to every tab when set. Null-safe: crops with
-    # no blur score are never hidden by the slider.
-    if min_blur_ratio is not None:
-        must.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'blur_lap_ratio': {'gte': min_blur_ratio}}},
-                        {'bool': {'must_not': {'exists': {'field': 'blur_lap_ratio'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
-
-    # Mistakenness floor — same null-safe pattern as min_blur_ratio: a crop
-    # with no mistakenness_score yet (not backfilled) is never hidden by
-    # the filter, only crops scored below the floor are.
-    if min_mistakenness is not None:
-        must.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'mistakenness_score': {'gte': min_mistakenness}}},
-                        {'bool': {'must_not': {'exists': {'field': 'mistakenness_score'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
-
-    # Near-dup filter — hides only crops a scoring pass explicitly marked
-    # as a non-representative duplicate (dup_is_representative == False).
-    # No-op wherever the field hasn't been backfilled: a crop with no
-    # dup_is_representative at all is never hidden.
-    if hide_near_duplicates:
-        must.append(
-            {
-                'bool': {
-                    'should': [
-                        {'term': {'dup_is_representative': True}},
-                        {'bool': {'must_not': {'exists': {'field': 'dup_is_representative'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
-
-    try:
-        sort_clause, sort_applied, sort_fallback_reason = await review_sorts.build_sort(
-            sort, tab=tab, opensearch=opensearch
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+    req = await _request(tab, filters, sort, opensearch)
     body = {
         'from': (page - 1) * page_size,
         'size': page_size,
-        'query': {'bool': {'must': must, 'must_not': must_not}},
-        'sort': sort_clause,
-        # OpenSearch caps hits.total.value at 10000 by default. The
-        # labeler displays the queue total in the page header; capping
-        # at 10k makes large queues look smaller than they are. Cost is
-        # one extra count pass per search — fine at typical deployment QPS.
+        'query': req.query,
+        'sort': req.sort,
+        # Exact totals: the default 10k cap makes large queues look smaller.
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors to the review grid.
         '_source': {'excludes': item_source_excludes()},
@@ -349,21 +336,145 @@ async def review_queue(
     hits = (resp.get('hits') or {}).get('hits') or []
     items: list[dict[str, Any]] = []
     for h in hits:
-        src = h.get('_source') or {}
-        item = serialize_item(src, h.get('_id', ''))
-        # Review-only extras on top of the shared wire item.
-        item['reason'] = reason
+        item = serialize_item(h.get('_source') or {}, h.get('_id', ''))
+        # Review-only extra on top of the shared wire item.
+        item['reason'] = req.reason
         items.append(item)
     return {
         'total': int(total),
         'page': page,
         'page_size': page_size,
         'items': items,
-        # Phase 3 (review_sorts.py) — additive envelope fields, never
-        # removes/retypes an existing key. sort_fallback_reason is always
-        # None today; reserved for a future graceful-degradation case.
-        'sort_applied': sort_applied,
-        'sort_fallback_reason': sort_fallback_reason,
+        'sort_applied': req.sort_applied,
+        # Reserved; always None today.
+        'sort_fallback_reason': None,
+    }
+
+
+@router.get('/review/{tab}/locate')
+async def review_locate(
+    tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
+    crop_id: Annotated[str, Query(description='The item to find.')],
+    opensearch: OpenSearchDep,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 30,
+    include_test: IncludeTest = False,
+    text: TextQ = None,
+    max_rank: MaxRankQ = None,
+    min_blur_ratio: BlurQ = None,
+    min_mistakenness: MistakeQ = None,
+    hide_near_duplicates: NearDupQ = False,
+    class_id: ClassIdQ = None,
+    source: SourceQ = None,
+    conf_min: ConfQ = None,
+    conf_max: ConfQ = None,
+    sort: SortQ = None,
+) -> dict[str, Any]:
+    """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
+    for the same filters and sort.
+
+    ``{crop_id, in_queue, rank, page, page_size, total, reason,
+    sort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of
+    ``page_size`` holding it. Out of the queue: ``rank``/``page`` null and
+    ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
+    items sorting before it, so any depth costs the same.
+    """
+    await _ensure_indexes(opensearch)
+    filters = _filters(
+        include_test,
+        text,
+        max_rank,
+        min_blur_ratio,
+        min_mistakenness,
+        hide_near_duplicates,
+        class_id,
+        source,
+        conf_min,
+        conf_max,
+    )
+    req = await _request(tab, filters, sort, opensearch)
+    out: dict[str, Any] = {
+        'crop_id': crop_id,
+        'in_queue': False,
+        'rank': None,
+        'page': None,
+        'page_size': page_size,
+        'total': None,
+        'reason': None,
+        'sort_applied': req.sort_applied,
+    }
+
+    async def _count(query: dict[str, Any]) -> int:
+        try:
+            resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        return int(resp.get('count', 0))
+
+    try:
+        doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
+        found = bool(doc.get('found', True))
+    except Exception:
+        found = False
+    if not found:
+        return {**out, 'reason': 'not_found'}
+    source_doc = {**(doc.get('_source') or {}), 'crop_id': crop_id}
+    out['total'] = await _count(req.query)
+    member = {'bool': {'filter': [req.query, {'term': {'crop_id': crop_id}}]}}
+    if not await _count(member):
+        return {**out, 'reason': 'filtered_out'}
+    try:
+        before = before_query(req.sort, source_doc)
+    except UnlocatableSortError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    rank = await _count({'bool': {'filter': [req.query, before]}})
+    return {**out, 'in_queue': True, 'rank': rank, 'page': rank // page_size + 1}
+
+
+@router.get('/review/new_class_proposals/summary')
+async def review_new_class_summary(
+    opensearch: OpenSearchDep,
+    size: Annotated[int, Query(ge=1, le=1000)] = 100,
+    samples: Annotated[int, Query(ge=0, le=20)] = 5,
+) -> dict[str, Any]:
+    """The VLM's proposed new-class names across ``vlm_new_class_pending``
+    items: ``{total_pending, top_terms: [{label, count, sample_crop_ids}]}``,
+    most common first — the input for deciding which classes to add."""
+    await _ensure_indexes(opensearch)
+    terms: dict[str, Any] = {
+        'terms': {'field': 'vlm_proposed_class', 'size': size, 'min_doc_count': 1}
+    }
+    if samples:
+        terms['aggs'] = {'samples': {'top_hits': {'size': samples, '_source': ['crop_id']}}}
+    body = {
+        'size': 0,
+        'query': {
+            'bool': {
+                'must': [{'term': {'class_source': 'vlm_new_class_pending'}}],
+                'must_not': [{'term': {'class_validated': True}}],
+            }
+        },
+        'aggs': {'proposed': terms},
+        'track_total_hits': True,
+    }
+    try:
+        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
+    buckets = ((resp.get('aggregations') or {}).get('proposed') or {}).get('buckets') or []
+    return {
+        'total_pending': int(total),
+        'top_terms': [
+            {
+                'label': str(b.get('key', '')),
+                'count': int(b.get('doc_count', 0)),
+                'sample_crop_ids': [
+                    (h.get('_source') or {}).get('crop_id') or h.get('_id')
+                    for h in ((b.get('samples') or {}).get('hits') or {}).get('hits') or []
+                ],
+            }
+            for b in buckets
+        ],
     }
 
 

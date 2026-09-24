@@ -33,6 +33,7 @@ KNOWN_TABS: tuple[str, ...] = (
     'regions',
     'primary_low_conf',
     'coco_blind_spots',
+    'new_class_proposals',
 )
 
 
@@ -263,15 +264,25 @@ def build_tab_query(
         must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
+    elif tab == 'new_class_proposals':
+        # Items that need a class the registry doesn't have yet: flagged by
+        # a human (POST /crops/flag_new_class) or proposed by the VLM.
+        must.append(
+            {
+                'bool': {
+                    'should': [
+                        {'term': {'needs_new_class': True}},
+                        {'term': {'class_source': 'vlm_new_class_pending'}},
+                    ],
+                    'minimum_should_match': 1,
+                }
+            }
+        )
+        reason = 'needs a class the registry does not have yet'
     else:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f'unknown review tab: {tab}. '
-                'Must be one of: all, mismatches, vlm_low_conf, outliers, '
-                'uncertainty, model_disagreements, regions, primary_low_conf, '
-                'coco_blind_spots'
-            ),
+            detail=f'unknown review tab: {tab}. Must be one of: {", ".join(KNOWN_TABS)}',
         )
 
     return must, must_not, reason

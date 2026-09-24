@@ -350,6 +350,35 @@ auto-label params and the stats keys (see B3).
 
 ### Review / holdout
 
+`GET /review/{tab}` tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`,
+`uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`,
+`coco_blind_spots`, **`new_class_proposals`** (items flagged
+`needs_new_class` by a human, or `class_source: vlm_new_class_pending`).
+Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
+`min_blur_ratio`, `min_mistakenness`, `hide_near_duplicates`, **`class_id`**,
+**`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
+`400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
+`items` (item + `reason`), `sort_applied` (the sort id that actually ran),
+`sort_fallback_reason` (always `null`).
+
+Sort: an explicit `sort` wins; omitted (or `default`) → the **tab's own
+default** (a deployment `sort` default from `PUT /settings` never overrides
+it — it only applies to a tab without one, e.g. `new_class_proposals`, else
+`recent`). Every queue ends in a `crop_id` ascending tiebreak so pages are
+stable and positions are exact.
+
+`GET /review/{tab}/locate?crop_id=…` (same filters + `sort`, plus
+`page_size`) → `{crop_id, in_queue, rank, page, page_size, total, reason,
+sort_applied}`: `rank` is 0-based, `page` the 1-based page holding it;
+out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
+`filtered_out`. It counts the items sorting before the crop (one count, any
+queue depth) — use it for `/review?crop_id=` deep links instead of paging.
+
+`GET /review/new_class_proposals/summary?size=&samples=` →
+`{total_pending, top_terms: [{label, count, sample_crop_ids}]}`: the VLM's
+proposed new-class names over unvalidated `vlm_new_class_pending` items,
+most common first.
+
 - `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
 - `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`
 
