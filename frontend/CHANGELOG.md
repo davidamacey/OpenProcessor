@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `/bakeoff` profile picker, backed by OpenProcessor's B1 `BakeoffProfile`
+  (`GET /bakeoff/profiles`). The chosen profile scopes the baseline model
+  list (`/bakeoff/baseline_models?profile=`) and is sent on
+  `POST /bakeoff/run`. "Deployment default" omits it. `BakeoffModelSpec`
+  now matches main's model spec: per-model `profile`,
+  `primary_*`/`secondary_*` coarse-stage fields replacing
+  `vehicle_weights`, and the `onnxruntime`/`coreml` backends. Trained
+  contenders are labeled "trained here" instead of a deployment-specific
+  corpus string.
+
 ### Changed
 
 - Retargeted at OpenProcessor `main` as the only backend (E2E contract

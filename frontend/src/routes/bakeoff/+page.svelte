@@ -15,6 +15,7 @@
     bakeoffBaselineModels,
     bakeoffEvalDatasets,
     bakeoffMatrix,
+    bakeoffProfiles,
     bakeoffResults,
     bakeoffRun,
     bakeoffRuns,
@@ -24,6 +25,7 @@
     type BakeoffEvalDataset,
     type BakeoffMatrix,
     type BakeoffModelSpec,
+    type BakeoffProfile,
     type BakeoffRunSummary,
     type BakeoffTrainedModel,
   } from '$lib/api';
@@ -31,7 +33,7 @@
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import QuantizationPanel from '$components/QuantizationPanel.svelte';
 
-  // Inference regime applied to every model: full-frame, vehicle-crop, or both
+  // Inference regime applied to every model: full-frame, parent-crop, or both
   // (the runner expands 'both' into [full] + [crop]).
   let mode = $state<'full' | 'crop' | 'both'>('both');
 
@@ -45,6 +47,11 @@
     enabled: boolean;
     imgsz: number;
   }
+
+  // '' = omit `profile`, i.e. the evaluator's deployment default.
+  let profile = $state<string>('');
+  let profiles = $state<BakeoffProfile[]>([]);
+  const activeProfile = $derived(profiles.find((p) => p.name === profile) ?? null);
 
   let evalDatasets = $state<DatasetChoice[]>([]);
   let baselines = $state<BaselineChoice[]>([]);
@@ -106,9 +113,17 @@
     }
   }
 
+  async function refreshProfiles() {
+    try {
+      profiles = (await bakeoffProfiles()).profiles ?? [];
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : String(e);
+    }
+  }
+
   async function refreshBaselines() {
     try {
-      const r = await bakeoffBaselineModels();
+      const r = await bakeoffBaselineModels(profile || undefined);
       baselines = (r.baselines ?? []).map((b) => ({ ...b, enabled: true }));
     } catch (e) {
       error = e instanceof ApiError ? e.message : String(e);
@@ -162,7 +177,7 @@
         imgsz: t.imgsz,
         mode,
         device: 'cuda',
-        training_data: `curated vehicles (ours${t.model_size ? ', ' + t.model_size : ''})`,
+        training_data: `trained here${t.model_size ? ` (${t.model_size})` : ''}`,
       }));
     const base: BakeoffModelSpec[] = baselines
       .filter((b) => b.enabled)
@@ -179,7 +194,12 @@
       return;
     }
     try {
-      const res = await bakeoffRun({ datasets, models, verify_frozen: true });
+      const res = await bakeoffRun({
+        datasets,
+        models,
+        profile: profile || undefined,
+        verify_frozen: true,
+      });
       activeJob = res.job_id;
       activeState = 'enqueued';
       activeProgress = null;
@@ -244,6 +264,7 @@
     await bakeoffAvailability.init();
     if (bakeoffAvailability.available === false) return;
     void refreshRuns();
+    void refreshProfiles();
     void refreshDatasets();
     void refreshBaselines();
     void refreshTrainedModels();
@@ -346,6 +367,28 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-4">
+        <label class="text-sm">
+          <span class="text-zinc-400">Profile</span>
+          <select
+            bind:value={profile}
+            onchange={() => void refreshBaselines()}
+            class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+          >
+            <option value="">deployment default</option>
+            {#each profiles as p (p.name)}
+              <option value={p.name}
+                >{p.name}{p.kind === 'example' ? ' (example)' : ''}</option
+              >
+            {/each}
+          </select>
+          {#if activeProfile}
+            <span class="ml-2 text-xs text-zinc-500">
+              target <span class="font-mono">{activeProfile.target_class_name}</span> ·
+              ranked by {METRIC_LABELS[activeProfile.rank_metric] ??
+                activeProfile.rank_metric}
+            </span>
+          {/if}
+        </label>
         <label class="text-sm">
           <span class="text-zinc-400">Regime</span>
           <select

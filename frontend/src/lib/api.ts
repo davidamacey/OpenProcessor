@@ -2394,21 +2394,64 @@ export function cancelAutoLabel(
 }
 
 // ===========================================================================
-// LPR bake-off (/curation/bakeoff) — model comparison runs + results.
+// Detector bake-off ({API_PREFIX}/bakeoff) — model comparison runs + results.
 // ===========================================================================
 
 export interface BakeoffModelSpec {
-  backend: 'ultralytics' | 'triton' | 'open-image-models' | 'two-stage' | 'lpdnet';
+  backend:
+    | 'ultralytics'
+    | 'triton'
+    | 'open-image-models'
+    | 'two-stage'
+    | 'lpdnet'
+    | 'onnxruntime'
+    | 'coreml';
   name: string;
+  /** Per-model BakeoffProfile override; else the request-level `profile`. */
+  profile?: string;
   mode?: 'full' | 'crop' | 'both';
   weights?: string;
   imgsz?: number;
   device?: string;
+  pred_class_id?: number;
+  gt_class_id?: number;
+  gt_class_name?: string;
   triton_url?: string;
   triton_model?: string;
   lpdnet_variant?: 'usa' | 'ccpd';
-  vehicle_weights?: string;
+  /** Coarse (parent-object) stage for crop / two-stage; unset fields come
+   *  from the profile's `context_*`. */
+  primary_weights?: string;
+  primary_classes?: string;
+  primary_imgsz?: number;
+  secondary_backend?: string;
+  secondary_imgsz?: number;
   training_data?: string;
+}
+
+/**
+ * What a bake-off scores: the target class under test plus the cascade
+ * context and metric config (backend `BakeoffProfile`). `registered`
+ * profiles are deployment-configured; `example` ones ship with the
+ * harness as templates.
+ */
+export interface BakeoffProfile {
+  name: string;
+  kind: 'registered' | 'example';
+  target_class_id: number;
+  target_class_name: string;
+  class_names: string[];
+  context_class_ids: number[];
+  default_backend: string;
+  imgsz: number;
+  rank_metric: string;
+  baselines_path: string;
+}
+
+export function bakeoffProfiles(
+  signal?: AbortSignal,
+): Promise<{ profiles: BakeoffProfile[]; count: number }> {
+  return apiFetch(`${API_PREFIX}/bakeoff/profiles`, {}, signal);
 }
 
 export interface BakeoffRunRow {
@@ -2484,6 +2527,8 @@ export function bakeoffRun(
     dataset?: string;
     datasets?: { path: string; name?: string }[];
     models: BakeoffModelSpec[];
+    /** BakeoffProfile name; omitted = the evaluator's deployment default. */
+    profile?: string;
     verify_frozen?: boolean;
     job_id?: string;
   },
@@ -2503,11 +2548,13 @@ export function bakeoffEvalDatasets(
   return apiFetch(`${API_PREFIX}/bakeoff/eval_datasets`, {}, signal);
 }
 
-/** Public/commercial baseline detectors from the editable registry. */
+/** Public/commercial baseline detectors from the editable registry —
+ *  the given profile's own registry when it declares one. */
 export function bakeoffBaselineModels(
+  profile?: string,
   signal?: AbortSignal,
 ): Promise<{ baselines: BakeoffModelSpec[]; count: number }> {
-  return apiFetch(`${API_PREFIX}/bakeoff/baseline_models`, {}, signal);
+  return apiFetch(`${API_PREFIX}/bakeoff/baseline_models${qs({ profile })}`, {}, signal);
 }
 
 /** The model x dataset matrix for a finished matrix job. */
