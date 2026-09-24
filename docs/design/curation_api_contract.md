@@ -29,28 +29,32 @@ acceptance criterion 8. A transitional `/legacy` prefix may appear
 during that migration (same doc, §2) — it is never a supported backend
 default and never dual-mounted.
 
-## The key invariant: HTTP JSON field names are independent of backend storage field names
+## The key invariant: one generic wire vocabulary, independent of storage names
 
-`RegionFields` (`src/config/region_fields.py`) lets the *backend*
-read/write its OpenSearch documents under configurable field names
-(defaulting to generic `region_*` names; a deployment with pre-existing
-data under other names, e.g. `plate_*`, constructs its own instance —
-no reindex). This is purely a backend/OpenSearch storage concern and
-does **not** touch the HTTP JSON contract documented below. Pydantic
-model attribute names (`ItemDoc.plate_bbox_norm`,
-`CropBatchStatusRequest.plate_status`, etc.) are class-level static
-declarations that define the wire format every consumer speaks. They
-are **frozen**: no field is renamed, has its meaning changed, or is
-removed on the wire, regardless of what OpenSearch field name the
-backend reads or writes internally to satisfy that JSON key.
+Every request and response on this API uses one generic vocabulary
+(decided 2026-09-23 by both teams' owners; see "B3" under Coordination
+notes for the full old→new table). The earlier rule that froze the
+historical `plate_*` / `gemma_*` wire names is **retired**: fresh
+deployments re-ingest, so there was no legacy data to protect.
 
-Concretely: a router handler may read `doc[region_fields.status]`
-internally while the Pydantic response model it returns keeps the
-literal attribute name `plate_status`. A consumer sees zero change
-either way. See the `RegionFields` module docstring
-(`src/config/region_fields.py`) for the full design rationale, and H4
-below for why a matching rename of the wire names themselves was
-formally closed as **WONTFIX**.
+1. **Region attributes go out as `region_<attr>`** for every
+   `RegionFields` attribute (`region_bbox_norm`, `region_status`,
+   `region_verified`, `region_detector_chain`, `region_text`,
+   `region_visible`, `region_cluster_id`, `region_cluster_subid`, …).
+   These wire names are **fixed**: they are the stock `RegionFields()`
+   default names, and they do not move when a deployment overrides its
+   OpenSearch storage names via `OP_REGION_FIELD_*`. The translation
+   storage→wire happens once, at the boundary, in
+   `src/services/curation/wire.py`; with stock defaults it is the
+   identity. Storage config never leaks onto the wire (enforced by
+   `tests/curation/test_wire_contract.py::test_storage_override_does_not_change_wire_keys`).
+2. **VLM and classifier names are vendor-neutral**: `vlm_*` (never a
+   model vendor's name) and `classifier_*` (never a model version).
+3. **Every item-returning endpoint emits the same item** (see "Item wire
+   format" below), built by one serializer, so a client parses one shape.
+
+Request bodies follow the same rule: a body key that writes a
+`RegionFields` attribute is named `region_<attr>`.
 
 ## Route surface
 
@@ -61,7 +65,7 @@ by router module; every path is relative to the configured
 
 | Router module | Routes |
 |---|---|
-| `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
+| `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
 | `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
@@ -92,19 +96,17 @@ abstraction (a deployment need not run Google's Gemma at all). No
 `/gemma/*` route is registered, and none will be added; see the VLM
 section below.
 
-## Frozen Pydantic wire models (attribute names are the JSON contract)
+## Wire models
 
-Field names below are **frozen** — do not rename, even when the
-corresponding backend OpenSearch field is renamed via `RegionFields`.
-Model class names reflect `src/routers/curation/_common.py` as of this
-writing; per D3 below, this table is hand-maintained today and can
-drift from the source — treat `_common.py` as authoritative if the two
-disagree, and see D3 for the plan to close that gap.
+Model class names reflect `src/routers/curation/_common.py`; this table
+is hand-maintained (see D3) — treat `_common.py` as authoritative if the
+two disagree. `ItemDoc`'s field set is test-pinned to the serializer's
+output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 
 ### Ingest
 
 - `IngestImageRequest`: `path`, `source`
-- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_plates`, `error`
+- `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_regions`, `error`
 - `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`
 - `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`, `disagreements` (with `detect_mismatches`: one record per model-vs-label disagreement, `kind` = `class_mismatch`/`missed_label`/`unmatched_detection`; also returned by `POST /import_labels/batch`)
 - `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
@@ -113,19 +115,33 @@ disagree, and see D3 for the plan to close that gap.
 
 ### Crops
 
-- `ItemDoc`: `crop_id`, `image_id`, `image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `label_validated`, `label_source`, `plate_bbox_norm`, `plate_score`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `thumbnail_url`, `plate_status`, `plate_text`, `plate_text_source`, `plate_text_confidence`, `plate_rejection_reason`, `plate_detector`, `plate_detector_version`, `plate_verified`, `plate_verified_at`, `plate_verifier`, `plate_label_source` — the last eleven are round-trip counterparts of what `PATCH /crops/{id}/region_meta` and `PUT /crops/{id}/region` write (via `RegionFields` on the storage side), added so a `GET` after either write actually reflects the region metadata instead of silently dropping it.
-- `CropsPageResponse`: `total`, `page`, `page_size`, `crops`, `method`, `version`, `n_pool`
+- `ItemDoc`: the shared wire item — see "Item wire format" below for the exact key list. Documentation/OpenAPI model only: handlers return the serializer's dict directly, so an unexpected stored value type never 500s a browse page.
+- `CropsPageResponse`: `total`, `page`, `page_size`, `crops` (list of items), `method`, `version`, `n_pool`
 - `CropLabelRequest`: `class_id`, `label_source`
 - `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source`
 - `CropMoveRequest`: `crop_ids`, `cluster_id`
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
-- `CropPlateRequest`: `bbox_norm` (source-image frame), `label_source`
-- `CropBatchPlateRequest`: `crop_ids`, `bbox_norm`, `label_source`
-- `CropBatchStatusRequest`: `crop_ids`, `plate_status`, `plate_verified`, `label_source` — `plate_status` must be one of `HUMAN_REGION_STATUS_VALUES` = `{'detected', 'no_region_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
-- `CropPlateMetaRequest`: `plate_text`, `plate_status`, `plate_rejection_reason`, `label_source` (all optional; only provided fields are written; `extra='forbid'`)
+- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (source-image frame `[x1,y1,x2,y2]`, or `null` = "no region visible"), `region_label_source` (default `human`). Response: `crop_id`, `region_bbox_norm`, `region_status`.
+- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`. Response: `updated`, `conflicts`.
+- `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_verified`, `region_label_source` — `region_status` must be one of `HUMAN_REGION_STATUS_VALUES` = `{'detected', 'no_region_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
+- `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`).
+- All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
-- **Region thumbnail URLs**: `ItemDoc`/`/regions` responses carry `thumbnail_url` and `plate_thumbnail_url` fields whose *values* point at `GET {prefix}/crops/{crop_id}/region_thumbnail` — the JSON key `plate_thumbnail_url` is frozen (do not rename), but the URL path segment it contains is the generic `region_thumbnail`, not `plate_thumbnail` (no such route is registered; see `cropwright_backend_integration_plan.md` §1.3 for the bug this fixed).
+
+`GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
+50), `limit` (1–500; alias for `page_size`, wins when both are set),
+`sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
+`updated_at`, `created_at`, `confidence`, `classifier_raw_confidence`,
+`crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`,
+`cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
+else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
+`cluster_id`, `label_source`, `class_source`, `label_validated`,
+`hdd_source`, `include_test`, `include_excluded`, `max_rank`,
+`min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
+(inclusive band on `confidence`, `400` if min > max), `order`
+(`default`/`outliers`/`diverse`), `k` (1–10000, `order=diverse` only:
+rank just the first `k` k-center-greedy picks; `total` is then `k`).
 
 ### Classes
 
@@ -138,32 +154,20 @@ disagree, and see D3 for the plan to close that gap.
 ### VLM labeling/verification
 
 Registered at `POST {prefix}/vlm/*` (`src/routers/curation/vlm.py`).
-The vendor-neutral name is the URL segment and the Python model/class
-names; the frontend's local review-tab ids and OpenSearch field names
-(`gemma_suggested_class_id`, `gemma_low_conf`, `by_gemma`,
-`class_source='gemma'`, etc.) are a separate, frozen wire/storage
-naming that predates this generalization and is untouched here — see
-the key-invariant section above.
+Every VLM-related name on the wire is `vlm_*` — URL segment, stored and
+returned fields (`vlm_confidence`, `vlm_raw_label`, …), `class_source`
+values (`vlm`, `vlm_unmatched`, …), the review tab `vlm_low_conf`, the
+auto-label params and the stats keys (see B3).
 
 - `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`
 - `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`
-- `VlmVerifyRegionBatchItem`: `crop_id`, `plate_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
+- `VlmVerifyRegionBatchItem`: `crop_id`, `region_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
 - `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
 - `VlmVerifyRegionBatchResult`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text`
 - `VlmVerifyRegionBatchResponse`: `results`
 - `VlmRegionVisibleBatchItem`: `crop_id`, `image_b64`
 - `VlmRegionVisibleBatchRequest` (`POST /vlm/region_visible_batch`): `items`
 - `VlmRegionVisibleBatchResponse`: `visible` (`dict[str, bool]`, keyed by `crop_id`)
-
-Note `plate_image_b64` is itself a frozen wire field name carried over
-unchanged from the reference implementation. `is_region` (the verdict
-boolean on `VlmVerifyRegionBatchResult`) is **not** `is_plate` — an
-earlier draft of this class in `src/routers/curation/_common.py` used
-`is_plate` and was never imported by the actual route
-(`src/routers/curation/vlm.py` defines and uses its own, wired,
-`is_region`-bearing class); that dead duplicate has been removed from
-`_common.py` so the code has exactly one definition, matching this
-table.
 
 ### Review / holdout
 
@@ -177,7 +181,7 @@ table.
 
 ### Health / status
 
-- `HealthResponse`: `status` (`ok`/`degraded`/`down`), `triton`, `opensearch`, `gemma`, `registry` — the `gemma` key name is itself frozen wire naming (predates the VLM generalization) and reports the configured VLM backend's reachability regardless of which model it actually is.
+- `HealthResponse`: `status` (`ok`/`degraded`/`down`), `triton`, `opensearch`, `vlm`, `registry` — `vlm` reports the configured VLM backend's reachability regardless of which model it is.
 - `StatusResponse`: `status`, `detail`, `extra`
 
 ### Export
@@ -306,19 +310,90 @@ read-modify-write round trip in application code.
 
 - `_PathLookupRequest`: `image_paths` (max 10,000)
 - `_PathLookupResponse`: `known_paths` (`dict[image_path, image_id]`)
-- `_PublishEvent` (`POST /events/publish`, used by the SAM worker): `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `plate_status`, `plate_text`, `image_path`, `topic`, `extra`
+- `_PublishEvent` (`POST /events/publish`, used by the SAM worker): `type`, `crop_id`, `class_id`, `class_name`, `class_source`, `region_status`, `region_text`, `image_path`, `topic`, `extra`. `extra='forbid'`: an unknown key is a `422` (a mismatched status key used to be silently dropped, so worker-published `crop.region_verified` events arrived with no status — audit S7).
 
-## What is explicitly NOT frozen
+## Item wire format
 
-- **Backend OpenSearch field names** (`plate_status`, `plate_bbox_norm`,
-  etc. as document keys) — governed by `RegionFields`
-  (`src/config/region_fields.py`), overridable per deployment via
-  `OP_REGION_FIELD_*` (see `env.template`).
-- **`RegionStatus` enum values** in `src/config/region_state.py` — these
-  are values, not field names. See D2 below for the codegen contract's
-  status. Work item B2 exercised exactly that freedom: `no_plate_box` /
-  `no_plate_visible` became `no_region_box` / `no_region_visible` (see
-  the B2 note under "Coordination notes" below).
+Built by `serialize_item()` in `src/services/curation/wire.py`. 71 keys,
+always all present (a value is `null` when the stored doc has no value;
+`bbox_norm` defaults to `[]`, `class_name`/`class_source`/
+`label_source`/`updated_at` to `""`, `confidence` to `0.0`,
+`label_validated`/`class_validated`/`test_holdout` to `false`).
+
+Item keys (40): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `coco_proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
+
+Region keys (31, one per `RegionFields` attribute except `embedding`,
+`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+
+`label_validated` is derived (`class_validated` OR `region_validated`).
+`thumbnail_url` / `region_thumbnail_url` are built from the configured
+`api_prefix` (`{prefix}/crops/{crop_id}/thumbnail` and
+`…/region_thumbnail`), so `OP_API_PREFIX` and the frontend's proxy prefix
+must match.
+
+| Endpoint | Items at | Keys |
+|---|---|---|
+| `GET /crops`, `GET /classes/{class_id}/crops` | `crops[]` | item |
+| `GET /crops/{crop_id}` | body | item |
+| `GET /review/{tab}` | `items[]` | item + `reason`, `proposed_class_id`, `proposed_class_name` |
+| `GET /regions` | `items[]` | item |
+| `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
+| `GET /search/text` | `items[]` | item + `semantic_score` |
+
+`GET /regions` filter params: `page`, `page_size`, `class_id`,
+`cluster_id`, `region_cluster_id`, `region_cluster_subid`,
+`sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`,
+`detector`, `text`, `include_test`.
+
+### SSE — `GET /events`
+
+`crop.region_verified` data: `type`, `topic` (`region_status`),
+`crop_id`, `region_status`, `region_text`, `ts`. The data keys other than
+`type`/`topic`/`ts` are item keys with the same meaning. The same payload
+is produced in-process (`publish_region_verified`) and by the SAM worker
+via `POST /events/publish`.
+
+### `GET /stats/dataset`
+
+- `labeled`: `by_human`, `by_vlm`, `by_classifier`, `by_proposal`, `other`
+- `regions`: `boxed`, `confirmed`, `total_detected`, `by_detector`,
+  `by_segmenter`, `by_human`, `by_human_drew`, `verified_by_human`,
+  `verified_by_vlm`, `validated_by_human` (`by_detector` /
+  `by_segmenter` / `by_human_drew` are matched against the active
+  `DetectionProfile`'s `detector_model` / `segmenter_name` /
+  `human_detector_name`; `verified_by_vlm` counts every non-human
+  verifier, because the VLM stamps its own model id)
+- unchanged: `as_of`, `total_crops`, `validated`, `test_holdout`,
+  `by_source`, `unlabeled`, `in_progress`, `clusters`
+
+### `GET /export/datasets`
+
+Query: `kind` (`yolo` | `single_class` — the same ids the `/methods`
+export axis advertises), `profile_name`. Rows: `kind`, `profile_name`
+(`null` for multi-class), `export_dir`, `version_tag`, `image_count`,
+`split_counts`, `dataset_sha`, `exported_at`, `class_count`,
+`is_current`. Multi-class versions live directly under the export root;
+single-class versions under `<export_root>/<profile_name>/<version>/`, and
+`is_current` is judged against that profile's own `current` symlink.
+
+### `class_source` values
+
+`human*` (human writes), `item_model` / `item_low_conf` (ingest's item
+detector, `f'{profile.name}_model'` with the ingest profile named
+`item` — see `src/services/curation/class_sources.py`), `vlm`,
+`vlm_unmatched`, `vlm_new_class_pending`, `vlm_reclassified`,
+`classifier_vlm_agreement`, `cluster_majority_agreement`,
+`unlabeled_proposal`.
+
+## What is explicitly NOT on the wire
+
+- **Backend OpenSearch field names** for region attributes — governed by
+  `RegionFields` (`src/config/region_fields.py`), overridable per
+  deployment via `OP_REGION_FIELD_*` (see `env.template`). They pick
+  where a value is read from and written to; the wire name is fixed.
+- **`RegionStatus` enum values** in `src/config/region_state.py` are
+  values, not field names (B2 renamed `no_plate_box` /
+  `no_plate_visible` to `no_region_box` / `no_region_visible`).
 - **The `/curation` URL prefix itself** — a config field
   (`CurationConfig.api_prefix`, env override `OP_API_PREFIX`) that
   defaults to `/curation`. A deployment may run behind a different
@@ -327,7 +402,11 @@ read-modify-write round trip in application code.
 
 ## H3/H4 — cross-repo decisions (cropwright_backend_integration_plan.md §6/§7)
 
-**H4 — `plate_*` → generic storage-field rename: formally closed as
+**H4 — superseded by B3 (2026-09-23).** H4 kept the historical
+`plate_*` names on the wire and closed the storage reindex as WONTFIX.
+B3 moves the *wire* to generic names; storage names stay configurable
+via `RegionFields` exactly as before, so no reindex is required of any
+deployment. Original ruling, for the record: **formally closed as
 WONTFIX.** Agreed by both the backend and Cropwright independently. The
 wire contract above is already fully decoupled from OpenSearch storage
 field names via `RegionFields`; a storage rename is invisible to any
@@ -392,24 +471,71 @@ and no statuses were merged:
 The three `/crops/{crop_id}/...` renames bring those routes in line with
 their already-generic sibling `GET /crops/{crop_id}/region_thumbnail`.
 
-Not renamed, deliberately: `GET /crops/{crop_id}/region_thumbnail`
-(already generic), every `plate_*` JSON key including
-`plate_thumbnail_url` and the `n_plates` ingest counter (frozen — see
-the invariant at the top of this doc), every OpenSearch document field
-name (`plate_bbox_norm` etc. — the reindex is WONTFIX per H4 below),
-the `plates` key in `GET /stats/dataset`'s response body (a wire field,
-not a path), and the `disagreement` / `human_corrected` /
-`false_positives` cohort modes.
+B2 deliberately left every `plate_*` JSON key, `plate_thumbnail_url`,
+`n_plates` and the `plates` stats block alone; B3 below renames all of
+them. The `disagreement` / `human_corrected` / `false_positives` cohort
+modes were already generic.
 
 Deployments carrying documents written before B2 need a one-off
 `update_by_query` rewriting the two status strings; nothing else in
 storage changes.
 
+### B3 — one generic wire vocabulary (BREAKING, 2026-09-23)
+
+Agreed by both teams' owners; ship both sides together. Fresh
+deployments re-ingest, so no data migration is provided. Also fixes the
+backend rows of the frontend's contract audit
+(`e2e-contract-audit-2026-09-23`): S4, S7, S8, S9, S10, the hardcoded
+`/curation` thumbnail URL, and the MISSING `GET /classes/{class_id}`.
+
+| Kind | Before | After |
+|---|---|---|
+| Item key (all item endpoints) | `plate_<attr>` (e.g. `plate_bbox_norm`, `plate_status`, `plate_verified`, `plate_validated`, `plate_detector_chain`, `plate_bbox_frame`, `plate_text`, `plate_text_raw`, `plate_visible`, `plate_cluster_id`, `plate_cluster_subid`, `plate_cluster_distance`, `plate_label_source`, …) | `region_<attr>` (`region_bbox_norm`, `region_status`, …) — full list under "Item wire format" |
+| Item key | `plate_thumbnail_url` | `region_thumbnail_url` |
+| Item key | `gemma_confidence` | `vlm_confidence` |
+| Item key | `v6_raw_confidence` | `classifier_raw_confidence` |
+| Item key (semantic search) | `region_bbox_norm` / `region_score` read under the storage names | fixed wire names (same values) |
+| Item keys added to `/crops`, `/crops/{id}`, `/regions`, search | — | the full item (provenance chain, bbox frame, scores, class provenance, `updated_at`, …) — was stripped by `ItemDoc` (S9) |
+| Stored doc field | `gemma_confidence`, `gemma_raw_label`, `gemma_raw_label_conf`, `gemma_raw_class`, `gemma_proposed_class`, `gemma_proposed_class_id`, `gemma_label_cluster_id`, `gemma_label_cluster_name`, `gemma_label_cluster_distance`, `gemma_verify_completed_at` | `vlm_confidence`, `vlm_raw_label`, `vlm_raw_label_conf`, `vlm_raw_class`, `vlm_proposed_class`, `vlm_proposed_class_id`, `vlm_label_cluster_id`, `vlm_label_cluster_name`, `vlm_label_cluster_distance`, `vlm_verify_completed_at` |
+| Stored doc field | `gemma_vehicle_make`, `gemma_vehicle_model` | `vlm_item_make`, `vlm_item_model` |
+| Stored doc field | `v6_raw_confidence` | `classifier_raw_confidence` |
+| `class_source` / `label_source` value | `gemma`, `gemma_unmatched`, `gemma_new_class_pending`, `gemma_reclassified`, `gemma_human_confirmed` | `vlm`, `vlm_unmatched`, `vlm_new_class_pending`, `vlm_reclassified`, `vlm_human_confirmed` |
+| `class_source` value | `v6_gemma_agreement`, `cluster_v6_majority_agreement` | `classifier_vlm_agreement`, `cluster_majority_agreement` |
+| `class_source` value (queried) | `v6_model`, `v6_low_conf` (hardcoded; never matched what generic ingest writes) | `item_model`, `item_low_conf` (what ingest writes) |
+| `region_detector_chain` entry | `<det>:gemma_verify_ok`, `<det>:gemma_reject`, `gemma_visible:yes` / `gemma_visible:no`, `<seg>:skip_gemma_verify` | `<det>:vlm_verify_ok`, `<det>:vlm_reject`, `vlm_visible:yes` / `vlm_visible:no`, `<seg>:skip_vlm_verify` |
+| Writer id (`class_id_history`) | `gemma_pipeline` | `vlm_pipeline` |
+| Review tab (`GET /review/{tab}`) | `gemma_low_conf` | `vlm_low_conf` |
+| Review `reason` text | "gemma's reply did not match…", "gemma confidence below high", "…v6 unsure or missed", "COCO found a vehicle v6 missed…", "plate detected — needs human confirmation" | "VLM's reply did not match…", "VLM confidence below high", "…classifier unsure or missed", "detector proposed an item the classifier missed (blind spot)", "region detected — needs human confirmation" |
+| Query param `GET /crops` | `v6_conf_lt` | `classifier_conf_lt` |
+| Query params `GET /crops` (new) | — | `limit`, `sort`, `conf_min`, `conf_max`, `k` (S10) |
+| Query param `GET /regions` | `plate_cluster_id`, `plate_cluster_subid` | `region_cluster_id`, `region_cluster_subid` |
+| Query params `POST /pipeline/auto_label[/start]` | `gemma_batch_size`, `gemma_concurrency`, `max_gemma_crops`, `run_gemma`, `v6_confidence_skip_gemma` | `vlm_batch_size`, `vlm_concurrency`, `max_vlm_crops`, `run_vlm`, `classifier_confidence_skip_vlm` |
+| Auto-label job stage / summary key | `gemma`, `cluster_id_normalize_post_gemma` | `vlm`, `cluster_id_normalize_post_vlm` |
+| Query params `GET /export/datasets` (new) | — | `kind`, `profile_name`; rows gain `kind`, `profile_name` (S4) |
+| Body `PUT /crops/{id}/region`, `PUT /crops/batch_region` | `bbox_norm`, `label_source` | `region_bbox_norm`, `region_label_source` |
+| Body `PATCH /crops/{id}/region_meta` | `plate_text`, `plate_status`, `plate_rejection_reason`, `label_source` | `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` |
+| Body `POST /regions/batch_status` | `plate_status`, `plate_verified`, `label_source` | `region_status`, `region_verified`, `region_label_source` |
+| Response `PUT /crops/{id}/region` | `plate_bbox_norm`, `plate_status` | `region_bbox_norm`, `region_status` |
+| Response `PATCH …/region_meta` `updated_fields` | `plate_text`, `plate_status`, `plate_rejection_reason` | `region_text`, `region_status`, `region_rejection_reason` |
+| Body `POST /events/publish` | `plate_status`, `plate_text` | `region_status`, `region_text` (unknown keys now 422) |
+| SSE `crop.region_verified` data | status/text under the storage field names; `topic` = storage status name; worker events carried no status (S7) | `region_status`, `region_text`; `topic` = `region_status` |
+| Stats `GET /stats/dataset` | `labeled.by_v6`, `labeled.by_yolo11_proposal` | `labeled.by_classifier`, `labeled.by_proposal` |
+| Stats `GET /stats/dataset` | `plates` block; `plates.by_lpr`, `plates.by_sam3`, `plates.verified_by_gemma` | `regions` block; `regions.by_detector`, `regions.by_segmenter`, `regions.verified_by_vlm` |
+| `GET /health` | `gemma` | `vlm` |
+| Ingest response | `n_plates` | `n_regions` |
+| `GET /regions/clusters` card | `dominant_class_name: "license_plate"` | `dominant_class_name: "region"` |
+| Route (new) | — | `GET /classes/{class_id}` |
+| Env var | `GEMMA_URL`, `GEMMA_IMAGES_PER_CALL`, `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE`, `SAM_WORKER_GEMMA_CONCURRENCY`, `SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY`, `SAM3_SKIP_GEMMA_VERIFY_SCORE` | `VLM_URL`, `VLM_IMAGES_PER_CALL`, `VLM_HTTPX_MAX_CONNECTIONS`, `VLM_HTTPX_KEEPALIVE`, `SAM_WORKER_VLM_CONCURRENCY`, `SAM_WORKER_VLM_VISIBLE_CONCURRENCY`, `SAM3_SKIP_VLM_VERIFY_SCORE` (old names still read as fallbacks) |
+
+Not renamed, deliberately: `coco_proposal_name` (an ingest-owned stored
+field), the internal-only `v6_embedding` storage field (never on the
+wire), Prometheus metric names, and the `needs_gemma_stop` Python alias
+in the GPU arbiter (not wire).
+
 - This doc is the shared source of truth for the `/curation` API. Point
   any consumer's docs here instead of duplicating the field list.
-- The JSON contract above is frozen: a consumer-side field-mapping
-  adapter is a convenience, not a prerequisite — no wire-format changes
-  ship without a corresponding update to this doc.
+- No wire-format change ships without a corresponding update to this
+  doc; `tests/curation/test_wire_contract.py` pins the item key set.
 - Cropwright is migrating onto this contract per
   `docs/design/cropwright_backend_integration_plan.md` — see that doc
   for the prefix-migration sequencing (`/legacy` → `/curation`, frontend-side
