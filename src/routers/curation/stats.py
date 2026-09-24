@@ -22,9 +22,9 @@ from src.routers.curation._common import (
     OpenSearchDep,
     _now_iso,
     get_class_registry,
-    logger,
     router,
 )
+from src.services.curation.dataset_thresholds import adequacy, aug_target, dataset_thresholds
 from src.services.curation.ingest_class_sources import (
     CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
     CLUSTER_MAJORITY_CLASS_SOURCE,
@@ -41,7 +41,8 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Per-class total/validated breakdown.
 
     Returns both the raw ``by_class`` aggregation and a flattened ``classes``
-    array (``{class_id, class_name, count, validated_count}``) joined against
+    array (``{class_id, class_name, count, validated_count, adequacy,
+    aug_target, aug_gap}``, plus the ``thresholds`` behind them) joined against
     the registry for the names. The labeler's ``getStats()`` (Export + Home
     pages) consumes ``classes`` — the aggregation alone has no class names, so
     without this join the Export dataset table renders empty.
@@ -76,20 +77,26 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
     classes: list[dict[str, Any]] = []
     try:
         reg = get_class_registry().load()
-        classes = [
-            {
-                'class_id': c.class_id,
-                'class_name': c.class_name,
-                'count': counts.get(c.class_id, 0),
-                'validated_count': validated.get(c.class_id, 0),
-            }
-            for c in reg.classes
-            if not getattr(c, 'deprecated', False)
-        ]
+        for c in reg.classes:
+            if getattr(c, 'deprecated', False):
+                continue
+            n_valid = validated.get(c.class_id, 0)
+            target = aug_target(n_valid)
+            classes.append(
+                {
+                    'class_id': c.class_id,
+                    'class_name': c.class_name,
+                    'count': counts.get(c.class_id, 0),
+                    'validated_count': n_valid,
+                    'adequacy': adequacy(n_valid),
+                    'aug_target': target,
+                    'aug_gap': target - n_valid,
+                }
+            )
     except Exception as exc:
-        logger.warning('stats_classes_registry_join_failed', error=str(exc))
+        raise HTTPException(status_code=503, detail=f'class registry unavailable: {exc}') from exc
 
-    return {**aggs, 'classes': classes}
+    return {**aggs, 'classes': classes, 'thresholds': dataset_thresholds()}
 
 
 # Provenance keys that mean "human-applied or human-validated", used to

@@ -58,9 +58,14 @@ Request bodies follow the same rule: a body key that writes a
 
 ## Route surface
 
-Full route list (113 distinct paths / 117 method routes under
-`/curation` as of this wave — the latest additions are
-`POST /crops/{crop_id}/label/undo` and `POST /crops/label/undo_batch`), grouped
+Full route list (123 distinct paths / 128 method routes under
+`/curation` as of this wave — the latest additions are the frontend
+logic-move routes: `GET /regions/statuses`, `POST /crops/{crop_id}/discard`,
+`POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`,
+`POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history`,
+`GET /crops/{crop_id}/image`, `GET /review/{tab}/locate`,
+`GET /review/new_class_proposals/summary`, `POST /vlm/label_cluster/{cluster_id}`,
+`GET /training_cohorts`), grouped
 by router module; every path is relative to the configured
 `api_prefix`:
 
@@ -68,8 +73,10 @@ by router module; every path is relative to the configured
 |---|---|
 | `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
-| `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label` |
-| `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label`, `POST /crops/{crop_id}/discard`, `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`, `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history` |
+| `crop_context.py` | `GET /crops/{crop_id}/image` |
+| `cohorts.py` | `GET /training_cohorts` |
+| `regions.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
@@ -77,9 +84,9 @@ by router module; every path is relative to the configured
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
-| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `GET /pipeline/events` |
+| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
-| `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
+| `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
 | `bakeoff.py` | `GET,POST /bakeoff/*` |
 | `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
@@ -119,18 +126,117 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 
 - `ItemDoc`: the shared wire item — see "Item wire format" below for the exact key list. Documentation/OpenAPI model only: handlers return the serializer's dict directly, so an unexpected stored value type never 500s a browse page.
 - `CropsPageResponse`: `total`, `page`, `page_size`, `crops` (list of items), `method`, `version`, `n_pool`
-- `CropLabelRequest`: `class_id`, `label_source`
-- `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source`
-- `CropMoveRequest`: `crop_ids`, `cluster_id`
+- `CropLabelRequest`: `class_id`, `label_source` (`human` default or `human_confirmed` — any other value is a `422`; the server always writes `class_source: "human"` for this write, so a client can't make a human label look machine-written)
+- `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` (same rule). Response: `updated`, `updated_ids` (exactly the crops written — the ids to pass to `undo_batch`), `conflicts` (`[{crop_id, current_source}]`, not written)
+- `CropMoveRequest`: `crop_ids`, `cluster_id`. Response: same shape as `batch_label` (`updated`, `updated_ids`, `conflicts`)
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
-- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (source-image frame `[x1,y1,x2,y2]`, or `null` = "no region visible"), `region_label_source` (default `human`). Response: `crop_id`, `region_bbox_norm`, `region_status`.
-- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`. Response: `updated`, `conflicts`.
-- `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_verified`, `region_label_source` — `region_status` must be one of `HUMAN_REGION_STATUS_VALUES` = `{'detected', 'no_region_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
-- `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`).
+- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (`[x1,y1,x2,y2]` in `frame`, or `null` = "no region visible"), `region_label_source` (default `human`), `frame` (`source` default = source-image frame; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none). Stored boxes are always source-frame (`region_bbox_frame: "source"`). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
+- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`, `frame` (`parent` projects through each item's own box; items without one land in `invalid`). Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
+- `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_label_source`; `region_status` must be human-writable (see "Region lifecycle" below). `region_verified` is still accepted but **ignored** (deprecated): the server derives it. Response: `updated`, `conflicts` (`[{crop_id, current_source}]`), `invalid` (`[{crop_id, detail}]`, e.g. `detected` on a crop with no box), `items` (post-write wire items).
+- `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`), `item` (post-write wire item). `422` when the status write would break an invariant (`detected` with no box).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
+
+### Training cohorts — `GET /training_cohorts?class_id=`
+
+`{cohorts: [{id, label, description, cutoffs, endpoint, params, row_kind}]}`
+(source: `src/services/curation/training_cohorts.py`). Fetch a cohort's
+rows with `GET {prefix}{endpoint}` + `params` (`class_id` already folded
+in). Core cohorts (always): `validated`, `needs_labeling`,
+`low_confidence` (`cutoffs: {classifier_conf_lt: 0.75}` — the backend's
+review band; the frontend's `0.5` is gone), `model_disagreements`
+(`row_kind: crop`). With a region profile configured, the
+`/regions/training_candidates` modes follow (`row_kind: region`,
+`params.mode`): `detector_blind_spots`, `low_conf_correct` (`cutoffs:
+{region_score_lt: 0.6}`), `disagreement`, `human_corrected`,
+`false_positives`; each `description` is exactly the `selection_reason`
+that endpoint returns.
+
+### Per-class dataset thresholds
+
+One definition (`src/services/curation/dataset_thresholds.py`), enforced by
+the training preflight and served wherever a client shows class counts:
+
+```json
+"thresholds": {"block_below": 20, "warn_below": 500, "min_test_per_class": 5,
+               "aug_target_min": 500, "aug_target_max": 3000}
+```
+
+- `adequacy` (`ok` / `warn` / `block`) of a class's validated count:
+  `< block_below` → `block` (preflight refuses), `< warn_below` → `warn`,
+  else `ok`. The frontend's old `100` "critical" line has no backend
+  meaning and is gone.
+- `aug_target` = validated count clamped to `[aug_target_min,
+  aug_target_max]`; `aug_gap` = `aug_target - validated_count`.
+
+| Endpoint | Adds |
+|---|---|
+| `POST /train/preflight` | `thresholds` |
+| `GET /stats/classes` | `thresholds`; per row `adequacy`, `aug_target`, `aug_gap` |
+| `GET /classes` | `thresholds`; per class `adequacy` |
+| `GET /test_holdout/stats` | `min_test_per_class`; per `by_class` bucket `deficient` (`doc_count < min_test_per_class`) |
+
+### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
+
+Queues the auto-label job (same job, same `GET /pipeline/auto_label/status`
+/ `POST /pipeline/auto_label/cancel`, `409` while one runs) scoped to one
+cluster with only the VLM stage: no re-clustering, no auto-promote, no cap.
+The server selects **every** unvalidated, non-holdout, non-excluded member
+(the global sweep's cost skips — classifier-confident, `vlm_unmatched`,
+recently combined-classified — don't apply to an explicit request) and
+chunks them itself. Optional `?prompt_pack=`. Response: the job state
+(`args.cluster_id` echoes the scope). While running, `total` is the number
+of members selected; on completion `result.stages.unvalidated_after_promote`
+is that count, `result.stages.vlm` `{predicted, updated, …}`, and
+`result.unvalidated_remaining` counts what is still unvalidated in the cluster.
+The same scope is available as `?cluster_id=` on `POST
+/pipeline/auto_label[/start]`.
+
+### Region shape warnings — deliberately none
+
+The region cascade's geometry gate (`is_plausible_region_bbox`,
+`src/services/detection/cascade_detect.py`) is geometry-only by design: an
+aspect-ratio / size envelope built from one domain's assumptions rejects
+legitimate regions from other domains. `DetectionProfile` carries no
+review-time shape envelope (its `aspect_*` / `auto_confirm_*` bands drive
+the OCR text-hint and the VLM-skip auto-confirm, not a verdict on a stored
+box), so the API serves **no** `region_shape_warning`. A client should not
+flag boxes by a shape prior of its own either.
+
+### Region lifecycle — `GET /regions/statuses`
+
+The single source is `REGION_STATUS_INFO` in `src/config/region_state.py`
+(also emitted to `contracts/ts/regionStatus.ts` by the codegen:
+`HUMAN_REGION_STATUSES`, `REGION_STATUS_ROLE`,
+`CONFIRM_STATUS_VALUE`, `REJECT_STATUS_VALUE`, `FALSE_POSITIVE_STATUS_VALUE`).
+
+```json
+{"statuses": [{"value": "no_region_visible", "label": "no region visible", "role": "absent",
+               "terminal": true, "human_writable": true, "clears_box": true, "wants_reason": true}, ...],
+ "confirm_status": "detected", "reject_status": "no_region_visible",
+ "false_positive_status": "false_positive"}
+```
+
+`statuses` lists every `RegionStatus` in enum order. `role` is one of
+`pending`, `positive`, `rejected`, `absent`, `false_positive`, `failed`.
+`wants_reason`: the UI may offer `region_rejection_reason` for it.
+
+Every human region writer (`PUT /crops/{id}/region`, `PUT
+/crops/batch_region`, `PATCH /crops/{id}/region_meta`, `POST
+/regions/batch_status`) enforces, server-side:
+
+- a status with `clears_box` (`no_region_visible`) clears `region_bbox_norm`
+  and `region_score`, whichever writer set it;
+- `region_verified` = (`region_status` == `confirm_status`), never taken
+  from the request (`detected` → `true`, every other human status → `false`);
+- `detected` on a crop with no box is refused (`422` single / `invalid[]` batch);
+- human writes set `region_validated=true`; `false_positive` parks the region
+  in the FP cluster, any other status releases it.
+
+Each returns the post-write item, so a client adopts it rather than
+re-deriving the result.
 
 ### Undo of human class writes
 
@@ -159,6 +265,53 @@ reverting — it calls undo and renders the returned item.
   but with nothing on record it resets the crop to unlabeled (class and
   provenance cleared, nothing invented) instead of `409`. Response:
   `crop_id`, `reset`.
+
+- `POST /crops/{crop_id}/discard` (`CropDiscardRequest`: `clear_class`
+  default `true`, `dismiss_from_review` default `false`; `422` if both are
+  false) — a **recorded** human write. `clear_class` clears class,
+  provenance and validation and drops the item to the residual pool
+  (`cluster_id: null`); `dismiss_from_review` stamps
+  `review_dismissed_at`/`review_dismissed_by` so every `/review` tab hides
+  it. Response: the post-write item. `POST /crops/discard_batch`
+  (`CropDiscardBatchRequest`: `crop_ids` + the same flags) → `items`,
+  `discarded`, `conflicts`, `not_found`.
+
+Which one to call:
+
+| Action | Route | Recorded (undoable)? |
+|---|---|---|
+| Label / confirm | `PUT /crops/{id}/label`, `PUT /crops/batch_label`, `POST /crops/move` | yes |
+| Discard (clear the class and/or hide from review) | `POST /crops/{id}/discard`, `POST /crops/discard_batch` | yes — undo restores class, placement and review visibility |
+| Undo the last recorded write | `POST /crops/{id}/label/undo`, `POST /crops/label/undo_batch` | is itself the undo; repeated calls step back |
+| `DELETE /crops/{id}/label` | legacy undo (same restore; resets to unlabeled when nothing is on record) | no — it *is* an undo, so Z can't reverse it |
+| `POST /crops/{id}/review_dismiss` | legacy one-way review hide | no — use `discard` with `clear_class: false, dismiss_from_review: true` instead |
+
+- `POST /crops/{crop_id}/vlm_dismiss` — reject the VLM's class
+  suggestion: stores `vlm_dismissed_class_id` / `vlm_dismissed_class_name`
+  / `vlm_dismissed_at`; while the VLM's suggestion is that one, the
+  suggestion keys are `null` and `proposed_class_*` no longer apply it
+  (`null` / `""`). A different later VLM suggestion shows again. The class
+  itself is untouched (label or discard separately). Response: the item.
+  `409` no suggestion, `404` unknown crop.
+- `GET /crops/{crop_id}/history` → `{crop_id, entries}`: `class_id_history`
+  oldest first, each entry the class state *before* one write
+  (`class_id`, `class_name`, `class_source`, `label_source`, `confidence`,
+  `class_detector`, `class_detector_version`, `class_labeler`,
+  `class_labeled_at`, `class_validated`, `cluster_id`, `cluster_subid`,
+  `review_dismissed_at`, `review_dismissed_by`) + `writer` (e.g.
+  `human:label_crop`, `human:discard_crop`, `vlm_pipeline`) + `at`;
+  unrecorded keys are `null`.
+
+- `POST /crops/{crop_id}/review_undismiss` — clear
+  `review_dismissed_at`/`review_dismissed_by` (back into the review
+  queues); for a `discard`-made dismissal `label/undo` does this *and*
+  restores the class. Response: the item. List hidden items with
+  `GET /crops?review_dismissed=true`; every item carries
+  `review_dismissed_at`.
+- `GET /crops/{crop_id}/image` → `{image: {image_id, image_path, width,
+  height, source, indexed_at} | null, items: [...]}`: the source frame and
+  every item detected in it (wire items, `crop_rank_in_image` ascending,
+  max 500).
 
 Cluster placement on restore: a restored validated class sits in its
 class cluster (`cluster_id == class_id`, keeping the recorded
@@ -196,6 +349,19 @@ candidate cluster (`cluster_id >= cluster_id_offset`)
 always `null` for candidates. Class clusters report their top class as
 before.
 
+Each card also carries `purity_tier` (`pure` / `mixed` / `noisy`, `null`
+with no labelled member) and `promotable` (the auto-promote gate: at least
+`promote_min_members` members, at least `promote_min_labelled_share` of
+them labelled, purity at least `pure_min`). The response serves the cut
+points: `purity_thresholds: {pure_min: 0.85, mixed_min: 0.6,
+promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
+`src/services/curation/cluster_purity.py`; `pure_min` *is* the gate, so a
+"pure" card is always one the gate would promote on purity) and
+`core_similarity_min: 0.75` (the cut line for the items' `cluster_is_core`).
+`POST /clusters/auto_promote` counts every labelled member in the purity
+denominator (it used to count only the top-5 classes, overstating purity
+on many-class clusters).
+
 `GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
 50), `limit` (1–500; alias for `page_size`, wins when both are set),
 `sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
@@ -204,19 +370,29 @@ before.
 `cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
 else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
 `cluster_id`, `label_source`, `class_source`, `label_validated`,
-`hdd_source`, `include_test`, `include_excluded`, `max_rank`,
+`hdd_source` / `source` (same filter; `source` is the wire name),
+`needs_new_class` (bool), `review_dismissed` (bool), `ids` (comma-separated, max 500: returns exactly
+those items in that order, missing ids dropped, every other filter ignored —
+use it to hydrate a `POST /select/diverse` page in one call),
+`include_test`, `include_excluded`, `max_rank`,
 `min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
 (inclusive band on `confidence`, `400` if min > max), `order`
 (`default`/`outliers`/`diverse`), `k` (1–10000, `order=diverse` only:
-rank just the first `k` k-center-greedy picks; `total` is then `k`).
+rank just the first `k` k-center-greedy picks; `total` is then `k`),
+`item_text` (≤200 chars; text read on the item crop — every letter/digit
+word of the query must be a case-insensitive prefix of one of the item's
+`item_text_tokens`, e.g. `smith mot` matches an item whose OCR read
+`Smith Motors`, `abc1234` matches `ABC-1234`; a query with no letter or
+digit is a `400`).
 
 ### Classes
 
-- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`
-- `ClassListResponse`: `classes`
-- `ClassCreateRequest`: `name`, `group`, `notes`
+- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`, `adequacy`, `added_at` (from the registry)
+- `ClassListResponse`: `classes`, `thresholds`, `reserved_hotkeys` (sorted single keys no class may bind: `/ a b d e f g m n u x z` — the labeling actions, the class picker and the region-review keys)
+- `ClassCreateRequest`: `name`, `group`, `notes`, `hotkey_letter` (optional)
 - `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
-- `ClassMergeRequest`: `source_id`, `target_id`
+- Class names must match `^[a-z0-9_]+$` on create and rename (`422` otherwise; they become export/training class names). Hotkeys, on create and update: one character (`400`), not reserved (`422`), not bound to another active class (`409`); `""` on update clears. A create that fails any hotkey rule writes nothing.
+- `ClassMergeRequest`: `source_id`, `target_id`. `POST /classes/merge?dry_run=true` writes nothing and returns `{dry_run: true, source_id, target_id, would_relabel, would_unvalidate, holdout_blocking, blocked}` — `would_relabel` counts every non-holdout item of the source class (validated or not), `would_unvalidate` the validated ones among them (a merge relabels with `class_source: class_merge` and clears validation), `blocked` = the real merge would `409` on frozen test-holdout items. `400` for an unknown id or a self-merge.
 - `GET /class_sources` -> `{"class_sources": [{"id", "label", "role", "short_label"}, ...]}` — see "`class_source` values" below
 
 ### VLM labeling/verification
@@ -238,6 +414,35 @@ auto-label params and the stats keys (see B3).
 - `VlmRegionVisibleBatchResponse`: `visible` (`dict[str, bool]`, keyed by `crop_id`)
 
 ### Review / holdout
+
+`GET /review/{tab}` tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`,
+`uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`,
+`coco_blind_spots`, **`new_class_proposals`** (items flagged
+`needs_new_class` by a human, or `class_source: vlm_new_class_pending`).
+Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
+`min_blur_ratio`, `min_mistakenness`, `hide_near_duplicates`, **`class_id`**,
+**`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
+`400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
+`items` (item + `reason`), `sort_applied` (the sort id that actually ran),
+`sort_fallback_reason` (always `null`).
+
+Sort: an explicit `sort` wins; omitted (or `default`) → the **tab's own
+default** (a deployment `sort` default from `PUT /settings` never overrides
+it — it only applies to a tab without one, e.g. `new_class_proposals`, else
+`recent`). Every queue ends in a `crop_id` ascending tiebreak so pages are
+stable and positions are exact.
+
+`GET /review/{tab}/locate?crop_id=…` (same filters + `sort`, plus
+`page_size`) → `{crop_id, in_queue, rank, page, page_size, total, reason,
+sort_applied}`: `rank` is 0-based, `page` the 1-based page holding it;
+out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
+`filtered_out`. It counts the items sorting before the crop (one count, any
+queue depth) — use it for `/review?crop_id=` deep links instead of paging.
+
+`GET /review/new_class_proposals/summary?size=&samples=` →
+`{total_pending, top_terms: [{label, count, sample_crop_ids}]}`: the VLM's
+proposed new-class names over unvalidated `vlm_new_class_pending` items,
+most common first.
 
 - `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
 - `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`
@@ -384,16 +589,37 @@ read-modify-write round trip in application code.
 
 ## Item wire format
 
-Built by `serialize_item()` in `src/services/curation/wire.py`. 73 keys,
+Built by `serialize_item()` in `src/services/curation/wire.py`. 91 keys,
 always all present (a value is `null` when the stored doc has no value;
 `bbox_norm` defaults to `[]`, `class_name`/`class_source`/
-`label_source`/`updated_at` to `""`, `confidence` to `0.0`,
-`label_validated`/`class_validated`/`test_holdout` to `false`).
+`label_source`/`updated_at`/`source`/`proposed_class_name` to `""`,
+`confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
+`needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (42): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
+Item keys (57): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
 
-Region keys (31, one per `RegionFields` attribute except `embedding`,
-`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+Region keys (34, one per `RegionFields` attribute except `embedding`,
+`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+
+Derived keys (computed by the serializer, never stored):
+
+- `region_bbox_in_parent` — the region box in the item-crop frame
+  (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when there is no region or
+  the item has no usable `bbox_norm`. Draw it on the item thumbnail as-is.
+- `proposed_class_id` / `proposed_class_name` — the class a one-key confirm
+  applies, on **every** item endpoint (was `/review`-only): the VLM
+  suggestion when there is one, else `class_id` and `vlm_raw_class` or
+  `class_name` or `""` (see "VLM class suggestion").
+- `cluster_kind` — `class` / `candidate` / `unassigned` from `cluster_id`
+  (`null` without one); same rule as the cluster cards.
+- `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
+  without a distance); `cluster_is_core` — `cluster_similarity >=
+  core_similarity_min` (served on `GET /clusters`, `0.75`).
+- Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
+  `class_excluded` (bool), `excluded_reason`, `excluded_at`,
+  `probe_pred_class_id` (registry id of `probe_pred_class`, written by the
+  probe pass), `source` (ingest source tag; stored under the legacy
+  `hdd_source` key — the wire name is `source`).
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
 `thumbnail_url` / `region_thumbnail_url` are built from the configured
@@ -405,10 +631,60 @@ must match.
 |---|---|---|
 | `GET /crops`, `GET /classes/{class_id}/crops` | `crops[]` | item |
 | `GET /crops/{crop_id}` | body | item |
-| `GET /review/{tab}` | `items[]` | item + `reason`, `proposed_class_id`, `proposed_class_name` |
+| `GET /review/{tab}` | `items[]` | item + `reason` |
 | `GET /regions` | `items[]` | item |
 | `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
 | `GET /search/text` | `items[]` | item + `semantic_score` |
+
+### Region text — `region_text*`
+
+`region_text` is the chosen reading of the region's text. Which reader
+fills it is the region profile's `text_reader`
+(`OP_REGION_DETECTION_TEXT_READER`):
+
+| `text_reader` | Region OCR runs | `region_text` |
+|---|---|---|
+| `vlm` | only when no VLM is configured | the VLM's reading |
+| `ocr` | always | the OCR reading (VLM's if OCR read nothing) |
+| `vlm_then_ocr` (generic default) | when the VLM read nothing | VLM's, else OCR's |
+| `both` (reference `license_plate` profile) | always | VLM's, else OCR's |
+
+- `region_text_source`: `vlm` or `ocr` (a human edit writes `human`).
+- `region_text_engine_version`: the VLM model id, or the OCR det + rec
+  model ids for an OCR reading (`<det>:<ver>+<rec>:<ver>`).
+- `region_text_confidence`: VLM category mapped to 0.92/0.70/0.40, or the
+  minimum recognition score of the kept OCR lines.
+- `region_text_raw`: every line the OCR read on the region crop,
+  unfiltered, in reading order, joined by a space; the VLM's verbatim
+  reading when OCR did not run.
+- `region_text_vlm` / `region_text_ocr`: each reader's own reading
+  whenever it produced one (keyword).
+- `region_text_disagreement`: `true`/`false` when both readings exist,
+  compared after the profile's normalization; `null` otherwise (boolean).
+
+The OCR reader keeps the region's dominant text: lines at least
+`text_min_height_ratio` × the tallest line's height, not centered in the
+outer `text_border_margin` band of the crop, minus `text_stopwords`,
+ordered in rows top-to-bottom / left-to-right, normalized
+(`text_uppercase`, `text_charset`), joined with `text_join`, and accepted
+only within `text_len_min`..`text_len_max` and above
+`text_min_confidence`. With no VLM configured (no `VLM_URL` /
+`GEMMA_URL` / `OPENWEBUI_BASE_URL`) the worker never calls a VLM:
+detector regions are written `detected` with `region_verified=false`
+(`<src>:accepted_unverified` on the chain) and their text is read by OCR.
+
+### Item text — `item_text_lines`
+
+Every OCR line read on the item crop by the detection worker (gated by
+`OP_ITEM_TEXT_ENABLED`, default on when the region profile names an OCR
+pipeline; lines below `OP_ITEM_TEXT_MIN_CONFIDENCE`, default 0.5, are not
+stored): a list of `{text, box_norm, confidence, rel_height}` —
+`box_norm` is `[x1, y1, x2, y2]` normalized to the item crop,
+`rel_height` the line height over the crop height. Always present on the
+wire (`[]` when none or not yet read). The normalized search tokens
+(`item_text_tokens`, keyword array: each letter/digit word uppercased,
+plus each multi-word line with separators removed) are storage-only and
+back `GET /crops?item_text=`.
 
 ### `region_detector_chain` entries
 
@@ -430,6 +706,7 @@ detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
 | `<src>:combined_no_region_visible` | VLM sees no region at all |
 | `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
 | `<seg>:skip_vlm_verify` | high-score segmenter box written without a VLM call |
+| `<src>:accepted_unverified` | no VLM configured: box written `detected` with `region_verified=false` (text from OCR) |
 | `<ocr>:text_hint:hit` / `:miss` / `:no_region_shape`, `<seg>:text_hint:miss` | OCR-hinted segmenter re-pass |
 
 Readers match whole entries with `term` queries — e.g. `GET
@@ -463,8 +740,8 @@ keys are keyed off `class_source`, so a stale value never leaks.
 - Registry class (`vlm_proposed_class_id` not null): `PUT /crops/{crop_id}/label`
   `{"class_id": <vlm_proposed_class_id>}` (bulk: `PUT /crops/batch_label`
   `{"crop_ids": [...], "class_id": ...}`). Sets `class_validated=true`,
-  `class_source`/`label_source` = `human` (the body's `label_source`, default
-  `human`); both suggestion keys become `null`.
+  `class_source` = `human`, `label_source` = the body's `label_source`
+  (`human` default, or `human_confirmed` for an accepted suggestion); both suggestion keys become `null`.
 - New class (`vlm_proposed_class_id` null, name set): `POST /classes`
   `{"name": <vlm_proposed_class_name>}` -> `{"class_id": N, ...}` (`409` if
   the name exists — then use `GET /classes` to find its id), then
@@ -481,6 +758,10 @@ item's unrelated current `class_id`); a VLM-applied class reports the
 resolved registry `class_name` (was the raw VLM slug `vlm_raw_class` when
 the VLM's new-class answer matched a synonym); a stale `vlm_proposed_class`
 on an item that is no longer pending no longer overrides the name.
+
+`GET /regions/suspected_false_positives`: `threshold` is optional — omit it
+and the server applies `default_threshold` (`0.35`, served on every
+response next to the `threshold` actually used).
 
 `GET /regions` filter params: `page`, `page_size`, `class_id`,
 `cluster_id`, `region_cluster_id`, `region_cluster_subid`,
@@ -560,6 +841,16 @@ value is missing from the catalog. The
 `primary_low_conf` / `coco_blind_spots` review tabs and the
 `/stats/dataset` rollup all filter on these derived sets, never on one
 deployment's detector names.
+
+## Errors: read endpoints fail closed
+
+A backend outage is a `503`, never an empty or zero answer that reads as
+real data. `GET /ingest/sam_drain` (its `total_unfinished: 0` is the
+"worker caught up" signal), `GET /ingest/status`, `GET /classes` (live
+counts) and `GET /stats/classes` (registry join) used to answer zeros /
+empty lists on failure and now `503`. Single-item reads added in this
+wave (`GET /crops/{id}/history`, `GET /review/{tab}/locate`) answer `404` /
+`not_found` only when the item doesn't exist and `503` on an outage.
 
 ## What is explicitly NOT on the wire
 

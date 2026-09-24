@@ -27,6 +27,8 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
+from src.services.curation.ingest_class_sources import HUMAN_CLASS_SOURCE
+from src.services.curation.item_text import item_text_query
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.detection.cascade_detect import class_provenance
 
@@ -41,6 +43,19 @@ def _human_class_provenance() -> dict[str, Any]:
         detector_version=human.human_detector_version,
         labeler='human',
     )
+
+
+_MAX_IDS = 500
+
+
+def _batch_outcome(
+    crop_ids: list[str], results: list[tuple[bool, dict[str, Any] | None]]
+) -> dict[str, Any]:
+    """``updated_ids`` lists exactly the crops written (the ones an undo of
+    this batch should pass); ``conflicts`` the ones that were not."""
+    updated_ids = [cid for cid, (ok, _c) in zip(crop_ids, results, strict=True) if ok]
+    conflicts = [c for ok, c in results if not ok and c is not None]
+    return {'updated': len(updated_ids), 'updated_ids': updated_ids, 'conflicts': conflicts}
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -70,6 +85,20 @@ async def list_crops(
     class_source: str | None = None,
     label_validated: bool | None = None,
     hdd_source: str | None = None,
+    source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
+    needs_new_class: bool | None = None,
+    review_dismissed: Annotated[
+        bool | None, Query(description='true = only items hidden from review.')
+    ] = None,
+    ids: Annotated[
+        str | None,
+        Query(
+            description=(
+                'Comma-separated crop ids (max 500): return exactly these items in this '
+                'order, missing ids dropped. Every other filter is ignored.'
+            )
+        ),
+    ] = None,
     include_test: bool = False,
     include_excluded: bool = False,
     max_rank: Annotated[int | None, Query(ge=1)] = None,
@@ -77,6 +106,16 @@ async def list_crops(
     classifier_conf_lt: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
     conf_min: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
     conf_max: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    item_text: Annotated[
+        str | None,
+        Query(
+            max_length=200,
+            description=(
+                'Text read on the item crop: every word must be a case-insensitive '
+                'prefix of a stored item text token.'
+            ),
+        ),
+    ] = None,
     order: Annotated[
         str,
         Query(
@@ -108,6 +147,12 @@ async def list_crops(
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
+    if ids is not None:
+        wanted = list(dict.fromkeys(i for i in (x.strip() for x in ids.split(',')) if i))
+        if len(wanted) > _MAX_IDS:
+            raise HTTPException(status_code=400, detail=f'at most {_MAX_IDS} ids per request')
+        found = await _crops_by_ids(opensearch, wanted)
+        return crops_page(total=len(found), page=1, page_size=len(wanted), crops=found)
     if limit is not None:
         page_size = limit
     try:
@@ -121,6 +166,11 @@ async def list_crops(
     filt: list[dict[str, Any]] = []
     if conf_clause is not None:
         filt.append(conf_clause)
+    if item_text is not None:
+        text_clause = item_text_query(item_text)
+        if text_clause is None:
+            raise HTTPException(status_code=400, detail='item_text must contain a letter or digit')
+        filt.append(text_clause)
     if class_id is not None:
         must.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
@@ -135,8 +185,14 @@ async def list_crops(
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).
         must.append({'term': {'class_validated': label_validated}})
-    if hdd_source:
-        must.append({'term': {'hdd_source': hdd_source}})
+    if source or hdd_source:
+        must.append({'term': {'hdd_source': source or hdd_source}})
+    if review_dismissed is not None:
+        dismissed: dict[str, Any] = {'exists': {'field': 'review_dismissed_at'}}
+        must.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
+    if needs_new_class is not None:
+        clause: dict[str, Any] = {'term': {'needs_new_class': True}}
+        must.append(clause if needs_new_class else {'bool': {'must_not': clause}})
     if not include_test:
         must.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
     if not include_excluded:
@@ -301,7 +357,7 @@ async def label_crop(
         return {
             'class_id': payload.class_id,
             'class_name': class_name,
-            'class_source': payload.label_source,
+            'class_source': HUMAN_CLASS_SOURCE,
             # Human class label. Sets class_validated; the region-side
             # validated flag is independent and unaffected.
             'class_validated': True,
@@ -355,7 +411,7 @@ async def batch_label_crops(
     class_name = entry.class_name if entry is not None else ''
 
     if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': []}
+        return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     from src.services.curation.history import record_class_snapshot
 
@@ -364,7 +420,7 @@ async def batch_label_crops(
         return {
             'class_id': payload.class_id,
             'class_name': class_name,
-            'class_source': payload.label_source,
+            'class_source': HUMAN_CLASS_SOURCE,
             'class_validated': True,
             'label_source': payload.label_source,
             'class_id_history': history,
@@ -407,9 +463,7 @@ async def batch_label_crops(
     # fine on a single index; this only ever runs on human-bounded
     # drag-drop sizes.
     results = await asyncio.gather(*(_label_one(cid) for cid in payload.crop_ids))
-    updated = sum(1 for ok, _ in results if ok)
-    conflicts = [c for ok, c in results if not ok and c is not None]
-    return {'updated': updated, 'conflicts': conflicts}
+    return _batch_outcome(payload.crop_ids, results)
 
 
 @router.post('/crops/move')
@@ -426,7 +480,7 @@ async def move_crops(
     should also mean "this is an X, validated by me".
     """
     if not payload.crop_ids:
-        return {'updated': 0, 'conflicts': []}
+        return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
     # Resolve the destination class so the crops also get relabeled.
     reg = get_class_registry()
@@ -477,9 +531,7 @@ async def move_crops(
             return False, {'crop_id': crop_id, 'current_source': None}
 
     results = await asyncio.gather(*(_move_one(cid) for cid in payload.crop_ids))
-    updated = sum(1 for ok, _ in results if ok)
-    conflicts = [c for ok, c in results if not ok and c is not None]
-    return {'updated': updated, 'conflicts': conflicts}
+    return _batch_outcome(payload.crop_ids, results)
 
 
 @router.post('/crops/flag_new_class')

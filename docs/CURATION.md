@@ -89,23 +89,32 @@ Stated up front, honestly, rather than discovered in production:
 Nothing in this subsystem ships a pretrained region-detector, VLM, or
 trainer. A deployment supplies:
 
-- **An image-embedding model — `pe_image_encoder` (required, not
-  optional).** Unlike everything else in this list, the Triton model
-  *name* here is hardcoded, not configurable: `src/clients/pe_encoder.py`
-  calls `pe_image_encoder` with a single FP32 input `images`
-  `[B, 3, 336, 336]` and reads a single FP32 output `image_embeddings`
-  `[B, 1024]`. The result is stored as the `pe_embedding` field and is
-  what semantic search (`GET /curation/search/text`), near-duplicate
-  detection, residual clustering and the embedding visualization all run
-  on — without it, ingest cannot write an embedding and those features
-  have nothing to query. This repo **does** ship the export chain for it:
-  `export/export_pe_image_encoder.py` (PE-Core-L14-336 vision tower →
-  ONNX), then `export/build_pe_trt.sh` (→ TensorRT plan) or
-  `export/build_pe_ort_fallback.sh` (serve the ONNX directly when the
-  TensorRT build fails on PE's attention-pool ops). See
-  [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings).
-  Swapping in a different embedding model means keeping that same Triton
-  model name and tensor contract, and matching the preprocessing in
+- **The PE-Core-L14-336 encoders — image tower `pe_image_encoder`
+  (required, not optional) and text tower (required for semantic
+  search).** Unlike everything else in this list, the Triton model *name*
+  here is hardcoded, not configurable: `src/clients/pe_encoder.py` calls
+  `pe_image_encoder` with a single FP32 input `images` `[B, 3, 336, 336]`
+  and reads a single FP32 output `image_embeddings` `[B, 1024]`. The
+  result is stored as the `pe_embedding` field and is what semantic search
+  (`GET /curation/search/text`), near-duplicate detection, residual
+  clustering and the embedding visualization all run on — without it,
+  ingest cannot write an embedding and those features have nothing to
+  query. The text tower encodes search queries into the same space; it
+  runs **in the API process** (ONNX Runtime over
+  `pytorch_models/pe_text_encoder.onnx`, else PyTorch eager through
+  `perception_models`), so search keeps working with the GPU/Triton down,
+  with an optional Triton `pe_text_encoder` route. This repo ships the
+  whole chain — `make pe-download` (pinned + SHA-256-verified checkpoint;
+  the HF repo is not gated), `make pe-export-image` + `make pe-build-trt`
+  (or `make pe-build-ort` when the TensorRT build fails on PE's
+  attention-pool ops), `make pe-export-text` (parity-gated against
+  PyTorch), then `--load-model=pe_image_encoder` in Triton and an API
+  restart; `make pe-text-status` confirms the text backend. Full
+  walkthrough, flags, Triton templates (`models/pe_image_encoder/`,
+  `models/pe_text_encoder/`) and CPU latency numbers:
+  [`export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
+  Swapping in a different embedding model means keeping the same Triton
+  model name and tensor contracts, and matching the preprocessing in
   `src/services/detection/pe_preprocess.py`.
 - **An item detector for ingest** — an end2end Triton model set via
   `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus any other
@@ -302,11 +311,13 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    edit `classes` for your domain, or start from an empty
    `{"version": 1, "updated_at": "...", "classes": []}` and add classes
    via `POST /curation/classes`.
-3. Build and load the `pe_image_encoder` Triton model — see "Models you
+3. Build the PE-Core encoders (`make pe-download pe-export-image
+   pe-build-trt pe-export-text`, or `make export-pe`), load
+   `pe_image_encoder` in Triton and restart the API — see "Models you
    must supply" above and
-   [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings).
-   Ingest writes no `pe_embedding` without it, and semantic search /
-   near-dup / clustering then have nothing to operate on.
+   [`export/README.md`](../export/README.md#pe-core-encoders-curation-embeddings).
+   Ingest writes no `pe_embedding` without the image model, and semantic
+   search / near-dup / clustering then have nothing to operate on.
 4. Configure at least an ingest detector model
    (`OP_INGEST_PRIMARY_DETECTOR_MODEL`) — ingest 503s until one is set.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
@@ -370,6 +381,7 @@ be changed at runtime once the app has started.
 | Ingest item detectors | `OP_INGEST_PRIMARY_<FIELD>` (e.g. `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_INPUT_SIZE`, `OP_INGEST_PRIMARY_CLASS_IDS`), optional secondary `OP_INGEST_SECONDARY_<FIELD>` (e.g. `OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_NAME`) — tuple/frozenset fields take a comma-separated value. Replaces the retired `OP_DETECTION_*` |
 | Region detection profile (off by default) | `OP_REGION_PROFILE` (select by name, e.g. `license_plate`), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
 | Ingest | `OP_MAX_INGEST_CONCURRENCY` |
+| PE text encoder (semantic-search queries) | `OP_PE_TEXT_BACKEND` (`auto`/`onnx`/`triton`/`torch`), `OP_PE_TEXT_ONNX_PATH` (default `/app/pytorch_models/pe_text_encoder.onnx`), `OP_PE_TEXT_TRITON_MODEL`, `OP_PE_TEXT_ORT_THREADS` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |
 | Item-scores tuning | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |
 | Diverse-selection tuning | `OP_SELECT_JOBS_DIR`, `OP_SELECT_JOB_MAX_N`, `OP_SELECT_MAX_N`, `OP_SELECT_SYNC_MAX_OPS`, `OP_SELECT_CACHE_TTL_S` |

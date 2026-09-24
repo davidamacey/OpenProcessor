@@ -93,8 +93,10 @@ async def search_text(
         raise HTTPException(
             status_code=503,
             detail=(
-                'PE text encoder not ready (checkpoint still warming, missing, '
-                'or perception_models/torch not installed) — see GET /health/pe_text'
+                'PE text encoder not ready (still warming, or no backend could load: '
+                'no OP_PE_TEXT_ONNX_PATH file, no ready Triton pe_text_encoder, and '
+                'perception_models/torch or the checkpoint unavailable) — see '
+                'GET /health/pe_text'
             ),
         )
 

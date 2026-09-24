@@ -10,7 +10,7 @@ evaluates the subset of the query DSL those paths use:
   ``must`` / ``filter`` / ``must_not`` / ``should`` (``should`` = any-of);
 - ``search`` with ``size``, a single-field ``sort``, ``search_after``,
   ``scroll`` (everything in the first page) and ``terms`` aggregations
-  (with ``missing`` and nested sub-aggregations);
+  (with ``missing`` and nested sub-aggregations, incl. ``top_hits``);
 - ``count``, ``get``, ``update`` (``if_seq_no`` honoured), ``mget``,
   ``bulk`` (``update`` with ``if_seq_no`` and ``index``), ``indices.refresh``.
 
@@ -115,6 +115,10 @@ def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
 def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name, spec in aggs.items():
+        if 'top_hits' in spec:
+            size = spec['top_hits'].get('size', 3)
+            out[name] = {'hits': {'hits': [{'_source': copy.deepcopy(d)} for d in docs[:size]]}}
+            continue
         if 'terms' not in spec:
             raise NotImplementedError(f'agg not supported by fake: {spec}')
         field = spec['terms']['field']

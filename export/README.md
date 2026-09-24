@@ -17,9 +17,11 @@ The export process transforms PyTorch models into optimized TensorRT engines for
 | `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
 | `export_mobileclip_text_encoder.py` | MobileCLIP text encoder | TensorRT engine |
+| `download_pe_weights.py` | Pinned, SHA-256-verified PE-Core-L14-336 checkpoint (both PE exporters) | HF cache |
 | `export_pe_image_encoder.py` | PE-Core-L14-336 image encoder (curation `pe_embedding`) | ONNX + `config.pbtxt` |
 | `build_pe_trt.sh` | PE-Core ONNX → TensorRT engine (Path 1) | TensorRT engine |
 | `build_pe_ort_fallback.sh` | PE-Core ONNX served by Triton's ORT backend (Path 2) | ONNX model dir |
+| `export_pe_text_encoder.py` | PE-Core-L14-336 text encoder (semantic-search queries), parity-gated | ONNX (+ optional Triton ORT model dir) |
 | `export_paddleocr_det.py` | PP-OCRv5 text detection | TensorRT engine |
 | `export_paddleocr_rec.py` | PP-OCRv5 text recognition | TensorRT engine |
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
@@ -35,7 +37,8 @@ pytorch_models/
 ├── mobileclip2_s2/                     # MobileCLIP checkpoint
 ├── mobileclip2_s2_image_encoder.onnx   # MobileCLIP image encoder ONNX
 ├── mobileclip2_s2_text_encoder.onnx    # MobileCLIP text encoder ONNX
-└── pe_image_encoder.onnx               # PE-Core-L14-336 image encoder ONNX
+├── pe_image_encoder.onnx               # PE-Core-L14-336 image encoder ONNX
+└── pe_text_encoder.onnx                # PE-Core-L14-336 text encoder ONNX (API loads in-process)
 
 models/
 ├── yolov11_small_trt/                  # YOLO11 TensorRT (standard)
@@ -60,6 +63,9 @@ models/
 │   ├── 1/model.plan                    #   Path 1 (TensorRT), OR
 │   ├── 1/model.onnx                    #   Path 2 (ONNX Runtime) - never both
 │   └── config.pbtxt
+├── pe_text_encoder/                    # PE-Core-L14-336 text encoder (optional)
+│   ├── 1/model.onnx                    #   --install-triton
+│   └── config.pbtxt                    #   onnxruntime_onnx, KIND_CPU
 ├── ppocr_det_v5/                       # PP-OCRv5 detection
 │   ├── 1/model.plan
 │   └── config.pbtxt
@@ -167,28 +173,61 @@ docker compose exec yolo-api python /app/export/export_mobileclip_image_encoder.
 docker compose exec yolo-api python /app/export/export_mobileclip_text_encoder.py
 ```
 
-### PE-Core Image Encoder (Curation Embeddings)
+### PE-Core Encoders (Curation Embeddings)
 
-**Required by the curation subsystem.** `src/clients/pe_encoder.py` calls the
-Triton model `pe_image_encoder` and stores the result as the `pe_embedding`
-field, which backs semantic search, near-duplicate detection, residual
-clustering and the embedding visualization (see
-[`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply)). The model
-name and both tensor names are a hardcoded contract with that client, not
-configuration.
+**Required by the curation subsystem.** PE-Core-L14-336 (Meta's Perception
+Encoder) provides both towers of one shared 1024-d embedding space:
 
-This export runs in two stages — the ONNX export in the API container, the
-TensorRT build in the Triton container (that's where `trtexec` lives):
+| Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`) |
+|-------|----------|---------|-----------------------------------------------------|
+| Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` FP32 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
+| Text  | `PEEncoder.encode_text` → `GET /curation/search/text` queries | **In-process** (ONNX Runtime, else PyTorch); Triton `pe_text_encoder` optional | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
+
+Both embeddings come out L2-normalized. See
+[`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
+depends on them.
+
+**Fresh deployment, end to end** (API container = `yolo-api`; it has torch,
+`perception_models` and the HF cache mounted from `./cache/huggingface`):
 
 ```bash
-# Stage 1: PE-Core-L14-336 vision tower -> ONNX (+ config.pbtxt)
+make pe-download        # 0. weights: pinned commit + SHA-256 into the HF cache
+make pe-export-image    # 1. image tower -> pytorch_models/pe_image_encoder.onnx
+make pe-build-trt       # 2. -> models/pe_image_encoder/1/model.plan (Path 1)
+#   make pe-build-ort   #    ...or serve the ONNX via Triton ORT (Path 2 fallback)
+make pe-export-text     # 3. text tower -> pytorch_models/pe_text_encoder.onnx
+# 4. load the image model in Triton (explicit model control): add
+#    --load-model=pe_image_encoder to the triton-server command, then
+make restart-triton
+docker compose restart yolo-api   # picks up the text ONNX
+make pe-text-status     # expect "backend": "onnx"
+```
+
+`make export-pe` runs steps 0–3 plus the Triton restart.
+
+#### 0. Weights — `download_pe_weights.py`
+
+Fetches `facebook/PE-Core-L14-336` : `PE-Core-L14-336.pt` (~2.7 GB, both
+towers) with `huggingface_hub`, **pinned** to repo commit
+`bafb0f76541d399057e980a25947f67acec76575` and verified against SHA-256
+`0cdab5b338cbaa1e7a5dcd1b2fb4c9f4d5df1abd289564658edbab64a650e7e8` (the
+Hub's LFS object id). The repo is **not gated** (Apache-2.0) — no
+`huggingface-cli login` needed. Both exporters call the same resolver, so
+they reuse the cached file; pass `--checkpoint-path` to either exporter to
+use a hand-copied checkpoint (air-gapped hosts) — it is still checksum
+verified. `download_pe_weights.py --verify-file <path>` checks a file
+offline. The API's PyTorch fallback loads through `perception_models`' own
+`hf_hub_download` into the same cache.
+
+#### 1–2. Image tower — `export_pe_image_encoder.py` + `build_pe_trt.sh` / `build_pe_ort_fallback.sh`
+
+The ONNX export runs in the API container, the TensorRT build in the Triton
+image (that's where `trtexec` lives):
+
+```bash
 docker compose exec yolo-api python /app/export/export_pe_image_encoder.py
-
-# Stage 2, Path 1 (preferred): ONNX -> TensorRT engine
-ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh
-
-# Stage 2, Path 2 (fallback): serve the ONNX directly via Triton's ORT backend
-ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_ort_fallback.sh
+ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh          # Path 1
+ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_ort_fallback.sh # Path 2
 ```
 
 Path 2 exists because PE's attention-pooling head has, on some TensorRT
@@ -196,22 +235,117 @@ releases, used ops the ONNX parser rejects. `build_pe_trt.sh` exits `3` with
 an explicit pointer to the fallback when that happens. Both paths install
 into `models/pe_image_encoder/` and render the matching `config.pbtxt`
 (`tensorrt_plan` vs. `onnxruntime_onnx`); each removes the other's artifact
-so Triton never sees both.
-
-Useful flags on the exporter:
+so Triton never sees both. The committed `models/pe_image_encoder/config.pbtxt`
+is the rendered default (TensorRT, max batch 32).
 
 | Flag | Purpose |
 |------|---------|
-| `--method optimum` | Export `facebook/PE-Core-L14-336-hf` via Optimum instead of `perception_models`. Needs no local PE install, but names its tensors `pixel_values`/`image_embeds` — the exporter reports the mismatch rather than shipping a model the client can't call. |
+| `--checkpoint-path`, `--no-verify-checkpoint` | Use a local checkpoint / skip the SHA-256 check. |
+| `--method optimum` | Export `facebook/PE-Core-L14-336-hf` via Optimum instead of `perception_models`. Needs no local PE install, but names its tensors `pixel_values`/`image_embeds` — the exporter reports the mismatch rather than shipping a model the client can't call. That HF repo **is gated**: set `HF_TOKEN`. |
 | `--config-only --platform ...` | Re-render just `config.pbtxt` (what the two build scripts call). |
 | `--models-dir`, `--max-batch`, `--gpus`, `--instance-count` | Target repository + Triton tuning. `--max-batch` must match the engine's profile. |
 | `--skip-validate` | Skip the ONNX Runtime probe (which also catches a static leading axis — see below). |
 
-> **Trace batch size matters.** The exporter traces with a batch-**2** dummy
-> on purpose. With batch 1, PE's attention pool bakes the batch dimension
-> into a Reshape as a constant volume; Triton then loads the model fine and
-> rejects every request with batch > 1. The validation step detects and
-> reports this — re-export rather than editing `config.pbtxt`.
+> **Trace batch size matters.** The image exporter traces with a batch-**2**
+> dummy on purpose. With batch 1, PE's attention pool bakes the batch
+> dimension into a Reshape as a constant volume; Triton then loads the model
+> fine and rejects every request with batch > 1. The validation step detects
+> and reports this — re-export rather than editing `config.pbtxt`.
+
+#### 3. Text tower — `export_pe_text_encoder.py`
+
+```bash
+docker compose exec yolo-api python /app/export/export_pe_text_encoder.py [--benchmark]
+```
+
+Exports `clip.encode_text(tokens, normalize=True)` — causal transformer,
+final LayerNorm, EOT (argmax) pooling, projection, L2 norm — to
+`pytorch_models/pe_text_encoder.onnx` (~1.4 GB, text weights only), then
+gates it:
+
+- **Contract check** (ORT CPU probe): tensor names/dtypes, 1024-d output,
+  dynamic batch axis **and** dynamic token axis.
+- **Parity gate**: ORT vs PyTorch eager on a fixed prompt set (short, long,
+  punctuation, non-ASCII, one longer than the 32-token context) at batch 1
+  and 8, both with full 32-token input and with the client's EOT-trimmed
+  input; fails below cosine **0.9999** (`--parity-threshold`). Reference
+  run: min cosine 1.0000000, max |diff| 4.8e-7.
+- `--benchmark` times PyTorch eager vs ORT, full vs trimmed, batch 1 and 8.
+
+Why a dynamic token axis: the text tower's mask is strictly causal and the
+pooled vector is read at the EOT position, so padding after a row's EOT can
+never affect it. The client drops that tail (`T = max EOT index + 1`), so a
+typical 3–7 word query runs ~9 positions instead of 32 — the largest single
+CPU latency win. The legacy TorchScript tracer bakes the traced length into
+the `nn.MultiheadAttention` reshapes, so this exporter uses the
+`torch.export`-based exporter (`dynamo=True`, opset 18) with symbolic
+`Dim`s.
+
+The API picks the text backend at startup (`OP_PE_TEXT_BACKEND`, default
+`auto`): **ONNX Runtime** (`CPUExecutionProvider`) when
+`OP_PE_TEXT_ONNX_PATH` (default `/app/pytorch_models/pe_text_encoder.onnx`)
+exists, else **Triton** `pe_text_encoder` if it reports ready, else
+**PyTorch eager**. Pin with `onnx` / `triton` / `torch`. A Triton call that
+fails switches the process to in-process encoding for good, so Triton is
+never a hard dependency. `GET /health/pe_text` (`make pe-text-status`)
+reports the active backend. Tokenization always stays in Python with PE's
+own `SimpleTokenizer`, so `perception_models` stays a runtime dependency
+(for the tokenizer only, when ONNX is used).
+
+Reference CPU numbers (Xeon E5-2680 v3, 8 intra-op threads on a shared,
+loaded host — treat as relative; median ms per call, typical queries):
+
+| Backend | Batch 1, full (T=32) | Batch 1, trimmed (T=9) | Batch 8, full | Batch 8, trimmed (T=9) | Warm-up | RSS |
+|---|---:|---:|---:|---:|---:|---:|
+| PyTorch eager (previous path: full) | 113.6 | 69.3 | 603.4 | 186.6 | 12.0 s | 6.1 GB |
+| ONNX Runtime CPU (new default: trimmed) | 94.2 | 48.0 | 536.5 | 205.4 | 4.3 s | 2.8 GB |
+
+Net effect for a single query: ~114 ms → ~48 ms, half the memory, a third
+of the warm-up. At batch 8 both backends are within noise once trimmed —
+the tower is weight-bandwidth bound in FP32 on this CPU.
+
+Optional Triton serving (onnxruntime backend, CPU instances by default so it
+takes no VRAM; `--kind gpu --gpus N` for GPU):
+
+```bash
+docker compose exec yolo-api python /app/export/export_pe_text_encoder.py \
+    --install-triton --models-dir /app/models      # = make pe-export-text-triton
+# then add --load-model=pe_text_encoder to the triton-server command
+```
+
+`models/pe_text_encoder/config.pbtxt` (committed) is the rendered default
+(`--config-only` re-renders it): `text_tokens` `dims: [ -1 ]` so trimmed
+batches are accepted. The API only routes to it when no local ONNX file is
+configured or `OP_PE_TEXT_BACKEND=triton`.
+
+| Flag | Purpose |
+|------|---------|
+| `--checkpoint-path`, `--no-verify-checkpoint` | As for the image exporter. |
+| `--onnx-out` | Destination (default `/app/pytorch_models/pe_text_encoder.onnx` = the API default). |
+| `--install-triton`, `--models-dir`, `--kind`, `--gpus`, `--instance-count`, `--max-batch` | Triton model-repo entry. |
+| `--config-only` | Re-render only `config.pbtxt` (no torch needed). |
+| `--skip-validate`, `--skip-parity`, `--parity-threshold` | QA gates. A failed gate exits 1 and never installs into Triton. |
+| `--benchmark`, `--bench-threads`, `--bench-iterations` | Latency table. |
+
+#### Sources relied on
+
+- facebookresearch/perception_models — `core/vision_encoder/pe.py`
+  (`CLIP.encode_text`, `TextTransformer` causal mask + argmax pooling),
+  `config.py` (`PE-Core-L14-336`: text context 32, width 1024, output 1024;
+  `fetch_pe_checkpoint` → `hf://facebook/PE-Core-L14-336:PE-Core-L14-336.pt`),
+  `tokenizer.py` (`SimpleTokenizer`), commit `3e352cc`:
+  <https://github.com/facebookresearch/perception_models>
+- Hugging Face model card + API for `facebook/PE-Core-L14-336` (license,
+  gating, commit, LFS SHA-256): <https://huggingface.co/facebook/PE-Core-L14-336>
+- PyTorch `torch.onnx.export(..., dynamo=True, dynamic_shapes=...)`:
+  <https://docs.pytorch.org/docs/stable/onnx_export.html>
+- ONNX Runtime Python API / threading (`SessionOptions.intra_op_num_threads`,
+  `CPUExecutionProvider`): <https://onnxruntime.ai/docs/performance/tune-performance/threading.html>
+- Triton ONNX Runtime backend (`platform: "onnxruntime_onnx"`, variable dims
+  `-1`, `KIND_CPU` instances): <https://github.com/triton-inference-server/onnxruntime_backend>
+  and model configuration: <https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html>
+- TensorRT `trtexec` optimization profiles (image Path 1):
+  <https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/command-line-programs.html>
 
 ### PP-OCRv5 (Text Recognition)
 
@@ -262,6 +396,13 @@ docker compose exec yolo-api python /app/export/export_paddleocr_rec.py
   `src/services/detection/pe_preprocess.py`)
 - Output: `image_embeddings` `[B, 1024]` FP32, L2-normalized
 - Dynamic batching: 1-32 (engine profile min=1 / opt=8 / max=32)
+
+### PE-Core-L14-336 Text Encoder
+- Input: `text_tokens` `[B, T]` INT64, `T <= 32` — PE `SimpleTokenizer` ids,
+  trimmed after the batch's last EOT by the client
+- Output: `text_embeddings` `[B, 1024]` FP32, L2-normalized
+- Served in-process by ONNX Runtime (default) or Triton `onnxruntime_onnx`
+  (optional, max batch 32)
 
 ### PP-OCRv5 Detection
 - Input: `[B, 3, H, W]` FP32, dynamic size

@@ -42,6 +42,12 @@ from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
+from src.services.curation.dataset_thresholds import (
+    HARD_MIN_CROPS_PER_CLASS,
+    MIN_TEST_CROPS_PER_CLASS,
+    WARN_MIN_CROPS_PER_CLASS,
+    dataset_thresholds,
+)
 from src.services.training import jobs as train_jobs
 from src.services.training.gpu_arbiter import needs_multi_gpu_stop, probe_trainer_reachable
 from src.services.training.jobs import Profile, TrainCampaignSpec, TrainJobSpec, TrainJobStatus
@@ -90,16 +96,15 @@ class PreflightReport(BaseModel):
     blocked: bool
     checks: list[PreflightCheck]
     summary: str = ''
+    # The per-class cut points the class_balance / test_holdout checks use.
+    thresholds: dict[str, int] = Field(default_factory=dataset_thresholds)
 
 
 # Disk-space threshold (design §15.1: ≥50 GB free on the training-data volume).
 MIN_FREE_DISK_GB = 50
 
-# Per-class crop minimum thresholds (design §15.1: hard-fail at <20,
-# warn at <500).
-HARD_MIN_CROPS_PER_CLASS = 20
-WARN_MIN_CROPS_PER_CLASS = 500
-MIN_TEST_CROPS_PER_CLASS = 5
+# Per-class crop minimums (design §15.1) live in dataset_thresholds.py,
+# which also serves them to clients.
 
 
 # =============================================================================

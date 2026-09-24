@@ -279,7 +279,10 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
             json={'region_bbox_norm': [0.1, 0.1, 0.2, 0.2]},
         )
     assert r.status_code == 200, r.text
-    assert set(r.json()) == {'crop_id', 'region_bbox_norm', 'region_status'}
+    assert set(r.json()) == {'crop_id', 'region_bbox_norm', 'region_status', 'item'}
+    # The post-write item is the shared wire item under the storage override.
+    assert set(r.json()['item']) == ITEM_WIRE_KEYS
+    assert r.json()['item']['region_bbox_norm'] == [0.1, 0.1, 0.2, 0.2]
     assert fake.doc[_OVERRIDE_STORAGE.bbox_norm] == [0.1, 0.1, 0.2, 0.2]
 
 

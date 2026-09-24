@@ -94,9 +94,9 @@ def _from_env_derived_vars() -> set[str]:
     # CurationConfig.from_env uses manual per-field keys (not always the
     # field name uppercased, e.g. class_registry_path -> OP_REGISTRY_PATH)
     # -- regex-scan the classmethod's own source for the literal keys it
-    # passes to its _str/_path/_int helpers, rather than guessing.
+    # passes to its _str/_path/_int/_float/_bool helpers, rather than guessing.
     curation_src = (REPO_ROOT / 'src/config/curation.py').read_text()
-    for m in re.finditer(r"_(?:str|path|int)\('([A-Z0-9_]+)'", curation_src):
+    for m in re.finditer(r"_(?:str|path|int|float|bool)\(\s*'([A-Z0-9_]+)'", curation_src):
         derived.add(f'OP_{m.group(1)}')
     return derived
 

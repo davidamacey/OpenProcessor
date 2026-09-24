@@ -7,7 +7,8 @@ requirement for cross-run near-duplicate detection and similar-image
 kNN search.
 
 Convention: resize so the shorter edge is 336, center-crop to
-336x336, scale to ``[0,1]``, ImageNet mean/std normalize, return CHW
+336x336, scale to ``[0,1]``, normalize with PE-Core's own mean/std (0.5, 0.5 —
+upstream ``core.vision_encoder.transforms.get_image_transform``), return CHW
 float32. The mean/std and the normalize math live here so a crop path
 can share them too.
 
@@ -25,8 +26,9 @@ import numpy as np
 
 
 PE_SIZE = 336
-PE_IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
-PE_IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
+# PE-Core was trained with Normalize([0.5]*3, [0.5]*3), not ImageNet statistics.
+PE_MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
+PE_STD = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
 
 
 def resize_crop_rgb(rgb: np.ndarray, target: int = PE_SIZE) -> np.ndarray:
@@ -42,7 +44,7 @@ def resize_crop_rgb(rgb: np.ndarray, target: int = PE_SIZE) -> np.ndarray:
 
 
 def normalize_chw(rgb_uint8: np.ndarray) -> np.ndarray:
-    """ImageNet-normalize HWC-uint8 RGB -> CHW float32.
+    """PE-normalize HWC-uint8 RGB -> CHW float32.
 
     Accepts a single image ``(H,W,3)`` -> ``(3,H,W)`` or a batch
     ``(N,H,W,3)`` -> ``(N,3,H,W)``.
@@ -50,11 +52,9 @@ def normalize_chw(rgb_uint8: np.ndarray) -> np.ndarray:
     arr = rgb_uint8.astype(np.float32) / 255.0
     if arr.ndim == 4:
         chw = np.transpose(arr, (0, 3, 1, 2))
-        return ((chw - PE_IMAGENET_MEAN[None]) / PE_IMAGENET_STD[None]).astype(
-            np.float32, copy=False
-        )
+        return ((chw - PE_MEAN[None]) / PE_STD[None]).astype(np.float32, copy=False)
     chw = np.transpose(arr, (2, 0, 1))
-    return ((chw - PE_IMAGENET_MEAN) / PE_IMAGENET_STD).astype(np.float32, copy=False)
+    return ((chw - PE_MEAN) / PE_STD).astype(np.float32, copy=False)
 
 
 def whole_frame_rgb(path: str, target: int = PE_SIZE) -> np.ndarray | None:

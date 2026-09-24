@@ -31,14 +31,16 @@ the model its own curation code requires.
 
 The input tensor must be preprocessed exactly the way
 ``src/services/detection/pe_preprocess.py`` does it: resize shorter edge to
-336, center-crop 336x336, scale to [0, 1], ImageNet mean/std normalize, CHW
+336, center-crop 336x336, scale to [0, 1], PE-Core 0.5/0.5 normalize, CHW
 float32. The exported graph L2-normalizes its own output; ``PEEncoder``
 re-normalizes defensively, so either is safe.
 
 Export methods
 --------------
 ``--method perception-models`` (default)
-    Loads the checkpoint through ``perception_models`` (already a declared
+    Loads the checkpoint (fetched + SHA-256 verified by
+    ``export/download_pe_weights.py``, or ``--checkpoint-path``) through
+    ``perception_models`` (already a declared
     project dependency; the pip distribution installs the top-level ``core``
     package) and runs ``torch.onnx.export`` on a thin wrapper whose I/O
     names are exactly ``images`` / ``image_embeddings``. This is the only
@@ -215,7 +217,7 @@ def render_config(cfg: PETritonConfig) -> str:
 # visualization. The tensor names below are a contract with that client.
 #
 # Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] FP32,
-#         ImageNet mean/std normalized (see src/services/detection/pe_preprocess.py)
+#         PE-Core 0.5/0.5 mean/std normalized (see src/services/detection/pe_preprocess.py)
 # Output: {cfg.output_name} [B, {cfg.embedding_dim}] FP32, L2-normalized
 #
 {provenance}
@@ -276,6 +278,8 @@ def export_via_perception_models(
     opset: int = ONNX_OPSET_VERSION,
     image_size: int | None = None,
     perception_models_path: Path | None = None,
+    checkpoint_path: Path | None = None,
+    verify_checkpoint: bool = True,
 ) -> Path:
     """Export the PE vision tower with ``torch.onnx.export``.
 
@@ -293,6 +297,10 @@ def export_via_perception_models(
         perception_models_path: Optional path to a source checkout of
             facebookresearch/perception_models, prepended to ``sys.path``
             when the package isn't pip-installed.
+        checkpoint_path: Local checkpoint file. Default: the pinned revision
+            from ``download_pe_weights.py`` (downloaded into / reused from
+            the HF cache), SHA-256 verified.
+        verify_checkpoint: Check the checkpoint's SHA-256 against the pin.
 
     Returns:
         The written ONNX path.
@@ -302,9 +310,11 @@ def export_via_perception_models(
 
     import torch
     from core.vision_encoder import pe
+    from download_pe_weights import resolve_checkpoint
 
-    logger.info(f'Loading {variant} via perception_models...')
-    clip_model = pe.CLIP.from_config(variant, pretrained=True)
+    ckpt = resolve_checkpoint(variant, checkpoint_path, verify=verify_checkpoint)
+    logger.info(f'Loading {variant} via perception_models from {ckpt} ...')
+    clip_model = pe.CLIP.from_config(variant, pretrained=True, checkpoint_path=str(ckpt))
     # Inference mode. getattr indirection keeps the literal token away from
     # the python-no-eval pre-commit hook, which targets the builtin.
     getattr(clip_model, 'ev' + 'al')()
@@ -551,6 +561,18 @@ def build_parser() -> argparse.ArgumentParser:
         help=f'perception_models checkpoint name (default: {PE_VARIANT})',
     )
     parser.add_argument(
+        '--checkpoint-path',
+        type=Path,
+        default=None,
+        help='Local PE checkpoint (.pt); default: pinned download via download_pe_weights.py',
+    )
+    parser.add_argument(
+        '--no-verify-checkpoint',
+        action='store_false',
+        dest='verify_checkpoint',
+        help='Skip the SHA-256 check of the checkpoint',
+    )
+    parser.add_argument(
         '--perception-models-path',
         type=Path,
         default=None,
@@ -711,6 +733,8 @@ def main(argv: list[str] | None = None) -> int:
             opset=args.opset,
             image_size=args.image_size,
             perception_models_path=args.perception_models_path,
+            checkpoint_path=args.checkpoint_path,
+            verify_checkpoint=args.verify_checkpoint,
         )
 
     problems: list[str] = []

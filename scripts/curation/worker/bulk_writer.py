@@ -81,6 +81,9 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
             )
             return {}
         update = dict(task.update_doc)
+        # Item text read this pass rides on the region write; it is not
+        # class data, so the human-label guard below leaves it alone.
+        update.update(task.item_text_update)
         # P0-2 defense-in-depth: runner.py's _should_classify already
         # prevents class fields from ever landing in task.update_doc for
         # a human-owned crop, so this should be a no-op in practice —

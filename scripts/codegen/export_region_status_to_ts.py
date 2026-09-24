@@ -7,7 +7,8 @@ returns over the API. A TypeScript frontend that switches on those
 strings must not hand-copy them — a Python-side rename (e.g. the B2
 ``no_region_box`` / ``no_region_visible`` change) would otherwise drift
 silently. This script renders the enum, a string-literal union type, the
-ordered value list, and the terminal / pending subsets into one ``.ts``
+ordered value list, the terminal / pending / human-writable subsets, each
+status's role and the confirm / reject / false-positive values into one ``.ts``
 file, and ``--check`` fails when the committed file is stale (wired as a
 pre-commit hook).
 
@@ -44,6 +45,8 @@ def _load_region_state():
     if spec is None or spec.loader is None:
         raise ImportError(f'cannot load {_SOURCE}')
     module = importlib.util.module_from_spec(spec)
+    # @dataclass resolves string annotations through sys.modules.
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -52,6 +55,8 @@ _region_state = _load_region_state()
 RegionStatus = _region_state.RegionStatus
 TERMINAL_STATUSES = _region_state.TERMINAL_STATUSES
 PENDING_STATUSES = _region_state.PENDING_STATUSES
+HUMAN_WRITABLE_STATUSES = _region_state.HUMAN_WRITABLE_STATUSES
+REGION_STATUS_INFO = _region_state.REGION_STATUS_INFO
 
 DEFAULT_TARGET = REPO_ROOT / 'contracts' / 'ts' / 'regionStatus.ts'
 
@@ -95,6 +100,17 @@ def render_ts() -> str:
     lines.extend(_const_array('TERMINAL_REGION_STATUSES', _subset(TERMINAL_STATUSES)))
     lines.append('')
     lines.extend(_const_array('PENDING_REGION_STATUSES', _subset(PENDING_STATUSES)))
+    lines.append('')
+    lines.append('// Statuses an operator may set by hand (region status / batch status writes).')
+    lines.extend(_const_array('HUMAN_REGION_STATUSES', _subset(HUMAN_WRITABLE_STATUSES)))
+    lines.append('')
+    lines.append('export const REGION_STATUS_ROLE: Readonly<Record<RegionStatusValue, string>> = {')
+    lines.extend(f"  {m.value}: '{REGION_STATUS_INFO[m].role}'," for m in RegionStatus)
+    lines.append('};')
+    lines.append('')
+    for const in ('CONFIRM_STATUS', 'REJECT_STATUS', 'FALSE_POSITIVE_STATUS'):
+        value = getattr(_region_state, const).value
+        lines.append(f"export const {const}_VALUE: RegionStatusValue = '{value}';")
     lines.append('')
     return '\n'.join(lines)
 

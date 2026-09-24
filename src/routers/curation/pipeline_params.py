@@ -36,6 +36,12 @@ CLASS_ID_DESC = (
     'the full unvalidated cohort, unchanged from before this parameter existed.'
 )
 
+CLUSTER_ID_DESC = (
+    'Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, '
+    "non-excluded member is labeled (the global sweep's cost skips do not apply). "
+    'POST /vlm/label_cluster/{cluster_id} starts exactly this run.'
+)
+
 # detection_profile is NOT a per-run option: region detection runs in the
 # detection worker on OP_REGION_PROFILE and no auto-label stage uses it.
 # The param stays declared (hidden) only so an old client still sending it

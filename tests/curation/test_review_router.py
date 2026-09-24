@@ -14,6 +14,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.services.curation.review_request import TIEBREAK
+
 
 ALL_TABS = (
     'all',
@@ -98,7 +100,8 @@ def test_sort_absent_is_byte_identical_to_legacy_clause(tab: str, app_client: Te
     r = app_client.get(f'/curation/review/{tab}')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    assert body['sort'] == LEGACY_SORT_CLAUSE[tab]
+    # The legacy clause, then the crop_id tiebreak every queue ends in.
+    assert body['sort'] == [*LEGACY_SORT_CLAUSE[tab], TIEBREAK]
 
     out = r.json()
     # Pre-existing envelope keys, unchanged in shape/value.
@@ -116,7 +119,8 @@ def test_sort_default_literal_matches_absent(tab: str, app_client: TestClient) -
     r = app_client.get(f'/curation/review/{tab}?sort=default')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    assert body['sort'] == LEGACY_SORT_CLAUSE[tab]
+    # The legacy clause, then the crop_id tiebreak every queue ends in.
+    assert body['sort'] == [*LEGACY_SORT_CLAUSE[tab], TIEBREAK]
     assert r.json()['sort_applied'] == EXPECTED_DEFAULT_SORT_ID[tab]
 
 
@@ -127,7 +131,8 @@ def test_explicit_stable_sort_overrides_tab_default(app_client: TestClient) -> N
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
-        {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
+        {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
+        TIEBREAK,
     ]
     assert r.json()['sort_applied'] == 'atypicality'
 
@@ -159,7 +164,8 @@ def test_mistakenness_sort_selectable_when_promoted(
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
-        {'mistakenness_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
+        {'mistakenness_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
+        TIEBREAK,
     ]
     assert r.json()['sort_applied'] == 'mistakenness'
 

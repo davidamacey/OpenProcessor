@@ -60,6 +60,20 @@ class TestClientContract:
 
         assert pe_export.PETritonConfig().max_batch_size >= PE_CROP_MAX_BATCH
 
+    def test_committed_template_matches_the_renderer(self) -> None:
+        committed = Path(__file__).resolve().parents[1] / 'models' / PE_IMAGE_MODEL
+        body = (committed / 'config.pbtxt').read_text()
+        assert body == pe_export.render_config(pe_export.PETritonConfig())
+
+    def test_checkpoint_flags(self) -> None:
+        parser = pe_export.build_parser()
+        args = parser.parse_args([])
+        assert args.checkpoint_path is None
+        assert args.verify_checkpoint is True
+        args = parser.parse_args(['--checkpoint-path', '/w/pe.pt', '--no-verify-checkpoint'])
+        assert args.checkpoint_path == Path('/w/pe.pt')
+        assert args.verify_checkpoint is False
+
     def test_rendered_config_declares_the_client_tensors(self) -> None:
         out = pe_export.render_config(pe_export.PETritonConfig())
         assert f'name: "{PE_IMAGE_MODEL}"' in out

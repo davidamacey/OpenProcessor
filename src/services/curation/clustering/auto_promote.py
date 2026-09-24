@@ -24,6 +24,11 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
 from src.core.logging import get_logger
+from src.services.curation.cluster_purity import (
+    PROMOTE_MIN_MEMBERS,
+    PROMOTE_MIN_PURITY,
+    is_promotable,
+)
 
 # Import order matters here — see orchestrator.py's bottom-of-file import
 # and plan §7 R11. orchestrator.py imports auto_promote_clusters from this
@@ -84,8 +89,8 @@ async def _scroll_ids(
 async def auto_promote_clusters(
     client: AsyncOpenSearch,
     *,
-    min_purity: float = 0.85,
-    min_members: int = 4,
+    min_purity: float = PROMOTE_MIN_PURITY,
+    min_members: int = PROMOTE_MIN_MEMBERS,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Auto-validate crops in high-purity clusters where v6 agrees.
@@ -142,13 +147,20 @@ async def auto_promote_clusters(
             continue
         top_name = cls_buckets[0]['key']
         top_count = int(cls_buckets[0]['doc_count'])
-        # Denominator is sum of all top_class buckets since OS ``terms``
-        # skips nulls — i.e. labelled-only.
-        labelled_total = sum(int(b['doc_count']) for b in cls_buckets)
+        # Denominator: every labelled member (``terms`` skips nulls). The
+        # agg only returns the top buckets; ``sum_other_doc_count`` holds
+        # the members of every other class.
+        labelled_total = sum(int(b['doc_count']) for b in cls_buckets) + int(
+            bucket.get('top_class', {}).get('sum_other_doc_count') or 0
+        )
         purity = top_count / labelled_total if labelled_total else 0.0
 
-        promote = (
-            members >= min_members and purity >= min_purity and labelled_total / members >= 0.5
+        promote = is_promotable(
+            members=members,
+            labelled=labelled_total,
+            purity=purity,
+            min_purity=min_purity,
+            min_members=min_members,
         )
 
         summaries.append(

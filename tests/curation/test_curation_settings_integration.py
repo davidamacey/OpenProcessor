@@ -65,22 +65,14 @@ def test_methods_reflects_a_stored_cluster_override(app_client: TestClient) -> N
 
 
 @pytest.mark.asyncio
-async def test_put_new_default_changes_both_methods_and_real_endpoint_behavior(
+async def test_put_new_sort_default_flips_methods_but_never_overrides_a_tab_default(
     app_client: TestClient,
 ) -> None:
-    """The point of the feature: setting a shared default for the 'sort'
-    axis must (a) flip GET /methods's default flag for that entry AND (b)
-    change what the real review endpoint does when ?sort is omitted -- the
-    two can never drift because both read through
-    resolve_effective_default against the same settings document."""
+    """Setting a shared 'sort' default (a) flips GET /methods's default flag
+    and (b) is what a tab *without* its own default sorts by — but a tab's
+    own default sort always wins over it (product rule: the regions tab's
+    region-score order must not be replaced by a deployment default)."""
     from src.services.curation import review_sorts
-
-    # Before: 'all' tab's own hardcoded default applies, 'uncertainty_entropy'
-    # is not it.
-    clause_before, applied_before, _ = await review_sorts.build_sort(
-        None, tab='all', opensearch=app_client.fake_os
-    )
-    assert applied_before == 'atypicality'
 
     r = app_client.put('/curation/settings', json={'defaults': {'sort': 'uncertainty_entropy'}})
     assert r.status_code == 200
@@ -90,11 +82,14 @@ async def test_put_new_default_changes_both_methods_and_real_endpoint_behavior(
     assert sort_entries['uncertainty_entropy']['default'] is True
     assert sort_entries['atypicality']['default'] is False
 
-    clause_after, applied_after, _ = await review_sorts.build_sort(
+    _clause, applied, _ = await review_sorts.build_sort(
         None, tab='all', opensearch=app_client.fake_os
     )
-    assert applied_after == 'uncertainty_entropy'
-    assert clause_after != clause_before
+    assert applied == 'atypicality'
+    _clause, applied, _ = await review_sorts.build_sort(
+        None, tab='new_class_proposals', opensearch=app_client.fake_os
+    )
+    assert applied == 'uncertainty_entropy'
 
 
 @pytest.mark.asyncio

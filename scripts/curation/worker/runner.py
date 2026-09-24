@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from src.config import get_region_fields
+from src.config import get_curation_config, get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.ingest_class_sources import (
@@ -37,6 +37,7 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
 )
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.detection.region_text import TEXT_SOURCE_OCR, ocr_engine_id, validate_text_reader
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
@@ -51,6 +52,13 @@ from scripts.curation.worker.cascade import (
     _fetch_pending,
     _resegment_from_text_hint,
     _source_to_crop,
+)
+from scripts.curation.worker.region_text_stage import (
+    accept_without_vlm,
+    apply_region_text,
+    candidate_detector,
+    item_text_fields,
+    read_item_lines,
 )
 from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
@@ -239,11 +247,21 @@ async def run(args: argparse.Namespace) -> int:
     # the item's class name.
     pack = resolve_prompt_pack()
     logger.info('vlm_prompt_pack_resolved', pack=pack.name)
-    gemma = (
-        _wkr.VlmLabeler(base_url=args.gemma_url, pack=pack)
-        if args.gemma_url
-        else _wkr.VlmLabeler(pack=pack)
+    # No VLM URL at all (VLM_URL / GEMMA_URL / OPENWEBUI_BASE_URL all
+    # unset) = a deployment without an image LLM: no visibility filter, no
+    # verify call; detector regions are accepted unverified and their
+    # text is read by OCR (region_text_stage.accept_without_vlm).
+    vlm_available = bool((args.gemma_url or '').strip())
+    validate_text_reader(profile.text_reader)
+    item_text_enabled = get_curation_config().item_text_enabled and bool(profile.ocr_pipeline_model)
+    item_text_min_conf = get_curation_config().item_text_min_confidence
+    logger.info(
+        'region_text_reader_configured',
+        vlm_available=vlm_available,
+        text_reader=profile.text_reader,
+        item_text_enabled=item_text_enabled,
     )
+    gemma = _wkr.VlmLabeler(base_url=args.gemma_url, pack=pack) if vlm_available else None
     # B-PR5: populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
     # classify in the same VLM round-trip as region verify + OCR.
@@ -251,22 +269,24 @@ async def run(args: argparse.Namespace) -> int:
     # falls back to legacy two-call paths (label_combined with empty
     # class_names just answers the region side).
     name_to_id: dict[str, int] = {}
-    try:
-        from src.clients.curation_opensearch import ClassRegistry
+    # Without a VLM nothing classifies, so the registry is not needed.
+    if gemma is not None:
+        try:
+            from src.clients.curation_opensearch import ClassRegistry
 
-        _reg = ClassRegistry().load()
-        # gemma.class_names is the list passed into the VLM prompt;
-        # reply.class_id is the *index* into this list, NOT the
-        # registry id. name_to_id maps the resolved name back to the
-        # registry's authoritative class_id so writes carry the
-        # correct value. Without this remap, a reply of class_id=0
-        # lands the registry's first non-deprecated class label on a
-        # doc with class_id=0 (deprecated) — historical drift.
-        gemma.class_names = [c.class_name for c in _reg.classes if not c.deprecated]
-        name_to_id = {c.class_name: int(c.class_id) for c in _reg.classes if not c.deprecated}
-        gemma.name_to_id = name_to_id
-    except Exception as _exc:  # nosec B110 — best-effort, registry optional
-        logger.warning('class_registry_load_failed', error=str(_exc))
+            _reg = ClassRegistry().load()
+            # gemma.class_names is the list passed into the VLM prompt;
+            # reply.class_id is the *index* into this list, NOT the
+            # registry id. name_to_id maps the resolved name back to the
+            # registry's authoritative class_id so writes carry the
+            # correct value. Without this remap, a reply of class_id=0
+            # lands the registry's first non-deprecated class label on a
+            # doc with class_id=0 (deprecated) — historical drift.
+            gemma.class_names = [c.class_name for c in _reg.classes if not c.deprecated]
+            name_to_id = {c.class_name: int(c.class_id) for c in _reg.classes if not c.deprecated}
+            gemma.name_to_id = name_to_id
+        except Exception as _exc:  # nosec B110 — best-effort, registry optional
+            logger.warning('class_registry_load_failed', error=str(_exc))
     opensearch = _wkr.AsyncOpenSearch(hosts=[args.opensearch])
 
     started_at = time.monotonic()
@@ -524,6 +544,14 @@ async def run(args: argparse.Namespace) -> int:
                     in_q.task_done()
                     continue
 
+                # One OCR read of the item crop per pass: stored as the
+                # item's searchable text and reused by the text-hint step.
+                if item_text_enabled:
+                    t.item_ocr_lines = await read_item_lines(ocr_recognizer, t.crop_jpeg, t.crop_id)
+                    t.item_text_update = item_text_fields(
+                        t.item_ocr_lines, min_confidence=item_text_min_conf
+                    )
+
                 is_secondary = _is_secondary_shape(t)
 
                 # Path 1: pending_verify — already has a primary-detector
@@ -539,7 +567,11 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     t.candidate_in_source = t.lpr_plate_in_source
                     t.candidate_score = t.lpr_score
-                    await combined_q.put(t)
+                    if vlm_available:
+                        await combined_q.put(t)
+                    else:
+                        await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                        await out_q.put(t)
                     in_q.task_done()
                     continue
 
@@ -566,7 +598,11 @@ async def run(args: argparse.Namespace) -> int:
                             cand.bbox_norm, t.vehicle_bbox_norm
                         )
                         t.candidate_score = cand.score
-                        await combined_q.put(t)
+                        if vlm_available:
+                            await combined_q.put(t)
+                        else:
+                            await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                            await out_q.put(t)
                         in_q.task_done()
                         continue
                     # Recorded so the blind-spot training cohort
@@ -578,8 +614,8 @@ async def run(args: argparse.Namespace) -> int:
                 # pre-filter — VLM yes/no decides whether the slow
                 # segmenter + combined path is even worth it. Fails
                 # OPEN on parse errors so a flaky VLM never silently
-                # drops a real region.
-                await gemma_visible_q.put(t)
+                # drops a real region. No VLM: straight to the segmenter.
+                await (gemma_visible_q if vlm_available else sam_q).put(t)
                 in_q.task_done()
             except Exception as exc:
                 logger.warning(
@@ -687,6 +723,9 @@ async def run(args: argparse.Namespace) -> int:
                 if plate_crops:
                     _vis_t0 = time.monotonic()
                     try:
+                        if gemma is None:
+                            msg = 'visibility stage fed without a VLM'
+                            raise RuntimeError(msg)
                         verdicts = await gemma.plate_visible_batch(plate_crops)
                         LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
@@ -826,6 +865,17 @@ async def run(args: argparse.Namespace) -> int:
                             verifier_version=None,
                             extra={F.skip_verify: True},
                         )
+                        await apply_region_text(
+                            t.update_doc,
+                            ocr=ocr_recognizer,
+                            crop_jpeg=t.crop_jpeg,
+                            region_in_crop=sam_candidate.bbox_norm,
+                            profile=profile,
+                            crop_id=t.crop_id,
+                            vlm_text=None,
+                            vlm_confidence=None,
+                            vlm_available=vlm_available,
+                        )
                         await out_q.put(t)
                         sam_q.task_done()
                         continue
@@ -838,7 +888,11 @@ async def run(args: argparse.Namespace) -> int:
                         sam_candidate.bbox_norm, t.vehicle_bbox_norm
                     )
                     t.candidate_score = sam_candidate.score
-                    await combined_q.put(t)
+                    if vlm_available:
+                        await combined_q.put(t)
+                    else:
+                        await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                        await out_q.put(t)
                     sam_q.task_done()
                     continue
 
@@ -847,11 +901,14 @@ async def run(args: argparse.Namespace) -> int:
                 # OCR-detection bbox is no longer trusted; the
                 # segmenter produces the final geometry. OCR text
                 # rides along for storage.
-                try:
-                    ocr_regions = await ocr_recognizer.detect_regions(t.crop_jpeg)
-                except Exception as exc:
-                    logger.warning('text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc))
-                    ocr_regions = []
+                if t.item_ocr_lines is not None:
+                    ocr_regions = ocr_recognizer.regions_from_lines(t.item_ocr_lines)
+                else:
+                    try:
+                        ocr_regions = await ocr_recognizer.detect_regions(t.crop_jpeg)
+                    except Exception as exc:
+                        logger.warning('text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc))
+                        ocr_regions = []
                 ocr_pick = (
                     ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
                 )
@@ -869,7 +926,11 @@ async def run(args: argparse.Namespace) -> int:
                         t.candidate_score = sub_cand.score
                         t.candidate_text = ocr_pick.text
                         t.candidate_text_confidence = ocr_pick.rec_score
-                        await combined_q.put(t)
+                        if vlm_available:
+                            await combined_q.put(t)
+                        else:
+                            await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                            await out_q.put(t)
                         sam_q.task_done()
                         continue
                     t.detection_trace.append(f'{region_profile().segmenter_name}:text_hint:miss')
@@ -961,6 +1022,9 @@ async def run(args: argparse.Namespace) -> int:
                 if combined_crops:
                     _gemma_t0 = time.monotonic()
                     try:
+                        if gemma is None:
+                            msg = 'combined stage fed without a VLM'
+                            raise RuntimeError(msg)
                         replies_by_id = await gemma.label_combined_batch(
                             combined_crops,
                             class_names=class_names or None,
@@ -1030,35 +1094,8 @@ async def run(args: argparse.Namespace) -> int:
                             else None
                         )
 
-                        # Map cascade's internal source tag to the
-                        # canonical detector name used in provenance.
-                        _det = {
-                            'sam3': (
-                                region_profile().segmenter_name,
-                                region_profile().segmenter_version,
-                            ),
-                            # OCR-hinted re-pass: bbox came from the
-                            # secondary segmenter too, just on a
-                            # tighter sub-crop. Provenance records
-                            # the segmenter as the detector; the
-                            # text-hint trace lives on the detector
-                            # chain.
-                            'sam3_text_hint': (
-                                region_profile().segmenter_name,
-                                region_profile().segmenter_version,
-                            ),
-                            'lpr': (
-                                region_profile().detector_model,
-                                region_profile().detector_version,
-                            ),
-                            'lpr_existing': (
-                                region_profile().detector_model,
-                                region_profile().detector_version,
-                            ),
-                        }.get(
-                            t.candidate_source,
-                            (t.candidate_source or 'unknown', '1'),
-                        )
+                        # Canonical detector name + version for provenance.
+                        _det = candidate_detector(t, region_profile())
                         actor = _det[0]
                         # The candidate's detector gets exactly one ``:hit``
                         # (Stage A records it for fresh detections; an
@@ -1109,23 +1146,28 @@ async def run(args: argparse.Namespace) -> int:
                             # Preserve the candidate_source marker for
                             # downstream consumers via RegionFields.source.
                             t.update_doc[F.source] = t.candidate_source
-                            # Text-hint OCR fallback: the VLM sometimes
-                            # reads no text from the bbox when the OCR
-                            # recognizer already produced one. Forward
-                            # the OCR text so the region is still
-                            # searchable.
-                            if not reply.plate_text and t.candidate_text:
-                                rc = t.candidate_text_confidence or 0.0
+                            await apply_region_text(
+                                t.update_doc,
+                                ocr=ocr_recognizer,
+                                crop_jpeg=t.crop_jpeg,
+                                region_in_crop=t.candidate_in_crop,
+                                profile=profile,
+                                crop_id=t.crop_id,
+                                vlm_text=reply.plate_text,
+                                vlm_confidence=reply.plate_confidence,
+                                vlm_available=True,
+                            )
+                            # Text-hint OCR fallback (text_reader='vlm' only
+                            # -- the other modes already read the region):
+                            # the VLM read nothing but the item-crop OCR hit
+                            # that seeded this box did. Forward that text
+                            # so the region is still searchable.
+                            if not t.update_doc.get(F.text) and t.candidate_text:
                                 t.update_doc[F.text] = t.candidate_text
                                 t.update_doc[F.text_raw] = t.candidate_text
-                                t.update_doc[F.text_source] = region_profile().ocr_rec_model
-                                t.update_doc[F.text_engine_version] = '1'
-                                # Map numeric rec_score -> VLM confidence
-                                # bin so downstream consumers treat
-                                # OCR-sourced confidence consistently.
-                                t.update_doc[F.text_confidence] = (
-                                    0.92 if rc >= 0.8 else 0.70 if rc >= 0.5 else 0.40
-                                )
+                                t.update_doc[F.text_source] = TEXT_SOURCE_OCR
+                                t.update_doc[F.text_engine_version] = ocr_engine_id(profile)
+                                t.update_doc[F.text_confidence] = t.candidate_text_confidence
                         elif reply.plate_visible:
                             # plate_bbox_correct is False/None but the
                             # VLM says a region IS visible. Write
@@ -1380,7 +1422,8 @@ async def run(args: argparse.Namespace) -> int:
             await metrics_server_runner.cleanup()
     finally:
         await sam3.aclose()
-        await gemma.aclose()
+        if gemma is not None:
+            await gemma.aclose()
         await opensearch.close()
         await pool.close()
 

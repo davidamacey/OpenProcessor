@@ -194,7 +194,8 @@ async def semantic_text_search(
 ) -> dict[str, Any]:
     """Run one semantic text search and return ``{items, total, page, page_size}``.
 
-    ``pe_encoder.encode_text`` is a blocking, CPU/GPU-bound PyTorch call —
+    ``pe_encoder.encode_text`` is a blocking, CPU-bound call (ONNX Runtime,
+    PyTorch, or a synchronous Triton gRPC request, per its backend) —
     it is **never** invoked inline on the event loop; the caller-supplied
     ``executor`` (the app's shared ``ThreadPoolExecutor``, same one every
     other CPU-bound curation path uses) runs it via

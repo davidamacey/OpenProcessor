@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, status
 
@@ -25,16 +25,42 @@ from src.routers.curation._common import (
 )
 from src.routers.curation.crops import list_crops
 from src.services.curation.class_sources import class_source_catalog
+from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
-# Single-char keys the labeler UI's global keydown listener binds to
-# labeling actions (accept-vlm, skip, discard, undo, ignore, undo-ignore,
-# select-all, move). Binding a class hotkey to one of these creates the
-# exact "class letter also fires a global action" collision documented in
-# Label Studio #491/#7431 — the class would be assigned *and* the action
-# would fire on the same keypress, since both window keydown listeners run
-# unconditionally.
-RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam')
+# Single keys the labeler binds to actions: the global labeling actions
+# accept-vlm, skip, discard, undo, ignore, undo-ignore, select-all and move;
+# '/' for the class picker; and the region-review keys d/f/e/b. Binding a class
+# hotkey to one of these fires the action *and* assigns the class on the
+# same keypress (Label Studio #491/#7431). Served on GET /classes.
+RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
+
+
+def _validated_hotkey(raw: str, *, class_id: int | None, registry_obj: Any) -> str | None:
+    """Normalize a requested hotkey; ``None`` = clear. 400 not one char,
+    422 reserved, 409 bound to another active class."""
+    stripped = raw.strip()
+    if stripped == '':
+        return None
+    if len(stripped) != 1:
+        raise HTTPException(status_code=400, detail='hotkey_letter must be a single character')
+    letter = stripped.lower()
+    if letter in RESERVED_HOTKEY_LETTERS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"hotkey '{letter}' is reserved for a labeling action and cannot be bound "
+            'to a class',
+        )
+    for c in registry_obj.classes:
+        if c.deprecated or c.class_id == class_id:
+            continue
+        if (getattr(c, 'hotkey_letter', None) or '').lower() == letter:
+            raise HTTPException(
+                status_code=409,
+                detail=f"hotkey '{letter}' is already bound to '{c.class_name}' "
+                f'(class_id={c.class_id})',
+            )
+    return letter
 
 
 @router.get('/class_sources')
@@ -92,7 +118,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             cid = int(bucket['key'])
             cluster_size[cid] = int(bucket.get('doc_count', 0))
     except Exception as exc:
-        logger.debug('class_counts_skipped', error=str(exc))
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
     # A region-of-interest class (e.g. license_plate) lives as a sub-bbox on
     # every parent item that has one, NOT as a separate doc whose primary
@@ -131,7 +157,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 cluster_size[c.class_id] = region_total
                 break
     except Exception as exc:
-        logger.debug('region_class_count_skipped', error=str(exc))
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
     return ClassListResponse(
         classes=[
@@ -144,9 +170,13 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 cluster_size=cluster_size.get(c.class_id, 0),
                 deprecated=c.deprecated,
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
+                adequacy=adequacy(validated.get(c.class_id, c.validated_count)),
+                added_at=getattr(c, 'added_at', None),
             )
             for c in reg.classes
-        ]
+        ],
+        thresholds=dataset_thresholds(),
+        reserved_hotkeys=sorted(RESERVED_HOTKEY_LETTERS),
     )
 
 
@@ -161,13 +191,29 @@ async def get_class(class_id: int, opensearch: OpenSearchDep) -> ClassEntry:
 
 @router.post('/classes', status_code=status.HTTP_201_CREATED)
 async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
-    """Append-only add."""
+    """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
+    an optional ``hotkey_letter`` is validated like on update before
+    anything is written."""
     reg = get_class_registry()
+    letter = None
+    if payload.hotkey_letter is not None:
+        letter = _validated_hotkey(payload.hotkey_letter, class_id=None, registry_obj=reg.load())
     try:
         new_id = reg.add_class(payload.name, group=payload.group, notes=payload.notes)
     except ClassRegistryError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {'class_id': new_id, 'class_name': payload.name, 'group': payload.group}
+    if letter is not None:
+        registry_obj = reg.load()
+        for c in registry_obj.classes:
+            if c.class_id == new_id:
+                c.hotkey_letter = letter
+        reg._atomic_write(registry_obj)
+    return {
+        'class_id': new_id,
+        'class_name': payload.name,
+        'group': payload.group,
+        'hotkey_letter': letter,
+    }
 
 
 @router.put('/classes/{class_id}')
@@ -182,37 +228,9 @@ async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, 
             registry_obj = reg.load()
             new_letter: str | None = None
             if payload.hotkey_letter is not None:
-                stripped = payload.hotkey_letter.strip()
-                # Empty string means "clear the binding".
-                if stripped == '':
-                    new_letter = None
-                else:
-                    if len(stripped) != 1:
-                        raise HTTPException(
-                            status_code=400,
-                            detail='hotkey_letter must be a single character',
-                        )
-                    new_letter = stripped.lower()
-                    if new_letter in RESERVED_HOTKEY_LETTERS:
-                        raise HTTPException(
-                            status_code=422,
-                            detail=(
-                                f"hotkey '{new_letter}' is reserved for a labeling "
-                                'action and cannot be bound to a class'
-                            ),
-                        )
-                    # Uniqueness check across active classes.
-                    for c in registry_obj.classes:
-                        if c.deprecated or c.class_id == class_id:
-                            continue
-                        if (getattr(c, 'hotkey_letter', None) or '').lower() == new_letter:
-                            raise HTTPException(
-                                status_code=409,
-                                detail=(
-                                    f"hotkey '{new_letter}' is already bound to "
-                                    f"'{c.class_name}' (class_id={c.class_id})"
-                                ),
-                            )
+                new_letter = _validated_hotkey(
+                    payload.hotkey_letter, class_id=class_id, registry_obj=registry_obj
+                )
             for c in registry_obj.classes:
                 if c.class_id == class_id:
                     if payload.group is not None:
@@ -231,9 +249,55 @@ async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, 
     return entry.model_dump()
 
 
+async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[str, Any]:
+    reg = get_class_registry()
+    for cid in (payload.source_id, payload.target_id):
+        if reg.get(cid) is None:
+            raise HTTPException(status_code=400, detail=f'class_id {cid} not found')
+    if payload.source_id == payload.target_id:
+        raise HTTPException(status_code=400, detail='cannot merge a class into itself')
+    of_source = {'term': {'class_id': payload.source_id}}
+    not_holdout = {'term': {'test_holdout': True}}
+
+    async def _count(query: dict[str, Any]) -> int:
+        resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
+        return int(resp.get('count', 0))
+
+    holdout = await _count({'bool': {'must': [of_source], 'filter': [not_holdout]}})
+    relabel = await _count({'bool': {'must': [of_source], 'must_not': [not_holdout]}})
+    unvalidate = await _count(
+        {
+            'bool': {
+                'must': [of_source, {'term': {'class_validated': True}}],
+                'must_not': [not_holdout],
+            }
+        }
+    )
+    return {
+        'dry_run': True,
+        'source_id': payload.source_id,
+        'target_id': payload.target_id,
+        'would_relabel': relabel,
+        'would_unvalidate': unvalidate,
+        'holdout_blocking': holdout,
+        'blocked': holdout > 0,
+    }
+
+
 @router.post('/classes/merge')
-async def merge_class(payload: ClassMergeRequest, opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Mark source deprecated; bulk-relabel matching crops + labels."""
+async def merge_class(
+    payload: ClassMergeRequest,
+    opensearch: OpenSearchDep,
+    dry_run: Annotated[bool, Query(description='Report counts; change nothing.')] = False,
+) -> dict[str, Any]:
+    """Mark source deprecated; bulk-relabel matching crops + labels.
+
+    ``dry_run=true`` returns ``{dry_run, source_id, target_id,
+    would_relabel, would_unvalidate, holdout_blocking, blocked}`` and
+    writes nothing (a real merge 409s when ``holdout_blocking > 0``).
+    """
+    if dry_run:
+        return await _merge_dry_run(payload, opensearch)
     # A merge that touches frozen test_holdout crops would relabel their
     # class_id and leave their recorded holdout identity (SHA1-of-crop_id-
     # per-class_id) stale. Refuse with 409 naming the affected count rather

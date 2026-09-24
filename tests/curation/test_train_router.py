@@ -107,6 +107,9 @@ def test_preflight_smoke(app_client: TestClient) -> None:
         'region_pairing',
     }
     assert expected.issubset(names), f'missing checks: {expected - names}'
+    from src.services.curation.dataset_thresholds import dataset_thresholds
+
+    assert out['thresholds'] == dataset_thresholds()
 
     # P2-8: empty_labels/region_pairing used to be hardcoded 'ok' unconditionally
     # -- never actually scanned. '/data/exports/x' doesn't exist on disk, so a

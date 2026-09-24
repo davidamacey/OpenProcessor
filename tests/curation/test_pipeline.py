@@ -23,9 +23,9 @@ class TestPipelineSkipFilter:
         # ``pipeline_auto_label``; rather than invoking the endpoint
         # against a live OS, we assert on the source string. This pins
         # the filter so an inadvertent removal trips the test.
-        from src.routers.curation import pipeline
+        from src.services.curation.autolabel import selection
 
-        src = Path(pipeline.__file__).read_text()
+        src = Path(selection.__file__).read_text()
         assert "'vlm_verify_completed_at'" in src
         # Must appear inside the must_not block, not just in a comment.
         # Heuristic: a range query keyed on the marker.
@@ -39,11 +39,10 @@ class TestPipelineSkipFilter:
         window and the range operator so a narrowing change (e.g. adding
         ``class_source == 'vlm'`` to the must clause) trips this test.
         """
-        from src.routers.curation import pipeline
+        from src.services.curation.autolabel import selection
 
-        src = Path(pipeline.__file__).read_text()
-        # 24h cutoff is intentional — see comment near the
-        # ``_combined_recent_cutoff`` definition.
+        src = Path(selection.__file__).read_text()
+        # 24h cutoff is intentional — see COMBINED_RECENT_WINDOW.
         assert 'timedelta(hours=24)' in src
         # The filter is structured as a bare range against the marker,
         # NOT nested inside a class_source bool — so any source that

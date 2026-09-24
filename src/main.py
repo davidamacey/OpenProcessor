@@ -278,16 +278,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('gpu_arbiter_reconcile_skipped', error=str(exc))
 
-    # Best-effort: warm the PE-Core text encoder for GET /curation/search/text.
-    # Non-fatal if torch/perception_models isn't installed or the checkpoint
-    # isn't available — the search endpoint surfaces a 503 in that case
-    # rather than the whole service failing to start.
+    # Best-effort: warm the PE-Core text encoder for GET /curation/search/text
+    # (ONNX Runtime when OP_PE_TEXT_ONNX_PATH exists, else Triton's
+    # pe_text_encoder if ready, else PyTorch — see src/clients/pe_encoder.py).
+    # Non-fatal if nothing can load — the search endpoint surfaces a 503 in
+    # that case rather than the whole service failing to start.
     from src.clients.pe_encoder import PEEncoder
 
     app.state.pe_encoder = PEEncoder(triton_pool=AppResources.async_triton_pool)
     try:
         app.state.pe_encoder.warm_text_encoder()
-        logger.info('pe_text_encoder_warmed')
+        logger.info('pe_text_encoder_warmed', backend=app.state.pe_encoder.text_backend)
     except Exception as exc:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 

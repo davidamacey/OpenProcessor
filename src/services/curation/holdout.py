@@ -34,12 +34,13 @@ from typing import Any
 from fastapi import HTTPException
 
 from src.config.curation import get_curation_config
+from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 
 
 # Every class that appears in the cohort gets at least this many crops held
 # out (or all of them, if the class has fewer than this many validated
 # crops) — see Appendix C Decision 1.
-MIN_TEST_PER_CLASS = 5
+MIN_TEST_PER_CLASS = MIN_TEST_CROPS_PER_CLASS
 
 # Composite-agg page size (max distinct (class_id, hdd_source) strata per
 # page) and the per-stratum scan page size. Today's cohort (~380 human-

@@ -42,6 +42,11 @@ from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES, _region_item
 REGION_CLUSTER_CLASS_NAME = 'region'
 
 
+SUSPECTED_FP_MAX_DISTANCE = 0.35
+"""Default max distance to the nearest FP sub-centroid for a region to be
+suggested as a false positive (served as ``default_threshold``)."""
+
+
 @router.post('/regions/cluster')
 async def cluster_regions(
     opensearch: OpenSearchDep,
@@ -228,7 +233,9 @@ async def fp_centroids_status() -> dict[str, Any]:
 @router.get('/regions/suspected_false_positives')
 async def suspected_false_positives(
     opensearch: OpenSearchDep,
-    threshold: float = Query(0.35, ge=0.0, le=2.0),
+    threshold: float | None = Query(
+        None, ge=0.0, le=2.0, description=f'Max distance; default {SUSPECTED_FP_MAX_DISTANCE}.'
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
 ) -> dict[str, Any]:
@@ -248,6 +255,8 @@ async def suspected_false_positives(
     from src.services.detection.fp_store import FalsePositiveCentroidStore
 
     F = get_region_fields()
+    if threshold is None:
+        threshold = SUSPECTED_FP_MAX_DISTANCE
     await _ensure_indexes(opensearch)
     store = FalsePositiveCentroidStore()
     if not store.load():
@@ -257,6 +266,8 @@ async def suspected_false_positives(
             'page': page,
             'page_size': page_size,
             'centroids_built': False,
+            'threshold': threshold,
+            'default_threshold': SUSPECTED_FP_MAX_DISTANCE,
             'message': (
                 'No FP centroids yet; POST '
                 # Kept as its own literal so the route-parity guard
@@ -330,6 +341,7 @@ async def suspected_false_positives(
         'page': page,
         'page_size': page_size,
         'threshold': threshold,
+        'default_threshold': SUSPECTED_FP_MAX_DISTANCE,
         'centroids_built': True,
         'trained_at': store.metadata.get('trained_at'),
     }
