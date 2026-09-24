@@ -818,19 +818,23 @@ async def cluster_residuals(
     n_clusters = len({int(x) for x in relabeled if int(x) != -1})
     n_noise = int((relabeled == -1).sum())
 
-    # Per-crop centroid distance (IVF only; aligned 1:1 with ids/labels).
+    # Per-crop centroid distance, aligned 1:1 with ids/labels. Methods
+    # without one (IVF's single-bucket fallback, AHC, HDBSCAN) get the
+    # member-mean centroid distance so outlier sorts work for every run.
     distances = result.distances
-    dist_list = distances.tolist() if distances is not None else None
+    if distances is not None:
+        dist_list = distances.tolist()
+    else:
+        from src.services.curation.clustering.centroid_distance import member_centroid_distances
+
+        dist_list = member_centroid_distances(embeddings, relabeled)
 
     # Chunk the bulk write — at production scale (~350k items) a single
     # bulk call exceeds the OpenSearch client's default 30s timeout.
     # Each chunk publishes incremental progress so the dashboard
     # advances during the write phase.
     BULK_CHUNK = 2000
-    if dist_list is not None:
-        pairs = list(zip(ids, relabeled.tolist(), dist_list, strict=True))
-    else:
-        pairs = list(zip(ids, relabeled.tolist(), [None] * len(ids), strict=True))
+    pairs = list(zip(ids, relabeled.tolist(), dist_list, strict=True))
     if progress is not None:
         progress.update(processed=0, total=len(pairs))
     n_written = 0
@@ -846,8 +850,8 @@ async def cluster_residuals(
             bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
             # Clear cluster_subid: stale refine groupings from the doc's
             # previous cluster have no meaning in the new candidate.
-            # cluster_distance: present for IVF (drives outlier sort), else
-            # cleared so a stale distance from a prior method can't mislead.
+            # cluster_distance drives the outlier sort; None (noise) clears
+            # a stale distance from a prior run.
             doc_update: dict[str, Any] = {'cluster_id': new_cid, 'cluster_subid': None}
             doc_update['cluster_distance'] = float(dist) if dist is not None else None
             bulk_body.append({'doc': doc_update})

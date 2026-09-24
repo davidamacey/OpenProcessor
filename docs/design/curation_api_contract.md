@@ -658,6 +658,11 @@ Derived keys (computed by the serializer, never stored):
 - `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
   without a distance); `cluster_is_core` — `cluster_similarity >=
   core_similarity_min` (served on `GET /clusters`, `0.75`).
+  `cluster_distance` is the cosine distance to the item's candidate-cluster
+  centroid, written by every residual clustering run whatever the method
+  (IVF's own centroids; otherwise the cluster's member-mean centroid). It
+  is `null` for noise and for items placed without a clustering pass
+  (class clusters via labeling, until they are clustered).
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the
