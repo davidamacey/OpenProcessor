@@ -75,12 +75,15 @@ def _search_response(buckets: list[dict[str, Any]]) -> dict[str, Any]:
     return {'aggregations': {'clusters': {'buckets': buckets}}}
 
 
-def _make_client(search_response: dict[str, Any]) -> MagicMock:
+def _make_client(search_response: dict[str, Any], *, count: int = 0) -> MagicMock:
     """Bare aggregation-only client for paths that never reach the write
     branch (dry_run, zero-label buckets, below min_members)."""
     client = MagicMock()
     client.search = AsyncMock(return_value=search_response)
     client.update_by_query = AsyncMock(return_value={'updated': 0})
+    # CM-2: dry-run now calls client.count(...) against the real
+    # promote_query instead of computing members - top_count locally.
+    client.count = AsyncMock(return_value={'count': count})
     return client
 
 
@@ -228,16 +231,20 @@ async def test_auto_promote_clusters_dry_run_does_not_call_update() -> None:
         _bucket(1, members=10, classes=[('cruiserbike', 10)]),
         _bucket(2, members=10, classes=[('sportycar', 5), ('pickup', 5)]),
     ]
-    client = _make_client(_search_response(buckets))
+    # CM-2: dry-run's count must come from an actual client.count(...) call
+    # against the real promote_query, not a locally-computed guess.
+    client = _make_client(_search_response(buckets), count=7)
 
     out = await auto_promote_clusters(client, min_purity=0.85, min_members=4, dry_run=True)
 
     # No writes in dry-run mode.
     assert client.update_by_query.await_count == 0
     assert out['dry_run'] is True
-    # In dry-run, ``promoted`` is the *count of crops that would be relabelled*
-    # (members - top_count) for promoted clusters. Cluster 1 is pure → 0.
-    assert out['promoted'] == 0
+    # Cluster 1 (pure, promoted) contributes whatever client.count(...)
+    # reports for its promote_query — no longer members - top_count.
+    client.count.assert_awaited_once()
+    assert client.count.await_args.kwargs['index'] == ITEMS_INDEX
+    assert out['promoted'] == 7
     # Cluster 2 is the only skip.
     assert out['skipped'] == 10
 
@@ -286,13 +293,85 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
     client.search.assert_awaited_once()
     assert client.search.await_args.kwargs['index'] == ITEMS_INDEX
     body = client.search.await_args.kwargs['body']
-    # Outer query is unconstrained — purity is computed across ALL labelled
-    # crops (validated and unvalidated). The validated/v6 distinction is
-    # enforced at update_by_query time, not at agg time, so a 99-validated
-    # cluster doesn't get its purity computed off the lone unvalidated crop.
-    assert 'query' not in body
+    # CM-1: the outer query restricts the aggregation to candidate clusters
+    # (cluster_id >= RESIDUAL_CLUSTER_ID_OFFSET). Class clusters have
+    # cluster_id == class_id by construction, so their purity is always
+    # 1.0 and every member trivially "agrees" -- a self-referential signal,
+    # not an independent one. Purity is still computed across ALL labelled
+    # crops in a candidate cluster (validated and unvalidated); the
+    # validated/v6 distinction is enforced at write time, not at agg time.
+    from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+
+    assert body['query']['bool']['filter'] == [
+        {'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}}
+    ]
+    # CM-2: excluded items never contribute to a cluster's purity call.
+    assert {'term': {'class_excluded': True}} in body['query']['bool']['must_not']
     # Aggregation shape matches what the helper expects to consume.
     assert body['aggs']['clusters']['terms']['field'] == 'cluster_id'
     # ``class_name`` is mapped keyword directly on the live index — no
     # ``.keyword`` subfield.
     assert body['aggs']['clusters']['aggs']['top_class']['terms']['field'] == 'class_name'
+
+
+# =============================================================================
+# CM-1: class clusters must never be auto-promote targets.
+# =============================================================================
+
+
+class _FilteringAutoPromoteClient(_FakeAutoPromoteClient):
+    """Like :class:`_FakeAutoPromoteClient`, but its `search` honors the
+    outer `query.bool.filter` range on `cluster_id` for the aggregation
+    call -- close enough to real OpenSearch behavior to prove the
+    CM-1 range filter actually excludes class-range buckets, not just
+    that the query body contains the right clause (already covered by
+    ``test_auto_promote_clusters_search_targets_correct_index``).
+    """
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        self.search_calls.append(body)
+        if 'aggs' in body:
+            min_cluster_id = body['query']['bool']['filter'][0]['range']['cluster_id']['gte']
+            buckets = self._agg_response['aggregations']['clusters']['buckets']
+            kept = [b for b in buckets if int(b['key']) >= min_cluster_id]
+            return {'aggregations': {'clusters': {'buckets': kept}}}
+        must = body['query']['bool']['must']
+        cluster_id = next(
+            int(m['term']['cluster_id']) for m in must if 'cluster_id' in m.get('term', {})
+        )
+        ids = self._crop_ids_by_cluster.get(cluster_id, [])
+        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': [{'_id': i} for i in ids]}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('reference_ingest_profiles')
+async def test_auto_promote_clusters_never_promotes_a_class_cluster() -> None:
+    """A class cluster (cluster_id == class_id, always purity 1.0 by
+    construction) with 10 classifier-labeled members must produce 0
+    promotions -- the exact circularity CM-1 fixes. A candidate cluster
+    (cluster_id >= RESIDUAL_CLUSTER_ID_OFFSET) with the same shape still
+    promotes normally.
+    """
+    from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
+
+    class_cluster_id = 7  # cluster_id == class_id, well under the offset
+    candidate_cluster_id = RESIDUAL_CLUSTER_ID_OFFSET + 3
+    buckets = [
+        _bucket(class_cluster_id, members=10, classes=[('cruiserbike', 10)]),
+        _bucket(candidate_cluster_id, members=10, classes=[('cruiserbike', 10)]),
+    ]
+    crop_ids = [f'crop-{i}' for i in range(10)]
+    client = _FilteringAutoPromoteClient(
+        _search_response(buckets),
+        {class_cluster_id: crop_ids, candidate_cluster_id: crop_ids},
+    )
+
+    out = await auto_promote_clusters(client, min_purity=0.85, min_members=4)
+
+    seen_cluster_ids = {s['cluster_id'] for s in out['clusters']}
+    assert class_cluster_id not in seen_cluster_ids
+    assert candidate_cluster_id in seen_cluster_ids
+    # Only the candidate cluster's 10 crops were written.
+    assert out['promoted'] == 10
+    written_ids = {c['id'] for c in client.update_calls}
+    assert written_ids == set(crop_ids)

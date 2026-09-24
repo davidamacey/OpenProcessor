@@ -248,7 +248,14 @@ async def list_clusters(
                 'purity': purity,
                 # Same thresholds as the auto-promote gate.
                 'purity_tier': purity_tier(purity),
-                'promotable': is_promotable(members=size, labelled=labelled_total, purity=purity),
+                # CM-1: only candidate clusters are ever auto-promote
+                # targets. Class clusters have cluster_id == class_id by
+                # construction, so their purity is always 1.0 and they'd
+                # otherwise show 'promotable' for a self-referential
+                # reason that has nothing to do with the auto-promote
+                # gate's actual eligibility check.
+                'promotable': ck == 'candidate'
+                and is_promotable(members=size, labelled=labelled_total, purity=purity),
                 'is_unlabeled': is_unlabeled,
                 'n_subclusters': n_subclusters,
                 'updated_at': bucket.get('latest_update', {}).get('value_as_string'),

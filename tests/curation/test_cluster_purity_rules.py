@@ -22,7 +22,10 @@ from src.services.curation.clustering import orchestrator as _orchestrator
 _ = _orchestrator.ITEMS_INDEX  # orchestrator must load before auto_promote
 
 from src.routers.curation.clusters import list_clusters  # noqa: E402
-from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN  # noqa: E402
+from src.services.curation.cluster_ids import (  # noqa: E402
+    CORE_SIMILARITY_MIN,
+    RESIDUAL_CLUSTER_ID_OFFSET,
+)
 from src.services.curation.cluster_purity import (  # noqa: E402
     PROMOTE_MIN_MEMBERS,
     PROMOTE_MIN_PURITY,
@@ -107,13 +110,17 @@ def _bucket(cid: int, size: int, classes: list[tuple[str, int]]) -> dict[str, An
 
 @pytest.mark.asyncio
 async def test_cluster_cards_serve_tier_promotable_and_thresholds() -> None:
+    candidate_id = RESIDUAL_CLUSTER_ID_OFFSET + 1
     resp = await _cards(
-        _bucket(1, 10, [('a', 9), ('b', 1)]),  # 0.9 -> pure, promotable
+        _bucket(candidate_id, 10, [('a', 9), ('b', 1)]),  # 0.9 -> pure, promotable
         _bucket(2, 10, [('a', 8), ('b', 2)]),  # 0.8 -> mixed (below the 0.85 gate)
         _bucket(3, 10, [('a', 5), ('b', 5)]),  # 0.5 -> noisy
     )
     cards = {c['cluster_id']: c for c in resp['items']}
-    assert (cards[1]['purity_tier'], cards[1]['promotable']) == ('pure', True)
+    assert (cards[candidate_id]['purity_tier'], cards[candidate_id]['promotable']) == (
+        'pure',
+        True,
+    )
     assert (cards[2]['purity_tier'], cards[2]['promotable']) == ('mixed', False)
     assert (cards[3]['purity_tier'], cards[3]['promotable']) == ('noisy', False)
     assert resp['purity_thresholds'] == {
@@ -123,3 +130,20 @@ async def test_cluster_cards_serve_tier_promotable_and_thresholds() -> None:
         'promote_min_labelled_share': 0.5,
     }
     assert resp['core_similarity_min'] == CORE_SIMILARITY_MIN
+
+
+@pytest.mark.asyncio
+async def test_cluster_cards_never_mark_a_class_cluster_promotable() -> None:
+    """CM-1: a class cluster (cluster_id == class_id) has purity 1.0 by
+    construction -- every member trivially "agrees" because the cluster
+    IS the class. `promotable` must stay False regardless of purity or
+    member count; only candidate clusters (cluster_id >= the residual
+    offset) are real auto-promote targets.
+    """
+    resp = await _cards(
+        _bucket(5, 20, [('a', 20)]),  # class cluster, purity 1.0, well above min_members
+    )
+    card = resp['items'][0]
+    assert card['cluster_kind'] == 'class'
+    assert card['purity_tier'] == 'pure'
+    assert card['promotable'] is False
