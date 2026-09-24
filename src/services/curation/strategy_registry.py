@@ -513,7 +513,12 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     (not 0) on OpenSearch failure, so a transient error hides nothing that
     already works"). The whole helper never raises; callers get a dict
     with real ints, ``None``s, or (only if OpenSearch is totally
-    unreachable for the total-count call) a ``None`` total too.
+    unreachable) a ``None`` total too.
+
+    F-28.2: on a cache miss this used to be N+1 round trips (one
+    ``opensearch.count`` per field plus one for the total). Now it's a
+    single ``_search`` (``size: 0``, ``track_total_hits: true``, one
+    ``filter: {exists}`` sub-agg per field) -- same answer, one request.
     """
     global _COVERAGE_CACHE, _COVERAGE_CACHE_AT  # noqa: PLW0603 - module-level TTL cache, same pattern as select.py
 
@@ -528,21 +533,31 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     from src.config.curation import IndexRole, get_curation_config, index_name
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)
+    sorted_fields = sorted(fields)
     counts: dict[str, int | None] = {}
 
     try:
-        total_resp = await opensearch.count(index=index, body={'query': {'match_all': {}}})
-        counts[_COVERAGE_TOTAL_KEY] = int(total_resp.get('count', 0))
+        resp = await opensearch.search(
+            index=index,
+            body={
+                'size': 0,
+                'track_total_hits': True,
+                'aggs': {
+                    field: {'filter': {'exists': {'field': field}}} for field in sorted_fields
+                },
+            },
+        )
+        counts[_COVERAGE_TOTAL_KEY] = int(
+            ((resp.get('hits') or {}).get('total') or {}).get('value', 0)
+        )
+        aggs = resp.get('aggregations') or {}
+        for field in sorted_fields:
+            bucket = aggs.get(field)
+            counts[field] = int(bucket['doc_count']) if bucket is not None else None
     except Exception as exc:
-        logger.warning('legacy_methods_field_coverage_total_failed', error=str(exc))
+        logger.warning('legacy_methods_field_coverage_failed', error=str(exc))
         counts[_COVERAGE_TOTAL_KEY] = None
-
-    for field in sorted(fields):
-        try:
-            resp = await opensearch.count(index=index, body={'query': {'exists': {'field': field}}})
-            counts[field] = int(resp.get('count', 0))
-        except Exception as exc:
-            logger.warning('legacy_methods_field_coverage_count_failed', field=field, error=str(exc))
+        for field in sorted_fields:
             counts[field] = None
 
     _COVERAGE_CACHE = counts

@@ -7,6 +7,7 @@ sub-modules import from here. _common.py MUST NOT import from sub-modules.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -162,11 +163,35 @@ async def warm_knn_indexes(opensearch: Any) -> None:
     )
 
 
+# F-28.4: guards the whole ~5-exists + N-put_mapping bootstrap sequence
+# below. Without this, concurrent requests that all arrive before the
+# first one flips _INDEXES_BOOTSTRAPPED each independently race through
+# the full migration sequence against OpenSearch (redundant `exists` +
+# `put_mapping` calls, all discarded but the first to finish).
+_ensure_indexes_lock = asyncio.Lock()
+
+
 async def _ensure_indexes(opensearch: Any) -> None:
-    """Create curation indexes on first request (idempotent)."""
-    global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag
+    """Create curation indexes on first request (idempotent).
+
+    Cheap fast path (no lock) once bootstrapped; the lock only guards the
+    (at most once) cold-start race.
+    """
     if _INDEXES_BOOTSTRAPPED:
         return
+    async with _ensure_indexes_lock:
+        # Re-check inside the lock: another request may have completed
+        # the whole bootstrap sequence while we were waiting to acquire.
+        if _INDEXES_BOOTSTRAPPED:
+            return
+        await _ensure_indexes_locked(opensearch)
+
+
+async def _ensure_indexes_locked(opensearch: Any) -> None:
+    """The actual bootstrap sequence — only ever called while holding
+    :data:`_ensure_indexes_lock`. Split out so :func:`_ensure_indexes`'s
+    fast path / lock / re-check logic stays readable."""
+    global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag
     try:
         await create_curation_indexes(opensearch, force_recreate=False)
         try:

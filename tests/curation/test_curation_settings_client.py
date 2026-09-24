@@ -14,16 +14,31 @@ than replacing it outright, which is exactly the behavior a partial
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from src.clients import curation_opensearch
 from src.clients.curation_opensearch import (
     CURATION_SETTINGS_DOC_ID,
     get_curation_settings,
     update_curation_settings,
 )
 from src.config.curation import CurationConfig
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+
+@pytest.fixture(autouse=True)
+def _reset_settings_cache() -> Iterator[None]:
+    """F-28.1's module-level settings cache is keyed by index name and
+    persists across tests -- every test here uses the same default index,
+    so a stale entry from another test would otherwise leak in."""
+    curation_opensearch._settings_cache.clear()
+    yield
+    curation_opensearch._settings_cache.clear()
 
 
 class _NotFoundError(Exception):

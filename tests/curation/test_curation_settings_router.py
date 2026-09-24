@@ -33,6 +33,19 @@ def _reset_field_coverage_cache() -> Iterator[None]:
     _reset_field_coverage_cache()
 
 
+@pytest.fixture(autouse=True)
+def _reset_settings_cache() -> Iterator[None]:
+    """F-28.1's settings-doc cache is module-level and keyed by index name
+    -- every test in this file shares the default index, and a fresh
+    ``FakeSettingsOpenSearch`` per test must never see a prior test's
+    cached value."""
+    from src.clients import curation_opensearch
+
+    curation_opensearch._settings_cache.clear()
+    yield
+    curation_opensearch._settings_cache.clear()
+
+
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as legacy_router

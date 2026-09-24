@@ -37,6 +37,16 @@ def _reset_field_coverage_cache() -> Iterator[None]:
     _reset_field_coverage_cache()
 
 
+@pytest.fixture(autouse=True)
+def _reset_settings_cache() -> Iterator[None]:
+    """See test_curation_settings_router.py's fixture of the same name."""
+    from src.clients import curation_opensearch
+
+    curation_opensearch._settings_cache.clear()
+    yield
+    curation_opensearch._settings_cache.clear()
+
+
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as legacy_router

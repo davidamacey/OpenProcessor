@@ -41,6 +41,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -532,6 +533,22 @@ instance) would key by tenant id with this same literal as the
 single-tenant fallback."""
 
 
+# F-28.1: get_curation_settings is read on nearly every strategy-scoring
+# request path (strategy_defaults.py, strategy_registry.py both fetch it
+# per call). A 5s TTL cache avoids a GET-by-id round trip on every one of
+# those, while staying short enough that a settings change is visible
+# almost immediately -- and update_curation_settings below invalidates it
+# immediately on write anyway, so the TTL only matters between writes.
+# Keyed by index name so a caller passing a non-default cfg doesn't share
+# another deployment's cached doc.
+_SETTINGS_CACHE_TTL_SECONDS = 5.0
+_settings_cache: dict[str, tuple[dict[str, Any], float]] = {}
+
+
+def _invalidate_settings_cache(index: str) -> None:
+    _settings_cache.pop(index, None)
+
+
 async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) -> dict[str, Any]:
     """Fetch the shared curation-settings document.
 
@@ -545,9 +562,17 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
     merge sets a nested field to null rather than deleting the key) --
     filtered out here so a cleared axis simply doesn't appear in
     ``defaults``, identical to "never had an override."
+
+    F-28.1: cached for :data:`_SETTINGS_CACHE_TTL_SECONDS`, invalidated
+    immediately by :func:`update_curation_settings` on write.
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
+
+    cached = _settings_cache.get(index)
+    if cached is not None and time.monotonic() < cached[1]:
+        return cached[0]
+
     source: dict[str, Any] = {}
     try:
         resp = await client.get(index=index, id=CURATION_SETTINGS_DOC_ID)
@@ -561,11 +586,13 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
         if not ('notfound' in msg or 'not found' in msg or '404' in msg):
             logger.warning('curation_settings_get_failed', error=str(exc))
     raw_defaults = source.get('defaults') or {}
-    return {
+    result = {
         'defaults': {k: v for k, v in raw_defaults.items() if v is not None},
         'updated_at': source.get('updated_at'),
         'updated_by': source.get('updated_by'),
     }
+    _settings_cache[index] = (result, time.monotonic() + _SETTINGS_CACHE_TTL_SECONDS)
+    return result
 
 
 async def update_curation_settings(
@@ -585,6 +612,13 @@ async def update_curation_settings(
     A ``None`` value for an axis clears its shared override -- stored as
     a literal null (see :func:`get_curation_settings`'s note on why that
     read path filters it back out).
+
+    F-28.1: no ``refresh=True`` -- the read-immediately-after-write below
+    is a single-doc ``GET`` (not ``_search``), which OpenSearch serves
+    real-time from the translog regardless of the index's refresh
+    interval, so forcing a segment refresh here bought nothing but
+    latency. The 5s settings cache is invalidated immediately (not left
+    to expire) so this read-after-write can never return a stale value.
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
@@ -596,7 +630,8 @@ async def update_curation_settings(
         },
         'doc_as_upsert': True,
     }
-    await client.update(index=index, id=CURATION_SETTINGS_DOC_ID, body=body, refresh=True)
+    await client.update(index=index, id=CURATION_SETTINGS_DOC_ID, body=body)
+    _invalidate_settings_cache(index)
     return await get_curation_settings(client, cfg=active_cfg)
 
 
