@@ -1144,7 +1144,7 @@
         "type": "object"
       },
       "ExportClassSplitCounts": {
-        "description": "One class's instance counts per split, as recorded in the manifest.",
+        "description": "One class's object (label-line) counts per split, as recorded in the manifest.",
         "properties": {
           "class_id": {
             "description": "Registry class id.",
@@ -1290,7 +1290,7 @@
         "type": "object"
       },
       "ExportSplitCounts": {
-        "description": "Instance counts per split.",
+        "description": "Counts per split (images or objects — see the field using it).",
         "properties": {
           "test": {
             "default": 0,
@@ -1312,7 +1312,7 @@
         "type": "object"
       },
       "ExportStatusResponse": {
-        "description": "``GET /export/status``: the last completed multi-class export.\n\n``idle`` = no export yet (every other field ``null``); ``unknown`` =\nthe ``current`` export exists but its manifest is missing or\nunreadable (only ``path``/``export_dir`` set); ``success`` = every\nfield below read from that export's ``manifest.json``.\n``class_split_counts`` is ``null`` for an export written before it was\nrecorded.",
+        "description": "``GET /export/status``: the last completed multi-class export.\n\n``idle`` = no export yet (every other field ``null``); ``unknown`` =\nthe ``current`` export exists but its manifest is missing or\nunreadable (only ``path``/``export_dir`` set); ``success`` = every\nfield below read from that export's ``manifest.json``.\nA field the manifest doesn't record (an export written before it\nexisted) is ``null``.\n\nThe export has one image file + one label file per source image:\n``image_count`` / ``split_counts`` count images, ``object_count`` /\n``split_object_counts`` count objects (label lines), and\n``class_split_counts`` counts objects per class per split.",
         "properties": {
           "class_count": {
             "anyOf": [
@@ -1337,6 +1337,7 @@
                 "type": "null"
               }
             ],
+            "description": "Objects per class per split.",
             "title": "Class Split Counts"
           },
           "dataset_sha": {
@@ -1383,7 +1384,32 @@
                 "type": "null"
               }
             ],
+            "description": "Exported images.",
             "title": "Image Count"
+          },
+          "images_dropped_not_fully_labeled": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Images left out by require_fully_labeled_images (0 when it was off).",
+            "title": "Images Dropped Not Fully Labeled"
+          },
+          "images_with_unlabeled_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exported images holding at least one unlabeled object.",
+            "title": "Images With Unlabeled Items"
           },
           "last_run": {
             "anyOf": [
@@ -1397,6 +1423,18 @@
             "description": "Finish (else start) time, ISO 8601.",
             "title": "Last Run"
           },
+          "object_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exported objects (label lines) across all images.",
+            "title": "Object Count"
+          },
           "path": {
             "anyOf": [
               {
@@ -1408,6 +1446,18 @@
             ],
             "description": "Resolved export directory.",
             "title": "Path"
+          },
+          "require_fully_labeled_images": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether images with an unlabeled object were left out.",
+            "title": "Require Fully Labeled Images"
           },
           "seed": {
             "anyOf": [
@@ -1428,7 +1478,19 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Images per split."
+          },
+          "split_object_counts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSplitCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objects (label lines) per split."
           },
           "status": {
             "enum": [
@@ -1438,6 +1500,18 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "unlabeled_items_on_exported_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objects on exported images the export did not label (unreviewed, or on a class it leaves out); learned as background. Excluded / dismissed items never count.",
+            "title": "Unlabeled Items On Exported Images"
           },
           "version_tag": {
             "anyOf": [
@@ -1491,6 +1565,11 @@
               }
             ],
             "title": "Max Images"
+          },
+          "require_fully_labeled_images": {
+            "default": false,
+            "title": "Require Fully Labeled Images",
+            "type": "boolean"
           },
           "seed": {
             "default": 42,
@@ -8142,7 +8221,7 @@
     },
     "/curation/export/yolo": {
       "post": {
-        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export with a deterministic split and a\nreproducibility manifest. Synchronous; the response includes the\nexport dir + counts. ``422`` (``nothing to export: <reason>``) when no\nitem is exportable; nothing is written then.",
+        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export, one image + one label file per source image,\nwith a deterministic per-image split and a reproducibility manifest.\nSynchronous; the response includes the export dir + counts\n(``image_count`` / ``split_counts`` are images, ``object_count`` /\n``split_object_counts`` are label lines). ``422`` (``nothing to export:\n<reason>``) when no image is exportable; nothing is written then.",
         "operationId": "export_yolo_curation_export_yolo_post",
         "requestBody": {
           "content": {
