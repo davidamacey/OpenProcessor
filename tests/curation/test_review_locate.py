@@ -75,6 +75,41 @@ def test_locate_rank_matches_queue_order(monkeypatch: pytest.MonkeyPatch) -> Non
         assert body['sort_applied'] == 'region_score'
 
 
+def test_locate_returns_in_queue_for_a_rejected_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DQ-B2 follow-up: a verify_rejected item with a kept candidate box
+    used to be unreachable from the regions queue/locate at all -- it now
+    locates in the default queue and the verify_rejected-only filter, and
+    is correctly filtered_out under detected-only."""
+    docs = _region_docs()
+    docs['rej'] = {
+        'crop_id': 'rej',
+        F.status: 'verify_rejected',
+        F.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
+        F.candidate_score: 0.81,
+    }
+    client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
+
+    r = client.get('/curation/review/regions/locate', params={'crop_id': 'rej'})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['in_queue'] is True, body
+    assert body['sort_applied'] == 'region_score'
+
+    r_detected = client.get(
+        '/curation/review/regions/locate', params={'crop_id': 'rej', 'region_status': 'detected'}
+    )
+    assert r_detected.json()['in_queue'] is False
+    assert r_detected.json()['reason'] == 'filtered_out'
+
+    r_rejected = client.get(
+        '/curation/review/regions/locate',
+        params={'crop_id': 'rej', 'region_status': 'verify_rejected'},
+    )
+    assert r_rejected.json()['in_queue'] is True
+
+
 def test_locate_reports_not_in_queue_and_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _region_docs()}), monkeypatch)
     body = client.get('/curation/review/regions/locate', params={'crop_id': 'done'}).json()

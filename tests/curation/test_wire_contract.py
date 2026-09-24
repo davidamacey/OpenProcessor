@@ -304,6 +304,24 @@ def test_region_request_bodies_reject_old_key_names(
     assert r.status_code == 422, r.text
 
 
+def test_region_thumbnail_url_is_non_empty_for_a_candidate_only_item() -> None:
+    """DQ-B2 follow-up: a verify_rejected item (no region_bbox_norm, only
+    region_candidate_bbox_norm) still gets a real region_thumbnail_url --
+    the frontend needs no special case, since the route itself now falls
+    back to the candidate box (see src/routers/curation_images.py)."""
+    f = RegionFields()
+    src = {
+        'crop_id': 'crop-rej',
+        f.status: 'verify_rejected',
+        f.candidate_bbox_norm: [0.3, 0.6, 0.4, 0.65],
+        'bbox_norm': [0.2, 0.4, 0.6, 0.8],
+    }
+    item = wire.serialize_item(src, 'crop-rej', api_prefix='/curation')
+    assert item['region_bbox_norm'] is None
+    assert item['region_thumbnail_url'] == '/curation/crops/crop-rej/region_thumbnail'
+    assert item['region_candidate_bbox_in_parent'] is not None
+
+
 def test_server_built_urls_follow_the_configured_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(wire, '_api_prefix', lambda: '/custom-mount')
     with _client(monkeypatch, RegionFields()) as client:

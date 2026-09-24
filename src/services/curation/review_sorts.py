@@ -217,12 +217,29 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                         'missing': '_last',
                         'unmapped_type': 'double',
                     }
-                }
+                },
+                # A verifier-rejected candidate never has `region_score`
+                # (only `region_candidate_score`) -- without this second
+                # key every rejected item ties on the first key's
+                # `missing: '_last'` and falls back to shard order among
+                # themselves. Ordering by the candidate's own score keeps
+                # them sorted sanely instead of an arbitrary tie; it never
+                # changes the order of items that DO have region_score,
+                # since that first key already fully orders them.
+                {
+                    fields.candidate_score: {
+                        'order': 'desc',
+                        'missing': '_last',
+                        'unmapped_type': 'double',
+                    }
+                },
             ],
             requires_field=fields.score,
             status='stable',
             description=(
-                'Highest-confidence region detection first. Legacy default for the regions tab.'
+                'Highest-confidence region detection first (falling back to a '
+                "rejected candidate's own score when there is no accepted "
+                'region score). Legacy default for the regions tab.'
             ),
         ),
         ReviewSort(

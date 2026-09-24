@@ -90,13 +90,37 @@ COMMON_FILTERS: tuple[str, ...] = (
     'conf_max',
 )
 # Tab-only filters, on top of COMMON_FILTERS.
-TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text',)}
+TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text', 'region_status')}
 # A filter value a tab applies when the client omits it (DQ-M6: the two
 # "primary subject" tabs are rank-limited by definition).
 PRIMARY_SUBJECT_MAX_RANK = 2
 TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'primary_low_conf': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
     'coco_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
+    'regions': {'region_status': 'all'},
+}
+
+# The ``region_status`` filter's selectable values on the ``regions`` tab
+# (DQ-B2 follow-up: a verifier-rejected candidate is reviewable but was
+# unreachable from the queue). ``'all'`` is the default -- today's
+# accepted-but-unvalidated boxes plus a rejected candidate that still has
+# a box to show. Served as ``filter_options`` on ``GET /review/tabs`` so
+# the frontend renders it without hardcoding the values/labels.
+REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
+    {'value': 'all', 'label': 'All (accepted + rejected candidates)'},
+    {'value': RegionStatus.DETECTED.value, 'label': 'Detected only'},
+    {
+        'value': RegionStatus.VERIFY_REJECTED.value,
+        'label': 'Verifier-rejected candidates only',
+    },
+)
+REGION_STATUS_FILTER_VALUES: frozenset[str] = frozenset(
+    o['value'] for o in REGION_STATUS_FILTER_OPTIONS
+)
+# Per-filter served ``{value, label}`` options, keyed by filter name --
+# only filters with a fixed, enumerable value set need an entry here.
+FILTER_OPTIONS: dict[str, tuple[dict[str, str], ...]] = {
+    'region_status': REGION_STATUS_FILTER_OPTIONS,
 }
 
 
@@ -106,12 +130,15 @@ def tab_filters(tab: str) -> tuple[str, ...]:
 
 
 def review_tab_catalog() -> list[dict[str, Any]]:
-    """``[{id, label, description, filters, filter_defaults}, ...]`` for
-    every ``KNOWN_TABS`` entry.
+    """``[{id, label, description, filters, filter_defaults,
+    filter_options}, ...]`` for every ``KNOWN_TABS`` entry.
 
     ``filters`` lists the query parameters the tab honours (anything else
     is accepted but ignored); ``filter_defaults`` the value a tab applies
-    when that parameter is omitted (``{}`` for none).
+    when that parameter is omitted (``{}`` for none); ``filter_options``
+    the ``{value, label}`` choices for any of those filters that have a
+    fixed enum (``{}`` for a tab with none), so the frontend can render an
+    enum filter generically instead of hardcoding its values.
 
     Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
     a matching ``TAB_LABELS`` entry -- the same "one source of truth"
@@ -124,6 +151,11 @@ def review_tab_catalog() -> list[dict[str, Any]]:
             'description': TAB_LABELS[tab][1],
             'filters': list(tab_filters(tab)),
             'filter_defaults': dict(TAB_FILTER_DEFAULTS.get(tab, {})),
+            'filter_options': {
+                name: [dict(o) for o in FILTER_OPTIONS[name]]
+                for name in tab_filters(tab)
+                if name in FILTER_OPTIONS
+            },
         }
         for tab in KNOWN_TABS
     ]
@@ -147,6 +179,22 @@ def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default
         confidence = src.get('vlm_confidence') or 'unknown'
         return f'VLM named registry class {raw!r} at {confidence} confidence; not applied'
     return default
+
+
+def region_reason(src: dict[str, Any], fields: Any, default: str) -> str:
+    """Per-item reason on the ``regions`` tab (mirrors :func:`mismatch_reason`).
+
+    A verifier-rejected candidate needs a different reason than an
+    accepted-but-unreviewed box: the reviewer is confirming/reversing a
+    rejection, not just validating a fresh detection. Includes
+    ``region_rejection_reason`` when the worker recorded one.
+    """
+    if src.get(fields.status) != RegionStatus.VERIFY_REJECTED.value:
+        return default
+    why = src.get(fields.rejection_reason)
+    if why:
+        return f'verifier rejected this candidate ({why}) — needs human review'
+    return 'verifier rejected this candidate — needs human review'
 
 
 def _escape_wildcard(text: str) -> str:
@@ -179,10 +227,13 @@ def build_tab_query(
     include_test: bool,
     text: str | None,
     max_rank: int | None,
+    region_status: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
     """Return ``(must, must_not, reason)`` for one review tab.
 
-    Raises ``HTTPException(400, ...)`` for an unrecognized ``tab`` — same
+    ``region_status`` (``regions`` tab only, ignored elsewhere): one of
+    :data:`REGION_STATUS_FILTER_VALUES`. Raises ``HTTPException(400, ...)``
+    for an unrecognized ``tab`` or an unrecognized ``region_status`` — same
     behavior ``legacy_review.py`` had inline before this split.
     """
     fields = get_region_fields()
@@ -267,10 +318,25 @@ def build_tab_query(
     elif tab == 'regions':
         # Region-detection review queue: every accepted region box a human
         # has not validated yet, including the worker's auto-confirmed ones
-        # (``region_auto_confirmed`` is machine agreement, not validation).
-        # The reviewer opens each in the region editor, adjusts the box if
-        # needed, and confirms, which sets the human-only validated flag.
-        must.append({'exists': {'field': fields.bbox_norm}})
+        # (``region_auto_confirmed`` is machine agreement, not validation)
+        # -- PLUS (default / 'all') a verifier-rejected candidate that still
+        # has a box to show (``region_candidate_bbox_norm``). Before this,
+        # a rejected candidate had no bbox_norm, so it could never match
+        # `exists bbox_norm` and was unreachable from this queue even
+        # though the confirm-promotes-candidate write path already
+        # supported reversing it (DQ-B2 follow-up). The reviewer opens
+        # each in the region editor, adjusts the box if needed, and
+        # confirms, which sets the human-only validated flag (a rejected
+        # candidate's confirm promotes it into `bbox_norm` instead).
+        region_status_filter = region_status or 'all'
+        if region_status_filter not in REGION_STATUS_FILTER_VALUES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f'unknown region_status filter: {region_status_filter!r}. '
+                    f'Must be one of: {", ".join(sorted(REGION_STATUS_FILTER_VALUES))}'
+                ),
+            )
         must_not = [{'term': {'class_excluded': True}}]
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
@@ -279,21 +345,49 @@ def build_tab_query(
         # No class_validated exclusion: region review is independent of the
         # item's class. VLM and cluster agreement validate most classes
         # automatically, so excluding them hid nearly every unreviewed region.
-        must_not.append({'term': {fields.status: RegionStatus.NO_REGION_VISIBLE}})
-        must_not.append({'term': {fields.status: RegionStatus.VERIFY_REJECTED}})
-        # Human already marked the detection a false positive (box kept
-        # for FP analysis / LPR hard-negative training) — terminal, must
-        # not re-enter the human queue.
-        must_not.append({'term': {fields.status: RegionStatus.FALSE_POSITIVE}})
+        rejected_candidate = {
+            'bool': {
+                'filter': [
+                    {'term': {fields.status: RegionStatus.VERIFY_REJECTED}},
+                    {'exists': {'field': fields.candidate_bbox_norm}},
+                ]
+            }
+        }
+        if region_status_filter == RegionStatus.DETECTED.value:
+            must.append({'exists': {'field': fields.bbox_norm}})
+            must_not.append({'term': {fields.status: RegionStatus.NO_REGION_VISIBLE}})
+            must_not.append({'term': {fields.status: RegionStatus.VERIFY_REJECTED}})
+            must_not.append({'term': {fields.status: RegionStatus.FALSE_POSITIVE}})
+            reason = 'region detected — needs human confirmation'
+        elif region_status_filter == RegionStatus.VERIFY_REJECTED.value:
+            must.append(rejected_candidate)
+            reason = 'verifier rejected this candidate — needs human review'
+        else:
+            # 'all': today's accepted-but-unvalidated boxes, plus a
+            # rejected candidate that still has a box to show. A
+            # false_positive keeps its box too (`bbox_norm` stays set —
+            # see RegionFields.candidate_bbox_norm's docstring) but is
+            # terminal and must never re-enter the human queue.
+            must.append(
+                {
+                    'bool': {
+                        'should': [{'exists': {'field': fields.bbox_norm}}, rejected_candidate],
+                        'minimum_should_match': 1,
+                    }
+                }
+            )
+            must_not.append({'term': {fields.status: RegionStatus.NO_REGION_VISIBLE}})
+            must_not.append({'term': {fields.status: RegionStatus.FALSE_POSITIVE}})
+            reason = 'region detected — needs human confirmation'
         # Substring search on region text, case-insensitive: stored case
         # depends on whichever writer set the text, so don't assume an
         # uppercase canonical form.
         if text and 'text' in tab_filters(tab):
             must.append(region_text_clause(fields.text, text))
-        # Default sort: region score desc, so the high-confidence detections
-        # are reviewed first (likely accept), low-score later (more
-        # corrections expected) — see review_sorts.py.
-        reason = 'region detected — needs human confirmation'
+        # Default sort: region score desc (falling back to the rejected
+        # candidate's score when there is no accepted region score), so
+        # the high-confidence items are reviewed first — see
+        # review_sorts.py's two-key 'region_score' clause.
     elif tab == 'model_disagreements':
         # Active-learning loop (design §15.6 / 17 Phase 5): after a
         # promote, /curation/pipeline/auto_label re-scores crops with the new
@@ -418,12 +512,16 @@ def build_tab_query(
 
 __all__ = [
     'COMMON_FILTERS',
+    'FILTER_OPTIONS',
     'KNOWN_TABS',
+    'REGION_STATUS_FILTER_OPTIONS',
+    'REGION_STATUS_FILTER_VALUES',
     'TAB_EXTRA_FILTERS',
     'TAB_FILTER_DEFAULTS',
     'TAB_LABELS',
     'build_tab_query',
     'mismatch_reason',
+    'region_reason',
     'review_tab_catalog',
     'tab_filters',
 ]

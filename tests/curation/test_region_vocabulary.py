@@ -130,6 +130,28 @@ def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None
     assert by_id['coco_blind_spots']['label'] == 'Classifier blind spots'
 
 
+def test_review_tabs_serves_region_status_filter_options(client: TestClient) -> None:
+    """DQ-B2 follow-up: the regions tab's ``region_status`` filter is a
+    fixed enum, served with value/label options so the frontend can
+    render it without hardcoding the values (same shape as the existing
+    ``filters``/``filter_defaults`` catalog fields)."""
+    resp = client.get('/curation/review/tabs')
+    assert resp.status_code == 200, resp.text
+    by_id = {t['id']: t for t in resp.json()['tabs']}
+    regions = by_id['regions']
+    assert 'region_status' in regions['filters']
+    assert regions['filter_defaults']['region_status'] == 'all'
+    options = regions['filter_options']['region_status']
+    assert {o['value'] for o in options} == {'all', 'detected', 'verify_rejected'}
+    for o in options:
+        assert o['label']
+    # Every other tab either has no filter_options at all, or one that
+    # doesn't include region_status (regions-only filter).
+    for tab_id, tab in by_id.items():
+        if tab_id != 'regions':
+            assert 'region_status' not in tab.get('filter_options', {})
+
+
 def test_review_tabs_route_not_shadowed_by_the_tab_path_param(client: TestClient) -> None:
     """'/review/tabs' must resolve to the tab-catalog route, not
     'GET /review/{tab}' with tab='tabs' (an unknown tab -> 400)."""

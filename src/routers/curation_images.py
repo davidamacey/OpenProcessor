@@ -233,11 +233,21 @@ async def crop_region_thumbnail(
 ) -> Response:
     """128px JPEG thumbnail of the crop's region-of-interest sub-bbox.
 
-    Used by the region-verification UI in the labeler. 404 if the crop
-    has no region bbox (``RegionFields.bbox_norm``).
+    Used by the region-verification UI in the labeler. Falls back to the
+    verifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)
+    when there is no accepted region box (``RegionFields.bbox_norm``) --
+    a ``verify_rejected`` item never has the latter, so this route used to
+    404 for every one of them even though the item is still reviewable
+    (DQ-B2 follow-up). 404 only when the crop has neither box. The cache
+    key includes the box's own coordinates (``ThumbnailCache.get_or_compute``),
+    so a later promotion or re-detection that changes the box never
+    serves a stale image -- it's a different cache key.
     """
     crop = await _fetch_crop(crop_id, opensearch)
-    region_bbox = crop.get(get_region_fields().bbox_norm)
+    fields = get_region_fields()
+    region_bbox = crop.get(fields.bbox_norm)
+    if not region_bbox or len(region_bbox) != 4:
+        region_bbox = crop.get(fields.candidate_bbox_norm)
     if not region_bbox or len(region_bbox) != 4:
         raise HTTPException(status_code=404, detail='crop has no region bbox')
 

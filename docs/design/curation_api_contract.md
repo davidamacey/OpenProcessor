@@ -569,15 +569,37 @@ max_rank`; omitted = no limit, except `primary_low_conf` /
 `coco_blind_spots`, which default to `2`), `min_blur_ratio`,
 `min_mistakenness`, `hide_near_duplicates`, **`class_id`**, **`source`**,
 **`conf_min` / `conf_max`** (inclusive band on `confidence`, `400` if
-min > max), `sort`; `text` on the `regions` tab only (ignored elsewhere).
+min > max), `sort`; `text` and `region_status` on the `regions` tab only
+(ignored elsewhere).
+
+`region_status` (`regions` tab; DQ-B2 follow-up) selects which region
+boxes the queue serves: `'all'` (default) — today's accepted-but-
+unvalidated boxes (`region_bbox_norm` present) plus a verifier-rejected
+candidate that still has a box to show (`region_status=verify_rejected`
+AND `region_candidate_bbox_norm` present); `'detected'` — accepted boxes
+only, same as `'all'` before this existed; `'verify_rejected'` — only the
+rejected candidates. `false_positive` and `no_region_visible` items never
+appear in any mode; a `verify_rejected` row with no candidate box (rejected
+before the candidate was kept) never appears either. `400` for an
+unrecognized value. A rejected candidate's per-item `reason` names the
+rejection (`region_rejection_reason` when the worker recorded one) instead
+of the generic "needs human confirmation" string. `locate` honours the
+same parameter.
 
 `GET /review/tabs` → `{tabs: [{id, label, description, filters,
-filter_defaults}]}`: `filters` is the list of query parameters the tab
-honours (a parameter not listed is accepted and ignored), `filter_defaults`
-the values it applies when one is omitted (`{"max_rank": 2}` for the two
-primary-subject tabs, else `{}`). The queue query reads the same table, so
-the catalog can't advertise a filter a tab ignores (DQ-M6: `max_rank` used
-to be honoured only by the two primary tabs). Response: `total`, `page`, `page_size`,
+filter_defaults, filter_options}]}`: `filters` is the list of query
+parameters the tab honours (a parameter not listed is accepted and
+ignored), `filter_defaults` the values it applies when one is omitted
+(`{"max_rank": 2}` for the two primary-subject tabs, `{"region_status":
+"all"}` for `regions`, else `{}`). `filter_options` serves `{value, label}`
+choices for any filter with a fixed enum (today, only `regions`'
+`region_status`: `[{"value": "all", "label": "..."}, {"value": "detected",
+"label": "..."}, {"value": "verify_rejected", "label": "..."}]`) — `{}` for
+a tab with none, so the frontend can render an enum filter generically
+instead of hardcoding its values. The queue query reads the same
+`filters`/`filter_defaults` table, so the catalog can't advertise a filter
+a tab ignores (DQ-M6: `max_rank` used to be honoured only by the two
+primary tabs). Response: `total`, `page`, `page_size`,
 `items` (item + `reason`), `sort_applied` (the sort id that actually ran),
 `sort_fallback_reason` (`null`, or a human-readable string when the
 resolved default was replaced — see below).
@@ -1140,6 +1162,18 @@ clustering and export ignore it. A human reverses the rejection with the
 confirm write (see "Region lifecycle"); region undo restores it. An
 accepted worker write clears any stale candidate. Items rejected before
 this existed carry no candidate (re-queue them to get one).
+
+**Review-queue reachability (DQ-B2 follow-up):** a rejected candidate is
+now reachable from `GET /review/regions` — see the `region_status` filter
+above. Its default ('all') `region_score` sort falls back to
+`region_candidate_score` (a second sort key) for items with no
+`region_score`, so rejected candidates sort by their own score instead of
+tying on `missing: '_last'` and falling back to shard order among
+themselves. `GET /crops/{crop_id}/region_thumbnail` renders the candidate
+box when there is no accepted `region_bbox_norm` (404 only when neither
+exists) — the thumbnail cache key includes the box's own coordinates, so
+a later promotion or re-detection that changes the box is never served
+stale.
 
 ### SSE — `GET /events`
 

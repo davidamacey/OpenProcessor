@@ -7095,7 +7095,7 @@
     },
     "/curation/crops/{crop_id}/region_thumbnail": {
       "get": {
-        "description": "128px JPEG thumbnail of the crop's region-of-interest sub-bbox.\n\nUsed by the region-verification UI in the labeler. 404 if the crop\nhas no region bbox (``RegionFields.bbox_norm``).",
+        "description": "128px JPEG thumbnail of the crop's region-of-interest sub-bbox.\n\nUsed by the region-verification UI in the labeler. Falls back to the\nverifier-rejected candidate box (``RegionFields.candidate_bbox_norm``)\nwhen there is no accepted region box (``RegionFields.bbox_norm``) --\na ``verify_rejected`` item never has the latter, so this route used to\n404 for every one of them even though the item is still reviewable\n(DQ-B2 follow-up). 404 only when the crop has neither box. The cache\nkey includes the box's own coordinates (``ThumbnailCache.get_or_compute``),\nso a later promotion or re-detection that changes the box never\nserves a stale image -- it's a different cache key.",
         "operationId": "crop_region_thumbnail_curation_crops__crop_id__region_thumbnail_get",
         "parameters": [
           {
@@ -10342,6 +10342,24 @@
               "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
               "title": "Sort"
             }
+          },
+          {
+            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+            "in": "query",
+            "name": "region_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+              "title": "Region Status"
+            }
           }
         ],
         "responses": {
@@ -10602,6 +10620,24 @@
               ],
               "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
               "title": "Sort"
+            }
+          },
+          {
+            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+            "in": "query",
+            "name": "region_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+              "title": "Region Status"
             }
           }
         ],
