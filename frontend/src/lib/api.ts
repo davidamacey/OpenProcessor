@@ -1187,10 +1187,11 @@ export type RawCrop = {
 };
 
 /**
- * Every key `RawCrop` declares, used by `src/lib/test/makeItem.ts` to build
- * a fixture that can't silently miss a field. The `satisfies` + exhaustiveness
- * check below makes an added/removed `RawCrop` key a compile error here
- * instead of a silent gap in the fixture.
+ * Every key `RawCrop` declares, as a runtime value. `src/lib/test/makeItem.ts`
+ * builds a fixture from it that can't silently miss a field, and
+ * `src/lib/contract/wireKeys.test.ts` checks it against the backend's
+ * vendored item-wire key list. The `satisfies` + exhaustiveness check below
+ * makes an added or removed `RawCrop` key a compile error here.
  */
 export const RAW_CROP_KEYS = [
   'crop_id',

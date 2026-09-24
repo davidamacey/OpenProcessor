@@ -472,6 +472,50 @@ container start by `docker-entrypoint.sh`, so one image fits any deployment:
 All API calls flow through `src/lib/api.ts` with retry + AbortController
 for in-flight cancellation.
 
+## API contract
+
+The frontend's picture of the backend's wire format is not hand-copied —
+it is vendored from OpenProcessor's own generated contract files and
+checked against them by tests, so a backend rename fails a frontend test
+instead of silently rendering blanks or 404ing.
+
+- **Vendored snapshot:** `contracts/openprocessor/` (`json/item_wire.json`,
+  `ts/{itemWire,classSources,regionStatus}.ts`, `openapi/curation.json`,
+  `SOURCE.md` recording the backend commit it came from). Generated on
+  OpenProcessor's side (`contracts/README.md` there); copied here
+  verbatim, never hand-edited.
+- **Sync / check:** `npm run contract:sync` refreshes the snapshot from a
+  local OpenProcessor checkout (`OPENPROCESSOR_REPO`, default
+  `../openprocessor`; `OPENPROCESSOR_REF`, default `main`) via
+  `git -C $OPENPROCESSOR_REPO show $OPENPROCESSOR_REF:contracts/...`.
+  `npm run contract:check` diffs the vendored copy against that ref and
+  exits non-zero on drift; it exits 0 with a "skipping" message when the
+  backend repo isn't present (CI), so it's harmless there. Wired into
+  CI's `check` job and a local pre-commit hook gated on `contracts/` or
+  `src/lib/api.ts` changing.
+- **Tests read the vendored files**, not a hand-typed copy — under
+  `src/lib/contract/`:
+  - `wireKeys.test.ts` — `api.ts`'s `RAW_CROP_KEYS` (compile-time
+    exhaustive against `RawCrop`) and every built-in slot's `*Field`
+    wire references vs the backend's item/region wire keys, with an
+    explicit `KNOWN_STALE` allow-list for any field the frontend reads
+    that the backend doesn't (currently empty).
+  - `regionStatus.test.ts` — slot lifecycle states/human-writable
+    statuses vs the backend's `RegionStatus` enum.
+  - `classSources.test.ts` — `sourceBadge` handles every backend
+    `class_source` role.
+  - `endpointCatalog.test.ts` — every `${API_PREFIX}/...` call site
+    (mechanically extracted by `src/lib/contract/apiCallScanner.ts` from
+    `api.ts`, `sse.ts`, `SlotCard.svelte`, `export/+page.svelte` — not a
+    hand-maintained list, and a new file with a call site the scanner
+    doesn't cover fails the "no other file references API_PREFIX"
+    completeness guard) resolves to a real path+method in the vendored
+    OpenAPI spec, with every mechanically-resolvable query param checked
+    against that operation's declared parameters. A handful of
+    runtime-composed paths (a slot's own declared `endpoints`/
+    `extras.datasetExport` paths) are anchored `MANUAL_OVERRIDES` in the
+    test, not silently skipped.
+
 ## Deployment
 
 The API serves all images and crop thumbnails — the labeler does NOT mount

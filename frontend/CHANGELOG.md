@@ -8,38 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Test-quality hardening from `docs/design/test-audit-2026-09-24.md`
-  (owner requirement: tests must exercise real behavior, not just look
-  plausible).
-  - `src/lib/test/makeItem.ts` — a shared raw-`{API_PREFIX}/crops` item
-    fixture builder covering every `RawCrop` field (`src/lib/api.ts`)
-    with a distinct, non-default value, so a dropped or mis-mapped
-    field is detectable by a plain assertion instead of a
-    self-consistent hand-copied payload. `RawCrop` is now exported,
-    alongside a `RAW_CROP_KEYS` const with a compile-time
-    exhaustiveness check against `RawCrop`'s keys.
-  - `src/lib/api.mapRawCrop.test.ts` — asserts every `mapRawCrop` field
-    mapping against the fixture, including the falsy-but-meaningful
-    cases (`0`, `false`, `null`) that a `??`/`||` mixup silently drops.
-    Closes three surviving mutations the audit found: `cluster_subid`
-    mapped to `null`, `test_holdout` mapped to `false`, and
-    `confidence`/`label_confidence` dropped.
-  - `api.classValidated.test.ts` migrated its hand-built raw payload to
-    `makeItem()`.
-  - Added `@stryker-mutator/core` + `@stryker-mutator/vitest-runner`
-    (devDependencies) and `stryker.config.json`, scoped to 10 pure
-    modules (`api.ts`, `stores/undo.svelte.ts`, `datasetStats.ts`,
-    `autoLabelRunVlm.ts`, `sourceBadge.ts`, `reviewTabs.ts`,
-    `curationSettings.ts`, `strategies.ts`, `classPicker.ts`,
-    `annotations/readSlot.ts`). New `npm run test:mutation` script.
-    Local/weekly only — see the new `.github/workflows/mutation.yml` and
-    the "Mutation testing" note in this file's Development section.
-  - Killed the highest-priority surviving mutants the first mutation
-    run found in `stores/undo.svelte.ts` (`undoLast`'s success/409/
-    generic-failure toast branches, and the empty-stack early-return
-    guard) with real assertions on `toastStore.toasts` and
-    `undoStore.stack`, not source text. Mutation score for that file
-    rose from 75.5% to 83.7%.
+- Tests now check the frontend against the backend's real API contract.
+  - `contracts/openprocessor/` holds a copy of OpenProcessor's generated
+    contract files (item and region fields, region statuses, class-source
+    roles, the curation OpenAPI). `npm run contract:sync` refreshes it and
+    `npm run contract:check` fails when it no longer matches the backend.
+    The check runs in pre-commit and CI; CI skips it until the backend
+    repo is available there.
+  - Tests in `src/lib/contract/` read that copy instead of hand-copied
+    lists. They check every field `RawCrop` reads, the slot profile's
+    region fields and statuses, every class-source role, and every API
+    call's path, method and query parameters. The call list is found by
+    scanning the code, so a new call is checked without registering it.
+  - `RAW_CROP_KEYS` in `api.ts` lists every `RawCrop` field, with a
+    compile-time check that it stays complete.
+- A shared test fixture, `src/lib/test/makeItem.ts`, sets every item field
+  to a distinct value. `api.mapRawCrop.test.ts` uses it to check every
+  mapped field. It catches the dropped `cluster_subid`, `test_holdout` and
+  confidence mappings that no test caught before.
+- Mutation testing with Stryker: `npm run test:mutation`, weekly in CI
+  (`.github/workflows/mutation.yml`). It covers the API client, the undo
+  store and eight helper modules. The build fails if the score drops
+  below its current level.
+
+### Removed
+
+- `src/lib/annotations/regionWireContract.test.ts`, replaced by the
+  contract tests.
 
 ### Fixed
 
