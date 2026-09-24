@@ -198,11 +198,18 @@ async def test_claim_single_gpu_uses_sentinel(tmp_path: Path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_claim_dual_gpu_falls_back_to_sentinel_without_docker(tmp_path: Path, monkeypatch):
-    """Dual-GPU on a host without docker on PATH = sentinel-only fallback,
-    but only once at least one container is configured -- otherwise
+async def test_claim_dual_gpu_fails_closed_without_docker(tmp_path: Path, monkeypatch):
+    """S-5: dual-GPU on a host without a usable docker SDK/socket must
+    refuse the claim (GpuArbiterStopFailedError), not silently fall back
+    to a sentinel-only pause -- a sentinel pauses a paired *worker*
+    process, not a sibling container sharing the GPU (e.g. a large vLLM
+    process), so falling back would let training start right next to it.
+    Only reachable once at least one container is configured -- otherwise
     stop_gpu_services() short-circuits to a pure no-op before ever
-    checking docker (see test_gpu_arbiter_config.py)."""
+    checking docker (see test_gpu_arbiter_config.py). The training lock
+    this call wrote must also be cleared on the way out, so a refused
+    claim never leaves stale lock state behind.
+    """
     monkeypatch.setattr(ga, '_state_dir', lambda: tmp_path)
     monkeypatch.setattr(ga, '_docker_client', lambda: None)
 
@@ -212,9 +219,10 @@ async def test_claim_dual_gpu_falls_back_to_sentinel_without_docker(tmp_path: Pa
     )
     _set_config(monkeypatch, fake_cfg)
 
-    res = await ga.claim_gpus_for_training('0,2')
-    assert res.action == 'sentinel_set'
-    assert ga.sentinel_path().exists()
+    with pytest.raises(ga.GpuArbiterStopFailedError):
+        await ga.claim_gpus_for_training('0,2')
+    assert not ga.sentinel_path().exists()
+    assert ga.read_training_lock() is None
 
 
 class _FakeContainer:

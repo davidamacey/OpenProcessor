@@ -57,7 +57,9 @@ from src.services.curation.dataset_thresholds import (
 )
 from src.services.training import jobs as train_jobs
 from src.services.training.gpu_arbiter import (
+    GpuArbiterStopFailedError,
     containers_to_stop,
+    docker_client_available,
     needs_service_stop,
     probe_trainer_reachable,
 )
@@ -520,6 +522,34 @@ async def _run_preflight(
         )
     )
 
+    # ---- 2c. GPU arbiter can actually stop what this claim requires (S-5) -----
+    # containers_to_stop() names real GPU-resident containers (e.g. a large
+    # vLLM/Triton process) this run's GPU claim must free. If the docker
+    # SDK/socket isn't usable from this container, claim_gpus_for_training
+    # cannot stop them -- proceeding would start training right next to
+    # that service on the same GPU. Blocking here (not just at /start)
+    # means the frontend form surfaces the failure before the user submits.
+    required_stop_names = containers_to_stop(spec.cuda_visible_devices)
+    if required_stop_names and not docker_client_available():
+        checks.append(
+            PreflightCheck(
+                name='gpu_arbiter',
+                severity='block',
+                message=(
+                    f'docker SDK/socket unavailable in the API container -- cannot stop '
+                    f'{", ".join(required_stop_names)} for this GPU claim'
+                ),
+            )
+        )
+    elif required_stop_names:
+        checks.append(
+            PreflightCheck(
+                name='gpu_arbiter',
+                severity='ok',
+                message=f'can stop: {", ".join(required_stop_names)}',
+            )
+        )
+
     # ---- 3. active run --------------------------------------------------------
     try:
         active = await train_jobs.get_active_job()
@@ -921,14 +951,28 @@ async def start_train(
             detail={'message': 'preflight blocked', 'preflight': report.model_dump()},
         )
     # GPU arbiter — pause Gemma worker (single-GPU) or stop the container
-    # (dual-GPU) BEFORE the trainer picks the job up. Best-effort: a missing
-    # docker socket falls back to sentinel-only and never fails /start.
+    # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE job.json
+    # is written. S-5: fails closed -- claim_gpus_for_training raises
+    # GpuArbiterStopFailedError when a claim needs to stop a configured
+    # GPU-resident container and can't (docker SDK/socket unavailable, or
+    # the stop itself failed). Starting anyway would run training right
+    # next to that service on the same GPU, so refuse with 409 and never
+    # reach write_job.
     from src.services.training.gpu_arbiter import claim_gpus_for_training
 
     try:
         await claim_gpus_for_training(spec.cuda_visible_devices)
-    except Exception as exc:
+    except GpuArbiterStopFailedError as exc:
         logger.warning('gpu_arbiter_claim_failed', error=str(exc))
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'message': (
+                    'cannot claim the requested GPU(s): a configured GPU-resident '
+                    f'container could not be stopped ({exc})'
+                ),
+            },
+        ) from exc
     try:
         job_id = await train_jobs.write_job(spec)
     except ValueError as exc:
@@ -980,12 +1024,22 @@ async def start_campaign(
 
     # GPU arbiter — claim once for the entire campaign. The reconcile loop
     # in src/main.py releases when no run is left in a non-terminal state.
+    # S-5: fails closed -- see the matching comment in start_train above.
     from src.services.training.gpu_arbiter import claim_gpus_for_training
 
     try:
         await claim_gpus_for_training(campaign.cuda_visible_devices)
-    except Exception as exc:
+    except GpuArbiterStopFailedError as exc:
         logger.warning('gpu_arbiter_claim_failed', error=str(exc))
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'message': (
+                    'cannot claim the requested GPU(s): a configured GPU-resident '
+                    f'container could not be stopped ({exc})'
+                ),
+            },
+        ) from exc
     try:
         campaign_id, job_ids = await train_jobs.write_campaign(campaign)
     except ValueError as exc:

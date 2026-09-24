@@ -51,6 +51,19 @@ def app_client(
     """Build a minimal FastAPI app with just the train router."""
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
 
+    # S-5: claim_gpus_for_training (called unconditionally by /start and
+    # /start_campaign before job.json is written) writes a sentinel/lock
+    # file under CurationConfig.state_dir. get_curation_config() is a
+    # process-wide cached singleton, so setting OP_STATE_DIR here would
+    # have no effect once the process has already built it once -- patch
+    # the arbiter's own _state_dir() seam instead (same pattern
+    # test_gpu_arbiter.py uses) so these tests exercise a real,
+    # succeeding claim instead of relying on an exception being silently
+    # swallowed by a broad except-Exception (which S-5 removed).
+    from src.services.training import gpu_arbiter as _gpu_arbiter
+
+    monkeypatch.setattr(_gpu_arbiter, '_state_dir', lambda: tmp_path)
+
     # Stub the registry so preflight class-resolution doesn't blow up.
     class _Reg:
         def load(self) -> Any:
@@ -540,9 +553,115 @@ def test_start_returns_409_when_active_run_exists(
     assert 'progress' in detail['message'].lower() or 'preflight' in detail
 
 
+def test_start_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S-5: a claim that needs to stop a configured GPU-resident container
+    (e.g. a large vLLM process sharing the requested GPU) must refuse
+    with 409 -- and must NOT write job.json -- when the docker SDK/socket
+    isn't usable, instead of silently falling back to a sentinel-only
+    pause that never actually stops the container.
+    """
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(
+        monkeypatch,
+        GpuArbiterConfig(
+            allowed_gpu_ids=frozenset({0}),
+            containers=('vllm-gemma4-e4b',),
+            container_gpus=(('vllm-gemma4-e4b', frozenset({0})),),
+        ),
+    )
+    from src.services.training import gpu_arbiter as _gpu_arbiter
+
+    monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
+
+    body = {
+        'dataset_export_dir': '/data/exports/x',
+        'profile': 'medium',
+        'cuda_visible_devices': '0',
+    }
+    with patch(
+        'src.routers.curation_train._run_preflight',
+        new=AsyncMock(
+            return_value=__import__(
+                'src.routers.curation_train', fromlist=['PreflightReport']
+            ).PreflightReport(blocked=False, checks=[], summary='ok')
+        ),
+    ):
+        r = app_client.post('/curation/train/start', json=body)
+
+    assert r.status_code == 409, r.text
+    assert 'vllm-gemma4-e4b' in r.json()['detail']['message']
+    assert list(tmp_path.glob('*.job.json')) == []
+
+
+def test_preflight_reports_blocking_gpu_arbiter_check_when_docker_unavailable(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gpu_arbiter preflight check must go 'block' whenever the claim
+    would need to stop a container the docker SDK/socket can't reach --
+    surfaced to the frontend form before the user even submits.
+    """
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(
+        monkeypatch,
+        GpuArbiterConfig(
+            allowed_gpu_ids=frozenset({0}),
+            containers=('vllm-gemma4-e4b',),
+            container_gpus=(('vllm-gemma4-e4b', frozenset({0})),),
+        ),
+    )
+    from src.services.training import gpu_arbiter as _gpu_arbiter
+
+    monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
+
+    body = {
+        'dataset_export_dir': '/data/exports/x',
+        'profile': 'medium',
+        'cuda_visible_devices': '0',
+    }
+    r = app_client.post('/curation/train/preflight', json=body)
+    assert r.status_code == 200, r.text
+    checks = {c['name']: c for c in r.json()['checks']}
+    assert 'gpu_arbiter' in checks
+    assert checks['gpu_arbiter']['severity'] == 'block'
+    assert r.json()['blocked'] is True
+
+
 # =============================================================================
 # /start_campaign
 # =============================================================================
+
+
+def test_start_campaign_refuses_with_409_when_gpu_stop_required_and_docker_unavailable(
+    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(
+        monkeypatch,
+        GpuArbiterConfig(
+            allowed_gpu_ids=frozenset({0}),
+            containers=('vllm-gemma4-e4b',),
+            container_gpus=(('vllm-gemma4-e4b', frozenset({0})),),
+        ),
+    )
+    from src.services.training import gpu_arbiter as _gpu_arbiter
+
+    monkeypatch.setattr(_gpu_arbiter, '_docker_client', lambda: None)
+
+    body = {
+        'dataset_export_dir': '/data/exports/x',
+        'cuda_visible_devices': '0',
+        'runs': [{'profile': 'nano', 'model_size': 'n'}],
+    }
+    r = app_client.post('/curation/train/start_campaign?force=true', json=body)
+
+    assert r.status_code == 409, r.text
+    assert 'vllm-gemma4-e4b' in r.json()['detail']['message']
+    assert list(tmp_path.glob('*.job.json')) == []
 
 
 def test_start_campaign_writes_n_jobs(app_client: TestClient, tmp_path: Any) -> None:

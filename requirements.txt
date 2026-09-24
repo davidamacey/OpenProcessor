@@ -92,3 +92,11 @@ scikit-learn  # src/services/curation/clustering/orchestrator.py, methods/ahc.py
 umap-learn  # src/services/curation/clustering/embedding_reduce.py, backend.py; src/services/curation/embedding_viz.py
 hdbscan  # src/services/curation/clustering/methods/hdbscan.py
 joblib  # src/services/curation/clustering/embedding_reduce.py, embedding_viz.py
+
+# GPU arbiter (src/services/training/gpu_arbiter.py): stops/starts
+# GPU-resident sibling containers (docker.sock mount, OP_GPU_ARBITER_*)
+# so a training run doesn't start next to another GPU workload on the
+# same device. S-5 (full_stack_audit.md): without this package, every
+# call falls back to a sentinel-only pause that never actually stops
+# anything -- fail-open. Pin the SDK, not "docker" the CLI wrapper.
+docker>=7,<8
