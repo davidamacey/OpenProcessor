@@ -505,18 +505,22 @@
     }
   });
 
+  // Purity banding is served (`purity_tier`, `{API_PREFIX}/clusters`'
+  // `purity_thresholds`) — no client 0.8/0.6 threshold. `has_subclusters`
+  // is a separate, unrelated signal (AHC sub-clustering ran) and still
+  // wins the border color outright.
   function borderColor(c: Cluster): string {
     if (c.has_subclusters) return 'border-blue-500/60';
-    const p = c.purity ?? 0;
-    if (p >= 0.8) return 'border-green-500/60';
-    if (p >= 0.6) return 'border-orange-500/60';
+    if (c.purity_tier === 'pure') return 'border-green-500/60';
+    if (c.purity_tier === 'mixed') return 'border-orange-500/60';
     return 'border-red-500/60';
   }
 
   function purityBadge(c: Cluster): { color: string; text: string } {
-    const p = c.purity ?? 0;
-    if (p >= 0.8) return { color: 'bg-green-500/20 text-green-300', text: 'pure' };
-    if (p >= 0.6) return { color: 'bg-orange-500/20 text-orange-200', text: 'mixed' };
+    if (c.purity_tier === 'pure')
+      return { color: 'bg-green-500/20 text-green-300', text: 'pure' };
+    if (c.purity_tier === 'mixed')
+      return { color: 'bg-orange-500/20 text-orange-200', text: 'mixed' };
     return { color: 'bg-red-500/20 text-red-200', text: 'noisy' };
   }
 
@@ -783,6 +787,14 @@
                     {pb.text}
                     {((c.purity ?? 0) * 100).toFixed(0)}
                   </span>
+                  {#if c.promotable}
+                    <span
+                      class="rounded border border-emerald-500/40 bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-200"
+                      title="Meets the server's auto-promote gate (purity + member count + labelled share)"
+                    >
+                      promotable
+                    </span>
+                  {/if}
                   {#if c.has_subclusters}
                     <span
                       class="rounded border border-blue-500/40 bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"

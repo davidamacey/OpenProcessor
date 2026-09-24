@@ -27,6 +27,7 @@
     getCrops,
     getReviewQueue,
     getTrainingCandidates,
+    getTrainingCohorts,
     getTrainManifest,
     getTrainPresets,
     getTrainProfiles,
@@ -38,6 +39,7 @@
     trainStart,
     trainStartCampaign,
     type PlateBrowseItem,
+    type ServedTrainingCohort,
     type TrainingCohortMode,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -54,6 +56,7 @@
   import { toastStore } from '$stores/toast.svelte';
   import { slotRegistry, registeredSlots } from '$lib/annotations/registeredSlots';
   import {
+    CORE_COHORTS,
     cohortsForClass,
     cohortEndpointKind,
     type CohortSpec,
@@ -623,28 +626,38 @@
     return 'yolo26';
   }
 
-  // -- Training-cohort picker (P2.14, docs/genericization-plan-2026-09-13.md
-  // §9.3) --------------------------------------------------------------
+  // -- Training-cohort picker (2026-09-24 logic-moves W6, item 13;
+  // originally P2.14, docs/genericization-plan-2026-09-13.md §9.3) -----
   //
-  // Generalized off the old plate-only "Wave 2c E4" panel: cohorts are
-  // now derived per class via cohortsForClass() (§9.2) instead of a
-  // hardcoded 4-mode PLATE_COHORTS literal. `license_plate` still gets
-  // its 5 hand-tuned server-side modes (declared on the slot profile,
-  // P2.13) — including the previously-unreachable 5th mode,
-  // `false_positives` — every other class gets the 4 class-agnostic
-  // CORE_COHORTS for free. `predicateCohortsAvailable` is hardcoded
-  // false: no backend (H5, §9.4) exists yet to answer a tier-2
-  // predicate cohort, so only tier-1 endpoint cohorts ever render —
-  // exactly today's request shapes, nothing new sent over the wire.
+  // Cohort definitions now come from the backend's own `GET
+  // {API_PREFIX}/training_cohorts?class_id=` — `id`/`label`/`description`/
+  // `endpoint`/`params`/`row_kind` are served verbatim, already resolved
+  // for the requested class (no client `{classId}` template compilation
+  // for these). This replaces the old client-side `cohortsForClass()`
+  // (CORE_COHORTS + licensePlateSlot's 5 hand-tuned modes) as the
+  // primary source: the backend serves the same 4 core + N region
+  // cohorts today, so nothing the operator sees changes, but a
+  // threshold like `low_confidence`'s `classifier_conf_lt` now comes
+  // from the server rather than a client constant.
+  //
+  // `cohortsForClass()`/`CORE_COHORTS`/`cohorts.ts`'s tier-2 mechanism
+  // is NOT deleted — a deployment can still register a brand-new slot
+  // via `annotation-profiles.json` (parseSlotConfig.ts) that the
+  // backend has no region profile for, and that slot's own hand-declared
+  // `capabilities.trainingCohorts.cohorts` (checked at `loadGroupCohorts`
+  // below) still surfaces here as a fallback for any cohort id the
+  // server didn't already send — the server always wins on an id
+  // collision. See secondSlotIntegration.test.ts / cohorts.test.ts for
+  // the tier-2 mechanism's own coverage, independent of this page.
   //
   // Scope note: cohorts are computed for every non-deprecated class
   // (the "default to all classes" recommendation, §9.11) rather than
   // synced to TrainForm's own class-subset selection — that tighter
-  // coupling (lifting `selectedClasses` into this page) is P2.14's
-  // step 1/2 in the plan and is deliberately NOT done here to keep this
-  // change additive-and-reviewable; TrainForm's selection continues to
-  // drive the actual training run unchanged.
+  // coupling (lifting `selectedClasses` into this page) is deliberately
+  // NOT done here; TrainForm's selection continues to drive the actual
+  // training run unchanged.
   const classesById = $derived(new Map(classesStore.classes.map((c) => [c.id, c.name])));
+  const coreCohortIds = new Set(CORE_COHORTS.map((c) => c.id));
 
   interface CohortGroup {
     classId: number;
@@ -652,16 +665,66 @@
     cohorts: CohortSpec[];
   }
 
+  // Cohort *definitions* load lazily per class (see lazyLoadGroupCounts
+  // below) — `classCohorts` starts empty for every class and is filled
+  // in the same intersection-observer callback that used to load only
+  // counts, so mounting this page never fires an eager N-classes
+  // request storm.
+  let classCohorts = $state<Record<number, CohortSpec[]>>({});
+
   const cohortGroups = $derived.by<CohortGroup[]>(() =>
     classesStore.classes
       .filter((c) => !c.deprecated)
       .map((c) => ({
         classId: c.id,
         className: c.name,
-        cohorts: cohortsForClass(c.id, c.name, slotRegistry, classesById, false),
-      }))
-      .filter((g) => g.cohorts.length > 0),
+        cohorts: classCohorts[c.id] ?? [],
+      })),
   );
+
+  /** Converts one served cohort into the local `CohortSpec` shape the
+   *  preview grid already understands — `params` are used verbatim
+   *  (already resolved for this class by the server), never
+   *  re-templated. `row_kind: 'region'` renders via `SlotCard`
+   *  ('slot') and jumps to the owning slot's review queue on click;
+   *  `'crop'` renders via `CropCard` and jumps to the All review tab. */
+  function fromServedCohort(c: ServedTrainingCohort): CohortSpec {
+    return {
+      id: c.id,
+      label: c.label,
+      description: c.description,
+      query: {
+        kind: 'endpoint',
+        path: c.endpoint,
+        params: c.params as Record<string, string | number | boolean>,
+      },
+      rowKind: c.row_kind === 'region' ? 'slot' : 'crop',
+      reviewTarget: c.row_kind === 'region' ? 'slotQueue' : 'all',
+    };
+  }
+
+  /** Server cohorts first; a slot's own tier-2-declared cohort fills in
+   *  only an id the server didn't already send — see the header comment
+   *  above. `predicateCohortsAvailable=false`: no backend support for a
+   *  tier-2 predicate cohort exists yet, so `cohortsForClass` here can
+   *  only ever contribute CORE_COHORTS (filtered out below, since the
+   *  server already sent its own core cohorts) or a slot's declared
+   *  cohorts. */
+  async function loadGroupCohorts(group: CohortGroup): Promise<CohortSpec[]> {
+    const served = await getTrainingCohorts(group.classId).catch(
+      () => ({ cohorts: [] }) as { cohorts: ServedTrainingCohort[] },
+    );
+    const servedCohorts = served.cohorts.map(fromServedCohort);
+    const servedIds = new Set(servedCohorts.map((c) => c.id));
+    const declaredFallback = cohortsForClass(
+      group.classId,
+      group.className,
+      slotRegistry,
+      classesById,
+      false,
+    ).filter((c) => !coreCohortIds.has(c.id) && !servedIds.has(c.id));
+    return [...servedCohorts, ...declaredFallback];
+  }
 
   let cohortCounts = $state<Record<string, number | null>>({});
   let selectedCohortKey = $state<string | null>(null);
@@ -676,10 +739,10 @@
     return `${classId}:${cohort.id}`;
   }
 
-  /** Dispatches a compiled tier-1 endpoint query to the one existing
-   *  api.ts function that already answers it — the three shapes every
-   *  CORE_COHORTS/licensePlateSlot cohort compiles to today (§9.1's
-   *  mode table + §9.2.2's CORE_COHORTS), keyed structurally by
+  /** Dispatches a cohort's `endpoint`/`params` (served verbatim by
+   *  `{API_PREFIX}/training_cohorts`, or a tier-2 declared fallback
+   *  compiled the same way) to the one existing api.ts function that
+   *  already answers that endpoint shape — keyed structurally by
    *  `cohortEndpointKind()` rather than a `path === '/plates/…'`
    *  string-equality check (Wave 2 C12 — see cohorts.ts's doc comment
    *  on `cohortEndpointKind` for why the old check silently broke on a
@@ -693,7 +756,11 @@
     if (cohort.query.kind !== 'endpoint') return { total: 0, items: [] };
     const { path, params } = cohort.query;
     const classId =
-      typeof params.class_id === 'string' ? Number(params.class_id) : undefined;
+      typeof params.class_id === 'number'
+        ? params.class_id
+        : typeof params.class_id === 'string'
+          ? Number(params.class_id)
+          : undefined;
     const kind = cohortEndpointKind(path);
 
     if (kind === 'training_candidates') {
@@ -728,10 +795,10 @@
     return { total: 0, items: [] };
   }
 
-  // Lazy per-group counts (§9.10's mitigation for the N-classes ×
-  // M-cohorts count-fetch storm): a group's counts load once, the first
-  // time its header scrolls into the viewport, instead of every group
-  // firing 4 requests on mount.
+  // Lazy per-group cohorts + counts (§9.10's mitigation for the
+  // N-classes × M-cohorts request storm): a group's cohort definitions
+  // AND counts load once, the first time its header scrolls into the
+  // viewport, instead of every group firing requests on mount.
   const groupCountsLoaded = new Set<number>();
   function lazyLoadGroupCounts(node: HTMLElement, group: CohortGroup) {
     const observer = new IntersectionObserver(
@@ -751,11 +818,11 @@
   }
 
   async function loadGroupCounts(group: CohortGroup): Promise<void> {
-    const results = await Promise.allSettled(
-      group.cohorts.map((c) => runCohortQuery(c, 1)),
-    );
+    const cohorts = await loadGroupCohorts(group);
+    classCohorts = { ...classCohorts, [group.classId]: cohorts };
+    const results = await Promise.allSettled(cohorts.map((c) => runCohortQuery(c, 1)));
     const next: Record<string, number | null> = { ...cohortCounts };
-    group.cohorts.forEach((cohort, i) => {
+    cohorts.forEach((cohort, i) => {
       const r = results[i];
       next[cohortKey(group.classId, cohort)] =
         r?.status === 'fulfilled' ? r.value.total : null;
@@ -1065,11 +1132,14 @@
     />
   {/if}
 
-  <!-- Training cohorts (P2.14, formerly "Plate training cohorts") —
-       cohortsForClass() (§9.2) surfaces license_plate's 5 hand-tuned
-       server-side modes AND every other class's 4 class-agnostic core
-       cohorts. Grouped by class so "pick the classes you want to train
-       and it goes" reads directly off the screen. Selecting a chip
+  <!-- Training cohorts (2026-09-24 logic-moves W6; originally P2.14,
+       "Plate training cohorts") — GET {API_PREFIX}/training_cohorts?class_id=
+       serves both license_plate's region cohorts AND every other
+       class's 4 class-agnostic core cohorts; a tier-2 slot's own
+       declared cohort fills in only if the server didn't already send
+       that id (see loadGroupCohorts). Grouped by class so "pick the
+       classes you want to train and it goes" reads directly off the
+       screen. Selecting a chip
        loads a 24-card sanity-preview grid. -->
   <section class="rounded-md border border-zinc-800 bg-zinc-900">
     <header
