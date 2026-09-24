@@ -65,6 +65,14 @@ _EXPLICIT: dict[str, Any] = {
     # attempt a class answer, and why it came back empty if it did.
     "vlm_class_attempted_at": "2026-01-02T03:03:00Z",
     "vlm_class_empty_reason": "no_visible_vehicle",
+    # Backend main 7254ec4 (dq-queues): a class confidence that matches
+    # class_source (DQ-M8's served-side half) and the VLM's raw,
+    # pre-registry-match class string. Not adopted by any UI in this
+    # batch (per instructions, a separate pass wires these up) -- just
+    # present so make_item()'s fail-closed contract-key check passes.
+    "class_confidence": 0.73,
+    "class_confidence_source": "v6_model",
+    "vlm_raw_class": "pickup truck",
     "vlm_proposed_class_id": 99,
     "vlm_proposed_class_name": "pickup_truck",
     "proposed_class_id": 101,
@@ -77,6 +85,7 @@ _EXPLICIT: dict[str, Any] = {
     "cluster_similarity": 0.81,
     "cluster_is_core": True,
     "cluster_subid": "47a",
+    "cluster_nearest_id": 18,
     "class_excluded": False,
     "excluded_reason": None,
     "excluded_at": None,
