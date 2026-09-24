@@ -70,6 +70,14 @@
      *  the active slot's own label.title, so the default is only ever
      *  seen by a caller that hasn't been updated yet. */
     label?: string;
+    /**
+     * Draws the ring dashed instead of solid (dq-region, 2026-09-24) —
+     * used for a verifier-rejected candidate box (the box hasn't been
+     * accepted as the region yet; a human confirming it promotes it
+     * server-side) so it reads as visually distinct from a confirmed or
+     * proposed box without a whole second ring-color scheme.
+     */
+    dashed?: boolean;
   }
 
   let {
@@ -82,6 +90,7 @@
     ringColor = 'rgb(80, 200, 255)',
     viewBox = null,
     label = 'box',
+    dashed = false,
   }: Props = $props();
 
   type DragMode = 'create' | 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
@@ -372,7 +381,9 @@
   {#if bbox}
     <div
       class="absolute border-2"
-      style="{ringStyle}; border-color: {ringColor}; background-color: {readonly
+      style="{ringStyle}; border-color: {ringColor}; border-style: {dashed
+        ? 'dashed'
+        : 'solid'}; background-color: {readonly
         ? 'transparent'
         : `color-mix(in srgb, ${ringColor} 12%, transparent)`};"
     >
