@@ -888,6 +888,88 @@ silently rendering empty. CI runs this in the `e2e-stubbed` job on every
 push/PR; a `py_compile` pre-commit hook (and CI step) gates
 `scripts/*.py` and `e2e/**/*.py` syntax separately from this suite.
 
+#### Live read-only tier (`e2e/live/`)
+
+`npm run test:live` — same `e2e/.venv`/chromium setup as `npm run
+test:e2e` (`scripts/run-e2e.mjs e2e/live`, sharing the venv-provisioning
+logic rather than a second copy of it), but drives the **real, currently
+deployed** build against a **real** OpenProcessor backend instead of the
+stubbed in-browser fixtures — the one class of bug `e2e/stubbed/`
+structurally cannot see: the frontend and the live backend's own wire
+shape/data actually disagreeing. Point it at the deployment with
+`CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run test:live` (or any
+other reachable Cropwright nginx origin) — unset, `_require_live_url`
+(`e2e/live/conftest.py`, session-scoped + autouse) skips every test in
+the tier before a browser is ever launched, so this never runs in CI or
+under plain `npm run test:e2e`. A session-scoped `live_url` fixture
+preflights `GET {API_PREFIX}/health`, skipping with a clear message on
+anything short of a clean 200.
+
+**Hard read-only, structurally, not by test discipline.** Every test
+uses the `guarded_page` fixture: it routes every `**/curation/**`
+request through a handler that lets GET/HEAD through untouched and
+`route.abort()`s anything else, recording the attempt — and its
+teardown asserts the recorded list is empty. A test that merely
+_attempts_ a write (even one the guard successfully blocked) fails; see
+the fixture's own docstring for the disposable proof-of-guard runbook
+(a scratch test firing a `fetch(..., {method: 'POST'})` via
+`page.evaluate`, run once to confirm both the abort and the teardown
+failure, then deleted — never a permanent test). The same fixture also
+fails a test on any `pageerror`, launches chromium with
+`args=["--disable-gpu"]` (inherited from `e2e/conftest.py`'s
+`browser_type_launch_args` — it hangs without this flag on this
+machine, see that fixture's docstring), sets an explicit 1280×720
+viewport, and explicit navigation/action timeouts. Tests use
+`wait_until="domcontentloaded"` plus a concrete `wait_for_selector`/
+`wait_for_function`, never `wait_until="load"` or a fixed sleep.
+Screenshots are captured only on failure, under
+`artifacts_local/cw-live/live-tier/` (gitignored) — wired via
+pytest-playwright's own `--screenshot=only-on-failure --output=...`
+flags in `scripts/run-e2e.mjs` when the target is `e2e/live`.
+
+Three test modules, 21 tests total against this deployment's live
+dataset:
+
+- **`test_route_sweep.py`** — every top-level route mounts: `/dashboard`,
+  `/clusters` (plain and `?class=license_plate`), `/review` with each
+  tab's `?tab=<urlId>` (`all`/`uncertainty`/`model_disagreements`/
+  `coco_blind_spots`/`new_class_proposals`/`plates`), `/classes`,
+  `/export`, `/train`, `/models`, `/bakeoff`, `/settings`. Each asserts:
+  no `pageerror`; no `**/curation/**` response >= 400 outside a small,
+  explicit, documented allow-list (`ALLOWED_4XX_5XX` in
+  `e2e/live/conftest.py` — empty today, since every endpoint this
+  deployment serves on mount came back 200/204 in manual verification);
+  no literal `"NaN"`/`"undefined"` in the rendered body text; every
+  `<img>` whose bounding box intersects the 1280×720 viewport finishes
+  loading (`naturalWidth > 0`) — an offscreen lazy image is allowed to
+  still be pending.
+- **`test_data_agreement.py`** — the UI shows what the API serves:
+  the dashboard's "Clusters (total now)" vs `GET {API_PREFIX}/stats/
+dataset` `clusters.cluster_count`; `/review?tab=plates`'s queue-counter
+  total vs `GET {API_PREFIX}/review/regions` `total`, both unfiltered
+  and with `?region_status=verify_rejected`; every `filter_specs` entry
+  `GET {API_PREFIX}/review/tabs` serves for the `regions` tab renders a
+  `<select>` with exactly the served option labels; a served
+  `rejection_reasons` label (`GET {API_PREFIX}/regions/vocabulary`,
+  resolved exact-then-longest-prefix, mirroring
+  `regionVocabularyStore.rejectionReasonLabel`) actually renders for a
+  live `verify_rejected` item — skipped, not failed, when the live
+  cohort is momentarily empty. A concurrently-writing actor (another
+  agent's UI-write smoke test against the same deployment, expected per
+  this tier's own operating assumption) can move a count between the
+  API read and the UI read: `agrees_with_retry` (conftest.py) re-reads
+  the API once on a mismatch and accepts either value, and
+  `wait_for_stable_text` polls a value until it stops changing (the
+  queue counter briefly renders an unfiltered total before a
+  URL-seeded `?region_status=` filter's `filter_specs` finish loading —
+  see "Served per-tab filters" above) rather than racing a single read.
+- **`test_deep_link.py`** — takes the first crop id off `GET
+{API_PREFIX}/review/regions?region_status=verify_rejected&page_size=1`
+  (skips if none), opens `/review?tab=plates&region_status=
+verify_rejected&crop_id=<id>`, and asserts it actually lands: "Locating
+  crop…" clears, the queue counter reports a real `rank / loaded`
+  position, and no "not in this review queue" toast appears.
+
 ### Mutation testing
 
 `npm run test:mutation` (Stryker, `stryker.config.json`) runs mutation

@@ -391,7 +391,9 @@
           </div>
           <div class="flex justify-between">
             <dt class="text-zinc-400">Clusters (total now)</dt>
-            <dd class="font-mono">{fmt(stats.clusters.cluster_count)}</dd>
+            <dd class="font-mono" data-testid="dataset-cluster-count">
+              {fmt(stats.clusters.cluster_count)}
+            </dd>
           </div>
           {#if stats.clusters.last_run_cluster_count != null}
             <div class="flex justify-between">

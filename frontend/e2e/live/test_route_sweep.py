@@ -1,0 +1,134 @@
+"""Live read-only tier: every top-level route mounts against the real
+deployment without erroring.
+
+Each route in ROUTES is opened in a real browser pointed at
+`CROPWRIGHT_LIVE_URL` (nginx on :5184 by default, proxying `/curation` to
+a live OpenProcessor backend). For each we assert:
+
+  * no `pageerror` (guaranteed by `guarded_page`'s teardown — see
+    conftest.py);
+  * no `**/curation/**` response >= 400, except a documented allow-list
+    entry (`is_allowlisted_bad_response`, conftest.py) — empty today,
+    because every route this backend serves came back 200/204 in manual
+    verification (`curl` against :5184/curation/{classes,methods,
+    regions/statuses,regions/vocabulary,review/tabs,class_sources,
+    settings,bakeoff/runs,stats/dataset,training_cohorts}`);
+  * no literal "NaN" or "undefined" in the rendered body text — the
+    classic symptom of an unmapped/undefined field leaking into a
+    template;
+  * every `<img>` whose bounding box intersects the 1280x720 viewport
+    finishes loading (`naturalWidth > 0`) — a lazy offscreen image is
+    allowed to still be pending.
+
+This is deliberately a shallow "did it mount cleanly" sweep, not a
+feature check — see test_data_agreement.py and test_deep_link.py for
+tests that check the UI's numbers actually match the API's.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from conftest import is_allowlisted_bad_response
+
+# (path, a selector proving the route actually mounted its real content,
+# not just an empty shell / loading spinner).
+ROUTES: list[tuple[str, str]] = [
+    ("/dashboard", 'h1:has-text("Dashboard")'),
+    ("/clusters", 'h1:has-text("Clusters")'),
+    ("/clusters?class=license_plate", 'h1:has-text("Clusters")'),
+    ("/review?tab=all", '[data-testid="queue-counter"]'),
+    ("/review?tab=uncertainty", '[data-testid="queue-counter"]'),
+    ("/review?tab=model_disagreements", '[data-testid="queue-counter"]'),
+    ("/review?tab=coco_blind_spots", '[data-testid="queue-counter"]'),
+    ("/review?tab=new_class_proposals", '[data-testid="queue-counter"]'),
+    ("/review?tab=plates", '[data-testid="queue-counter"]'),
+    ("/classes", 'h1:has-text("Class management")'),
+    ("/export", 'h1:has-text("Export dataset")'),
+    ("/train", 'h1:has-text("Train model")'),
+    ("/models", 'h1:has-text("Models")'),
+    ("/bakeoff", 'h1:has-text("Bake-off")'),
+    ("/settings", 'h1:has-text("Deployment defaults")'),
+]
+
+
+def _bad_responses(gp: Any) -> list[tuple[str, str, int]]:
+    """Collected as (method, path, status) for every `**/curation/**`
+    response >= 400 seen while this list is wired up by the caller."""
+    return gp.bad_responses
+
+
+@pytest.mark.parametrize("path,ready_selector", ROUTES, ids=[r[0] for r in ROUTES])
+def test_route_mounts_cleanly(guarded_page: Any, live_url: str, path: str, ready_selector: str) -> None:
+    gp = guarded_page
+    page = gp.page
+
+    def _record_response(response: Any) -> None:
+        url = response.url
+        if "/curation/" not in url:
+            return
+        status = response.status
+        if status < 400:
+            return
+        method = response.request.method
+        # Strip origin + query for the allow-list match.
+        bare_path = url.split("://", 1)[-1].split("/", 1)[-1]
+        bare_path = "/" + bare_path.split("?")[0]
+        if is_allowlisted_bad_response(method, bare_path, status):
+            return
+        gp.bad_responses.append((method, bare_path, status))
+
+    page.on("response", _record_response)
+
+    page.goto(f"{live_url}{path}", wait_until="domcontentloaded")
+    page.wait_for_selector(ready_selector, timeout=15_000)
+
+    # Give in-flight `{API_PREFIX}` fetches issued on mount a chance to
+    # land and their images to start loading, without a fixed sleep or
+    # `wait_until="load"` — wait for the concrete condition we actually
+    # care about (every in-viewport image either loaded or still
+    # legitimately pending offscreen never blocks us).
+    page.wait_for_function(
+        """
+        () => {
+          const vw = window.innerWidth, vh = window.innerHeight;
+          const imgs = Array.from(document.querySelectorAll('img'));
+          const inViewport = imgs.filter((img) => {
+            const r = img.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
+              && r.top < vh && r.left < vw;
+          });
+          return inViewport.every((img) => img.complete);
+        }
+        """,
+        timeout=15_000,
+    )
+
+    broken = page.evaluate(
+        """
+        () => {
+          const vw = window.innerWidth, vh = window.innerHeight;
+          const imgs = Array.from(document.querySelectorAll('img'));
+          return imgs
+            .filter((img) => {
+              const r = img.getBoundingClientRect();
+              return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0
+                && r.top < vh && r.left < vw;
+            })
+            .filter((img) => img.complete && img.naturalWidth === 0)
+            .map((img) => img.src);
+        }
+        """
+    )
+    assert broken == [], f"{path}: in-viewport image(s) failed to load: {broken}"
+
+    body_text = page.locator("body").inner_text()
+    assert "NaN" not in body_text, f"{path}: literal 'NaN' rendered in body text"
+    assert "undefined" not in body_text, f"{path}: literal 'undefined' rendered in body text"
+
+    assert gp.bad_responses == [], (
+        f"{path}: unexpected >=400 {{API_PREFIX}} response(s) (not on the "
+        f"allow-list): {gp.bad_responses}"
+    )

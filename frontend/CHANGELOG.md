@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Live read-only e2e tier** (`e2e/live/`, `npm run test:live`) — drives
+  the real, currently-deployed build against a live OpenProcessor
+  backend (default `http://localhost:5184`) instead of the stubbed
+  in-browser fixtures `e2e/stubbed/` uses, to catch frontend/backend
+  drift the stubbed suite structurally can't see. Skipped entirely
+  unless `CROPWRIGHT_LIVE_URL` is set (never in CI, never via
+  `npm run test:e2e`), and hard read-only: every `**/curation/**`
+  request is routed through a guard that lets GET/HEAD through and
+  `route.abort()`s anything else, recording the attempt — every test's
+  teardown asserts nothing was attempted, not just that it was blocked.
+  21 tests: a route-mount sweep over every top-level route/review tab
+  (no page error, no unexpected >=400 `{API_PREFIX}` response, no
+  literal "NaN"/"undefined", every in-viewport image loads), data-
+  agreement checks (dashboard cluster count, plates queue totals
+  filtered/unfiltered, the regions tab's served `filter_specs` `<select>`
+  options, a `rejection_reasons` label rendering for a live item) with
+  retry-once/settle-then-read tolerance for a concurrently-writing
+  actor, and a `/review?crop_id=` deep-link resolution check. See
+  CLAUDE.md's "Live read-only tier" section. Added
+  `data-testid="dataset-cluster-count"` to `DatasetStats.svelte` for
+  this (falls back to a dt/dd label selector against the currently
+  deployed build, which predates the testid).
 - Adopted OpenProcessor `main` 840beb8 (rejection-reason vocabulary +
   review `filter_specs`, contracts synced from 1bea18b):
   - **Labeled rejection reasons.** `GET {API_PREFIX}/regions/vocabulary`

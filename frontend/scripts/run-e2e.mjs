@@ -6,6 +6,14 @@
  * (e2e/conftest.py) does `npm run build` + `vite preview`, so this script
  * does not build itself.
  *
+ * `npm run test:live` reuses this exact venv/browser setup, just pointed
+ * at `e2e/live` instead — pass the target directory as argv[2] (see
+ * package.json). The live tier never builds/serves anything itself; it
+ * talks to whatever `CROPWRIGHT_LIVE_URL` points at (its own conftest.py
+ * skips the whole tier when that's unset), and gets `--screenshot=
+ * only-on-failure` so a failure leaves a screenshot in
+ * artifacts_local/cw-live/live-tier/ instead of nothing.
+ *
  * See docs/design/test-audit-2026-09-24.md recommendation 5 and CLAUDE.md's
  * "Development" section.
  */
@@ -64,5 +72,15 @@ if (!hasChromium) {
   run(VENV_PY, ['-m', 'playwright', 'install', 'chromium']);
 }
 
-console.log('[test:e2e] running pytest e2e/stubbed …');
-run(VENV_PYTEST, ['-c', 'e2e/pytest.ini', 'e2e/stubbed', '-v']);
+const target = process.argv[2] || 'e2e/stubbed';
+const isLive = target === 'e2e/live';
+const pytestArgs = ['-c', 'e2e/pytest.ini', target, '-v'];
+if (isLive) {
+  pytestArgs.push(
+    '--screenshot=only-on-failure',
+    '--output=artifacts_local/cw-live/live-tier',
+  );
+}
+
+console.log(`[test:e2e] running pytest ${target} …`);
+run(VENV_PYTEST, pytestArgs);

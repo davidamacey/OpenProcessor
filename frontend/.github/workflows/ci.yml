@@ -39,7 +39,7 @@ jobs:
         run: npm run build
 
       - name: py_compile scripts/ and e2e/
-        run: python3 -m py_compile scripts/*.py e2e/*.py e2e/stubbed/*.py e2e/fixtures/*.py
+        run: python3 -m py_compile scripts/*.py e2e/*.py e2e/stubbed/*.py e2e/fixtures/*.py e2e/live/*.py
 
   e2e-stubbed:
     runs-on: ubuntu-latest
