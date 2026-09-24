@@ -19,6 +19,11 @@ This module is the one generic tool for that:
   the rejection reason is cleared, and with ``clear_detection`` every
   box/verify/text/embedding field is nulled so the cascade starts fresh.
 
+The same tool also backfills items that carry **no** region status at all
+(``RequeueSelection(status=None)``): items ingested before ingest seeded
+``pending_detection`` for an active region profile are otherwise invisible
+to the worker forever.
+
 Human-validated regions (``RegionFields.validated=true``) are never
 selected: a human "no region visible" or a human box is a verdict, not a
 failure. ``false_positive`` and ``detected`` are not requeueable statuses.
@@ -66,7 +71,8 @@ class RequeueSelection:
     """Which parked regions to requeue.
 
     Attributes:
-        status: The terminal status to requeue from.
+        status: The terminal status to requeue from, or ``None`` to select
+            items with no region status at all (the unseeded backfill).
         target: The pending status to requeue to. ``pending_verification``
             re-runs only the verify step on the existing box, so it selects
             only items that still have one.
@@ -78,14 +84,14 @@ class RequeueSelection:
             ``RegionFields.detector_chain`` (pre-provenance writes).
     """
 
-    status: RegionStatus
+    status: RegionStatus | None
     target: RegionStatus = RegionStatus.PENDING_DETECTION
     detectors: tuple[str, ...] = ()
     reasons: tuple[str, ...] = ()
     missing_provenance: bool = False
 
     def __post_init__(self) -> None:
-        if self.status not in REQUEUEABLE_STATUSES:
+        if self.status is not None and self.status not in REQUEUEABLE_STATUSES:
             raise ValueError(
                 f'{self.status!s} is not requeueable; expected one of '
                 f'{[s.value for s in REQUEUEABLE_STATUSES]}'
@@ -106,8 +112,12 @@ def _value_filter(field: str, values: tuple[str, ...]) -> dict[str, Any]:
 
 def requeue_query(sel: RequeueSelection, fields: RegionFields | None = None) -> dict[str, Any]:
     F = fields or get_region_fields()
-    must: list[dict[str, Any]] = [{'term': {F.status: sel.status.value}}]
+    must: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = [{'term': {F.validated: True}}]
+    if sel.status is None:
+        must_not.append({'exists': {'field': F.status}})
+    else:
+        must.append({'term': {F.status: sel.status.value}})
     if sel.detectors:
         must.append(_value_filter(F.detector, sel.detectors))
     if sel.reasons:
@@ -194,7 +204,7 @@ async def requeue_breakdown(
             {'detector': str(det['key']), 'count': int(det['doc_count']), 'reasons': reasons}
         )
     return {
-        'status': sel.status.value,
+        'status': sel.status.value if sel.status is not None else NONE_BUCKET,
         'target': sel.target.value,
         'total': total,
         'by_detector': detectors,
@@ -235,15 +245,18 @@ async def apply_requeue(
     F = fields or get_region_fields()
     to_clear = detection_fields(F) if clear_detection else ()
     now = datetime.now(UTC).isoformat()
+    expected = sel.status.value if sel.status is not None else None
 
     def _merge(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-        if current.get(F.status) != sel.status.value or current.get(F.validated) is True:
+        if current.get(F.status) != expected or current.get(F.validated) is True:
             return {}
         update: dict[str, Any] = dict.fromkeys(to_clear)
         update[F.status] = sel.target.value
-        update[F.rejection_reason] = None
-        if current.get(F.status_legacy) is None:
-            update[F.status_legacy] = sel.status.value
+        if expected is not None:
+            # Unseeded items have no prior verdict to stash or reason to clear.
+            update[F.rejection_reason] = None
+            if current.get(F.status_legacy) is None:
+                update[F.status_legacy] = expected
         update['updated_at'] = now
         return update
 
@@ -275,7 +288,7 @@ async def apply_requeue(
         totals['updated'] += int(result.get('updated', 0))
         totals['skipped'] += int(result.get('skipped_due_to_conflict', 0))
         totals['errors'] += len(result.get('errors') or [])
-        logger.info('region_requeue_page', status=sel.status.value, cursor=cursor, **totals)
+        logger.info('region_requeue_page', status=expected, cursor=cursor, **totals)
         if cursor is None or len(hits) < size:
             break
 

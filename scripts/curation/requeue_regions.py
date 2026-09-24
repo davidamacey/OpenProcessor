@@ -6,6 +6,11 @@ regions — bbox sanity thresholds, a replaced detector engine, a tightened
 verify prompt, a removed pre-filter stage. Requeued items go back into the
 detection worker's queue; nothing is re-ingested.
 
+``--missing-status`` (instead of ``--status``) is the one-off backfill for
+items that carry no region status at all — ingested before ingest seeded
+``pending_detection`` for an active region profile. The worker never selects
+such items, so they need this once after enabling a region profile.
+
 The dry run (default) prints the selected cohort broken down by detector and
 rejection reason, so you can see which model is producing the failures
 before requeueing. ``--apply`` then moves them:
@@ -36,6 +41,11 @@ concurrent write wins); re-running is a no-op once the cohort is drained.
     # Full re-detect of pre-provenance rejects, capped for a partial run.
     python3 scripts/curation/requeue_regions.py --status verify_rejected \\
         --missing-provenance --clear-detection --max-docs 5000 --apply
+
+    # Backfill items ingested before ingest seeded a region status (they
+    # never reach the worker otherwise). Dry run first, then --apply.
+    python3 scripts/curation/requeue_regions.py --missing-status
+    python3 scripts/curation/requeue_regions.py --missing-status --apply
 
 ``--detector`` / ``--reason`` are repeatable; pass ``'(none)'`` to select
 rows with no detector / reason recorded. Field names follow
@@ -68,6 +78,7 @@ from src.services.curation.region_requeue import (
     apply_requeue,
     requeue_breakdown,
 )
+from src.services.detection.profile_registry import get_active_region_profile
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
@@ -93,6 +104,11 @@ async def _async_main(args: argparse.Namespace, sel: RequeueSelection) -> int:
     try:
         report = await requeue_breakdown(client, sel, config=cfg)
         _print_breakdown(report)
+        if get_active_region_profile() is None:
+            print(
+                '\nNote: no region profile is configured (OP_REGION_PROFILE); the '
+                'detection worker idles and will not process requeued items.'
+            )
         if args.dry_run:
             print('\nDry-run only. Pass --apply to requeue.')
             return 0
@@ -119,11 +135,16 @@ def main() -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument(
+    source = p.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         '--status',
-        required=True,
         choices=[s.value for s in REQUEUEABLE_STATUSES],
         help='Terminal status to requeue from.',
+    )
+    source.add_argument(
+        '--missing-status',
+        action='store_true',
+        help='Select items with no region status at all (pre-seeding backfill).',
     )
     p.add_argument(
         '--to',
@@ -157,7 +178,7 @@ def main() -> int:
     if args.page_size <= 0 or args.max_docs < 0:
         p.error('--page-size must be positive and --max-docs non-negative')
     sel = RequeueSelection(
-        status=RegionStatus(args.status),
+        status=None if args.missing_status else RegionStatus(args.status),
         target=RegionStatus(args.target),
         detectors=tuple(args.detector),
         reasons=tuple(args.reason),
