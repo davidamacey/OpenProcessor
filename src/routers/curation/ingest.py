@@ -1,8 +1,8 @@
 """Curation router sub-module — ingest, label import, and status/lookup helpers.
 
-``POST /ingest/image``, ``POST /ingest/batch``, ``POST /import_labels``
-and ``POST /import_labels/batch`` are the generic curation ingest front
-door: they create ``images`` + ``items`` documents (and, for label
+``POST /ingest/image``, ``POST /ingest/batch``, ``POST /ingest/upload``,
+``POST /import_labels`` and ``POST /import_labels/batch`` are the generic
+curation ingest front door: they create ``images`` + ``items`` documents (and, for label
 import, ``labels_confirmed`` documents), backed by
 :class:`~src.services.curation.ingest.CurationIngestService` and
 :mod:`src.services.curation.label_import`. Everything else in this
@@ -17,10 +17,11 @@ module ships no domain-specific class taxonomy or detector weights.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import HTTPException
+from fastapi import File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
@@ -44,6 +45,7 @@ from src.routers.curation._common import (
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.label_import import (
     DEFAULT_LABEL_SOURCE,
+    count_disagreements,
     import_labels_batch,
     import_yolo_labels,
 )
@@ -176,17 +178,29 @@ async def curation_ingest_batch(
                 IngestImageResponse(status='failed', image_path=item.path, error=str(exc))
             )
 
+    # The service stamps one source per call; honour the per-item tag when
+    # the batch agrees on one (the common case — a driver tags a whole run).
+    sources = {item.source for item in body.items}
     batch_result = (
         await service.ingest_batch(
             images,
             paths,
             label_paths=label_paths if any(label_paths) else None,
+            source=sources.pop() if len(sources) == 1 else 'batch',
             label_source=body.label_source,
             detect_mismatches=body.detect_mismatches,
         )
         if images
         else None
     )
+    return _batch_response(batch_result, failed_early)
+
+
+def _batch_response(
+    batch_result: Any,
+    failed_early: list[IngestImageResponse],
+) -> _BatchIngestResponse:
+    """Merge per-item pre-flight failures with a service ``BatchIngestResult``."""
     results = list(failed_early)
     summary = _BatchIngestSummaryResponse(failed=len(failed_early))
     if batch_result is not None:
@@ -207,6 +221,8 @@ async def curation_ingest_batch(
         summary.crops_indexed += batch_result.summary.crops_indexed
         summary.labels_imported += batch_result.summary.labels_imported
         summary.mismatches += batch_result.summary.mismatches
+        summary.missed_labels += batch_result.summary.missed_labels
+        summary.unmatched_detections += batch_result.summary.unmatched_detections
 
     if summary.failed == 0:
         status: Any = 'success'
@@ -214,7 +230,93 @@ async def curation_ingest_batch(
         status = 'error'
     else:
         status = 'partial'
-    return _BatchIngestResponse(status=status, summary=summary, results=results)
+    return _BatchIngestResponse(
+        status=status,
+        summary=summary,
+        results=results,
+        disagreements=list(batch_result.disagreements) if batch_result is not None else [],
+    )
+
+
+MAX_UPLOAD_IMAGES = 128
+
+
+def _parse_upload_paths(image_paths: str | None, uploads: list[UploadFile]) -> list[str]:
+    if image_paths is None or not image_paths.strip():
+        return [u.filename or f'upload_{i}' for i, u in enumerate(uploads)]
+    try:
+        paths = json.loads(image_paths)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f'image_paths is not JSON: {exc}') from None
+    if not isinstance(paths, list) or not all(isinstance(p, str) and p for p in paths):
+        raise HTTPException(status_code=422, detail='image_paths must be a JSON list of strings')
+    if len(paths) != len(uploads):
+        raise HTTPException(
+            status_code=422,
+            detail=f'image_paths has {len(paths)} entries but {len(uploads)} images were sent',
+        )
+    return paths
+
+
+@router.post('/ingest/upload', response_model=_BatchIngestResponse)
+async def curation_ingest_upload(
+    images: Annotated[list[UploadFile], File(description='Encoded image files (JPEG/PNG)')],
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+    image_paths: Annotated[
+        str | None,
+        Form(
+            description=(
+                'JSON list of stable identifiers, one per image, stored as image_path '
+                '(default: the upload filenames). Need not exist on the server.'
+            )
+        ),
+    ] = None,
+    source: Annotated[str, Form(description='Provenance tag for every image')] = 'upload',
+) -> _BatchIngestResponse:
+    """Ingest a batch of images sent as bytes (multipart), not server-side paths.
+
+    For storage the API container cannot mount (a laptop, a remote NAS, a
+    high-latency share): the client reads the files and uploads them.
+    ``image_paths`` are identifiers, recorded verbatim — keep them stable
+    across runs so ``/ingest/path_lookup`` can pre-filter a re-scan.
+
+    Resume is server-side content dedup: every image is fingerprinted
+    (imohash over the uploaded bytes) and one already in the images index
+    comes back as ``duplicate`` without re-running inference, so a
+    crashed upload run can simply be restarted. The whole-frame embedding
+    is computed from the uploaded bytes, not by re-opening the path.
+    """
+    if not images:
+        raise HTTPException(status_code=422, detail='no images uploaded')
+    if len(images) > MAX_UPLOAD_IMAGES:
+        raise HTTPException(
+            status_code=413,
+            detail=f'{len(images)} images exceeds the per-request limit of {MAX_UPLOAD_IMAGES}',
+        )
+    paths = _parse_upload_paths(image_paths, images)
+    await _ensure_indexes(opensearch)
+    service = await _get_ingest_service(opensearch, registry)
+
+    data: list[bytes] = []
+    kept_paths: list[str] = []
+    failed_early: list[IngestImageResponse] = []
+    for upload, path in zip(images, paths, strict=True):
+        payload = await upload.read()
+        if not payload:
+            failed_early.append(
+                IngestImageResponse(status='failed', image_path=path, error='empty upload')
+            )
+            continue
+        data.append(payload)
+        kept_paths.append(path)
+
+    batch_result = (
+        await service.ingest_batch(data, kept_paths, source=source, whole_frame_from_bytes=True)
+        if data
+        else None
+    )
+    return _batch_response(batch_result, failed_early)
 
 
 @router.post('/import_labels')
@@ -235,7 +337,7 @@ async def curation_import_labels(
         detect_mismatches=body.detect_mismatches,
         mismatch_sink=mismatches,
     )
-    return {'labels_imported': n, 'mismatches': len(mismatches)}
+    return {'labels_imported': n, **count_disagreements(mismatches)}
 
 
 @router.post('/import_labels/batch')
@@ -243,19 +345,29 @@ async def curation_import_labels_batch(
     body: ImportLabelsBatchRequest,
     opensearch: OpenSearchDep,
     registry: RegistryDep,
-) -> dict[str, int]:
-    """Batch-import YOLO ``.txt`` label files against already-ingested images."""
+) -> dict[str, Any]:
+    """Batch-import YOLO ``.txt`` label files against already-ingested images.
+
+    With ``detect_mismatches`` the response also carries the per-label
+    ``disagreements`` records (same shape as ``POST /ingest/batch``).
+    """
     await _ensure_indexes(opensearch)
     pairs = [(Path(i.image_path), Path(i.label_txt_path)) for i in body.items]
     label_source = body.items[0].label_source if body.items else DEFAULT_LABEL_SOURCE
     detect_mismatches = any(i.detect_mismatches for i in body.items)
-    return await import_labels_batch(
-        pairs,
-        registry,
-        opensearch,
-        label_source=label_source,
-        detect_mismatches=detect_mismatches,
+    disagreements: list[dict[str, Any]] = []
+    summary: dict[str, Any] = dict(
+        await import_labels_batch(
+            pairs,
+            registry,
+            opensearch,
+            label_source=label_source,
+            detect_mismatches=detect_mismatches,
+            disagreement_sink=disagreements,
+        )
     )
+    summary['disagreements'] = disagreements
+    return summary
 
 
 @router.get('/ingest/status')

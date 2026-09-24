@@ -159,9 +159,8 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_gpu_arbiter.py',
     'tests/curation/test_gpu_arbiter_config.py',
     'src/routers/curation/bakeoff.py',
-    'scripts/curation/bakeoff/dedup_sweep.py',
-    'scripts/curation/bakeoff/lean_candidates.py',
-    'scripts/curation/bakeoff/deskew_prototype.py',
+    'scripts/curation/bakeoff/',
+    'examples/bakeoff_lpr_paper/dedup_sweep.py',
     'tests/curation/test_bakeoff_router.py',
     # Chunk 7 commit (a) — VLM client (transport) + PromptPack (prompt
     # data). `vlm_prompts.py` carries no `RegionFields`-governed literals
@@ -251,6 +250,19 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/curation/export_support.py',
     'src/routers/curation/export_single_class.py',
     'tests/curation/test_export_single_class.py',
+    # Operator tooling — probe-inference backfill driver.
+    'scripts/curation/run_probe.py',
+    'tests/curation/test_run_probe_cli.py',
+    # Operator tooling — registry-growth reclassification.
+    'src/services/curation/registry_reclassify.py',
+    'scripts/curation/reclassify_after_registry_growth.py',
+    'tests/curation/query_fakes.py',
+    'tests/curation/test_registry_reclassify.py',
+    # Operator tooling — terminal-status region requeue.
+    'src/services/curation/region_requeue.py',
+    'scripts/curation/requeue_regions.py',
+    'tests/curation/test_region_requeue.py',
+    'tests/curation/test_labels_export_roundtrip.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.

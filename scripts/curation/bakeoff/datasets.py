@@ -1,79 +1,236 @@
-"""Convert public LPR datasets into the YOLO test layout the harness reads.
+"""Convert labelled datasets into the YOLO test layout the harness reads.
 
 The harness scores any ``images/<split>`` + ``labels/<split>`` tree, so a
-cross-dataset matrix only needs per-format converters. Implemented:
+cross-dataset matrix only needs per-format converters. Converters live in
+a registry (:func:`register_converter`); each one reads a source tree and
+hands boxes to a :class:`YoloWriter`, which owns the output layout (images
+symlinked, no copy; ``<stem>.txt`` labels in normalized ``cls cx cy w h``)
+and a ``data.yaml`` whose class names come from the active
+:class:`~scripts.curation.bakeoff.profile.BakeoffProfile`.
 
-* ``ccpd``   --- CCPD encodes the plate bbox in the filename.
-* ``ufpr``   --- UFPR-ALPR ships a per-image annotation ``.txt`` with a
-  ``position_plate: x y w h`` line.
-* ``voc``    --- Pascal VOC XML (the andrewmvd Kaggle car-plate set).
-* ``yolo``   --- already-YOLO datasets (e.g. Roboflow exports): passthrough.
+Built-in, domain-neutral converters:
 
-Output is a single-class (``license_plate``) YOLO dir with images symlinked
-(no copy) and ``<stem>.txt`` labels in normalized ``cx cy w h``.
+* ``yolo`` --- already-YOLO datasets: symlink images, remap/filter labels.
+* ``voc``  --- Pascal VOC XML; ``<object><name>`` maps to a class id.
+
+Domain-specific converters register themselves from a profile's
+``converter_modules`` (an example profile under ``examples/<name>/`` can ship
+the converters for its domain's public benchmark formats).
+
+Class-id policy (both built-ins): when the profile's label space has a
+single class, every source box collapses onto ``target_class_id`` (a
+single-class benchmark of a multi-class source); otherwise source ids /
+names are kept and anything outside the label space is dropped.
 
 CLI:
     python -m scripts.curation.bakeoff.datasets \
-        --format ccpd --src /data/raw/ccpd --out /data/bench/ccpd
+        --profile my_profile.json --format voc --src /data/raw/set --out /data/bench/set
 """
 
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import cv2
 
-
-_IMG_EXTS = ('.jpg', '.jpeg', '.png')
-LPR_CLASS_ID = 0
+from .profile import BakeoffProfile, load_converter_plugins, resolve_profile
 
 
-def _abs_xyxy_to_yolo(
-    box: tuple[float, float, float, float], w: int, h: int
-) -> tuple[float, float, float, float] | None:
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+
+IMG_EXTS = ('.jpg', '.jpeg', '.png')
+
+AbsBox = tuple[float, float, float, float]
+YoloBox = tuple[int, float, float, float, float]
+
+
+def abs_xyxy_to_yolo(box: AbsBox, w: int, h: int) -> tuple[float, float, float, float] | None:
     """Absolute ``(x1,y1,x2,y2)`` px -> normalized ``(cx,cy,w,h)`` or None."""
     x1, y1, x2, y2 = box
     if x2 <= x1 or y2 <= y1 or w <= 0 or h <= 0:
         return None
-    cx = ((x1 + x2) / 2) / w
-    cy = ((y1 + y2) / 2) / h
-    bw = (x2 - x1) / w
-    bh = (y2 - y1) / h
-    return (cx, cy, bw, bh)
+    return (((x1 + x2) / 2) / w, ((y1 + y2) / 2) / h, (x2 - x1) / w, (y2 - y1) / h)
 
 
-def parse_ccpd_filename(name: str) -> tuple[float, float, float, float] | None:
-    """Extract the plate bbox from a CCPD filename.
+class YoloWriter:
+    """Writes one YOLO split plus ``data.yaml`` for a given label space.
 
-    CCPD encodes fields separated by ``-``; the 3rd field is the bounding
-    box as ``x1&y1_x2&y2`` in absolute pixels, e.g.
-    ``...-154&383_386&473-...``.
+    Args:
+        out_root: Output dataset root.
+        class_names: Label space, index = class id (``profile.label_names()``).
+        split: Split directory name.
+        target_class_id: Class id used for single-class sources and as the
+            collapse target when ``class_names`` has one entry.
     """
-    parts = Path(name).stem.split('-')
-    if len(parts) < 3:
-        return None
+
+    def __init__(
+        self,
+        out_root: Path,
+        class_names: Sequence[str],
+        *,
+        split: str = 'test',
+        target_class_id: int = 0,
+    ) -> None:
+        if not class_names:
+            raise ValueError('YoloWriter needs at least one class name')
+        if not 0 <= target_class_id < len(class_names):
+            raise ValueError(f'target_class_id {target_class_id} outside nc={len(class_names)}')
+        self.out_root = out_root
+        self.class_names = tuple(class_names)
+        self.split = split
+        self.target_class_id = target_class_id
+        self._by_name = {n.strip().lower(): i for i, n in enumerate(self.class_names)}
+
+    @classmethod
+    def for_profile(cls, out_root: Path, profile: BakeoffProfile, *, split: str) -> YoloWriter:
+        return cls(
+            out_root,
+            profile.label_names(),
+            split=split,
+            target_class_id=profile.target_class_id,
+        )
+
+    @property
+    def nc(self) -> int:
+        return len(self.class_names)
+
+    @property
+    def single_class(self) -> bool:
+        return self.nc == 1
+
+    def map_class_id(self, source_id: int) -> int | None:
+        """Source class id -> output id (collapse if single-class, else keep/drop)."""
+        if self.single_class:
+            return self.target_class_id
+        return source_id if 0 <= source_id < self.nc else None
+
+    def map_class_name(self, source_name: str | None) -> int | None:
+        """Source class name -> output id (collapse if single-class, else lookup/drop)."""
+        if self.single_class:
+            return self.target_class_id
+        if source_name is None:
+            return None
+        return self._by_name.get(source_name.strip().lower())
+
+    def write(self, stem: str, src_img: Path, boxes: Sequence[YoloBox]) -> None:
+        """Symlink ``src_img`` and write its label file (empty => background)."""
+        for cls_id, *_ in boxes:
+            if not 0 <= cls_id < self.nc:
+                raise ValueError(f'class id {cls_id} outside nc={self.nc} for {stem}')
+        img_dir = self.out_root / 'images' / self.split
+        lbl_dir = self.out_root / 'labels' / self.split
+        img_dir.mkdir(parents=True, exist_ok=True)
+        lbl_dir.mkdir(parents=True, exist_ok=True)
+        link = img_dir / f'{stem}{src_img.suffix}'
+        if not link.exists():
+            link.symlink_to(src_img.resolve())
+        lines = [f'{c} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}' for c, cx, cy, bw, bh in boxes]
+        (lbl_dir / f'{stem}.txt').write_text(('\n'.join(lines) + '\n') if lines else '')
+
+    def write_abs(
+        self,
+        stem: str,
+        src_img: Path,
+        abs_boxes: Sequence[AbsBox],
+        w: int,
+        h: int,
+        *,
+        class_id: int | None = None,
+    ) -> None:
+        """Convenience for single-class formats: abs xyxy boxes -> one class id."""
+        cid = self.target_class_id if class_id is None else class_id
+        yolo = [(cid, *b) for b in (abs_xyxy_to_yolo(bx, w, h) for bx in abs_boxes) if b]
+        self.write(stem, src_img, yolo)
+
+    def write_data_yaml(self) -> Path:
+        names = ''.join(f'  {i}: {n}\n' for i, n in enumerate(self.class_names))
+        path = self.out_root / 'data.yaml'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f'path: {self.out_root}\ntrain: images/{self.split}\nval: images/{self.split}\n'
+            f'test: images/{self.split}\nnc: {self.nc}\nnames:\n{names}'
+        )
+        return path
+
+
+@dataclass(frozen=True)
+class DatasetConverter:
+    """A registered source format. ``fn(src, writer) -> n_images_written``."""
+
+    name: str
+    fn: Callable[[Path, YoloWriter], int]
+    description: str = ''
+    example_for: str | None = None
+
+
+_CONVERTERS: dict[str, DatasetConverter] = {}
+
+
+def register_converter(
+    name: str,
+    fn: Callable[[Path, YoloWriter], int],
+    *,
+    description: str = '',
+    example_for: str | None = None,
+    replace: bool = False,
+) -> DatasetConverter:
+    """Register a converter under ``name`` (error on a clash unless ``replace``)."""
+    existing = _CONVERTERS.get(name)
+    if existing is not None and not replace and existing.fn is not fn:
+        raise ValueError(f'dataset converter {name!r} already registered')
+    conv = DatasetConverter(name, fn, description, example_for)
+    _CONVERTERS[name] = conv
+    return conv
+
+
+def available_converters() -> dict[str, DatasetConverter]:
+    return dict(_CONVERTERS)
+
+
+def get_converter(name: str) -> DatasetConverter:
     try:
-        tl, br = parts[2].split('_')
-        x1, y1 = (float(v) for v in tl.split('&'))
-        x2, y2 = (float(v) for v in br.split('&'))
-    except (ValueError, IndexError):
+        return _CONVERTERS[name]
+    except KeyError:
+        raise ValueError(
+            f'unknown dataset format {name!r}; registered: {", ".join(sorted(_CONVERTERS))} '
+            "(domain formats come from a profile's converter_modules)"
+        ) from None
+
+
+def iter_images(src: Path) -> list[Path]:
+    out: list[Path] = []
+    for ext in IMG_EXTS:
+        out.extend(src.rglob(f'*{ext}'))
+    return sorted(out)
+
+
+def image_size(img: Path) -> tuple[int, int] | None:
+    """``(width, height)`` of an image, or None if unreadable."""
+    arr = cv2.imread(str(img))
+    if arr is None:
         return None
-    return (x1, y1, x2, y2)
+    h, w = arr.shape[:2]
+    return w, h
 
 
-def parse_voc_xml(
-    text: str,
-) -> tuple[tuple[int, int] | None, list[tuple[float, float, float, float]]]:
-    """Parse a Pascal VOC annotation (the andrewmvd Kaggle format).
+# --- built-in: Pascal VOC --------------------------------------------------
 
-    Returns ``((width, height) | None, [ (x1,y1,x2,y2) abs ])``. Size may be
-    None if the XML omits it (then the caller reads the image instead).
+
+def parse_voc_xml(text: str) -> tuple[tuple[int, int] | None, list[tuple[str | None, AbsBox]]]:
+    """Parse a Pascal VOC annotation.
+
+    Returns ``((width, height) | None, [(object_name, (x1,y1,x2,y2) abs)])``.
+    Size may be None if the XML omits it (then the caller reads the image).
     """
     import xml.etree.ElementTree as ET
 
     try:
-        root = ET.fromstring(text)  # nosec B314 - parsing our own dataset files
+        root = ET.fromstring(text)  # nosec B314 - parsing local dataset files
     except ET.ParseError:
         return None, []
     size_el = root.find('size')
@@ -82,7 +239,7 @@ def parse_voc_xml(
         w_el, h_el = size_el.find('width'), size_el.find('height')
         if w_el is not None and h_el is not None and w_el.text and h_el.text:
             size = (int(float(w_el.text)), int(float(h_el.text)))
-    boxes: list[tuple[float, float, float, float]] = []
+    boxes: list[tuple[str | None, AbsBox]] = []
     for obj in root.findall('object'):
         bb = obj.find('bndbox')
         if bb is None:
@@ -94,199 +251,120 @@ def parse_voc_xml(
             y2 = float(bb.findtext('ymax'))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
-        boxes.append((x1, y1, x2, y2))
+        boxes.append((obj.findtext('name'), (x1, y1, x2, y2)))
     return size, boxes
 
 
-def parse_openalpr_annotation(text: str) -> list[tuple[float, float, float, float]]:
-    """OpenALPR endtoend benchmark: ``<name> x y w h <plate_text>`` per line.
-
-    x,y are the plate top-left and w,h its size (absolute px). Returns
-    absolute ``(x1,y1,x2,y2)`` boxes (one per line).
-    """
-    boxes: list[tuple[float, float, float, float]] = []
-    for line in text.splitlines():
-        parts = line.split()
-        if len(parts) < 5:
-            continue
-        try:
-            x, y, w, h = (float(v) for v in parts[1:5])
-        except ValueError:
-            continue
-        if w > 0 and h > 0:
-            boxes.append((x, y, x + w, y + h))
-    return boxes
-
-
-def parse_ufpr_annotation(text: str) -> list[tuple[float, float, float, float]]:
-    """Extract plate boxes from a UFPR-ALPR annotation file.
-
-    Lines of the form ``position_plate: x y w h`` (absolute px, top-left +
-    size). Returns absolute ``(x1,y1,x2,y2)`` boxes.
-    """
-    boxes: list[tuple[float, float, float, float]] = []
-    for line in text.splitlines():
-        low = line.strip().lower()
-        if low.startswith('position_plate:'):
-            nums = line.split(':', 1)[1].split()
-            if len(nums) >= 4:
-                try:
-                    x, y, w, h = (float(v) for v in nums[:4])
-                except ValueError:
-                    continue
-                boxes.append((x, y, x + w, y + h))
-    return boxes
-
-
-def _write(out_root: Path, stem: str, src_img: Path, boxes_yolo: list, *, split: str) -> None:
-    img_dir = out_root / 'images' / split
-    lbl_dir = out_root / 'labels' / split
-    img_dir.mkdir(parents=True, exist_ok=True)
-    lbl_dir.mkdir(parents=True, exist_ok=True)
-    link = img_dir / f'{stem}{src_img.suffix}'
-    if not link.exists():
-        link.symlink_to(src_img.resolve())
-    lines = [f'{LPR_CLASS_ID} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}' for cx, cy, bw, bh in boxes_yolo]
-    (lbl_dir / f'{stem}.txt').write_text(('\n'.join(lines) + '\n') if lines else '')
-
-
-def _iter_images(src: Path) -> list[Path]:
-    out: list[Path] = []
-    for ext in _IMG_EXTS:
-        out.extend(src.rglob(f'*{ext}'))
-    return sorted(out)
-
-
-def convert_ccpd(src: Path, out_root: Path, *, split: str = 'test') -> int:
+def convert_voc(src: Path, writer: YoloWriter) -> int:
+    """Pascal VOC. XML co-located with the image or in a sibling ``annotations/``."""
     n = 0
-    for img in _iter_images(src):
-        box = parse_ccpd_filename(img.name)
-        if box is None:
-            continue
-        dims = cv2.imread(str(img))
-        if dims is None:
-            continue
-        h, w = dims.shape[:2]
-        yolo = _abs_xyxy_to_yolo(box, w, h)
-        if yolo is None:
-            continue
-        _write(out_root, img.stem, img, [yolo], split=split)
-        n += 1
-    return n
-
-
-def convert_ufpr(src: Path, out_root: Path, *, split: str = 'test') -> int:
-    n = 0
-    for img in _iter_images(src):
-        ann = img.with_suffix('.txt')
-        if not ann.is_file():
-            continue
-        abs_boxes = parse_ufpr_annotation(ann.read_text(encoding='utf-8', errors='ignore'))
-        dims = cv2.imread(str(img))
-        if dims is None:
-            continue
-        h, w = dims.shape[:2]
-        yolo = [b for b in (_abs_xyxy_to_yolo(bx, w, h) for bx in abs_boxes) if b]
-        _write(out_root, img.stem, img, yolo, split=split)
-        n += 1
-    return n
-
-
-def convert_openalpr(src: Path, out_root: Path, *, split: str = 'test') -> int:
-    """OpenALPR endtoend benchmark (image + co-located ``.txt``)."""
-    n = 0
-    for img in _iter_images(src):
-        ann = img.with_suffix('.txt')
-        if not ann.is_file():
-            continue
-        abs_boxes = parse_openalpr_annotation(ann.read_text(encoding='utf-8', errors='ignore'))
-        dims = cv2.imread(str(img))
-        if dims is None:
-            continue
-        h, w = dims.shape[:2]
-        yolo = [b for b in (_abs_xyxy_to_yolo(bx, w, h) for bx in abs_boxes) if b]
-        _write(out_root, img.stem, img, yolo, split=split)
-        n += 1
-    return n
-
-
-def convert_voc(src: Path, out_root: Path, *, split: str = 'test') -> int:
-    """Pascal VOC (andrewmvd Kaggle). XML co-located or in sibling annotations/."""
-    n = 0
-    for img in _iter_images(src):
+    for img in iter_images(src):
         ann = img.with_suffix('.xml')
         if not ann.is_file():
             ann = img.parent.parent / 'annotations' / f'{img.stem}.xml'
         if not ann.is_file():
             continue
-        size, abs_boxes = parse_voc_xml(ann.read_text(encoding='utf-8', errors='ignore'))
-        if size is not None:
-            w, h = size
-        else:
-            dims = cv2.imread(str(img))
-            if dims is None:
-                continue
-            h, w = dims.shape[:2]
-        yolo = [b for b in (_abs_xyxy_to_yolo(bx, w, h) for bx in abs_boxes) if b]
-        _write(out_root, img.stem, img, yolo, split=split)
+        size, named = parse_voc_xml(ann.read_text(encoding='utf-8', errors='ignore'))
+        dims = size or image_size(img)
+        if dims is None:
+            continue
+        w, h = dims
+        boxes: list[YoloBox] = []
+        for obj_name, box in named:
+            cid = writer.map_class_name(obj_name)
+            yolo = abs_xyxy_to_yolo(box, w, h)
+            if cid is not None and yolo is not None:
+                boxes.append((cid, *yolo))
+        writer.write(img.stem, img, boxes)
         n += 1
     return n
 
 
-def convert_yolo_passthrough(src: Path, out_root: Path, *, split: str = 'test') -> int:
-    """Datasets already in YOLO format: symlink images + copy labels as-is."""
+# --- built-in: YOLO passthrough ---------------------------------------------
+
+
+def convert_yolo_passthrough(src: Path, writer: YoloWriter) -> int:
+    """Datasets already in YOLO format: symlink images, remap/filter class ids."""
     n = 0
-    for img in _iter_images(src):
+    for img in iter_images(src):
         # YOLO layout keeps labels in a sibling ``labels/`` dir
         # (``.../images/x.jpg`` -> ``.../labels/x.txt``); fall back to a label
         # sitting next to the image for flat layouts.
         sibling = Path(str(img.parent).replace('/images', '/labels')) / f'{img.stem}.txt'
         lbl = sibling if sibling.is_file() else img.with_suffix('.txt')
-        boxes_lines = lbl.read_text(encoding='utf-8').splitlines() if lbl.is_file() else []
-        img_dir = out_root / 'images' / split
-        lbl_dir = out_root / 'labels' / split
-        img_dir.mkdir(parents=True, exist_ok=True)
-        lbl_dir.mkdir(parents=True, exist_ok=True)
-        link = img_dir / f'{img.stem}{img.suffix}'
-        if not link.exists():
-            link.symlink_to(img.resolve())
-        # Force every class id to 0 (single-class license_plate benchmark).
-        norm = [f'0 {" ".join(ln.split()[1:])}' for ln in boxes_lines if len(ln.split()) == 5]
-        (lbl_dir / f'{img.stem}.txt').write_text(('\n'.join(norm) + '\n') if norm else '')
+        lines = lbl.read_text(encoding='utf-8').splitlines() if lbl.is_file() else []
+        boxes: list[YoloBox] = []
+        for line in lines:
+            parts = line.split()
+            if len(parts) != 5:
+                continue
+            try:
+                src_id = int(float(parts[0]))
+                cx, cy, bw, bh = (float(v) for v in parts[1:])
+            except ValueError:
+                continue
+            cid = writer.map_class_id(src_id)
+            if cid is not None:
+                boxes.append((cid, cx, cy, bw, bh))
+        writer.write(img.stem, img, boxes)
         n += 1
     return n
 
 
-_CONVERTERS = {
-    'ccpd': convert_ccpd,
-    'openalpr': convert_openalpr,
-    'ufpr': convert_ufpr,
-    'voc': convert_voc,
-    'yolo': convert_yolo_passthrough,
-}
+register_converter('voc', convert_voc, description='Pascal VOC XML (object name -> class id)')
+register_converter('yolo', convert_yolo_passthrough, description='YOLO txt passthrough')
 
 
-def _write_data_yaml(out_root: Path) -> None:
-    (out_root / 'data.yaml').write_text(
-        f'path: {out_root}\ntrain: images/test\nval: images/test\ntest: images/test\n'
-        'nc: 1\nnames:\n  0: license_plate\n'
+def convert(
+    fmt: str,
+    src: Path,
+    out_root: Path,
+    profile: BakeoffProfile,
+    *,
+    split: str = 'test',
+) -> int:
+    """Run the ``fmt`` converter under ``profile``; write ``data.yaml``; return count."""
+    load_converter_plugins(profile)
+    converter = get_converter(fmt)
+    writer = YoloWriter.for_profile(out_root, profile, split=split)
+    n = converter.fn(src, writer)
+    writer.write_data_yaml()
+    return n
+
+
+def main(argv: list[str] | None = None) -> int:
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument('--profile', default=None)
+    known, _ = pre.parse_known_args(argv)
+    profile = resolve_profile(known.profile)
+    load_converter_plugins(profile)
+
+    p = argparse.ArgumentParser(
+        description='Convert a labelled dataset to the bake-off YOLO test layout.'
     )
-
-
-def main() -> int:
-    p = argparse.ArgumentParser(description='Convert a public LPR dataset to YOLO test layout.')
-    p.add_argument('--format', required=True, choices=sorted(_CONVERTERS))
+    p.add_argument(
+        '--profile',
+        default=None,
+        help='Bake-off profile: registered/example name or profile .json (default: generic)',
+    )
+    p.add_argument('--format', required=True, choices=sorted(available_converters()))
     p.add_argument('--src', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--split', default='test')
-    args = p.parse_args()
-    n = _CONVERTERS[args.format](args.src, args.out, split=args.split)
-    _write_data_yaml(args.out)
-    print(f'converted {n} images ({args.format}) -> {args.out}/images/{args.split}')
+    args = p.parse_args(argv)
+    n = convert(args.format, args.src, args.out, profile, split=args.split)
+    print(
+        f'converted {n} images ({args.format}, profile={profile.name}) '
+        f'-> {args.out}/images/{args.split}'
+    )
     if n == 0:
         print('WARNING: 0 images converted --- check --src layout / format')
     return 0
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    # Run through the canonically-imported module: plugin converters register
+    # into ``scripts.curation.bakeoff.datasets``, not into this ``__main__`` copy.
+    from scripts.curation.bakeoff import datasets as _canonical
+
+    raise SystemExit(_canonical.main())

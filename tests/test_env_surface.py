@@ -27,6 +27,7 @@ import re
 from dataclasses import fields
 from pathlib import Path
 
+from scripts.curation.bakeoff.profile import BakeoffProfile
 from src.config.detection_profile import DetectionProfile
 from src.config.region_fields import RegionFields
 
@@ -47,7 +48,7 @@ _SCANNED_ROOTS = ('src', 'scripts', 'docker')
 # fields, DetectionProfile ~30) -- direction 1 (code -> env.template) is
 # allowlisted for these; direction 2 (env.template -> code) still checks
 # every literal env.template actually spells out.
-_PATTERN_DOCUMENTED_PREFIXES = ('OP_REGION_FIELD_', 'OP_DETECTION_')
+_PATTERN_DOCUMENTED_PREFIXES = ('OP_REGION_FIELD_', 'OP_DETECTION_', 'OP_BAKEOFF_PROFILE_')
 
 # Vars read by code but intentionally not surfaced in env.template: none
 # yet. Keep this real -- if something lands here, document why.
@@ -59,6 +60,7 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_',  # pattern-prefix mentions, e.g. "Pattern: OP_REGION_FIELD_<ATTR>"
     'OP_REGION_FIELD_',
     'OP_DETECTION_',
+    'OP_BAKEOFF_PROFILE_',
 }
 
 
@@ -77,6 +79,8 @@ def _from_env_derived_vars() -> set[str]:
         derived.add(f'OP_REGION_FIELD_{f.name.upper()}')
     for f in fields(DetectionProfile):
         derived.add(f'OP_DETECTION_{f.name.upper()}')
+    for f in fields(BakeoffProfile):
+        derived.add(f'OP_BAKEOFF_PROFILE_{f.name.upper()}')
     # CurationConfig.from_env uses manual per-field keys (not always the
     # field name uppercased, e.g. class_registry_path -> OP_REGISTRY_PATH)
     # -- regex-scan the classmethod's own source for the literal keys it

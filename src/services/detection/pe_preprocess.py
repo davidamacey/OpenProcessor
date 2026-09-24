@@ -70,9 +70,33 @@ def whole_frame_rgb(path: str, target: int = PE_SIZE) -> np.ndarray | None:
     return resize_crop_rgb(rgb, target)
 
 
+def whole_frame_rgb_from_bytes(data: bytes, target: int = PE_SIZE) -> np.ndarray | None:
+    """:func:`whole_frame_rgb` for an in-memory encoded image (e.g. an upload).
+
+    ``cv2.imdecode`` with the same ``IMREAD_REDUCED_COLOR_8`` flag runs the
+    same decoder as ``cv2.imread`` on the same bytes, so an uploaded image
+    and the identical file read from disk embed to the same vector.
+    """
+    if not data:
+        return None
+    bgr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_REDUCED_COLOR_8)
+    if bgr is None:
+        return None
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    return resize_crop_rgb(rgb, target)
+
+
 def whole_frame_chw(path: str, target: int = PE_SIZE) -> np.ndarray | None:
     """Single-image convenience: decode + preprocess -> (3,target,target) f32."""
     rgb = whole_frame_rgb(path, target)
+    if rgb is None:
+        return None
+    return normalize_chw(rgb)
+
+
+def whole_frame_chw_from_bytes(data: bytes, target: int = PE_SIZE) -> np.ndarray | None:
+    """:func:`whole_frame_chw` for an in-memory encoded image."""
+    rgb = whole_frame_rgb_from_bytes(data, target)
     if rgb is None:
         return None
     return normalize_chw(rgb)

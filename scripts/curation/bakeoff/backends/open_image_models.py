@@ -1,10 +1,13 @@
-"""open-image-models backend (ankandrew) — YOLOv9-tiny plate detector.
+"""open-image-models backend (ankandrew) — YOLOv9-tiny license-plate detector.
+
+A license-plate-only public model, kept as a baseline backend for the
+``license_plate`` example profile.
 
 Runs the model through its own package API (it returns boxes directly), so
 we compare it exactly as a user of that library would. Install:
 ``.venv/bin/pip install open-image-models``. The package ships pretrained
 ONNX weights trained on open plate datasets — record that provenance in
-the paper (it's the "their training data vs ours" comparison).
+any write-up (it's the "their training data vs ours" comparison).
 """
 
 from __future__ import annotations

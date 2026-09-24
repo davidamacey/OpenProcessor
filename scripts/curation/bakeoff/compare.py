@@ -3,7 +3,7 @@
 Each ``run`` writes ``<model>.json`` + a row in ``summary.csv``. This
 merges every per-model JSON in a results dir into (a) a ranked markdown
 table for quick reading, (b) a combined ``comparison.json`` the UI/API
-serve, and (c) LaTeX table rows to paste into the paper's results table.
+serve, and (c) LaTeX table rows for a write-up's results table.
 
 CLI:
     python -m scripts.curation.bakeoff.compare --results-dir /data/bakeoff
@@ -51,11 +51,17 @@ def _row(r: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_comparison(results_dir: Path) -> dict[str, Any]:
-    """Rank models by mAP@.5:.95 and return a UI/API-ready structure."""
+def build_comparison(results_dir: Path, *, rank_by: str = 'map_50_95') -> dict[str, Any]:
+    """Rank models by ``rank_by`` (a profile's ``rank_metric``), best first.
+
+    Returns the UI/API-ready structure; ``rank_by`` is echoed so a reader
+    knows which metric ordered the rows.
+    """
     rows = [_row(r) for r in _load_reports(results_dir)]
-    rows.sort(key=lambda x: x['map_50_95'], reverse=True)
-    return {'models': rows, 'n_models': len(rows)}
+    if rows and rank_by not in rows[0]:
+        raise ValueError(f'cannot rank by unknown metric {rank_by!r}')
+    rows.sort(key=lambda x: x[rank_by] if x[rank_by] is not None else float('-inf'), reverse=True)
+    return {'models': rows, 'n_models': len(rows), 'rank_by': rank_by}
 
 
 def to_markdown(comparison: dict[str, Any]) -> str:
@@ -75,7 +81,7 @@ def to_markdown(comparison: dict[str, Any]) -> str:
 
 
 def to_latex_rows(comparison: dict[str, Any]) -> str:
-    """LaTeX rows for the paper's headline table (Table 2 column order)."""
+    """LaTeX table rows (model, mAP@.5, mAP@.5:.95, AP_s, meanIoU, P, R, F1, ms)."""
     out: list[str] = []
     for m in comparison['models']:
         name = m['model'].replace('_', r'\_')
@@ -91,9 +97,10 @@ def main() -> int:
     p = argparse.ArgumentParser(description='Aggregate bake-off results.')
     p.add_argument('--results-dir', type=Path, required=True)
     p.add_argument('--latex', action='store_true', help='Also print LaTeX table rows')
+    p.add_argument('--rank-by', default='map_50_95', help='Metric to rank models by')
     args = p.parse_args()
 
-    comparison = build_comparison(args.results_dir)
+    comparison = build_comparison(args.results_dir, rank_by=args.rank_by)
     if not comparison['models']:
         raise SystemExit(f'no per-model JSON reports found in {args.results_dir}')
 
@@ -104,7 +111,7 @@ def main() -> int:
     (args.results_dir / 'comparison.md').write_text(md, encoding='utf-8')
     print(md)
     if args.latex:
-        print('% --- paste into Table 2 ---')
+        print('% --- LaTeX table rows ---')
         print(to_latex_rows(comparison))
     return 0
 

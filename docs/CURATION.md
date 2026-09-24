@@ -140,10 +140,18 @@ trainer. A deployment supplies:
   Optional: by default residual clustering reduces `pe_embedding`
   instead (`OP_RESIDUAL_EMBEDDING_FIELD`), so a deployment that never
   populates `v6_embedding` still clusters — it just has one fewer
-  embedding space to compare against. **Ingest does not yet write the
-  field**: `WholeImageDetector` requests only `output0` from the
-  secondary detector, so wiring `sppf_feat` into the ingest write path
-  is still required to fill it.
+  embedding space to compare against. Ingest fills the field from the
+  **secondary** detector (the `secondary_profile` passed to
+  `CurationIngestService`): when Triton's model metadata lists
+  `DetectionProfile.feature_output` (default `sppf_feat`) it is
+  requested alongside `output0` and pooled over every item's bbox. A
+  secondary model without that output is called exactly as before and
+  the field is simply not written. A feature map with fewer channels
+  than `backbone_embedding_dim` is zero-padded (e.g. a 768-channel map
+  into the 1024-d default); one with *more* channels is skipped with a
+  logged error rather than truncated. Note `OP_BACKBONE_EMBEDDING_DIM`
+  sets the mapping only when the items index is created — changing it
+  later does not resize an existing index's field.
 - **An OCR/recognition model, if your region type has readable text**
   (`DetectionProfile.ocr_rec_model`) — optional, only used by the
   text-hint heuristics.
@@ -279,7 +287,18 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    constructed instance) — ingest 503s until one is set.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
-   walk with a resumable progress file.
+   walk with a resumable progress file. If the images are not on storage
+   the API container can mount, use `scripts/curation/ingest_upload.py`
+   instead — it reads the files locally and uploads the bytes to
+   `POST /curation/ingest/upload` (resume = server-side content dedup).
+   To bring in an **already-labeled** YOLO dataset, use
+   `scripts/curation/import_labeled_dataset.py`: it ingests each image
+   with its `.txt` in one call, checks the dataset's class names against
+   the registry first, and writes a disagreement report (where the
+   detector missed a label, fired on a background image, or chose a
+   different class). Seed the registry from the detector itself with
+   `scripts/curation/seed_class_registry.py --model <detector.onnx>` so
+   class ids cannot drift from the model's class order.
 6. Optionally bring up the async workers (`--profile curation`) so
    detection/labeling/clustering keep running without you driving each
    step by hand.
@@ -325,7 +344,7 @@ be changed at runtime once the app has started.
 | Clustering / IVF tuning | `OP_IVF_RETRAIN_CHECK_S`, `OP_IVF_RETRAIN_GROWTH`, `OP_IVF_RETRAIN_MIN_INTERVAL_S`, `OP_MAX_REFINE_MEMBERS`, `OP_OUTLIER_CACHE_TTL_S`, `OP_OUTLIER_MAX_MEMBERS`, `OP_RESIDUAL_EMBEDDING_FIELD`, `OP_REGION_CLUSTER_JOB_FILE`, `OP_REGION_FP_JOB_FILE`, `OP_REGION_PARTITION_MARKER`, `OP_REGION_REFINE_MARKER` |
 | Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP` |
 | Export | `OP_BUILD_SHA` |
-| Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_COREML_HOST` |
+| Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE`, `OP_BAKEOFF_PROFILE_<FIELD>` |
 | Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
 | VLM connection | `OPENWEBUI_BASE_URL`, `OPENWEBUI_MODEL`, `OPENWEBUI_API_KEY`, `GEMMA_IMAGES_PER_CALL`, `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
 | Segmenter connection | `SAM3_URL`, `SAM3_URLS`, `SAM3_HTTPX_MAX_CONNECTIONS`, `SAM3_HTTPX_KEEPALIVE` |

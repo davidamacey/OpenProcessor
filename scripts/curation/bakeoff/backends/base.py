@@ -1,4 +1,4 @@
-"""Backend abstraction: a plate detector maps an RGB frame to boxes."""
+"""Backend abstraction: a detector maps an RGB frame to target-class boxes."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Detection:
-    """One predicted plate box in absolute pixel coords (xyxy) + score.
+    """One predicted target-class box in absolute pixel coords (xyxy) + score.
 
     Coordinates are in the original frame's pixel space (not normalized,
     not letterboxed) so the harness can score every backend the same way.
@@ -32,7 +32,7 @@ class Detection:
 
 @runtime_checkable
 class Detector(Protocol):
-    """A plate detector that runs in its own native runtime.
+    """A single-target-class detector that runs in its own native runtime.
 
     Implementations load weights at construction and expose a stable
     ``name`` (used in reports) and a ``runtime`` tag (e.g. ``ultralytics``,
@@ -46,5 +46,5 @@ class Detector(Protocol):
     runtime: str
 
     def detect(self, image_rgb: np.ndarray) -> list[Detection]:
-        """Return all plate boxes for one HxWx3 uint8 RGB frame."""
+        """Return all target-class boxes for one HxWx3 uint8 RGB frame."""
         ...

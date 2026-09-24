@@ -27,6 +27,14 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
+# Items-index field holding the per-item backbone embedding (a detector's
+# feature map RoI-pooled over the item bbox, ``CurationConfig.
+# backbone_embedding_dim`` wide). The mapping and the ingest writer both
+# read this constant so they cannot drift; the name is kept for
+# compatibility with existing indexes.
+BACKBONE_EMBEDDING_FIELD = 'v6_embedding'
+
+
 class IndexRole(str, Enum):
     """Logical role of a curation OpenSearch index.
 

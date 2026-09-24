@@ -35,6 +35,9 @@ Pipeline, per image:
    that index); items docs go through
    :func:`~src.clients.occ.occ_upsert_bulk` with human-field guards so a
    re-ingest never clobbers a human-applied label.
+8. After a successful write, one advisory ``crop.created`` event per
+   newly created item on the in-process event hub
+   (:func:`~src.services.curation.event_hub.publish_crop_created`).
 
 Sibling modules, split out of this one to keep each to one concern:
 
@@ -46,7 +49,7 @@ Sibling modules, split out of this one to keep each to one concern:
   implementation: one msearch dedup, one batched decode, **one batched
   Triton call per detector per ``batch_limit`` chunk** (not one per
   image), the results fed back into ``ingest_one`` through its
-  ``prefilled_image`` / ``prefilled_items`` / ``prefilled_secondary_raw``
+  ``prefilled_image`` / ``prefilled_items`` / ``prefilled_secondary``
   arguments, plus optional companion-YOLO-label import.
 """
 
@@ -64,7 +67,12 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from src.config import get_curation_config
 from src.core.logging import get_logger, get_request_id
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
-from src.services.curation.ingest_detect import SECONDARY_IOU_MATCH, WholeImageDetector
+from src.services.curation.event_hub import publish_crop_created
+from src.services.curation.ingest_detect import (
+    SECONDARY_IOU_MATCH,
+    SecondaryOutput,
+    WholeImageDetector,
+)
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.item_doc import DetectedItem, build_image_doc, build_item_doc
 from src.services.curation.source_image_cache import write_crop_cache
@@ -183,6 +191,7 @@ class CurationIngestService:
             registry=registry,
             profile=profile,
             secondary_profile=secondary_profile,
+            backbone_embedding_dim=self.config.backbone_embedding_dim,
         )
 
     # ------------------------------------------------------------------
@@ -243,8 +252,13 @@ class CurationIngestService:
         self,
         image_doc: dict[str, Any] | None,
         crop_docs: list[dict[str, Any]],
+        created_ids: list[str] | None = None,
     ) -> dict[str, int]:
-        """Index 1 images doc (blind) + N items docs (OCC upsert)."""
+        """Index 1 images doc (blind) + N items docs (OCC upsert).
+
+        ``created_ids`` (optional out-list) receives the crop_id of every
+        items doc this call newly created.
+        """
         from src.clients.occ import occ_upsert_bulk
 
         result = {
@@ -273,6 +287,7 @@ class CurationIngestService:
                 index=self.config.items_index,
                 human_field_guards=list(self._CROP_HUMAN_FIELD_GUARDS),
                 writer_id='ingest',
+                created_ids=created_ids,
             )
             result['crops_created'] = upsert['created']
             result['crops_updated'] = upsert['updated']
@@ -293,7 +308,8 @@ class CurationIngestService:
         *,
         prefilled_image: Image.Image | None = None,
         prefilled_items: list[DetectedItem] | None = None,
-        prefilled_secondary_raw: np.ndarray | None = None,
+        prefilled_secondary: SecondaryOutput | None = None,
+        whole_frame_from_bytes: bool = False,
     ) -> IngestResult:
         """Run the full pipeline on a single image.
 
@@ -310,8 +326,13 @@ class CurationIngestService:
                 own single-image Triton round-trip. An empty list is
                 meaningful (the detector found nothing) and is *not*
                 treated as "not prefilled".
-            prefilled_secondary_raw: Secondary-detector raw tensor from
-                :meth:`_run_secondary_detector_raw_batch`; same deal.
+            prefilled_secondary: Secondary-detector output (raw tensor
+                plus optional backbone feature map) from
+                :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
+            whole_frame_from_bytes: Compute the whole-frame embedding from
+                ``image_bytes`` instead of re-reading ``image_path``. Set by
+                byte-upload ingest, where ``image_path`` is a client-side
+                identifier the server cannot open.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -369,17 +390,33 @@ class CurationIngestService:
                 )
 
         if self.secondary_profile is not None and items:
-            try:
-                raw = prefilled_secondary_raw
-                if raw is None:
-                    raw = await self.detector.run_secondary_raw(img)
-                if raw is not None:
-                    sec_scale, sec_pad = letterbox_params(
-                        img, target=self.secondary_profile.input_size
+            secondary = prefilled_secondary
+            if secondary is None:
+                try:
+                    secondary = await self.detector.run_secondary_raw(img)
+                except Exception as exc:
+                    logger.warning(
+                        'ingest_secondary_detector_failed', path=image_path, error=str(exc)
                     )
-                    self.detector.resolve_with_secondary(items, raw, sec_scale, sec_pad)
-            except Exception as exc:
-                logger.warning('ingest_secondary_detector_failed', path=image_path, error=str(exc))
+            if secondary is not None:
+                sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
+                # Class override and embedding pooling fail independently —
+                # an NMS failure must not also drop the embeddings.
+                try:
+                    self.detector.resolve_with_secondary(items, secondary.raw, sec_scale, sec_pad)
+                except Exception as exc:
+                    logger.warning(
+                        'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
+                    )
+                if secondary.feature_map is not None:
+                    try:
+                        self.detector.attach_backbone_embeddings(
+                            items, secondary.feature_map, sec_scale, sec_pad
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
+                        )
 
         crops_pil = [self._crop_pil(img, item.bbox_pixel) for item in items]
         try:
@@ -395,7 +432,10 @@ class CurationIngestService:
 
         whole_frame_embedding = None
         try:
-            whole_frame_embedding = await self.pe_encoder.embed_whole_frame(image_path)
+            if whole_frame_from_bytes:
+                whole_frame_embedding = await self.pe_encoder.embed_whole_frame_bytes(image_bytes)
+            else:
+                whole_frame_embedding = await self.pe_encoder.embed_whole_frame(image_path)
         except Exception as exc:
             logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
 
@@ -474,8 +514,9 @@ class CurationIngestService:
                 )
             )
 
+        created_ids: list[str] = []
         try:
-            bulk_result = await self._bulk_index(image_doc, crop_docs)
+            bulk_result = await self._bulk_index(image_doc, crop_docs, created_ids)
         except Exception as exc:
             logger.error('ingest_bulk_index_failed', path=image_path, error=str(exc))
             return IngestResult(
@@ -485,6 +526,7 @@ class CurationIngestService:
                 error=str(exc),
                 error_kind='bulk_index',
             )
+        self._publish_created(created_ids, image_path)
 
         return IngestResult(
             status='success',
@@ -497,6 +539,22 @@ class CurationIngestService:
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),
             crops_final_conflicts=bulk_result.get('crops_final_conflicts', 0),
         )
+
+    @staticmethod
+    def _publish_created(crop_ids: list[str], image_path: str) -> None:
+        """Announce newly written items on the live-update event hub.
+
+        Only ids ``occ_upsert_bulk`` confirmed as created are published —
+        a re-ingest update or a rejected create is not a new crop. Events
+        are advisory (the hub never blocks: bounded per-subscriber queues,
+        drop-oldest), so a publish error is logged and swallowed rather
+        than failing an ingest whose writes already succeeded.
+        """
+        for crop_id in crop_ids:
+            try:
+                publish_crop_created(crop_id, image_path)
+            except Exception as exc:
+                logger.warning('ingest_event_publish_failed', crop_id=crop_id, error=str(exc))
 
     @staticmethod
     def _crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) -> Image.Image:
@@ -515,6 +573,7 @@ class CurationIngestService:
         source: str = 'batch',
         label_source: str = '',
         detect_mismatches: bool = False,
+        whole_frame_from_bytes: bool = False,
     ) -> BatchIngestResult:
         """Batch ingest: msearch dedup, batched detector inference, per-image finish.
 
@@ -537,6 +596,7 @@ class CurationIngestService:
             detect_mismatches: Record (and count) labels whose IoU-matched
                 item carried a different detector class — the
                 model-vs-ground-truth disagreement report.
+            whole_frame_from_bytes: See :meth:`ingest_one`.
 
         Raises:
             ValueError: If ``image_paths`` or ``label_paths`` is not the
@@ -552,6 +612,7 @@ class CurationIngestService:
             source=source,
             label_source=label_source,
             detect_mismatches=detect_mismatches,
+            whole_frame_from_bytes=whole_frame_from_bytes,
         )
 
 

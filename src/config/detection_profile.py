@@ -35,6 +35,10 @@ class DetectionProfile:
     confidence_floor: float = 0.4
     batch_limit: int = 16
     letterbox_fill: tuple[int, int, int] = (114, 114, 114)
+    # Optional backbone feature-map output of a raw-output (secondary)
+    # detector, requested only when Triton reports the model has it.
+    # Empty disables the request entirely.
+    feature_output: str = 'sppf_feat'
     aspect_min: float = 1.2
     aspect_max: float = 8.0
     text_hint_aspect_min: float = 1.5

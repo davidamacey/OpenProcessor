@@ -1,15 +1,18 @@
 """Detector bake-off CLI: score one detector backend on a frozen test split.
 
-Domain-agnostic: point it at any single-class-per-run YOLO test split
-(any target class id, any class name) and any of the wired backends.
-Originated as an LPR-detector comparison harness; the class/backend
-identity is entirely CLI-driven, nothing here is hardcoded to plates.
+Domain-agnostic: point it at any YOLO test split and any of the wired
+backends. What is measured -- target class, the context classes a crop-mode
+cascade crops on, the Triton model, backend and metric defaults -- comes
+from a :class:`~scripts.curation.bakeoff.profile.BakeoffProfile`
+(``--profile``; the neutral ``generic`` profile when omitted). Any
+explicit CLI flag overrides the profile's value.
 
 Example:
     .venv/bin/python -m scripts.curation.bakeoff.run \
+        --profile my_profile.json \
         --dataset ./data/bakeoff_eval/curated/my_export \
         --backend ultralytics --weights ./weights/my_model.pt \
-        --imgsz 1280 --name my-model-v1 --out-dir /tmp/bakeoff
+        --name my-model-v1 --out-dir /tmp/bakeoff
 
 Run once per model; the per-model JSON files are then merged into the
 comparison tables. Accuracy is identical-metric (COCOeval) across
@@ -32,6 +35,7 @@ import cv2
 
 from .dataset import YoloTestSet
 from .metrics import coco_eval, detections_to_coco, operating_point, percentiles
+from .profile import BACKENDS, BakeoffProfile, resolve_profile
 
 
 if TYPE_CHECKING:
@@ -127,16 +131,20 @@ def _build_detector(args: argparse.Namespace, backend: str) -> Detector:
     raise SystemExit(f'unknown / not-yet-wired backend: {backend!r}')
 
 
-def _primary_detector(args: argparse.Namespace) -> Detector:
-    """Coarse-stage COCO detector for crop mode (any class list you keep).
+def parse_class_ids(value: str | None) -> tuple[int, ...]:
+    """``'2,3'`` -> ``(2, 3)``; empty/None -> ``()`` (keep every class)."""
+    return tuple(int(c) for c in str(value or '').split(',') if c.strip())
 
-    Default class list (car/motorcycle/bus/truck) is just an example for a
-    vehicle->plate style cascade -- pass --primary-classes to target any
-    other COCO classes for a different coarse->fine cascade.
+
+def _primary_detector(args: argparse.Namespace) -> Detector:
+    """Coarse-stage detector for crop mode / two-stage.
+
+    Keeps only the context (parent) classes from the profile or
+    ``--primary-classes``; an empty list keeps every class.
     """
     from .backends.ultralytics_pt import UltralyticsDetector
 
-    keep = {int(c) for c in str(args.primary_classes).split(',') if c.strip()}
+    keep = set(parse_class_ids(args.primary_classes))
     return UltralyticsDetector(
         args.primary_weights,
         name='primary',
@@ -152,7 +160,7 @@ def _build_backend(args: argparse.Namespace) -> Detector:
     """Build the system under test, honoring --mode (full vs crop).
 
     ``--mode crop`` wraps ANY backend in a coarse-detector->crop->detector
-    pipeline (e.g. vehicle->plate, but any two-stage cascade works);
+    pipeline (parent object -> part, any two-stage cascade);
     ``--mode full`` runs the detector directly on the source frame. The
     ``two-stage`` backend is a fixed, non-wrapped variant of that same
     cascade for when the coarse+fine pair is the system under test itself
@@ -265,42 +273,53 @@ def _per_stratum(
     return out
 
 
-def main() -> int:
+# argparse dest -> BakeoffProfile field. These flags default to None so an
+# explicit CLI value can be told apart from "use the profile's value".
+PROFILE_BACKED_ARGS: dict[str, str] = {
+    'gt_class_id': 'target_class_id',
+    'gt_class_name': 'target_class_name',
+    'backend': 'default_backend',
+    'imgsz': 'imgsz',
+    'triton_model': 'triton_model',
+    'primary_weights': 'context_weights',
+    'primary_imgsz': 'context_imgsz',
+    'primary_conf': 'context_conf',
+    'conf_floor': 'conf_floor',
+    'nms_iou': 'nms_iou',
+    'op_conf': 'op_conf',
+    'op_iou': 'op_iou',
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description='Detector bake-off (single backend run).')
+    p.add_argument(
+        '--profile',
+        default=None,
+        help='BakeoffProfile: registered/example name or a profile .json (default: generic)',
+    )
     p.add_argument('--dataset', type=Path, help='Export root with images/<split> + labels/<split>')
     p.add_argument('--split', default='test')
     p.add_argument('--images', type=Path, help='Override: images dir (instead of --dataset)')
     p.add_argument('--labels', type=Path, help='Override: labels dir')
     p.add_argument('--stratum-map', type=Path, help='JSON {image_stem: stratum} for per-cluster')
-    p.add_argument('--gt-class-id', type=int, default=0, help='Target class id in GT labels')
+    p.add_argument('--gt-class-id', type=int, default=None, help='Target class id in GT labels')
     p.add_argument(
         '--gt-class-name',
-        default='object',
+        default=None,
         help='Display name for the target class (cosmetic, COCO categories block)',
     )
-    p.add_argument(
-        '--backend',
-        required=True,
-        choices=[
-            'ultralytics',
-            'triton',
-            'open-image-models',
-            'two-stage',
-            'lpdnet',
-            'onnxruntime',
-            'coreml',
-        ],
-    )
+    p.add_argument('--backend', default=None, choices=list(BACKENDS))
     p.add_argument('--weights', help='Model weights path (backend-specific)')
     p.add_argument('--name', help='Model display name for the report')
-    p.add_argument('--imgsz', type=int, default=1280)
+    p.add_argument('--imgsz', type=int, default=None)
     p.add_argument('--device', default='0')
     p.add_argument('--pred-class-id', type=int, default=None, help='Keep only this pred class')
     # full = detector on the source frame; crop = coarse->crop->detector
     # (a cascade deployment mode). Applies to ANY backend.
     p.add_argument('--mode', choices=['full', 'crop'], default='full')
-    # LPDNet (NVIDIA TAO DetectNet_v2) backend -- a plate-detection-specific
-    # architecture; only meaningful if you're actually benchmarking plates.
+    # LPDNet (NVIDIA TAO DetectNet_v2): a domain-specific public baseline
+    # model; see backends/lpdnet.py for when it applies.
     p.add_argument('--lpdnet-variant', choices=['usa', 'ccpd'], default='usa')
     # Triton backend
     p.add_argument('--triton-url', default='localhost:4601')
@@ -322,22 +341,25 @@ def main() -> int:
     p.add_argument(
         '--coreml-compute-units', default='ALL', help='CoreML ComputeUnit (ALL/CPU_ONLY/...)'
     )
-    # Coarse stage (crop mode + two-stage): a COCO detector (YOLO11/YOLO26)
-    # filtered to any class list. Default (car/motorcycle/bus/truck) is just
-    # an example for a vehicle->plate cascade -- pass --primary-classes for
-    # a different coarse->fine cascade.
-    p.add_argument('--primary-weights', default='./weights/yolo11n.pt')
-    p.add_argument('--primary-classes', default='2,3,5,7', help='COCO class ids to keep')
-    p.add_argument('--primary-imgsz', type=int, default=960)
-    p.add_argument('--primary-conf', type=float, default=0.25)
+    # Coarse stage (crop mode + two-stage): a detector filtered to the
+    # profile's context (parent) classes.
+    p.add_argument('--primary-weights', default=None)
+    p.add_argument(
+        '--primary-classes',
+        default=None,
+        help="Comma-separated coarse-stage class ids (default: the profile's context_class_ids; "
+        "'' keeps every class)",
+    )
+    p.add_argument('--primary-imgsz', type=int, default=None)
+    p.add_argument('--primary-conf', type=float, default=None)
     p.add_argument('--secondary-backend', choices=['ultralytics', 'triton'], default='ultralytics')
     p.add_argument(
         '--secondary-imgsz', type=int, default=640, help='Crop input size (two-stage fine stage)'
     )
-    p.add_argument('--conf-floor', type=float, default=0.001, help='Low floor so mAP sees full PR')
-    p.add_argument('--nms-iou', type=float, default=0.7, help='NMS IoU during inference')
-    p.add_argument('--op-conf', type=float, default=0.25, help='Operating-point confidence')
-    p.add_argument('--op-iou', type=float, default=0.45, help='Operating-point match IoU')
+    p.add_argument('--conf-floor', type=float, default=None, help='Low floor so mAP sees full PR')
+    p.add_argument('--nms-iou', type=float, default=None, help='NMS IoU during inference')
+    p.add_argument('--op-conf', type=float, default=None, help='Operating-point confidence')
+    p.add_argument('--op-iou', type=float, default=None, help='Operating-point match IoU')
     p.add_argument('--warmup', type=int, default=3, help='Frames excluded from latency stats')
     p.add_argument('--out-dir', type=Path, default=Path('/tmp/bakeoff'))
     p.add_argument('--training-data', help="Note on this model's training data (for the report)")
@@ -355,12 +377,36 @@ def main() -> int:
         default=os.environ.get('MLFLOW_TRACKING_URI', 'http://localhost:5000'),
     )
     p.add_argument('--mlflow-experiment', default='bakeoff')
-    args = p.parse_args()
+    return p
 
+
+def resolve_args(args: argparse.Namespace) -> tuple[argparse.Namespace, BakeoffProfile]:
+    """Fill every flag the user left unset from the profile; validate.
+
+    Raises ``SystemExit`` for an unknown profile or a triton backend with
+    no model (the profile's ``triton_model`` is empty by design).
+    """
+    try:
+        profile = resolve_profile(args.profile)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    for dest, attr in PROFILE_BACKED_ARGS.items():
+        if getattr(args, dest) is None:
+            setattr(args, dest, getattr(profile, attr))
+    if args.primary_classes is None:
+        args.primary_classes = ','.join(str(c) for c in profile.context_class_ids)
+    args.profile_name = profile.name
+    if not args.triton_model:
+        args.triton_model = None
     if args.backend == 'triton' and not args.triton_model:
-        raise SystemExit('--triton-model is required for --backend triton')
+        raise SystemExit("--triton-model (or the profile's triton_model) is required for triton")
     if args.backend == 'two-stage' and args.secondary_backend == 'triton' and not args.triton_model:
         raise SystemExit('--triton-model is required when --secondary-backend triton')
+    return args, profile
+
+
+def main(argv: list[str] | None = None) -> int:
+    args, _profile = resolve_args(build_parser().parse_args(argv))
 
     if args.images and args.labels:
         ds = YoloTestSet(
@@ -403,6 +449,8 @@ def main() -> int:
     report: dict[str, Any] = {
         'model': backend.name,
         'runtime': backend.runtime,
+        'profile': args.profile_name,
+        'target_class': {'id': args.gt_class_id, 'name': args.gt_class_name},
         'imgsz': args.imgsz,
         'test_frames': len(ds.images),
         'positive_frames': ds.n_positive_frames,

@@ -41,9 +41,8 @@ class UltralyticsDetector:
         self.conf = conf
         self.iou = iou
         self.pred_class_id = pred_class_id
-        # When set, keep only these class ids (e.g. COCO vehicle classes
-        # {2,3,5,7} for an example crop-mode coarse stage). Takes precedence
-        # over pred_class_id.
+        # When set, keep only these class ids (a profile's context_class_ids
+        # for a crop-mode coarse stage). Takes precedence over pred_class_id.
         self.keep_classes = keep_classes
         self.half = half
         self._model = YOLO(weights)

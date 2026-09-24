@@ -16,9 +16,12 @@ index *names* are deployment data, not hardcoded here):
 - ``items`` (default ``op_items``) — one document per detected item
   crop (with embedding, class label, region-of-interest sub-bbox,
   holdout flag).
-- ``labels_confirmed`` (default ``op_labels_confirmed``) — confirmed
-  YOLO-style ground-truth labels (no embedding). Source of truth for
-  export → trainer.
+- ``labels_confirmed`` (default ``op_labels_confirmed``) — provenance
+  ledger of imported YOLO-style ground-truth labels (no embedding),
+  written only by label import. NOT the export source: export and
+  training select ``class_validated=true`` items from ``items``, which
+  every labeling path (human label/move, auto-promote, label import)
+  sets — see ``tests/curation/test_labels_export_roundtrip.py``.
 - ``classes`` (default ``op_classes``) — read-projection of
   ``class_registry.json`` for fast term filters / dashboards. The JSON
   file is the canonical source; this index is rebuilt from it via
@@ -44,7 +47,14 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-from src.config import CurationConfig, IndexRole, get_curation_config, get_region_fields, index_name
+from src.config import (
+    BACKBONE_EMBEDDING_FIELD,
+    CurationConfig,
+    IndexRole,
+    get_curation_config,
+    get_region_fields,
+    index_name,
+)
 from src.core.logging import get_logger
 
 
@@ -331,7 +341,7 @@ def _items_body() -> dict[str, Any]:
                 'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
                 # Backbone RoI-pool embedding used for residual AHC
                 # clustering + intra-class similarity refinement.
-                'v6_embedding': _knn_field(dim=config.backbone_embedding_dim),
+                BACKBONE_EMBEDDING_FIELD: _knn_field(dim=config.backbone_embedding_dim),
                 # Encoder embedding of the region-of-interest (cropped at
                 # the region bbox, pad-to-square). Lets regions be
                 # clustered / AHC-refined like item classes so
@@ -895,7 +905,7 @@ async def ensure_items_pe_v6_embedding_fields(
     body = {
         'properties': {
             'pe_embedding': _knn_field(dim=config.encoder_embedding_dim),
-            'v6_embedding': _knn_field(dim=config.backbone_embedding_dim),
+            BACKBONE_EMBEDDING_FIELD: _knn_field(dim=config.backbone_embedding_dim),
         }
     }
     try:
@@ -904,13 +914,13 @@ async def ensure_items_pe_v6_embedding_fields(
         logger.info(
             'curation_mapping_migration',
             index=index,
-            fields=['pe_embedding', 'v6_embedding'],
+            fields=['pe_embedding', BACKBONE_EMBEDDING_FIELD],
             acknowledged=ack,
         )
         return {
             'acknowledged': ack,
             'index': index,
-            'fields_added': ['pe_embedding', 'v6_embedding'],
+            'fields_added': ['pe_embedding', BACKBONE_EMBEDDING_FIELD],
         }
     except Exception as exc:
         msg = str(exc)
@@ -925,7 +935,7 @@ async def ensure_items_pe_v6_embedding_fields(
         return {
             'acknowledged': False,
             'index': index,
-            'fields_added': ['pe_embedding', 'v6_embedding'],
+            'fields_added': ['pe_embedding', BACKBONE_EMBEDDING_FIELD],
             'error': msg,
         }
 

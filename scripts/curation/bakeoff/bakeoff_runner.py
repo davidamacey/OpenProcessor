@@ -12,10 +12,14 @@ Modes:
     --job <file>         run one job spec and exit
 
 Job spec (JSON) --- ``datasets`` is the matrix form; ``dataset`` (singular) is
-still accepted for back-compat::
+still accepted for back-compat. ``profile`` (optional) names the
+:class:`~scripts.curation.bakeoff.profile.BakeoffProfile` every model is scored
+under unless a model sets its own ``profile``; it also picks the metric the
+per-dataset comparison is ranked by::
 
     {
         'job_id': '2026-05-25T10-00',
+        'profile': 'generic',
         'datasets': [
             {'name': 'curated', 'path': '/data/exports/<run>'},
             {'name': 'public_set', 'path': './data/bakeoff_eval/public/<dataset>'},
@@ -53,6 +57,7 @@ from typing import Any
 
 from .compare import build_comparison, to_markdown
 from .freeze import verify
+from .profile import resolve_profile
 
 
 # GPU pool + concurrency for parallel scoring. The detectors are tiny (hundreds
@@ -67,6 +72,7 @@ _CONCURRENCY: int = max(1, int(os.environ.get('OP_BAKEOFF_CONCURRENCY', '4')))
 
 
 _OPT_FLAGS = {
+    'profile': '--profile',
     'weights': '--weights',
     'imgsz': '--imgsz',
     'device': '--device',
@@ -106,41 +112,62 @@ _CELL_METRICS = (
 _LOWER_IS_BETTER = {'latency_ms', 'size_mb'}
 
 
+# The CoreML (Apple) export leg is not shipped: it needs a macOS host plus a
+# host-side driver that is not part of this repository. A job asking for it
+# gets this recorded as a failed stage instead of a silent skip or a crash.
+COREML_UNAVAILABLE = (
+    'CoreML export is not available in this build: it requires a macOS host and a '
+    'CoreML export driver that this repository does not ship. Set quantize.coreml=false '
+    '(score .mlpackage files you export yourself with --backend coreml).'
+)
+
+
+def _quant_root(quant: dict[str, Any], out_dir: Path) -> Path:
+    """Where quantized artifacts go: ``quantize.out_root`` or ``<out_dir>/quant``."""
+    return Path(quant['out_root']) if quant.get('out_root') else out_dir / 'quant'
+
+
 def _quantize_and_variant_models(
-    quant: dict[str, Any], datasets: list[dict[str, str]]
+    quant: dict[str, Any], datasets: list[dict[str, str]], out_dir: Path
 ) -> list[dict[str, Any]]:
-    """Run export/quantize.py for a checkpoint, return the variant model specs.
+    """Export a checkpoint to ONNX variants (``quantize.py``); return their model specs.
 
-    Lets a single bake-off job be fully seamless: export the trained YOLO26 model
-    to portable ONNX (fp32/fp16/int8), then score those variants alongside the
-    other models so the matrix + frontend QuantizationPanel show size / speed /
-    accuracy with no manual step. The ``quantize`` block:
+    Lets a single bake-off job export a trained model to portable ONNX
+    (fp32/fp16/int8) and score those variants alongside the other models, so
+    the matrix shows size / speed / accuracy with no manual step. The
+    ``quantize`` block::
 
-        {"model_id": "ours_yolo26n", "checkpoint": "/runs/.../best.pt",
-         "formats": ["fp32_onnx","fp16_onnx","int8_onnx"], "n_calib": 1000,
-         "calib_dataset": "/data/exports/<run>",  # default: first dataset
-         "out_root": "/data/quant"}
+        {
+            'model_id': 'my_model',
+            'checkpoint': '/runs/.../best.pt',
+            'formats': ['fp32_onnx', 'fp16_onnx', 'int8_onnx'],
+            'n_calib': 1000,
+            'calib_dataset': '/data/exports/<run>',  # default: first dataset
+            'calib_split': 'train',
+            'imgsz': 640,
+            'out_root': '/data/quant',
+        }  # default: <out_dir>/quant
+
+    Raises :class:`quantize.QuantizeError` (or the exporter's own error) on
+    failure; the caller records it in the job status.
     """
-    import sys
+    from .quantize import run as quantize_run
 
-    repo_root = Path(__file__).resolve().parents[3]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    from export.quantize import run as quantize_run
-
-    model_id = quant.get('model_id', 'ours_yolo26n')
+    model_id = quant.get('model_id') or 'candidate'
     formats = quant.get('formats') or ['fp32_onnx', 'fp16_onnx', 'int8_onnx']
-    out_root = Path(quant.get('out_root', '/data/quant'))
+    out_root = _quant_root(quant, out_dir)
     calib = quant.get('calib_dataset') or (datasets[0]['path'] if datasets else None)
     checkpoint = quant.get('checkpoint')
     print(f'[bakeoff] quantize: exporting {model_id} {formats} from {checkpoint}', flush=True)
     quantize_run(
         model_id,
-        formats,
+        list(formats),
         out_root,
         pt_override=Path(checkpoint) if checkpoint else None,
         calib_override=Path(calib) if calib else None,
         n_calib_override=quant.get('n_calib'),
+        imgsz=int(quant.get('imgsz', 640)),
+        calib_split=str(quant.get('calib_split', 'train')),
     )
 
     qdir = out_root / model_id
@@ -189,8 +216,8 @@ def _run_throughput_sweep(
     Runs ``throughput.py`` per variant/EP so the auto pipeline captures model
     *speed* (not just accuracy) -- the JSONs land in ``<out_dir>/throughput/``.
     """
-    model_id = quant.get('model_id', 'ours_yolo26n')
-    qdir = Path(quant.get('out_root', '/data/quant')) / model_id
+    model_id = quant.get('model_id') or 'candidate'
+    qdir = _quant_root(quant, out_dir) / model_id
     imgsz = str(quant.get('imgsz', 640))
     if not datasets:
         return
@@ -244,39 +271,6 @@ def _run_throughput_sweep(
             subprocess.run(argv, check=True)
         except subprocess.CalledProcessError as exc:
             print(f'[bakeoff] throughput {label} failed: {exc}', flush=True)
-
-
-def _run_coreml_mac_leg(quant: dict[str, Any], out_dir: Path) -> None:
-    """Drive the Mac Studio CoreML export+bench over SSH (best-effort, opt-in).
-
-    Gated by the ``OP_COREML_HOST`` env var (e.g. ``user@host.local``)
-    so it's a safe no-op until the evaluator is provisioned with ssh/rsync + a key
-    that can reach the Mac on the LAN. Exports FP16/INT8 CoreML on the Mac, benchmarks
-    ANE+CPU, and pulls the .mlpackage + throughput JSON back.
-    """
-    host = os.environ.get('OP_COREML_HOST')
-    if not host:
-        print('[bakeoff] coreml: OP_COREML_HOST not set, skipping Mac leg', flush=True)
-        return
-    repo_root = Path(__file__).resolve().parents[3]
-    model_id = quant.get('model_id', 'ours_yolo26n')
-    argv = [
-        sys.executable,
-        str(repo_root / 'export' / 'quantize_coreml_mac.py'),
-        '--model',
-        model_id,
-        '--host',
-        host,
-        '--pull-into',
-        str(out_dir / 'coreml'),
-    ]
-    print(f'[bakeoff] coreml: driving Mac leg on {host} ...', flush=True)
-    try:
-        subprocess.run(argv, check=True)
-    except (subprocess.CalledProcessError, OSError) as exc:
-        print(
-            f'[bakeoff] coreml: Mac leg failed (need ssh/rsync + key in image?): {exc}', flush=True
-        )
 
 
 def _expand_modes(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -420,14 +414,34 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     job_id = spec.get('job_id', datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ'))
     out_dir = Path(spec.get('out_dir', f'/data/bakeoff/{job_id}'))
     datasets = _dataset_specs(spec)
+    job_profile = spec.get('profile')
+    try:
+        profile = resolve_profile(job_profile)
+    except ValueError as exc:
+        status_err: dict[str, Any] = {
+            'job_id': job_id,
+            'state': 'error',
+            'error': str(exc),
+            'started_at': datetime.now(UTC).isoformat(),
+            'models': [],
+        }
+        _write_status(out_dir, status_err)
+        return status_err
     raw_models = list(spec.get('models', []))
+    quant = spec.get('quantize') or {}
+    stage_failures: list[dict[str, Any]] = []
     # Optional: export the trained model to portable ONNX first, then score those
     # quantized variants in this same job (seamless export -> benchmark -> matrix).
-    if spec.get('quantize'):
+    if quant:
         try:
-            raw_models += _quantize_and_variant_models(spec['quantize'], datasets)
-        except Exception as exc:  # don't abort the whole job if export fails
+            raw_models += _quantize_and_variant_models(quant, datasets, out_dir)
+        except Exception as exc:  # recorded below; scoring of the other models goes on
             print(f'[bakeoff] quantize step failed: {exc}', flush=True)
+            stage_failures.append({'stage': 'quantize', 'error': f'{type(exc).__name__}: {exc}'})
+    if quant.get('coreml'):
+        stage_failures.append({'stage': 'coreml', 'error': COREML_UNAVAILABLE})
+    if job_profile:
+        raw_models = [{'profile': job_profile, **m} for m in raw_models]
     models = _expand_modes(raw_models)
     verify_frozen = spec.get('verify_frozen', True)
     model_names = [m.get('name', m['backend']) for m in models]
@@ -435,15 +449,23 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     status: dict[str, Any] = {
         'job_id': job_id,
         'state': 'running',
+        'profile': profile.name,
         'datasets': [d['name'] for d in datasets],
         'dataset': datasets[0]['path'] if datasets else None,  # legacy field
         'started_at': datetime.now(UTC).isoformat(),
         'models': model_names,
         'completed': [],
-        'failed': [],
+        'failed': list(stage_failures),
         'progress': {'done': 0, 'total': len(datasets) * len(models)},
     }
     _write_status(out_dir, status)
+
+    if not models:
+        # e.g. a quantize-only job whose export failed: nothing left to score.
+        reason = '; '.join(f'{f["stage"]}: {f["error"]}' for f in stage_failures)
+        status.update(state='error', error=reason or 'no models to score')
+        _write_status(out_dir, status)
+        return status
 
     if not datasets:
         status.update(state='error', error='no datasets in job spec')
@@ -500,7 +522,7 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     # Aggregate each dataset's per-model JSON into its comparison.
     per_dataset: dict[str, dict[str, Any]] = {}
     for ds_name, _ds_path, ds_out in valid:
-        comp = build_comparison(ds_out)
+        comp = build_comparison(ds_out, rank_by=profile.rank_metric)
         (ds_out / 'comparison.json').write_text(json.dumps(comp, indent=2), encoding='utf-8')
         (ds_out / 'comparison.md').write_text(to_markdown(comp), encoding='utf-8')
         per_dataset[ds_name] = comp
@@ -509,18 +531,12 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     (out_dir / 'matrix.json').write_text(json.dumps(matrix, indent=2), encoding='utf-8')
 
     # Optional: steady-state throughput (img/s, CPU+GPU) for the quant variants.
-    if spec.get('quantize', {}).get('throughput'):
+    if quant.get('throughput'):
         try:
-            _run_throughput_sweep(spec['quantize'], datasets, out_dir)
-        except Exception as exc:  # best-effort; never fail the whole job
+            _run_throughput_sweep(quant, datasets, out_dir)
+        except Exception as exc:  # best-effort; recorded, never fails the whole job
             print(f'[bakeoff] throughput sweep failed: {exc}', flush=True)
-
-    # Optional: Mac Studio CoreML export + ANE/CPU benchmark over the LAN.
-    if spec.get('quantize', {}).get('coreml'):
-        try:
-            _run_coreml_mac_leg(spec['quantize'], out_dir)
-        except Exception as exc:  # best-effort
-            print(f'[bakeoff] coreml mac leg failed: {exc}', flush=True)
+            status['failed'].append({'stage': 'throughput', 'error': str(exc)})
 
     # Back-compat: a top-level comparison.json (the first/primary dataset) so the
     # existing single-dataset results view keeps working.

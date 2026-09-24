@@ -196,6 +196,8 @@ class BatchIngestSummaryResponse(BaseModel):
     duplicates: int = 0
     failed: int = 0
     mismatches: int = 0
+    missed_labels: int = 0
+    unmatched_detections: int = 0
     labels_imported: int = 0
     crops_indexed: int = 0
 
@@ -204,6 +206,10 @@ class BatchIngestResponse(BaseModel):
     status: Literal['success', 'partial', 'error']
     summary: BatchIngestSummaryResponse
     results: list[IngestImageResponse] = Field(default_factory=list)
+    # Populated only when the request set ``detect_mismatches``: one record
+    # per model-vs-label disagreement (``kind`` = class_mismatch |
+    # missed_label | unmatched_detection).
+    disagreements: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ImportLabelsRequest(BaseModel):

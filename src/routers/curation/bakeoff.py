@@ -9,15 +9,22 @@ to MLflow, and writes ``status.json`` + ``comparison.json`` back here for
 the UI to read.
 
 Endpoints:
-    POST /bakeoff/run            enqueue a comparison job
-    GET  /bakeoff/runs           list past/current runs
-    GET  /bakeoff/status/{id}    job progress (running/done/error)
-    GET  /bakeoff/results/{id}   ranked comparison rows for the UI
+    POST /bakeoff/run               enqueue a comparison job
+    GET  /bakeoff/runs              list past/current runs
+    GET  /bakeoff/status/{id}       job progress (running/done/error)
+    GET  /bakeoff/results/{id}      ranked comparison rows for the UI
+    GET  /bakeoff/matrix/{id}       model x dataset matrix
+    GET  /bakeoff/eval_datasets     frozen evaluation datasets
+    GET  /bakeoff/baseline_models   baseline-model registry (optionally per profile)
+    GET  /bakeoff/trained_models    finished training runs usable as contenders
+    GET  /bakeoff/profiles          available BakeoffProfiles
 
-Ported from a private reference vehicle/license-plate curation stack's
-bake-off router (see ``docs/design/curation_design_rationale.md`` for
-the genericization rationale). The bake-off harness itself lives at
-``scripts/curation/bakeoff/`` (not under ``src/`` — see that package's
+What a run measures (target class, cascade context classes, Triton model,
+metric thresholds) comes from a ``BakeoffProfile``
+(``scripts/curation/bakeoff/profile.py``) named by the request's optional
+``profile`` field -- see ``docs/design/curation_design_rationale.md`` §8
+("The detector bake-off harness"). The harness itself lives at
+``scripts/curation/bakeoff/`` (not under ``src/`` -- see that package's
 module docstring for why).
 """
 
@@ -87,8 +94,12 @@ EVAL_DATASET_ROOTS: list[tuple[str, Path]] = [
 ]
 # Baseline-model registry (public/commercial detectors). Add a model = one entry
 # in this JSON; no code change. Lives next to the harness so the evaluator and
-# the API share it.
-BASELINES_PATH = Path(__file__).resolve().parents[3] / 'scripts/curation/bakeoff/baselines.json'
+# the API share it. A profile may name its own registry (baselines_path); the
+# OP_BAKEOFF_BASELINES_PATH env var replaces the default file.
+_DEFAULT_BASELINES_PATH = (
+    Path(__file__).resolve().parents[3] / 'scripts/curation/bakeoff/baselines.json'
+)
+BASELINES_PATH = Path(os.environ.get('OP_BAKEOFF_BASELINES_PATH') or _DEFAULT_BASELINES_PATH)
 _JOB_ID_RE = re.compile(r'[A-Za-z0-9_.:-]{1,64}')
 
 
@@ -115,13 +126,32 @@ def _safe_job_id(job_id: str) -> str:
     return job_id
 
 
+def _check_profile(spec: str | None) -> None:
+    """400 on an unknown profile name.
+
+    A ``.json`` path is passed through unchecked: it is resolved inside the
+    evaluator container, whose filesystem may differ from this one's.
+    """
+    if not spec or spec.endswith('.json'):
+        return
+    from scripts.curation.bakeoff.profile import resolve_profile
+
+    try:
+        resolve_profile(spec)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class BakeoffModelSpec(BaseModel):
     """One model to score. Mirrors the harness CLI flags."""
 
     backend: str = Field(
-        description='ultralytics | triton | open-image-models | lpdnet | two-stage'
+        description='ultralytics | triton | open-image-models | lpdnet | two-stage '
+        '| onnxruntime | coreml'
     )
     name: str
+    # Per-model BakeoffProfile override (else the request-level profile).
+    profile: str | None = None
     mode: str | None = None  # full | crop | both (run in source-frame and/or crop mode)
     weights: str | None = None
     imgsz: int | None = None
@@ -132,8 +162,8 @@ class BakeoffModelSpec(BaseModel):
     lpdnet_variant: str | None = None
     triton_url: str | None = None
     triton_model: str | None = None
-    # Coarse stage for --mode crop / two-stage (any coarse->fine cascade,
-    # not just vehicle->plate -- see run.py's _primary_detector).
+    # Coarse stage for --mode crop / two-stage. Unset fields come from the
+    # profile (context_class_ids / context_weights / ...).
     primary_weights: str | None = None
     primary_classes: str | None = None
     primary_imgsz: int | None = None
@@ -158,6 +188,11 @@ class BakeoffRequest(BaseModel):
     """
 
     dataset: str | None = Field(default=None, description='Legacy single frozen export root')
+    profile: str | None = Field(
+        default=None,
+        description='BakeoffProfile name (see GET /bakeoff/profiles) or a profile .json path '
+        'on the evaluator; omitted = the evaluator default (generic)',
+    )
     datasets: list[DatasetRef] | None = Field(default=None, description='Matrix: frozen datasets')
     models: list[BakeoffModelSpec] = Field(default_factory=list)
     verify_frozen: bool = True
@@ -176,8 +211,15 @@ async def bakeoff_run(payload: BakeoffRequest) -> dict[str, Any]:
     """Enqueue a bake-off job for the evaluator container to execute."""
     if not payload.models and not payload.quantize:
         raise HTTPException(status_code=400, detail='no models specified')
+    if payload.quantize and payload.quantize.get('coreml'):
+        from scripts.curation.bakeoff.bakeoff_runner import COREML_UNAVAILABLE
+
+        raise HTTPException(status_code=400, detail=COREML_UNAVAILABLE)
     if not payload.datasets and not payload.dataset:
         raise HTTPException(status_code=400, detail='provide datasets or dataset')
+    _check_profile(payload.profile)
+    for m in payload.models:
+        _check_profile(m.profile)
     job_id = _safe_job_id(payload.job_id or datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ'))
     out_dir = OUT_DIR / job_id
     spec: dict[str, Any] = {
@@ -186,6 +228,8 @@ async def bakeoff_run(payload: BakeoffRequest) -> dict[str, Any]:
         'out_dir': str(out_dir),
         'models': [m.model_dump(exclude_none=True) for m in payload.models],
     }
+    if payload.profile:
+        spec['profile'] = payload.profile
     if payload.quantize:
         spec['quantize'] = payload.quantize
     if payload.datasets:
@@ -254,11 +298,77 @@ async def bakeoff_eval_datasets() -> dict[str, Any]:
     return {'datasets': datasets, 'count': len(datasets)}
 
 
-@router.get('/bakeoff/baseline_models')
-async def bakeoff_baseline_models() -> dict[str, Any]:
-    """Public/commercial baseline detectors from the editable registry."""
+@router.get('/bakeoff/profiles')
+async def bakeoff_profiles() -> dict[str, Any]:
+    """Registered + example BakeoffProfiles, flagging the default.
+
+    ``kind`` says where a profile comes from (``registered`` in code,
+    ``example`` from ``examples/<name>/profile.json``, ``configured`` for a
+    default that is neither -- e.g. ``OP_BAKEOFF_PROFILE`` naming a .json
+    path). ``default`` marks the profile a job gets when it names none
+    (``OP_BAKEOFF_PROFILE``, else ``generic`` plus ``OP_BAKEOFF_PROFILE_*``
+    overrides); the default row carries those effective field values. The
+    top-level ``default_profile`` repeats its name (null if the configured
+    default does not resolve -- see ``default_error``). Resolved from this
+    API process's environment, which the deployment is expected to share
+    with the evaluator.
+    """
+    from scripts.curation.bakeoff.profile import (
+        example_profile_names,
+        registered_profiles,
+        resolve_profile,
+    )
+
+    registered = registered_profiles()
+    profiles: list[dict[str, Any]] = [
+        {**prof.to_dict(), 'kind': 'registered', 'default': False} for prof in registered.values()
+    ]
+    for name in example_profile_names():
+        if name in registered:
+            continue
+        try:
+            profiles.append(
+                {**resolve_profile(name).to_dict(), 'kind': 'example', 'default': False}
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            logger.warning('bakeoff_profile_invalid', profile=name, error=str(exc))
+
+    body: dict[str, Any] = {'default_profile': None}
     try:
-        reg = json.loads(BASELINES_PATH.read_text(encoding='utf-8'))
+        default = resolve_profile(None)
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning('bakeoff_default_profile_invalid', error=str(exc))
+        body['default_error'] = str(exc)
+    else:
+        body['default_profile'] = default.name
+        row = next((p for p in profiles if p['name'] == default.name), None)
+        if row is None:
+            profiles.append({**default.to_dict(), 'kind': 'configured', 'default': True})
+        else:
+            row.update(default.to_dict(), default=True)
+    return {'profiles': profiles, 'count': len(profiles), **body}
+
+
+@router.get('/bakeoff/baseline_models')
+async def bakeoff_baseline_models(profile: str | None = None) -> dict[str, Any]:
+    """Baseline detectors from the editable registry.
+
+    With ``?profile=<name>`` (a registered/example name, not a path) the
+    profile's own ``baselines_path`` is read instead, falling back to the
+    default registry when it names none.
+    """
+    path = BASELINES_PATH
+    if profile:
+        if '/' in profile or profile.endswith('.json'):
+            raise HTTPException(status_code=400, detail='profile must be a profile name')
+        from scripts.curation.bakeoff.profile import resolve_baselines_path, resolve_profile
+
+        try:
+            path = resolve_baselines_path(resolve_profile(profile), BASELINES_PATH)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        reg = json.loads(path.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
         logger.warning('bakeoff_baselines_read_failed', error=str(exc))
         return {'baselines': [], 'count': 0}
