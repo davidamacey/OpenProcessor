@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import logging
 import os
 import signal
 import sys
@@ -335,9 +336,33 @@ async def run(args: argparse.Namespace) -> int:
             last_processed = metrics['total_processed']
             last_t = now
 
+    def _crash_on_unhandled_exception(task: asyncio.Task) -> None:
+        """S-1: a task dying silently (e.g. an import error inside the
+        producer coroutine) previously left the worker reporting
+        `session=0 chunks=0` forever with a passing healthcheck. Any
+        task that finishes with an exception other than cancellation is
+        fatal — log the traceback and exit so the container restart
+        policy recovers the worker.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is None:
+            return
+        logging.getLogger('vlm-worker').critical(
+            'fatal: task %s exited with an unhandled exception', task.get_name(), exc_info=exc
+        )
+        os._exit(1)
+
     async with httpx.AsyncClient() as client:
-        prod_task = asyncio.create_task(producer(client))
-        cons_tasks = [asyncio.create_task(consumer(i, client)) for i in range(args.concurrency)]
+        prod_task = asyncio.create_task(producer(client), name='producer')
+        prod_task.add_done_callback(_crash_on_unhandled_exception)
+        cons_tasks = [
+            asyncio.create_task(consumer(i, client), name=f'consumer-{i}')
+            for i in range(args.concurrency)
+        ]
+        for t in cons_tasks:
+            t.add_done_callback(_crash_on_unhandled_exception)
         metrics_task = asyncio.create_task(metrics_reporter())
 
         # Wait for either signal-stop or producer-drain.
