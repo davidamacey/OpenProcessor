@@ -27,12 +27,15 @@ describe('840beb8: generic served-enum filter bar (no tab/param-specific code)',
     );
   });
 
-  it('_filter() forwards every set enumFilterValues entry as its own query param', () => {
+  it('_filter() forwards only params the active tab declares in filter_specs', () => {
     const filterFnStart = src.indexOf('function _filter()');
     const filterFnBody = src.slice(filterFnStart, src.indexOf('\n  }\n', filterFnStart));
     expect(filterFnBody).toMatch(
-      /for \(const \[param, value\] of Object\.entries\(enumFilterValues\)\) \{\s*if \(value\) f\[param\] = value;\s*\}/,
+      /for \(const spec of activeFilterSpecs\) \{\s*const value = enumFilterValues\[spec\.param\];\s*if \(value\) f\[spec\.param\] = value;\s*\}/,
     );
+    // enumFilterValues is seeded from every URL param, so iterating it
+    // directly would forward unrelated/stale params to the backend.
+    expect(filterFnBody).not.toMatch(/Object\.entries\(enumFilterValues\)/);
   });
 
   it('setEnumFilter persists the value in the URL (like preset)', () => {

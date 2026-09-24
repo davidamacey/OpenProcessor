@@ -475,9 +475,14 @@
     // Generic served-enum filters (840beb8 adoption) — sent whenever the
     // operator picked a value; the backend applies its own
     // `filter_defaults` when a param is omitted, so an unset control
-    // never needs a client-side default to fall back to.
-    for (const [param, value] of Object.entries(enumFilterValues)) {
-      if (value) f[param] = value;
+    // never needs a client-side default to fall back to. Only params the
+    // active tab's served filter_specs declare are forwarded: the state is
+    // seeded from every URL param, so an unrelated or stale one (e.g.
+    // ?region_status= on a tab without that spec) must not reach the
+    // backend, which 400s on filters a tab doesn't honor.
+    for (const spec of activeFilterSpecs) {
+      const value = enumFilterValues[spec.param];
+      if (value) f[spec.param] = value;
     }
     Object.assign(f, strategyBar.toQueryParams());
     return f;
