@@ -483,7 +483,10 @@ class TestBulkWrite:
         c.update_doc = {F.status: 'no_region_box'}
 
         async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
-            found: dict[str, dict[str, Any]] = {d['_id']: {} for d in body['docs']}
+            # Docs are still in the pending state the tasks were fetched in.
+            found: dict[str, dict[str, Any]] = {
+                d['_id']: {F.status: 'pending'} for d in body['docs']
+            }
             return make_mget_response(found)
 
         async def _fake_bulk(*, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:

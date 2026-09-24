@@ -46,6 +46,9 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
     existing ``RegionFields.detector_chain`` rather than overwriting it,
     so concurrent chain mutations are preserved.
 
+    A write whose doc's stored region status no longer equals the status
+    the task was fetched with is dropped (stale — see ``_merge``).
+
     Returns ``(n_written, n_skipped)`` where ``n_skipped`` counts both
     tasks with empty ``update_doc`` and tasks that lost an OCC race.
     """
@@ -64,6 +67,19 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
 
     def _merge(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
         task = by_id[doc_id]
+        # Idempotency backstop: the result only applies to the pending
+        # state it was computed from. If the live (realtime ``_mget``) doc
+        # has moved on — an earlier pass or a duplicate consumer already
+        # wrote it, or a human changed it — drop this write instead of
+        # re-stamping the region and re-appending the chain.
+        if current.get(F.status) != task.plate_status:
+            logger.info(
+                'region_write_stale_skip',
+                crop_id=doc_id,
+                fetched_status=task.plate_status,
+                current_status=current.get(F.status),
+            )
+            return {}
         update = dict(task.update_doc)
         # P0-2 defense-in-depth: runner.py's _should_classify already
         # prevents class fields from ever landing in task.update_doc for
@@ -97,7 +113,11 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         doc_ids=[t.crop_id for t in eligible],
         merger=_merge,
         index=CURATION_ITEMS_INDEX,
-        refresh=False,
+        # The runner releases a crop from its in-flight set once this
+        # returns; ``wait_for`` makes the write visible to the next
+        # pending search first, so a refresh-lagged search can't hand the
+        # same crop out again.
+        refresh='wait_for',
         writer_id='sam_worker',
     )
     n_written = int(result.get('updated', 0))

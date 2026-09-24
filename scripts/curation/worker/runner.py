@@ -112,6 +112,10 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
 # (combined.py: _V6_LOW_CONF_THRESHOLD).
 _V6_HIGH_CONF_THRESHOLD = 0.80
 
+# How long the producer remembers a released crop. Only has to outlive the
+# slowest single pending search.
+_RELEASED_AT_TTL_S = 300.0
+
 
 def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
     """Decide whether to ask the VLM for the item class on this crop.
@@ -270,6 +274,14 @@ async def run(args: argparse.Namespace) -> int:
 
     in_flight: set[str] = set()
     in_flight_lock = asyncio.Lock()
+    # crop_id -> monotonic time the writer released it after a successful
+    # write. A pending search that STARTED before that moment may carry the
+    # pre-write (still pending) doc, so the producer drops those hits; a
+    # search started after it sees the write (the bulk uses
+    # refresh='wait_for'). Without this, a crop released between a
+    # search's start and its response was re-queued and ran the whole
+    # cascade a second time.
+    released_at: dict[str, float] = {}
 
     # Pipeline (hybrid: ≤ 2 VLM round-trips per crop, with the cheap
     # visibility pre-filter shielding the slow segmenter GPU and the
@@ -421,6 +433,7 @@ async def run(args: argparse.Namespace) -> int:
             # If in_flight ever blows past that, we'd need search_after
             # or scroll. For now cap at 9000 to stay safely under.
             fetch_n = min(fetch_n, 9000)
+            fetch_started = time.monotonic()
             try:
                 tasks = await _fetch_pending(opensearch, batch_size=fetch_n)
             except Exception as exc:
@@ -428,9 +441,18 @@ async def run(args: argparse.Namespace) -> int:
                 await asyncio.sleep(args.poll_interval)
                 continue
 
-            # Filter out in-flight tasks; keep only fresh ones.
+            # Filter out in-flight tasks and hits that may predate a write
+            # released while this search was running; keep only fresh ones.
             async with in_flight_lock:
-                fresh = [t for t in tasks if t.crop_id not in in_flight]
+                fresh = [
+                    t
+                    for t in tasks
+                    if t.crop_id not in in_flight
+                    and released_at.get(t.crop_id, float('-inf')) < fetch_started
+                ]
+                horizon = fetch_started - _RELEASED_AT_TTL_S
+                for cid in [c for c, ts in released_at.items() if ts < horizon]:
+                    del released_at[cid]
 
             if not fresh:
                 metrics['consecutive_empty_polls'] += 1
@@ -497,6 +519,8 @@ async def run(args: argparse.Namespace) -> int:
                     in_q.task_done()
                     continue
                 if t.plate_status in _TERMINAL_STATUSES:
+                    async with in_flight_lock:
+                        in_flight.discard(t.crop_id)
                     in_q.task_done()
                     continue
 
@@ -1188,10 +1212,13 @@ async def run(args: argparse.Namespace) -> int:
                 session_avg_cps=round(rate, 2),
                 request_ids=batch_request_ids,
             )
-            # Now safe to remove from in_flight.
+            # Now safe to remove from in_flight: the bulk ran with
+            # refresh='wait_for', so searches started from here on see it.
+            released = time.monotonic()
             async with in_flight_lock:
                 for t in pending:
                     in_flight.discard(t.crop_id)
+                    released_at[t.crop_id] = released
             pending.clear()
             last_flush = time.monotonic()
 

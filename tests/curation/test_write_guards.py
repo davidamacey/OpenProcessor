@@ -460,7 +460,13 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         opensearch = AsyncMock()
         opensearch.mget = AsyncMock(
             return_value=make_mget_response(
-                {'crop-1': {'class_source': 'human', 'class_validated': True}}
+                {
+                    'crop-1': {
+                        'class_source': 'human',
+                        'class_validated': True,
+                        'region_status': 'pending',
+                    }
+                }
             )
         )
         opensearch.bulk = AsyncMock(
@@ -497,7 +503,13 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         opensearch = AsyncMock()
         opensearch.mget = AsyncMock(
             return_value=make_mget_response(
-                {'crop-1': {'class_source': 'v6_model', 'class_validated': False}}
+                {
+                    'crop-1': {
+                        'class_source': 'v6_model',
+                        'class_validated': False,
+                        'region_status': 'pending',
+                    }
+                }
             )
         )
         opensearch.bulk = AsyncMock(

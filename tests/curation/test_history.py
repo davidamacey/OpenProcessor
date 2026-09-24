@@ -369,6 +369,8 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
         'class_name': 'honda',
         'class_source': 'item_model',
         'class_validated': False,
+        # Still in the pending state the task was fetched in.
+        F.status: 'pending',
     }
 
     from unittest.mock import AsyncMock
