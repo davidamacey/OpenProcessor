@@ -8,7 +8,9 @@ client picks:
 - a status whose lifecycle entry ``clears_box`` also clears the box and
   score (``REGION_STATUS_INFO`` in ``src/config/region_state.py``);
 - ``region_verified`` follows the status: true for the confirm status,
-  false for every other human-written status. Clients never send it;
+  false for every other human-written status. Clients never send it. A
+  write that re-asserts the stored status re-derives nothing (verified and
+  the region-cluster placement stay as stored);
 - the confirm status needs a box to confirm (:class:`RegionWriteError`);
 - a false-positive mark parks the region in the permanent FP cluster,
   and moving off it releases the region for re-clustering.
@@ -92,11 +94,20 @@ def human_status_fields(region_status: str, current: dict[str, Any]) -> dict[str
         raise RegionWriteError(
             f'cannot mark {status.value!r} without a region box; set one with PUT region'
         )
-    doc: dict[str, Any] = {F.status: status.value, F.verified: status == CONFIRM_STATUS}
+    doc: dict[str, Any] = {F.status: status.value}
+    if current.get(F.status) == status.value:
+        # Re-asserting the stored status (a bulk write over a mixed
+        # selection) changes nothing derived from it: verified and the
+        # region-cluster placement stay as stored. Confirming is the one
+        # exception — it is an explicit verification.
+        if status == CONFIRM_STATUS:
+            doc[F.verified] = True
+    else:
+        doc[F.verified] = status == CONFIRM_STATUS
+        doc.update(fp_cluster_fields(status.value))
     if info.clears_box:
         doc[F.bbox_norm] = None
         doc[F.score] = None
-    doc.update(fp_cluster_fields(status.value))
     return doc
 
 
