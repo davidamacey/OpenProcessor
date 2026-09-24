@@ -37,13 +37,13 @@ _config = get_curation_config()
 CURATION_ITEMS_INDEX = _config.items_index
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
-DEFAULT_SAM3 = os.environ.get('SAM3_URL', 'http://sam3:8000')
-# Dual-GPU SAM3: SAM3_URLS=http://sam3-gpu0:8000,http://sam3-gpu1:8000
+DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
+# Dual-GPU SAM3: OP_SEGMENTER_URLS=http://sam3-gpu0:8000,http://sam3-gpu1:8000
 # When set, the worker round-robins requests across all listed URLs so
-# the parallelism across GPUs adds up. SAM3_URL is kept as the
-# single-URL fallback for backwards compatibility.
-DEFAULT_SAM3_URLS = os.environ.get('SAM3_URLS', '').strip()
-DEFAULT_GEMMA = os.environ.get('OP_VLM_URL', '')
+# the parallelism across GPUs adds up. OP_SEGMENTER_URL is the
+# single-URL fallback when OP_SEGMENTER_URLS is unset.
+DEFAULT_SEGMENTER_URLS = os.environ.get('OP_SEGMENTER_URLS', '').strip()
+DEFAULT_VLM_URL = os.environ.get('OP_VLM_URL', '')
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',

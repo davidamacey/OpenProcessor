@@ -18,9 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every item-returning endpoint (`/crops`, `/crops/{id}`, `/review/{tab}`,
   `/regions`, training candidates, `/search/text`) returns the same serialized
   item. Full old→new table: `docs/design/curation_api_contract.md` (B3).
-- **Region detection is off by default.** The reference license-plate profile no
-  longer self-registers; select it with `OP_REGION_PROFILE=license_plate` or
-  configure one via `OP_REGION_DETECTION_*`.
+- **Region detection is off by default, and no profile ships built in.**
+  `src/services/detection/reference_profiles.py` is removed; the
+  license-plate example profile is a data file,
+  `examples/region_profiles/license_plate.json`, loaded via
+  `OP_REGION_PROFILE_PATH=<path>`. `OP_REGION_PROFILE=<name>` now only
+  resolves a profile a deployment's own startup code registered.
+  `DetectionProfile` gains `region_class_name` and `display_name` fields.
 - **`OP_DETECTION_*` is retired**; ingest detectors use `OP_INGEST_PRIMARY_*` and
   `OP_INGEST_SECONDARY_*` (leftover `OP_DETECTION_*` vars fail with a rename
   message). The secondary detector is now actually wired into ingest.
@@ -63,9 +67,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     prefix.
   - `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY` /
     `VLM_URL` / `GEMMA_URL` are retired; only `OP_VLM_URL` / `OP_VLM_MODEL`
-    / `OP_VLM_API_KEY` are read now (the remaining `VLM_*`/`GEMMA_*` env
-    vars — images-per-call, httpx pool sizing — are unchanged pending a
-    later wave).
+    / `OP_VLM_API_KEY` are read now.
+- **Naming sweep, wave W2 — wire surface**: `GET /curation/methods`'
+  operationId is `get_methods_curation_methods_get` (was
+  `legacy_methods_curation_methods_get`); its `flags` keys drop the `legacy_`
+  prefix (`scores_enabled`, `scores_shadow`, `select_diverse_enabled`,
+  `viz_projection_enabled`, `semantic_search_enabled`); the
+  `coco_blind_spots` review tab id and its default-sort id are renamed
+  to `classifier_blind_spots` / `classifier_blind_spots_default`.
+- **Naming sweep, wave W3 — env vars, clean break, no aliases.** A
+  startup guard (`src/config/retired_env.py`, called from `src/main.py`'s
+  lifespan and both worker `main()` entry points) now fails loudly,
+  naming the replacement, if any of these are still set:
+
+  | Old | New |
+  |---|---|
+  | `VLM_URL`, `GEMMA_URL`, `OPENWEBUI_BASE_URL` | `OP_VLM_URL` |
+  | `OPENWEBUI_MODEL` | `OP_VLM_MODEL` |
+  | `OPENWEBUI_API_KEY` | `OP_VLM_API_KEY` |
+  | `VLM_IMAGES_PER_CALL`, `GEMMA_IMAGES_PER_CALL` | `OP_VLM_OPEN_IMAGES_PER_CALL` |
+  | `VLM_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_MAX_CONNECTIONS` | `OP_VLM_HTTPX_MAX_CONNECTIONS` |
+  | `VLM_HTTPX_KEEPALIVE`, `GEMMA_HTTPX_KEEPALIVE` | `OP_VLM_HTTPX_KEEPALIVE` |
+  | `SAM3_URL` | `OP_SEGMENTER_URL` |
+  | `SAM3_URLS` | `OP_SEGMENTER_URLS` |
+  | `SAM3_HTTPX_MAX_CONNECTIONS` | `OP_SEGMENTER_HTTPX_MAX_CONNECTIONS` |
+  | `SAM3_HTTPX_KEEPALIVE` | `OP_SEGMENTER_HTTPX_KEEPALIVE` |
+  | `SAM3_SKIP_VLM_VERIFY_SCORE`, `SAM3_SKIP_GEMMA_VERIFY_SCORE` | `OP_SEGMENTER_SKIP_VERIFY_SCORE` |
+  | `SAM_WORKER_VLM_CONCURRENCY`, `SAM_WORKER_GEMMA_CONCURRENCY` | `OP_REGION_WORKER_VLM_CONCURRENCY` |
+  | `SAM_WORKER_VLM_VISIBLE_CONCURRENCY`, `SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY` | `OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY` |
+  | `SAM_WORKER_METRICS_PORT` | `OP_REGION_WORKER_METRICS_PORT` |
+  | `OP_REGION_DETECTION_SAM_TEXT_PROMPT` | `OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT` |
+  | `GEMMA_CROP_CACHE_DIR` | `OP_CROP_CACHE_DIR` |
+
+  Also: the region worker's `--gemma-url` CLI flag is now `--vlm-url`;
+  the segmenter service's `/sam3/segment_plate` and
+  `/sam3/segment_plate_batch` path aliases are removed (`POST /segment`
+  and `POST /segment/batch` are the only paths now; the shipped client
+  posts to `/segment`).
 
 ### Added
 - **VLM class-attempt fields** `vlm_class_attempted_at` (date) and

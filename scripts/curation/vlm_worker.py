@@ -611,6 +611,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from src.config.retired_env import reject_retired_env
+
+    reject_retired_env()
     args = parse_args(argv)
     try:
         return asyncio.run(run(args))

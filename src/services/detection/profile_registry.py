@@ -21,7 +21,7 @@ purely through the environment:
   built-in profile — there isn't one.
 - ``OP_REGION_DETECTION_<FIELD>`` overrides individual fields on top of
   whichever profile ``OP_REGION_PROFILE_PATH`` / ``OP_REGION_PROFILE``
-  selected (e.g. ``OP_REGION_DETECTION_SAM_TEXT_PROMPT``,
+  selected (e.g. ``OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT``,
   ``OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS``). With neither set,
   these alone build a profile from the dataclass defaults (named by
   ``OP_REGION_DETECTION_NAME``, else ``region``).

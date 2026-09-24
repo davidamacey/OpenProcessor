@@ -100,11 +100,7 @@ async def _verify_with_vlm(
 # ``DetectionProfile.auto_confirm_aspect`` / ``.auto_confirm_area_frac``)
 # are intentionally loose to admit near-square regions, angled / partial
 # regions, and small far-away regions.
-_SKIP_VLM_VERIFY_SECONDARY_SCORE = float(
-    os.environ.get('SAM3_SKIP_VLM_VERIFY_SCORE')
-    or os.environ.get('SAM3_SKIP_GEMMA_VERIFY_SCORE')
-    or '0.95'
-)
+_SKIP_VLM_VERIFY_SECONDARY_SCORE = float(os.environ.get('OP_SEGMENTER_SKIP_VERIFY_SCORE') or '0.95')
 # Skip the VLM verify roundtrip when the secondary segmenter is very
 # confident AND the bbox passes the same shape sanity check the VLM
 # would do anyway. The VLM verify in this pipeline catches detector
@@ -118,7 +114,7 @@ _SKIP_VLM_VERIFY_SECONDARY_SCORE = float(
 # load from this worker substantially and lets the shared VLM serve
 # other queues (e.g. class labeling) instead.
 #
-# Override at runtime: SAM3_SKIP_VLM_VERIFY_SCORE=0.99 to be more
+# Override at runtime: OP_SEGMENTER_SKIP_VERIFY_SCORE=0.99 to be more
 # conservative, or 0.90 for more aggressive skipping. Set to 1.01 to
 # disable the skip entirely (everything still goes through the VLM).
 

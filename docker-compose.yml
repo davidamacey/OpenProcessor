@@ -177,14 +177,14 @@ services:
     environment:
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
-      # D5: the segmenter leg is opt-in. Empty SAM3_URL makes it a
+      # D5: the segmenter leg is opt-in. Empty OP_SEGMENTER_URL makes it a
       # documented no-op (see scripts/curation/worker/client.py
-      # Sam3Client). Set SAM3_URL=http://segmenter:8000 to use the
+      # SegmenterClient). Set OP_SEGMENTER_URL=http://segmenter:8000 to use the
       # `segmenter` service below (`--profile segmenter`), or point it
       # at your own service's `POST /sam3/segment_plate` — a
-      # comma-separated SAM3_URLS list load-balances across several.
-      - SAM3_URL=${SAM3_URL:-}
-      - SAM3_URLS=${SAM3_URLS:-}
+      # comma-separated OP_SEGMENTER_URLS list load-balances across several.
+      - OP_SEGMENTER_URL=${OP_SEGMENTER_URL:-}
+      - OP_SEGMENTER_URLS=${OP_SEGMENTER_URLS:-}
       - OP_VLM_URL=${OP_VLM_URL:-}
       - OP_VLM_MODEL=${OP_VLM_MODEL:-}
       - OP_VLM_API_KEY=${OP_VLM_API_KEY:-}
@@ -351,10 +351,10 @@ services:
   # The detection cascade's segmenter leg (see docker/segmenter/README.md).
   # Its own profile, not `curation`: it needs a GPU of its own plus a
   # HuggingFace token for gated weights, so enabling it is an explicit
-  # choice. Leaving it off keeps SAM3_URL empty, which makes the leg a
+  # choice. Leaving it off keeps OP_SEGMENTER_URL empty, which makes the leg a
   # clean no-op (tests/curation/test_sam3_optional.py).
   #
-  #   SAM3_URL=http://segmenter:8000 \
+  #   OP_SEGMENTER_URL=http://segmenter:8000 \
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
     image: davidamacey/openprocessor-segmenter:latest

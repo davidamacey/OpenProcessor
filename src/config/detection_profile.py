@@ -109,7 +109,7 @@ class DetectionProfile:
     text_format: str = ''
     text_placeholders: frozenset[str] = field(default_factory=frozenset)
     text_reject_sequences: bool = False
-    sam_text_prompt: str = ''
+    segmenter_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
     # Item (ingest) detectors only: the model class ids whose detections
     # become items. Empty = every class. Lets a generic proposer (e.g. an

@@ -20,12 +20,12 @@ logger = get_logger('curation_worker')
 
 from scripts.curation.worker import run
 from scripts.curation.worker.state import (
-    DEFAULT_GEMMA,
     DEFAULT_OPENSEARCH,
     DEFAULT_PAUSE_SENTINEL,
-    DEFAULT_SAM3,
-    DEFAULT_SAM3_URLS,
+    DEFAULT_SEGMENTER_URL,
+    DEFAULT_SEGMENTER_URLS,
     DEFAULT_TRITON,
+    DEFAULT_VLM_URL,
 )
 
 
@@ -39,17 +39,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument('--triton', default=DEFAULT_TRITON)
     p.add_argument(
         '--sam3-url',
-        default=DEFAULT_SAM3_URLS or DEFAULT_SAM3,
+        default=DEFAULT_SEGMENTER_URLS or DEFAULT_SEGMENTER_URL,
         help=(
             'Secondary-segmenter base URL. May be a comma-separated list '
             'to round-robin across multiple segmenter services on '
-            'different GPUs (env SAM3_URLS=http://sam3-gpu0:8000,'
+            'different GPUs (env OP_SEGMENTER_URLS=http://sam3-gpu0:8000,'
             'http://sam3-gpu1:8000).'
         ),
     )
     p.add_argument(
-        '--gemma-url',
-        default=DEFAULT_GEMMA,
+        '--vlm-url',
+        default=DEFAULT_VLM_URL,
         help='VLM base URL. Empty → use VlmLabeler defaults.',
     )
     p.add_argument(
@@ -98,6 +98,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from src.config.retired_env import reject_retired_env
+
+    reject_retired_env()
     args = parse_args(argv)
     try:
         return asyncio.run(run(args))

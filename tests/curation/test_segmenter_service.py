@@ -213,7 +213,7 @@ class TestClientServerContract:
         try:
             async with _asgi_client() as http:
                 resp = await http.post(
-                    '/sam3/segment_plate',
+                    '/segment',
                     json={'crop_jpeg_b64': 'not-a-jpeg', 'text_prompt': _PROMPT},
                 )
                 assert resp.status_code == 503
@@ -229,22 +229,31 @@ class TestWireSurface:
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('served')
-    async def test_frozen_path_and_generic_alias_are_the_same_handler(self) -> None:
-        """``/sam3/segment_plate`` is what deployed workers post to; ``/segment``
-        is the name the service deserves. Both must work."""
+    async def test_generic_path_serves_the_wire_contract(self) -> None:
+        """``/segment`` is the shipped client's only path (W3: the
+        ``/sam3/segment_plate`` alias was removed -- no deployed worker
+        posts to it anymore)."""
+        payload = {
+            'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
+            'text_prompt': _PROMPT,
+        }
+        async with _asgi_client() as http:
+            generic = await http.post('/segment', json=payload)
+
+        assert generic.status_code == 200
+        assert generic.json()['prompt'] == _PROMPT
+        assert generic.json()['crop_size'] == [320, 240]
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('served')
+    async def test_retired_alias_path_is_gone(self) -> None:
         payload = {
             'crop_jpeg_b64': base64.b64encode(_make_jpeg()).decode('ascii'),
             'text_prompt': _PROMPT,
         }
         async with _asgi_client() as http:
             legacy = await http.post('/sam3/segment_plate', json=payload)
-            generic = await http.post('/segment', json=payload)
-
-        assert legacy.status_code == 200
-        assert generic.status_code == 200
-        assert legacy.json()['candidates'] == generic.json()['candidates']
-        assert legacy.json()['prompt'] == _PROMPT
-        assert legacy.json()['crop_size'] == [320, 240]
+        assert legacy.status_code == 404
 
     @pytest.mark.asyncio
     async def test_text_prompt_has_no_server_side_default(self, served: _FakeProcessor) -> None:

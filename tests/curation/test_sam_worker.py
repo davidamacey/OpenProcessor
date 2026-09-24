@@ -672,7 +672,7 @@ class TestSignalHandling:
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
                 '--sam3-url=http://sam3.local:8000',
-                '--gemma-url=http://gemma.local:8000',
+                '--vlm-url=http://gemma.local:8000',
                 f'--pause-sentinel={sentinel}',
                 '--max-iterations=1',
             ]

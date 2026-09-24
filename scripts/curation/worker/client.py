@@ -21,14 +21,14 @@ Failure model:
   failure with no retry budget.
 
 The segmenter leg is optional (D5): passing an empty/``None``
-``base_url`` (e.g. ``SAM3_URL=''``) constructs a *disabled* client
+``base_url`` (e.g. ``OP_SEGMENTER_URL=''``) constructs a *disabled* client
 instead of raising. A disabled client's :meth:`Sam3Client.segment_plate`
 always returns ``None`` — the same "no candidate" result an unhealthy
 or empty-response segmenter already produces — without attempting any
 HTTP call, so callers that already treat ``None`` as "fall through to
 the next cascade step" degrade cleanly with zero code changes. A
 deployment with no segmentation service of its own simply leaves
-``SAM3_URL`` unset/empty and documents that behavior; see
+``OP_SEGMENTER_URL`` unset/empty and documents that behavior; see
 ``docs/design/curation_design_rationale.md``.
 """
 
@@ -100,7 +100,7 @@ class _HostState:
 
 
 class Sam3Client:
-    """Thin async wrapper around ``POST /sam3/segment_plate``.
+    """Thin async wrapper around ``POST /segment``.
 
     Owns the underlying ``httpx.AsyncClient`` so the worker can share
     connections across calls. Returns the **highest-scoring** candidate
@@ -129,8 +129,8 @@ class Sam3Client:
         self.timeout_s = timeout_s
         self.max_candidates = max_candidates
         self.text_prompt = text_prompt
-        _max_conn = int(os.environ.get('SAM3_HTTPX_MAX_CONNECTIONS', '512'))
-        _keepalive = int(os.environ.get('SAM3_HTTPX_KEEPALIVE', '128'))
+        _max_conn = int(os.environ.get('OP_SEGMENTER_HTTPX_MAX_CONNECTIONS', '512'))
+        _keepalive = int(os.environ.get('OP_SEGMENTER_HTTPX_KEEPALIVE', '128'))
         _limits = httpx.Limits(
             max_connections=_max_conn,
             max_keepalive_connections=_keepalive,
@@ -253,7 +253,7 @@ class Sam3Client:
                 if timing is not None:
                     timing['post_started'] = self._now()
                 resp = await self._client.post(
-                    f'{url}/sam3/segment_plate',
+                    f'{url}/segment',
                     json=payload,
                     timeout=self.timeout_s,
                 )

@@ -41,12 +41,12 @@ from scripts.curation.worker.cascade import Sam3Client  # noqa: F401
 from scripts.curation.worker.runner import run  # noqa: F401
 from scripts.curation.worker.state import (  # noqa: F401
     CURATION_ITEMS_INDEX,
-    DEFAULT_GEMMA,
     DEFAULT_OPENSEARCH,
     DEFAULT_PAUSE_SENTINEL,
-    DEFAULT_SAM3,
-    DEFAULT_SAM3_URLS,
+    DEFAULT_SEGMENTER_URL,
+    DEFAULT_SEGMENTER_URLS,
     DEFAULT_TRITON,
+    DEFAULT_VLM_URL,
     JPEG_QUALITY,
     STATUS_PENDING_DETECTION,
     STATUS_PENDING_VERIFICATION,

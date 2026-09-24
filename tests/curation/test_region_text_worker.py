@@ -112,7 +112,7 @@ async def _drive(
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--sam3-url=http://seg.invalid:8000',
-            f'--gemma-url={vlm_url}',
+            f'--vlm-url={vlm_url}',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',

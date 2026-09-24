@@ -37,12 +37,12 @@ healthcheck probes the flag rather than the socket.
 {"status": "healthy", "model": "sam3", "device": "cuda:0", "loaded": true, "instances": 2}
 ```
 
-### `POST /segment` (alias: `POST /sam3/segment_plate`)
+### `POST /segment`
 
 ```jsonc
 {
   "crop_jpeg_b64": "<base64 jpeg>",  // data: prefix tolerated
-  "text_prompt": "license plate",    // REQUIRED — no default
+  "text_prompt": "shipping label",    // REQUIRED — no default
   "max_candidates": 4                // optional, top-K by score
 }
 ```
@@ -60,16 +60,11 @@ Returns:
   ],
   "elapsed_ms": 2937.4,
   "crop_size": [256, 256],
-  "prompt": "license plate"
+  "prompt": "shipping label"
 }
 ```
 
-`/sam3/segment_plate` is the path the shipped client posts to and is
-**frozen** — renaming it would break already-deployed workers. `/segment`
-is the same handler under a name that describes what the service does;
-prefer it for new callers.
-
-### `POST /segment/batch` (alias: `POST /sam3/segment_plate_batch`)
+### `POST /segment/batch`
 
 `{crops_jpeg_b64: [...], text_prompt, max_candidates}` → `results[]`
 aligned 1:1 with the request order. N images run under one processor

@@ -238,23 +238,23 @@ async def run(args: argparse.Namespace) -> int:
     # region bbox source (it's too loose; produced visibly-oversized
     # regions).
     ocr_recognizer = PaddleOcrTextRecognizer(pool, profile)
-    # D5: the segmenter leg is optional. An empty ``--sam3-url``/``SAM3_URL``
+    # D5: the segmenter leg is optional. An empty ``--sam3-url``/``OP_SEGMENTER_URL``
     # constructs a disabled Sam3Client — segment_plate() then always
     # returns None (the same "no candidate" result callers already
     # handle) without attempting any HTTP call. A deployment with no
     # segmentation service of its own leaves this unset.
     # The segmenter is prompt-driven; the prompt is region-type config
-    # (OP_REGION_DETECTION_SAM_TEXT_PROMPT). A segmenter URL with no prompt
+    # (OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT). A segmenter URL with no prompt
     # would be rejected by the service on every call, so disable the leg.
     sam3_url = args.sam3_url
-    if sam3_url and not profile.sam_text_prompt:
+    if sam3_url and not profile.segmenter_text_prompt:
         logger.warning(
             'segmenter_disabled_no_text_prompt',
             profile=profile.name,
-            detail='set OP_REGION_DETECTION_SAM_TEXT_PROMPT to use the segmenter leg',
+            detail='set OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT to use the segmenter leg',
         )
         sam3_url = ''
-    sam3 = _wkr.Sam3Client(sam3_url, text_prompt=profile.sam_text_prompt)
+    sam3 = _wkr.Sam3Client(sam3_url, text_prompt=profile.segmenter_text_prompt)
     # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
     # the region IS and that ``region_text`` is its transcribed text. The
     # built-in generic pack describes an unspecified "labeled sub-region",
@@ -271,7 +271,7 @@ async def run(args: argparse.Namespace) -> int:
     # LLM: no visibility filter, no verify call; detector regions are
     # accepted unverified and their text is read by OCR
     # (region_text_stage.accept_without_vlm).
-    vlm_available = bool((args.gemma_url or '').strip())
+    vlm_available = bool((args.vlm_url or '').strip())
     validate_text_reader(profile.text_reader)
     item_text_enabled = get_curation_config().item_text_enabled and bool(profile.ocr_pipeline_model)
     item_text_min_conf = get_curation_config().item_text_min_confidence
@@ -281,7 +281,7 @@ async def run(args: argparse.Namespace) -> int:
         text_reader=profile.text_reader,
         item_text_enabled=item_text_enabled,
     )
-    gemma = _wkr.VlmLabeler(base_url=args.gemma_url, pack=pack) if vlm_available else None
+    gemma = _wkr.VlmLabeler(base_url=args.vlm_url, pack=pack) if vlm_available else None
     # B-PR5: populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
     # classify in the same VLM round-trip as region verify + OCR.
@@ -374,20 +374,14 @@ async def run(args: argparse.Namespace) -> int:
     # in-flight. The removed visibility stage no longer competes for
     # VLM slots, so we can spend the full VLM budget on the combined
     # call (which subsumes both old calls).
-    vlm_concurrency = int(
-        os.environ.get('SAM_WORKER_VLM_CONCURRENCY')
-        or os.environ.get('SAM_WORKER_GEMMA_CONCURRENCY')
-        or '16'
-    )
+    vlm_concurrency = int(os.environ.get('OP_REGION_WORKER_VLM_CONCURRENCY') or '16')
     # Visibility pre-filter: cheap yes/no, packed VISIBLE_CHUNK per call.
     # Default 8 consumers gives 8 x 6 = 48 in-flight calls at the
     # upstream VLM, well under the combined-call budget of 16 x 6 = 96.
     # The visible filter is fast (~2s/call) so it doesn't need as many
     # consumers as the heavier combined call.
     gemma_visible_concurrency = int(
-        os.environ.get('SAM_WORKER_VLM_VISIBLE_CONCURRENCY')
-        or os.environ.get('SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY')
-        or '8'
+        os.environ.get('OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY') or '8'
     )
     # Aligned with the shared VLM's --limit-mm-per-prompt {"image":6}.
     # Per-call work scales worse than linearly past 6 on the reference
@@ -1509,7 +1503,7 @@ async def run(args: argparse.Namespace) -> int:
         # Port 4609 inside container, mapped 1:1 on the host so the
         # default prometheus scrape config can reach it.
         metrics_server_runner = await _start_metrics_http_server(
-            port=int(os.environ.get('SAM_WORKER_METRICS_PORT', '4609')),
+            port=int(os.environ.get('OP_REGION_WORKER_METRICS_PORT', '4609')),
         )
         logger.info(
             'sam_worker_pipeline_ready',

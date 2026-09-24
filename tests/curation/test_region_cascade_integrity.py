@@ -474,7 +474,7 @@ async def _drive_worker(
             '--opensearch=http://os.invalid:9200',
             '--triton=triton.invalid:8001',
             '--sam3-url=http://seg.invalid:8000',
-            '--gemma-url=http://vlm.invalid:8000',
+            '--vlm-url=http://vlm.invalid:8000',
             f'--pause-sentinel={tmp_path / "absent.sentinel"}',
             '--continuous',
             '--poll-interval=0.01',

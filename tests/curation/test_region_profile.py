@@ -96,7 +96,7 @@ def test_region_profile_or_neutral_has_no_detector(region_env: pytest.MonkeyPatc
     neutral = profile_registry.region_profile_or_neutral()
     assert neutral.name == 'region'
     assert neutral.detector_model == ''
-    assert neutral.sam_text_prompt == ''
+    assert neutral.segmenter_text_prompt == ''
     assert neutral.secondary_shape_groups == frozenset()
 
 
@@ -111,12 +111,12 @@ def test_select_builtin_reference_profile_by_name(region_env: pytest.MonkeyPatch
 def test_env_overrides_layer_on_selected_profile(region_env: pytest.MonkeyPatch) -> None:
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     region_env.setenv(f'{_ENV_PREFIX}SECONDARY_SHAPE_GROUPS', 'group_a, group_b')
-    region_env.setenv(f'{_ENV_PREFIX}SAM_TEXT_PROMPT', 'a custom prompt')
+    region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'a custom prompt')
     active = profile_registry.get_active_region_profile()
     assert active is not None
     assert active.name == 'license_plate'
     assert active.secondary_shape_groups == frozenset({'group_a', 'group_b'})
-    assert active.sam_text_prompt == 'a custom prompt'
+    assert active.segmenter_text_prompt == 'a custom prompt'
     # Everything not overridden comes from the selected base.
     assert active.detector_model == REFERENCE_LICENSE_PLATE_PROFILE.detector_model
     assert active.aspect_min == REFERENCE_LICENSE_PLATE_PROFILE.aspect_min
@@ -236,7 +236,7 @@ def _worker_args(tmp_path: Path, sam3_url: str = 'http://sam3.local:8000') -> ar
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
             f'--sam3-url={sam3_url}',
-            '--gemma-url=http://gemma.local:8000',
+            '--vlm-url=http://gemma.local:8000',
             f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
         ]
@@ -260,7 +260,7 @@ async def test_worker_sends_the_profile_segmenter_prompt(
     region_env: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     region_env.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
-    region_env.setenv(f'{_ENV_PREFIX}SAM_TEXT_PROMPT', 'shipping label')
+    region_env.setenv(f'{_ENV_PREFIX}SEGMENTER_TEXT_PROMPT', 'shipping label')
     mocks = _patch_worker_io(region_env)
     assert await worker.run(_worker_args(tmp_path)) == 0
     mocks['Sam3Client'].assert_called_once_with(
