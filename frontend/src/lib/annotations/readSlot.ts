@@ -211,6 +211,7 @@ export function readSlot(
       validated: asBoolean(pick(raw, cap.lifecycle.validatedField)),
       autoConfirmed: asBoolean(pick(raw, cap.lifecycle.autoConfirmedField)),
       rejectionReason: asString(pick(raw, cap.lifecycle.rejectionReasonField)),
+      boxCorrect: asBoolean(pick(raw, cap.lifecycle.boxCorrectField)),
     };
   }
 

@@ -81,6 +81,7 @@ export const licensePlateSlot: SlotSpec = {
       validatedField: 'region_validated',
       autoConfirmedField: 'region_auto_confirmed',
       rejectionReasonField: 'region_rejection_reason',
+      boxCorrectField: 'region_bbox_correct',
       labelSourceField: 'region_label_source',
       states: [
         {
