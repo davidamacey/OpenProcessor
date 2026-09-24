@@ -5,6 +5,7 @@ import {
   pointInPolygon,
   selectIdsInLasso,
   type ScreenPoint,
+  classifyRebuildPoll,
 } from './embeddingPlot';
 
 describe('computeScale', () => {
@@ -157,5 +158,23 @@ describe('colorForCluster', () => {
   it('produces more than one distinct color across a spread of cluster ids', () => {
     const colors = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(colorForCluster));
     expect(colors.size).toBeGreaterThan(1);
+  });
+});
+
+describe('classifyRebuildPoll', () => {
+  it('keeps polling while the job runs, tracked or not', () => {
+    expect(classifyRebuildPoll('running', true)).toBe('running');
+    expect(classifyRebuildPoll('running', false)).toBe('running');
+  });
+
+  it('reports the terminal status of a job this plot was watching', () => {
+    expect(classifyRebuildPoll('completed', true)).toBe('completed');
+    expect(classifyRebuildPoll('failed', true)).toBe('failed');
+    expect(classifyRebuildPoll('cancelled', true)).toBe('idle');
+  });
+
+  it("ignores a terminal status for a job it never watched (someone else's history)", () => {
+    expect(classifyRebuildPoll('completed', false)).toBe('idle');
+    expect(classifyRebuildPoll('failed', false)).toBe('idle');
   });
 });

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The embedding plot's projection rebuild is no longer fire-and-forget. It
+  polls `GET /viz/projection/status`, shows progress, offers Cancel
+  (`POST /viz/projection/cancel`) and reloads the plot when the job
+  completes, or shows an error if it fails. It also picks up a rebuild
+  already running when the page opens. Once a projection exists there's
+  now a Rebuild button; before this, a projection could only be built
+  once and never refreshed as new crops arrived.
+
 ### Changed
 
 - The single-class plate dataset export now runs on OpenProcessor's generic

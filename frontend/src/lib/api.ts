@@ -540,6 +540,22 @@ export function rebuildVizProjection(signal?: AbortSignal): Promise<VizProjectio
   );
 }
 
+/** Current rebuild-job snapshot — poll this after `rebuildVizProjection()`. */
+export function getVizProjectionStatus(signal?: AbortSignal): Promise<VizProjectionJob> {
+  return apiFetch<VizProjectionJob>(`${API_PREFIX}/viz/projection/status`, {}, signal);
+}
+
+/** Cancel a running rebuild. `cancelled` is false when nothing was running. */
+export function cancelVizProjection(
+  signal?: AbortSignal,
+): Promise<VizProjectionJob & { cancelled: boolean }> {
+  return apiFetch<VizProjectionJob & { cancelled: boolean }>(
+    `${API_PREFIX}/viz/projection/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
 // -- plates browse / training-cohort selection ---------------------------
 
 /**

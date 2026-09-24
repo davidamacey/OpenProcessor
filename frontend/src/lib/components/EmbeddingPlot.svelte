@@ -31,14 +31,22 @@
 
   import {
     bulkLabel,
+    cancelVizProjection,
     getThumbUrl,
     getVizProjection,
+    getVizProjectionStatus,
     moveCropsToCluster,
     rebuildVizProjection,
     type VizPoint,
+    type VizProjectionJob,
   } from '$lib/api';
   import { isAssignableClass } from '$lib/classVisibility';
-  import { colorForCluster, computeScale, selectIdsInLasso } from '$lib/embeddingPlot';
+  import {
+    classifyRebuildPoll,
+    colorForCluster,
+    computeScale,
+    selectIdsInLasso,
+  } from '$lib/embeddingPlot';
   import type { ScreenPoint } from '$lib/embeddingPlot';
   import { classesStore } from '$stores/classes.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -85,6 +93,11 @@
   let moveTargetInput = $state<string>('');
   let busy = $state<boolean>(false);
   let rebuilding = $state<boolean>(false);
+  // The rebuild job, while one is running. Polled so the operator sees
+  // progress, can cancel, and gets the new projection without reloading.
+  let job = $state<VizProjectionJob | null>(null);
+  let jobPoll: ReturnType<typeof setInterval> | null = null;
+  const JOB_POLL_MS = 3000;
   // Which selected-preview thumbnail (if any) is shown enlarged. The strip
   // thumbnails are 56px -- too small to actually judge a crop by, per live
   // feedback ("I need to be able to individually select and click on them
@@ -270,23 +283,105 @@
     }
   }
 
+  function stopJobPoll(): void {
+    if (jobPoll) clearInterval(jobPoll);
+    jobPoll = null;
+  }
+
+  async function pollJob(): Promise<void> {
+    let st: VizProjectionJob;
+    try {
+      st = await getVizProjectionStatus();
+    } catch {
+      return; // transient — keep polling
+    }
+    const outcome = classifyRebuildPoll(st.status, job !== null);
+    if (outcome === 'running') {
+      job = st;
+      return;
+    }
+    job = null;
+    stopJobPoll();
+    if (outcome === 'completed') {
+      toastStore.success(`Embedding projection rebuilt (${st.n_written} points).`);
+      await load();
+    } else if (outcome === 'failed') {
+      toastStore.error(`Projection rebuild failed: ${st.error ?? 'unknown error'}`);
+    }
+  }
+
+  function startJobPoll(): void {
+    stopJobPoll();
+    jobPoll = setInterval(() => void pollJob(), JOB_POLL_MS);
+  }
+
+  // Adopt a rebuild already in flight (another tab, or before a reload).
+  $effect(() => {
+    void getVizProjectionStatus()
+      .then((st) => {
+        if (st.status === 'running') {
+          job = st;
+          startJobPoll();
+        }
+      })
+      .catch(() => {});
+    return stopJobPoll;
+  });
+
   async function triggerRebuild(): Promise<void> {
-    if (rebuilding) return;
+    if (rebuilding || job) return;
     rebuilding = true;
     try {
-      await rebuildVizProjection();
-      toastStore.info(
-        'Rebuilding embedding projection… this runs as a background job and can take a while.',
-      );
+      job = await rebuildVizProjection();
+      startJobPoll();
     } catch (e) {
       toastStore.error(`Rebuild failed: ${(e as Error).message}`);
     } finally {
       rebuilding = false;
     }
   }
+
+  async function cancelRebuild(): Promise<void> {
+    try {
+      await cancelVizProjection();
+      toastStore.info('Projection rebuild cancelled.');
+    } catch (e) {
+      toastStore.error(`Cancel failed: ${(e as Error).message}`);
+    } finally {
+      job = null;
+      stopJobPoll();
+    }
+  }
 </script>
 
 <div class="flex flex-col gap-2">
+  <div class="flex items-center gap-2 text-xs text-zinc-400">
+    {#if job}
+      <span>
+        Rebuilding projection{job.n_pool
+          ? ` — ${job.n_written.toLocaleString()} / ${job.n_pool.toLocaleString()} points`
+          : '…'}
+      </span>
+      <button
+        type="button"
+        class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:bg-zinc-800"
+        onclick={() => void cancelRebuild()}
+      >
+        Cancel
+      </button>
+    {:else if built}
+      <button
+        type="button"
+        disabled={rebuilding}
+        class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+        title="Refit the projection over the current pool (background job)"
+        onclick={() => void triggerRebuild()}
+      >
+        {rebuilding ? 'Requesting…' : 'Rebuild'}
+      </button>
+    {/if}
+  </div>
+
   {#if bannerRequired}
     <div
       class="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200"
@@ -373,11 +468,11 @@
           </p>
           <button
             type="button"
-            disabled={rebuilding}
+            disabled={rebuilding || job !== null}
             class="rounded border border-blue-500/50 bg-blue-500/20 px-3 py-1.5 text-xs text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
             onclick={() => void triggerRebuild()}
           >
-            {rebuilding ? 'Requesting…' : 'Build projection'}
+            {rebuilding ? 'Requesting…' : job ? 'Building…' : 'Build projection'}
           </button>
         </div>
       {:else if points.length === 0}

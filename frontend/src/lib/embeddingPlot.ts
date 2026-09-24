@@ -157,3 +157,23 @@ export function colorForCluster(clusterId: number | null): string {
   const idx = Math.abs(Math.trunc(clusterId)) % PALETTE.length;
   return PALETTE[idx]!;
 }
+
+/** What the plot should do with one rebuild-job status poll. */
+export type RebuildPollOutcome = 'running' | 'completed' | 'failed' | 'idle';
+
+/**
+ * Classify a `/viz/projection/status` snapshot. `wasTracking` is whether
+ * this component started or adopted the job: a terminal status for a job
+ * it never watched (e.g. an old completed run) is just `idle`, so it
+ * doesn't toast or reload for someone else's history.
+ */
+export function classifyRebuildPoll(
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled',
+  wasTracking: boolean,
+): RebuildPollOutcome {
+  if (status === 'running') return 'running';
+  if (!wasTracking) return 'idle';
+  if (status === 'completed') return 'completed';
+  if (status === 'failed') return 'failed';
+  return 'idle';
+}
