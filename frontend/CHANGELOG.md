@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `/bakeoff` preselects the deployment's default profile (`default` /
+  `default_profile` on `/bakeoff/profiles`) and warns when the configured
+  default is invalid (`default_error`). Profiles now load before
+  baselines, so an unscoped baseline lookup can no longer land after the
+  scoped one and show the wrong baselines.
+- `/bakeoff` shows why a run failed. It shows the job-level `error` when
+  `state` is `error`, and every failed stage or dataset × model cell from
+  the status `failed` list. Before, a failed cell silently vanished from
+  the matrix.
+- Dropped the progress line's "auto-stops SAM3/Gemma" claim, which
+  described one deployment's GPU handling rather than main's.
+
 ### Removed
 
 - The dashboard's per-run detection-profile picker, along with

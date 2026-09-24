@@ -23,6 +23,7 @@
     bakeoffTrainedModels,
     type BakeoffComparison,
     type BakeoffEvalDataset,
+    type BakeoffFailure,
     type BakeoffMatrix,
     type BakeoffModelSpec,
     type BakeoffProfile,
@@ -30,6 +31,7 @@
     type BakeoffTrainedModel,
   } from '$lib/api';
   import { bakeoffAvailability } from '$lib/bakeoffAvailability.svelte';
+  import { bakeoffFailureWhere } from '$lib/bakeoffStatus';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import QuantizationPanel from '$components/QuantizationPanel.svelte';
 
@@ -51,6 +53,7 @@
   // '' = omit `profile`, i.e. the evaluator's deployment default.
   let profile = $state<string>('');
   let profiles = $state<BakeoffProfile[]>([]);
+  let profileDefaultError = $state<string | null>(null);
   const activeProfile = $derived(profiles.find((p) => p.name === profile) ?? null);
 
   let evalDatasets = $state<DatasetChoice[]>([]);
@@ -66,6 +69,10 @@
   let activeJob = $state<string | null>(null);
   let activeState = $state<string | null>(null);
   let activeProgress = $state<{ done: number; total: number } | null>(null);
+  // What went wrong in the tracked job: the job-level reason when it ended
+  // in `error`, and every stage / dataset x model cell that failed.
+  let activeError = $state<string | null>(null);
+  let activeFailures = $state<BakeoffFailure[]>([]);
   let error = $state<string | null>(null);
   let busy = $state(false);
   let poll: ReturnType<typeof setInterval> | undefined;
@@ -115,7 +122,13 @@
 
   async function refreshProfiles() {
     try {
-      profiles = (await bakeoffProfiles()).profiles ?? [];
+      const r = await bakeoffProfiles();
+      profiles = r.profiles ?? [];
+      profileDefaultError = r.default_error ?? null;
+      // Preselect the deployment's default so the baselines shown are the
+      // ones a run would actually use. Only while the operator hasn't
+      // picked one themselves.
+      if (!profile && r.default_profile) profile = r.default_profile;
     } catch (e) {
       error = e instanceof ApiError ? e.message : String(e);
     }
@@ -203,6 +216,8 @@
       activeJob = res.job_id;
       activeState = 'enqueued';
       activeProgress = null;
+      activeError = null;
+      activeFailures = [];
       await refreshRuns();
       startPolling();
     } catch (e) {
@@ -218,12 +233,11 @@
     poll = setInterval(async () => {
       if (!activeJob) return;
       try {
-        const st = (await bakeoffStatus(activeJob)) as {
-          state?: string;
-          progress?: { done: number; total: number };
-        };
+        const st = await bakeoffStatus(activeJob);
         activeState = st.state ?? null;
         activeProgress = st.progress ?? null;
+        activeError = st.state === 'error' ? (st.error ?? 'bake-off failed') : null;
+        activeFailures = st.failed ?? [];
         if (st.state === 'done' || st.state === 'error') {
           stopPolling();
           await refreshRuns();
@@ -264,9 +278,10 @@
     await bakeoffAvailability.init();
     if (bakeoffAvailability.available === false) return;
     void refreshRuns();
-    void refreshProfiles();
+    // Baselines depend on the (possibly preselected) profile, so they
+    // must wait for it — two concurrent lookups could land out of order.
+    void refreshProfiles().then(refreshBaselines);
     void refreshDatasets();
-    void refreshBaselines();
     void refreshTrainedModels();
   });
   onDestroy(stopPolling);
@@ -374,10 +389,16 @@
             onchange={() => void refreshBaselines()}
             class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
           >
-            <option value="">deployment default</option>
+            {#if !profiles.some((p) => p.default)}
+              <option value="">deployment default</option>
+            {/if}
             {#each profiles as p (p.name)}
               <option value={p.name}
-                >{p.name}{p.kind === 'example' ? ' (example)' : ''}</option
+                >{p.name}{p.default
+                  ? ' (default)'
+                  : p.kind === 'example'
+                    ? ' (example)'
+                    : ''}</option
               >
             {/each}
           </select>
@@ -415,6 +436,34 @@
         {/if}
       </div>
 
+      {#if profileDefaultError}
+        <p class="mt-3 text-xs text-amber-300">
+          The configured default bake-off profile is invalid: {profileDefaultError}
+        </p>
+      {/if}
+
+      {#if activeError || activeFailures.length > 0}
+        <div
+          class="mt-3 rounded border border-red-800 bg-red-950/60 p-3 text-xs text-red-200"
+        >
+          {#if activeError}<p class="font-medium">Job failed: {activeError}</p>{/if}
+          {#if activeFailures.length > 0}
+            <p class="mb-1 {activeError ? 'mt-2' : ''} font-medium">
+              {activeFailures.length} failed {activeFailures.length === 1
+                ? 'piece'
+                : 'pieces'}
+            </p>
+            <ul class="max-h-40 space-y-0.5 overflow-auto font-mono">
+              {#each activeFailures as f, i (i)}
+                <li>
+                  {bakeoffFailureWhere(f)} — {f.error}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+
       {#if activeJob && activeProgress && activeProgress.total > 0 && activeState !== 'done' && activeState !== 'error'}
         <div class="mt-3">
           <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
@@ -428,7 +477,7 @@
           <p class="mt-1 text-xs text-zinc-500">
             {activeProgress.done} / {activeProgress.total} evaluations ({Math.round(
               (activeProgress.done / activeProgress.total) * 100,
-            )}%) — auto-stops SAM3/Gemma during the run, restores them when done.
+            )}%)
           </p>
         </div>
       {/if}

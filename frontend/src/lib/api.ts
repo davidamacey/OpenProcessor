@@ -2494,11 +2494,39 @@ export interface BakeoffProfile {
   imgsz: number;
   rank_metric: string;
   baselines_path: string;
+  /** The profile a run uses when the request names none. */
+  default?: boolean;
 }
 
-export function bakeoffProfiles(
-  signal?: AbortSignal,
-): Promise<{ profiles: BakeoffProfile[]; count: number }> {
+export interface BakeoffProfileList {
+  profiles: BakeoffProfile[];
+  count: number;
+  /** Name of the `default: true` row; null when the configured default
+   *  does not resolve (see `default_error`). */
+  default_profile?: string | null;
+  default_error?: string;
+}
+
+/** One failed piece of a bake-off: a whole stage (`throughput`, a
+ *  quantize export) or one dataset × model cell. */
+export interface BakeoffFailure {
+  stage?: string;
+  dataset?: string;
+  model?: string;
+  error: string;
+}
+
+/** `GET /bakeoff/status/{job_id}` — the runner's status.json. */
+export interface BakeoffStatus {
+  state?: 'enqueued' | 'running' | 'done' | 'error' | string;
+  /** Job-level reason when `state` is `error`. */
+  error?: string;
+  progress?: { done: number; total: number };
+  completed?: string[];
+  failed?: BakeoffFailure[];
+}
+
+export function bakeoffProfiles(signal?: AbortSignal): Promise<BakeoffProfileList> {
   return apiFetch(`${API_PREFIX}/bakeoff/profiles`, {}, signal);
 }
 
@@ -2626,7 +2654,7 @@ export function bakeoffRuns(
 export function bakeoffStatus(
   jobId: string,
   signal?: AbortSignal,
-): Promise<Record<string, unknown>> {
+): Promise<BakeoffStatus> {
   return apiFetch(
     `${API_PREFIX}/bakeoff/status/${encodeURIComponent(jobId)}`,
     {},
