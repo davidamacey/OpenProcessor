@@ -6,7 +6,7 @@
 # visualization. The tensor names below are a contract with that client.
 #
 # Input:  images [B, 3, 336, 336] FP32,
-#         ImageNet mean/std normalized (see src/services/detection/pe_preprocess.py)
+#         PE-Core 0.5/0.5 mean/std normalized (see src/services/detection/pe_preprocess.py)
 # Output: image_embeddings [B, 1024] FP32, L2-normalized
 #
 # TensorRT plan built by export/build_pe_trt.sh from the ONNX

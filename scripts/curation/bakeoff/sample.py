@@ -27,14 +27,16 @@ from PIL import Image
 
 
 _PE_INPUT_SIZE = 336
-_PE_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
-_PE_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
+# Must equal src/services/detection/pe_preprocess.PE_MEAN/PE_STD (PE-Core's own
+# 0.5/0.5 normalization); tests/curation/test_pe_preprocess.py pins the two together.
+_PE_MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
+_PE_STD = np.array([0.5, 0.5, 0.5], dtype=np.float32).reshape(3, 1, 1)
 _PE_MODEL = 'pe_image_encoder'
 _IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp'}
 
 
 def _preprocess_for_pe(img: Image.Image, target: int = _PE_INPUT_SIZE) -> np.ndarray:
-    """Resize-by-shorter-edge + center-crop to PE-Core 336 ImageNet-norm CHW.
+    """Resize-by-shorter-edge + center-crop to PE-Core 336 PE-normalized CHW.
 
     Identical convention to the production PE image path so embeddings match.
     """

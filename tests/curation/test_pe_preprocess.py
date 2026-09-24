@@ -6,9 +6,9 @@ from __future__ import annotations
 import numpy as np
 
 from src.services.detection.pe_preprocess import (
-    PE_IMAGENET_MEAN,
-    PE_IMAGENET_STD,
+    PE_MEAN,
     PE_SIZE,
+    PE_STD,
     normalize_chw,
     resize_crop_rgb,
 )
@@ -32,9 +32,9 @@ class TestNormalizeChwShapeAndDtype:
 
 class TestNormalizeChwImagenetMean:
     def test_mean_pixel_normalizes_to_near_zero(self) -> None:
-        # A flat image at exactly the ImageNet mean (as a 0-255 uint8
+        # A flat image at exactly the PE mean (as a 0-255 uint8
         # value) should normalize to ~0 in every channel.
-        mean_rgb = np.round(PE_IMAGENET_MEAN.reshape(3) * 255).astype(np.uint8)
+        mean_rgb = np.round(PE_MEAN.reshape(3) * 255).astype(np.uint8)
         flat = np.tile(mean_rgb.reshape(1, 1, 3), (PE_SIZE, PE_SIZE, 1))
         chw = normalize_chw(flat)
         assert np.abs(chw.mean()) < 0.05
@@ -44,7 +44,7 @@ class TestNormalizeChwImagenetMean:
         rgb = rng.integers(0, 256, size=(8, 8, 3), dtype=np.uint8)
         chw = normalize_chw(rgb)
         expected = np.transpose(rgb.astype(np.float32) / 255.0, (2, 0, 1))
-        expected = (expected - PE_IMAGENET_MEAN) / PE_IMAGENET_STD
+        expected = (expected - PE_MEAN) / PE_STD
         np.testing.assert_allclose(chw, expected, atol=1e-6)
 
 
@@ -113,3 +113,16 @@ class TestWholeFrameFromBytes:
 
         assert whole_frame_chw_from_bytes(b'') is None
         assert whole_frame_chw_from_bytes(b'not an image') is None
+
+
+def test_normalization_matches_upstream_pe_core() -> None:
+    """PE-Core's own transform is Normalize([0.5]*3, [0.5]*3), not ImageNet."""
+    assert np.allclose(PE_MEAN.reshape(3), 0.5)
+    assert np.allclose(PE_STD.reshape(3), 0.5)
+
+
+def test_bakeoff_sampler_uses_the_same_normalization() -> None:
+    from scripts.curation.bakeoff import sample
+
+    assert np.array_equal(sample._PE_MEAN, PE_MEAN)
+    assert np.array_equal(sample._PE_STD, PE_STD)
