@@ -413,6 +413,137 @@ def _normalize_confidence(value: Any) -> ConfidenceLevel:
     return 'low'
 
 
+_TRUE_STRINGS = frozenset({'true', 'yes', 'y', '1'})
+_FALSE_STRINGS = frozenset({'false', 'no', 'n', '0', 'null', 'none', ''})
+
+
+def _coerce_bool(value: Any) -> bool | None:
+    """Strict boolean read of a VLM reply field; ``None`` when unrecognized.
+
+    ``bool("false")`` is ``True``, so a model that quotes its booleans
+    would otherwise have every "false" read as an accept.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return bool(value) if value in (0, 1) else None
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in _TRUE_STRINGS:
+            return True
+        if v in _FALSE_STRINGS:
+            return False
+    return None
+
+
+def _clean_combined_region_text(raw: Any, *, echoes: tuple[str, ...]) -> str | None:
+    """The region's transcribed text from a combined reply, or ``None``.
+
+    Drops sentinels ("unknown", "n/a", ...) and any value that is really
+    one of the reply's own item answers echoed into the text slot
+    (``echoes``: the class name it picked, its ``make`` / ``model``, both
+    joined). Those describe the item, not text read off the region.
+    """
+    if raw is None or isinstance(raw, bool | dict | list):
+        return None
+    text = str(raw).strip()
+    if not text or text.lower() in _TEXT_SENTINELS:
+        return None
+    if _echo_key(text) in {_echo_key(e) for e in echoes if e}:
+        return None
+    return text[:32]
+
+
+def _echo_key(value: str) -> str:
+    """Case- and separator-insensitive form ("Adventure Bike" == "adventurebike")."""
+    return ''.join(ch for ch in value.casefold() if ch.isalnum())
+
+
+def _combined_reply_from_entry(
+    entry: dict[str, Any],
+    *,
+    img_id: str,
+    fields: RegionFields,
+    class_names: list[str] | None,
+) -> VlmCombinedReply:
+    """Build a :class:`VlmCombinedReply` from one parsed reply object.
+
+    Fail-closed: raises ``ValueError`` when the region-visible answer is
+    missing or not a recognizable boolean (the caller leaves the item
+    pending rather than stamping ``no_region_visible`` or an accept off a
+    reply that never answered). ``region_bbox_correct`` reads ``None``
+    unless it is a recognizable boolean, so only an explicit ``true``
+    can accept a box.
+    """
+    visible = _coerce_bool(entry.get(fields.visible))
+    if visible is None:
+        msg = f'{fields.visible} missing or not a boolean: {entry.get(fields.visible)!r}'
+        raise ValueError(msg)
+    class_id_raw = entry.get('class_id')
+    class_id: int | None = int(class_id_raw) if class_id_raw is not None else None
+    class_conf_raw = entry.get('class_confidence')
+    region_conf_raw = entry.get(fields.confidence)
+    make = str(entry.get('make') or '').strip()[:48]
+    model_name = str(entry.get('model') or '').strip()[:48]
+    picked_class = (
+        class_names[class_id]
+        if class_names and class_id is not None and 0 <= class_id < len(class_names)
+        else ''
+    )
+    echoes = (picked_class, make, model_name, f'{make} {model_name}'.strip())
+    return VlmCombinedReply(
+        img_id=img_id,
+        class_id=class_id,
+        class_confidence=(
+            _normalize_confidence(class_conf_raw) if class_conf_raw is not None else None
+        ),
+        plate_visible=visible,
+        plate_bbox_correct=_coerce_bool(entry.get(fields.bbox_correct)),
+        plate_text=_clean_combined_region_text(entry.get(fields.text), echoes=echoes),
+        plate_confidence=(
+            _normalize_confidence(region_conf_raw) if region_conf_raw is not None else None
+        ),
+        make=make,
+        model=model_name,
+    )
+
+
+def _align_batch_entries(parsed: list[Any], n: int) -> list[dict[str, Any] | None] | None:
+    """Map a batch reply's entries onto input positions ``0..n-1``.
+
+    Returns ``None`` when the mapping can't be trusted, so the caller
+    treats the whole chunk as a parse failure instead of handing one
+    image's verdict to another:
+
+    * a duplicate or out-of-range ``img`` index,
+    * a mix of indexed and un-indexed entries,
+    * un-indexed entries whose count differs from ``n``.
+
+    ``img`` is 1-based per the prompt; a reply that is consistently
+    0-based (contains ``0``) is shifted. Missing indices map to ``None``.
+    """
+    entries = [e for e in parsed if isinstance(e, dict)]
+    raw_idx = [e.get('img') for e in entries]
+    if all(i is None for i in raw_idx):
+        return list(entries) if len(entries) == n else None
+    idx: list[int] = []
+    for i in raw_idx:
+        if i is None or isinstance(i, bool):
+            return None
+        try:
+            idx.append(int(i))
+        except (TypeError, ValueError):
+            return None
+    offset = 1 if 0 in idx else 0
+    out: list[dict[str, Any] | None] = [None] * n
+    for entry, i in zip(entries, idx, strict=True):
+        pos = i + offset - 1
+        if not 0 <= pos < n or out[pos] is not None:
+            return None
+        out[pos] = entry
+    return out
+
+
 # ---------------------------------------------------------------------------
 # VlmLabeler
 # ---------------------------------------------------------------------------
@@ -1071,8 +1202,11 @@ class VlmLabeler:
             raise CombinedParseFailure(f'http error: {exc}') from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))
+        if not raw:
+            logger.info('vlm_labeler.combined_parse_failure', img_id=img_id, reason='empty')
+            raise CombinedParseFailure('empty response')
         try:
-            parsed = json.loads(raw) if raw else {}
+            parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
             logger.info(
                 'vlm_labeler.combined_parse_failure',
@@ -1085,29 +1219,10 @@ class VlmLabeler:
             logger.info('vlm_labeler.combined_parse_failure', img_id=img_id, reason='not-an-object')
             raise CombinedParseFailure('response is not a json object')
 
-        fields = self._fields
         try:
-            class_id_raw = parsed.get('class_id')
-            class_id: int | None = int(class_id_raw) if class_id_raw is not None else None
-            class_conf = (
-                _normalize_confidence(parsed.get('class_confidence'))
-                if parsed.get('class_confidence') is not None
-                else None
+            return _combined_reply_from_entry(
+                parsed, img_id=img_id, fields=self._fields, class_names=class_names
             )
-            plate_visible = bool(parsed.get(fields.visible, False))
-            plate_bbox_correct_raw = parsed.get(fields.bbox_correct)
-            plate_bbox_correct: bool | None = (
-                bool(plate_bbox_correct_raw) if plate_bbox_correct_raw is not None else None
-            )
-            plate_text = parsed.get(fields.text)
-            plate_text = str(plate_text)[:32] if plate_text else None
-            plate_conf = (
-                _normalize_confidence(parsed.get(fields.confidence))
-                if parsed.get(fields.confidence) is not None
-                else None
-            )
-            make = str(parsed.get('make') or '').strip()[:48]
-            model_name = str(parsed.get('model') or '').strip()[:48]
         except (TypeError, ValueError) as exc:
             logger.info(
                 'vlm_labeler.combined_parse_failure',
@@ -1116,18 +1231,6 @@ class VlmLabeler:
                 error=str(exc),
             )
             raise CombinedParseFailure(f'type coercion: {exc}') from exc
-
-        return VlmCombinedReply(
-            img_id=img_id,
-            class_id=class_id,
-            class_confidence=class_conf,
-            plate_visible=plate_visible,
-            plate_bbox_correct=plate_bbox_correct,
-            plate_text=plate_text,
-            plate_confidence=plate_conf,
-            make=make,
-            model=model_name,
-        )
 
     async def label_combined_batch(
         self,
@@ -1298,13 +1401,17 @@ class VlmLabeler:
                 raw_len=len(raw),
                 raw_preview=raw[:300],
             )
-        return self._parse_combined_batch_response(raw, chunk, self._fields)
+        return self._parse_combined_batch_response(
+            raw, chunk, self._fields, class_names=class_names
+        )
 
     @staticmethod
     def _parse_combined_batch_response(
         raw: str,
         chunk: list[CombinedCrop],
         fields: RegionFields,
+        *,
+        class_names: list[str] | None = None,
     ) -> dict[str, VlmCombinedReply | None]:
         """Parse a batched combined response into ``{crop_id: reply | None}``.
 
@@ -1360,66 +1467,30 @@ class VlmLabeler:
             )
             return {c.crop_id: None for c in chunk}
 
-        by_index: dict[int, dict[str, Any]] = {}
-        positional: list[dict[str, Any]] = []
-        for entry in parsed:
-            if not isinstance(entry, dict):
-                continue
-            raw_idx = entry.get('img')
-            if raw_idx is not None:
-                try:
-                    by_index[int(raw_idx)] = entry
-                    continue
-                except (TypeError, ValueError):
-                    pass
-            positional.append(entry)
+        aligned = _align_batch_entries(parsed, len(chunk))
+        if aligned is None:
+            logger.warning(
+                'vlm_labeler.combined_batch_misaligned',
+                chunk_size=len(chunk),
+                n_entries=len(parsed),
+                raw_preview=raw[:400],
+            )
+            return {c.crop_id: None for c in chunk}
 
         out: dict[str, VlmCombinedReply | None] = {}
-        for i, crop in enumerate(chunk, start=1):
-            entry = by_index.get(i)
-            if entry is None and positional:
-                entry = positional.pop(0)
+        for crop, entry in zip(chunk, aligned, strict=True):
             if entry is None:
                 out[crop.crop_id] = None
                 continue
-
             try:
-                class_id_raw = entry.get('class_id')
-                class_id: int | None = int(class_id_raw) if class_id_raw is not None else None
-                class_conf = (
-                    _normalize_confidence(entry.get('class_confidence'))
-                    if entry.get('class_confidence') is not None
-                    else None
+                out[crop.crop_id] = _combined_reply_from_entry(
+                    entry,
+                    img_id=crop.crop_id,
+                    fields=fields,
+                    class_names=class_names if crop.classify else None,
                 )
-                plate_visible = bool(entry.get(fields.visible, False))
-                plate_bbox_correct_raw = entry.get(fields.bbox_correct)
-                plate_bbox_correct: bool | None = (
-                    bool(plate_bbox_correct_raw) if plate_bbox_correct_raw is not None else None
-                )
-                plate_text_raw = entry.get(fields.text)
-                plate_text = str(plate_text_raw)[:32] if plate_text_raw else None
-                plate_conf = (
-                    _normalize_confidence(entry.get(fields.confidence))
-                    if entry.get(fields.confidence) is not None
-                    else None
-                )
-                make = str(entry.get('make') or '').strip()[:48]
-                model_name = str(entry.get('model') or '').strip()[:48]
             except (TypeError, ValueError):
                 out[crop.crop_id] = None
-                continue
-
-            out[crop.crop_id] = VlmCombinedReply(
-                img_id=crop.crop_id,
-                class_id=class_id,
-                class_confidence=class_conf,
-                plate_visible=plate_visible,
-                plate_bbox_correct=plate_bbox_correct,
-                plate_text=plate_text,
-                plate_confidence=plate_conf,
-                make=make,
-                model=model_name,
-            )
         return out
 
     @staticmethod
@@ -1484,28 +1555,18 @@ class VlmLabeler:
             )
             return fallback
 
-        # Map img-index → record. The VLM is told to use 1-based ``img``
-        # ids; tolerate missing/duplicate indices by falling back to
-        # positional order for any entries lacking a numeric ``img``.
-        by_index: dict[int, dict[str, Any]] = {}
-        positional: list[dict[str, Any]] = []
-        for entry in parsed:
-            if not isinstance(entry, dict):
-                continue
-            raw_idx = entry.get('img')
-            if raw_idx is not None:
-                try:
-                    by_index[int(raw_idx)] = entry
-                    continue
-                except (TypeError, ValueError):
-                    pass
-            positional.append(entry)
+        aligned = _align_batch_entries(parsed, len(chunk))
+        if aligned is None:
+            logger.warning(
+                'vlm_labeler.region_batch_misaligned',
+                chunk_size=len(chunk),
+                n_entries=len(parsed),
+                raw_preview=raw[:200],
+            )
+            return fallback
 
         out: list[VlmRegionVerdict] = []
-        for i, crop in enumerate(chunk, start=1):
-            entry = by_index.get(i)
-            if entry is None and positional:
-                entry = positional.pop(0)
+        for crop, entry in zip(chunk, aligned, strict=True):
             if entry is None:
                 out.append(
                     VlmRegionVerdict(
@@ -1516,13 +1577,7 @@ class VlmLabeler:
                     )
                 )
                 continue
-            is_region_raw = entry.get('is_region')
-            if isinstance(is_region_raw, bool):
-                is_region = is_region_raw
-            elif isinstance(is_region_raw, str):
-                is_region = is_region_raw.strip().lower() in ('true', 'yes', '1')
-            else:
-                is_region = False
+            is_region = _coerce_bool(entry.get('is_region')) is True
             confidence = _normalize_confidence(entry.get('confidence'))
             reason = str(entry.get('reason', '') or '')[:120]
             text, text_confidence = _extract_region_text(entry, is_region=is_region)
@@ -1710,24 +1765,17 @@ class VlmLabeler:
             )
             return out
 
-        by_index: dict[int, dict[str, Any]] = {}
-        positional: list[dict[str, Any]] = []
-        for entry in parsed:
-            if not isinstance(entry, dict):
-                continue
-            raw_idx = entry.get('img')
-            if raw_idx is not None:
-                try:
-                    by_index[int(raw_idx)] = entry
-                    continue
-                except (TypeError, ValueError):
-                    pass
-            positional.append(entry)
+        aligned = _align_batch_entries(parsed, len(chunk))
+        if aligned is None:
+            # Can't tell which verdict is whose: keep the fail-open default.
+            logger.warning(
+                'vlm_labeler.region_visible_misaligned',
+                chunk_size=len(chunk),
+                n_entries=len(parsed),
+            )
+            return out
 
-        for i, crop in enumerate(chunk, start=1):
-            entry = by_index.get(i)
-            if entry is None and positional:
-                entry = positional.pop(0)
+        for crop, entry in zip(chunk, aligned, strict=True):
             if entry is None:
                 # Fail-open: leave the default True verdict in place.
                 continue
@@ -1799,13 +1847,7 @@ class VlmLabeler:
         if not isinstance(parsed, dict):
             return fallback
 
-        is_region_raw = parsed.get('is_region')
-        if isinstance(is_region_raw, bool):
-            is_region = is_region_raw
-        elif isinstance(is_region_raw, str):
-            is_region = is_region_raw.strip().lower() in ('true', 'yes', '1')
-        else:
-            is_region = False
+        is_region = _coerce_bool(parsed.get('is_region')) is True
 
         confidence = _normalize_confidence(parsed.get('confidence'))
         reason = str(parsed.get('reason', '') or '')[:120]

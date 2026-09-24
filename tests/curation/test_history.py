@@ -8,9 +8,11 @@ import pytest
 
 from src.services.curation.history import (
     MAX_HISTORY_ENTRIES,
-    MAX_PLATE_CHAIN_ENTRIES,
-    append_plate_chain_entry,
+    MAX_REGION_CHAIN_ENTRIES,
+    merge_region_chain,
+    normalize_region_chain_entry,
     record_class_history,
+    region_chain_entry,
 )
 
 
@@ -183,42 +185,49 @@ class TestRecordClassHistory:
         assert len(result) == MAX_HISTORY_ENTRIES
 
 
-class TestAppendPlateChainEntry:
-    def test_appends_to_empty(self):
-        result = append_plate_chain_entry(
-            None,
-            detector='primary_detector',
-            detector_version='1',
-            outcome='hit',
-        )
-        assert len(result) == 1
-        assert result[0].startswith('primary_detector:1:hit@')
+class TestRegionChain:
+    """``region_detector_chain`` entries are exactly ``<actor>:<event>``."""
 
-    def test_appends_to_existing(self):
-        chain = ['primary_detector:1:miss@2026-05-15T00:00:00+00:00']
-        result = append_plate_chain_entry(
-            chain,
-            detector='secondary_detector',
-            detector_version='2',
-            outcome='hit',
+    def test_entry_format(self):
+        assert region_chain_entry('primary_detector', 'hit') == 'primary_detector:hit'
+        assert (
+            region_chain_entry('segmenter', 'sanity_reject:aspect')
+            == 'segmenter:sanity_reject:aspect'
         )
-        assert len(result) == 2
-        assert result[-1].startswith('secondary_detector:2:hit@')
 
-    def test_caps_at_max(self):
-        chain = [
-            f'primary_detector:{i}:hit@2026-05-15T00:00:00+00:00'
-            for i in range(MAX_PLATE_CHAIN_ENTRIES)
+    def test_normalizes_legacy_double_colon_timestamped_entries(self):
+        assert (
+            normalize_region_chain_entry('primary_detector::hit@2026-09-24T03:09:23+00:00')
+            == 'primary_detector:hit'
+        )
+        assert (
+            normalize_region_chain_entry('vlm_visible::yes@2026-09-24T03:09:21+00:00')
+            == 'vlm_visible:yes'
+        )
+        # Canonical entries (incl. multi-part events) pass through untouched.
+        for entry in ('vlm_visible:no', 'segmenter:sanity_reject:aspect', 'det:hit'):
+            assert normalize_region_chain_entry(entry) == entry
+
+    def test_merge_dedups_across_passes_and_heals_legacy(self):
+        stored = [
+            'primary_detector::hit@2026-09-24T03:09:23+00:00',
+            'primary_detector::combined_verify_ok@2026-09-24T03:09:23+00:00',
         ]
-        result = append_plate_chain_entry(
-            chain,
-            detector='secondary_detector',
-            detector_version='1',
-            outcome='hit',
+        merged = merge_region_chain(
+            stored, ['primary_detector:hit', 'primary_detector:combined_verify_ok']
         )
-        assert len(result) == MAX_PLATE_CHAIN_ENTRIES
-        # Newest at tail.
-        assert result[-1].startswith('secondary_detector:1:hit@')
+        assert merged == ['primary_detector:hit', 'primary_detector:combined_verify_ok']
+
+    def test_merge_appends_new_in_order(self):
+        merged = merge_region_chain(['a:miss'], ['b:hit', 'b:combined_verify_ok', 'b:hit'])
+        assert merged == ['a:miss', 'b:hit', 'b:combined_verify_ok']
+
+    def test_merge_caps_drop_oldest(self):
+        chain = [f'det{i}:hit' for i in range(MAX_REGION_CHAIN_ENTRIES)]
+        merged = merge_region_chain(chain, ['segmenter:hit'])
+        assert len(merged) == MAX_REGION_CHAIN_ENTRIES
+        assert merged[-1] == 'segmenter:hit'
+        assert 'det0:hit' not in merged
 
 
 # =============================================================================
@@ -360,6 +369,8 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
         'class_name': 'honda',
         'class_source': 'item_model',
         'class_validated': False,
+        # Still in the pending state the task was fetched in.
+        F.status: 'pending',
     }
 
     from unittest.mock import AsyncMock

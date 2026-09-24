@@ -38,6 +38,7 @@ from src.services.detection.cascade_detect import (
 )
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
+from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
 
 logger = get_logger('curation_worker')
@@ -110,6 +111,10 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
 # threshold as the legacy cascade's combined-cohort gate
 # (combined.py: _V6_LOW_CONF_THRESHOLD).
 _V6_HIGH_CONF_THRESHOLD = 0.80
+
+# How long the producer remembers a released crop. Only has to outlive the
+# slowest single pending search.
+_RELEASED_AT_TTL_S = 300.0
 
 
 def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
@@ -226,7 +231,19 @@ async def run(args: argparse.Namespace) -> int:
         )
         sam3_url = ''
     sam3 = _wkr.Sam3Client(sam3_url, text_prompt=profile.sam_text_prompt)
-    gemma = _wkr.VlmLabeler(base_url=args.gemma_url) if args.gemma_url else _wkr.VlmLabeler()
+    # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
+    # the region IS and that ``region_text`` is its transcribed text. The
+    # built-in generic pack describes an unspecified "labeled sub-region",
+    # so on any other domain the VLM verified whatever box it was shown and
+    # filled region_text with a description of it ("a red taillight") or
+    # the item's class name.
+    pack = resolve_prompt_pack()
+    logger.info('vlm_prompt_pack_resolved', pack=pack.name)
+    gemma = (
+        _wkr.VlmLabeler(base_url=args.gemma_url, pack=pack)
+        if args.gemma_url
+        else _wkr.VlmLabeler(pack=pack)
+    )
     # B-PR5: populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
     # classify in the same VLM round-trip as region verify + OCR.
@@ -257,6 +274,14 @@ async def run(args: argparse.Namespace) -> int:
 
     in_flight: set[str] = set()
     in_flight_lock = asyncio.Lock()
+    # crop_id -> monotonic time the writer released it after a successful
+    # write. A pending search that STARTED before that moment may carry the
+    # pre-write (still pending) doc, so the producer drops those hits; a
+    # search started after it sees the write (the bulk uses
+    # refresh='wait_for'). Without this, a crop released between a
+    # search's start and its response was re-queued and ran the whole
+    # cascade a second time.
+    released_at: dict[str, float] = {}
 
     # Pipeline (hybrid: ≤ 2 VLM round-trips per crop, with the cheap
     # visibility pre-filter shielding the slow segmenter GPU and the
@@ -408,6 +433,7 @@ async def run(args: argparse.Namespace) -> int:
             # If in_flight ever blows past that, we'd need search_after
             # or scroll. For now cap at 9000 to stay safely under.
             fetch_n = min(fetch_n, 9000)
+            fetch_started = time.monotonic()
             try:
                 tasks = await _fetch_pending(opensearch, batch_size=fetch_n)
             except Exception as exc:
@@ -415,9 +441,18 @@ async def run(args: argparse.Namespace) -> int:
                 await asyncio.sleep(args.poll_interval)
                 continue
 
-            # Filter out in-flight tasks; keep only fresh ones.
+            # Filter out in-flight tasks and hits that may predate a write
+            # released while this search was running; keep only fresh ones.
             async with in_flight_lock:
-                fresh = [t for t in tasks if t.crop_id not in in_flight]
+                fresh = [
+                    t
+                    for t in tasks
+                    if t.crop_id not in in_flight
+                    and released_at.get(t.crop_id, float('-inf')) < fetch_started
+                ]
+                horizon = fetch_started - _RELEASED_AT_TTL_S
+                for cid in [c for c, ts in released_at.items() if ts < horizon]:
+                    del released_at[cid]
 
             if not fresh:
                 metrics['consecutive_empty_polls'] += 1
@@ -484,6 +519,8 @@ async def run(args: argparse.Namespace) -> int:
                     in_q.task_done()
                     continue
                 if t.plate_status in _TERMINAL_STATUSES:
+                    async with in_flight_lock:
+                        in_flight.discard(t.crop_id)
                     in_q.task_done()
                     continue
 
@@ -522,6 +559,7 @@ async def run(args: argparse.Namespace) -> int:
                         outcome='hit' if cand is not None else 'miss'
                     ).observe(time.monotonic() - _lpr_t0)
                     if cand is not None:
+                        t.detection_trace.append(f'{region_profile().detector_model}:hit')
                         t.candidate_source = 'lpr'
                         t.candidate_in_crop = cand.bbox_norm
                         t.candidate_in_source = crop_norm_to_source_norm(
@@ -531,6 +569,9 @@ async def run(args: argparse.Namespace) -> int:
                         await combined_q.put(t)
                         in_q.task_done()
                         continue
+                    # Recorded so the blind-spot training cohort
+                    # (``<detector>:miss`` + segmenter hit) can find it.
+                    t.detection_trace.append(f'{region_profile().detector_model}:miss')
 
                 # Path 3: secondary-shape pending OR non-secondary with
                 # no primary hit. Hand off to the visibility
@@ -790,6 +831,7 @@ async def run(args: argparse.Namespace) -> int:
                         continue
                     # Else: queue the secondary-segmenter candidate for
                     # combined VLM call.
+                    t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
                     t.candidate_source = 'sam3'
                     t.candidate_in_crop = sam_candidate.bbox_norm
                     t.candidate_in_source = crop_norm_to_source_norm(
@@ -833,7 +875,7 @@ async def run(args: argparse.Namespace) -> int:
                     t.detection_trace.append(f'{region_profile().segmenter_name}:text_hint:miss')
                 elif ocr_regions:
                     t.detection_trace.append(
-                        f'{region_profile().ocr_rec_model}:text_hint:no_plate_shape'
+                        f'{region_profile().ocr_rec_model}:text_hint:no_region_shape'
                     )
                 else:
                     t.detection_trace.append(f'{region_profile().ocr_rec_model}:text_hint:miss')
@@ -988,6 +1030,42 @@ async def run(args: argparse.Namespace) -> int:
                             else None
                         )
 
+                        # Map cascade's internal source tag to the
+                        # canonical detector name used in provenance.
+                        _det = {
+                            'sam3': (
+                                region_profile().segmenter_name,
+                                region_profile().segmenter_version,
+                            ),
+                            # OCR-hinted re-pass: bbox came from the
+                            # secondary segmenter too, just on a
+                            # tighter sub-crop. Provenance records
+                            # the segmenter as the detector; the
+                            # text-hint trace lives on the detector
+                            # chain.
+                            'sam3_text_hint': (
+                                region_profile().segmenter_name,
+                                region_profile().segmenter_version,
+                            ),
+                            'lpr': (
+                                region_profile().detector_model,
+                                region_profile().detector_version,
+                            ),
+                            'lpr_existing': (
+                                region_profile().detector_model,
+                                region_profile().detector_version,
+                            ),
+                        }.get(
+                            t.candidate_source,
+                            (t.candidate_source or 'unknown', '1'),
+                        )
+                        actor = _det[0]
+                        # The candidate's detector gets exactly one ``:hit``
+                        # (Stage A records it for fresh detections; an
+                        # ingest-time box awaiting verification has none).
+                        if f'{actor}:hit' not in t.detection_trace:
+                            t.detection_trace.append(f'{actor}:hit')
+
                         if (
                             reply.plate_bbox_correct
                             and reply.plate_visible
@@ -1001,9 +1079,7 @@ async def run(args: argparse.Namespace) -> int:
                                 t.candidate_in_crop, t.vehicle_bbox_norm
                             )
                             if not gate_ok:
-                                t.detection_trace.append(
-                                    f'{t.candidate_source or "unknown"}:sanity_reject:{gate_reason}'
-                                )
+                                t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
                                 t.update_doc = {
                                     F.status: RegionStatus.VERIFY_REJECTED,
                                     F.detector_chain: list(t.detection_trace),
@@ -1018,37 +1094,7 @@ async def run(args: argparse.Namespace) -> int:
                                 bbox_in_crop=t.candidate_in_crop,
                                 vlm_high_conf=reply.plate_confidence == 'high',
                             )
-                            # Map cascade's internal source tag to the
-                            # canonical detector name used in provenance.
-                            _det = {
-                                'sam3': (
-                                    region_profile().segmenter_name,
-                                    region_profile().segmenter_version,
-                                ),
-                                # OCR-hinted re-pass: bbox came from the
-                                # secondary segmenter too, just on a
-                                # tighter sub-crop. Provenance records
-                                # the segmenter as the detector; the
-                                # text-hint trace lives on the detector
-                                # chain.
-                                'sam3_text_hint': (
-                                    region_profile().segmenter_name,
-                                    region_profile().segmenter_version,
-                                ),
-                                'lpr': (
-                                    region_profile().detector_model,
-                                    region_profile().detector_version,
-                                ),
-                                'lpr_existing': (
-                                    region_profile().detector_model,
-                                    region_profile().detector_version,
-                                ),
-                            }.get(
-                                t.candidate_source,
-                                (t.candidate_source or 'unknown', '1'),
-                            )
-                            t.detection_trace.append(f'{_det[0]}:hit')
-                            t.detection_trace.append(f'{_det[0]}:combined_verify_ok')
+                            t.detection_trace.append(f'{actor}:combined_verify_ok')
                             t.update_doc = _combined_write_doc(
                                 reply=reply,
                                 candidate_in_source=t.candidate_in_source,
@@ -1089,8 +1135,7 @@ async def run(args: argparse.Namespace) -> int:
                             # review picks these up.
                             metrics['combined_bbox_wrong'] += 1
                             t.detection_trace.append(
-                                f'{t.candidate_source or "unknown"}:'
-                                'combined_verify_reject:plate_visible_elsewhere'
+                                f'{actor}:combined_verify_reject:region_visible_elsewhere'
                             )
                             t.update_doc = {
                                 F.status: RegionStatus.VERIFY_REJECTED,
@@ -1102,9 +1147,7 @@ async def run(args: argparse.Namespace) -> int:
                         else:
                             # plate_visible=False — no region in this crop.
                             metrics['combined_no_plate_visible'] += 1
-                            t.detection_trace.append(
-                                f'{t.candidate_source or "unknown"}:combined_no_plate_visible'
-                            )
+                            t.detection_trace.append(f'{actor}:combined_no_region_visible')
                             t.update_doc = {
                                 F.status: RegionStatus.NO_REGION_VISIBLE,
                                 F.detector_chain: list(t.detection_trace),
@@ -1169,10 +1212,13 @@ async def run(args: argparse.Namespace) -> int:
                 session_avg_cps=round(rate, 2),
                 request_ids=batch_request_ids,
             )
-            # Now safe to remove from in_flight.
+            # Now safe to remove from in_flight: the bulk ran with
+            # refresh='wait_for', so searches started from here on see it.
+            released = time.monotonic()
             async with in_flight_lock:
                 for t in pending:
                     in_flight.discard(t.crop_id)
+                    released_at[t.crop_id] = released
             pending.clear()
             last_flush = time.monotonic()
 
