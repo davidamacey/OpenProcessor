@@ -107,12 +107,21 @@ def test_confidence_band(client: TestClient, fake_os: _RecordingOS) -> None:
 
 def test_class_crops_passes_real_defaults(client: TestClient, fake_os: _RecordingOS) -> None:
     """/classes/{id}/crops calls list_crops directly; unset params must be
-    plain defaults, not FastAPI FieldInfo objects leaking into the query."""
+    plain defaults, not FastAPI FieldInfo objects leaking into the query.
+
+    F-19: class_id/test_holdout/class_excluded are pure predicates and
+    live in filter context now, but the optional params this test cares
+    about (max_rank, min_blur_ratio, classifier_conf_lt, item_text,
+    confidence band) must still be absent when unset."""
     r = client.get(f'{P}/classes/3/crops')
     assert r.status_code == 200, r.text
     body = fake_os.bodies[-1]
     assert body['size'] == 50
-    assert 'filter' not in body['query']['bool']
+    filt = body['query']['bool']['filter']
+    assert not any('range' in clause for clause in filt)
+    assert not any(
+        'should' in clause.get('bool', {}) for clause in filt if isinstance(clause, dict)
+    )
 
 
 def test_diverse_order_honors_k(

@@ -454,7 +454,7 @@ async def review_new_class_summary(
         'size': 0,
         'query': {
             'bool': {
-                'must': [{'term': {'class_source': 'vlm_new_class_pending'}}],
+                'filter': [{'term': {'class_source': 'vlm_new_class_pending'}}],
                 'must_not': [{'term': {'class_validated': True}}],
             }
         },

@@ -209,9 +209,9 @@ async def list_crops(
         conf_clause = confidence_band(conf_min, conf_max)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    must: list[dict[str, Any]] = []
-    # Filter-context clauses (cached bitsets, no scoring) for the new
-    # primary-subject filters.
+    # F-19: every clause below is a pure predicate (term/exists/range/
+    # must_not-wrapped-term) — none score — so all of it lives in filter
+    # context, not must.
     filt: list[dict[str, Any]] = []
     if conf_clause is not None:
         filt.append(conf_clause)
@@ -221,31 +221,31 @@ async def list_crops(
             raise HTTPException(status_code=400, detail='item_text must contain a letter or digit')
         filt.append(text_clause)
     if class_id is not None:
-        must.append({'term': {'class_id': class_id}})
+        filt.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
-        must.append({'term': {'cluster_id': cluster_id}})
+        filt.append({'term': {'cluster_id': cluster_id}})
     if label_source:
-        must.append({'term': {'label_source': label_source}})
+        filt.append({'term': {'label_source': label_source}})
     if class_source:
         # class_source is mapped keyword directly on the live index — no
         # .keyword subfield exists.
-        must.append({'term': {'class_source': class_source}})
+        filt.append({'term': {'class_source': class_source}})
     if label_validated is not None:
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).
-        must.append({'term': {'class_validated': label_validated}})
+        filt.append({'term': {'class_validated': label_validated}})
     if source or hdd_source:
-        must.append({'term': {'hdd_source': source or hdd_source}})
+        filt.append({'term': {'hdd_source': source or hdd_source}})
     if review_dismissed is not None:
         dismissed: dict[str, Any] = {'exists': {'field': 'review_dismissed_at'}}
-        must.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
+        filt.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
     if needs_new_class is not None:
         clause: dict[str, Any] = {'term': {'needs_new_class': True}}
-        must.append(clause if needs_new_class else {'bool': {'must_not': clause}})
+        filt.append(clause if needs_new_class else {'bool': {'must_not': clause}})
     if not include_test:
-        must.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
+        filt.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
     if not include_excluded:
-        must.append({'bool': {'must_not': {'term': {'class_excluded': True}}}})
+        filt.append({'bool': {'must_not': {'term': {'class_excluded': True}}}})
     if max_rank is not None:
         filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
     if min_blur_ratio is not None:
@@ -266,8 +266,6 @@ async def list_crops(
         filt.append(classifier_low_confidence_clause(classifier_conf_lt))
 
     bool_q: dict[str, Any] = {}
-    if must:
-        bool_q['must'] = must
     if filt:
         bool_q['filter'] = filt
     query_clause: dict[str, Any] = {'bool': bool_q} if bool_q else {'match_all': {}}

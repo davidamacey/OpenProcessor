@@ -96,33 +96,35 @@ async def list_regions(
     """
     F = get_region_fields()
     await _ensure_indexes(opensearch)
-    must: list[dict[str, Any]] = [{'exists': {'field': F.bbox_norm}}]
+    # F-19: every clause here is a pure predicate (exists/term/range/
+    # wildcard-as-boolean-match) -- filter context, not must.
+    filt: list[dict[str, Any]] = [{'exists': {'field': F.bbox_norm}}]
     must_not: list[dict[str, Any]] = []
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
     if class_id is not None:
-        must.append({'term': {'class_id': class_id}})
+        filt.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
-        must.append({'term': {'cluster_id': cluster_id}})
+        filt.append({'term': {'cluster_id': cluster_id}})
     if region_cluster_id is not None:
-        must.append({'term': {F.cluster_id: region_cluster_id}})
+        filt.append({'term': {F.cluster_id: region_cluster_id}})
     if region_cluster_subid is not None:
-        must.append({'term': {F.cluster_subid: region_cluster_subid}})
+        filt.append({'term': {F.cluster_subid: region_cluster_subid}})
     if max_rank is not None:
-        must.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
+        filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
     if min_score is not None or max_score is not None:
         rng: dict[str, float] = {}
         if min_score is not None:
             rng['gte'] = min_score
         if max_score is not None:
             rng['lte'] = max_score
-        must.append({'range': {F.score: rng}})
+        filt.append({'range': {F.score: rng}})
     if verified is not None:
-        must.append({'term': {F.verified: verified}})
+        filt.append({'term': {F.verified: verified}})
     if detector is not None:
-        must.append({'term': {F.detector: detector}})
+        filt.append({'term': {F.detector: detector}})
     if text:
-        must.append(region_text_clause(F.text, text))
+        filt.append(region_text_clause(F.text, text))
 
     # In a bucket, either group by sub-cluster (subid asc, then outliers within
     # each subid) so refine results render as contiguous, paginated groups — or
@@ -151,7 +153,7 @@ async def list_regions(
         'from': (page - 1) * page_size,
         'size': page_size,
         '_source': {'excludes': _REGION_SOURCE_EXCLUDES},
-        'query': {'bool': {'must': must, 'must_not': must_not}},
+        'query': {'bool': {'filter': filt, 'must_not': must_not}},
         'sort': sort,
         'track_total_hits': True,
     }
@@ -185,7 +187,7 @@ def _training_candidate_query(
         return (
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'exists': {'field': F.bbox_norm}},
                         {'term': {F.detector: profile.segmenter_name}},
                         {'term': {F.verified: True}},
@@ -204,7 +206,7 @@ def _training_candidate_query(
         return (
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'term': {F.detector: profile.detector_model}},
                         {'term': {F.verified: True}},
                         {'range': {F.score: {'lt': REGION_LOW_SCORE_MAX}}},
@@ -223,7 +225,7 @@ def _training_candidate_query(
         return (
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'exists': {'field': F.bbox_norm}},
                         {'term': {F.detector_chain: f'{profile.detector_model}:hit'}},
                         {'term': {F.detector_chain: f'{profile.segmenter_name}:hit'}},
@@ -240,7 +242,7 @@ def _training_candidate_query(
         return (
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'exists': {'field': F.label_source}},
                         {'exists': {'field': F.detector_chain}},
                     ],
@@ -257,7 +259,7 @@ def _training_candidate_query(
         return (
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
                         {'exists': {'field': F.bbox_norm}},
                     ],
@@ -295,8 +297,8 @@ async def training_candidates(
     await _ensure_indexes(opensearch)
     query, reason = _training_candidate_query(mode)
     if class_id is not None:
-        # Tack the class filter onto the bool.must of the mode query.
-        query['bool']['must'] = [*query['bool']['must'], {'term': {'class_id': class_id}}]
+        # Tack the class filter onto the bool.filter of the mode query.
+        query['bool']['filter'] = [*query['bool']['filter'], {'term': {'class_id': class_id}}]
 
     guard_page_depth(page, page_size)
     body: dict[str, Any] = {

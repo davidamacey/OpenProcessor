@@ -451,13 +451,15 @@ def test_crops_listing_filters_test_holdout_by_default(
 
     r = app_client.get('/curation/crops')
     assert r.status_code == 200, r.text
-    must = captured['body']['query']['bool']['must']
+    # F-19: this is a pure predicate (must_not term), so it lives in
+    # filter context now, not must.
+    filt = captured['body']['query']['bool']['filter']
     has_test_filter = any(
         isinstance(m, dict)
         and 'bool' in m
         and 'must_not' in (m.get('bool') or {})
         and m['bool']['must_not'].get('term', {}).get('test_holdout') is True
-        for m in must
+        for m in filt
     )
     assert has_test_filter, 'test_holdout should be filtered out by default'
 
