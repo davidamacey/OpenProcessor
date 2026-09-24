@@ -22,6 +22,7 @@ from src.services.detection.profile_registry import get_active_region_profile
 
 if TYPE_CHECKING:
     from src.config import DetectionProfile
+    from src.services.detection.region_text import OcrLine
 
 
 logger = get_logger('curation_worker')
@@ -153,6 +154,11 @@ class _ItemTask:
     # ``update_doc`` at write time so subsequent region-cascade writes
     # don't clobber the class fields (cohort = primary-detector-missed).
     combined_class_update: dict[str, Any] = field(default_factory=dict)
+    # Item-text OCR: every line read on the item crop this pass (None =
+    # not read / read failed), and the item-text fields layered onto
+    # whatever region write this pass produces.
+    item_ocr_lines: list[OcrLine] | None = None
+    item_text_update: dict[str, Any] = field(default_factory=dict)
     # Final outcome to write back. Empty dict means "no update for this crop".
     update_doc: dict[str, Any] = field(default_factory=dict)
 
