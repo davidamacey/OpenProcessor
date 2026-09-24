@@ -1237,6 +1237,7 @@ export async function getClusters(
     total: raw.total ?? items.length,
     page: 1,
     page_size: items.length,
+    purity_thresholds: raw.purity_thresholds ?? null,
   };
 }
 

@@ -127,6 +127,17 @@
         onrejectVlm={(c) => onrejectVlm?.(c)}
         ondetail={(c) => ondetail?.(c)}
       />
+      {#if scoreOf?.(crop) != null || cornerBadge}
+        <!-- p7 (2026-09-24 interactive pass): the MATCH/cluster chips sit
+             on top of the crop image itself (object-contain, so a
+             tall/portrait crop has little letterbox padding up there to
+             sit in) and were unreadable against busy image content. A
+             scrim behind the whole top strip keeps them legible without
+             needing per-image letterbox-rect math. -->
+        <div
+          class="pointer-events-none absolute inset-x-0 top-0 h-7 rounded-t-md bg-gradient-to-b from-black/55 to-transparent"
+        ></div>
+      {/if}
       {#if scoreOf}
         {@const score = scoreOf(crop)}
         {#if score != null}

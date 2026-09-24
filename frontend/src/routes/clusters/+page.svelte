@@ -41,11 +41,21 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { undoStore } from '$stores/undo.svelte';
 
+  // m7 (2026-09-24 interactive pass): the served purity_thresholds this
+  // response carries, so the border-color legend can render the real
+  // pure_min/mixed_min instead of a hardcoded "≥80% / ≥60%". null until
+  // the first page resolves.
+  let purityThresholds = $state<{ pure_min: number; mixed_min: number } | null>(null);
+
   // Cluster grid pager. One params builder (clusterQuery) feeds page 1 and
   // every later page, so a filter can't be sent on the first request and
   // silently dropped on the next.
   const clusterPager = createPager<Cluster>({
-    fetchPage: async (page) => await getClusters(clusterQuery(page)),
+    fetchPage: async (page) => {
+      const res = await getClusters(clusterQuery(page));
+      if (res.purity_thresholds) purityThresholds = res.purity_thresholds;
+      return res;
+    },
     keyOf: (c) => String(c.id),
   });
 
@@ -426,6 +436,13 @@
   const embeddingVizBannerRequired = $derived(
     isEmbeddingVizBannerRequired(strategiesStore.methods.overlays),
   );
+  // m20 (2026-09-24 interactive pass): served field_coverage_total for
+  // the viz_projection overlay, so EmbeddingPlot can note when it's
+  // showing fewer points than the pool the fit was computed over.
+  const embeddingVizCoverageTotal = $derived(
+    strategiesStore.methods.overlays.find((o) => o.id === 'viz_projection')
+      ?.field_coverage_total ?? null,
+  );
   let showEmbeddingViz = $state<boolean>(false);
   // The synthetic plate-browse view (isLicensePlateFilter) has its own
   // grid + bulk-triage toolbar; the embedding plot projects vehicle
@@ -800,16 +817,16 @@
     >
       <span class="flex items-center gap-1">
         <span class="inline-block h-2 w-3 rounded-sm border-2 border-green-500/60"></span>
-        ≥80%
+        {purityThresholds ? `≥${Math.round(purityThresholds.pure_min * 100)}%` : 'pure'}
       </span>
       <span class="flex items-center gap-1">
         <span class="inline-block h-2 w-3 rounded-sm border-2 border-orange-500/60"
         ></span>
-        ≥60%
+        {purityThresholds ? `≥${Math.round(purityThresholds.mixed_min * 100)}%` : 'mixed'}
       </span>
       <span class="flex items-center gap-1">
         <span class="inline-block h-2 w-3 rounded-sm border-2 border-red-500/60"></span>
-        &lt;60%
+        {purityThresholds ? `<${Math.round(purityThresholds.mixed_min * 100)}%` : 'noisy'}
       </span>
       <span class="flex items-center gap-1">
         <span class="inline-block h-2 w-3 rounded-sm border-2 border-blue-500/60"></span>
@@ -1010,7 +1027,11 @@
            from showing both at once). Lazily mounted: this is the only
            place <EmbeddingPlot> appears, so it never instantiates (never
            fetches) while the toggle is off. -->
-      <EmbeddingPlot classId={classFilter} bannerRequired={embeddingVizBannerRequired} />
+      <EmbeddingPlot
+        classId={classFilter}
+        bannerRequired={embeddingVizBannerRequired}
+        coveragePoolTotal={embeddingVizCoverageTotal}
+      />
     {:else if isLicensePlateFilter}
       <!-- Plates list view -- extracted to SlotGallery.svelte (P2.6),
            backed by plateGalleryController.svelte.ts. -->

@@ -257,7 +257,7 @@
           onclick={() =>
             gallery.applyPlateStatus(
               [...gallery.plateSel.ids],
-              PLATE_FALSE_POSITIVE_STATE,
+              PLATE_FALSE_POSITIVE_STATE(),
             )}
         >
           ✗ Mark false positive
@@ -267,7 +267,7 @@
           disabled={gallery.plateBusy}
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
           onclick={() =>
-            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_REJECT_STATE)}
+            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_REJECT_STATE())}
         >
           No plate
         </button>
@@ -276,7 +276,7 @@
           disabled={gallery.plateBusy}
           class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_CONFIRM_STATE)}
+            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_CONFIRM_STATE())}
         >
           ✓ Verify
         </button>
@@ -403,7 +403,7 @@
             onclick={gallery.togglePlateSelect}
             onedit={gallery.openPlateEditor}
             onmarkfp={(c) =>
-              gallery.applyPlateStatus([c.crop_id], PLATE_FALSE_POSITIVE_STATE)}
+              gallery.applyPlateStatus([c.crop_id], PLATE_FALSE_POSITIVE_STATE())}
           />
         {/each}
       </div>

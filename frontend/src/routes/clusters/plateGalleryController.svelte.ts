@@ -40,19 +40,34 @@ import { createSelection } from '$lib/selection.svelte';
 import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
-// Sourced from the profile rather than hardcoded, so a lifecycle-state
-// rename only ever needs editing in licensePlate.ts (P2.6/C4b — see
-// docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.3). This
-// file stays deliberately un-parameterized (P2.7's territory) — these
-// three constants are the narrow exception: a state literal that
-// silently means nothing for another slot is the highest-risk class of
-// straggler, so it's worth fixing here without doing the full
-// per-slot parameterization.
-export const { confirmState: PLATE_CONFIRM_STATE, rejectState: PLATE_REJECT_STATE } =
-  licensePlateSlot.capabilities.lifecycle!;
-export const PLATE_FALSE_POSITIVE_STATE =
-  licensePlateSlot.capabilities.lifecycle!.falsePositiveState!;
+// m9 (2026-09-24 interactive pass): the review tab reads
+// confirm/reject/false_positive status from the served
+// `GET {API_PREFIX}/regions/statuses` (`regionStatusesStore`); this gallery
+// used to read only the hand-maintained slot-profile literal. Now tries
+// the served value first and falls back to the profile — same
+// degrade-to-static-default contract `regionStatusesStore`'s own doc
+// comment documents, so a missing/pre-rollout endpoint never breaks the
+// bulk-status buttons.
+export function PLATE_CONFIRM_STATE(): string {
+  return (
+    regionStatusesStore.confirmStatus ??
+    licensePlateSlot.capabilities.lifecycle!.confirmState
+  );
+}
+export function PLATE_REJECT_STATE(): string {
+  return (
+    regionStatusesStore.rejectStatus ??
+    licensePlateSlot.capabilities.lifecycle!.rejectState
+  );
+}
+export function PLATE_FALSE_POSITIVE_STATE(): string {
+  return (
+    regionStatusesStore.falsePositiveStatus ??
+    licensePlateSlot.capabilities.lifecycle!.falsePositiveState!
+  );
+}
 
 /** Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (clustering/orchestrator.py). */
 export const FP_PLATE_CLUSTER_ID = -100;

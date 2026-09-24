@@ -177,3 +177,21 @@ export function classifyRebuildPoll(
   if (status === 'failed') return 'failed';
   return 'idle';
 }
+
+/**
+ * m20 (2026-09-24 interactive pass): the plot's point count caption used
+ * to always read "{points.length} points", even when `{API_PREFIX}/methods`'
+ * `viz_projection` overlay reports a larger `field_coverage_total` — e.g.
+ * 116 shown out of a 422-crop pool, no sign anything was left out. Pure
+ * so the coverage-notice text is unit-testable without mounting the
+ * canvas component.
+ */
+export function embeddingCoverageSuffix(
+  pointsShown: number,
+  coveragePoolTotal: number | null,
+): string {
+  if (coveragePoolTotal != null && coveragePoolTotal > pointsShown) {
+    return `of ${coveragePoolTotal.toLocaleString()} projected — Rebuild to include the rest`;
+  }
+  return 'points';
+}

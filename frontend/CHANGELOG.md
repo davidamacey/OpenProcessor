@@ -993,6 +993,30 @@ which the old check (`combo === 'shift+\``) never matched — fixed
     `hasFieldCoverage()`, same predicate `StrategyBar` uses), plus an
     inline warning when the currently-selected/effective option has no
     coverage.
+  - **m7** — `/clusters`' purity-legend chips hardcoded "≥80% / ≥60% /
+    <60%", contradicting the served `purity_thresholds`
+    (`pure_min: 0.85`, `mixed_min: 0.6`). `GET {API_PREFIX}/clusters`'
+    `purity_thresholds` is now surfaced on `PaginatedResponse` and the
+    legend renders the real percentages.
+  - **m9 (frontend half)** — the plate gallery's bulk confirm/reject/
+    mark-false-positive buttons read `PLATE_CONFIRM_STATE`/etc. from
+    the static `licensePlateSlot` profile only, unlike the review tab's
+    same buttons, which already prefer the served
+    `GET {API_PREFIX}/regions/statuses`. `plateGalleryController.svelte.ts`'s
+    exports are now functions that check `regionStatusesStore` first
+    and fall back to the profile literal. The plate detector filter
+    list and `FP_PLATE_CLUSTER_ID` stay hardcoded — no backend endpoint
+    serves either today (needs backend data).
+  - **m20** — the embedding plot's point-count caption always read
+    "{n} points", even when `{API_PREFIX}/methods`' `viz_projection`
+    overlay reports a larger `field_coverage_total` (e.g. 116 of a
+    422-crop pool). Added `embeddingCoverageSuffix()`
+    (`$lib/embeddingPlot.ts`) and a `coveragePoolTotal` prop so it now
+    reads "116 of 422 projected — Rebuild to include the rest".
+  - **p7** — the MATCH/cluster-origin chips on `/clusters` search
+    results sat directly on the crop image with no backdrop, unreadable
+    against busy content on a tall/portrait crop. Added a top gradient
+    scrim behind the chip row in `CropResultGrid.svelte`.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —

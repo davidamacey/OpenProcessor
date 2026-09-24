@@ -553,6 +553,12 @@ export interface PaginatedResponse<T> {
   order_method?: string | null;
   order_version?: string | null;
   n_pool?: number | null;
+  /** m7 (2026-09-24 interactive pass): `{API_PREFIX}/clusters`' own
+   *  `purity_thresholds` — the border-color legend on `/clusters` used
+   *  to hardcode "≥80% / ≥60% / <60%", which drifted from the server's
+   *  real `pure_min`/`mixed_min` (0.85/0.6). Absent on every other
+   *  endpoint. */
+  purity_thresholds?: { pure_min: number; mixed_min: number } | null;
 }
 
 /**

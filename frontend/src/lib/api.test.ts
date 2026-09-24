@@ -1628,6 +1628,24 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
       promotable: false,
       core_similarity_min: 0.75,
     });
+    // m7 (2026-09-24 interactive pass): the /clusters legend used to
+    // hardcode "≥80% / ≥60%" instead of reading this.
+    expect(res.purity_thresholds).toMatchObject({ pure_min: 0.85, mixed_min: 0.6 });
+  });
+
+  it('getClusters reports purity_thresholds as null when the server omits it, never a stale hardcoded value', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [],
+        total: 0,
+        total_class_clusters: 0,
+        total_candidate_clusters: 0,
+        cluster_id_offset: 0,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await getClusters();
+    expect(res.purity_thresholds ?? null).toBeNull();
   });
 
   it('getCluster carries purity_tier/promotable/core_similarity_min through for the single-cluster lookup', async () => {

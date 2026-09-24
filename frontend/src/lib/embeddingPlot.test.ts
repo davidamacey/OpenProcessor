@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { embeddingCoverageSuffix } from './embeddingPlot';
 import {
   colorForCluster,
   computeScale,
@@ -176,5 +177,25 @@ describe('classifyRebuildPoll', () => {
   it("ignores a terminal status for a job it never watched (someone else's history)", () => {
     expect(classifyRebuildPoll('completed', false)).toBe('idle');
     expect(classifyRebuildPoll('failed', false)).toBe('idle');
+  });
+});
+
+describe('embeddingCoverageSuffix (m20, 2026-09-24 interactive pass)', () => {
+  it('reads "points" plainly when there is no served pool total', () => {
+    expect(embeddingCoverageSuffix(116, null)).toBe('points');
+  });
+
+  it('reads "points" when the pool total equals what is shown (full coverage)', () => {
+    expect(embeddingCoverageSuffix(422, 422)).toBe('points');
+  });
+
+  it('notes the gap and points at Rebuild when the pool total exceeds what is shown', () => {
+    expect(embeddingCoverageSuffix(116, 422)).toBe(
+      'of 422 projected — Rebuild to include the rest',
+    );
+  });
+
+  it('never claims a gap when the pool total is smaller than shown (stale/inconsistent data)', () => {
+    expect(embeddingCoverageSuffix(500, 422)).toBe('points');
   });
 });

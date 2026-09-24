@@ -45,6 +45,7 @@
     classifyRebuildPoll,
     colorForCluster,
     computeScale,
+    embeddingCoverageSuffix,
     selectIdsInLasso,
   } from '$lib/embeddingPlot';
   import type { ScreenPoint } from '$lib/embeddingPlot';
@@ -63,6 +64,16 @@
      *  banner-required purity tier (see `isEmbeddingVizBannerRequired`
      *  in `$lib/strategies.ts`) — renders a small persistent note. */
     bannerRequired?: boolean;
+    /**
+     * m20 (2026-09-24 interactive pass): `{API_PREFIX}/methods`' `viz_projection`
+     * overlay's own `field_coverage`/`field_coverage_total` (e.g.
+     * 116/422) — the pool size the *fit* was computed over, which can
+     * be larger than `points.length` (this call's `max_points`-capped,
+     * possibly class/cluster-scoped result). Passed down by the caller
+     * from `strategiesStore.methods.overlays` rather than recomputed
+     * here. `null` when `/methods` hasn't reported it.
+     */
+    coveragePoolTotal?: number | null;
   }
 
   let {
@@ -70,6 +81,7 @@
     classId = null,
     maxPoints = 4000,
     bannerRequired = false,
+    coveragePoolTotal = null,
   }: Props = $props();
 
   const PLOT_HEIGHT = 520;
@@ -495,7 +507,8 @@
         <p
           class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-[10px] text-zinc-500"
         >
-          {points.length.toLocaleString()} points · click-drag to lasso-select
+          {points.length.toLocaleString()}
+          {embeddingCoverageSuffix(points.length, coveragePoolTotal)} · click-drag to lasso-select
         </p>
       {/if}
     </div>

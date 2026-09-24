@@ -4,42 +4,47 @@
  * hardcode 'false_positive' | 'no_plate_visible' | 'detected' as raw
  * lifecycle-state literals — a state literal that silently means
  * nothing for another slot, and (per the plan) the highest-risk class
- * of straggler in this codebase. Both files now read
- * PLATE_CONFIRM_STATE / PLATE_REJECT_STATE / PLATE_FALSE_POSITIVE_STATE,
- * derived from licensePlateSlot itself, so a backend rename only ever
- * needs editing licensePlate.ts.
+ * of straggler in this codebase.
  *
- * This is the "zero direct test coverage" controller (own header,
- * §7.3 of the plan) — full behavioral coverage is P2.7/F7's job, not
- * this commit's. This test's only job is to pin that the exported
- * constants stay derived from (never drift from) the profile.
+ * m9 (2026-09-24 interactive pass): PLATE_CONFIRM_STATE / etc. were
+ * `export const`s derived from licensePlateSlot alone — the plate
+ * gallery's bulk-status buttons ignored the served
+ * `GET {API_PREFIX}/regions/statuses` vocabulary the review tab already
+ * reads. They're now functions that prefer `regionStatusesStore`'s
+ * loaded value and fall back to the profile literal only when the
+ * store hasn't loaded (or the endpoint 404s) — same degrade contract
+ * `regionStatuses.svelte.ts`'s own doc comment describes.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   PLATE_CONFIRM_STATE,
   PLATE_REJECT_STATE,
   PLATE_FALSE_POSITIVE_STATE,
 } from './plateGalleryController.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+
+afterEach(() => {
+  regionStatusesStore.confirmStatus = null;
+  regionStatusesStore.rejectStatus = null;
+  regionStatusesStore.falsePositiveStatus = null;
+});
 
 describe('plateGalleryController status constants', () => {
-  // Kept (test-audit-2026-09-24.md T2/P2-2): this is a real regression
-  // guard — it fails if PLATE_CONFIRM_STATE/etc. are ever re-hardcoded
-  // instead of derived from the profile. No mount/controller test
-  // reaches this: it's a module-level `export const` computed once at
-  // import time, not something a component render or a controller call
-  // exercises.
-  it('are read from licensePlateSlot, not hardcoded', () => {
+  it('fall back to licensePlateSlot when the served vocabulary has not loaded', () => {
     const lifecycle = licensePlateSlot.capabilities.lifecycle!;
-    expect(PLATE_CONFIRM_STATE).toBe(lifecycle.confirmState);
-    expect(PLATE_REJECT_STATE).toBe(lifecycle.rejectState);
-    expect(PLATE_FALSE_POSITIVE_STATE).toBe(lifecycle.falsePositiveState);
+    expect(PLATE_CONFIRM_STATE()).toBe(lifecycle.confirmState);
+    expect(PLATE_REJECT_STATE()).toBe(lifecycle.rejectState);
+    expect(PLATE_FALSE_POSITIVE_STATE()).toBe(lifecycle.falsePositiveState);
   });
 
-  // Deleted (test-audit-2026-09-24.md T2): "today's values match the
-  // pre-C4b hardcoded literals" only re-asserted the profile's own
-  // literal values back at itself — it never fails for a real
-  // regression, only when someone edits licensePlate.ts's lifecycle
-  // states on purpose, and the test would get updated in the same
-  // commit.
+  it('prefer the served regionStatusesStore values once loaded, over the static profile', () => {
+    regionStatusesStore.confirmStatus = 'served_confirm';
+    regionStatusesStore.rejectStatus = 'served_reject';
+    regionStatusesStore.falsePositiveStatus = 'served_fp';
+
+    expect(PLATE_CONFIRM_STATE()).toBe('served_confirm');
+    expect(PLATE_REJECT_STATE()).toBe('served_reject');
+    expect(PLATE_FALSE_POSITIVE_STATE()).toBe('served_fp');
+  });
 });

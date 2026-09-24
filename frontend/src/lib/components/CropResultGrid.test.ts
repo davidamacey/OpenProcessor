@@ -49,4 +49,12 @@ describe('CropResultGrid.svelte', () => {
     expect(src).toMatch(/cornerBadge/);
     expect(src).toMatch(/@render cornerBadge/);
   });
+
+  it('p7 (2026-09-24 interactive pass): renders a top scrim behind the chip row whenever either chip can appear', () => {
+    // Must be gated on the SAME condition the two chips use
+    // (scoreOf?.(crop) != null || cornerBadge), not a narrower one that
+    // would leave a chip unscrimmed.
+    expect(src).toMatch(/\{#if scoreOf\?\.\(crop\) != null \|\| cornerBadge\}/);
+    expect(src).toMatch(/bg-gradient-to-b from-black\/55 to-transparent/);
+  });
 });
