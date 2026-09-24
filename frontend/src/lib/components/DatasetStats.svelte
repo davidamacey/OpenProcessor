@@ -18,7 +18,7 @@
    *   - Labeled-by-source table with proportion bars
    *   - Unlabeled breakdown (pending_detection / pending_verification /
    *     no_label_source)
-   *   - In-progress queue (sam_drain_total_unfinished)
+   *   - In-progress queue (region_drain_total_unfinished)
    *   - Last clustering run summary (timestamp, method, cluster_count,
    *     residual_count, noise_count)
    */
@@ -68,7 +68,7 @@
     error = result.error;
     if (result.error) return;
     lastUpdated = Date.now();
-    const unfinished = stats?.in_progress?.sam_drain_total_unfinished ?? 0;
+    const unfinished = stats?.in_progress?.region_drain_total_unfinished ?? 0;
     const now = Date.now();
     samples = [...samples, { unfinished, t: now }].filter(
       (s) => now - s.t <= SAMPLE_WINDOW_MS * 2,
@@ -233,7 +233,7 @@
   // (queue not shrinking). Operator sees "computing…" or "queue stalled".
   const etaSeconds = $derived.by<number | null>(() => {
     if (drainRate == null || drainRate <= 0) return null;
-    const remaining = stats?.in_progress?.sam_drain_total_unfinished ?? 0;
+    const remaining = stats?.in_progress?.region_drain_total_unfinished ?? 0;
     return remaining / drainRate;
   });
 
@@ -516,12 +516,14 @@
         <h3 class="mb-3 text-sm font-semibold text-zinc-300">In-flight pipeline</h3>
         <div class="flex items-baseline gap-3">
           <span class="font-mono text-2xl text-zinc-100">
-            {fmt(stats.in_progress.sam_drain_total_unfinished)}
+            {fmt(stats.in_progress.region_drain_total_unfinished)}
           </span>
-          <span class="text-sm text-zinc-400">crops awaiting SAM3 / Gemma</span>
+          <span class="text-sm text-zinc-400"
+            >crops awaiting detection / verification</span
+          >
         </div>
 
-        {#if stats.in_progress.sam_drain_total_unfinished > 0}
+        {#if stats.in_progress.region_drain_total_unfinished > 0}
           <!-- ETA — rolling drain rate over last ~60s. Caveat: only as
                good as the steady-state assumption (sam-worker bursts
                look like big rate spikes; queue refills look like
@@ -568,9 +570,10 @@
           <p class="mt-3 text-xs text-green-400">queue drained</p>
         {/if}
         <p class="mt-3 text-xs text-zinc-500">
-          Matches the API's <code class="font-mono">ingest/sam_drain</code> total. While &gt;
-          0 the ingest walker waits before triggering the next clustering pass. SAM3 only runs
-          on crops that pass the Gemma visible-filter — most time is spent in Gemma, not SAM3.
+          Matches the API's <code class="font-mono">ingest/region_drain</code> total. While
+          &gt; 0 the ingest walker waits before triggering the next clustering pass. SAM3 only
+          runs on crops that pass the Gemma visible-filter — most time is spent in Gemma, not
+          SAM3.
         </p>
       </div>
     </div>

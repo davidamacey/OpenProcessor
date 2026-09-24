@@ -16,7 +16,7 @@ export interface StatsUpdateResult {
  * op_items region_status mapping isn't aggregatable — see G1) instead of a
  * real DatasetStats payload. Trusting that blindly crashes the dashboard
  * (`Cannot read properties of undefined (reading
- * 'sam_drain_total_unfinished')`) once a caller reads into it. Guard here:
+ * 'region_drain_total_unfinished')`) once a caller reads into it. Guard here:
  * an error envelope, or any payload missing `total_crops` (present on
  * every real response), keeps the last-known-good `stats` and reports the
  * error instead.

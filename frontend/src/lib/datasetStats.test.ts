@@ -4,7 +4,7 @@
  * share its shape) can return `{error: "..."}` instead of a real
  * DatasetStats body — trusting that blindly crashed the dashboard with
  * `Cannot read properties of undefined (reading
- * 'sam_drain_total_unfinished')`.
+ * 'region_drain_total_unfinished')`.
  */
 import { describe, expect, it } from 'vitest';
 import { resolveStatsUpdate, summarizeStatsError } from './datasetStats';
@@ -19,7 +19,7 @@ const GOOD: DatasetStats = {
   labeled: { by_human: 100, by_vlm: 50, by_classifier: 10, by_proposal: 5, other: 0 },
   regions: { total_detected: 0, by_detector: 0, by_segmenter: 0, by_human: 0 },
   unlabeled: { pending_detection: 0, pending_verification: 0, no_label_source: 0 },
-  in_progress: { sam_drain_total_unfinished: 3 },
+  in_progress: { region_drain_total_unfinished: 3 },
   clusters: {
     last_run_at: null,
     cluster_count: 0,

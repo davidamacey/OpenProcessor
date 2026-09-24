@@ -41,7 +41,7 @@ function goodStats(overrides: Partial<DatasetStatsType> = {}): DatasetStatsType 
     labeled: { by_human: 100, by_vlm: 200, by_classifier: 50, by_proposal: 10, other: 5 },
     regions: { total_detected: 0, by_detector: 0, by_segmenter: 0, by_human: 0 },
     unlabeled: { pending_detection: 10, pending_verification: 5, no_label_source: 2 },
-    in_progress: { sam_drain_total_unfinished: 0 },
+    in_progress: { region_drain_total_unfinished: 0 },
     clusters: {
       last_run_at: null,
       cluster_count: 0,

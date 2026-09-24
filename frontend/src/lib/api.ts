@@ -1019,7 +1019,7 @@ export interface DatasetStats {
     no_label_source: number;
   };
   in_progress: {
-    sam_drain_total_unfinished: number;
+    region_drain_total_unfinished: number;
   };
   clusters: {
     last_run_at: string | null;
