@@ -44,7 +44,7 @@ here is a stub.
 | Route            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/dashboard`     | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `{API_PREFIX}/regions` (detector / verified / score / plate-text filters; click → jump to the license_plate slot's review tab). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                                                                                                                                                                                                                                                                                                                                                                                       |
+| `/clusters`      | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When the class filter is a slot-bound class (in this deployment `class=license_plate`), replaces the cluster grid with that slot's **region gallery** (`SlotGallery`, driven by `createSlotGalleryController(slot)` in `src/routes/clusters/slotGalleryController.svelte.ts`, one controller per slot bound through `slotForClassName`, browsing the slot's `queue.browsePath`, i.e. `{API_PREFIX}/regions`; detector / verified / status / score / text filters, all copy templated over `slot.label`). The unfiltered grid pins one synthetic inventory card per registered slot with a browse endpoint. Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below). An **Ignored** toggle (2026-09-24, logic-moves W7) swaps the grid for the excluded/`cluster_id=-2` bucket with a "Restore selected" action, and an **item-text search** box (`{API_PREFIX}/crops?item_text=`) swaps it for a literal OCR-text search over `item_text_lines` — both mode-swaps mirror the existing dataset-wide semantic search's pattern, and neither is the same endpoint as the semantic (embedding) search box.                        |
 | `/clusters/[id]` | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `/review`        | 6 top-level review tabs (2026-09 consolidation, down from 9, plus `new_class_proposals` added 2026-09-24 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / **New Class Proposals** / one tab per registered queue-capable slot (today: **Plates**, for `license_plate`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays — the bar's summary chip also shows the server's `sort_applied` next to whatever was requested. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. Class/Source/Conf filter controls (`class_id`/`source`/`conf_min`/`conf_max`) are live against `GET {API_PREFIX}/review/{tab}`. `/review?crop_id=` deep links resolve via `GET {API_PREFIX}/review/{tab}/locate` — jumps straight to the crop's served page/rank, or shows the backend's `reason` when it isn't in the queue. A slot tab (Plates today) carries provenance chips + VLM-read plate text, driven by the active slot's capabilities rather than a hardcoded `'plates'` check (see "Slot-generic review tabs" below). |
 | `/classes`       | Add / rename / merge classes, per-class hotkey binding, and a **Proposals** section (`GET {API_PREFIX}/review/new_class_proposals/summary`) for creating a class from — or mapping onto an existing class — a VLM-proposed term the registry doesn't have yet, bulk-resolving _every_ pending crop proposing that term (`POST {API_PREFIX}/review/new_class_proposals/resolve`), not just the summary's sample thumbnails.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -710,9 +710,9 @@ without one (core tabs, e.g. the Mismatches preset).
 
 `GET {API_PREFIX}/regions` also gained a `status=` filter (400 on an
 unknown value, `GET {API_PREFIX}/regions/statuses` for the vocabulary)
-— the `/clusters` plate gallery's `SlotGallery` renders it as a
+— the `/clusters` region gallery's `SlotGallery` renders it as a
 `<select>`, matching the existing Detector filter's served-vocabulary
-pattern (`plateGalleryController.plateStatusFilter`).
+pattern (`slotGalleryController`'s `statusFilter`).
 
 **New shared components** (renamed off the license-plate-specific names
 during the genericization pass — see `docs/genericization-plan-2026-09-13.md`):
@@ -755,8 +755,10 @@ verifier | human | classifier | proposal`) via `paletteForRole`
 
 **New API helpers:**
 
-- `getPlates(params)` — `{API_PREFIX}/regions` paginated browse with
-  detector/verified/score/text filters .
+- `getRegions(browsePath, params)` — `{API_PREFIX}/regions` paginated browse
+  with detector/verified/score/status/text filters. The `/regions`
+  wrappers all use the `Region` noun (`RegionBrowseItem`,
+  `getRegionClusters`, `batchRegionStatus(slot, ids, status)`, …).
 - `getTrainingCandidates(mode, params)` — `{API_PREFIX}/regions/training_candidates`
   with 5 cohort modes.
 - `getCropHistory(cropId)` — `GET {API_PREFIX}/crops/{id}/history`, the
@@ -790,6 +792,43 @@ still true for a developer with a checkout. It is no longer the _only_
 registration point: a deployment operator with no checkout at all
 registers a domain via the JSON file above instead, through the same
 `resolveSlotRegistry`/merge-by-replace mechanism.
+
+## Domain-neutral source (2026-09-24)
+
+Cropwright must work for any data domain
+(`docs/design/domain-neutral-audit-2026-09-24.md`). Steps 1-6 of that
+audit are done; steps 7-11 (served region profile, profiles moved to
+`examples/`) wait on the backend's naming-w2.
+
+- **Naming:** `api.ts` wrappers of `/regions` endpoints use `Region`
+  (`getRegions`, `RegionBrowseItem`, `batchRegionStatus`); the view layer
+  uses `Slot` or no prefix (`SlotGallery`, `slotGalleryController`,
+  `pager`/`sel`/`statusFilter` inside it). No rename ever crosses the
+  wire — paths and JSON keys are the backend's.
+- **No profile imports in generic code.** `createSlotGalleryController(slot)`
+  reads browse path, lifecycle states and slot key from its `SlotSpec`
+  (served `/regions/statuses` first). The false-positive bucket id is
+  one constant, `FALSE_POSITIVE_REGION_CLUSTER_ID` (TODO: served
+  `cluster_kind === 'false_positive'` after naming-w2). `CropCard` picks
+  its sub-box slot by the crop's region evidence (`subBoxSlotFor`,
+  `cropSlots.ts`) and renders ✎ only when there is one. `SlotCard` /
+  `SlotBboxEditor` require their `slot` prop.
+- **UI copy** names the region by `slot.label` (singular/plural/title),
+  the served tab label, or `datasetExportSpec.blurb` — never a fixed noun.
+- **Tests use the neutral fixture domain:** widgets with a tag region
+  (`TAG-001`, `tag_detector_v1`), built from
+  `src/lib/test/fixtures/regionSlot.ts`'s `widgetTagSlot`. Tests bound to
+  the live registry assert over `registeredSlots`/`builtinSlots`
+  generically. e2e names the region slot's class and `?tab=` id once, in
+  `e2e/fixtures/wire.py` (`REGION_CLASS`/`REGION_TAB_URL_ID`), and clicks
+  the region tab by its served label (`REGION_TAB_LABEL`, conftest's
+  default `/review/tabs`).
+- **Ratchet:** `src/lib/domainNeutral.scan.test.ts` fails on any plate
+  noun, `legacy`, `/curation` or private dataset number anywhere under
+  `src/` (code, strings, comments, tests) outside its per-file
+  allow-list, each entry naming the audit step that removes it. Fix the
+  file; don't widen the allow-list. `LPR`/vehicle/Gemma/SAM3 literals are
+  a separate sweep (audit §8) and not scanned yet.
 
 ## Development
 
@@ -837,7 +876,7 @@ drive a full user flow to observe — see `TrainForm.test.ts`'s remaining
 `+page.svelte` — the page still owns `queue`/`cursor`/`handledIds`
 (shared with slot-tab actions and arrow-key nav) and hands them to the
 controller by reference/accessor, following the existing
-`plateGalleryController.svelte.ts` factory-function convention. Test
+`slotGalleryController.svelte.ts` factory-function convention. Test
 new queue-action behavior against the controller directly
 (`reviewController.test.ts`), not by mounting the whole page.
 
