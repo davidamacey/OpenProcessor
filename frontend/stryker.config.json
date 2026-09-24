@@ -23,7 +23,8 @@
     "src/lib/strategies.ts",
     "src/lib/classPicker.ts",
     "src/lib/annotations/readSlot.ts",
-    "src/lib/review/reviewController.svelte.ts"
+    "src/lib/review/reviewController.svelte.ts",
+    "src/lib/clusters/clusterController.svelte.ts"
   ],
   "ignorePatterns": [
     "e2e/**",

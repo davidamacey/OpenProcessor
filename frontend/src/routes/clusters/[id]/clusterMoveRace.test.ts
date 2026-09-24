@@ -256,14 +256,6 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
 // `excludedCropIds.add` call still fails.
 const normalizedSrc = normalize(src);
 
-/** `dropOnClassStore.register(async (cls, droppedIds) => { ... });`'s
- *  handler body — the sidebar-drop / class-hotkey path. */
-function sidebarDropHandler(): string {
-  const h = extractBalanced(src, /dropOnClassStore\.register\(\s*async \([^)]*\) => \{/);
-  expect(h).not.toBeNull();
-  return h!;
-}
-
 describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapshotting it', () => {
   it('gridGroups is a $derived off createGridGroups, not a writable $state snapshot', () => {
     expect(normalizedSrc).toMatch(/const gridGroups = \$derived\(grid\.groups\)/);
@@ -291,73 +283,40 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
     expect(normalize(fn!)).not.toMatch(/setZoneItems/);
     expect(normalize(fn!)).not.toMatch(/e\.detail\.items/);
   });
-
-  it('the sidebar-drop handler resets the grid override right after the optimistic removal', () => {
-    const handler = normalize(sidebarDropHandler());
-    // Whitespace-collapsed, so order-adjacency survives reformatting —
-    // was previously bounded by a `[\s\S]{0,600}?` character-count gap
-    // that would silently stop matching if a comment between the two
-    // statements grew (T1).
-    expect(handler).toMatch(
-      /cropPager\.total = Math\.max\(0, cropPager\.total - ids\.length\);.*?grid\.reset\(\);/,
-    );
-  });
 });
 
-describe('wiring: /clusters/[id] +page.svelte actually uses the exclusion set', () => {
-  it('declares a page-local excludedCropIds set', () => {
-    // \s+ (not a literal single space) so this survives the exact
-    // whitespace mutation the audit found breaking the old literal-space
-    // version: `const excludedCropIds  = new Set<string>()`.
-    expect(normalizedSrc).toMatch(/const excludedCropIds = new Set<string>\(\)/);
-  });
-
-  it("wires cropPager's accept to the exclusion set (closes the stale-fetch race for every fetchPage call, loadFirst included)", () => {
-    expect(normalizedSrc).toMatch(
-      /accept:\s*\(c\)\s*=>\s*!excludedCropIds\.has\(c\.id\)/,
-    );
-  });
-
-  it('the sidebar-drop (dropOnClassStore) handler claims dragged ids before awaiting bulkLabel', () => {
-    const handler = normalize(sidebarDropHandler());
-    expect(handler).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);
-    // Conflicted ids never actually left -- must be released before the resync.
-    expect(handler).toMatch(/excludedCropIds\.delete\(c\.crop_id\)/);
-    // Hard failure reverts the optimistic removal -- must release too.
-    expect(handler).toMatch(
-      /catch.*?for \(const id of ids\) excludedCropIds\.delete\(id\)/,
-    );
-  });
-
-  it('moveCropIds (M hotkey / move picker) claims ids before awaiting moveCropsToCluster', () => {
-    const fn = extractFunction(src, 'moveCropIds');
-    expect(fn).not.toBeNull();
-    const norm = normalize(fn!);
-    expect(norm).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);
-    expect(norm).toMatch(/excludedCropIds\.delete\(c\.crop_id\)/);
-    expect(norm).toMatch(/catch.*?for \(const id of ids\) excludedCropIds\.delete\(id\)/);
-  });
-
-  it('ignoreSelected claims ids and undoIgnore releases them', () => {
-    const ignoreFn = extractFunction(src, 'ignoreSelected');
-    const undoIgnoreFn = extractFunction(src, 'undoIgnore');
-    expect(normalize(ignoreFn!)).toMatch(
-      /for \(const id of ids\) excludedCropIds\.add\(id\)/,
-    );
-    expect(normalize(undoIgnoreFn!)).toMatch(
-      /for \(const id of ids\) excludedCropIds\.delete\(id\)/,
-    );
-  });
-
-  it('the discard (D) hotkey handler claims successfully-discarded ids', () => {
-    expect(normalizedSrc).toMatch(
-      /cropPager\.items = cropPager\.items\.filter\(\(c\) => !succeededSet\.has\(c\.id\)\); for \(const id of succeededIds\) excludedCropIds\.add\(id\)/,
-    );
-  });
-
-  it('undoLast releases the restored crop id back so it can reappear', () => {
-    const fn = extractFunction(src, 'undoLast');
-    expect(fn).not.toBeNull();
-    expect(normalize(fn!)).toMatch(/excludedCropIds\.delete\(crop\.id\)/);
-  });
-});
+// The `describe('wiring: ... actually uses the exclusion set', ...)` block
+// that used to live here (source-scanning +page.svelte for
+// `excludedCropIds.add`/`.delete` call sites across the sidebar-drop
+// handler, moveCropIds, ignoreSelected/undoIgnore, the D hotkey handler,
+// and undoLast) is deleted per docs/design/test-audit-2026-09-24.md P1-4
+// (second pass): that logic — and the exclusion set itself, now
+// `ExclusionGuard` — moved into `$lib/clusters/clusterController.svelte.ts`
+// (commit history: "refactor(clusters): extract action logic into
+// clusterController"). `clusterController.test.ts` exercises the same
+// guarantees behaviorally instead of by regex:
+//   - 'claims dropped ids in the exclusion guard before the request
+//     settles, and resets the grid' / 'releases conflicted ids ...' /
+//     'reverts the optimistic removal and releases claimed ids ...'
+//     (describe('handleClassDrop')) replace the old sidebar-drop-handler
+//     scan (`the sidebar-drop (dropOnClassStore) handler claims dragged
+//     ids ...` and the "resets the grid override" test that used to live
+//     in the describe block above, both here originally);
+//   - the three equivalently-named tests in describe('moveCropIds')
+//     replace 'moveCropIds (M hotkey / move picker) claims ids ...';
+//   - describe('ignoreSelected / undoIgnore') replaces 'ignoreSelected
+//     claims ids and undoIgnore releases them';
+//   - describe('discardSelected then undoLast')'s first test (checks
+//     `exclusionGuard.accept(a)` is false after a claim) replaces 'the
+//     discard (D) hotkey handler claims successfully-discarded ids';
+//   - describe('undoLast branch coverage') replaces 'undoLast releases
+//     the restored crop id back so it can reappear' — and additionally
+//     exercises both branches of the `if (cropPager.items.some(...))`
+//     check that survived as an `if (false)` mutant under the old scan
+//     (docs/design/test-audit-2026-09-24.md §2.2).
+// The remaining `excludedCropIds`-named text above (a page-local
+// `const excludedCropIds = new Set<string>()` and its `accept:` wiring)
+// no longer exists in +page.svelte at all — the page now owns
+// `exclusionGuard` (from `createExclusionGuard()`) and passes
+// `exclusionGuard.accept` straight into `cropPager`'s `accept` option, so
+// there was nothing left in the page source for a scan to check.
