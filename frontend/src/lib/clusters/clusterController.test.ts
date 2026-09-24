@@ -424,26 +424,63 @@ describe('handleClassDrop', () => {
 // ---------------------------------------------------------------------
 
 describe('acceptVlmForCrop', () => {
-  it('applies the suggestion optimistically and records undo on success', async () => {
+  // dq-queues cutover (2026-09-24): labeling a crop now moves it into its
+  // class cluster server-side, so accepting a suggestion for a class
+  // OTHER than this cluster's own (setup()'s getClusterId() === 42) must
+  // drop it from the grid, not just flip class_id in place.
+  it('drops the crop from the grid (optimistically) and records undo when the suggestion moves it to a different class', async () => {
     vi.mocked(putCropLabel).mockResolvedValue({} as never);
     const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
     const a = crop('a', { vlm_suggested_class_id: 9, vlm_suggested_class_name: 'van' });
-    const { cropPager, controller } = setup([a]);
+    const { cropPager, exclusionGuard, controller } = setup([a]);
 
     await controller.acceptVlmForCrop(a);
 
-    expect(cropPager.items[0]!.class_id).toBe(9);
-    // ?? null (not && null): a truthy name must survive, not collapse to
-    // null.
-    expect(cropPager.items[0]!.class_name).toBe('van');
+    expect(cropPager.items).toEqual([]);
+    expect(cropPager.total).toBe(0);
+    expect(exclusionGuard.accept(a)).toBe(false);
     expect(putCropLabel).toHaveBeenCalledWith('a', 9);
     expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
   });
 
-  it('reverts the optimistic label when the write fails', async () => {
+  // The other half: accepting a suggestion for THIS cluster's own class
+  // (id 42, matching getClusterId()) never moves the crop, so it must
+  // stay visible with the label applied in place — same as before.
+  it("applies the suggestion in place, without removing the crop, when it matches this cluster's own class", async () => {
+    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
+    const a = crop('a', { vlm_suggested_class_id: 42, vlm_suggested_class_name: 'suv' });
+    const { cropPager, controller } = setup([a]);
+
+    await controller.acceptVlmForCrop(a);
+
+    expect(cropPager.items).toHaveLength(1);
+    expect(cropPager.items[0]!.class_id).toBe(42);
+    // ?? null (not && null): a truthy name must survive, not collapse to
+    // null.
+    expect(cropPager.items[0]!.class_name).toBe('suv');
+    expect(putCropLabel).toHaveBeenCalledWith('a', 42);
+    expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
+  });
+
+  it('reverts the optimistic removal (crop reappears, exclusion released) when the write fails, for a move to a different class', async () => {
     vi.mocked(putCropLabel).mockRejectedValue(new Error('nope'));
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
     const a = crop('a', { vlm_suggested_class_id: 9, vlm_suggested_class_name: 'van' });
+    const { cropPager, exclusionGuard, controller } = setup([a]);
+
+    await controller.acceptVlmForCrop(a);
+
+    expect(cropPager.items).toEqual([a]);
+    expect(cropPager.total).toBe(1);
+    expect(exclusionGuard.accept(a)).toBe(true);
+    expect(errorSpy).toHaveBeenCalledWith('Accept VLM suggestion failed: nope');
+  });
+
+  it('reverts the optimistic label in place when the write fails, for a same-cluster accept', async () => {
+    vi.mocked(putCropLabel).mockRejectedValue(new Error('nope'));
+    const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
+    const a = crop('a', { vlm_suggested_class_id: 42, vlm_suggested_class_name: 'suv' });
     const { cropPager, controller } = setup([a]);
 
     await controller.acceptVlmForCrop(a);
@@ -587,8 +624,35 @@ describe('acceptAllVlmOnPage', () => {
     expect(recordWritesSpy).toHaveBeenCalledWith(['a', 'b']);
     expect(recordWritesSpy).toHaveBeenCalledWith(['c']);
     expect(successSpy).toHaveBeenCalledWith('Accepted 3 suggestions.');
-    // ?? null (not && null): a truthy suggested name must survive.
-    expect(cropPager.items.find((x) => x.id === 'a')!.class_name).toBe('x1');
+    // dq-queues cutover: every target here suggests a DIFFERENT class
+    // than this cluster's own (getClusterId() === 42), so all three move
+    // clusters server-side and must leave the grid — not stay in place
+    // with class_id flipped.
+    expect(cropPager.items).toEqual([]);
+    expect(cropPager.total).toBe(0);
+  });
+
+  // The other half of DQ's "may move clusters" fix: a target whose
+  // suggestion matches this cluster's own class never moves, so it must
+  // stay in the grid with the label applied in place, same as a bulkLabel
+  // group that DOES move drops its crops.
+  it("applies the label in place (stays in the grid) for a target whose suggestion matches this cluster's own class", async () => {
+    vi.mocked(bulkLabel).mockImplementation(async (ids, _classId) => ({
+      updated: ids.length,
+      updated_ids: ids,
+      conflicts: [],
+    }));
+    const a = crop('a', { vlm_suggested_class_id: 42, vlm_suggested_class_name: 'suv' });
+    const b = crop('b', { vlm_suggested_class_id: 9, vlm_suggested_class_name: 'van' });
+    const { cropPager, exclusionGuard, controller, setVisible } = setup([a, b]);
+    setVisible([a, b]);
+
+    await controller.acceptAllVlmOnPage();
+
+    const stayed = cropPager.items.find((x) => x.id === 'a');
+    expect(stayed?.class_id).toBe(42);
+    expect(cropPager.items.find((x) => x.id === 'b')).toBeUndefined();
+    expect(exclusionGuard.accept(b)).toBe(false);
   });
 
   // The final error toast's `lastError ? `: ${lastError}` : '.'` else
@@ -600,7 +664,7 @@ describe('acceptAllVlmOnPage', () => {
   // `lastError` is always non-null. A test forcing the `'.'` branch would
   // have to fake `failedIds` non-empty with `lastError` still null, which
   // isn't reachable through the public `acceptAllVlmOnPage()` surface.
-  it('rolls back only the crops in a failed group, leaving the succeeded group labeled', async () => {
+  it('rolls back only the crops in a failed group, leaving the succeeded group moved out of the grid', async () => {
     vi.mocked(bulkLabel).mockImplementation(async (ids, classId) => {
       if (classId === 2) throw new Error('group 2 failed');
       return { updated: ids.length, updated_ids: ids, conflicts: [] };
@@ -608,14 +672,20 @@ describe('acceptAllVlmOnPage', () => {
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
     const a = crop('a', { vlm_suggested_class_id: 1, vlm_suggested_class_name: 'x1' });
     const c = crop('c', { vlm_suggested_class_id: 2, vlm_suggested_class_name: 'x2' });
-    const { cropPager, controller, setVisible } = setup([a, c]);
+    const { cropPager, exclusionGuard, controller, setVisible } = setup([a, c]);
     setVisible([a, c]);
 
     await controller.acceptAllVlmOnPage();
 
     const byId = new Map(cropPager.items.map((x) => [x.id, x]));
-    expect(byId.get('a')!.class_id).toBe(1); // succeeded group stays labeled
-    expect(byId.get('c')!.class_id).toBeNull(); // failed group reverted
+    // Both groups target a class other than this cluster's own (42), so
+    // both are "moving" groups: the succeeded one (class 1) leaves the
+    // grid for good, and the failed one (class 2) is restored — reverting
+    // its optimistic removal, not an in-place class_id revert.
+    expect(byId.has('a')).toBe(false);
+    expect(exclusionGuard.accept(a)).toBe(false);
+    expect(byId.get('c')).toEqual(c);
+    expect(exclusionGuard.accept(c)).toBe(true);
     expect(errorSpy).toHaveBeenCalledWith(
       'Accepted 1, failed 1 (reverted): group 2 failed',
     );

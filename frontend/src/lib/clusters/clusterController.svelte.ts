@@ -238,13 +238,36 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
 
   async function acceptVlmForCrop(crop: Crop): Promise<void> {
     if (crop.vlm_suggested_class_id == null) return;
-    applyLocalLabel(
-      crop.id,
-      crop.vlm_suggested_class_id,
-      crop.vlm_suggested_class_name ?? null,
-    );
+    const targetClassId = crop.vlm_suggested_class_id;
+    const targetClassName = crop.vlm_suggested_class_name ?? null;
+    // dq-queues cutover (2026-09-24): labeling a crop now moves it into
+    // its class cluster server-side — accepting a suggestion for a
+    // DIFFERENT class than this cluster's own (cluster_id === class_id
+    // for a class-kind cluster; any real class for a candidate cluster)
+    // must drop the crop from the grid, the same optimistic-removal +
+    // exclusionGuard pattern dropOnClass/handleClassDrop already use for
+    // a manual label move — not just an in-place field update that
+    // leaves a now-wrong-cluster crop sitting in this grid.
+    if (targetClassId !== getClusterId()) {
+      const snap = cropPager.items;
+      const snapTotal = cropPager.total;
+      cropPager.items = cropPager.items.filter((c) => c.id !== crop.id);
+      cropPager.total = Math.max(0, cropPager.total - 1);
+      exclusionGuard.claim([crop.id]);
+      try {
+        await putCropLabel(crop.id, targetClassId);
+        undoStore.recordWrites([crop.id]);
+      } catch (e) {
+        toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
+        exclusionGuard.release([crop.id]);
+        cropPager.items = snap;
+        cropPager.total = snapTotal;
+      }
+      return;
+    }
+    applyLocalLabel(crop.id, targetClassId, targetClassName);
     try {
-      await putCropLabel(crop.id, crop.vlm_suggested_class_id);
+      await putCropLabel(crop.id, targetClassId);
       undoStore.recordWrites([crop.id]);
     } catch (e) {
       toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
@@ -291,12 +314,28 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     // a single try/catch around the whole loop left the failed group and
     // every later group locally green but never sent.
     const priors = new Map<string, Crop>();
+    // dq-queues cutover (2026-09-24): a suggestion accepted for a
+    // DIFFERENT class than this cluster's own moves the crop into that
+    // class's cluster server-side — drop it from the grid optimistically
+    // (exclusionGuard, same as dropOnClass/acceptVlmForCrop) instead of
+    // an in-place field update that leaves a now-wrong-cluster crop
+    // sitting in this grid.
+    const movingIds = new Set<string>();
     for (const t of targets) {
       const k = t.vlm_suggested_class_id!;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(t.id);
       priors.set(t.id, t);
-      applyLocalLabel(t.id, k, t.vlm_suggested_class_name ?? null);
+      if (k !== getClusterId()) {
+        movingIds.add(t.id);
+      } else {
+        applyLocalLabel(t.id, k, t.vlm_suggested_class_name ?? null);
+      }
+    }
+    if (movingIds.size > 0) {
+      cropPager.items = cropPager.items.filter((c) => !movingIds.has(c.id));
+      cropPager.total = Math.max(0, cropPager.total - movingIds.size);
+      exclusionGuard.claim(movingIds);
     }
     let ok = 0;
     let lastError: string | null = null;
@@ -315,9 +354,20 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       toastStore.success(`Accepted ${targets.length} suggestions.`);
       return;
     }
+    const restored: Crop[] = [];
     for (const id of failedIds) {
       const prior = priors.get(id);
-      if (prior) revertLocalLabel(prior);
+      if (!prior) continue;
+      if (movingIds.has(id)) {
+        exclusionGuard.release([id]);
+        restored.push(prior);
+      } else {
+        revertLocalLabel(prior);
+      }
+    }
+    if (restored.length > 0) {
+      cropPager.items = [...cropPager.items, ...restored];
+      cropPager.total += restored.length;
     }
     toastStore.error(
       `Accepted ${ok}, failed ${failedIds.length} (reverted)${lastError ? `: ${lastError}` : '.'}`,
