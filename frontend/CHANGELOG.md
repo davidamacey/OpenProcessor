@@ -137,12 +137,14 @@ of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
   `/clusters/[id]` now read `class_validated` instead of the OR-combined
   `label_validated`, which previously showed a crop as validated purely
   because its _region_ had been confirmed.
-- `/review`'s Class, HDD source and Conf filter controls are hidden and
-  no longer sent to `GET /review/{tab}` — the backend silently ignores
-  them today (totals didn't change for `class_id=99999` /
-  `hdd_source=nonexistent` / `conf_min=0.99`). Re-enable via
-  `REVIEW_SERVER_FILTERS_ENABLED` once the backend adds the params; no
-  client-side filtering was added in the meantime.
+- `/review`'s Class, Source and Conf filter controls are re-enabled and
+  sent to `GET {API_PREFIX}/review/{tab}` as `class_id`/`source`/
+  `conf_min`/`conf_max` — the backend now honors them (verified live:
+  `class_id` and `conf_min` both change the queue total). The old
+  `REVIEW_SERVER_FILTERS_ENABLED` flag is deleted; the "HDD source"
+  control is renamed to "Source" (`hddSource` → `sourceFilter`,
+  reading/writing `Crop.source`, which replaces the dead `hdd_source`
+  field). See `docs/design/logic-moves-adoption-plan-2026-09-24.md` W5.
 - Scoped VLM-assist runs (`AssistScopeBar`) now actually run the VLM
   stage: `startAutoLabel()` sends `run_vlm: true` whenever a class or
   prompt pack is scoped, matching the toast copy that already claimed
@@ -154,9 +156,38 @@ of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
 
 - `/review`'s item panel shows a "Model predicts" row
   (`probe_pred_class` + an entropy `ScoreChip`) when the backend serves
-  a probe prediction — previously computed but never rendered (G4).
-  Display only: no class-name-to-id accept action, pending the backend
-  serving `probe_pred_class_id`.
+  a probe prediction — previously computed but never rendered (G4). An
+  "Accept model's class" button now assigns `probe_pred_class_id`
+  directly (closes G4 — the backend ships the id, so no
+  name-to-id lookup is needed).
+- `/review` W5 (`docs/design/logic-moves-adoption-plan-2026-09-24.md`):
+  - `/review?crop_id=` deep links now call
+    `GET {API_PREFIX}/review/{tab}/locate` and jump straight to the
+    crop's served `page`/`rank`, instead of paging forward up to 300
+    items hoping to find it. A crop the backend reports as not in the
+    queue shows its `reason` (e.g. "filtered_out") in the toast.
+  - The client-side `proposed_class_id`/`proposed_class_name` fill-ins
+    in the diverse-selection hydration, semantic-search results and
+    undo-restore are deleted — `Crop`/`mapRawCrop` now carry the
+    server's own `proposed_class_id`/`_name` (served on every
+    crop-shaped item, not just review rows), so every one of those
+    paths already has the real value.
+  - The StrategyBar summary chip shows the server's `sort_applied`
+    (e.g. "sort: Default order → atypicality") next to whatever the
+    operator picked, so a tab-default or a sort fallback is visible,
+    not just implied.
+  - A new `new_class_proposals` review tab (not a preset — a distinct
+    triage workflow) surfaces crops the VLM flagged as needing a class
+    the registry doesn't have yet; flagged items show
+    `needs_new_class_note` inline.
+  - `/classes` gets a "Proposals" section
+    (`GET {API_PREFIX}/review/new_class_proposals/summary`) — the top
+    VLM-proposed-but-unmatched terms with sample thumbnails, each with
+    "Create class & assign" (`POST {API_PREFIX}/classes` then
+    `PUT {API_PREFIX}/crops/batch_label` on the served
+    `sample_crop_ids`) and "Map to existing" actions. Degrades to an
+    inline error banner (verified live against a real opensearch
+    aggregation 503) rather than breaking the page.
 
 ### Changed
 

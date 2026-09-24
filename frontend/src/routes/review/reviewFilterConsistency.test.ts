@@ -70,3 +70,35 @@ describe('review page: rank-scope + blur controls are tab-agnostic (no PRIMARY_T
     );
   });
 });
+
+/**
+ * W5 (2026-09-24 logic-moves): GET /review/{tab} accepts class_id/source/
+ * conf_min/conf_max now — re-enabled unconditionally, not behind the old
+ * REVIEW_SERVER_FILTERS_ENABLED flag (deleted). Static source-scan, same
+ * pattern as the block above.
+ */
+describe('review page: class/source/conf filters are sent unconditionally (no server-filters flag)', () => {
+  it('never references the deleted REVIEW_SERVER_FILTERS_ENABLED flag', () => {
+    expect(src).not.toMatch(/REVIEW_SERVER_FILTERS_ENABLED/);
+  });
+
+  it('never references the deleted DEEP_LINK_MAX_ITEMS paging scan', () => {
+    expect(src).not.toMatch(/DEEP_LINK_MAX_ITEMS/);
+  });
+
+  it('_filter() sends class_id/source/conf_min/conf_max', () => {
+    const filterFnStart = src.indexOf('function _filter()');
+    const filterFnBody = src.slice(filterFnStart, src.indexOf('\n  }\n', filterFnStart));
+    expect(filterFnBody).toMatch(/if \(classFilter != null\) f\.class_id = classFilter;/);
+    expect(filterFnBody).toMatch(/if \(sourceFilter\) f\.source = sourceFilter;/);
+    expect(filterFnBody).toMatch(/if \(confMin > 0\) f\.conf_min = confMin;/);
+    expect(filterFnBody).toMatch(/if \(confMax < 1\) f\.conf_max = confMax;/);
+  });
+
+  it('the Class/Source/Conf filter bar controls render unconditionally (no #if wrapper)', () => {
+    const idx = src.indexOf(
+      '<label class="flex shrink-0 items-center gap-1.5">\n      <span class="text-zinc-400">Source</span>',
+    );
+    expect(idx).toBeGreaterThan(-1);
+  });
+});

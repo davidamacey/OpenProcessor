@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { createStrategyBar } from './strategyBar.svelte';
+import { createStrategyBar, formatAppliedSort } from './strategyBar.svelte';
+
+// 2026-09-24 logic-moves W5, item 10: `sort_applied` on {API_PREFIX}/review/{tab}
+// is what the StrategyBar summary chip surfaces next to the operator's
+// own selection.
+describe('formatAppliedSort', () => {
+  it('returns null when nothing was applied yet (no response received)', () => {
+    expect(formatAppliedSort('default', null)).toBeNull();
+    expect(formatAppliedSort('default', undefined)).toBeNull();
+  });
+
+  it('returns null when the applied sort matches what was requested', () => {
+    expect(formatAppliedSort('mistakenness', 'mistakenness')).toBeNull();
+  });
+
+  it('returns the applied id when it differs from the request — the "no override" case', () => {
+    // Operator never picked a sort ('default' sentinel); the backend
+    // still applied the tab's own default sort, e.g. 'atypicality'.
+    expect(formatAppliedSort('default', 'atypicality')).toBe('atypicality');
+  });
+
+  it('returns the applied id when the requested sort fell back to a different one', () => {
+    expect(formatAppliedSort('mistakenness', 'atypicality')).toBe('atypicality');
+  });
+});
 
 describe('createStrategyBar', () => {
   it('starts on the default id with no filters, serializing to an empty object', () => {

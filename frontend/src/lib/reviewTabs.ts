@@ -64,6 +64,19 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
     urlId: 'coco_blind_spots',
     endpointId: 'coco_blind_spots',
   },
+  // New-class-proposal queue (2026-09-24 logic-moves W5) — crops the VLM
+  // flagged as needing a class the registry doesn't have yet
+  // (`needs_new_class`/`class_source: 'vlm_new_class_pending'`). A real
+  // top-level tab, not a preset: it's a distinct triage workflow (confirm
+  // vs. map-to-existing vs. create-a-class), not a filter over "All."
+  // `/classes`'s Proposals section is a separate, aggregate view of the
+  // same underlying cohort (GET .../new_class_proposals/summary).
+  {
+    id: 'new_class_proposals',
+    label: 'New Class Proposals',
+    urlId: 'new_class_proposals',
+    endpointId: 'new_class_proposals',
+  },
 ];
 
 /**

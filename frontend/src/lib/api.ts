@@ -1216,6 +1216,9 @@ export type RawCrop = {
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
   class_labeler?: string | null;
+  /** Ingest source tag — replaces the dead `hdd_source` (2026-09-24
+   *  logic-moves cutover, item 14/G3). */
+  source?: string | null;
   test_holdout?: boolean;
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
@@ -1225,6 +1228,10 @@ export type RawCrop = {
   vlm_confidence?: string | null;
   vlm_proposed_class_id?: number | null;
   vlm_proposed_class_name?: string | null;
+  /** The backend's confirmable suggestion — served on every crop-shaped
+   *  item (item 11, 2026-09-24), not just review-queue rows. */
+  proposed_class_id?: number | null;
+  proposed_class_name?: string | null;
   // Curation scores (Phase 3, docs/curation-strategy-plan-2026-09.md §4).
   // Optional/forward-tolerant: an un-backfilled pool just omits these.
   mistakenness_score?: number | null;
@@ -1233,7 +1240,6 @@ export type RawCrop = {
   mistakenness_scored_at?: string | null;
   thumbnail_url?: string;
   updated_at?: string;
-  source?: string | null;
   class_excluded?: boolean;
   excluded_reason?: string | null;
   excluded_at?: string | null;
@@ -1266,6 +1272,7 @@ export const RAW_CROP_KEYS = [
   'class_detector_version',
   'class_labeled_at',
   'class_labeler',
+  'source',
   'test_holdout',
   'crop_rank_in_image',
   'crop_area_norm',
@@ -1275,13 +1282,14 @@ export const RAW_CROP_KEYS = [
   'vlm_confidence',
   'vlm_proposed_class_id',
   'vlm_proposed_class_name',
+  'proposed_class_id',
+  'proposed_class_name',
   'mistakenness_score',
   'mistakenness_method',
   'mistakenness_version',
   'mistakenness_scored_at',
   'thumbnail_url',
   'updated_at',
-  'source',
   'class_excluded',
   'excluded_reason',
   'excluded_at',
@@ -1337,6 +1345,9 @@ function mapRawCrop(c: RawCrop): Crop {
     class_detector_version: c.class_detector_version ?? null,
     class_labeled_at: c.class_labeled_at ?? null,
     class_labeler: c.class_labeler ?? null,
+    source: c.source ?? null,
+    proposed_class_id: c.proposed_class_id ?? null,
+    proposed_class_name: c.proposed_class_name ?? null,
     test_holdout: !!c.test_holdout,
     crop_rank_in_image: c.crop_rank_in_image ?? null,
     crop_area_norm: c.crop_area_norm ?? null,
@@ -1350,7 +1361,6 @@ function mapRawCrop(c: RawCrop): Crop {
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
     mistakenness_scored_at: c.mistakenness_scored_at ?? null,
-    source: c.source ?? null,
     class_excluded: !!c.class_excluded,
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
@@ -1950,12 +1960,17 @@ export async function getReviewQueue(
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
   // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmSlot all see the
   // same shape regardless of the endpoint that produced the item.
+  // proposed_class_id/name come straight off RawCrop/mapRawCrop now —
+  // they're served on every crop-shaped item (item 11, 2026-09-24
+  // logic-moves), not a review-only field — so only the genuinely
+  // review-specific extras are declared here.
   type RawReviewItem = RawCrop & {
     reason?: string;
-    proposed_class_id?: number | null;
-    proposed_class_name?: string | null;
     probe_pred_class?: string | null;
+    probe_pred_class_id?: number | null;
     probe_pred_entropy?: number | null;
+    needs_new_class?: boolean;
+    needs_new_class_note?: string | null;
   };
   type RawPage = {
     total: number;
@@ -1965,6 +1980,8 @@ export async function getReviewQueue(
     /** Set when the requested `?sort=` fell back to the default — see
      *  PaginatedResponse.sort_fallback_reason in types.ts. */
     sort_fallback_reason?: string | null;
+    /** The sort id actually applied — see PaginatedResponse.sort_applied. */
+    sort_applied?: string | null;
   };
   const raw = await apiFetch<RawPage>(
     `${API_PREFIX}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
@@ -1976,10 +1993,11 @@ export async function getReviewQueue(
     return {
       ...base,
       reason: it.reason ?? '',
-      proposed_class_id: it.proposed_class_id ?? null,
-      proposed_class_name: it.proposed_class_name ?? null,
       probe_pred_class: it.probe_pred_class ?? null,
+      probe_pred_class_id: it.probe_pred_class_id ?? null,
       probe_pred_entropy: it.probe_pred_entropy ?? null,
+      needs_new_class: !!it.needs_new_class,
+      needs_new_class_note: it.needs_new_class_note ?? null,
     };
   });
   return {
@@ -1988,6 +2006,71 @@ export async function getReviewQueue(
     page: raw.page ?? page,
     page_size: raw.page_size ?? pageSize,
     sort_fallback_reason: raw.sort_fallback_reason ?? null,
+    sort_applied: raw.sort_applied ?? null,
+  };
+}
+
+/** `GET {API_PREFIX}/review/{tab}/locate` — where a specific crop sits in a
+ *  review queue under the given filters/sort, without paging through it
+ *  by hand. Powers `/review?crop_id=` deep links (2026-09-24 logic-moves
+ *  W5): `in_queue: false` means the crop doesn't match this tab's
+ *  filters (or is already handled) — `reason` explains why when the
+ *  backend sends one. */
+export interface ReviewLocateResult {
+  crop_id: string;
+  in_queue: boolean;
+  rank: number | null;
+  page: number | null;
+  page_size: number;
+  total: number;
+  reason: string | null;
+  sort_applied: string | null;
+}
+
+export async function locateInReviewQueue(
+  tab: string,
+  cropId: string,
+  pageSize: number,
+  filter: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<ReviewLocateResult> {
+  const raw = await apiFetch<Partial<ReviewLocateResult>>(
+    `${API_PREFIX}/review/${tab}/locate${qs({ crop_id: cropId, page_size: pageSize, ...filter })}`,
+    {},
+    signal,
+  );
+  return {
+    crop_id: raw.crop_id ?? cropId,
+    in_queue: !!raw.in_queue,
+    rank: raw.rank ?? null,
+    page: raw.page ?? null,
+    page_size: raw.page_size ?? pageSize,
+    total: raw.total ?? 0,
+    reason: raw.reason ?? null,
+    sort_applied: raw.sort_applied ?? null,
+  };
+}
+
+/** `GET {API_PREFIX}/review/new_class_proposals/summary` — the aggregate
+ *  `/classes`'s Proposals section renders (top VLM-proposed-but-unmatched
+ *  terms, with counts and a handful of sample crop ids each), distinct
+ *  from paging the `new_class_proposals` review tab item-by-item. */
+export interface NewClassProposalsSummary {
+  total_pending: number;
+  top_terms: Array<{ label: string; count: number; sample_crop_ids: string[] }>;
+}
+
+export async function getNewClassProposalsSummary(
+  signal?: AbortSignal,
+): Promise<NewClassProposalsSummary> {
+  const raw = await apiFetch<Partial<NewClassProposalsSummary>>(
+    `${API_PREFIX}/review/new_class_proposals/summary`,
+    {},
+    signal,
+  );
+  return {
+    total_pending: raw.total_pending ?? 0,
+    top_terms: Array.isArray(raw.top_terms) ? raw.top_terms : [],
   };
 }
 

@@ -45,7 +45,7 @@
     isDiverseOverlayAvailable,
     type MethodStatus,
   } from '$lib/strategies';
-  import type { StrategyBar } from '$lib/strategyBar.svelte';
+  import { formatAppliedSort, type StrategyBar } from '$lib/strategyBar.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
 
   /** Provenance echoed back by a pool-scale overlay ordering (Phase 4 —
@@ -100,6 +100,12 @@
      *  sent any (see `DiverseMeta`). Surfaced as a small inline note/tooltip
      *  next to the stepper — not a new prominent UI element. */
     diverseMeta?: DiverseMeta | null;
+    /** The sort id the backend actually applied (`sort_applied` on the
+     *  review-queue response, 2026-09-24 logic-moves W5 item 10) — may
+     *  differ from `bar.sort` (a tab's own default beats the deployment
+     *  default when the operator hasn't picked one, or a requested sort
+     *  fell back). Omit on a route that doesn't have it yet. */
+    appliedSort?: string | null;
   }
 
   let {
@@ -111,6 +117,7 @@
     diverseKMin = 4,
     diverseKMax = 500,
     diverseMeta = null,
+    appliedSort = null,
   }: Props = $props();
 
   // getMethods()/init() never throws (404 or any error degrades to
@@ -201,6 +208,10 @@
   const currentSort = $derived(sortOptions.find((s) => s.id === bar.sort) ?? null);
   const currentIsBeta = $derived(currentSort?.status === 'experimental');
   const currentLabel = $derived(currentSort?.label ?? bar.sort);
+  // What the backend actually ordered by, when it differs from what the
+  // operator picked (a tab default beating an unset selection, or a
+  // requested sort falling back) — null when there's nothing to add.
+  const appliedLabel = $derived(formatAppliedSort(bar.sort, appliedSort));
 
   // The k stepper only renders once 'diverse' is both selected AND
   // actually offered. isDiverseOverlayAvailable is the same predicate
@@ -262,6 +273,14 @@
     >
       <span class="text-zinc-500">sort:</span>
       <span>{currentLabel}</span>
+      {#if appliedLabel}
+        <span
+          class="text-zinc-500"
+          title="The backend applied this sort — a tab default, or a fallback from what was requested."
+        >
+          → {appliedLabel}
+        </span>
+      {/if}
       {#if currentIsBeta}
         <span
           class="rounded border border-amber-500/60 bg-amber-500/15 px-1 text-[9px] uppercase tracking-wide text-amber-200"
@@ -283,6 +302,9 @@
           {/each}
         </select>
       </label>
+      {#if appliedLabel}
+        <span class="text-zinc-500">applied: {appliedLabel}</span>
+      {/if}
     {:else}
       <!-- No alternate sorts reported yet (backend not deployed, or
            {API_PREFIX}/methods reports a registry shape this build doesn't

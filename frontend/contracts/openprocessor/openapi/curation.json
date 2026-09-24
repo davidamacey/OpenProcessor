@@ -3051,7 +3051,6 @@
             "title": "Campaign Id"
           },
           "cuda_visible_devices": {
-            "default": "0",
             "title": "Cuda Visible Devices",
             "type": "string"
           },
@@ -3112,6 +3111,79 @@
         "title": "TrainCampaignSpec",
         "type": "object"
       },
+      "TrainGpuOption": {
+        "description": "One selectable ``cuda_visible_devices`` value for the train form.",
+        "properties": {
+          "advisory": {
+            "title": "Advisory",
+            "type": "string"
+          },
+          "default": {
+            "default": false,
+            "title": "Default",
+            "type": "boolean"
+          },
+          "gpu_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gpu Ids",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "stops_containers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stops Containers",
+            "type": "array"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "gpu_ids",
+          "label",
+          "advisory"
+        ],
+        "title": "TrainGpuOption",
+        "type": "object"
+      },
+      "TrainGpuOptionsResponse": {
+        "properties": {
+          "allowed_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Allowed Ids",
+            "type": "array"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/TrainGpuOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "unrestricted": {
+            "title": "Unrestricted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "options",
+          "allowed_ids",
+          "unrestricted"
+        ],
+        "title": "TrainGpuOptionsResponse",
+        "type": "object"
+      },
       "TrainJobSpec": {
         "additionalProperties": false,
         "description": "Payload accepted by ``POST /curation/train/start``.\n\nAll fields except the dataset path are optional -- the trainer\napplies profile defaults from :mod:`src.services.training.profiles`\nfor anything not supplied.",
@@ -3148,7 +3220,6 @@
             "title": "Campaign Id"
           },
           "cuda_visible_devices": {
-            "default": "0",
             "title": "Cuda Visible Devices",
             "type": "string"
           },
@@ -10363,6 +10434,28 @@
           }
         },
         "summary": "Cancel Campaign Endpoint",
+        "tags": [
+          "Curation - Train"
+        ]
+      }
+    },
+    "/curation/train/gpus": {
+      "get": {
+        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions (design rationale: the frontend must\nnever hardcode a deployment's GPU topology) -- see\n``docs/design/train_gpu_options_plan.md``. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.",
+        "operationId": "list_train_gpu_options_curation_train_gpus_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainGpuOptionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Train Gpu Options",
         "tags": [
           "Curation - Train"
         ]

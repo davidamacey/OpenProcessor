@@ -137,7 +137,9 @@ describe('loadDeploymentProfiles — propagation and memoization', () => {
     expect(registeredSlots.map((s) => s.key)).toEqual(['license_plate', 'pallet_label']);
     expect(slotRegistry.byKey('pallet_label')).toBeDefined();
     expect(REVIEW_TABS.map((t) => t.id)).toContain('slot:pallet_label');
-    expect(REVIEW_TABS).toHaveLength(6);
+    // 6 core tabs (2026-09-24 adds new_class_proposals) + license_plate +
+    // the newly installed pallet_label slot tab.
+    expect(REVIEW_TABS).toHaveLength(7);
     expect(tabFromUrlId('pallet_labels')).toBe('slot:pallet_label');
     expect(tabFromUrlId('plates')).toBe('slot:license_plate');
     expect(endpointForTab('slot:pallet_label')).toBe('pallet_labels');
