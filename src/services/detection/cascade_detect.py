@@ -42,6 +42,7 @@ from src.config import DetectionProfile, get_region_fields
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox
 from src.services.detection.profile_registry import ensure_env_region_profile
 from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
+from src.services.detection.region_text import OcrLine
 
 
 if TYPE_CHECKING:
@@ -839,6 +840,132 @@ def _canonicalize_text(s: str) -> str:
     return ' '.join(''.join(kept).split())
 
 
+# Side-length window the OCR text-detection engine accepts. The shipped
+# export (scripts/export_paddleocr.sh) builds up to 960; some TensorRT
+# builds reject sides below 320, so a wide, short crop (a region crop)
+# must be scaled up on its short side rather than sent at e.g. 640x256.
+OCR_DET_MIN_SIDE = 320
+OCR_DET_MAX_SIDE = 960
+OCR_DET_TARGET_LONG_SIDE = 640
+
+
+def ocr_det_input_size(w: int, h: int) -> tuple[int, int]:
+    """``(width, height)`` for the OCR detection input of a ``w`` x ``h`` crop.
+
+    Long side scaled to :data:`OCR_DET_TARGET_LONG_SIDE`, raised so the
+    short side reaches :data:`OCR_DET_MIN_SIDE`, each side rounded to a
+    multiple of 32 and clamped to the engine window. Clamping stretches
+    only extreme aspect ratios; that is safe because the OCR pipeline
+    maps detection boxes back per axis (``orig / det`` for x and y
+    separately).
+    """
+    scale = OCR_DET_TARGET_LONG_SIDE / max(w, h)
+    if min(w, h) * scale < OCR_DET_MIN_SIDE:
+        scale = OCR_DET_MIN_SIDE / min(w, h)
+
+    def _side(v: int) -> int:
+        r = round(v * scale / 32) * 32
+        return max(OCR_DET_MIN_SIDE, min(OCR_DET_MAX_SIDE, r))
+
+    return _side(w), _side(h)
+
+
+# Neutral fill around a framed region crop (same gray the detectors
+# letterbox with).
+_OCR_FRAME_FILL = (114, 114, 114)
+# Free canvas border around the framed crop, in pixels, so text touching
+# the crop edge still has context for the detector's box expansion.
+_OCR_FRAME_PAD = 32
+
+
+def frame_for_ocr(
+    img: Image.Image, *, min_height: int
+) -> tuple[Image.Image, tuple[int, int, int, int]]:
+    """Upscale a small crop and center it on a detector-sized canvas.
+
+    Returns ``(canvas, (x, y, w, h))`` -- where the scaled crop sits on
+    the canvas, in canvas pixels. The canvas sides are multiples of 32
+    within ``[OCR_DET_MIN_SIDE, OCR_DET_MAX_SIDE]`` so it is sent to the
+    detector at native size (no second resize).
+    """
+    w, h = img.size
+    scale = max(1.0, min_height / max(h, 1))
+    max_w = OCR_DET_MAX_SIDE - 2 * _OCR_FRAME_PAD
+    scale = min(scale, max_w / max(w, 1), max_w / max(h, 1))
+    sw, sh = max(1, round(w * scale)), max(1, round(h * scale))
+    scaled = img.resize((sw, sh), Image.Resampling.BICUBIC) if (sw, sh) != (w, h) else img
+
+    def _side(v: int) -> int:
+        padded = -(-(v + 2 * _OCR_FRAME_PAD) // 32) * 32
+        return max(OCR_DET_MIN_SIDE, min(OCR_DET_MAX_SIDE, padded))
+
+    cw, ch = _side(sw), _side(sh)
+    canvas = Image.new('RGB', (cw, ch), _OCR_FRAME_FILL)
+    ox, oy = (cw - sw) // 2, (ch - sh) // 2
+    canvas.paste(scaled, (ox, oy))
+    return canvas, (ox, oy, sw, sh)
+
+
+def _unframe_line(
+    line: OcrLine, canvas_size: tuple[int, int], placement: tuple[int, int, int, int]
+) -> OcrLine | None:
+    """Map a canvas-normalized line box back to the framed crop's frame."""
+    cw, ch = canvas_size
+    ox, oy, sw, sh = placement
+    x1, y1, x2, y2 = line.box
+    bx = (
+        max(0.0, min(1.0, (x1 * cw - ox) / sw)),
+        max(0.0, min(1.0, (y1 * ch - oy) / sh)),
+        max(0.0, min(1.0, (x2 * cw - ox) / sw)),
+        max(0.0, min(1.0, (y2 * ch - oy) / sh)),
+    )
+    if bx[2] <= bx[0] or bx[3] <= bx[1]:
+        return None
+    return OcrLine(text=line.text, box=bx, score=line.score, det_score=line.det_score)
+
+
+def _parse_ocr_pipeline_result(result: Any) -> list[OcrLine]:
+    """Decode the OCR BLS response into :class:`OcrLine` objects.
+
+    Degenerate boxes and empty strings are dropped; boxes are clamped to
+    ``[0, 1]``.
+    """
+    num_arr = result.as_numpy('num_texts')
+    if num_arr is None:
+        return []
+    n = int(num_arr.flatten()[0])
+    if n <= 0:
+        return []
+    boxes = result.as_numpy('text_boxes_normalized')
+    texts = result.as_numpy('texts')
+    det_scores = result.as_numpy('text_scores')
+    rec_scores = result.as_numpy('rec_scores')
+    if boxes is None or texts is None or det_scores is None or rec_scores is None:
+        return []
+    lines: list[OcrLine] = []
+    for i in range(min(n, len(texts))):
+        raw_bytes = texts[i]
+        raw = (
+            raw_bytes.decode('utf-8', errors='replace')
+            if isinstance(raw_bytes, bytes)
+            else str(raw_bytes)
+        )
+        if not raw.strip():
+            continue
+        x1, y1, x2, y2 = (max(0.0, min(1.0, float(v))) for v in boxes[i])
+        if x2 <= x1 or y2 <= y1:
+            continue
+        lines.append(
+            OcrLine(
+                text=raw,
+                box=(x1, y1, x2, y2),
+                score=float(rec_scores[i]),
+                det_score=float(det_scores[i]),
+            )
+        )
+    return lines
+
+
 class PaddleOcrTextRecognizer:
     """OCR wrapper around a Triton Python BLS OCR pipeline model.
 
@@ -869,19 +996,43 @@ class PaddleOcrTextRecognizer:
         self.rec_score_floor = rec_score_floor
         self.det_score_floor = det_score_floor
 
-    async def detect_regions(self, crop_jpeg: bytes) -> list[OcrRegion]:
-        """Return every text region in the crop, region-shaped or not.
+    async def read_lines(self, crop_jpeg: bytes) -> list[OcrLine]:
+        """Every line the OCR pipeline detected + recognized, unfiltered.
 
-        Callers filter for region-shape and region-text-regex; this
-        just runs the pipeline and parses the response.
+        Boxes are axis-aligned and normalized to the crop; ``text`` is the
+        recognizer's exact string. An undecodable crop yields ``[]``; a
+        Triton failure raises (callers decide whether a failed read is
+        "no text" or "retry later").
         """
         try:
             img = _decode_jpeg(crop_jpeg)
         except ValueError:
             return []
+        return await self._infer_lines(img)
 
+    async def read_region_lines(self, region_jpeg: bytes, *, min_height: int) -> list[OcrLine]:
+        """Like :meth:`read_lines`, for a small region crop.
+
+        Region crops are often a few dozen pixels tall. Stretched straight
+        to the detector's input size the text blurs past what the text
+        detector finds, so the crop is instead upscaled to ``min_height``
+        pixels tall (never downscaled) and centered on a neutral canvas of
+        at least the detector's minimum side (see :func:`frame_for_ocr`).
+        Boxes come back normalized to the region crop.
+        """
         try:
-            ocr_in, orig_in, orig_shape = self._preprocess(img)
+            img = _decode_jpeg(region_jpeg)
+        except ValueError:
+            return []
+        canvas, placement = frame_for_ocr(img, min_height=min_height)
+        lines = await self._infer_lines(canvas, det_size=canvas.size)
+        return [ln for ln in (_unframe_line(ln, canvas.size, placement) for ln in lines) if ln]
+
+    async def _infer_lines(
+        self, img: Image.Image, det_size: tuple[int, int] | None = None
+    ) -> list[OcrLine]:
+        try:
+            ocr_in, orig_in, orig_shape = self._preprocess(img, det_size)
         except ValueError:
             return []
 
@@ -900,60 +1051,43 @@ class PaddleOcrTextRecognizer:
             InferRequestedOutput('text_scores'),
             InferRequestedOutput('rec_scores'),
         ]
+        result = await self.triton_pool.infer(self.model_name, inputs, outputs=outputs)
+        return _parse_ocr_pipeline_result(result)
 
-        try:
-            result = await self.triton_pool.infer(self.model_name, inputs, outputs=outputs)
-        except Exception:
-            logger.exception('ocr_pipeline_infer_failed')
-            return []
-
-        num_arr = result.as_numpy('num_texts')
-        if num_arr is None:
-            return []
-        n = int(num_arr.flatten()[0])
-        if n <= 0:
-            return []
-        boxes = result.as_numpy('text_boxes_normalized')
-        texts = result.as_numpy('texts')
-        det_scores = result.as_numpy('text_scores')
-        rec_scores = result.as_numpy('rec_scores')
-        if boxes is None or texts is None or det_scores is None or rec_scores is None:
-            return []
-
+    def regions_from_lines(self, lines: list[OcrLine]) -> list[OcrRegion]:
+        """Apply this recognizer's score floors + canonicalization to raw
+        lines (what :meth:`detect_regions` returns for the same crop)."""
         regions: list[OcrRegion] = []
-        for i in range(min(n, len(texts))):
-            raw_bytes = texts[i]
-            raw = (
-                raw_bytes.decode('utf-8', errors='replace')
-                if isinstance(raw_bytes, bytes)
-                else str(raw_bytes)
-            )
-            canon = _canonicalize_text(raw)
+        for ln in lines:
+            canon = _canonicalize_text(ln.text)
             if not canon:
                 continue
-            ds = float(det_scores[i])
-            rs = float(rec_scores[i])
-            if ds < self.det_score_floor or rs < self.rec_score_floor:
-                continue
-            x1, y1, x2, y2 = (float(v) for v in boxes[i])
-            if x2 <= x1 or y2 <= y1:
+            if ln.det_score < self.det_score_floor or ln.score < self.rec_score_floor:
                 continue
             regions.append(
                 OcrRegion(
-                    bbox_norm=(
-                        max(0.0, min(1.0, x1)),
-                        max(0.0, min(1.0, y1)),
-                        max(0.0, min(1.0, x2)),
-                        max(0.0, min(1.0, y2)),
-                    ),
+                    bbox_norm=ln.box,
                     text=canon,
-                    text_raw=raw,
-                    det_score=ds,
-                    rec_score=rs,
+                    text_raw=ln.text,
+                    det_score=ln.det_score,
+                    rec_score=ln.score,
                     profile=self.profile,
                 )
             )
         return regions
+
+    async def detect_regions(self, crop_jpeg: bytes) -> list[OcrRegion]:
+        """Return every text region in the crop, region-shaped or not.
+
+        Callers filter for region-shape and region-text-regex; this
+        just runs the pipeline and parses the response.
+        """
+        try:
+            lines = await self.read_lines(crop_jpeg)
+        except Exception:
+            logger.exception('ocr_pipeline_infer_failed')
+            return []
+        return self.regions_from_lines(lines)
 
     async def read_plate_region(self, plate_jpeg: bytes) -> tuple[str, float] | None:
         """Concatenate every recognized line on an already-cropped region.
@@ -1003,11 +1137,14 @@ class PaddleOcrTextRecognizer:
 
         return max(plate_like, key=_key)
 
-    def _preprocess(self, img: Image.Image) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _preprocess(
+        self, img: Image.Image, det_size: tuple[int, int] | None = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Build the three input tensors the OCR pipeline model expects.
 
         * ``ocr_images``: detection-network input. BGR, scaled to a
-          square multiple-of-32 ≤ 960, normalized to ``[-1, 1]``.
+          multiple-of-32 size from :func:`ocr_det_input_size`,
+          normalized to ``[-1, 1]``.
         * ``original_image``: full-resolution RGB normalized to
           ``[0, 1]``. The pipeline crops text regions from this when
           feeding the recognition head.
@@ -1025,11 +1162,7 @@ class PaddleOcrTextRecognizer:
         orig_chw = np.transpose(orig_rgb, (2, 0, 1))
         orig_shape = np.asarray([h, w], dtype=np.int32)
 
-        # ocr_images: BGR [-1, 1] at a multiple-of-32 size ≤ 960.
-        target = 640
-        scale = min(target / w, target / h)
-        new_w = max(32, (round(w * scale) // 32) * 32 or 32)
-        new_h = max(32, (round(h * scale) // 32) * 32 or 32)
+        new_w, new_h = det_size or ocr_det_input_size(w, h)
         resized = img.resize((new_w, new_h), Image.BILINEAR)
         arr = np.asarray(resized, dtype=np.float32)[:, :, ::-1]  # BGR
         arr = arr / 127.5 - 1.0

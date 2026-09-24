@@ -96,6 +96,18 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'OCR_REC_MODEL': 'env_ocr_rec',
         'OCR_REC_VERSION': '6',
         'OCR_PIPELINE_MODEL': 'env_ocr_pipeline',
+        'TEXT_READER': 'both',
+        'TEXT_CROP_MARGIN': '0.02',
+        'TEXT_CROP_MIN_HEIGHT': '72',
+        'TEXT_MIN_HEIGHT_RATIO': '0.55',
+        'TEXT_BORDER_MARGIN': '0.1',
+        'TEXT_UPPERCASE': 'true',
+        'TEXT_CHARSET': '[A-Z0-9]',
+        'TEXT_JOIN': '-',
+        'TEXT_LEN_MIN': '3',
+        'TEXT_LEN_MAX': '9',
+        'TEXT_STOPWORDS': 'alpha, beta',
+        'TEXT_MIN_CONFIDENCE': '0.4',
         'SAM_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
         'CLASS_IDS': '2, 3,7',
@@ -143,6 +155,18 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.ocr_rec_model == 'env_ocr_rec'
     assert profile.ocr_rec_version == '6'
     assert profile.ocr_pipeline_model == 'env_ocr_pipeline'
+    assert profile.text_reader == 'both'
+    assert profile.text_crop_margin == 0.02
+    assert profile.text_crop_min_height == 72
+    assert profile.text_min_height_ratio == 0.55
+    assert profile.text_border_margin == 0.1
+    assert profile.text_uppercase is True
+    assert profile.text_charset == '[A-Z0-9]'
+    assert profile.text_join == '-'
+    assert profile.text_len_min == 3
+    assert profile.text_len_max == 9
+    assert profile.text_stopwords == frozenset({'alpha', 'beta'})
+    assert profile.text_min_confidence == 0.4
     assert profile.sam_text_prompt == 'env prompt'
     assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
     assert profile.class_ids == frozenset({2, 3, 7})
