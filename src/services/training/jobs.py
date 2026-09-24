@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from src.config import get_gpu_arbiter_config
 from src.core.logging import get_logger
+from src.services.training.augmentation_presets import DEFAULT_AUGMENTATION_PRESET
 
 
 logger = get_logger(__name__)
@@ -153,7 +154,9 @@ class AugmentationSpec(BaseModel):
 
     enabled: bool = True
     multiplier: int = Field(default=1, ge=1, le=20)
-    preset: str = Field(default='balanced_default')
+    # Validated against the catalog by preflight and /start (not here, so
+    # preflight can report it as a check); GET /train/augmentation_presets.
+    preset: str = Field(default=DEFAULT_AUGMENTATION_PRESET)
     albumentations: dict[str, Any] = Field(default_factory=dict)
     per_class_multiplier: dict[str, int] = Field(default_factory=dict)
 

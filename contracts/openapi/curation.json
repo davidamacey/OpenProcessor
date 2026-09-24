@@ -1,6 +1,58 @@
 {
   "components": {
     "schemas": {
+      "AugmentationPresetOption": {
+        "description": "One selectable ``augmentation.preset``.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "orientation_sensitive": {
+            "description": "Horizontal flip is disabled for the whole run with this preset.",
+            "title": "Orientation Sensitive",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "orientation_sensitive"
+        ],
+        "title": "AugmentationPresetOption",
+        "type": "object"
+      },
+      "AugmentationPresetsResponse": {
+        "properties": {
+          "default": {
+            "description": "Preset used when a job omits augmentation.preset.",
+            "title": "Default",
+            "type": "string"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/AugmentationPresetOption"
+            },
+            "title": "Presets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "presets",
+          "default"
+        ],
+        "title": "AugmentationPresetsResponse",
+        "type": "object"
+      },
       "AugmentationSpec": {
         "additionalProperties": true,
         "description": "Optional augmentation block in ``job.json``.",
@@ -11623,6 +11675,28 @@
         ]
       }
     },
+    "/curation/train/augmentation_presets": {
+      "get": {
+        "description": "The augmentation presets the trainer can build, for the form picker.\n\nServed from the catalog the trainer itself builds from\n(``src/services/training/augmentation_presets.py``); ``/preflight`` and\n``/start`` reject any other id.",
+        "operationId": "list_augmentation_presets_curation_train_augmentation_presets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AugmentationPresetsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Augmentation Presets",
+        "tags": [
+          "Curation - Train"
+        ]
+      }
+    },
     "/curation/train/cancel/{job_id}": {
       "post": {
         "description": "Drop the cancel sentinel; trainer picks it up between epochs.",
@@ -12035,7 +12109,7 @@
     },
     "/curation/train/start": {
       "post": {
-        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``. The trainer picks up the file out-of-band.",
+        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``, and 422 for an unknown augmentation preset even\nwith ``force`` (before the GPU claim). The trainer picks up the file\nout-of-band.",
         "operationId": "start_train_curation_train_start_post",
         "parameters": [
           {
