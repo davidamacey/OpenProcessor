@@ -80,6 +80,17 @@ class RegionFields:
     detector_chain: str = 'region_detector_chain'
     detected_at: str = 'region_detected_at'
 
+    # A detector box the verifier REJECTED (status ``verify_rejected``),
+    # kept for human review and reversal. Deliberately NOT ``bbox_norm``:
+    # a box there is an accepted region to every reader (browse, export,
+    # clustering). A human confirm promotes the candidate into
+    # ``bbox_norm``; the verifier's reason is ``rejection_reason``.
+    candidate_bbox_norm: str = 'region_candidate_bbox_norm'
+    candidate_score: str = 'region_candidate_score'
+    candidate_detector: str = 'region_candidate_detector'
+    candidate_detector_version: str = 'region_candidate_detector_version'
+    candidate_source: str = 'region_candidate_source'
+
     embedding: str = 'region_embedding'
     cluster_id: str = 'region_cluster_id'
     cluster_subid: str = 'region_cluster_subid'

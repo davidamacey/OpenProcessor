@@ -169,6 +169,9 @@ def _region_write_doc(
     )
     if chain:
         doc[F.detector_chain] = list(chain)
+    # An accepted box supersedes any candidate an earlier pass rejected.
+    doc.update(dict.fromkeys(candidate_fields(F)))
+    doc[F.rejection_reason] = None
     if plate_text:
         doc[F.text] = plate_text
         doc[F.text_raw] = plate_text
@@ -178,6 +181,66 @@ def _region_write_doc(
             doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(plate_text_confidence, 0.70)
     if extra:
         doc.update(extra)
+    return doc
+
+
+def candidate_fields(F: Any) -> tuple[str, ...]:
+    """Storage names of the rejected-candidate fields."""
+    return (
+        F.candidate_bbox_norm,
+        F.candidate_score,
+        F.candidate_detector,
+        F.candidate_detector_version,
+        F.candidate_source,
+    )
+
+
+# ``RegionFields.rejection_reason`` values for a verifier reject. The
+# sanity-gate one carries the gate's reason after the prefix.
+REJECT_REASON_VERIFIER = 'region_visible_elsewhere'
+REJECT_REASON_SANITY_PREFIX = 'sanity_reject:'
+
+
+def candidate_reject_doc(
+    *,
+    candidate_in_source: tuple[float, float, float, float] | None,
+    candidate_score: float,
+    detector: str,
+    detector_version: str,
+    candidate_source: str,
+    reason: str,
+    chain: list[str],
+    bbox_correct: bool | None = None,
+) -> dict[str, Any]:
+    """Region side of a ``verify_rejected`` write.
+
+    The rejected box is kept in the ``candidate_*`` fields -- never in
+    ``bbox_norm``, which every reader treats as an accepted region -- with
+    its detector and score, plus the rejection reason and the verifier's
+    box verdict, so a human can review the rejection and reverse it
+    (confirming promotes the candidate). Any accepted box a
+    pending-verification item carried is cleared: the verifier rejected it.
+    """
+    F = get_region_fields()
+    doc: dict[str, Any] = {
+        F.status: RegionStatus.VERIFY_REJECTED,
+        F.rejection_reason: reason,
+        F.bbox_norm: None,
+        F.score: None,
+        F.detector_chain: list(chain),
+    }
+    if bbox_correct is not None:
+        doc[F.bbox_correct] = bbox_correct
+    if candidate_in_source is not None:
+        doc.update(
+            {
+                F.candidate_bbox_norm: list(candidate_in_source),
+                F.candidate_score: candidate_score,
+                F.candidate_detector: detector,
+                F.candidate_detector_version: detector_version,
+                F.candidate_source: candidate_source,
+            }
+        )
     return doc
 
 

@@ -243,6 +243,18 @@ def _region_text_reader_mapping() -> dict[str, Any]:
     }
 
 
+def _region_review_mapping() -> dict[str, Any]:
+    """Region fields that keep machine verdicts reviewable: the candidate
+    box a verifier rejected (see ``RegionFields.candidate_bbox_norm``)."""
+    return {
+        F.candidate_bbox_norm: {'type': 'float'},
+        F.candidate_score: {'type': 'float'},
+        F.candidate_detector: {'type': 'keyword'},
+        F.candidate_detector_version: {'type': 'keyword'},
+        F.candidate_source: {'type': 'keyword'},
+    }
+
+
 def _items_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -367,6 +379,7 @@ def _items_body() -> dict[str, Any]:
                 F.text_source: {'type': 'keyword'},
                 F.text_engine_version: {'type': 'keyword'},
                 **_region_text_reader_mapping(),
+                **_region_review_mapping(),
                 # Every OCR line read on the item crop + normalized search
                 # tokens (src/services/curation/item_text.py).
                 **ITEM_TEXT_MAPPING,
@@ -1106,8 +1119,8 @@ async def ensure_items_exclusion_fields(
 async def ensure_items_text_reader_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the region text-reader fields and the item-text fields onto the
-    items mapping.
+    """PUT the region text-reader fields, the region review fields and the
+    item-text fields onto the items mapping.
 
     One ``PUT _mapping`` per field (as :func:`ensure_items_exclusion_fields`)
     so a dynamic mapping one of them already picked up on an older index
@@ -1116,7 +1129,8 @@ async def ensure_items_text_reader_fields(
     index = config.items_index
     added: list[str] = []
     conflicts: list[str] = []
-    for field, spec in {**_region_text_reader_mapping(), **ITEM_TEXT_MAPPING}.items():
+    specs = {**_region_text_reader_mapping(), **_region_review_mapping(), **ITEM_TEXT_MAPPING}
+    for field, spec in specs.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)

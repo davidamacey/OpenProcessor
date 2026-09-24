@@ -75,7 +75,13 @@ def region_state_fields() -> tuple[str, ...]:
         F.detector,
         F.detector_version,
         F.detected_at,
+        F.source,
         F.rejection_reason,
+        F.candidate_bbox_norm,
+        F.candidate_score,
+        F.candidate_detector,
+        F.candidate_detector_version,
+        F.candidate_source,
         F.text,
         F.text_source,
         F.text_confidence,
@@ -138,7 +144,10 @@ def find_edit_undo(history: list[Any] | None, kind: EditKind) -> dict[str, Any] 
 def restore_edit_state(entry: dict[str, Any], kind: EditKind) -> dict[str, Any]:
     """Update-doc fields putting back the state recorded in ``entry``."""
     state = entry.get('state') or {}
-    return {f: state.get(f) for f in state_fields(kind)}
+    # Only the fields the snapshot recorded: an entry written before a
+    # field joined ``state_fields`` says nothing about it, and restoring it
+    # as null would erase a value that edit never touched.
+    return {f: state[f] for f in state_fields(kind) if f in state}
 
 
 __all__ = [

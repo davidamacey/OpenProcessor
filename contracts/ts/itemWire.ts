@@ -98,6 +98,12 @@ export interface ItemWire {
   region_detector_version: string | null;
   region_detector_chain: string[] | null;
   region_detected_at: string | null;
+  region_candidate_bbox_norm: number[] | null;
+  region_candidate_score: number | null;
+  region_candidate_detector: string | null;
+  region_candidate_detector_version: string | null;
+  region_candidate_source: string | null;
+  region_candidate_bbox_in_parent: number[] | null;
   region_cluster_id: number | null;
   region_cluster_subid: string | null;
   region_cluster_distance: number | null;
@@ -195,6 +201,12 @@ export const ITEM_WIRE_KEYS = [
   'region_detector_version',
   'region_detector_chain',
   'region_detected_at',
+  'region_candidate_bbox_norm',
+  'region_candidate_score',
+  'region_candidate_detector',
+  'region_candidate_detector_version',
+  'region_candidate_source',
+  'region_candidate_bbox_in_parent',
   'region_cluster_id',
   'region_cluster_subid',
   'region_cluster_distance',
@@ -234,6 +246,11 @@ export const REGION_WIRE_KEYS = [
   'region_detector_version',
   'region_detector_chain',
   'region_detected_at',
+  'region_candidate_bbox_norm',
+  'region_candidate_score',
+  'region_candidate_detector',
+  'region_candidate_detector_version',
+  'region_candidate_source',
   'region_cluster_id',
   'region_cluster_subid',
   'region_cluster_distance',

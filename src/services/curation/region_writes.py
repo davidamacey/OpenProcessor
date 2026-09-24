@@ -84,19 +84,78 @@ def fp_cluster_fields(region_status: str | None) -> dict[str, Any]:
     return {F.cluster_id: None, F.cluster_subid: None}
 
 
+def candidate_box(current: dict[str, Any]) -> list[float] | None:
+    """The verifier-rejected candidate box stored on ``current``, or ``None``."""
+    F = get_region_fields()
+    box = current.get(F.candidate_bbox_norm)
+    if not isinstance(box, list | tuple) or len(box) != 4:
+        return None
+    try:
+        return [float(v) for v in box]
+    except (TypeError, ValueError):
+        return None
+
+
+def candidate_promotion(current: dict[str, Any]) -> dict[str, Any]:
+    """Fields that turn ``current``'s rejected candidate into its region box.
+
+    The candidate's detector, version, score and source become the
+    region's provenance (the detector *found* the box; a human accepting it
+    doesn't change that) and the candidate + rejection fields are cleared.
+    Empty when there is no candidate or the item already has a box.
+    """
+    F = get_region_fields()
+    box = candidate_box(current)
+    if box is None or current.get(F.bbox_norm):
+        return {}
+    return {
+        F.bbox_norm: box,
+        F.bbox_frame: 'source',
+        F.score: current.get(F.candidate_score),
+        F.detector: current.get(F.candidate_detector),
+        F.detector_version: current.get(F.candidate_detector_version),
+        F.source: current.get(F.candidate_source),
+        F.rejection_reason: None,
+        **candidate_clear_fields(),
+    }
+
+
+def candidate_clear_fields() -> dict[str, Any]:
+    """Update-doc entries clearing every rejected-candidate field."""
+    F = get_region_fields()
+    return dict.fromkeys(
+        (
+            F.candidate_bbox_norm,
+            F.candidate_score,
+            F.candidate_detector,
+            F.candidate_detector_version,
+            F.candidate_source,
+        )
+    )
+
+
+# A human accepting a rejected candidate as a region (confirm) or keeping it
+# as a known bad detection (false positive) promotes it into the region box.
+_PROMOTING_STATUSES = frozenset({CONFIRM_STATUS, RegionStatus.FALSE_POSITIVE})
+
+
 def human_status_fields(region_status: str, current: dict[str, Any]) -> dict[str, Any]:
     """Fields a human write of ``region_status`` sets, given the stored doc.
 
-    Raises :class:`RegionWriteError` when confirming a region that has no box.
+    Confirming (or marking a false positive on) an item whose only box is a
+    verifier-rejected candidate promotes that candidate to the region box
+    (:func:`candidate_promotion`). Raises :class:`RegionWriteError` when
+    confirming a region that has no box and no candidate.
     """
     F = get_region_fields()
     status = RegionStatus(region_status)
     info = REGION_STATUS_INFO[status]
-    if status == CONFIRM_STATUS and not current.get(F.bbox_norm):
+    promotion = candidate_promotion(current) if status in _PROMOTING_STATUSES else {}
+    if status == CONFIRM_STATUS and not (current.get(F.bbox_norm) or promotion):
         raise RegionWriteError(
             f'cannot mark {status.value!r} without a region box; set one with PUT region'
         )
-    doc: dict[str, Any] = {F.status: status.value}
+    doc: dict[str, Any] = {F.status: status.value, **promotion}
     if current.get(F.status) == status.value:
         # Re-asserting the stored status (a bulk write over a mixed
         # selection) changes nothing derived from it: verified and the
@@ -212,12 +271,26 @@ def region_box_write(
     now: str,
 ) -> dict[str, Any]:
     """Update doc for ``PUT region``: a confirmation when the box equals the
-    stored one (:func:`same_box`), else a human box write
-    (:func:`region_box_doc`)."""
+    stored one or the stored rejected candidate (:func:`same_box`), else a
+    human box write (:func:`region_box_doc`)."""
     F = get_region_fields()
     if region_bbox_norm is not None and same_box(region_bbox_norm, current.get(F.bbox_norm)):
         return region_confirm_doc(current, label_source=label_source, now=now)
-    return region_box_doc(region_bbox_norm, label_source=label_source, now=now)
+    promotion = candidate_promotion(current)
+    if (
+        region_bbox_norm is not None
+        and promotion
+        and same_box(region_bbox_norm, promotion[F.bbox_norm])
+    ):
+        # The box a human PUTs back is the rejected candidate: a confirmation
+        # of the detector's box, provenance kept.
+        promoted = {**current, **promotion}
+        return {**promotion, **region_confirm_doc(promoted, label_source=label_source, now=now)}
+    doc = region_box_doc(region_bbox_norm, label_source=label_source, now=now)
+    if region_bbox_norm is not None:
+        # A human-drawn box replaces the rejected candidate.
+        doc.update({F.rejection_reason: None, **candidate_clear_fields()})
+    return doc
 
 
 def post_write_item(
@@ -230,6 +303,9 @@ def post_write_item(
 __all__ = [
     'BOX_MATCH_TOLERANCE',
     'RegionWriteError',
+    'candidate_box',
+    'candidate_clear_fields',
+    'candidate_promotion',
     'fp_cluster_fields',
     'human_status_fields',
     'parent_to_source_bbox',

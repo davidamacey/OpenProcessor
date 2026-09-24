@@ -133,6 +133,17 @@ class ItemDoc(BaseModel):
     region_detector_version: str | None = None
     region_detector_chain: list[str] | None = None
     region_detected_at: str | None = None
+    # A detector box the verifier rejected (region_status verify_rejected),
+    # kept for review: never an accepted region. A human confirm (PATCH
+    # region_meta region_status=detected, or PUT region with this box)
+    # promotes it to region_bbox_norm with this provenance.
+    region_candidate_bbox_norm: list[float] | None = None
+    region_candidate_score: float | None = None
+    region_candidate_detector: str | None = None
+    region_candidate_detector_version: str | None = None
+    region_candidate_source: str | None = None
+    # Derived: the candidate box in the item-crop frame (xyxy, [0, 1]).
+    region_candidate_bbox_in_parent: list[float] | None = None
     region_cluster_id: int | None = None
     region_cluster_subid: str | None = None
     region_cluster_distance: float | None = None

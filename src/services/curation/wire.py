@@ -105,6 +105,20 @@ def region_bbox_in_parent(src: dict[str, Any], storage: RegionFields | None = No
         return None
     if src.get(f.bbox_frame) in _CROP_FRAMES:
         return list(region)
+    return _source_to_parent(src, region)
+
+
+def region_candidate_bbox_in_parent(
+    src: dict[str, Any], storage: RegionFields | None = None
+) -> Any:
+    """The verifier-rejected candidate box (always source frame) in the
+    item-crop frame, or ``None`` when there is no candidate."""
+    f = storage or get_region_fields()
+    region = _xyxy(src.get(f.candidate_bbox_norm))
+    return None if region is None else _source_to_parent(src, region)
+
+
+def _source_to_parent(src: dict[str, Any], region: tuple[float, float, float, float]) -> Any:
     parent = _xyxy(src.get('bbox_norm'))
     if parent is None:
         return None
@@ -231,6 +245,7 @@ def serialize_item(
     }
     item.update(region_to_wire(src, f))
     item['region_bbox_in_parent'] = region_bbox_in_parent(src, f)
+    item['region_candidate_bbox_in_parent'] = region_candidate_bbox_in_parent(src, f)
     return item
 
 
@@ -268,6 +283,7 @@ __all__ = [
     'item_list_source_excludes',
     'item_source_excludes',
     'region_bbox_in_parent',
+    'region_candidate_bbox_in_parent',
     'region_event_payload',
     'region_to_wire',
     'region_wire_key',

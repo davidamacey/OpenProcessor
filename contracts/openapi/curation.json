@@ -1996,6 +1996,78 @@
             ],
             "title": "Region Bbox Norm"
           },
+          "region_candidate_bbox_in_parent": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Bbox In Parent"
+          },
+          "region_candidate_bbox_norm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Bbox Norm"
+          },
+          "region_candidate_detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Detector"
+          },
+          "region_candidate_detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Detector Version"
+          },
+          "region_candidate_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Score"
+          },
+          "region_candidate_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Source"
+          },
           "region_class_id": {
             "anyOf": [
               {
@@ -8726,7 +8798,7 @@
     },
     "/curation/regions": {
       "get": {
-        "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling.",
+        "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling. ``status`` selects one lifecycle status instead of\n\"has a box\" (a rejected or absent region has none).",
         "operationId": "list_regions_curation_regions_get",
         "parameters": [
           {
@@ -8937,6 +9009,24 @@
               ],
               "description": "Substring search on region_text.",
               "title": "Text"
+            }
+          },
+          {
+            "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+              "title": "Status"
             }
           },
           {

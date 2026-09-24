@@ -77,7 +77,7 @@ by router module; every path is relative to the configured
 | `crop_context.py` | `GET /crops/{crop_id}/context` |
 | `edit_undo.py` | `POST /crops/{crop_id}/region/undo`, `POST /crops/region/undo_batch`, `POST /crops/{crop_id}/vlm_dismiss/undo` |
 | `cohorts.py` | `GET /training_cohorts` |
-| `regions.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
+| `regions.py` / `regions_edit.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
@@ -249,7 +249,15 @@ Every human region writer (`PUT /crops/{id}/region`, `PUT
   and `region_score`, whichever writer set it;
 - `region_verified` = (`region_status` == `confirm_status`), never taken
   from the request (`detected` → `true`, every other human status → `false`);
-- `detected` on a crop with no box is refused (`422` single / `invalid[]` batch);
+- `detected` on a crop with no box is refused (`422` single / `invalid[]` batch)
+  — unless the crop carries a verifier-rejected candidate
+  (`region_candidate_bbox_norm`, below): then `detected` (and
+  `false_positive`) promotes the candidate into `region_bbox_norm`, taking
+  `region_score` / `region_detector` / `region_detector_version` /
+  `region_source` from the `region_candidate_*` fields, clearing them and
+  `region_rejection_reason`. `PUT /crops/{id}/region` with the candidate's
+  box is the same confirmation (provenance kept); any other box replaces
+  the candidate;
 - human writes set `region_validated=true`; `false_positive` parks the region
   in the FP cluster, any other status releases it;
 - a write that re-asserts the stored status re-derives nothing:
@@ -713,7 +721,7 @@ always all present (a value is `null` when the stored doc has no value;
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (58): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
+Item keys (59): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`, `region_candidate_bbox_in_parent`.
 
 `vlm_class_attempted_at` / `vlm_class_empty_reason`: when a VLM was last
 asked for the item's class, and why that attempt gave no class — `no_answer`
@@ -724,14 +732,16 @@ answered. An empty answer leaves every class field as it was (it is **not**
 carries it in `vlm_raw_class`). Such items appear in the `all` review tab and
 stay out of the VLM selectors for 24 h.
 
-Region keys (34, one per `RegionFields` attribute except `embedding`,
-`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+Region keys (39, one per `RegionFields` attribute except `embedding`,
+`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_candidate_bbox_norm`, `region_candidate_score`, `region_candidate_detector`, `region_candidate_detector_version`, `region_candidate_source`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
 
 Derived keys (computed by the serializer, never stored):
 
 - `region_bbox_in_parent` — the region box in the item-crop frame
   (`[x1,y1,x2,y2]`, clamped to `[0, 1]`); `null` when there is no region or
   the item has no usable `bbox_norm`. Draw it on the item thumbnail as-is.
+- `region_candidate_bbox_in_parent` — the same projection of
+  `region_candidate_bbox_norm` (`null` without a candidate).
 - `proposed_class_id` / `proposed_class_name` — the class a one-key confirm
   applies, on **every** item endpoint (was `/review`-only): the VLM
   suggestion when there is one, else `class_id` and `vlm_raw_class` or
@@ -902,7 +912,27 @@ response next to the `threshold` actually used).
 `GET /regions` filter params: `page`, `page_size`, `class_id`,
 `cluster_id`, `region_cluster_id`, `region_cluster_subid`,
 `sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`,
-`detector`, `text`, `include_test`.
+`detector`, `text`, `status`, `include_test`. Without `status` only items
+carrying a region box are listed; `status=<region_status>` (any value from
+`GET /regions/statuses`, else `400`) lists every item in that status
+instead, box or not — e.g. `status=verify_rejected` for the verifier
+rejections, whose box is `region_candidate_bbox_norm`.
+
+### Verifier-rejected candidates — `region_candidate_*`
+
+When the verifier rejects a detector's box (`region_status=verify_rejected`)
+the worker keeps it for review instead of discarding it:
+`region_candidate_bbox_norm` (source frame), `region_candidate_score`,
+`region_candidate_detector`, `region_candidate_detector_version`,
+`region_candidate_source`, plus `region_rejection_reason`
+(`region_visible_elsewhere` for a verifier `region_bbox_correct=false`,
+`sanity_reject:<gate reason>` for the geometry gate) and
+`region_bbox_correct=false` for the verifier verdict. The candidate is
+never an accepted region: `region_bbox_norm` stays `null`, so browse,
+clustering and export ignore it. A human reverses the rejection with the
+confirm write (see "Region lifecycle"); region undo restores it. An
+accepted worker write clears any stale candidate. Items rejected before
+this existed carry no candidate (re-queue them to get one).
 
 ### SSE — `GET /events`
 

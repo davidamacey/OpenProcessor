@@ -95,6 +95,12 @@
     "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
+    "region_candidate_bbox_norm",
+    "region_candidate_score",
+    "region_candidate_detector",
+    "region_candidate_detector_version",
+    "region_candidate_source",
+    "region_candidate_bbox_in_parent",
     "region_cluster_id",
     "region_cluster_subid",
     "region_cluster_distance",
@@ -657,6 +663,84 @@
         "default": null,
         "title": "Region Bbox Norm"
       },
+      "region_candidate_bbox_in_parent": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Bbox In Parent"
+      },
+      "region_candidate_bbox_norm": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Bbox Norm"
+      },
+      "region_candidate_detector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Detector"
+      },
+      "region_candidate_detector_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Detector Version"
+      },
+      "region_candidate_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Score"
+      },
+      "region_candidate_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Source"
+      },
       "region_class_id": {
         "anyOf": [
           {
@@ -1166,6 +1250,11 @@
     "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
+    "region_candidate_bbox_norm",
+    "region_candidate_score",
+    "region_candidate_detector",
+    "region_candidate_detector_version",
+    "region_candidate_source",
     "region_cluster_id",
     "region_cluster_subid",
     "region_cluster_distance",

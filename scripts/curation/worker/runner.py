@@ -73,11 +73,14 @@ from scripts.curation.worker.state import (
 )
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
+    REJECT_REASON_SANITY_PREFIX,
+    REJECT_REASON_VERIFIER,
     _auto_confirm_or_pending,
     _bbox_shape_is_plausible,
     _combined_class_update,
     _combined_write_doc,
     _region_write_doc,
+    candidate_reject_doc,
 )
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
@@ -1124,8 +1127,15 @@ async def run(args: argparse.Namespace) -> int:
                             if not gate_ok:
                                 t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
                                 t.update_doc = {
-                                    F.status: RegionStatus.VERIFY_REJECTED,
-                                    F.detector_chain: list(t.detection_trace),
+                                    **candidate_reject_doc(
+                                        candidate_in_source=t.candidate_in_source,
+                                        candidate_score=t.candidate_score,
+                                        detector=_det[0],
+                                        detector_version=_det[1],
+                                        candidate_source=t.candidate_source,
+                                        reason=f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}',
+                                        chain=t.detection_trace,
+                                    ),
                                     **_combined_class_update(
                                         reply, effective_class_names, name_to_id=name_to_id
                                     ),
@@ -1197,11 +1207,19 @@ async def run(args: argparse.Namespace) -> int:
                             # calls per crop).
                             metrics['combined_bbox_wrong'] += 1
                             t.detection_trace.append(
-                                f'{actor}:combined_verify_reject:region_visible_elsewhere'
+                                f'{actor}:combined_verify_reject:{REJECT_REASON_VERIFIER}'
                             )
                             t.update_doc = {
-                                F.status: RegionStatus.VERIFY_REJECTED,
-                                F.detector_chain: list(t.detection_trace),
+                                **candidate_reject_doc(
+                                    candidate_in_source=t.candidate_in_source,
+                                    candidate_score=t.candidate_score,
+                                    detector=_det[0],
+                                    detector_version=_det[1],
+                                    candidate_source=t.candidate_source,
+                                    reason=REJECT_REASON_VERIFIER,
+                                    chain=t.detection_trace,
+                                    bbox_correct=False,
+                                ),
                                 **_combined_class_update(
                                     reply, effective_class_names, name_to_id=name_to_id
                                 ),
