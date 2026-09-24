@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 from types import SimpleNamespace
 from typing import Any
 
@@ -124,7 +123,7 @@ def test_primary_with_a_class_is_not_guessed() -> None:
 @pytest.mark.asyncio
 async def test_apply_restores_and_snapshots() -> None:
     fake = QueryFakeOpenSearch({INDEX: _docs()})
-    plans = await repair.plan_repairs(fake, index=INDEX)
+    plans = await repair.plan_repairs(fake, index=INDEX, record_attempt=True)
     counts = await repair.apply_repairs(fake, plans, index=INDEX)
     assert counts == {'repaired': 4, 'skipped_changed': 0, 'not_applicable': 1, 'errors': 0}
 
@@ -171,15 +170,27 @@ async def test_apply_skips_items_changed_since_the_plan() -> None:
 async def test_script_dry_run_writes_nothing(capsys: pytest.CaptureFixture[str]) -> None:
     import copy
 
-    from scripts.curation.repair_empty_vlm_answers import run
+    from scripts.curation.repair_empty_vlm_answers import build_parser, run
 
     fake = QueryFakeOpenSearch({INDEX: _docs()})
     before = copy.deepcopy(fake.docs(INDEX))
-    args = argparse.Namespace(
-        index=INDEX, crop_id_prefix=None, page_size=500, dry_run=True, verbose=True
-    )
+    args = build_parser().parse_args(['--index', INDEX, '--verbose'])
     assert await run(args, fake) == 0
     assert fake.docs(INDEX) == before
     out = capsys.readouterr().out
     assert '5 candidate(s); 4 repairable, 1 report-only' in out
     assert 'Dry-run only' in out
+
+
+@pytest.mark.asyncio
+async def test_default_repair_leaves_items_eligible_for_an_immediate_retry() -> None:
+    """The empty answers came from a transport defect, not the model; by
+    default a repaired item carries no attempt stamp so the VLM worker asks
+    again right away instead of waiting out the retry cooldown."""
+    fake = QueryFakeOpenSearch({INDEX: _docs()})
+    plans = await repair.plan_repairs(fake, index=INDEX)
+    await repair.apply_repairs(fake, plans, index=INDEX)
+    a = fake.docs(INDEX)['a_proposal']
+    assert a['class_source'] == 'det_proposal'
+    assert a.get('vlm_class_attempted_at') is None
+    assert a.get('vlm_class_empty_reason') is None

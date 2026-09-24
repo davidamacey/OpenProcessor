@@ -58,7 +58,11 @@ def format_plan(plan: RepairPlan) -> str:
 
 async def run(args: argparse.Namespace, client: object) -> int:
     plans = await plan_repairs(
-        client, index=args.index, id_prefix=args.crop_id_prefix, page_size=args.page_size
+        client,
+        index=args.index,
+        id_prefix=args.crop_id_prefix,
+        page_size=args.page_size,
+        record_attempt=args.record_attempt,
     )
     if args.verbose:
         for plan in plans:
@@ -99,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--page-size', type=int, default=500)
     p.add_argument('--opensearch-url', default=DEFAULT_OPENSEARCH)
     p.add_argument('--verbose', action='store_true', help='Print one line per candidate.')
+    p.add_argument(
+        '--record-attempt',
+        action='store_true',
+        help='Stamp the empty answer as a VLM attempt (defers the retry); default: retry now.',
+    )
     g = p.add_mutually_exclusive_group()
     g.add_argument('--dry-run', action='store_true', default=True)
     g.add_argument('--apply', dest='dry_run', action='store_false')

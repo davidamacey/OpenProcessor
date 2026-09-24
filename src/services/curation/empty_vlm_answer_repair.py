@@ -26,9 +26,12 @@ So the pre-write ``class_source`` is recoverable from the doc itself:
 
 The empty write's ``vlm_confidence`` (a confidence for an answer that did
 not exist) and empty ``vlm_raw_class`` / ``vlm_raw_label`` are cleared, and
-the attempt is recorded as :mod:`~src.services.curation.vlm_class_attempt`
-now does (``vlm_class_attempted_at`` = the item's ``updated_at``,
-``vlm_class_empty_reason='no_answer'``).
+by default the item is left eligible for an immediate VLM retry: these
+empty answers came from a transport defect, not the model. With
+``record_attempt=True`` the attempt is recorded as
+:mod:`~src.services.curation.vlm_class_attempt` does
+(``vlm_class_attempted_at`` = the item's ``updated_at``,
+``vlm_class_empty_reason='no_answer'``), which defers the retry.
 
 Applying re-checks each item under OCC (still ``vlm_unmatched`` with an empty
 raw class, not human-owned / validated) and records a restorable
@@ -119,18 +122,20 @@ def ingest_class_source(doc: dict[str, Any]) -> str | None:
     return None
 
 
-def _cleanup(doc: dict[str, Any]) -> dict[str, Any]:
+def _cleanup(doc: dict[str, Any], *, record_attempt: bool) -> dict[str, Any]:
     out: dict[str, Any] = {'vlm_confidence': None}
     for field in ('vlm_raw_class', 'vlm_raw_label'):
         if field in doc and not str(doc.get(field) or '').strip():
             out[field] = None
     at = doc.get('updated_at') or doc.get('class_labeled_at')
-    if at:
+    if record_attempt and at:
         out.update(class_attempt_fields(str(at), EmptyClassReason.NO_ANSWER))
     return out
 
 
-def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
+def plan_repair(
+    crop_id: str, doc: dict[str, Any], *, record_attempt: bool = False
+) -> RepairPlan | None:
     """The repair plan for one doc, or ``None`` if it isn't a candidate."""
     if not is_candidate(doc):
         return None
@@ -149,12 +154,24 @@ def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
             'class_source': VLM_CLASS_SOURCE,
             'label_source': VLM_CLASS_SOURCE,
         }
-        return RepairPlan(crop_id, SOURCE_VLM, True, current, {**restore, **_cleanup(doc)})
+        return RepairPlan(
+            crop_id,
+            SOURCE_VLM,
+            True,
+            current,
+            {**restore, **_cleanup(doc, record_attempt=record_attempt)},
+        )
     if labeler == INGEST_CLASS_LABELER:
         ingest_source = ingest_class_source(doc)
         if ingest_source is not None:
             restore = {'class_source': ingest_source, 'label_source': ingest_source}
-            return RepairPlan(crop_id, SOURCE_INGEST, True, current, {**restore, **_cleanup(doc)})
+            return RepairPlan(
+                crop_id,
+                SOURCE_INGEST,
+                True,
+                current,
+                {**restore, **_cleanup(doc, record_attempt=record_attempt)},
+            )
     history = [e for e in doc.get('class_id_history') or [] if isinstance(e, dict)]
     if history and history[-1].get('class_source'):
         entry = history[-1]
@@ -164,7 +181,7 @@ def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
             SOURCE_HISTORY,
             True,
             current,
-            {**restore, **_cleanup(doc)},
+            {**restore, **_cleanup(doc, record_attempt=record_attempt)},
             note=f'state before {entry.get("writer")} at {entry.get("at")}',
         )
     return RepairPlan(
@@ -179,7 +196,12 @@ def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
 
 
 async def plan_repairs(
-    client: Any, *, index: str, id_prefix: str | None = None, page_size: int = 500
+    client: Any,
+    *,
+    index: str,
+    id_prefix: str | None = None,
+    page_size: int = 500,
+    record_attempt: bool = False,
 ) -> list[RepairPlan]:
     """Scan ``index`` for candidates (paged by ``crop_id``) and plan each."""
     plans: list[RepairPlan] = []
@@ -199,7 +221,7 @@ async def plan_repairs(
             break
         cursor = hits[-1].get('sort')
         for h in hits:
-            plan = plan_repair(h['_id'], h.get('_source') or {})
+            plan = plan_repair(h['_id'], h.get('_source') or {}, record_attempt=record_attempt)
             if plan is not None:
                 plans.append(plan)
         if len(hits) < page_size or cursor is None:
