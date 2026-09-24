@@ -112,15 +112,54 @@ async def force_cluster_id_equals_class_id(
 
     Idempotent and safe to re-run.
     """
+    from src.services.curation.clustering.embedding_reduce import CONFIDENT_CLASS_SOURCES
+
     config = get_curation_config()
     # `class_id` / `cluster_id` / `cluster_subid` here are the top-level
     # item fields (already generic — not the RegionFields-governed
     # region/plate sub-annotation; see RegionFields' docstring scope).
+    #
+    # F-10: the old query (`exists: class_id` only) matched nearly every
+    # doc — 234,575 on the legacy index — forcing OpenSearch to load and
+    # reconstruct the full _source (including derived kNN vectors) only
+    # for the script to noop. Worse, it isn't just wasteful: residual
+    # crops sitting in a candidate cluster (cluster_id >= the residual
+    # offset) carry an unconfident class_id, and this query pulled them
+    # back out of their candidate cluster on every run, undoing the
+    # residual pool's clustering. Narrow to confident/validated docs
+    # (the same CONFIDENT_CLASS_SOURCES set the residual-pool builder in
+    # embedding_reduce.py excludes — imported from there so the two sets
+    # never drift apart) plus a doc-values script filter that excludes
+    # already-correct docs at query time (no _source load). The
+    # doc-values filter alone cut the legacy match from 234,575 to
+    # 30,688 (7.6x); the class-source restriction narrows it further.
     body = {
-        # Restrict to docs that actually have a class assignment.
-        # update_by_query then evaluates the script on each matched doc;
-        # the script no-ops when cluster_id is already correct.
-        'query': {'bool': {'must': [{'exists': {'field': 'class_id'}}]}},
+        'query': {
+            'bool': {
+                'filter': [
+                    {'exists': {'field': 'class_id'}},
+                    {
+                        'bool': {
+                            'should': [
+                                {'term': {'class_validated': True}},
+                                {'terms': {'class_source': sorted(CONFIDENT_CLASS_SOURCES)}},
+                            ],
+                            'minimum_should_match': 1,
+                        }
+                    },
+                    {
+                        'script': {
+                            'script': {
+                                'source': (
+                                    "doc['cluster_id'].size()==0 ||"
+                                    " doc['cluster_id'].value != doc['class_id'].value"
+                                )
+                            }
+                        }
+                    },
+                ]
+            }
+        },
         'script': {
             'source': (
                 # `def` rather than `int` so we can hold either an int
