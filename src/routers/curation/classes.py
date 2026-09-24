@@ -24,6 +24,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.crops import list_crops
+from src.services.curation.class_sources import class_source_catalog
 
 
 # Single-char keys the labeler UI's global keydown listener binds to
@@ -34,6 +35,18 @@ from src.routers.curation.crops import list_crops
 # would fire on the same keypress, since both window keydown listeners run
 # unconditionally.
 RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam')
+
+
+@router.get('/class_sources')
+async def list_class_sources() -> dict[str, list[dict[str, str]]]:
+    """Every ``class_source`` value this deployment can write.
+
+    ``{"class_sources": [{"id", "label", "role"}, ...]}``. Ingest values
+    follow ``OP_INGEST_PRIMARY_*`` / ``OP_INGEST_SECONDARY_*``; the rest
+    are fixed writer values. ``role`` is one of
+    :data:`~src.services.curation.class_sources.CLASS_SOURCE_ROLES`.
+    """
+    return {'class_sources': class_source_catalog()}
 
 
 @router.get('/classes', response_model=ClassListResponse)

@@ -119,7 +119,8 @@ trainer. A deployment supplies:
   looked up by its id. Set it `true` only when the primary was trained on
   your class registry. The `class_source` values the worker and
   clustering code filter on are derived from these profile names
-  (`src/services/curation/ingest_class_sources.py`). Ingest returns `503` until one is
+  (`src/services/curation/ingest_class_sources.py`); `GET /curation/class_sources`
+  lists every value the deployment can write. Ingest returns `503` until one is
   configured and loaded. An optional raw-output secondary detector
   (`OP_INGEST_SECONDARY_DETECTOR_MODEL` + `OP_INGEST_SECONDARY_<FIELD>`)
   overrides the primary's class on IoU-matched boxes. The retired

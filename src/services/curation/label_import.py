@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.history import record_class_history
+from src.services.curation.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.item_doc import region_seed_status
 from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.geometry import crop_id as _geometry_crop_id, iou as _iou
@@ -63,7 +64,7 @@ logger = get_logger(__name__)
 
 LABEL_IOU_MATCH = 0.5
 
-DEFAULT_LABEL_SOURCE = 'external_label'
+DEFAULT_LABEL_SOURCE = LABEL_IMPORT_CLASS_SOURCE
 
 # ``kind`` values of the model-vs-label disagreement records produced when
 # ``detect_mismatches`` is on.

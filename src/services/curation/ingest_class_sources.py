@@ -25,6 +25,8 @@ CLUSTER_MAJORITY_CLASS_SOURCE = 'cluster_majority_agreement'
 CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE = 'classifier_vlm_agreement'
 # ItemDoc's default before any detector stamps a source.
 DEFAULT_PROPOSAL_CLASS_SOURCE = 'unlabeled_proposal'
+# Label import's default (callers may pass their own).
+LABEL_IMPORT_CLASS_SOURCE = 'external_label'
 
 
 def unlabeled_proposal_class_sources() -> frozenset[str]:
@@ -57,6 +59,7 @@ __all__ = [
     'CLUSTER_MAJORITY_CLASS_SOURCE',
     'DEFAULT_PROPOSAL_CLASS_SOURCE',
     'HUMAN_CLASS_SOURCE',
+    'LABEL_IMPORT_CLASS_SOURCE',
     'VLM_CLASS_SOURCE',
     'classifier_class_sources',
     'confident_class_sources',
