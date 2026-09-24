@@ -23,10 +23,9 @@
    * Renders a sub-bbox thumbnail (cropped server-side to the child
    * bbox region, per the active slot's own `subBox.thumbnail`
    * path/aspect — not a hardcoded plate URL/ratio) with the parent
-   * vehicle class, detector score, a provenance chip strip, and a ⚠
-   * shape warning when the bbox shape envelope fails. Clicking the
-   * card emits an `onclick` event so the parent can navigate to the
-   * review queue.
+   * vehicle class, detector score, and a provenance chip strip.
+   * Clicking the card emits an `onclick` event so the parent can
+   * navigate to the review queue.
    */
   import ProvenanceChip from './ProvenanceChip.svelte';
   import {
@@ -85,11 +84,6 @@
     slot.capabilities.lifecycle?.falsePositiveState != null &&
       data.lifecycle?.status === slot.capabilities.lifecycle.falsePositiveState,
   );
-
-  // Shape envelope check — delegates to the shared evaluateShapeGate via
-  // readSlot, so this agrees with the /review surface on non-finite
-  // input (Finding C.1).
-  const warn = $derived(data.subBox?.shapeWarning ?? false);
 
   const thumbCap = $derived(slot.capabilities.subBox?.thumbnail);
   // crop.region_thumbnail_url, when present, is a server-provided,
@@ -195,15 +189,6 @@
         class="absolute top-1 right-1 rounded border border-red-500/60 bg-red-600/85 px-1 py-0.5 text-[9px] font-semibold text-white"
       >
         false pos
-      </span>
-    {/if}
-    {#if warn}
-      <span
-        class="absolute bottom-1 left-1 rounded border border-yellow-500/60 bg-yellow-500/85 px-1 py-0.5 text-[9px] font-semibold text-yellow-950"
-        title="Bbox shape fails the {slot.label
-          .singular} envelope — flag for re-detection"
-      >
-        ⚠
       </span>
     {/if}
   </div>

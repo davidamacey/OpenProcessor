@@ -34,11 +34,7 @@
     panelLabels,
   } from '$lib/review/slotPanel';
   import { slotOf } from '$lib/annotations/cropSlots';
-  import { describeEnvelope } from '$lib/annotations/types';
-  import type { SlotData } from '$lib/annotations/types';
   import { resolveConfirmClassId, searchClasses } from '$lib/classPicker';
-  import { bboxNormToXYXY } from '$lib/bboxFrames';
-  import { projectFromParent } from '$lib/annotations/readSlot';
   import {
     endpointForTab,
     isSlotTab,
@@ -68,6 +64,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
+  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
@@ -810,8 +807,12 @@
   // Status values an operator is allowed to write, for the ACTIVE slot —
   // closes Finding D (the panel used to render licensePlateSlot's own
   // vocabulary regardless of which slot tab was active). Order matches
-  // the active slot's own `capabilities.lifecycle.states`.
-  const slotStatusOptions = $derived(activeSlot ? humanWritableStates(activeSlot) : []);
+  // the deployment's served `GET {API_PREFIX}/regions/statuses` vocabulary
+  // when loaded, falling back to the active slot's own
+  // `capabilities.lifecycle.states`.
+  const slotStatusOptions = $derived(
+    activeSlot ? humanWritableStates(activeSlot, regionStatusesStore.list) : [],
+  );
   const slotLabels = $derived(activeSlot ? panelLabels(activeSlot) : null);
 
   // Undo stack for slot confirm/reject. Each entry holds the previously
@@ -823,8 +824,9 @@
     item: ReviewItem;
     insertAt: number;
     /**
-     * The sub-box in the slot's own stored frame that was sent to the
-     * server for this confirm — null means "rejected" (not visible).
+     * The sub-box, in the parent-crop-normalized frame, that was sent to
+     * the server for this confirm (frame: 'parent') — null means
+     * "rejected" (not visible).
      */
     saved: [number, number, number, number] | null;
   }
@@ -925,58 +927,44 @@
   // edits to a *different* crop don't interfere with each other.
   const slotMetaAborts = new AbortRegistry();
 
-  /** Resolves the SlotState for a raw status value under the active slot. */
-  function _resolveSlotState(status: string) {
-    return (
-      activeSlot?.capabilities.lifecycle?.states.find((s) => s.value === status) ?? null
-    );
-  }
-
-  async function saveSlotMeta(
-    patch: {
-      status?: string | null;
-      text?: string | null;
-      rejectionReason?: string | null;
-    },
-    applyOptimistic: (prev: SlotData) => SlotData,
-  ): Promise<void> {
+  /**
+   * PATCH a slot metadata field and render whatever the server returns —
+   * no client-computed post-write state. On failure, reseed the local
+   * inputs from the crop's last-known-good server state (rather than a
+   * hand-rolled "prior" snapshot) so the operator sees what's actually
+   * persisted.
+   */
+  async function saveSlotMeta(patch: {
+    status?: string | null;
+    text?: string | null;
+    rejectionReason?: string | null;
+  }): Promise<void> {
     if (!current || !activeSlot) return;
     const id = current.id;
-    const key = activeSlot.key;
     // Look up by id, not cursor — if the user advances mid-save the
-    // captured idx would point at the next crop and the revert would
+    // captured idx would point at the next crop and a reseed would
     // corrupt unrelated state.
     const findIdx = () => queue.items.findIndex((x) => x.id === id);
-    const idx0 = findIdx();
-    const priorData: SlotData =
-      idx0 >= 0 ? (queue.items[idx0].slots?.[key] ?? { key }) : { key };
-    if (idx0 >= 0) {
-      queue.items[idx0] = {
-        ...queue.items[idx0],
-        slots: { ...queue.items[idx0].slots, [key]: applyOptimistic(priorData) },
-      };
-    }
     // Abort any in-flight save on this crop so we don't get an ABA-style
     // response that overwrites a newer edit.
     const ac = slotMetaAborts.start(id);
     try {
-      await patchSlotMeta(activeSlot, id, patch, ac.signal);
+      const res = await patchSlotMeta(activeSlot, id, patch, ac.signal);
+      const idx = findIdx();
+      if (idx >= 0) {
+        queue.items[idx] = { ...queue.items[idx], ...res.item } as ReviewItem;
+      }
     } catch (e) {
       if (ac.signal.aborted) return; // superseded by a newer save
-      const idx1 = findIdx();
-      if (idx1 >= 0) {
-        queue.items[idx1] = {
-          ...queue.items[idx1],
-          slots: { ...queue.items[idx1].slots, [key]: priorData },
-        };
-      }
       // Reseed local inputs only if we're still on the same crop the
       // user was editing; otherwise leave the inputs alone — they're
       // already bound to the new crop's state.
       if (current?.id === id) {
-        editedSlotText = priorData.text?.value ?? '';
-        editedSlotStatus = priorData.lifecycle?.status ?? '';
-        editedRejectionReason = priorData.lifecycle?.rejectionReason ?? '';
+        const idx = findIdx();
+        const seedData = idx >= 0 ? slotOf(queue.items[idx], activeSlot) : null;
+        editedSlotText = seedData?.text?.value ?? '';
+        editedSlotStatus = seedData?.lifecycle?.status ?? '';
+        editedRejectionReason = seedData?.lifecycle?.rejectionReason ?? '';
       }
       toastStore.error(`Save failed: ${(e as Error).message}`);
     } finally {
@@ -989,16 +977,7 @@
     const slotData = slotOf(current, activeSlot);
     const next = editedSlotText.trim() || null;
     if ((slotData?.text?.value ?? null) === next) return;
-    await saveSlotMeta({ text: next }, (prev) => ({
-      ...prev,
-      text: {
-        value: next,
-        raw: prev.text?.raw ?? null,
-        source: 'human',
-        confidence: next ? 1.0 : null,
-        engineVersion: prev.text?.engineVersion ?? null,
-      },
-    }));
+    await saveSlotMeta({ text: next });
   }
 
   async function commitSlotStatus(): Promise<void> {
@@ -1006,50 +985,22 @@
     if (!editedSlotStatus) return;
     const slotData = slotOf(current, activeSlot);
     if (editedSlotStatus === slotData?.lifecycle?.status) return;
+    const id = current.id;
     // The reject state implies the bbox is gone — call setSlotBox null
     // to keep the bbox + status in sync (avoids the contradiction of a
     // reject status with a populated sub-box).
-    if (statusClearsBox(activeSlot, editedSlotStatus)) {
+    if (statusClearsBox(activeSlot, editedSlotStatus, regionStatusesStore.list)) {
       try {
-        await setSlotBox(activeSlot, current.id, null);
-        const idx = queue.items.findIndex((x) => x.id === current.id);
-        if (idx >= 0) {
-          const key = activeSlot.key;
-          const prev = queue.items[idx].slots?.[key] ?? { key };
-          queue.items[idx] = {
-            ...queue.items[idx],
-            slots: {
-              ...queue.items[idx].slots,
-              [key]: {
-                ...prev,
-                subBox: prev.subBox
-                  ? { ...prev.subBox, rawXyxy: null, parent: null }
-                  : prev.subBox,
-                lifecycle: {
-                  status: editedSlotStatus,
-                  state: _resolveSlotState(editedSlotStatus),
-                  verified: prev.lifecycle?.verified ?? null,
-                  rejectionReason: prev.lifecycle?.rejectionReason ?? null,
-                },
-              },
-            },
-          } as ReviewItem;
-        }
+        const item = await setSlotBox(activeSlot, id, null);
+        const idx = queue.items.findIndex((x) => x.id === id);
+        if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
         editedSlotBox = null;
       } catch (e) {
         toastStore.error(`Save failed: ${(e as Error).message}`);
       }
       return;
     }
-    await saveSlotMeta({ status: editedSlotStatus }, (prev) => ({
-      ...prev,
-      lifecycle: {
-        status: editedSlotStatus,
-        state: _resolveSlotState(editedSlotStatus),
-        verified: prev.lifecycle?.verified ?? null,
-        rejectionReason: prev.lifecycle?.rejectionReason ?? null,
-      },
-    }));
+    await saveSlotMeta({ status: editedSlotStatus });
   }
 
   async function commitRejectionReason(): Promise<void> {
@@ -1057,15 +1008,7 @@
     const slotData = slotOf(current, activeSlot);
     const next = editedRejectionReason.trim() || null;
     if ((slotData?.lifecycle?.rejectionReason ?? null) === next) return;
-    await saveSlotMeta({ rejectionReason: next }, (prev) => ({
-      ...prev,
-      lifecycle: {
-        status: prev.lifecycle?.status ?? null,
-        state: prev.lifecycle?.state ?? null,
-        verified: prev.lifecycle?.verified ?? null,
-        rejectionReason: next,
-      },
-    }));
+    await saveSlotMeta({ rejectionReason: next });
   }
 
   function toggleEdit(): void {
@@ -1084,53 +1027,31 @@
     editMode = true;
   }
 
+  /** [x1,y1,x2,y2] of `box` (a parent-crop-normalized BBoxNorm), for the
+   *  `frame: 'parent'` write path — no projection through the parent
+   *  vehicle bbox needed; the server does that itself. */
+  function _parentFrameTuple(box: BBoxNorm): [number, number, number, number] {
+    return [
+      box.cx - box.w / 2,
+      box.cy - box.h / 2,
+      box.cx + box.w / 2,
+      box.cy + box.h / 2,
+    ];
+  }
+
   async function saveBboxAndExit(): Promise<void> {
     if (!current || !activeSlot) return;
     if (!editedSlotBox) {
       toastStore.warn('No bbox to save — draw one or press Backspace to clear.');
       return;
     }
-    if (!current.bbox_norm) {
-      toastStore.error(
-        'Missing parent vehicle bbox; cannot project to the stored frame.',
-      );
-      return;
-    }
     const id = current.id;
-    const parentXyxy = bboxNormToXYXY(current.bbox_norm);
-    const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
-    const tuple = projectFromParent(editedSlotBox, parentXyxy, frame);
+    const tuple = _parentFrameTuple(editedSlotBox);
     slotSaving = true;
     try {
-      await setSlotBox(activeSlot, id, tuple);
-      // Server flips status to the slot's confirmState + verified=true on
-      // bbox write; reflect that locally without waiting for a refetch.
+      const item = await setSlotBox(activeSlot, id, tuple, 'parent');
       const idx = queue.items.findIndex((x) => x.id === id);
-      if (idx >= 0) {
-        const key = activeSlot.key;
-        const prev = queue.items[idx].slots?.[key] ?? { key };
-        const confirmState = activeSlot.capabilities.lifecycle?.confirmState ?? null;
-        queue.items[idx] = {
-          ...queue.items[idx],
-          slots: {
-            ...queue.items[idx].slots,
-            [key]: {
-              ...prev,
-              subBox: prev.subBox
-                ? { ...prev.subBox, rawXyxy: tuple, parent: editedSlotBox }
-                : prev.subBox,
-              lifecycle: confirmState
-                ? {
-                    status: confirmState,
-                    state: _resolveSlotState(confirmState),
-                    verified: true,
-                    rejectionReason: prev.lifecycle?.rejectionReason ?? null,
-                  }
-                : prev.lifecycle,
-            },
-          },
-        } as ReviewItem;
-      }
+      if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...item } as ReviewItem;
       editMode = false;
       toastStore.success('Bbox saved.');
     } catch (e) {
@@ -1148,22 +1069,14 @@
       );
       return;
     }
-    if (!current.bbox_norm) {
-      toastStore.error(
-        'Missing parent vehicle bbox; cannot project to the stored frame.',
-      );
-      return;
-    }
     const item = current;
-    const parentXyxy = bboxNormToXYXY(item.bbox_norm!);
-    const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
-    const tuple = projectFromParent(editedSlotBox, parentXyxy, frame);
+    const tuple = _parentFrameTuple(editedSlotBox);
     // Snapshot for "Back" before mutating the queue.
     const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: tuple };
     _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
-      await setSlotBox(activeSlot, item.id, tuple);
+      await setSlotBox(activeSlot, item.id, tuple, 'parent');
       toastStore.success(`${activeSlot.label.title} confirmed. ← to go back.`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
@@ -1191,7 +1104,9 @@
 
   async function markFalsePositive(): Promise<void> {
     if (!current || !activeSlot) return;
-    const fpState = activeSlot.capabilities.lifecycle?.falsePositiveState;
+    const fpState =
+      regionStatusesStore.falsePositiveStatus ??
+      activeSlot.capabilities.lifecycle?.falsePositiveState;
     if (!fpState) return; // no falsePositiveState declared -> action shouldn't be reachable
     const item = current;
     // False positive: a detector drew this box but it is NOT the slot's
@@ -1831,16 +1746,6 @@
               {:else}
                 <span class="text-zinc-500">—</span>
               {/if}
-              {#if slotData?.subBox?.shapeWarning}
-                <span
-                  class="rounded border border-yellow-500/60 bg-yellow-500/15 px-1.5 py-0.5 text-[10px] text-yellow-200"
-                  title="{activeSlot.capabilities.subBox?.envelope
-                    ? describeEnvelope(activeSlot.capabilities.subBox.envelope)
-                    : 'Implausible shape'}. Likely legacy / corrupted data — press E to fix."
-                >
-                  ⚠ shape · press E to fix
-                </span>
-              {/if}
               {#if current.mistakenness_score != null}
                 <ScoreChip
                   label="mistakenness"
@@ -1898,7 +1803,7 @@
                 </span>
               {/if}
             </span>
-            {#if statusWantsRejectionReason(activeSlot, editedSlotStatus)}
+            {#if statusWantsRejectionReason(activeSlot, editedSlotStatus, regionStatusesStore.list)}
               <span class="text-zinc-500">Rejection reason</span>
               <span>
                 <input

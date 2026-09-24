@@ -44,7 +44,7 @@ gone — every route in this table exists and works; nothing here is a stub.
 | `/dashboard`                 | Current pipeline dashboard — live `DatasetStats` (polls every 10s) + `AutoLabelPanel` ("Run Clustering Now" with stage progress), shared with the daemon-fired auto-label run. `AutoLabelPanel` also hosts an optional per-class assist scope (`AssistScopeBar`, absent unless `/methods` advertises a usable `prompt_pack` — see "Curation-strategy selector bar" below) that lets an operator point the VLM-assisted sweep at a single class instead of the whole pool.                                                                                                                                                                                                                                                                                                                                                                             |
 | `/clusters`                  | Cluster grid view, sidebar filter, **strategy bar** (review-sort dropdown + score chips, see below — no cluster-method picker here; that lives on `/settings`). When `class=license_plate` is selected, replaces the cluster grid with a **plate-thumbnail grid** backed by `{API_PREFIX}/regions` (detector / verified / score / plate-text filters; click → jump to the license_plate slot's review tab). Also hosts the **embedding-plot** overlay toggle when `viz_projection` is available (see below).                                                                                                                                                                                                                                                                                                                                          |
 | `/clusters/[id]`             | Single cluster crop grid + DnD + bulk ops + strategy bar (sort / diverse overlay / score chips scoped to this cluster)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `/review`                    | 5 top-level review tabs (2026-09 consolidation, down from 9 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / one tab per registered queue-capable slot (today: **Plates**, for `license_plate`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. A slot tab (Plates today) carries provenance chips + VLM-read plate text + ⚠ shape warnings, driven by the active slot's capabilities rather than a hardcoded `'plates'` check (see "Slot-generic review tabs" below).  |
+| `/review`                    | 5 top-level review tabs (2026-09 consolidation, down from 9 — see below): **All** / **Uncertainty** / **Model Disagreements** / **COCO Blind Spots** / one tab per registered queue-capable slot (today: **Plates**, for `license_plate`), each with its own default sort (`review_sorts.py`'s `_TAB_DEFAULTS`) plus the strategy bar's selectable sort/score overlays. The All tab additionally offers a row of **quick-filter preset chips** (VLM mismatches / VLM low-conf / Primary · low-conf) that layer the former Mismatches / Gemma Low-Conf / Primary · Low-Conf tabs' exact cohort queries on top of the All view. A slot tab (Plates today) carries provenance chips + VLM-read plate text, driven by the active slot's capabilities rather than a hardcoded `'plates'` check (see "Slot-generic review tabs" below).                     |
 | `/classes`                   | Add / rename / merge classes, per-class hotkey binding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `/export`                    | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `/models`                    | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -320,11 +320,28 @@ string through `src/lib/review/slotPanel.ts`'s `humanWritableStates` /
 `statusClearsBox` / `statusWantsRejectionReason` / `panelLabels`. Writes
 go through `setSlotBox`/`patchSlotMeta` (`api.ts`), which target the
 active slot's own declared `endpoints`/wire field names — never a
-hardcoded `/crops/{id}/region` or `region_status` literal. A second
-queue-capable slot registered in `registeredSlots.ts` now gets a fully
-working review tab — shell, keymap, hint strip, AND inline panel body —
-with zero further edits to `review/+page.svelte`, proved by
-`src/lib/annotations/secondSlotIntegration.test.ts`.
+hardcoded `/crops/{id}/region` or `region_status` literal, and render
+the server's own returned item rather than a client-computed post-write
+state. A second queue-capable slot registered in `registeredSlots.ts`
+now gets a fully working review tab — shell, keymap, hint strip, AND
+inline panel body — with zero further edits to `review/+page.svelte`,
+proved by `src/lib/annotations/secondSlotIntegration.test.ts`.
+
+Since 2026-09-24 (logic-moves W2), `slotPanel.ts`'s three functions
+above take an optional third/second `served` argument — the deployment's
+region-status vocabulary from `GET {API_PREFIX}/regions/statuses`
+(`regionStatusesStore`, loaded once in the root layout). `review/+page.svelte`
+passes `regionStatusesStore.list`; when it's loaded, the status dropdown,
+clear-box and rejection-reason behavior all read the server's own
+`human_writable`/`clears_box`/`wants_reason` flags. A slot's own
+`capabilities.lifecycle.states` is kept only as the fallback for when
+the endpoint is absent or hasn't loaded yet. Box edits (`saveBboxAndExit`/
+`confirmSlot`) send the box exactly as drawn (crop-local, parent frame)
+with `setSlotBox(..., 'parent')` — the server does the projection into
+its own stored frame, so there is no client-side `projectFromParent` on
+the write path (read-side projection is unchanged, and prefers a served
+`region_bbox_in_parent` when present — see "Plate provenance + OCR"
+below).
 
 The class picker (`src/lib/classPicker.ts`) is a fuzzy-search combobox over
 every non-deprecated class — the top-10 quick-assign row under the crop
@@ -360,6 +377,11 @@ render via the shared chip components.
 - `region_detector` (`'lpr_nanov11_640'` / `'sam3'` /
   `'paddleocr_det_trt'` / `'human'`)
 - `region_detector_version`, `region_bbox_frame` (always `'source'`)
+- `region_bbox_in_parent` — the region box already projected into the
+  parent crop's frame, server-computed. `licensePlateSlot` declares it
+  as `subBox.bboxInParentField`; `readSlot` renders from it directly
+  when present, falling back to the client-side projection only when
+  it isn't (2026-09-24, logic-moves W2).
 - `region_detector_chain` — string array, every step of the cascade:
   `['lpr_nanov11_640:miss', 'sam3:hit', 'sam3:vlm_verify_ok']`
 - `region_verifier` (`'gemma-4-e4b'` / `'human'`), `region_verified_at`
@@ -367,8 +389,13 @@ render via the shared chip components.
   the VLM reads the plate during verify in the same round-trip
 - `region_rejection_reason` — set when the server-side sanity gate
   rejected the candidate
-- `shapeWarning` (slot data) — client-side computed via the same envelope
-  as `is_plausible_plate_bbox` in `plate_detect.py`
+
+There is no shape-plausibility warning: the ⚠ badge (and the client-side
+envelope check that computed it — `shapeGate.ts`, `PLATE_SHAPE_ENVELOPE`,
+`SlotData.subBox.shapeWarning`) was deleted 2026-09-24 (logic-moves W2)
+— the backend never served this flag, and OpenProcessor's own geometry
+guard (`is_plausible_region_bbox`) is a different, server-side-only
+check with no client mirror.
 
 **New shared components** (renamed off the license-plate-specific names
 during the genericization pass — see `docs/genericization-plan-2026-09-13.md`):
@@ -379,8 +406,8 @@ during the genericization pass — see `docs/genericization-plan-2026-09-13.md`)
   chain entry directly. Miss/reject tags get a muted variant.
 - `src/lib/components/SlotCard.svelte` (formerly `PlateCard.svelte`) —
   128px annotation-slot thumbnail (via `{API_PREFIX}/crops/{id}/region_thumbnail`),
-  parent class chip, score, provenance chip strip, slot text inline,
-  ⚠ shape warning. Parameterized via `readSlot` (`src/lib/annotations/
+  parent class chip, score, provenance chip strip, slot text inline.
+  Parameterized via `readSlot` (`src/lib/annotations/
 readSlot.ts`) against a `SlotSpec` (`registeredSlots.ts`) rather than
   hardcoded plate fields, so a second registered slot renders through
   the same component.

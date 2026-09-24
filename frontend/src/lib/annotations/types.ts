@@ -17,10 +17,6 @@
  * existing — it is pure types + pure functions, consumed opt-in.
  */
 
-import {
-  evaluateShapeGate,
-  describeEnvelope as describeShapeEnvelope,
-} from '../shapeGate';
 // Type-only — erased at compile time, so this doesn't create a real
 // runtime cycle with cohorts.ts importing SlotSpec from this module.
 import type { TrainingCohortsCapability } from './cohorts';
@@ -79,16 +75,6 @@ export interface Palette {
 /* Capability: subBox                                                  */
 /* ------------------------------------------------------------------ */
 
-/** Plausibility envelope for a sub-bbox, evaluated in the PARENT frame.
- *  Re-exported from `shapeGate.ts` so profiles have one type to import. */
-export interface ShapeEnvelope {
-  aspectMin?: number;
-  aspectMax?: number;
-  maxWidthFrac?: number;
-  maxHeightFrac?: number;
-  maxAreaFrac?: number;
-}
-
 export interface SubBoxRing {
   /** A human has confirmed this box. */
   confirmed: string;
@@ -110,8 +96,12 @@ export interface SubBoxCapability {
   scoreField?: WireField;
   /** Boolean "the thing is visible in this crop". Plates: `region_visible`. */
   visibleField?: WireField;
-  /** Shape gate. Omit to disable the warning badge entirely for this slot. */
-  envelope?: ShapeEnvelope;
+  /** Optional wire field carrying the box already projected into the
+   *  PARENT (crop-local) frame, server-computed (plates:
+   *  `region_bbox_in_parent`). When present, `readSlot` renders from it
+   *  directly instead of projecting `bboxField` through `parentXyxy`
+   *  itself — preferring the server's own projection over a client one. */
+  bboxInParentField?: WireField;
   /** Server-side crop of the sub-bbox region, used as the gallery card image. */
   thumbnail?: {
     path: (cropId: string, size: number) => string;
@@ -287,7 +277,6 @@ export interface SlotData {
     frame: SlotFrame;
     score: number | null;
     visible: boolean | null;
-    shapeWarning: boolean;
   };
   text?: {
     value: string | null;
@@ -327,7 +316,3 @@ export function slotIsPresent(d: SlotData | undefined | null): boolean {
   if (d.lifecycle && d.lifecycle.status != null) return true;
   return false;
 }
-
-/** Re-export so consumers of this module don't need a second import for
- *  the shape gate that `SubBoxCapability.envelope` feeds. */
-export { evaluateShapeGate, describeShapeEnvelope as describeEnvelope };

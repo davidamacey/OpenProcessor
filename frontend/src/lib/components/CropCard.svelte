@@ -23,7 +23,7 @@
      * source-frame sub-box (or null for "not visible"). Lets the page
      * update local state without a full reload.
      */
-    onslotsaved?: (cropId: string, boxSrc: BBoxNorm | null) => void;
+    onslotsaved?: (cropId: string, item: Crop) => void;
     /**
      * Optional "open details" hook — wires the per-card "ⓘ" affordance
      * to a parent-owned CropDetailModal so the cluster grid can show the
@@ -354,9 +354,9 @@
     {crop}
     slot={activeSlot}
     onclose={() => (plateEditorOpen = false)}
-    onsave={(plateSrc) => {
+    onsave={(item) => {
       plateEditorOpen = false;
-      onslotsaved?.(crop.id, plateSrc);
+      onslotsaved?.(crop.id, item);
     }}
   />
 {/if}

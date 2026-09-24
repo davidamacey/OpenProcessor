@@ -28,7 +28,6 @@ describe('readSlot / licensePlateSlot', () => {
     expect(slotIsPresent(d)).toBe(true);
     expect(d.subBox?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
     expect(d.subBox?.parent).not.toBeNull();
-    expect(d.subBox?.shapeWarning).toBe(false);
     expect(d.text?.value).toBe('ABC123');
     expect(d.provenance?.detector).toBe('lpr_nanov11_640');
     expect(d.lifecycle?.status).toBe('detected');
@@ -50,11 +49,26 @@ describe('readSlot / licensePlateSlot', () => {
     expect(d.text?.value).toBeNull();
   });
 
-  it('flags an implausible plate shape via the shared shape gate', () => {
-    // aspect too narrow: w/vw small relative to h/vh
-    const raw = { region_bbox_norm: [0.15, 0.02, 0.2, 0.18] };
+  it('prefers the server-projected bboxInParentField over its own projection', () => {
+    // Deliberately inconsistent with region_bbox_norm/parent so the
+    // assertion only passes if bboxInParentField actually won.
+    const raw = {
+      region_bbox_norm: [0.1, 0.08, 0.3, 0.12],
+      region_bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
+    };
     const d = readSlot(raw, licensePlateSlot, parent);
-    expect(d.subBox?.shapeWarning).toBe(true);
+    expect(d.subBox?.parent?.cx).toBeCloseTo(0.5);
+    expect(d.subBox?.parent?.cy).toBeCloseTo(0.5);
+    expect(d.subBox?.parent?.w).toBeCloseTo(0.2);
+    expect(d.subBox?.parent?.h).toBeCloseTo(0.2);
+  });
+
+  it('falls back to its own projection when bboxInParentField is absent', () => {
+    const raw = { region_bbox_norm: [0.1, 0.08, 0.3, 0.12] };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    // vw=0.4, vh=0.2 (parent): cx=(0.2/0.4)=0.5, cy=(0.1/0.2)=0.5
+    expect(d.subBox?.parent?.cx).toBeCloseTo(0.5);
+    expect(d.subBox?.parent?.cy).toBeCloseTo(0.5);
   });
 
   it('resolves a legacy status value via aliases to the state a rename declares', () => {

@@ -67,9 +67,14 @@ describe('RawCrop (src/lib/api.ts) vs the backend item wire', () => {
 
 /**
  * Every registered slot's `*Field` wire references (bboxField,
- * valueField, statusField, ...) must be one of the backend's 31
- * `region_*` keys. Replaces regionWireContract.test.ts's hand-copied
- * `REGION_WIRE_KEYS` literal.
+ * valueField, statusField, ...) must be a real backend item-wire key.
+ * Checked against `ALL_WIRE_KEYS`, not just `REGION_KEYS` — the vendored
+ * contract's `region_keys` array covers the region *write* vocabulary,
+ * but a capability field can also name a server-computed, read-only
+ * item field (e.g. `bboxInParentField: 'region_bbox_in_parent'`, which
+ * is classified under `item_keys` upstream despite the `region_` name).
+ * Replaces regionWireContract.test.ts's hand-copied `REGION_WIRE_KEYS`
+ * literal.
  */
 function declaredWireFields(v: unknown, out: string[] = []): string[] {
   if (Array.isArray(v)) v.forEach((x) => declaredWireFields(x, out));
@@ -91,8 +96,8 @@ describe('built-in slot profiles vs the backend region wire', () => {
         expect(fields.length).toBeGreaterThan(0);
       });
 
-      it('uses only documented region_* keys', () => {
-        expect(fields.filter((f) => !REGION_KEYS.has(f))).toEqual([]);
+      it('uses only documented wire keys', () => {
+        expect(fields.filter((f) => !ALL_WIRE_KEYS.has(f))).toEqual([]);
       });
     });
   }

@@ -35,10 +35,9 @@ import {
   type PlateBrowseItem,
   type SuspectedFpItem,
 } from '$lib/api';
-import { bboxNormToXYXY } from '$lib/bboxFrames';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
-import type { BBoxNorm, Cluster, Crop } from '$lib/types';
+import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 
@@ -381,53 +380,40 @@ export function createPlateGalleryController() {
   async function applyPlateStatus(cropIds: string[], status: string): Promise<void> {
     if (cropIds.length === 0 || plateBusy) return;
     plateBusy = true;
-    // Snapshot for rollback, then update the affected cards IN PLACE. The
-    // grid's #each is keyed by crop_id, so patching the array (rather than
-    // reloading page 1) reuses the existing DOM nodes and preserves scroll
-    // position — critical when the operator is deep in a 15k-item gallery.
-    const snap = platePager.items;
-    const snapById = new Map(snap.map((p) => [p.crop_id, p]));
-    const idSet = new Set(cropIds);
-    const verified = status === PLATE_CONFIRM_STATE ? true : undefined;
-    // Mirror the backend write contract (batch_set_plate_status): a human
-    // status change is terminal, so it also flips region_validated=true. Keep
-    // the optimistic patch identical to what OpenSearch persists so the card
-    // never diverges from authoritative state.
-    const patch = (p: PlateBrowseItem): PlateBrowseItem => ({
-      ...p,
-      region_status: status,
-      region_verified: verified ?? p.region_verified,
-      region_validated: true,
-    });
-    platePager.items = platePager.items.map((p) => (idSet.has(p.crop_id) ? patch(p) : p));
     plateSel.clear();
     try {
       // Callers only ever pass one of the profile's own state values
       // (PLATE_CONFIRM_STATE / PLATE_REJECT_STATE / PLATE_FALSE_POSITIVE_STATE);
       // the cast just satisfies batchPlateStatus's still-literal wire
       // type (that union is api.ts's Wave 2 concern, not this file's).
+      // `region_verified` is not sent — the server derives it from
+      // `region_status` and ignores the field when present.
       const res = await batchPlateStatus(
         licensePlateSlot,
         cropIds,
         status as 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
-        { plateVerified: verified },
       );
-      // Reconcile with the backend: any crop_id the server reported as a
-      // conflict was NOT written, so revert just those cards to their
-      // pre-edit state rather than leaving a falsely-applied status.
-      const conflictIds = new Set((res.conflicts ?? []).map((c) => c.crop_id));
-      if (conflictIds.size > 0) {
-        platePager.items = platePager.items.map((p) =>
-          conflictIds.has(p.crop_id) ? (snapById.get(p.crop_id) ?? p) : p,
-        );
+      // Render exactly what the server wrote. `items` covers every crop
+      // actually updated; conflicted/invalid ids are left untouched here
+      // and reported in the toast below.
+      const byId = new Map(res.items.map((p) => [p.crop_id, p]));
+      platePager.items = platePager.items.map((p) => byId.get(p.crop_id) ?? p);
+      const conflictCount = res.conflicts?.length ?? 0;
+      const invalid = res.invalid ?? [];
+      if (conflictCount > 0 || invalid.length > 0) {
+        const parts = [
+          conflictCount > 0 ? `${conflictCount} conflicted` : null,
+          invalid.length > 0
+            ? `${invalid.length} invalid (${invalid.map((i) => i.detail).join('; ')})`
+            : null,
+        ].filter((s): s is string => s != null);
         toastStore.error(
-          `${status.replace('_', ' ')}: ${res.updated} updated, ${conflictIds.size} conflicted (reverted)`,
+          `${status.replace('_', ' ')}: ${res.updated} updated, ${parts.join(', ')}`,
         );
       } else {
         toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
       }
     } catch (err) {
-      platePager.items = snap;
       toastStore.error(`Bulk update failed: ${(err as Error).message}`);
     } finally {
       plateBusy = false;
@@ -436,32 +422,31 @@ export function createPlateGalleryController() {
 
   /**
    * `onsave` for `SlotBboxEditor` — the editor has ALREADY performed the
-   * write via `setSlotBox` (C8, docs/design/slot-generic-crop-mapping-
-   * plan-2026-09-21.md §7.1) by the time this fires. This function only
-   * does the optimistic local-state patch; it must NOT re-PUT the box
-   * (a pre-C8 bug — this used to call `setCropPlate` a second time here,
-   * redundantly re-sending a box the editor had just saved).
+   * write via `setSlotBox` by the time this fires, and passes back the
+   * server's own returned item. This function only patches the matching
+   * card from that item; it must NOT re-PUT the box (a pre-C8 bug — this
+   * used to call `setCropPlate` a second time here, redundantly
+   * re-sending a box the editor had just saved), and must NOT re-derive
+   * confirmed-vs-rejected status client-side — it renders what the
+   * server wrote.
    */
-  function savePlateBbox(plateBboxSrc: BBoxNorm | null): void {
+  function savePlateBbox(item: Crop): void {
     if (!editPlateCrop) return;
-    const cropId = editPlateCrop.id;
-    // Editor yields a BBoxNorm {cx,cy,w,h} in the slot's stored frame
-    // (source, for license_plate); the local cache stores [x1,y1,x2,y2].
-    const arr = plateBboxSrc ? bboxNormToXYXY(plateBboxSrc) : null;
+    const cropId = item.id;
     toastStore.success('Plate saved');
     editPlateCrop = null;
+    const slotData = item.slots?.[licensePlateSlot.key];
     // Patch just this card in place rather than reloading page 1 (which
-    // would wipe the list and reset scroll). The bbox presence/absence
-    // determines confirmed-vs-rejected status, mirroring the editor's
-    // own write. The plate thumbnail is a server-rendered URL, so
-    // bust its cache to pull the re-cropped box.
+    // would wipe the list and reset scroll). The plate thumbnail is a
+    // server-rendered URL, so bust its cache to pull the re-cropped box.
     platePager.items = platePager.items.map((p) =>
       p.crop_id === cropId
         ? {
             ...p,
-            region_status: arr ? PLATE_CONFIRM_STATE : PLATE_REJECT_STATE,
-            region_verified: arr ? true : p.region_verified,
-            region_bbox_norm: arr ?? null,
+            region_status: slotData?.lifecycle?.status ?? p.region_status,
+            region_verified: slotData?.lifecycle?.verified ?? p.region_verified,
+            region_bbox_norm: slotData?.subBox?.rawXyxy ?? null,
+            region_bbox_frame: slotData?.subBox?.frame ?? p.region_bbox_frame,
             region_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
           }
         : p,

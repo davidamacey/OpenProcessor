@@ -52,7 +52,7 @@ function fullSlot(): Record<string, unknown> {
         frameField: 'tag_bbox_frame',
         scoreField: 'tag_score',
         visibleField: 'tag_visible',
-        envelope: { aspectMin: 0.5, aspectMax: 2.5, maxWidthFrac: 0.7 },
+        bboxInParentField: 'tag_bbox_in_parent',
         thumbnail: {
           path: '/crops/{cropId}/region_thumbnail?size={size}',
           aspect: '1 / 1',
@@ -312,10 +312,10 @@ describe('parseSlotConfig — subBox', () => {
     expectRejected(parseSlotConfig(s2), /thumbSize/);
   });
 
-  it('24. envelope.aspectMin > aspectMax rejected', () => {
+  it('24. bboxInParentField: a non-wire-field value rejected', () => {
     const s = fullSlot();
-    (s.capabilities as any).subBox.envelope = { aspectMin: 5, aspectMax: 2 };
-    expectRejected(parseSlotConfig(s), /envelope/);
+    (s.capabilities as any).subBox.bboxInParentField = 123;
+    expectRejected(parseSlotConfig(s), /bboxInParentField/);
   });
 });
 
@@ -600,7 +600,7 @@ describe('parseSlotConfig — cohorts / endpoints / extras', () => {
   });
 });
 
-describe('parseProfileDocument — envelope', () => {
+describe('parseProfileDocument', () => {
   it('62. unknown version rejects the whole document with one warning', () => {
     const r = parseProfileDocument({ version: 2, slots: [] });
     expect(r.slots).toEqual([]);

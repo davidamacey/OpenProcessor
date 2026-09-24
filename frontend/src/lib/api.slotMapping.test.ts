@@ -67,7 +67,6 @@ describe('mapRawCrop slots mapping', () => {
 
     expect(slot!.subBox?.rawXyxy).toEqual(raw.region_bbox_norm);
     expect(slot!.subBox?.score).toBe(0.91);
-    expect(slot!.subBox?.shapeWarning).toBe(false);
     expect(slot!.lifecycle?.status).toBe('detected');
     expect(slot!.lifecycle?.verified).toBe(true);
     expect(slot!.text?.value).toBe('ABC123');
@@ -90,7 +89,7 @@ describe('mapRawCrop slots mapping', () => {
     expect(out.slots?.license_plate).toBeUndefined();
   });
 
-  it('flags an implausible shape even when the parent bbox is degenerate (NaN-safe, per shapeGate.ts)', async () => {
+  it('does not crash when the parent bbox is degenerate (NaN-safe projection)', async () => {
     const raw = {
       crop_id: 'c3',
       image_path: '/img/3.jpg',
@@ -99,7 +98,8 @@ describe('mapRawCrop slots mapping', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
     const out = await getCrop('c3');
-    expect(out.slots?.license_plate?.subBox?.shapeWarning).toBe(false);
+    expect(out.slots?.license_plate?.subBox?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    expect(out.slots?.license_plate?.subBox?.parent).toBeNull();
   });
 
   it('a crop with no plate_* keys at all yields slots === {} (absence, not a block of nulls)', async () => {

@@ -11,12 +11,6 @@
       "bboxField": "tail_bbox_norm",
       "storedFrame": "parent",
       "scoreField": "tail_score",
-      "envelope": {
-        "aspectMin": 0.15,
-        "aspectMax": 1.4,
-        "maxHeightFrac": 0.6,
-        "maxAreaFrac": 0.25
-      },
       "thumbnail": {
         "path": "/crops/{cropId}/tail_thumbnail?size={size}",
         "aspect": "1 / 2",

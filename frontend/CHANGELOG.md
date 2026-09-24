@@ -52,6 +52,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (`GET {API_PREFIX}/crops?review_dismissed=true` +
     `POST {API_PREFIX}/crops/{id}/review_undismiss`) so a permanent
     dismiss (**D**) can be reversed.
+- Region writes and statuses now match OpenProcessor `main` (`d037be8`,
+  see `docs/design/logic-moves-adoption-plan-2026-09-24.md` W2):
+  - `setSlotBox`/`patchSlotMeta`/`batchPlateStatus` render the item(s)
+    the server actually wrote (`{..., item}` / `{..., items}`) instead
+    of a hand-computed post-write state. `batchPlateStatus`'s `invalid[]`
+    entries (e.g. `detected` with no box) show as a toast with the
+    per-crop detail.
+  - `setSlotBox` takes a `frame: 'source' | 'parent'` argument. Box
+    edits (`/review`'s inline canvas, `SlotBboxEditor.svelte`) now send
+    the box exactly as drawn with `frame: 'parent'` — no more
+    client-side `projectFromParent` on the write path. Reads still
+    project client-side when the server doesn't serve
+    `region_bbox_in_parent`; `licensePlateSlot` now declares
+    `bboxInParentField: 'region_bbox_in_parent'` and prefers it.
+  - The ⚠ bbox-shape-plausibility warning is gone: `shapeGate.ts`,
+    `PLATE_SHAPE_ENVELOPE`, `evaluateShapeGate`/
+    `evaluateShapeEnvelopeOnFraction`/`describeEnvelope`, and the badge
+    in `SlotCard.svelte`/`/review` are deleted — the backend never
+    served this flag, and OpenProcessor's own geometry guard is a
+    different check. `SubBoxCapability.envelope`/`ShapeEnvelope` and
+    `SlotData.subBox.shapeWarning` are removed from the slot type model.
+  - The region-status vocabulary is now served
+    (`GET {API_PREFIX}/regions/statuses`, loaded once by
+    `regionStatusesStore`) and drives `/review`'s status dropdown,
+    clear/rejection-reason behavior and the confirm/reject/false-positive
+    actions, via `slotPanel.ts`'s `humanWritableStates`/`statusClearsBox`/
+    `statusWantsRejectionReason`. `licensePlateSlot`'s own
+    `capabilities.lifecycle.states` is kept as the fallback for when the
+    endpoint is unavailable.
 
 ### Removed
 

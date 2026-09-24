@@ -14,7 +14,6 @@
  */
 
 import type { SlotSpec, SlotData, XYXY, SlotFrame, BBoxNormLike } from './types';
-import { evaluateShapeEnvelopeOnFraction } from '../shapeGate';
 
 function pick(raw: Record<string, unknown>, field: string | undefined): unknown {
   return field == null ? undefined : raw[field];
@@ -116,21 +115,28 @@ export function readSlot(
       : null;
     const frame: SlotFrame =
       frameRaw === 'parent' || frameRaw === 'source' ? frameRaw : cap.subBox.storedFrame;
-    const parent = rawXyxy ? projectToParent(rawXyxy, parentXyxy, frame) : null;
-    // Evaluated on the already-projected parent-frame fractions, so this
-    // is correct regardless of whether the slot stores 'source' or
-    // 'parent' frame boxes (see evaluateShapeEnvelopeOnFraction's doc).
-    const shapeWarning =
-      cap.subBox.envelope && rawXyxy && parent
-        ? evaluateShapeEnvelopeOnFraction(parent.w, parent.h, cap.subBox.envelope)
-        : false;
+    // Prefer the server's own parent-frame projection when it sent one
+    // (plates: region_bbox_in_parent) over projecting rawXyxy ourselves —
+    // one less place client and server geometry can disagree.
+    const servedParentXyxy = cap.subBox.bboxInParentField
+      ? asXyxy(pick(raw, cap.subBox.bboxInParentField))
+      : null;
+    const parent = servedParentXyxy
+      ? {
+          cx: (servedParentXyxy[0] + servedParentXyxy[2]) / 2,
+          cy: (servedParentXyxy[1] + servedParentXyxy[3]) / 2,
+          w: servedParentXyxy[2] - servedParentXyxy[0],
+          h: servedParentXyxy[3] - servedParentXyxy[1],
+        }
+      : rawXyxy
+        ? projectToParent(rawXyxy, parentXyxy, frame)
+        : null;
     out.subBox = {
       parent,
       rawXyxy,
       frame,
       score: asNumber(pick(raw, cap.subBox.scoreField)),
       visible: asBoolean(pick(raw, cap.subBox.visibleField)),
-      shapeWarning,
     };
   }
 

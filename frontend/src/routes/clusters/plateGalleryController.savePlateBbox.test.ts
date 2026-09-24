@@ -3,15 +3,20 @@
  * `savePlateBbox` used to re-PUT the box via `setCropPlate` even though
  * `SlotBboxEditor` had already saved it via `setSlotBox` — a redundant
  * double-write on every plate-gallery bbox save. It is now a pure local
- * patch: no network call, no `fetch` stub needed, which is itself part
- * of the proof (a lingering `setCropPlate` call would require one).
+ * patch off the server's own returned item: no network call, no `fetch`
+ * stub needed, which is itself part of the proof (a lingering
+ * `setCropPlate` call would require one), and no client-side
+ * confirmed-vs-rejected derivation — it renders `item.slots.license_plate`
+ * verbatim.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPlateGalleryController } from './plateGalleryController.svelte';
+import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 import type { Crop } from '$lib/types';
+import type { SlotData } from '$lib/annotations/types';
 import type { PlateBrowseItem } from '$lib/api';
 
-function fakeCrop(id: string): Crop {
+function fakeCropWithSlot(id: string, slot: SlotData): Crop {
   return {
     id,
     source_image_path: '/img.jpg',
@@ -27,6 +32,7 @@ function fakeCrop(id: string): Crop {
     cluster_subid: null,
     test_holdout: false,
     updated_at: '',
+    slots: { [licensePlateSlot.key]: slot },
   } as Crop;
 }
 
@@ -61,16 +67,35 @@ function fakePlateItem(id: string): PlateBrowseItem {
   } as PlateBrowseItem;
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('savePlateBbox — no redundant write', () => {
-  it('patches the local pager item to confirmed and never calls fetch', () => {
+  it('patches the local pager item from the returned item and never calls fetch', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     const gallery = createPlateGalleryController();
-    gallery.editPlateCrop = fakeCrop('c1');
+    gallery.editPlateCrop = fakeCropWithSlot('c1', {
+      key: licensePlateSlot.key,
+      subBox: {
+        rawXyxy: [0.4, 0.45, 0.6, 0.55],
+        frame: 'source',
+        parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 },
+        score: null,
+        visible: true,
+      },
+      lifecycle: {
+        status: 'detected',
+        state: null,
+        verified: true,
+        rejectionReason: null,
+      },
+    });
     gallery.platePager.items = [fakePlateItem('c1')];
 
-    gallery.savePlateBbox({ cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 });
+    gallery.savePlateBbox(gallery.editPlateCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(gallery.editPlateCrop).toBeNull();
@@ -78,25 +103,36 @@ describe('savePlateBbox — no redundant write', () => {
     expect(patched?.region_status).toBe('detected');
     expect(patched?.region_verified).toBe(true);
     expect(patched?.region_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
-
-    vi.unstubAllGlobals();
   });
 
-  it('clearing (null) patches to the rejectState and clears the bbox', () => {
+  it('a cleared item (no subBox.rawXyxy) patches to the rejectState and clears the bbox', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     const gallery = createPlateGalleryController();
-    gallery.editPlateCrop = fakeCrop('c2');
+    gallery.editPlateCrop = fakeCropWithSlot('c2', {
+      key: licensePlateSlot.key,
+      subBox: {
+        rawXyxy: null,
+        frame: 'source',
+        parent: null,
+        score: null,
+        visible: null,
+      },
+      lifecycle: {
+        status: 'no_region_visible',
+        state: null,
+        verified: null,
+        rejectionReason: null,
+      },
+    });
     gallery.platePager.items = [fakePlateItem('c2')];
 
-    gallery.savePlateBbox(null);
+    gallery.savePlateBbox(gallery.editPlateCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
     const patched = gallery.platePager.items.find((p) => p.crop_id === 'c2');
     expect(patched?.region_status).toBe('no_region_visible');
     expect(patched?.region_bbox_norm).toBeNull();
-
-    vi.unstubAllGlobals();
   });
 });

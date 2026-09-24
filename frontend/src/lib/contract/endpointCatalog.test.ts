@@ -82,7 +82,7 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export function setSlotBox(',
+    marker: 'export async function setSlotBox(',
     // spec.endpoints.setBox/clearBox — 'license_plate' declares both as
     // '/crops/{id}/region' today (profiles/licensePlate.ts endpoints).
     path: '/crops/*/region',
@@ -91,7 +91,7 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export function patchSlotMeta(',
+    marker: 'export async function patchSlotMeta(',
     // spec.endpoints.patchMeta — '/crops/{id}/region_meta' today.
     path: '/crops/*/region_meta',
     method: 'PATCH',
@@ -99,7 +99,7 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export function batchPlateStatus(',
+    marker: 'export async function batchPlateStatus(',
     // spec.endpoints.batchStatus — '/regions/batch_status' today.
     path: '/regions/batch_status',
     method: 'POST',

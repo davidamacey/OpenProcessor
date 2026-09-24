@@ -11,40 +11,68 @@
  */
 
 import type { SlotSpec } from '../annotations/types';
+import type { RegionStatusEntry } from '../api';
 
 /**
- * Human-writable lifecycle states, in the profile's declared order.
- * Replaces review/+page.svelte's PLATE_STATUS_OPTIONS, which read a
+ * Human-writable lifecycle states, in server-declared order when the
+ * deployment's `GET {API_PREFIX}/regions/statuses` vocabulary (`served`)
+ * is available — falling back to the profile's own declared
+ * `capabilities.lifecycle.states` only when it isn't (endpoint absent,
+ * or `regionStatusesStore` hasn't loaded yet). Replaces
+ * review/+page.svelte's PLATE_STATUS_OPTIONS, which read a
  * directly-imported licensePlateSlot regardless of the active tab.
  */
 export function humanWritableStates(
   spec: SlotSpec,
+  served?: readonly RegionStatusEntry[] | null,
 ): Array<{ value: string; label: string }> {
+  if (served && served.length > 0) {
+    return served
+      .filter((s) => s.human_writable)
+      .map((s) => ({ value: s.value, label: s.label }));
+  }
   return (spec.capabilities.lifecycle?.states ?? [])
     .filter((s) => s.humanWritable)
     .map((s) => ({ value: s.value, label: s.label }));
 }
 
 /**
- * True when writing `status` means the sub-box must be cleared — i.e.
- * status === lifecycle.rejectState. Replaces the hardcoded
- * `editedPlateStatus === 'no_plate_visible'` check.
+ * True when writing `status` means the sub-box must be cleared. Reads
+ * the server's own `clears_box` flag when `served` is available,
+ * falling back to `status === lifecycle.rejectState` (the pre-existing
+ * hardcoded assumption) otherwise.
  */
-export function statusClearsBox(spec: SlotSpec, status: string): boolean {
-  return status.length > 0 && status === spec.capabilities.lifecycle?.rejectState;
+export function statusClearsBox(
+  spec: SlotSpec,
+  status: string,
+  served?: readonly RegionStatusEntry[] | null,
+): boolean {
+  if (!status) return false;
+  if (served && served.length > 0) {
+    return served.find((s) => s.value === status)?.clears_box ?? false;
+  }
+  return status === spec.capabilities.lifecycle?.rejectState;
 }
 
 /**
- * True when the rejection-reason input should render for `status`: the
- * state's role is 'rejected' or 'absent' *and* it is humanWritable.
- * Replaces the hardcoded
- * `=== 'verify_rejected' || === 'no_plate_visible'` check.
+ * True when the rejection-reason input should render for `status`.
+ * Reads the server's own `wants_reason` (+ `human_writable`) flags when
+ * `served` is available; otherwise falls back to the profile's role ===
+ * 'rejected' | 'absent' heuristic.
  *
- * For licensePlateSlot this yields exactly {verify_rejected,
+ * For licensePlateSlot the fallback yields exactly {verify_rejected,
  * no_plate_visible} — pinned in slotPanel.test.ts as the no-regression
  * proof.
  */
-export function statusWantsRejectionReason(spec: SlotSpec, status: string): boolean {
+export function statusWantsRejectionReason(
+  spec: SlotSpec,
+  status: string,
+  served?: readonly RegionStatusEntry[] | null,
+): boolean {
+  if (served && served.length > 0) {
+    const entry = served.find((s) => s.value === status);
+    return !!entry && entry.human_writable && entry.wants_reason;
+  }
   const state = spec.capabilities.lifecycle?.states.find((s) => s.value === status);
   if (!state || !state.humanWritable) return false;
   return state.role === 'rejected' || state.role === 'absent';

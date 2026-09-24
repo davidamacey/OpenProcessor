@@ -14,9 +14,9 @@
    *
    * Internally we work in the **crop's local (parent) frame** (normalized
    * [0, 1] inside the parent box) so that pointer math is independent of
-   * the source image. On save we reconstruct the slot's own stored frame
-   * via `projectFromParent` — never hardcoding 'source' — and PUT it as
-   * `[x1, y1, x2, y2]`.
+   * the source image. On save we PUT that box straight through with
+   * `frame: 'parent'` — the server does the projection into its own
+   * stored frame, so this component never re-derives it.
    *
    * Hotkeys (focus inside the modal):
    *   [ / ]    nudge right edge in / out by 1 crop-pixel
@@ -26,10 +26,9 @@
    *   Escape   close without saving
    *
    * `onsave` fires AFTER this component has already performed the write
-   * (via `setSlotBox`) — "notify", not "perform the save". The box it
-   * passes is in the slot's own stored frame (`source` for
-   * licensePlateSlot today), not necessarily literal image-source
-   * coordinates for every future slot.
+   * (via `setSlotBox`) — "notify", not "perform the save". It passes the
+   * server's own returned item, so the caller renders what was actually
+   * persisted rather than re-deriving it.
    */
   import { getThumbUrl, setSlotBox } from '$lib/api';
   import { bboxNormToXYXY } from '$lib/bboxFrames';
@@ -45,9 +44,9 @@
     /** Slot whose sub-box this modal edits. Defaults to whatever slot is
      *  bound to the crop's own class, matching CropCard's own default. */
     slot?: SlotSpec;
-    /** Called after a successful save (or clear). Passes the new bbox in
-     *  the slot's own stored frame, or `null` if cleared. */
-    onsave?: (savedBoxInStoredFrame: BBoxNorm | null) => void;
+    /** Called after a successful save (or clear) with the server's
+     *  returned item. */
+    onsave?: (item: Crop) => void;
     /** Called when the user dismisses without saving. */
     onclose: () => void;
     /** Optional thumbnail size override (px). Defaults to the active
@@ -360,27 +359,28 @@
   async function save(): Promise<void> {
     if (busy) return;
     if (!activeSlot) return;
-    const label = activeSlot.label.singular;
     errorText = null;
     busy = true;
     try {
       // Clear: PUT null -> backend writes the slot's rejectState.
       if (plateLocal == null) {
-        await setSlotBox(activeSlot, crop.id, null);
+        const item = await setSlotBox(activeSlot, crop.id, null);
         toastStore.success(`${activeSlot.label.title} cleared.`);
-        onsave?.(null);
+        onsave?.(item);
         return;
       }
-      if (!crop.bbox_norm) {
-        throw new Error(`Cannot save ${label}: parent vehicle bbox is missing.`);
-      }
-      const parentXyxy = bboxNormToXYXY(crop.bbox_norm);
-      const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
-      const tuple = projectFromParent(plateLocal, parentXyxy, frame);
-      await setSlotBox(activeSlot, crop.id, tuple);
+      // Send the box exactly as drawn, in the crop's local (parent)
+      // frame — the server projects it into its own stored frame.
+      const { cx, cy, w, h } = plateLocal;
+      const tuple: [number, number, number, number] = [
+        cx - w / 2,
+        cy - h / 2,
+        cx + w / 2,
+        cy + h / 2,
+      ];
+      const item = await setSlotBox(activeSlot, crop.id, tuple, 'parent');
       toastStore.success(`${activeSlot.label.title} saved.`);
-      const [x1, y1, x2, y2] = tuple;
-      onsave?.({ cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 });
+      onsave?.(item);
     } catch (e) {
       errorText = (e as Error).message;
       toastStore.error(errorText ?? `${activeSlot.label.title} save failed.`);

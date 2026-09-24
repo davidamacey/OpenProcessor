@@ -42,18 +42,6 @@ describe('capability-model falsification: three independently-configured slots',
     expect(letters).not.toContain('f');
   });
 
-  it('aircraft_tail_number: a TALL envelope is honored, not the plate WIDE one', () => {
-    const tail = registry.byKey('aircraft_tail_number')!;
-    // storedFrame is 'parent' for this slot, so the box below is already
-    // expressed as parent-relative fractions: w=0.1, h=0.4 -> aspect 0.25,
-    // within [0.15, 1.4]; a plate's [1.2, 8.0] envelope would reject this
-    // outright, which is exactly the leak this test is designed to catch.
-    const parent: XYXY = [0, 0, 1, 1];
-    const raw = { tail_bbox_norm: [0.4, 0.1, 0.5, 0.5] };
-    const d = readSlot(raw, tail, parent);
-    expect(d.subBox?.shapeWarning).toBe(false);
-  });
-
   it('aircraft_tail_number: storedFrame=parent is read, not assumed source', () => {
     const tail = registry.byKey('aircraft_tail_number')!;
     const parent: XYXY = [0.2, 0.2, 0.6, 0.8];

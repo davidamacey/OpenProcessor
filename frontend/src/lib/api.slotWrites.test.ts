@@ -17,6 +17,11 @@ function okResponse(body: unknown = {}) {
   });
 }
 
+/** Minimal RawCrop the live backend's `{..., item}` wrapper carries. */
+function rawItem(id: string): Record<string, unknown> {
+  return { crop_id: id, image_path: `/img/${id}.jpg`, bbox_norm: [0, 0, 1, 1] };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -25,7 +30,9 @@ describe('patchSlotMeta', () => {
   it('licensePlateSlot: body is byte-identical to the old PlateMetaPatch shape', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(okResponse({ crop_id: 'c1', updated_fields: [] }));
+      .mockResolvedValue(
+        okResponse({ crop_id: 'c1', updated_fields: [], item: rawItem('c1') }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await patchSlotMeta(licensePlateSlot, 'c1', {
@@ -45,10 +52,28 @@ describe('patchSlotMeta', () => {
     });
   });
 
+  it('returns the mapped item alongside crop_id/updated_fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      okResponse({
+        crop_id: 'c1',
+        updated_fields: ['region_status'],
+        item: rawItem('c1'),
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await patchSlotMeta(licensePlateSlot, 'c1', { status: 'detected' });
+    expect(res.crop_id).toBe('c1');
+    expect(res.updated_fields).toEqual(['region_status']);
+    expect(res.item.id).toBe('c1');
+  });
+
   it('omits keys whose value is undefined (leaves them untouched, per the old contract)', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(okResponse({ crop_id: 'c1', updated_fields: [] }));
+      .mockResolvedValue(
+        okResponse({ crop_id: 'c1', updated_fields: [], item: rawItem('c1') }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await patchSlotMeta(licensePlateSlot, 'c1', { text: 'XYZ' });
@@ -60,7 +85,9 @@ describe('patchSlotMeta', () => {
   it('a slot with no matching capability produces an empty body rather than throwing', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(okResponse({ crop_id: 'c1', updated_fields: [] }));
+      .mockResolvedValue(
+        okResponse({ crop_id: 'c1', updated_fields: [], item: rawItem('c1') }),
+      );
     vi.stubGlobal('fetch', fetchMock);
     const textOnlySpec = {
       ...licensePlateSlot,
@@ -73,20 +100,39 @@ describe('patchSlotMeta', () => {
 });
 
 describe('setSlotBox', () => {
-  it('PUTs the bbox to the slot-declared endpoint', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(okResponse({ id: 'c1' }));
+  it('PUTs the bbox to the slot-declared endpoint, defaulting frame to source', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await setSlotBox(licensePlateSlot, 'c1', [0.1, 0.1, 0.2, 0.2]);
+    const item = await setSlotBox(licensePlateSlot, 'c1', [0.1, 0.1, 0.2, 0.2]);
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body)).toEqual({ region_bbox_norm: [0.1, 0.1, 0.2, 0.2] });
+    expect(JSON.parse(init.body)).toEqual({
+      region_bbox_norm: [0.1, 0.1, 0.2, 0.2],
+      frame: 'source',
+    });
+    // Unwraps {..., item} into the mapped Crop rather than returning the
+    // wrapper — the write path renders this, not the raw response.
+    expect(item.id).toBe('c1');
+  });
+
+  it('passes frame: "parent" through when the caller drew in the parent-crop frame', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await setSlotBox(licensePlateSlot, 'c1', [0.1, 0.1, 0.2, 0.2], 'parent');
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({
+      region_bbox_norm: [0.1, 0.1, 0.2, 0.2],
+      frame: 'parent',
+    });
   });
 
   it('clearing (null) falls back to setBox when no distinct clearBox is declared', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(okResponse({ id: 'c1' }));
+    const fetchMock = vi.fn().mockResolvedValue(okResponse({ item: rawItem('c1') }));
     vi.stubGlobal('fetch', fetchMock);
 
     await setSlotBox(licensePlateSlot, 'c1', null);
@@ -94,7 +140,7 @@ describe('setSlotBox', () => {
     const [url, init] = fetchMock.mock.calls[0];
     // licensePlateSlot's clearBox and setBox are the same URL today.
     expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
-    expect(JSON.parse(init.body)).toEqual({ region_bbox_norm: null });
+    expect(JSON.parse(init.body)).toEqual({ region_bbox_norm: null, frame: 'source' });
   });
 
   it('rejects when the slot declares no setBox endpoint', async () => {
@@ -107,7 +153,9 @@ describe('batchPlateStatus', () => {
   it("writes the slot's own lifecycle wire fields (B3 region_* body)", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(okResponse({ updated: 2, conflicts: [] }));
+      .mockResolvedValue(
+        okResponse({ updated: 2, conflicts: [], invalid: [], items: [] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await batchPlateStatus(licensePlateSlot, ['a', 'b'], 'detected', {

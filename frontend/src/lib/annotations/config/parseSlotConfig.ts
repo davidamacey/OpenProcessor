@@ -27,7 +27,6 @@ import type {
   QueueCapability,
   SlotEndpoints,
   SlotState,
-  ShapeEnvelope,
   SubBoxRing,
 } from '../types';
 import type {
@@ -263,50 +262,6 @@ function parseLabel(
 /* subBox                                                              */
 /* ------------------------------------------------------------------ */
 
-function parseEnvelope(
-  raw: unknown,
-  key: string,
-  errors: string[],
-): ShapeEnvelope | null | undefined {
-  if (raw === undefined) return undefined;
-  if (!isPlainObject(raw) || hasForbiddenKey(raw)) {
-    errors.push(
-      `slot "${key}": capabilities.subBox.envelope must be an object — skipped`,
-    );
-    return null;
-  }
-  const out: ShapeEnvelope = {};
-  const fields = [
-    'aspectMin',
-    'aspectMax',
-    'maxWidthFrac',
-    'maxHeightFrac',
-    'maxAreaFrac',
-  ] as const;
-  for (const f of fields) {
-    if (raw[f] === undefined) continue;
-    const v = raw[f];
-    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
-      errors.push(
-        `slot "${key}": capabilities.subBox.envelope.${f} must be a positive finite number — skipped`,
-      );
-      return null;
-    }
-    out[f] = v;
-  }
-  if (
-    out.aspectMin !== undefined &&
-    out.aspectMax !== undefined &&
-    out.aspectMin > out.aspectMax
-  ) {
-    errors.push(
-      `slot "${key}": capabilities.subBox.envelope.aspectMin must be <= aspectMax — skipped`,
-    );
-    return null;
-  }
-  return out;
-}
-
 function parseThumbnail(
   raw: unknown,
   key: string,
@@ -450,14 +405,17 @@ function parseSubBox(
     );
     return null;
   }
-  for (const f of ['frameField', 'scoreField', 'visibleField'] as const) {
+  for (const f of [
+    'frameField',
+    'scoreField',
+    'visibleField',
+    'bboxInParentField',
+  ] as const) {
     if (raw[f] !== undefined && !isWireField(raw[f])) {
       errors.push(`slot "${key}": capabilities.subBox.${f} is invalid — skipped`);
       return null;
     }
   }
-  const envelope = parseEnvelope(raw.envelope, key, errors);
-  if (envelope === null) return null;
   const thumbnail = parseThumbnail(raw.thumbnail, key, errors);
   if (thumbnail === null) return null;
   const ring = parseRing(raw.ring, key, errors);
@@ -474,7 +432,8 @@ function parseSubBox(
   if (raw.frameField !== undefined) out.frameField = raw.frameField as string;
   if (raw.scoreField !== undefined) out.scoreField = raw.scoreField as string;
   if (raw.visibleField !== undefined) out.visibleField = raw.visibleField as string;
-  if (envelope !== undefined) out.envelope = envelope;
+  if (raw.bboxInParentField !== undefined)
+    out.bboxInParentField = raw.bboxInParentField as string;
   if (thumbnail !== undefined) out.thumbnail = thumbnail;
   return out;
 }

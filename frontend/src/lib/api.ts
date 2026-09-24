@@ -18,7 +18,7 @@ import {
 } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
-import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
+import type { XYXY, SlotKey, SlotData, SlotSpec, SlotFrame } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
 import type {
   BulkLabelConflict,
@@ -1559,6 +1559,33 @@ export async function vlmDismissCrop(
   return mapRawCrop(raw);
 }
 
+export interface RegionStatusEntry {
+  value: string;
+  label: string;
+  role: string;
+  terminal: boolean;
+  human_writable: boolean;
+  clears_box: boolean;
+  wants_reason: boolean;
+}
+
+export interface RegionStatusesResponse {
+  statuses: RegionStatusEntry[];
+  confirm_status: string;
+  reject_status: string;
+  false_positive_status: string;
+}
+
+/** The deployment's region-status vocabulary (`GET {API_PREFIX}/regions/statuses`),
+ *  meant to be loaded once by a store — see `$stores/regionStatuses.svelte`. */
+export function getRegionStatuses(signal?: AbortSignal): Promise<RegionStatusesResponse> {
+  return apiFetch<RegionStatusesResponse>(
+    `${API_PREFIX}${REGION_BASE}/statuses`,
+    {},
+    signal,
+  );
+}
+
 /**
  * Update or clear the plate sub-bbox on a crop.
  *
@@ -1598,11 +1625,23 @@ export async function getCrop(cropId: string, signal?: AbortSignal): Promise<Cro
  * "PUT with a null box clears" contract). The body key is the slot's own
  * `subBox.bboxField`, so a slot's writes use the same wire name its reads
  * do.
+ *
+ * `frame` says which frame `xyxy` is expressed in: `'source'` (the
+ * historical default — the caller has already projected through the
+ * parent crop's own bbox) or `'parent'` (the parent-crop-normalized
+ * frame an editor draws in; the server does the projection). Passing
+ * `'parent'` lets a caller send the box it drew directly, with no
+ * client-side projection.
+ *
+ * Returns the server's authoritative item (unwrapped from `{..., item}`)
+ * so the caller can render what was actually persisted rather than
+ * re-deriving it.
  */
-export function setSlotBox(
+export async function setSlotBox(
   spec: SlotSpec,
   cropId: string,
   xyxy: [number, number, number, number] | null,
+  frame: SlotFrame = 'source',
   signal?: AbortSignal,
 ): Promise<Crop> {
   const path =
@@ -1614,11 +1653,12 @@ export function setSlotBox(
       new Error(`slot "${spec.key}" has no setBox/clearBox endpoint or subBox field`),
     );
   }
-  return apiFetch<Crop>(
+  const res = await apiFetch<{ item: RawCrop }>(
     `${API_PREFIX}${path}`,
-    { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy }) },
+    { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy, frame }) },
     signal,
   );
+  return mapRawCrop(res.item);
 }
 
 /**
@@ -1630,7 +1670,7 @@ export function setSlotBox(
  * Keys whose capability is absent, or whose value is `undefined`
  * (as opposed to `null`, which clears), are omitted.
  */
-export function patchSlotMeta(
+export async function patchSlotMeta(
   spec: SlotSpec,
   cropId: string,
   patch: {
@@ -1639,7 +1679,7 @@ export function patchSlotMeta(
     rejectionReason?: string | null;
   },
   signal?: AbortSignal,
-): Promise<{ crop_id: string; updated_fields: string[] }> {
+): Promise<{ crop_id: string; updated_fields: string[]; item: Crop }> {
   const cap = spec.capabilities;
   const body: Record<string, unknown> = {};
   if (patch.status !== undefined && cap.lifecycle?.statusField) {
@@ -1655,11 +1695,12 @@ export function patchSlotMeta(
   if (!path) {
     return Promise.reject(new Error(`slot "${spec.key}" has no patchMeta endpoint`));
   }
-  return apiFetch(
-    `${API_PREFIX}${path}`,
-    { method: 'PATCH', body: JSON.stringify(body) },
-    signal,
-  );
+  const res = await apiFetch<{
+    crop_id: string;
+    updated_fields: string[];
+    item: RawCrop;
+  }>(`${API_PREFIX}${path}`, { method: 'PATCH', body: JSON.stringify(body) }, signal);
+  return { ...res, item: mapRawCrop(res.item) };
 }
 
 /**
@@ -1675,7 +1716,12 @@ export function patchSlotMeta(
  * profile into this generic module (falls back to the REGION_BASE path
  * if a spec declares no batchStatus endpoint, matching today's only caller).
  */
-export function batchPlateStatus(
+export interface BatchStatusInvalidEntry {
+  crop_id: string;
+  detail: string;
+}
+
+export async function batchPlateStatus(
   spec: SlotSpec,
   cropIds: string[],
   plateStatus: 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
@@ -1684,6 +1730,8 @@ export function batchPlateStatus(
 ): Promise<{
   updated: number;
   conflicts: { crop_id: string; current_source: string | null }[];
+  invalid: BatchStatusInvalidEntry[];
+  items: PlateBrowseItem[];
 }> {
   const path = spec.endpoints.batchStatus?.() ?? `${REGION_BASE}/batch_status`;
   const lc = spec.capabilities.lifecycle;

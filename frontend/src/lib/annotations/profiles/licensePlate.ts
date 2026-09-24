@@ -13,7 +13,6 @@
  */
 
 import type { SlotSpec } from '../types';
-import { PLATE_SHAPE_ENVELOPE } from '../../shapeGate';
 
 export const licensePlateSlot: SlotSpec = {
   key: 'license_plate',
@@ -27,7 +26,7 @@ export const licensePlateSlot: SlotSpec = {
       frameField: 'region_bbox_frame',
       scoreField: 'region_score',
       visibleField: 'region_visible',
-      envelope: PLATE_SHAPE_ENVELOPE,
+      bboxInParentField: 'region_bbox_in_parent',
       thumbnail: {
         path: (id, size) =>
           `/crops/${encodeURIComponent(id)}/region_thumbnail?size=${size}`,

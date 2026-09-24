@@ -131,7 +131,6 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
     };
     const d = readSlot(raw, palletSlot, [0.2, 0.2, 0.8, 0.8]);
     expect(d.subBox!.parent!.w).toBeCloseTo(0.2, 5);
-    expect(d.subBox!.shapeWarning).toBe(false);
     expect(d.text!.value).toBe('000123456700000000');
     expect(d.provenance!.chain).toHaveLength(2);
     expect(d.lifecycle!.state!.badge).toBe('false pos');

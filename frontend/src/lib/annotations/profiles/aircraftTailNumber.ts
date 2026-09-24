@@ -6,8 +6,8 @@
  * DIFFERENT values everywhere, so any place a plate-shaped default or
  * assumption leaked into the (not-yet-built) generic components would
  * be caught immediately: `storedFrame: 'parent'` (plates use `'source'`),
- * a TALL aspect envelope (plates are wide), `showChainOnCard: false`
- * (plates: true), and no `falsePositiveState` (plates have one).
+ * `showChainOnCard: false` (plates: true), and no `falsePositiveState`
+ * (plates have one).
  *
  * Not bound to any real class or route — this is a proof-of-concept
  * profile, not a shipped deployment.
@@ -27,13 +27,6 @@ export const aircraftTailNumberSlot: SlotSpec = {
       // not assumed.
       storedFrame: 'parent',
       scoreField: 'tail_score',
-      // Tail numbers on a vertical stabilizer are TALL, not wide.
-      envelope: {
-        aspectMin: 0.15,
-        aspectMax: 1.4,
-        maxHeightFrac: 0.6,
-        maxAreaFrac: 0.25,
-      },
       thumbnail: {
         path: (id, s) => `/crops/${encodeURIComponent(id)}/tail_thumbnail?size=${s}`,
         aspect: '1 / 2',

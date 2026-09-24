@@ -16,6 +16,7 @@
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
+  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { healthStore } from '$stores/health.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -38,6 +39,7 @@
     const releaseHealth = healthStore.acquire();
     const releaseClasses = classesStore.acquire();
     void classSourcesStore.init();
+    void regionStatusesStore.init();
     return () => {
       releaseHealth();
       releaseClasses();
