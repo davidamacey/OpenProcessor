@@ -68,7 +68,13 @@ class _FakeOpenSearch:
         return {'_scroll_id': scroll_id, 'hits': {'hits': hits}}
 
     def _match(self, query: dict[str, Any]) -> list[dict[str, Any]]:
-        """Crude status-terms matcher, enough to split the three region pools."""
+        """Crude status-terms matcher, enough to split the three region pools.
+
+        F-29: the empty-frame sample query is wrapped in ``function_score``
+        (random_score) rather than a bare bool — unwrap it first.
+        """
+        if 'function_score' in query:
+            query = query['function_score']['query']
         clauses = query.get('bool', {}).get('must', [])
         wanted: set[str] = set()
         for clause in clauses:
@@ -442,6 +448,32 @@ async def test_region_mode_splits_positives_hard_negatives_and_empties(tmp_path)
     assert manifest['false_positive_background_images'] == 3
     assert manifest['class_name'] == 'plate'
     assert '  0: plate\n' in (Path(result.export_dir) / 'data.yaml').read_text()
+
+
+@pytest.mark.asyncio
+async def test_region_mode_empty_frame_sample_uses_random_score_with_fixed_seed(tmp_path):
+    """F-29: the empty-frame sample must not be index-order-biased (the
+    same leading docs every export) — it's a function_score/random_score
+    query with a fixed seed instead."""
+    from src.services.curation.export_single_class_rows import EMPTY_FRAME_SAMPLE_SEED
+
+    docs = [
+        _region_item(i, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45]) for i in range(4)
+    ]
+    profile = SingleClassExportProfile(box_source='region', region_class_name='plate')
+    fake_os = _FakeOpenSearch(docs, by_status=True)
+    service = _service(tmp_path, fake_os, profile)
+
+    await service.export(empty_bg_ratio=0.5, seed=1, copy_images=False)
+
+    empty_queries = [
+        q
+        for q in fake_os.queries
+        if 'function_score' in q and 'random_score' in q['function_score']
+    ]
+    assert empty_queries, 'expected at least one random_score-wrapped empty-frame query'
+    rs = empty_queries[0]['function_score']['random_score']
+    assert rs['seed'] == EMPTY_FRAME_SAMPLE_SEED
 
 
 @pytest.mark.asyncio

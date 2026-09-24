@@ -22,10 +22,12 @@ import inspect
 
 import pytest
 
+from src.services.curation.clustering.auto_promote import _scroll_cluster_buckets
+
 # Import via `orchestrator` (not `auto_promote` directly) — the two
 # modules have a top/bottom circular import between them that only
 # resolves cleanly when `orchestrator` is the first of the pair loaded.
-from src.services.curation.clustering.orchestrator import auto_promote_clusters
+from src.services.curation.clustering.orchestrator import auto_promote_clusters  # noqa: F401
 
 
 pytestmark = pytest.mark.integration
@@ -46,7 +48,11 @@ def test_auto_promote_purity_aggregation_targets_class_name_directly() -> None:
     """The purity aggregation must target bare ``class_name`` (matching
     the keyword mapping above), not a ``.keyword`` subfield that doesn't
     exist on this schema — pointing at a nonexistent subfield would 400,
-    not silently degrade."""
-    src = inspect.getsource(auto_promote_clusters)
+    not silently degrade.
+
+    F-29 moved the aggregation body out of ``auto_promote_clusters``
+    itself and into ``_scroll_cluster_buckets`` (composite-agg paging) —
+    inspect that helper instead."""
+    src = inspect.getsource(_scroll_cluster_buckets)
     assert "'field': 'class_name'" in src
     assert "'field': 'class_name.keyword'" not in src

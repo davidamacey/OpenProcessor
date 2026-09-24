@@ -60,6 +60,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from src.config.curation import CurationConfig
 from src.services.curation.raw_label_clusters import (
+    CLUSTER_ID_FIELD,
     RAW_LABEL_FIELD,
     UNMATCHED_CLASS_SOURCE,
     ClusterAssignment,
@@ -167,13 +168,13 @@ async def write_back(
     dry_run: bool,
 ) -> dict[str, int]:
     """Walk every item with a raw label and write its cluster fields."""
-    stats = {'scanned': 0, 'updated': 0, 'unassigned': 0, 'errors': 0, 'pages': 0}
+    stats = {'scanned': 0, 'updated': 0, 'unassigned': 0, 'unchanged': 0, 'errors': 0, 'pages': 0}
     now = datetime.now(UTC).isoformat()
     search_after: list[Any] | None = None
     while True:
         body: dict[str, Any] = {
             'size': page_size,
-            '_source': ['crop_id', RAW_LABEL_FIELD],
+            '_source': ['crop_id', RAW_LABEL_FIELD, CLUSTER_ID_FIELD],
             'query': _base_query(unmatched_only),
             'sort': [{'crop_id': 'asc'}],
         }
@@ -194,6 +195,12 @@ async def write_back(
                 # Labels past --max-terms (or blank) keep whatever cluster
                 # fields a previous run wrote.
                 stats['unassigned'] += 1
+                continue
+            # F-29: skip the write if this doc's label-cluster id already
+            # matches the fresh assignment — a stable-hash re-cluster of an
+            # unchanged label corpus would otherwise rewrite every row.
+            if src.get(CLUSTER_ID_FIELD) == int(assignment.cluster_id):
+                stats['unchanged'] += 1
                 continue
             ops.append({'update': {'_index': index, '_id': doc_id}})
             ops.append({'doc': cluster_update_doc(assignment, now)})

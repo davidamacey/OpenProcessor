@@ -193,7 +193,8 @@ class TestAutomatedClassWritersExcludeTestHoldout:
                     'clusters': {
                         'buckets': [
                             {
-                                'key': 7,
+                                # F-29: composite-agg bucket key is a dict.
+                                'key': {'cluster_id': 7},
                                 'doc_count': 10,
                                 'top_class': {
                                     'buckets': [{'key': 'sedan', 'doc_count': 9}],

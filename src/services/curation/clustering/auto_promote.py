@@ -98,6 +98,65 @@ async def _scroll_ids(
     return ids
 
 
+_CLUSTER_AGG_PAGE_SIZE = 1000
+
+
+async def _scroll_cluster_buckets(client: AsyncOpenSearch, *, index: str) -> list[dict[str, Any]]:
+    """Page every ``cluster_id`` bucket via a ``composite`` aggregation
+    (F-29), instead of a single ``terms`` agg capped at ``size: 10000`` —
+    a single oversized terms agg both costs one big heap allocation and,
+    past 10000 distinct cluster_ids, silently drops the rest instead of
+    erroring. ``composite`` pages exhaustively via ``after_key``.
+    """
+    buckets: list[dict[str, Any]] = []
+    after: dict[str, Any] | None = None
+    while True:
+        composite: dict[str, Any] = {
+            'size': _CLUSTER_AGG_PAGE_SIZE,
+            'sources': [{'cluster_id': {'terms': {'field': 'cluster_id'}}}],
+        }
+        if after is not None:
+            composite['after'] = after
+        body = {
+            'size': 0,
+            'aggs': {
+                'clusters': {
+                    'composite': composite,
+                    'aggs': {
+                        'top_class': {
+                            # class_name is mapped keyword directly on the
+                            # live index — no .keyword subfield exists. See
+                            # legacy_clusters.py's top_class agg for the full
+                            # story.
+                            'terms': {
+                                'field': 'class_name',
+                                'size': 5,
+                                'order': {'_count': 'desc'},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+        resp = await client.search(index=index, body=body)
+        clusters_agg = resp.get('aggregations', {}).get('clusters', {})
+        page_buckets = clusters_agg.get('buckets', [])
+        if not page_buckets:
+            break
+        buckets.extend(
+            {
+                'key': b['key']['cluster_id'],
+                'doc_count': b['doc_count'],
+                'top_class': b.get('top_class', {}),
+            }
+            for b in page_buckets
+        )
+        after = clusters_agg.get('after_key')
+        if after is None or len(page_buckets) < _CLUSTER_AGG_PAGE_SIZE:
+            break
+    return buckets
+
+
 async def auto_promote_clusters(
     client: AsyncOpenSearch,
     *,
@@ -109,37 +168,17 @@ async def auto_promote_clusters(
 
     Returns a summary keyed by ``promoted``, ``skipped``, ``clusters``.
     """
-    # Aggregation: per-cluster top class. Purity is computed across ALL
+    # Per-cluster top class, paged (F-29). Purity is computed across ALL
     # labelled members (validated + unvalidated) so a cluster with 99
     # v6 honda + 1 unvalidated cruiserbike isn't deemed 100% cruiserbike.
-    body = {
-        'size': 0,
-        'aggs': {
-            'clusters': {
-                'terms': {'field': 'cluster_id', 'size': 10000},
-                'aggs': {
-                    'top_class': {
-                        # class_name is mapped keyword directly on the live
-                        # index — no .keyword subfield exists. See
-                        # legacy_clusters.py's top_class agg for the full story.
-                        'terms': {
-                            'field': 'class_name',
-                            'size': 5,
-                            'order': {'_count': 'desc'},
-                        },
-                    },
-                },
-            },
-        },
-    }
-    resp = await client.search(index=ITEMS_INDEX, body=body)
+    cluster_buckets = await _scroll_cluster_buckets(client, index=ITEMS_INDEX)
 
     summaries: list[dict[str, Any]] = []
     total_promoted = 0
     total_skipped = 0
     now = datetime.now(UTC).isoformat()
 
-    for bucket in resp.get('aggregations', {}).get('clusters', {}).get('buckets', []):
+    for bucket in cluster_buckets:
         cluster_id = int(bucket['key'])
         members = int(bucket['doc_count'])
         cls_buckets = bucket.get('top_class', {}).get('buckets', [])
@@ -265,7 +304,10 @@ async def auto_promote_clusters(
                 doc_ids=doc_ids,
                 merger=_merge_promote,
                 index=ITEMS_INDEX,
-                refresh=True,
+                # F-29: refresh once at the end of the whole promote
+                # operation instead of forcing a refresh on every
+                # per-cluster (and, within that, every per-page) bulk call.
+                refresh=False,
                 writer_id='auto_promote',
             )
         except Exception as exc:
@@ -280,6 +322,12 @@ async def auto_promote_clusters(
                 cluster_id=cluster_id,
                 errors=len(result['errors']),
             )
+
+    if not dry_run and total_promoted:
+        try:
+            await client.indices.refresh(index=ITEMS_INDEX)
+        except Exception as exc:  # nosec B110 - advisory; next scheduled refresh covers it
+            logger.info('curation_auto_promote_final_refresh_failed', error=str(exc))
 
     return {
         'status': 'success',

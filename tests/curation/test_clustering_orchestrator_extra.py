@@ -61,9 +61,14 @@ def _bucket(
     members: int,
     classes: list[tuple[str, int]],
 ) -> dict[str, Any]:
-    """Build an OpenSearch bucket like the one ``auto_promote_clusters`` consumes."""
+    """Build an OpenSearch bucket like the one ``auto_promote_clusters`` consumes.
+
+    F-29: cluster buckets now come from a ``composite`` agg (paged by
+    cluster_id) rather than a single ``terms: size=10000`` agg — the
+    composite bucket key is a dict of source-name -> value.
+    """
     return {
-        'key': cluster_id,
+        'key': {'cluster_id': cluster_id},
         'doc_count': members,
         'top_class': {
             'buckets': [{'key': name, 'doc_count': count} for name, count in classes],
@@ -291,8 +296,10 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
     # enforced at update_by_query time, not at agg time, so a 99-validated
     # cluster doesn't get its purity computed off the lone unvalidated crop.
     assert 'query' not in body
-    # Aggregation shape matches what the helper expects to consume.
-    assert body['aggs']['clusters']['terms']['field'] == 'cluster_id'
+    # Aggregation shape matches what the helper expects to consume (F-29:
+    # composite agg paged by cluster_id, not a single terms:size=10000).
+    sources = body['aggs']['clusters']['composite']['sources']
+    assert sources == [{'cluster_id': {'terms': {'field': 'cluster_id'}}}]
     # ``class_name`` is mapped keyword directly on the live index — no
     # ``.keyword`` subfield.
     assert body['aggs']['clusters']['aggs']['top_class']['terms']['field'] == 'class_name'

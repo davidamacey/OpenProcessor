@@ -255,7 +255,8 @@ class _FakeAutoPromoteOS:
                     'clusters': {
                         'buckets': [
                             {
-                                'key': 1,
+                                # F-29: composite-agg bucket key is a dict.
+                                'key': {'cluster_id': 1},
                                 'doc_count': 5,
                                 'top_class': {
                                     'buckets': [{'key': 'honda', 'doc_count': 5}],

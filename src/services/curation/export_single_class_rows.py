@@ -45,6 +45,13 @@ HARD_NEGATIVE_REGION_STATUSES: frozenset[str] = frozenset({RegionStatus.FALSE_PO
 # into the negatives teaches the next detector the current one's mistakes.
 EMPTY_REGION_STATUSES: frozenset[str] = frozenset({RegionStatus.NO_REGION_VISIBLE.value})
 
+# F-29: fixed seed for the empty-frame sample's random_score. A scroll
+# with no sort effectively returns index/segment order — always the same
+# leading docs — which is a biased sample repeated on every export. A
+# fixed seed keeps repeated exports of the same pool reproducible while
+# no longer always picking the same docs first.
+EMPTY_FRAME_SAMPLE_SEED = 1337
+
 
 @dataclass
 class _FrameRow:
@@ -204,7 +211,19 @@ class RowCollector:
             empty_hits = await scroll_hits(
                 self.opensearch,
                 index=self.config.items_index,
-                query=self._region_query({'terms': {f.status: sorted(EMPTY_REGION_STATUSES)}}),
+                # F-29: random_score with a fixed seed instead of the bare
+                # bool query, which a sort-less scroll returns in
+                # index/segment order — the same leading docs on every
+                # export.
+                query={
+                    'function_score': {
+                        'query': self._region_query(
+                            {'terms': {f.status: sorted(EMPTY_REGION_STATUSES)}}
+                        ),
+                        'random_score': {'seed': EMPTY_FRAME_SAMPLE_SEED, 'field': '_seq_no'},
+                        'boost_mode': 'replace',
+                    }
+                },
                 source=source,
                 # Over-read: empty frames carry several items each, and this
                 # export needs distinct FRAMES, not documents.

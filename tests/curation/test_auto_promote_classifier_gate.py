@@ -22,12 +22,15 @@ from src.services.curation.clustering import auto_promote
 
 
 def _cluster_agg_response(cluster_id: int, class_name: str, count: int) -> dict[str, Any]:
+    # F-29: cluster buckets now come from a composite agg (paged by
+    # cluster_id), not a single terms:size=10000 agg — the composite
+    # bucket key is a dict of source-name -> value.
     return {
         'aggregations': {
             'clusters': {
                 'buckets': [
                     {
-                        'key': cluster_id,
+                        'key': {'cluster_id': cluster_id},
                         'doc_count': count,
                         'top_class': {'buckets': [{'key': class_name, 'doc_count': count}]},
                     }

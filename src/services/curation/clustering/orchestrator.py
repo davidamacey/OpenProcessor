@@ -817,10 +817,17 @@ async def _park_gated_residuals(
         return 0
     base = _residual_pool_filter()
     # "Fails the gate" = residual pool AND NOT(passes all gate clauses).
+    # F-29: also exclude docs already parked — rewriting cluster_id=-3 onto
+    # a doc that's already -3 (with cluster_subid already null) is a
+    # wasted write on every re-run of this gate.
     query = {
         'bool': {
             'must': base['must'],
-            'must_not': [*base['must_not'], {'bool': {'must': gate}}],
+            'must_not': [
+                *base['must_not'],
+                {'bool': {'must': gate}},
+                {'term': {'cluster_id': PARKED_CLUSTER_ID}},
+            ],
         }
     }
     body = {

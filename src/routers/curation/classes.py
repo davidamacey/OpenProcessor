@@ -360,6 +360,12 @@ async def merge_class(
     # The confirmed-labels index has no class_id_history / class_validated
     # field (its label_source means "original label provenance", not
     # "is this human-confirmed") — stays a plain update_by_query.
+    #
+    # F-29: this index has no mapping for cluster_id/cluster_subid — they
+    # were only ever written here (nothing reads them off this index;
+    # models.py's health check only checks index existence), so an
+    # unmapped field was accumulating on every merge for no reader. Drop
+    # both writes rather than add a mapping for dead fields.
     try:
         await opensearch.update_by_query(
             index=CURATION_LABELS_CONFIRMED_INDEX,
@@ -369,8 +375,6 @@ async def merge_class(
                         'ctx._source.class_id = params.class_id;'
                         'ctx._source.class_name = params.class_name;'
                         'ctx._source.class_source = params.class_source;'
-                        'ctx._source.cluster_id = params.class_id;'
-                        'ctx._source.remove("cluster_subid");'
                         'ctx._source.updated_at = params.updated_at;'
                     ),
                     'params': relabel_doc,
@@ -424,12 +428,15 @@ async def merge_class(
     try:
         crop_ids = await _scroll_merge_ids()
         if crop_ids:
+            # F-29: refresh once after every page instead of forcing a
+            # refresh=True on each of occ_skip_on_conflict_bulk's
+            # per-500-id pages.
             bulk_result = await occ_skip_on_conflict_bulk(
                 opensearch,
                 doc_ids=crop_ids,
                 merger=_merge_crop,
                 index=CURATION_ITEMS_INDEX,
-                refresh=True,
+                refresh=False,
                 writer_id='class_merge',
             )
             if bulk_result.get('errors'):
@@ -438,6 +445,10 @@ async def merge_class(
                     index=CURATION_ITEMS_INDEX,
                     errors=len(bulk_result['errors']),
                 )
+            try:
+                await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+            except Exception as exc:
+                logger.debug('merge_relabel_final_refresh_failed', error=str(exc))
     except Exception as exc:
         logger.warning('merge_relabel_failed', index=CURATION_ITEMS_INDEX, error=str(exc))
     return result
