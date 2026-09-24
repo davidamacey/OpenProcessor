@@ -49,7 +49,13 @@ describe('vendored item-wire snapshot sanity', () => {
  * If a genuinely stale `RawCrop` field turns up later, list it here with
  * a one-line reason instead of silently excluding it.
  */
-const KNOWN_STALE: readonly string[] = [];
+const KNOWN_STALE: readonly string[] = [
+  // Dropped from item_wire.json by openprocessor's OpenSearch perf/
+  // correctness merge (main f7dd620, 2026-09-24) — out of scope for this
+  // frontend pass. `mapRawCrop` already defaults it to null and every
+  // reader treats it as optional, so this is inert, not a crash risk.
+  'classifier_raw_confidence',
+];
 
 describe('RawCrop (src/lib/api.ts) vs the backend item wire', () => {
   it('every non-stale RawCrop key is a real item-wire key', () => {
