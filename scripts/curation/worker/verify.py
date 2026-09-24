@@ -98,7 +98,7 @@ _SKIP_VLM_VERIFY_SECONDARY_SCORE = float(
 # load from this worker substantially and lets the shared VLM serve
 # other queues (e.g. class labeling) instead.
 #
-# Override at runtime: SAM3_SKIP_GEMMA_VERIFY_SCORE=0.99 to be more
+# Override at runtime: SAM3_SKIP_VLM_VERIFY_SCORE=0.99 to be more
 # conservative, or 0.90 for more aggressive skipping. Set to 1.01 to
 # disable the skip entirely (everything still goes through the VLM).
 
