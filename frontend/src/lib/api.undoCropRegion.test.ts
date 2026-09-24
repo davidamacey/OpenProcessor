@@ -9,9 +9,13 @@
  * undoLast()/slotBack() rely on: whatever this function returns is what
  * `queue.items[idx]` gets replaced with directly.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { undoCropRegion, API_PREFIX } from './api';
-import { licensePlateSlot } from './annotations/profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import {
+  installDeploymentSlots,
+  resetDeploymentSlots,
+} from './annotations/registeredSlots';
 
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -20,8 +24,13 @@ function jsonResponse(body: unknown) {
   });
 }
 
+beforeEach(() => {
+  installDeploymentSlots([widgetTagSlot]);
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  resetDeploymentSlots();
 });
 
 describe('undoCropRegion — dq-region candidate round trip', () => {
@@ -35,7 +44,7 @@ describe('undoCropRegion — dq-region candidate round trip', () => {
       region_rejection_reason: 'sanity_reject:aspect_ratio',
       region_candidate_bbox_norm: [0.1, 0.02, 0.3, 0.06],
       region_candidate_score: 0.55,
-      region_candidate_detector: 'lpr_nanov11_640',
+      region_candidate_detector: 'tag_detector_v1',
       region_validated: false,
       region_auto_confirmed: false,
       region_text_choice: 'no_valid_reading',
@@ -48,7 +57,7 @@ describe('undoCropRegion — dq-region candidate round trip', () => {
     expect(String(url)).toBe(`${API_PREFIX}/crops/c1/region/undo`);
     expect((init as RequestInit).method).toBe('POST');
 
-    const slot = crop.slots?.[licensePlateSlot.key];
+    const slot = crop.slots?.[widgetTagSlot.key];
     expect(slot?.subBox?.rawXyxy).toBeNull();
     expect(slot?.subBox?.candidate?.rawXyxy).toEqual([0.1, 0.02, 0.3, 0.06]);
     expect(slot?.subBox?.candidate?.score).toBeCloseTo(0.55);

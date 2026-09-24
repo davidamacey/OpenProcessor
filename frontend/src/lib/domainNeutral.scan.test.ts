@@ -47,6 +47,8 @@ const ALLOWED: Record<string, string> = {
     'builtinSlots still registers the license-plate example profile until audit step 9 empties it',
   'lib/test/fixtures/regionSlot.ts':
     "reuses the example profile's region_* wire map until audit step 8's regionSlotFromServedProfile",
+  'lib/annotations/profiles.falsification.test.ts':
+    'the one test that exercises the example profiles themselves (audit §3.9 KEEP-example)',
 };
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -75,10 +77,9 @@ function offendingLines(file: string): string[] {
     .map(({ line, n }) => `${rel(file)}:${n}: ${line.trim()}`);
 }
 
-const files = walk(srcRoot).filter((f) => /\.(ts|svelte|js|json|css|html)$/.test(f));
-// Step 5 of the audit covers product source; the test files follow in
-// step 6.
-const scanned = files.filter((f) => !/\.test\.ts$/.test(f));
+// Product source and tests alike: a test fixture in one domain is a
+// domain leak too (audit §4.4 — tests use the neutral widget/tag domain).
+const scanned = walk(srcRoot).filter((f) => /\.(ts|svelte|js|json|css|html)$/.test(f));
 
 describe('domain-neutral source (audit §7.2)', () => {
   it('scans a real tree', () => {

@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from conftest import agrees_with_retry, api_get, wait_for_stable_text
+from fixtures.wire import REGION_TAB_URL_ID
 
 TOTAL_RE = re.compile(r"·\s*([\d,]+)\s*total")  # "1 / 18 loaded · 18 total"
 
@@ -65,9 +66,9 @@ def test_dashboard_cluster_count_agrees_with_stats_dataset(guarded_page: Any, li
     )
 
 
-def test_plates_queue_total_agrees_with_review_regions(guarded_page: Any, live_url: str) -> None:
+def test_region_queue_total_agrees_with_review_regions(guarded_page: Any, live_url: str) -> None:
     page = guarded_page.page
-    page.goto(f"{live_url}/review?tab=plates", wait_until="domcontentloaded")
+    page.goto(f"{live_url}/review?tab={REGION_TAB_URL_ID}", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
     page.wait_for_function(
         """
@@ -83,15 +84,15 @@ def test_plates_queue_total_agrees_with_review_regions(guarded_page: Any, live_u
 
     ok, first, second = agrees_with_retry(live_url, "/review/regions", ("total",), displayed)
     assert ok, (
-        f"/review?tab=plates queue-counter showed total={displayed}, but "
+        f"/review?tab={REGION_TAB_URL_ID} queue-counter showed total={displayed}, but "
         f"GET {{API_PREFIX}}/review/regions total was {first} (and, on retry, {second})"
     )
 
 
-def test_plates_queue_total_agrees_with_filtered_region_status(guarded_page: Any, live_url: str) -> None:
+def test_region_queue_total_agrees_with_filtered_region_status(guarded_page: Any, live_url: str) -> None:
     page = guarded_page.page
     page.goto(
-        f"{live_url}/review?tab=plates&region_status=verify_rejected",
+        f"{live_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected",
         wait_until="domcontentloaded",
     )
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
@@ -115,7 +116,7 @@ def test_plates_queue_total_agrees_with_filtered_region_status(guarded_page: Any
         live_url, "/review/regions?region_status=verify_rejected", ("total",), displayed
     )
     assert ok, (
-        f"/review?tab=plates&region_status=verify_rejected queue-counter showed "
+        f"/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected queue-counter showed "
         f"total={displayed}, but GET {{API_PREFIX}}/review/regions?"
         f"region_status=verify_rejected total was {first} (and, on retry, {second})"
     )
@@ -129,7 +130,7 @@ def test_regions_filter_spec_select_matches_served_options(guarded_page: Any, li
     specs = regions_tab["filter_specs"]
 
     page = guarded_page.page
-    page.goto(f"{live_url}/review?tab=plates", wait_until="domcontentloaded")
+    page.goto(f"{live_url}/review?tab={REGION_TAB_URL_ID}", wait_until="domcontentloaded")
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)
 
     for spec in specs:
@@ -188,7 +189,7 @@ def test_rejection_reason_label_renders_for_a_live_item(guarded_page: Any, live_
 
     page = guarded_page.page
     page.goto(
-        f"{live_url}/review?tab=plates&region_status=verify_rejected",
+        f"{live_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected",
         wait_until="domcontentloaded",
     )
     page.wait_for_selector('[data-testid="queue-counter"]', timeout=15_000)

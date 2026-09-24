@@ -1,7 +1,7 @@
 /**
- * Regression coverage for the cross-origin plate-thumbnail 404 bug
+ * Regression coverage for the cross-origin region-thumbnail 404 bug
  * (2026-09-12 report): with `PUBLIC_TRITON_API_URL` set to a remote
- * host, several call sites built plate-thumbnail `<img src>` values as
+ * host, several call sites built region-thumbnail `<img src>` values as
  * bare relative region-thumbnail paths instead of
  * going through `apiBase`, so the browser resolved them against the
  * frontend's OWN origin instead of the configured remote openprocessor.

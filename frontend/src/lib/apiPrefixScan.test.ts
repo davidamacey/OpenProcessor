@@ -116,9 +116,7 @@ describe('no bare /curation literal composes a URL outside api.ts', () => {
     expect(scanned).toContain(path.join('lib', 'api.ts'));
     expect(scanned).toContain(path.join('lib', 'sse.ts'));
     expect(scanned).toContain(path.join('routes', 'export', '+page.svelte'));
-    expect(scanned).toContain(
-      path.join('lib', 'annotations', 'profiles', 'licensePlate.ts'),
-    );
+    expect(scanned).toContain(path.join('lib', 'annotations', 'registeredSlots.ts'));
   });
 
   it('finds zero offenders', () => {

@@ -270,7 +270,7 @@ describe('curationSettingsStore', () => {
     );
 
     await expect(
-      curationSettingsStore.saveDefault('detection_profile', 'license_plate'),
+      curationSettingsStore.saveDefault('detection_profile', 'widget_tag'),
     ).rejects.toThrow(/not settable/);
     expect(curationSettingsStore.error).toMatch(/not settable/);
   });

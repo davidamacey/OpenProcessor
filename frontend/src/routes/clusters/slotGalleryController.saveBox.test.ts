@@ -1,12 +1,12 @@
 /**
  * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
- * `saveBox` used to re-PUT the box via `setCropPlate` even though
+ * `saveBox` used to re-PUT the box a second time even though
  * `SlotBboxEditor` had already saved it via `setSlotBox` — a redundant
- * double-write on every plate-gallery bbox save. It is now a pure local
+ * double-write on every region-gallery bbox save. It is now a pure local
  * patch off the server's own returned item: no network call, no `fetch`
- * stub needed, which is itself part of the proof (a lingering
- * `setCropPlate` call would require one), and no client-side
- * confirmed-vs-rejected derivation — it renders `item.slots.license_plate`
+ * stub needed, which is itself part of the proof (a lingering second
+ * write would require one), and no client-side
+ * confirmed-vs-rejected derivation — it renders `item.slots.widget_tag`
  * verbatim.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +22,7 @@ function fakeCropWithSlot(id: string, slot: SlotData): Crop {
     source_image_path: '/img.jpg',
     bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
     class_id: 3,
-    class_name: 'license_plate',
+    class_name: 'widget_tag',
     class_source: null,
     label_source: 'human',
     label_validated: true,
@@ -61,7 +61,7 @@ function fakeRegionItem(id: string): RegionBrowseItem {
     region_text_source: null,
     region_text_confidence: null,
     class_id: 3,
-    class_name: 'license_plate',
+    class_name: 'widget_tag',
     cluster_id: null,
     updated_at: '',
   } as RegionBrowseItem;

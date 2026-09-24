@@ -1,6 +1,6 @@
 /**
- * W0 naming-sweep finding m9: SlotGallery's plate-gallery Detector <select>
- * used to hardcode `lpr_nanov11_640`/`sam3`/`paddleocr_det_trt`/`human`
+ * W0 naming-sweep finding m9: SlotGallery's region-gallery Detector <select>
+ * used to hardcode `tag_detector_v1`/`sam3`/`paddleocr_det_trt`/`human`
  * options. Its options are now the served vocabulary's filterable
  * detectors (`GET {API_PREFIX}/regions/vocabulary`, `regionVocabularyStore`).
  * Mounts the real component (see SlotGallery.unclustered.test.ts's
@@ -52,7 +52,12 @@ afterEach(() => {
 describe('SlotGallery detector filter — served vocabulary (m9)', () => {
   it("renders only the vocabulary's filterable detectors as options, using their served labels", async () => {
     regionVocabularyStore.detectors = [
-      { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
+      {
+        id: 'tag_detector_v1',
+        label: 'Tag detector',
+        role: 'detector',
+        filterable: true,
+      },
       { id: 'sam3', label: 'SAM3', role: 'segmenter', filterable: true },
       // Not filterable — must not appear as an option.
       { id: 'human', label: 'Human', role: 'human', filterable: false },
@@ -66,8 +71,8 @@ describe('SlotGallery detector filter — served vocabulary (m9)', () => {
     const optionLabels = [...select.options].map((o) => o.textContent?.trim());
     const optionValues = [...select.options].map((o) => o.value);
 
-    expect(optionLabels).toEqual(['any', 'LPR', 'SAM3']);
-    expect(optionValues).toEqual(['', 'lpr_nanov11_640', 'sam3']);
+    expect(optionLabels).toEqual(['any', 'Tag detector', 'SAM3']);
+    expect(optionValues).toEqual(['', 'tag_detector_v1', 'sam3']);
     expect(el.textContent).not.toContain('Paddle det');
     expect(el.textContent).not.toContain('Human');
   });

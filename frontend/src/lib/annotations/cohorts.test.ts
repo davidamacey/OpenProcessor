@@ -7,7 +7,7 @@ import {
   derivedCohorts,
 } from './cohorts';
 import { resolveSlotRegistry } from './registry';
-import { licensePlateSlot } from './profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
 import { defectCodeSlot } from './profiles/defectCode';
 
@@ -15,7 +15,7 @@ describe('compileCohortQuery', () => {
   it('substitutes {classId} in an endpoint query params bag', () => {
     const compiled = compileCohortQuery(
       { kind: 'endpoint', path: '/crops', params: { class_id: '{classId}' } },
-      { classId: 42, className: 'sedan' },
+      { classId: 42, className: 'widget_a' },
     );
     expect(compiled).toEqual({
       kind: 'endpoint',
@@ -51,16 +51,16 @@ describe('compileCohortQuery', () => {
 });
 
 describe('cohortsForClass — class with no registered slot', () => {
-  const { registry } = resolveSlotRegistry({ builtins: [licensePlateSlot] });
-  const classesById = new Map([[7, 'sedan']]);
+  const { registry } = resolveSlotRegistry({ builtins: [widgetTagSlot] });
+  const classesById = new Map([[7, 'widget_a']]);
 
   it('gets exactly the 4 core cohorts, no slot cohorts', () => {
-    const cohorts = cohortsForClass(7, 'sedan', registry, classesById, true);
+    const cohorts = cohortsForClass(7, 'widget_a', registry, classesById, true);
     expect(cohorts.map((c) => c.id).sort()).toEqual(CORE_COHORTS.map((c) => c.id).sort());
   });
 
   it("compiles each core cohort's class_id against the requested class", () => {
-    const cohorts = cohortsForClass(7, 'sedan', registry, classesById, true);
+    const cohorts = cohortsForClass(7, 'widget_a', registry, classesById, true);
     const validated = cohorts.find((c) => c.id === 'validated')!;
     expect(validated.query).toEqual({
       kind: 'endpoint',
@@ -70,12 +70,12 @@ describe('cohortsForClass — class with no registered slot', () => {
   });
 });
 
-describe('cohortsForClass — license_plate (declared cohorts override derived)', () => {
-  const { registry } = resolveSlotRegistry({ builtins: [licensePlateSlot] });
-  const classesById = new Map([[3, 'license_plate']]);
+describe('cohortsForClass — a region slot (declared cohorts override derived)', () => {
+  const { registry } = resolveSlotRegistry({ builtins: [widgetTagSlot] });
+  const classesById = new Map([[3, 'widget_tag']]);
 
-  it('has 4 core + 5 declared LPR cohorts, not the weaker derived versions', () => {
-    const cohorts = cohortsForClass(3, 'license_plate', registry, classesById, true);
+  it('has 4 core + 5 declared region cohorts, not the weaker derived versions', () => {
+    const cohorts = cohortsForClass(3, 'widget_tag', registry, classesById, true);
     const ids = cohorts.map((c) => c.id).sort();
     expect(ids).toEqual(
       [
@@ -90,11 +90,10 @@ describe('cohortsForClass — license_plate (declared cohorts override derived)'
   });
 
   // Wave 2 C13/C14 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
-  // §8.4(iii)): the cohort `id` (render key) was split from `params.mode`
-  // (the wire value) in C13; C14 flips `mode` and `path` to match the
-  // backend's live rename (/plates -> /regions, lpr_* -> the new names).
-  it('every compiled tier-1 LPR cohort URL is byte-identical to getTrainingCandidates(mode, {class_id})', () => {
-    const cohorts = cohortsForClass(3, 'license_plate', registry, classesById, true);
+  // §8.4(iii)): the cohort `id` (render key) is separate from `params.mode`
+  // (the wire value).
+  it('every compiled tier-1 region cohort URL is byte-identical to getTrainingCandidates(mode, {class_id})', () => {
+    const cohorts = cohortsForClass(3, 'widget_tag', registry, classesById, true);
     const idToMode: Record<string, string> = {
       detector_blind_spots: 'detector_blind_spots',
       low_conf_correct: 'low_conf_correct',
@@ -113,7 +112,7 @@ describe('cohortsForClass — license_plate (declared cohorts override derived)'
   });
 
   it("declared 'disagreement' and 'false_positives' replace the derived ids of the same name", () => {
-    const cohorts = cohortsForClass(3, 'license_plate', registry, classesById, true);
+    const cohorts = cohortsForClass(3, 'widget_tag', registry, classesById, true);
     const disagreement = cohorts.find((c) => c.id === 'disagreement')!;
     // The derived version would hit a predicate query on
     // region_detector_chain — the declared one hits the real endpoint.
@@ -145,11 +144,13 @@ describe('cohortsForClass — predicateCohortsAvailable gate', () => {
 });
 
 describe('cohortEndpointKind (Wave 2 C12 — structural dispatch, not path === literal)', () => {
-  it('recognizes training_candidates under the old /plates base', () => {
-    expect(cohortEndpointKind('/plates/training_candidates')).toBe('training_candidates');
+  it('recognizes training_candidates under any base path', () => {
+    expect(cohortEndpointKind('/gadgets/training_candidates')).toBe(
+      'training_candidates',
+    );
   });
 
-  it('recognizes training_candidates under the renamed /regions base — the whole point of the fix', () => {
+  it('recognizes training_candidates under the /regions base', () => {
     expect(cohortEndpointKind('/regions/training_candidates')).toBe(
       'training_candidates',
     );

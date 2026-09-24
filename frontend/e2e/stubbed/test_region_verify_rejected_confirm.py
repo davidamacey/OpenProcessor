@@ -17,13 +17,13 @@ whatever the server returns.
 
 from __future__ import annotations
 
-from fixtures.wire import make_item
+from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
     {
         "id": 1,
-        "name": "license_plate",
-        "group": "vehicle",
+        "name": REGION_CLASS,
+        "group": "widgets",
         "hotkey_letter": "l",
         "count": 40,
         "validated_count": 12,
@@ -37,13 +37,13 @@ METHODS = {"strategies": [], "flags": {}}
 _CANDIDATE_BBOX = [0.15, 0.25, 0.55, 0.75]
 
 
-def rejected_plate_item() -> dict:
+def rejected_tag_item() -> dict:
     return make_item(
-        crop_id="plate-rejected-1",
+        crop_id="tag-rejected-1",
         image_id="img-1",
         class_id=1,
-        class_name="license_plate",
-        thumbnail_url="/curation/crops/plate-rejected-1/thumbnail",
+        class_name=REGION_CLASS,
+        thumbnail_url="/curation/crops/tag-rejected-1/thumbnail",
         region_bbox_norm=None,
         region_bbox_in_parent=None,
         region_status="verify_rejected",
@@ -73,7 +73,7 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
     def review_handler(_request, _match):
         return (
             200,
-            {"items": [rejected_plate_item()], "total": 1, "page": 1, "page_size": 30},
+            {"items": [rejected_tag_item()], "total": 1, "page": 1, "page_size": 30},
         )
 
     stub.on("GET", r"/review/", review_handler)
@@ -82,10 +82,10 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
         region_calls.append((request.method, match.string, request.post_data_json or {}))
         # A promoted item, as the backend would actually return it.
         promoted = make_item(
-            crop_id="plate-rejected-1",
+            crop_id="tag-rejected-1",
             image_id="img-1",
             class_id=1,
-            class_name="license_plate",
+            class_name=REGION_CLASS,
             region_bbox_norm=_CANDIDATE_BBOX,
             region_status="detected",
             region_validated=True,
@@ -97,20 +97,20 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
     def region_meta_handler(request, match):
         region_meta_calls.append((request.method, match.string, request.post_data_json or {}))
         promoted = make_item(
-            crop_id="plate-rejected-1",
+            crop_id="tag-rejected-1",
             image_id="img-1",
             class_id=1,
-            class_name="license_plate",
+            class_name=REGION_CLASS,
             region_bbox_norm=_CANDIDATE_BBOX,
             region_status="detected",
             region_validated=True,
             region_candidate_bbox_norm=None,
         )
-        return (200, {"crop_id": "plate-rejected-1", "updated_fields": ["region_status"], "item": promoted})
+        return (200, {"crop_id": "tag-rejected-1", "updated_fields": ["region_status"], "item": promoted})
 
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta_handler)
 
-    page.goto(f"{app_url}/review?tab=plates")
+    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=15000)
 
@@ -134,7 +134,7 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
     )
     method, path, body = region_meta_calls[0]
     assert method == "PATCH"
-    assert "plate-rejected-1" in path, path
+    assert "tag-rejected-1" in path, path
     assert body.get("region_status") == "detected", body
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]

@@ -1,12 +1,12 @@
 """OpenProcessor main 840beb8 adoption: `GET {API_PREFIX}/review/tabs`
 gains `filter_specs` — a self-describing enum filter per tab (e.g. the
-Plates tab's `region_status`: all / detected only / verifier-rejected
+region tab's `region_status`: all / detected only / verifier-rejected
 candidates only). `/review`'s filter bar renders one generic `<select>`
 per served spec (no tab/param-specific markup), and picking a value
 forwards it as `?region_status=` on `GET {API_PREFIX}/review/regions` —
 proves the real browser-rendered control actually drives the query, not
 just that it renders (mirrors test_region_gallery_status_filter.py's pattern for
-the /clusters plate gallery's equivalent control).
+the /clusters region gallery's equivalent control).
 
 Also covers the companion wording rule (backend live-check, 2026-09-24):
 a slot-tab item's own `region_rejection_reason` is rendered through the
@@ -18,13 +18,13 @@ served `rejection_reasons` vocabulary, never the generic per-item
 
 from __future__ import annotations
 
-from fixtures.wire import make_item
+from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID
 
 CLASSES = [
     {
         "id": 1,
-        "name": "license_plate",
-        "group": "vehicle",
+        "name": REGION_CLASS,
+        "group": "widgets",
         "hotkey_letter": "l",
         "count": 40,
         "validated_count": 12,
@@ -37,7 +37,7 @@ REVIEW_TABS = {
     "tabs": [
         {
             "id": "regions",
-            "label": "License plates",
+            "label": REGION_TAB_LABEL,
             "filters": ["text", "region_status"],
             "filter_defaults": {"region_status": "all"},
             "filter_specs": [
@@ -104,11 +104,11 @@ def needs_human_item() -> dict:
     # under region_status=verify_rejected: 13 model_verdict + 5
     # verifier_no_verdict).
     item = make_item(
-        crop_id="plate-needs-human-1",
+        crop_id="tag-needs-human-1",
         image_id="img-1",
         class_id=1,
-        class_name="license_plate",
-        thumbnail_url="/curation/crops/plate-needs-human-1/thumbnail",
+        class_name=REGION_CLASS,
+        thumbnail_url="/curation/crops/tag-needs-human-1/thumbnail",
         region_bbox_norm=None,
         region_bbox_in_parent=None,
         region_status="verify_rejected",
@@ -151,7 +151,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 
     stub.on("GET", r"/review/regions(\?|$)", review_handler)
 
-    page.goto(f"{app_url}/review?tab=plates")
+    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=15000)
     page.wait_for_timeout(500)
@@ -182,7 +182,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 
 
 def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_url):
-    # Live regression (2026-09-24): loading /review?tab=plates&region_status=
+    # Live regression (2026-09-24): loading /review?tab=regions&region_status=
     # verify_rejected directly showed the unfiltered queue. _filter() only
     # forwards params the tab's served filter_specs declare, and the refetch
     # effect keyed on the raw URL-seeded values, so when /review/tabs landed
@@ -203,11 +203,11 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
 
     stub.on("GET", r"/review/regions(\?|$)", review_handler)
 
-    page.goto(f"{app_url}/review?tab=plates&region_status=verify_rejected")
+    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected")
     page.get_by_test_id("queue-counter").first.wait_for(timeout=15000)
     page.wait_for_timeout(1500)
 
-    assert region_calls, "the plates queue must be fetched"
+    assert region_calls, "the region queue must be fetched"
     assert "region_status=verify_rejected" in region_calls[-1], region_calls
     select = page.locator('label:has-text("Status") select')
     assert select.input_value() == "verify_rejected"

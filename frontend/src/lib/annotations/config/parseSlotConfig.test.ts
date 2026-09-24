@@ -126,7 +126,7 @@ function fullSlot(): Record<string, unknown> {
             description: 'Human-confirmed tags',
             query: {
               kind: 'endpoint',
-              path: '/plates/training_candidates',
+              path: '/widgets/training_candidates',
               params: { class_id: '{classId}' },
             },
             rowKind: 'slot',
@@ -536,14 +536,14 @@ describe('parseSlotConfig — cohorts / endpoints / extras', () => {
     expect(r.slot).toBeDefined();
     expect(r.slot!.capabilities.trainingCohorts!.cohorts[0].query).toMatchObject({
       kind: 'endpoint',
-      path: '/plates/training_candidates',
+      path: '/widgets/training_candidates',
     });
   });
 
   it('54. cohort query.path using {cropId} rejected (wrong placeholder set)', () => {
     const s = fullSlot();
     (s.capabilities as any).trainingCohorts.cohorts[0].query.path =
-      '/plates/training_candidates/{cropId}';
+      '/widgets/training_candidates/{cropId}';
     expectRejected(parseSlotConfig(s), /query\.path/);
   });
 

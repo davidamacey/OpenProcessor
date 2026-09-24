@@ -1,6 +1,6 @@
-"""W0 naming-sweep finding m9: the /clusters plate gallery's Detector
-filter used to hardcode `lpr_nanov11_640`/`sam3`/`paddleocr_det_trt`/
-`human` `<option>`s (`SlotGallery.svelte`). It now renders the served
+"""W0 naming-sweep finding m9: the /clusters region gallery's Detector
+filter used to hardcode one deployment's detector-id `<option>`s
+(`SlotGallery.svelte`). It now renders the served
 `GET {API_PREFIX}/regions/vocabulary` response's filterable detectors instead —
 this proves the real browser-rendered `<select>` reflects a vocabulary
 this test controls, not a hardcoded list baked into the build.
@@ -8,11 +8,13 @@ this test controls, not a hardcoded list baked into the build.
 
 from __future__ import annotations
 
+from fixtures.wire import REGION_CLASS
+
 CLASSES = [
     {
         "id": 1,
-        "name": "license_plate",
-        "group": "vehicle",
+        "name": REGION_CLASS,
+        "group": "widgets",
         "hotkey_letter": "l",
         "count": 40,
         "validated_count": 12,
@@ -38,13 +40,13 @@ def test_region_gallery_detector_filter_lists_served_filterable_detectors(stub, 
     stub.on("GET", r"/regions/vocabulary(\?|$)", VOCABULARY)
     stub.on("GET", r"/regions/clusters(\?|$)", {"clusters": [], "count": 0})
     stub.on("GET", r"/regions(\?|$)", {"items": [], "total": 0})
-    # Not the plate gallery's own view, but /clusters/+page.svelte's
+    # Not the region gallery's own view, but /clusters/+page.svelte's
     # class-filter effect fires unconditionally on mount before
-    # `isLicensePlateFilter` settles — stub it too so this test stays
+    # `isSlotFilter` settles — stub it too so this test stays
     # fail-closed-clean rather than accumulating unrelated `unhandled` hits.
     stub.on("GET", r"/clusters(\?|$)", {"clusters": [], "count": 0})
 
-    page.goto(f"{app_url}/clusters?class=license_plate")
+    page.goto(f"{app_url}/clusters?class={REGION_CLASS}")
 
     # The Detector select specifically — /clusters also renders an
     # unrelated cluster-sort <select>, so `.first` would be ambiguous.
@@ -65,5 +67,5 @@ def test_region_gallery_detector_filter_lists_served_filterable_detectors(stub, 
     # Neither the non-filterable served detector nor any of the old
     # hardcoded ids/labels this deployment used to bake in ever appear.
     full_text = select.evaluate("el => el.textContent")
-    for stale in ("ACME Classifier", "LPR", "SAM3", "Paddle det", "lpr_nanov11_640", "sam3"):
+    for stale in ("ACME Classifier", "Tag detector", "Tag segmenter", "tag_detector_v1"):
         assert stale not in full_text, f"stale/unfilterable option leaked: {stale!r}"

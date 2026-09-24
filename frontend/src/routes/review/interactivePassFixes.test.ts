@@ -2,7 +2,7 @@
  * Regression tests for the FRONTEND findings fixed by the 2026-09-24
  * interactive-pass follow-up (docs/design/interactive-pass-2026-09-24.md
  * §6 FRONTEND): M1 (Dismissed panel 400), M2/M12 (Details collapses the
- * crop image / plate unreadable at 1280×720), and B2's frontend half
+ * crop image / region unreadable at 1280×720), and B2's frontend half
  * (confirm-with-unchanged-box must not rewrite detector provenance).
  *
  * Same static source-scan convention as logicMovesW2.test.ts /
@@ -46,7 +46,7 @@ describe('M1: Dismissed panel sends a sort the backend accepts and reports failu
   });
 });
 
-describe('M2/M12: the crop/plate image never collapses to 0px when Details opens', () => {
+describe('M2/M12: the crop/region image never collapses to 0px when Details opens', () => {
   it('the image wrapper is shrink-0 with a floor min-height, not flex-1', () => {
     // DQ-M5 (2026-09-24 data-quality pass) added a `max-h-[46%]` ceiling
     // alongside the floor — the wrapper is still shrink-0 with min-height,
@@ -61,7 +61,7 @@ describe('M2/M12: the crop/plate image never collapses to 0px when Details opens
   });
 });
 
-describe("B2 (frontend half): confirming an unchanged plate box doesn't rewrite provenance", () => {
+describe("B2 (frontend half): confirming an unchanged region box doesn't rewrite provenance", () => {
   const confirmFn = src.match(/async function confirmSlot\([\s\S]*?\n {2}\}/)?.[0];
 
   it('confirmSlot is defined', () => {

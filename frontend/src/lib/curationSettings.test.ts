@@ -85,7 +85,7 @@ describe('settableAxes / advisoryAxes', () => {
   const methods = {
     cluster_methods: [entry('ivf', true)],
     review_sorts: [entry('recent', true)],
-    detection_profiles: [entry('license_plate', false)],
+    detection_profiles: [entry('widget_tag', false)],
     prompt_packs: [entry('generic_item_v1', true)],
   } as unknown as MethodsResponse;
 
@@ -110,7 +110,7 @@ describe('settableAxes / advisoryAxes', () => {
   it('flips with the server, with no table edit', () => {
     const flipped = {
       ...methods,
-      detection_profiles: [entry('license_plate', true)],
+      detection_profiles: [entry('widget_tag', true)],
     } as MethodsResponse;
     expect(settableAxes(flipped).map((a) => a.axis)).toContain('detection_profile');
   });

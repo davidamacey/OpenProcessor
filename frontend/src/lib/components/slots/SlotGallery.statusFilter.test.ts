@@ -1,5 +1,5 @@
 /**
- * dq-region (2026-09-24): SlotGallery's plate-gallery gained a Status
+ * dq-region (2026-09-24): SlotGallery's region-gallery gained a Status
  * filter backed by `GET {API_PREFIX}/regions?status=` — options are the
  * served region-status vocabulary (`GET {API_PREFIX}/regions/statuses`,
  * `regionStatusesStore`), not a hardcoded list, mirroring the Detector

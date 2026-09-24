@@ -37,6 +37,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+from fixtures.wire import REGION_TAB_LABEL
+
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -186,22 +188,27 @@ class Stub:
         # OpenAPI description (contracts/openprocessor/openapi/curation.json,
         # `/curation/regions/vocabulary`) — `{detectors, region_sources,
         # chain_actors}`, each a list of `{id, label, role, filterable?}`.
-        # Defaults reproduce this deployment's two live detector ids
-        # (`lpr_nanov11_640`, `sam3`) so the plate gallery's detector
-        # filter and provenance chips render sensibly without every test
-        # having to stub the endpoint itself.
+        # Defaults are the neutral fixture domain's detector ids (a tag
+        # detector and segmenter, audit §4.4) so the region gallery's
+        # detector filter and provenance chips render sensibly without
+        # every test having to stub the endpoint itself.
         self.on(
             "GET",
             r"/regions/vocabulary(\?|$)",
             {
                 "detectors": [
                     {
-                        "id": "lpr_nanov11_640",
-                        "label": "LPR",
+                        "id": "tag_detector_v1",
+                        "label": "Tag detector",
                         "role": "detector",
                         "filterable": True,
                     },
-                    {"id": "sam3", "label": "SAM3", "role": "segmenter", "filterable": True},
+                    {
+                        "id": "tag_segmenter",
+                        "label": "Tag segmenter",
+                        "role": "segmenter",
+                        "filterable": True,
+                    },
                     {"id": "human", "label": "Human", "role": "human", "filterable": True},
                 ],
                 "region_sources": [
@@ -209,7 +216,7 @@ class Stub:
                     {"id": "segmenter", "label": "Segmenter", "role": "segmenter"},
                 ],
                 "chain_actors": [
-                    {"id": "gemma-4-e4b", "label": "Gemma", "role": "verifier"},
+                    {"id": "tag_verifier", "label": "Tag verifier", "role": "verifier"},
                 ],
                 # openprocessor fix #29 / 840beb8 adoption: labeled
                 # `region_rejection_reason` vocabulary. Empty by default —
@@ -225,10 +232,14 @@ class Stub:
         )
         # W0 naming-sweep finding m9: every review tab's served
         # id/label/description (contracts/openprocessor/openapi/curation.json,
-        # `/curation/review/tabs`). Empty by default — the frontend's own
-        # static REVIEW_TABS labels are the documented fallback when a
-        # served id isn't present, so most tests don't need this stubbed.
-        self.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
+        # `/curation/review/tabs`). The region tab's label is served (the
+        # region profile's display name), so tests find that tab by
+        # REGION_TAB_LABEL; every other tab falls back to its static label.
+        self.on(
+            "GET",
+            r"/review/tabs(\?|$)",
+            {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]},
+        )
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
 
         page.route(f"**{api_prefix}/**", self._dispatch)

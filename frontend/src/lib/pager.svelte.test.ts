@@ -103,7 +103,7 @@ describe('createPager', () => {
   });
 
   it('a loadMore() in flight when loadFirst() reloads does not clobber the fresh page (refine-then-reload race)', async () => {
-    // Mirrors /clusters' plate bucket view: the user has scrolled a bucket
+    // Mirrors /clusters' region bucket view: the user has scrolled a bucket
     // (loadMore() in flight fetching an old, pre-refine page) and then
     // triggers "Refine AHC", whose handler calls loadFirst() to reload page 1
     // with the freshly-refined data. If the stale loadMore() resolves AFTER

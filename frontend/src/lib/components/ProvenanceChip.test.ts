@@ -45,11 +45,16 @@ afterEach(() => {
 describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', () => {
   it('renders the served label and a role-appropriate palette for a detector', () => {
     regionVocabularyStore.detectors = [
-      { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
+      {
+        id: 'tag_detector_v1',
+        label: 'Tag detector',
+        role: 'detector',
+        filterable: true,
+      },
     ];
-    const el = renderChip({ detector: 'lpr_nanov11_640' });
+    const el = renderChip({ detector: 'tag_detector_v1' });
 
-    expect(el.textContent).toContain('LPR');
+    expect(el.textContent).toContain('Tag detector');
     const span = el.querySelector('span.chip') as HTMLElement;
     expect(span.className).toContain('border-blue-500/50');
   });
@@ -83,11 +88,16 @@ describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', 
 
   it('parses `raw="<id>:<tag>"`, and mutes a miss/reject tag', () => {
     regionVocabularyStore.detectors = [
-      { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
+      {
+        id: 'tag_detector_v1',
+        label: 'Tag detector',
+        role: 'detector',
+        filterable: true,
+      },
     ];
-    const el = renderChip({ raw: 'lpr_nanov11_640:miss' });
+    const el = renderChip({ raw: 'tag_detector_v1:miss' });
 
-    expect(el.textContent).toContain('LPR');
+    expect(el.textContent).toContain('Tag detector');
     expect(el.textContent).toContain('miss');
     const span = el.querySelector('span.chip') as HTMLElement;
     expect(span.className).toContain('opacity-60');

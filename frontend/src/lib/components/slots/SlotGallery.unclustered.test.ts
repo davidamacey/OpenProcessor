@@ -120,6 +120,6 @@ describe('SlotGallery — regions reachable when only the FP bucket is clustered
     const text = el.textContent ?? '';
     expect(text).toContain('Cluster sprockets');
     expect(text).toContain('Browse all sprockets');
-    expect(text).not.toMatch(/plate/i);
+    expect(text).not.toMatch(/region/i);
   });
 });
