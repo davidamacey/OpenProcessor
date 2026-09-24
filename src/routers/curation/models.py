@@ -205,8 +205,10 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
 # unload endpoint, not even with force=true. "Never touch the configured
 # detection pipeline's models" is the standing constraint; which models
 # that means is driven by the active DetectionProfile, not a hardcoded
-# domain name.
-_REGION_PROTECTED_PREFIXES = ('lpr_', 'paddleocr_')
+# domain name. S8: the 'lpr_' prefix is dropped -- the code never names
+# the deployed region-detector id; a name is protected only via the
+# active profile's detector_model (or the fixed paddleocr_ OCR prefix).
+_REGION_PROTECTED_PREFIXES = ('paddleocr_',)
 
 
 def _region_protected_models() -> frozenset[str]:
