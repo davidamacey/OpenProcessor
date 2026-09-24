@@ -194,27 +194,19 @@ def _images_body() -> dict[str, Any]:
 # One entry per class write (src/services/curation/history.py). Human label
 # writes record the full pre-write class state (class_detector* through
 # cluster_subid, restorable=true) so the labeler's Undo restores it exactly.
+#
+# F-22: mapped as an unindexed object, not `nested`. Nothing ever issues a
+# `nested` query or agg against this field (only mapping + plain `_source`
+# reads/writes) -- rg -n "'nested'" src scripts turns up none -- yet every
+# entry cost a hidden Lucene doc (the reference index carried 560k Lucene
+# docs for 348k items), every write rewrote the whole nested block, and every
+# top-level query without a positive clause picked up a `FieldExistsQuery
+# [_primary_term]` parent filter (measured 21-105ms of query time). `enabled:
+# False` keeps the data in `_source` (label_undo.py reads `_source`, not the
+# mapping) without indexing any of it.
 _CLASS_HISTORY_MAPPING: dict[str, Any] = {
-    'type': 'nested',
-    'properties': {
-        'class_id': {'type': 'integer'},
-        'class_name': {'type': 'keyword'},
-        'class_source': {'type': 'keyword'},
-        'label_source': {'type': 'keyword'},
-        'confidence': {'type': 'float'},
-        'class_detector': {'type': 'keyword'},
-        'class_detector_version': {'type': 'keyword'},
-        'class_labeler': {'type': 'keyword'},
-        'class_labeled_at': {'type': 'date'},
-        'class_validated': {'type': 'boolean'},
-        'cluster_id': {'type': 'integer'},
-        'cluster_subid': {'type': 'keyword'},
-        'restorable': {'type': 'boolean'},
-        'writer': {'type': 'keyword'},
-        'at': {'type': 'date'},
-        'review_dismissed_at': {'type': 'date'},
-        'review_dismissed_by': {'type': 'keyword'},
-    },
+    'type': 'object',
+    'enabled': False,
 }
 
 # Exclusion plus the other per-item human review decisions.
@@ -993,15 +985,35 @@ async def ensure_items_validation_split_fields(
 async def ensure_items_history_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the ``class_id_history`` nested field onto the existing items
+    """PUT the ``class_id_history`` object field onto the existing items
     mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent. Writers land in
     ``src/services/curation/history.py``; this helper exists so a
     re-ingested or migrated index has the field ready when the writers go
     live.
+
+    F-22: a field's type can't change in place — an index built before this
+    field went from ``nested`` to ``object enabled:false`` still has it
+    mapped ``nested``, and OpenSearch would 400 on a conflicting
+    ``put_mapping`` every cold start. No-op whenever the field is already
+    present, regardless of its type; the type change itself only takes
+    effect on a reindex (see the F-5 migration note).
     """
     index = config.items_index
+    try:
+        existing = await client.indices.get_mapping(index=index)
+    except Exception as exc:
+        logger.info('curation_mapping_precheck_failed', index=index, error=str(exc))
+        existing = {}
+    for mapping in (existing or {}).values():
+        if 'class_id_history' in (mapping.get('mappings', {}).get('properties') or {}):
+            return {
+                'acknowledged': True,
+                'index': index,
+                'fields_added': [],
+                'skipped': 'field_already_present',
+            }
     body = {
         'properties': {
             'class_id_history': _CLASS_HISTORY_MAPPING,
