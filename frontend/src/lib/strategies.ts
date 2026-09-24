@@ -478,24 +478,7 @@ export function selectableAxisEntries<T extends MethodInfoBase>(entries: T[]): T
   return entries.filter((e) => e.status === 'stable' || e.status === 'experimental');
 }
 
-/**
- * Whether `{API_PREFIX}/methods` advertises at least one usable
- * detection profile. Mirrors `isDiverseOverlayAvailable` /
- * `isEmbeddingVizAvailable` / `isSemanticSearchAvailable` /
- * `isDatasetExportAvailable`: same stable/experimental-only bar, same
- * "absent / shadow / disabled never renders" contract.
- *
- * Differs from those four in one respect only: they ask about a single
- * known id, this asks "does this axis have anything to offer at all,"
- * because the operator picks from a server-supplied list rather than
- * toggling one known feature.
- */
-export function isDetectionProfileAvailable(profiles: DetectionProfileInfo[]): boolean {
-  return selectableAxisEntries(profiles).length > 0;
-}
-
-/** Prompt-pack analog of `isDetectionProfileAvailable`. Same bar, same
- *  absence contract. */
+/** Whether any prompt pack is selectable (`stable` or `experimental`). */
 export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
   return selectableAxisEntries(packs).length > 0;
 }
@@ -505,25 +488,20 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  * at all — the single gate `AutoLabelPanel` uses to decide whether the
  * scope bar exists (absent, not disabled).
  *
- * Composed from the two assist axes on purpose. The agreed contract
- * (this plan §1.3) adds `class_id` to
- * `POST {API_PREFIX}/pipeline/auto_label/start` **in the same backend
- * change** that adds these axes, and supplies no separate capability
- * signal for the param itself. An unknown query param is silently
- * ignored by FastAPI, so an un-gated class picker on today's backend
- * would start a full-pool, hours-long run while the UI claimed it was
- * scoped — strictly worse than the 404 the `export` axis gate exists to
- * prevent, because nothing surfaces the mistake. Hiding the whole
- * control until the server affirmatively advertises the feature is the
- * only safe default. See §2.6 of the plan, and Q2 in §1.4/§10.
+ * Gated on the `prompt_pack` axis: it arrived in the same backend
+ * change that made `class_id` on `POST {API_PREFIX}/pipeline/auto_label/start`
+ * real, and `class_id` has no capability signal of its own. An unknown
+ * query param used to be silently ignored, so an un-gated class picker
+ * against an older backend would start a full-pool, hours-long run while
+ * the UI claimed it was scoped. Hiding the control until the server
+ * advertises the axis is the safe default. (`detection_profile` is not a
+ * gate: OpenProcessor rejects it per run — region detection is startup
+ * config — so it is display-only, on /settings.)
  */
 export function isScopedAssistAvailable(
-  methods: Pick<OpMethodsResponse, 'detection_profiles' | 'prompt_packs'>,
+  methods: Pick<OpMethodsResponse, 'prompt_packs'>,
 ): boolean {
-  return (
-    isDetectionProfileAvailable(methods.detection_profiles) ||
-    isPromptPackAvailable(methods.prompt_packs)
-  );
+  return isPromptPackAvailable(methods.prompt_packs);
 }
 
 /**

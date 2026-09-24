@@ -3,7 +3,6 @@ import {
   FALLBACK_METHODS,
   hasFieldCoverage,
   isDatasetExportAvailable,
-  isDetectionProfileAvailable,
   isDiverseOverlayAvailable,
   isEmbeddingVizAvailable,
   isEmbeddingVizBannerRequired,
@@ -921,49 +920,6 @@ describe('selectableAxisEntries', () => {
   });
 });
 
-describe('isDetectionProfileAvailable', () => {
-  it('is false for an empty list', () => {
-    expect(isDetectionProfileAvailable([])).toBe(false);
-  });
-
-  it('is true with one stable entry', () => {
-    expect(isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'stable' }])).toBe(
-      true,
-    );
-  });
-
-  it('is true with one experimental entry', () => {
-    expect(
-      isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'experimental' }]),
-    ).toBe(true);
-  });
-
-  it('is false with only shadow entries', () => {
-    expect(isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'shadow' }])).toBe(
-      false,
-    );
-  });
-
-  it('is false with only disabled entries', () => {
-    expect(
-      isDetectionProfileAvailable([{ id: 'a', label: 'A', status: 'disabled' }]),
-    ).toBe(false);
-  });
-
-  it('is true for a mixed list with at least one usable entry', () => {
-    expect(
-      isDetectionProfileAvailable([
-        { id: 'a', label: 'A', status: 'shadow' },
-        { id: 'b', label: 'B', status: 'stable' },
-      ]),
-    ).toBe(true);
-  });
-
-  it('is false for FALLBACK_METHODS.detection_profiles', () => {
-    expect(isDetectionProfileAvailable(FALLBACK_METHODS.detection_profiles)).toBe(false);
-  });
-});
-
 describe('isPromptPackAvailable', () => {
   it('is false for an empty list', () => {
     expect(isPromptPackAvailable([])).toBe(false);
@@ -1027,26 +983,18 @@ describe('isScopedAssistAvailable', () => {
     expect(isScopedAssistAvailable(parsed)).toBe(true);
   });
 
-  it('is false when detection profiles are all shadow and packs are empty', () => {
-    const profiles: DetectionProfileInfo[] = [
-      { id: 'legacy', label: 'Legacy', status: 'shadow' },
-    ];
-    const packs: PromptPackInfo[] = [];
-    expect(
-      isScopedAssistAvailable({ detection_profiles: profiles, prompt_packs: packs }),
-    ).toBe(false);
+  // Detection profiles never gate the bar: a deployment advertising
+  // profiles but no usable prompt pack gets no scope bar.
+  it('is false when no prompt pack is usable', () => {
+    const packs: PromptPackInfo[] = [{ id: 'legacy', label: 'Legacy', status: 'shadow' }];
+    expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(false);
+    expect(isScopedAssistAvailable({ prompt_packs: [] })).toBe(false);
   });
 
-  // "Absence is the signal, not a status" (§2.6 / the `export` axis
-  // comment above): either axis being usable is sufficient — the two
-  // controls are independent, not a package deal.
-  it('is true when only prompt_packs is usable (either axis is sufficient)', () => {
-    const profiles: DetectionProfileInfo[] = [];
+  it('is true when a prompt pack is usable', () => {
     const packs: PromptPackInfo[] = [
       { id: 'warehouse_v1', label: 'Warehouse', status: 'stable' },
     ];
-    expect(
-      isScopedAssistAvailable({ detection_profiles: profiles, prompt_packs: packs }),
-    ).toBe(true);
+    expect(isScopedAssistAvailable({ prompt_packs: packs })).toBe(true);
   });
 });

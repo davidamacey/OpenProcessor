@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- The dashboard's per-run detection-profile picker, along with
+  `detection_profile` on `startAutoLabel` and the
+  `isDetectionProfileAvailable` gate. OpenProcessor confirmed that no
+  auto-label stage runs region detection: it's the detection worker's
+  startup config, so the picker was a silent no-op, and main now rejects
+  the param with a 422. The scope bar is gated on the `prompt_pack` axis
+  alone and shows a chosen pack in its collapsed summary.
+
 ### Changed
 
 - Adopted OpenProcessor's per-run auto-label contract (`profile-arbiter`):

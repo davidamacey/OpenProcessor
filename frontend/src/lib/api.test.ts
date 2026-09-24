@@ -1162,17 +1162,13 @@ describe('startAutoLabel', () => {
     expect(url).not.toContain('null');
   });
 
-  it('forwards detection_profile and prompt_pack when selected', async () => {
+  it('forwards prompt_pack when selected', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await startAutoLabel({
-      detection_profile: 'grounding_v2',
-      prompt_pack: 'warehouse_v1',
-    });
+    await startAutoLabel({ prompt_pack: 'warehouse_v1' });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
-    expect(url).toContain('detection_profile=grounding_v2');
     expect(url).toContain('prompt_pack=warehouse_v1');
   });
 

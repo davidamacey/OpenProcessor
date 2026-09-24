@@ -2376,18 +2376,12 @@ export interface AutoLabelStartParams {
    */
   class_id?: number | null;
   /**
-   * Per-run override of the settings-doc default, for this job only —
-   * omitted/null means the deployment default. Wire name agreed with the
-   * OpenProcessor owner 2026-09-23 (landing on `cutover/profile-arbiter`):
-   * an unknown id is a 422, and the resolved value is echoed in the job
-   * state's `args`. Before that, `main` silently dropped this param — the
-   * 2026-09-21 "live" pass only proved the request was composed, not
-   * honored. Produced in exactly one place
+   * Per-run override of the settings-doc prompt-pack default, for this
+   * job only — omitted/null means the deployment default. An unknown id
+   * is a 422 (`unknownStrategyDetail`); the resolved value is echoed in
+   * the job state's `args`. Produced in exactly one place
    * (`createAssistScope().toStartParams()` in `$lib/assistScope.svelte`).
-   * Never sent unless the matching axis is advertised.
    */
-  detection_profile?: string | null;
-  /** Same contract as `detection_profile`, for the VLM prompt pack. */
   prompt_pack?: string | null;
 }
 

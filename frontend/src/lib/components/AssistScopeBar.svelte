@@ -13,26 +13,24 @@
    * there is something to reset; pointer-first with zero global
    * keybindings (AssistScopeBar.test.ts asserts no global listener call).
    *
-   * Three independent controls, each additive and each individually
+   * Two independent controls, each additive and each individually
    * optional:
    *   1. class scope   — always offered once the bar renders; the
    *                      `class_id` param, fuzzy-searched via
    *                      `searchClasses` ($lib/classPicker), the same
-   *                      ranking /review's picker uses.
-   *   2. detection profile — only when the `detection_profile` axis is
-   *                      advertised.
-   *   3. prompt pack   — only when the `prompt_pack` axis is advertised.
-   * Leaving all three alone produces `{}` from `toStartParams()`, i.e.
+   *                      ranking /review's picker uses. Limits only the
+   *                      VLM sweep; clustering still covers the pool.
+   *   2. prompt pack   — only when the `prompt_pack` axis is advertised.
+   * No detection-profile control: region detection runs in the backend's
+   * detection worker from startup config, so a per-run profile would
+   * change nothing (OpenProcessor rejects the param with a 422).
+   * Leaving both alone produces `{}` from `toStartParams()`, i.e.
    * exactly today's unscoped run.
    */
 
   import ChevronDownIcon from './ChevronDownIcon.svelte';
   import { searchClasses } from '$lib/classPicker';
-  import {
-    isDetectionProfileAvailable,
-    isPromptPackAvailable,
-    selectableAxisEntries,
-  } from '$lib/strategies';
+  import { isPromptPackAvailable, selectableAxisEntries } from '$lib/strategies';
   import type { AssistScope } from '$lib/assistScope.svelte';
   import type { OpClass } from '$lib/types';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -56,14 +54,8 @@
     void strategiesStore.init();
   });
 
-  const detectionProfiles = $derived(
-    selectableAxisEntries(strategiesStore.methods.detection_profiles),
-  );
   const promptPacks = $derived(
     selectableAxisEntries(strategiesStore.methods.prompt_packs),
-  );
-  const detectionProfileAvailable = $derived(
-    isDetectionProfileAvailable(strategiesStore.methods.detection_profiles),
   );
   const promptPackAvailable = $derived(
     isPromptPackAvailable(strategiesStore.methods.prompt_packs),
@@ -78,11 +70,6 @@
   // looping on state it also reads. Defense in depth: nothing can select
   // a value before the axis is available, so this should never fire.
   $effect(() => {
-    if (!detectionProfileAvailable && scope.detectionProfile != null) {
-      scope.detectionProfile = null;
-    }
-  });
-  $effect(() => {
     if (!promptPackAvailable && scope.promptPack != null) {
       scope.promptPack = null;
     }
@@ -91,7 +78,11 @@
   const selectedClass = $derived(
     scope.classId == null ? null : (classes.find((c) => c.id === scope.classId) ?? null),
   );
-  const summary = $derived(selectedClass ? selectedClass.name : 'whole dataset');
+  const summary = $derived(
+    [selectedClass ? selectedClass.name : 'whole dataset', scope.promptPack]
+      .filter(Boolean)
+      .join(' · '),
+  );
 
   let expanded = $state(false);
   let query = $state('');
@@ -113,7 +104,7 @@
         ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
-      title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick a detection profile / prompt pack"
+      title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick its prompt pack"
       {disabled}
     >
       <span class="text-zinc-500">assist:</span>
@@ -164,29 +155,7 @@
     </div>
 
     <!-- Optional axis: absent entirely (not disabled) when /methods
-         doesn't advertise a detection profile. -->
-    {#if detectionProfileAvailable}
-      <label class="flex items-center gap-1.5">
-        <span class="text-zinc-500">detector</span>
-        <select
-          value={scope.detectionProfile ?? ''}
-          onchange={(e) => {
-            const v = (e.currentTarget as HTMLSelectElement).value;
-            scope.detectionProfile = v === '' ? null : v;
-          }}
-          class="select-sm"
-          {disabled}
-        >
-          <option value="">Server default</option>
-          {#each detectionProfiles as p (p.id)}
-            <option value={p.id}>
-              {p.label}{p.status === 'experimental' ? ' · beta' : ''}
-            </option>
-          {/each}
-        </select>
-      </label>
-    {/if}
-
+         doesn't advertise a prompt pack. -->
     {#if promptPackAvailable}
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-500">prompts</span>

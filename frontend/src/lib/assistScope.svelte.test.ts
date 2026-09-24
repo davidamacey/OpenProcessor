@@ -5,7 +5,6 @@ describe('createAssistScope', () => {
   it('starts fully unscoped, serializing to an empty object (the byte-identity guarantee)', () => {
     const scope = createAssistScope();
     expect(scope.classId).toBeNull();
-    expect(scope.detectionProfile).toBeNull();
     expect(scope.promptPack).toBeNull();
     expect(scope.isDefault).toBe(true);
     // `{}` here is what makes an unscoped `startAutoLabel({...})` call
@@ -27,30 +26,21 @@ describe('createAssistScope', () => {
     expect(scope.isDefault).toBe(false);
   });
 
-  it('serializes detectionProfile alone under detection_profile', () => {
-    const scope = createAssistScope();
-    scope.detectionProfile = 'grounding_v2';
-    expect(scope.toStartParams()).toEqual({ detection_profile: 'grounding_v2' });
-  });
-
   it('serializes promptPack alone under prompt_pack', () => {
     const scope = createAssistScope();
     scope.promptPack = 'warehouse_v1';
     expect(scope.toStartParams()).toEqual({ prompt_pack: 'warehouse_v1' });
   });
 
-  it('all three set independently — setting one never disturbs the others', () => {
+  it('both set independently — setting one never disturbs the other', () => {
     const scope = createAssistScope();
     scope.classId = 3;
-    scope.detectionProfile = 'grounding_v2';
     scope.promptPack = 'warehouse_v1';
     expect(scope.toStartParams()).toEqual({
       class_id: 3,
-      detection_profile: 'grounding_v2',
       prompt_pack: 'warehouse_v1',
     });
     expect(scope.classId).toBe(3);
-    expect(scope.detectionProfile).toBe('grounding_v2');
     expect(scope.promptPack).toBe('warehouse_v1');
   });
 
@@ -66,27 +56,23 @@ describe('createAssistScope', () => {
   it('reset() returns every field to null and toStartParams() to {}', () => {
     const scope = createAssistScope();
     scope.classId = 3;
-    scope.detectionProfile = 'grounding_v2';
     scope.promptPack = 'warehouse_v1';
     scope.reset();
     expect(scope.classId).toBeNull();
-    expect(scope.detectionProfile).toBeNull();
     expect(scope.promptPack).toBeNull();
     expect(scope.isDefault).toBe(true);
     expect(scope.toStartParams()).toEqual({});
   });
 
-  // Pinned-key test: the wire param names are provisional (Q1, plan
-  // §1.4) — this is the one assertion that fails obviously, rather than
-  // silently, if the peer session confirms a different name.
-  it('pins the exact emitted key names (Q1 — provisional, confirm with the peer session before the live pass)', () => {
+  // Pinned wire names, confirmed against OpenProcessor main (80dd097).
+  // detection_profile must never be emitted: main rejects it with a 422
+  // because region detection is startup config, not a per-run choice.
+  it('pins the exact emitted key names, and never emits detection_profile', () => {
     const scope = createAssistScope();
     scope.classId = 1;
-    scope.detectionProfile = 'a';
     scope.promptPack = 'b';
     expect(Object.keys(scope.toStartParams()).sort()).toEqual([
       'class_id',
-      'detection_profile',
       'prompt_pack',
     ]);
   });

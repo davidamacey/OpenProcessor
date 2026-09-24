@@ -1,6 +1,6 @@
 /**
  * State/logic for the dashboard's `<AssistScopeBar>` control — which
- * class (and, optionally, which detection profile / prompt pack) an
+ * class (and, optionally, which prompt pack) an
  * assisted auto-label run is scoped to
  * (docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §3).
  *
@@ -19,9 +19,6 @@
  * network.
  *
  * `toStartParams()` is the ONE place a selection becomes wire params.
- * Two of the three names it emits are still provisional (Q1, plan
- * §1.4) — keeping the mapping in a single function is what makes a
- * rename a one-line change instead of a hunt.
  */
 
 // Type-only import: erased at compile time, so this module keeps its
@@ -33,9 +30,6 @@ export interface AssistScope {
   /** Class to scope the run to, or `null` = whole dataset (today's
    *  behavior, and the default). */
   classId: number | null;
-  /** Selected `axis: 'detection_profile'` entry id, or `null` = let the
-   *  server use its own default. */
-  detectionProfile: string | null;
   /** Selected `axis: 'prompt_pack'` entry id, or `null` = server default. */
   promptPack: string | null;
   /** True when nothing is scoped — the run is exactly today's run. */
@@ -55,7 +49,6 @@ export interface AssistScope {
 
 export function createAssistScope(): AssistScope {
   let classId = $state<number | null>(null);
-  let detectionProfile = $state<string | null>(null);
   let promptPack = $state<string | null>(null);
 
   return {
@@ -65,12 +58,6 @@ export function createAssistScope(): AssistScope {
     set classId(next: number | null) {
       classId = next;
     },
-    get detectionProfile() {
-      return detectionProfile;
-    },
-    set detectionProfile(next: string | null) {
-      detectionProfile = next;
-    },
     get promptPack() {
       return promptPack;
     },
@@ -78,20 +65,18 @@ export function createAssistScope(): AssistScope {
       promptPack = next;
     },
     get isDefault() {
-      return classId == null && detectionProfile == null && promptPack == null;
+      return classId == null && promptPack == null;
     },
 
     toStartParams(): Partial<AutoLabelStartParams> {
       const params: Partial<AutoLabelStartParams> = {};
       if (classId != null) params.class_id = classId;
-      if (detectionProfile != null) params.detection_profile = detectionProfile;
       if (promptPack != null) params.prompt_pack = promptPack;
       return params;
     },
 
     reset(): void {
       classId = null;
-      detectionProfile = null;
       promptPack = null;
     },
   };

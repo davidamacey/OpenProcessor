@@ -28,11 +28,10 @@ describe('AssistScopeBar.svelte', () => {
     expect(src).not.toMatch(/addEventListener/);
   });
 
-  it('imports selectableAxisEntries, isDetectionProfileAvailable, isPromptPackAvailable from $lib/strategies', () => {
+  it('imports selectableAxisEntries and isPromptPackAvailable from $lib/strategies', () => {
     expect(src).toMatch(
       /import\s*\{[^}]*selectableAxisEntries[^}]*\}\s*from\s*['"]\$lib\/strategies['"]/s,
     );
-    expect(src).toMatch(/isDetectionProfileAvailable/);
     expect(src).toMatch(/isPromptPackAvailable/);
   });
 
@@ -50,16 +49,17 @@ describe('AssistScopeBar.svelte', () => {
     expect(src).not.toMatch(/status === 'stable'/);
   });
 
-  it('gates the detector <select> behind detectionProfileAvailable', () => {
-    expect(src).toMatch(/\{#if detectionProfileAvailable\}/);
+  // Region detection is backend startup config; a per-run picker would be
+  // a silent no-op (OpenProcessor 422s the param).
+  it('offers no detection-profile control', () => {
+    expect(src).not.toMatch(/detection_profile|detectionProfile/);
   });
 
   it('gates the prompts <select> behind promptPackAvailable', () => {
     expect(src).toMatch(/\{#if promptPackAvailable\}/);
   });
 
-  it('reads strategiesStore.methods.detection_profiles and .prompt_packs, and calls strategiesStore.init()', () => {
-    expect(src).toMatch(/strategiesStore\.methods\.detection_profiles/);
+  it('reads strategiesStore.methods.prompt_packs and calls strategiesStore.init()', () => {
     expect(src).toMatch(/strategiesStore\.methods\.prompt_packs/);
     expect(src).toMatch(/strategiesStore\.init\(\)/);
   });
