@@ -30,9 +30,9 @@ class-vocabulary strings like this, so there is no leak-scan or
 RegionFields requirement forcing a rename. Flagged as a follow-up
 genericization opportunity, not done in this port.
 
-Vehicle-only. LPR (single-class plate exports) is handled entirely by the
-router's own additive ``dataset_kind == 'lpr_single_class'`` branch -- this
-module never reads an LPR export.
+Vehicle-only. Single-class exports are handled entirely by the router's
+own additive ``dataset_kind == 'single_class'`` branch -- this module
+never reads a single-class export.
 """
 
 from __future__ import annotations
