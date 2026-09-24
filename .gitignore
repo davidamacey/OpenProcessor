@@ -352,3 +352,6 @@ secrets.yml
 # Go benchmark binaries
 benchmarks/ingest_benchmark
 benchmarks/ingest_benchmark_batch
+
+# Local, uncommitted working artifacts (exported engines, prototype scratch, gated weights)
+artifacts_local/
