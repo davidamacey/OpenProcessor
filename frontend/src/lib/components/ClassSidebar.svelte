@@ -226,11 +226,12 @@
                 </span>
                 <span
                   class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
-                    cls.validated_count ?? 0,
+                    cls.adequacy,
                   )}"
                   title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ??
                     0} of {cls.count ??
-                    0} labeled crops are human-validated.&#10;Chip color reflects validated-count adequacy."
+                    0} labeled crops are human-validated.&#10;Chip color reflects the server's adequacy tier ({cls.adequacy ??
+                    'unknown'})."
                 >
                   {(cls.cluster_size ?? 0).toLocaleString()}
                 </span>

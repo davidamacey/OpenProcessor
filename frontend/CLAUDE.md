@@ -233,19 +233,30 @@ scheme — it was removed; one binding scheme means no "what does this key do
 here?" friction. On `/clusters/[id]` a class letter labels the current
 selection (or the just-dragged set); on `/review` it labels the current item.
 
-Reserved single-char action keys (`g n d z x u a m /`) cannot be bound to a
-class — `setClassHotkey` (`src/lib/classHotkey.ts`) rejects them, validating
-against `reservedHotkeyLetters()` rather than the bare `RESERVED_HOTKEY_LETTERS`
-constant. `reservedHotkeyLetters(registry)` is that constant **∪ every
+Reserved single-char action keys (`g n d z x u a m /`, plus `b f e` from the
+`license_plate` slot's keymap — server-served today as `/abdefgmnuxz`)
+cannot be bound to a class — `setClassHotkey` (`src/lib/classHotkey.ts`)
+rejects them, validating against `reservedHotkeyLetters()`. As of the
+2026-09-24 OpenProcessor `logic-moves` cutover, the base set is no longer a
+hand-maintained frontend constant: `GET {API_PREFIX}/classes` serves its own
+`reserved_hotkeys` field (`classesStore.reservedHotkeys`), and
+`reservedHotkeyLetters(registry)` is that served set **∪ every
 single-character combo any registered queue-capable slot's
 `QueueCapability.keymap` declares** (P2.8c, closing Finding C.2
-structurally) — today that adds `d`/`f`/`e`/`b` from `license_plate`'s
-keymap (`d` was already reserved). A slot tab already suppresses class-drop
-registration entirely (`isSlotSuppressedTab`/`isSlotTab`), so this is
-defense in depth, not a fix for a live collision — it's what keeps a
-_second_ capable slot's letters safe without a human re-auditing every
-class hotkey. Both window keydown listeners fire on the same keypress, so
-a class bound to `d` would be assigned _and_ the selection discarded.
+structurally). The registry union is redundant against the server's set
+today — verified live, the server's `/abdefgmnuxz` already includes
+`license_plate`'s `d`/`f`/`e`/`b` — but is what keeps a _second_,
+backend-unaware slot's letters safe without a human re-auditing every class
+hotkey, since a tier-2 deployment profile can register a slot the backend
+has never heard of. `setClassHotkey` shows the server's 400/409/422 detail
+text verbatim when a bind is rejected server-side (a race, or a rule the
+client-side check above doesn't know about yet). A slot tab already
+suppresses class-drop registration entirely
+(`isSlotSuppressedTab`/`isSlotTab`), so all of this is defense in depth, not
+a fix for a live collision — it's what keeps a bound letter from firing two
+handlers on the same keypress. `/classes` shows a banner for any class whose
+bound hotkey predates its reservation — live example: `bmw` is bound to `b`,
+which is now reserved; the binding is kept, not auto-cleared.
 
 Global:
 

@@ -37,3 +37,40 @@ describe('structured API errors', () => {
     expect(e.message).toContain("unknown prompt_pack 'nope'");
   });
 });
+
+describe('Pydantic validation-error arrays (W4, 2026-09-24)', () => {
+  // Live on d037be8: `POST {API_PREFIX}/classes` with a name that fails
+  // `^[a-z0-9_]+$` returns `{detail: [{type, loc, msg, input, ctx}]}`, not a
+  // plain string. `/classes` and `AddClassModal` dropped their own regex
+  // and now depend on this text reaching the toast.
+  const nameValidationBody = {
+    detail: [
+      {
+        type: 'string_pattern_mismatch',
+        loc: ['body', 'name'],
+        msg: "String should match pattern '^[a-z0-9_]+$'",
+        input: 'Bad Name!',
+        ctx: { pattern: '^[a-z0-9_]+$' },
+      },
+    ],
+  };
+
+  it('extracts the msg field from a single-entry validation array', () => {
+    const e = new ApiError(422, '/curation/classes', nameValidationBody);
+    expect(e.detail).toBe("String should match pattern '^[a-z0-9_]+$'");
+    expect(e.message).toContain("String should match pattern '^[a-z0-9_]+$'");
+  });
+
+  it('joins multiple validation entries with "; "', () => {
+    const body = {
+      detail: [{ msg: 'first problem' }, { msg: 'second problem' }],
+    };
+    const e = new ApiError(422, '/x', body);
+    expect(e.detail).toBe('first problem; second problem');
+  });
+
+  it('falls back to null (not a crash) when no entry has a msg string', () => {
+    const e = new ApiError(422, '/x', { detail: [{ loc: ['body'] }] });
+    expect(e.detail).toBeNull();
+  });
+});

@@ -7,7 +7,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { keyboardStore } from './keyboard.svelte';
-import { RESERVED_HOTKEY_LETTERS } from '$lib/classHotkey';
+import { reservedHotkeyLetters } from '$lib/classHotkey';
+import { classesStore } from './classes.svelte';
 
 const cleanups: Array<() => void> = [];
 
@@ -152,7 +153,29 @@ describe('keyboardStore', () => {
     // Mirrors the existing g/n/d/z/x/u/a/m guard: a class bound to '/'
     // would fire both the layout's per-class assign listener AND the
     // class-picker's open handler on the same keypress (neither listener's
-    // preventDefault stops the other).
-    expect(RESERVED_HOTKEY_LETTERS.has('/')).toBe(true);
+    // preventDefault stops the other). '/' is reserved server-side now
+    // (`GET {API_PREFIX}/classes`'s `reserved_hotkeys`, live 2026-09-24:
+    // `/abdefgmnuxz`) — mirror that response here rather than asserting
+    // against a client constant that no longer exists.
+    const prev = classesStore.reservedHotkeys;
+    classesStore.reservedHotkeys = [
+      '/',
+      'a',
+      'b',
+      'd',
+      'e',
+      'f',
+      'g',
+      'm',
+      'n',
+      'u',
+      'x',
+      'z',
+    ];
+    try {
+      expect(reservedHotkeyLetters().has('/')).toBe(true);
+    } finally {
+      classesStore.reservedHotkeys = prev;
+    }
   });
 });

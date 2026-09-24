@@ -80,4 +80,55 @@ describe('getStats', () => {
     expect(result.total_crops).toBe(5);
     expect(result.ingestion.images_processed).toBe(5);
   });
+
+  // W4 (docs/design/logic-moves-adoption-plan-2026-09-24.md §1.7): thresholds
+  // are served on `/stats/classes` too, and each class row carries
+  // server-computed adequacy/aug_target/aug_gap — `/export` and the
+  // dashboard read these directly rather than clamping or deriving a tier.
+  it('passes adequacy/aug_target/aug_gap per class and the top-level thresholds through untouched', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes(`${API_PREFIX}/stats/dataset`)) {
+        return Promise.resolve(new Response('boom', { status: 503 }));
+      }
+      return Promise.resolve(
+        ok({
+          classes: [
+            {
+              class_id: 8,
+              class_name: 'bmw',
+              count: 8,
+              validated_count: 8,
+              adequacy: 'block',
+              aug_target: 500,
+              aug_gap: 492,
+            },
+          ],
+          thresholds: {
+            block_below: 20,
+            warn_below: 500,
+            min_test_per_class: 5,
+            aug_target_min: 500,
+            aug_target_max: 3000,
+          },
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getStats();
+
+    expect(result.per_class[0]).toMatchObject({
+      class_id: 8,
+      adequacy: 'block',
+      aug_target: 500,
+      aug_gap: 492,
+    });
+    expect(result.thresholds).toEqual({
+      block_below: 20,
+      warn_below: 500,
+      min_test_per_class: 5,
+      aug_target_min: 500,
+      aug_target_max: 3000,
+    });
+  });
 });

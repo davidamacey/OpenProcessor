@@ -30,7 +30,6 @@
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import { exportYolo, getCrops, getStats, getThumbUrl, runVlmOnCluster } from '$lib/api';
-  import { adequacyLevel } from '$lib/adequacy';
   import type { Crop, StatsSummary } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -111,13 +110,13 @@
       .map((c) => ({
         ...c,
         pct: Math.max(2, Math.round((c.validated_count / max) * 100)),
-        tier: adequacyLevel(c.validated_count),
+        tier: c.adequacy ?? 'block',
       }));
   });
 
   function tierBg(t: string): string {
     if (t === 'ok') return 'bg-green-500';
-    if (t === 'low') return 'bg-orange-500';
+    if (t === 'warn') return 'bg-orange-500';
     return 'bg-red-500';
   }
 </script>

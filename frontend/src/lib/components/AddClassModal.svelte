@@ -21,8 +21,6 @@
   let busy = $state<boolean>(false);
   let errorText = $state<string | null>(null);
 
-  const SLUG_RE = /^[a-z0-9_]+$/;
-
   const groups = $derived.by(() => {
     const set = new Set<string>();
     for (const c of classesStore.classes) {
@@ -55,10 +53,6 @@
       errorText = 'Name is required.';
       return;
     }
-    if (!SLUG_RE.test(slug)) {
-      errorText = 'Name must be lowercase letters, digits, or underscores.';
-      return;
-    }
     const group = (createNewGroup ? groupNew : groupExisting).trim();
     if (!group) {
       errorText = 'Group is required.';
@@ -67,6 +61,9 @@
     errorText = null;
     busy = true;
     try {
+      // No client-side slug check — `POST {API_PREFIX}/classes` 422s on a
+      // bad name (`^[a-z0-9_]+$`) with the pattern in its detail; that
+      // message is what renders below the field.
       await addClass({ name: slug, group, notes: notes.trim() || undefined });
       toastStore.success(`Created class "${slug}".`);
       await classesStore.clearAndRefetch();
@@ -113,15 +110,10 @@
             bind:value={name}
             required
             placeholder="e.g. class_c_class_d"
-            pattern="[a-z0-9_]+"
             class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           />
-          <span
-            class="mt-1 block text-[11px] {name === '' || SLUG_RE.test(name)
-              ? 'text-zinc-500'
-              : 'text-red-300'}"
-          >
-            Lowercase a–z, 0–9, _ only. No spaces.
+          <span class="mt-1 block text-[11px] text-zinc-500">
+            Lowercase a–z, 0–9, _ only. No spaces — the server rejects anything else.
           </span>
         </label>
 

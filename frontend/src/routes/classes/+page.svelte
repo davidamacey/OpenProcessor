@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { mergeClasses, renameClass, syncClassesToOpensearch } from '$lib/api';
+  import {
+    mergeClasses,
+    previewClassMerge,
+    renameClass,
+    syncClassesToOpensearch,
+  } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { focusOnMount } from '$lib/actions/focusOnMount';
-  import { setClassHotkey } from '$lib/classHotkey';
-  import type { RegistryClass } from '$lib/types';
+  import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
+  import type { ClassMergeDryRun, RegistryClass } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -30,12 +35,23 @@
   // Merge form
   let mergeSourceId = $state<number | null>(null);
   let mergeTargetId = $state<number | null>(null);
+  let mergePreview = $state<ClassMergeDryRun | null>(null);
+  let mergePreviewError = $state<string | null>(null);
+  let mergePreviewBusy = $state<boolean>(false);
 
-  const SLUG_RE = /^[a-z0-9_]+$/;
-
-  function isSlug(v: string): boolean {
-    return v.length > 0 && SLUG_RE.test(v);
-  }
+  // ---- reserved-hotkey conflicts ------------------------------------------
+  // A class's bound hotkey can predate a later reservation (live example,
+  // 2026-09-24: `bmw` is bound to `b`, which the backend now reserves for
+  // the license_plate slot's keymap). The backend keeps the existing
+  // binding rather than silently clearing it, so surface it here instead of
+  // hiding the conflict.
+  const reservedConflicts = $derived.by(() => {
+    const reserved = reservedHotkeyLetters();
+    return classesStore.classes.filter(
+      (c) =>
+        !c.deprecated && c.hotkey_letter && reserved.has(c.hotkey_letter.toLowerCase()),
+    );
+  });
 
   // ---- derived data ------------------------------------------------------
 
@@ -81,8 +97,8 @@
 
   async function commitRename(cls: RegistryClass): Promise<void> {
     const next = editName.trim();
-    if (!isSlug(next)) {
-      toastStore.error('Class name must be lowercase a-z, 0-9, _ only.');
+    if (!next) {
+      toastStore.error('Class name is required.');
       return;
     }
     if (next === cls.name) {
@@ -91,6 +107,9 @@
     }
     busy = true;
     try {
+      // No client-side slug check — `PUT {API_PREFIX}/classes/{id}` 422s on a
+      // bad name (`^[a-z0-9_]+$`) with the pattern in its detail; that
+      // message is what the toast shows.
       await renameClass(cls.id, { name: next });
       toastStore.success(`Renamed ${cls.name} → ${next}`);
       cancelEdit();
@@ -132,6 +151,8 @@
   function openMerge(): void {
     mergeSourceId = null;
     mergeTargetId = null;
+    mergePreview = null;
+    mergePreviewError = null;
     mergeOpen = true;
   }
 
@@ -146,6 +167,34 @@
       : null,
   );
 
+  // Dry-run preview: every time the pair changes, ask the server what a
+  // real merge would do (would_relabel / would_unvalidate / holdout_blocking
+  // / blocked) before it's possible to confirm. Never guessed client-side —
+  // the backend already knows about holdout-blocking rows the frontend has
+  // no visibility into.
+  $effect(() => {
+    const sourceId = mergeSourceId;
+    const targetId = mergeTargetId;
+    mergePreview = null;
+    mergePreviewError = null;
+    if (!mergeOpen || sourceId == null || targetId == null || sourceId === targetId)
+      return;
+    const ctrl = new AbortController();
+    mergePreviewBusy = true;
+    void previewClassMerge({ source_id: sourceId, target_id: targetId }, ctrl.signal)
+      .then((res) => {
+        mergePreview = res;
+      })
+      .catch((e: unknown) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        mergePreviewError = (e as Error).message;
+      })
+      .finally(() => {
+        mergePreviewBusy = false;
+      });
+    return () => ctrl.abort();
+  });
+
   async function submitMerge(): Promise<void> {
     if (mergeSourceId == null || mergeTargetId == null) {
       toastStore.error('Pick both source and target classes.');
@@ -155,10 +204,14 @@
       toastStore.error('Source and target must differ.');
       return;
     }
+    if (mergePreview?.blocked) {
+      toastStore.error('Merge is blocked — resolve the holdout conflict first.');
+      return;
+    }
     const ok = window.confirm(
       `Merge "${mergeSource?.name}" into "${mergeTarget?.name}"? This relabels ` +
-        `${mergeSource?.validated_count ?? 0} validated crops and marks the source deprecated. ` +
-        'The action is recorded in the registry but cannot be undone from the UI.',
+        `${mergePreview?.would_relabel ?? mergeSource?.validated_count ?? 0} crops and marks the ` +
+        'source deprecated. The action is recorded in the registry but cannot be undone from the UI.',
     );
     if (!ok) return;
     busy = true;
@@ -217,6 +270,17 @@
       + Add Class
     </button>
   </header>
+
+  {#if reservedConflicts.length > 0}
+    <div
+      class="mb-4 rounded-md border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-xs text-orange-200"
+    >
+      <strong>Reserved-hotkey conflict:</strong>
+      {#each reservedConflicts as c, i (c.id)}{i > 0 ? ', ' : ''}<strong>{c.name}</strong>
+        → '{c.hotkey_letter}'{/each} — bound before this key became reserved for a labeling
+      action. The binding is kept; rebind to a free letter when convenient.
+    </div>
+  {/if}
 
   <!-- Active classes -->
   <section class="surface flex-1 overflow-auto">
@@ -306,9 +370,9 @@
               <td class="px-3 py-1.5 text-right font-mono">
                 <span
                   class="rounded-md border px-1.5 py-0.5 text-xs {adequacyChipClass(
-                    cls.validated_count ?? 0,
+                    cls.adequacy,
                   )}"
-                  title={adequacyTooltip(cls.validated_count ?? 0)}
+                  title={adequacyTooltip(cls.adequacy, cls.validated_count ?? 0)}
                 >
                   {cls.validated_count ?? 0}
                 </span>
@@ -446,13 +510,36 @@
       </label>
 
       {#if mergeSource && mergeTarget}
-        <div
-          class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
-        >
-          Will relabel <strong>{mergeSource.validated_count ?? 0}</strong> validated crops
-          from
-          <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>.
-        </div>
+        {#if mergePreviewBusy}
+          <div class="mb-3 text-xs text-zinc-500">Checking impact…</div>
+        {:else if mergePreviewError}
+          <div
+            class="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          >
+            Preview failed: {mergePreviewError}
+          </div>
+        {:else if mergePreview}
+          <div
+            class="mb-3 rounded border px-3 py-2 text-xs {mergePreview.blocked
+              ? 'border-red-500/40 bg-red-500/10 text-red-200'
+              : 'border-orange-500/40 bg-orange-500/10 text-orange-200'}"
+          >
+            Will relabel <strong>{mergePreview.would_relabel}</strong> crops from
+            <strong>{mergeSource.name}</strong> to <strong>{mergeTarget.name}</strong>
+            {#if mergePreview.would_unvalidate > 0}
+              &middot; <strong>{mergePreview.would_unvalidate}</strong> lose validation
+            {/if}
+            {#if mergePreview.holdout_blocking > 0}
+              &middot; <strong>{mergePreview.holdout_blocking}</strong> test-holdout crops block
+              this merge
+            {/if}
+            {#if mergePreview.blocked}
+              <div class="mt-1 font-semibold">
+                Blocked — a real merge will 409 until the holdout conflict is resolved.
+              </div>
+            {/if}
+          </div>
+        {/if}
       {/if}
 
       <div class="flex justify-end gap-2">
@@ -468,7 +555,11 @@
           type="button"
           class="btn btn-primary"
           onclick={() => void submitMerge()}
-          disabled={busy || mergeSourceId == null || mergeTargetId == null}
+          disabled={busy ||
+            mergeSourceId == null ||
+            mergeTargetId == null ||
+            mergePreviewBusy ||
+            mergePreview?.blocked}
         >
           {busy ? 'Merging…' : 'Merge'}
         </button>

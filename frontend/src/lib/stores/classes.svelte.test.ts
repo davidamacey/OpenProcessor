@@ -1,6 +1,12 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { classesStore } from './classes.svelte';
 import type { RegistryClass } from '$lib/types';
+
+const ok = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
 
 function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
   return {
@@ -36,5 +42,49 @@ describe('classesStore.topNForCluster — license_plate is a normal class', () =
     ];
     expect(classesStore.byId(80)?.name).toBe('license_plate');
     expect(classesStore.byName('license_plate')?.id).toBe(80);
+  });
+});
+
+// W4 (docs/design/logic-moves-adoption-plan-2026-09-24.md §2 W4): refresh()
+// must populate thresholds/reservedHotkeys from the same /classes response
+// that populates classes — classHotkey.ts's reservedHotkeyLetters() and
+// adequacy.ts's chip rendering both read these store fields directly.
+describe('classesStore.refresh — thresholds + reservedHotkeys', () => {
+  afterEach(() => {
+    classesStore.classes = [];
+    classesStore.thresholds = {
+      block_below: 0,
+      warn_below: 0,
+      min_test_per_class: 0,
+      aug_target_min: 0,
+      aug_target_max: 0,
+    };
+    classesStore.reservedHotkeys = [];
+    vi.unstubAllGlobals();
+  });
+
+  it('stores the served thresholds and reserved_hotkeys alongside classes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        ok({
+          classes: [{ class_id: 8, class_name: 'bmw', validated_count: 8 }],
+          thresholds: {
+            block_below: 20,
+            warn_below: 500,
+            min_test_per_class: 5,
+            aug_target_min: 500,
+            aug_target_max: 3000,
+          },
+          reserved_hotkeys: ['b', 'd'],
+        }),
+      ),
+    );
+
+    await classesStore.refresh();
+
+    expect(classesStore.thresholds.block_below).toBe(20);
+    expect(classesStore.reservedHotkeys).toEqual(['b', 'd']);
+    expect(classesStore.classes).toHaveLength(1);
   });
 });
