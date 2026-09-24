@@ -66,6 +66,14 @@ repos:
         language: system
         pass_filenames: false
         files: ^(contracts/|src/lib/api\.ts$)
+      # Full vitest suite before anything leaves the machine: too slow for
+      # every commit, but a red push is what CI would reject anyway.
+      - id: vitest-pre-push
+        name: vitest (full suite)
+        entry: npx vitest run --maxWorkers=4
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
 
   # Secret detection
   - repo: https://github.com/gitleaks/gitleaks
@@ -82,6 +90,6 @@ repos:
         stages: [commit-msg]
         args: [--force-scope]
 
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 fail_fast: false

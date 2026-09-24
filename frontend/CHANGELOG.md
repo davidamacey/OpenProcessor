@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- A pre-push hook runs the full vitest suite (`vitest-pre-push` in
+  `.pre-commit-config.yaml`), so a failing test can't be pushed. Install
+  it with `pre-commit install --hook-type pre-push`.
 - The `/train` GPU picker shows the backend's allowed GPUs
   (`GET /train/gpus`) with each option's advisory, and preselects the one
   the backend marks default. It shows a free-text field when the backend
