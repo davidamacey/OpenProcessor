@@ -18,16 +18,18 @@
 
   let { value, setValue }: Props = $props();
 
-  // Curated list mirrors the design §13.4 preset table.
+  // Must match the trainer's own PRESETS table (OpenProcessor
+  // docker/trainer/augment.py); an id it doesn't know raises "unknown
+  // augmentation preset" only after the run has started and stopped the
+  // VLM. Replace with the served list once the backend exposes one.
   const PRESETS = [
     'none',
     'balanced_default',
-    'outdoor_traffic',
-    'motorcycle_tilt',
+    'outdoor_scene',
+    'heavy_tilt',
     'low_light',
-    'plates',
-    'plates_aggressive',
-    'custom',
+    'text_targets',
+    'text_targets_aggressive',
   ] as const;
 
   let expanded = $state<boolean>(false);
