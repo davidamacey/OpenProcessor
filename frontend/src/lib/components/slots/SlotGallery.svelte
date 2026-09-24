@@ -23,6 +23,7 @@
     type PlateGalleryController,
   } from '../../../routes/clusters/plateGalleryController.svelte';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+  import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
   interface Props {
     gallery: PlateGalleryController;
@@ -50,12 +51,15 @@
     >
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-400">Detector</span>
+        <!-- Options are the served vocabulary's filterable detectors
+             (`GET {API_PREFIX}/regions/vocabulary`, W0 finding m9) — the exact
+             values that can appear in stored region_detector for this
+             deployment, rather than a hardcoded model-id list. -->
         <select bind:value={gallery.plateDetectorFilter} class="select-sm">
           <option value="">any</option>
-          <option value="lpr_nanov11_640">LPR</option>
-          <option value="sam3">SAM3</option>
-          <option value="paddleocr_det_trt">Paddle det</option>
-          <option value="human">Human</option>
+          {#each regionVocabularyStore.filterableDetectors as d (d.id)}
+            <option value={d.id}>{d.label}</option>
+          {/each}
         </select>
       </label>
       <label class="flex items-center gap-1.5">

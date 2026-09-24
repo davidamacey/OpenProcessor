@@ -8,6 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adopted OpenProcessor `main` 1327181's naming-sweep waves W0/W1 (finding
+  m9) and the small F4-F11 renames that shipped alongside it:
+  - **W0 — `GET {API_PREFIX}/regions/vocabulary`**: a new `regionVocabularyStore`
+    (`$stores/regionVocabulary.svelte`), loaded once from the root
+    layout, serves this deployment's detector/segmenter/verifier
+    vocabulary (`{detectors, region_sources, chain_actors}`, each
+    `{id, label, role, filterable?}`). `ProvenanceChip.svelte` now reads
+    a chain entry's label from the store and derives chip color from its
+    served `role` via a new `paletteForRole` (`detectorRegistry.ts`) —
+    an id the vocabulary doesn't know about renders verbatim with the
+    neutral chip, same as before. `SlotGallery.svelte`'s plate-gallery
+    Detector `<select>` now renders the vocabulary's `filterableDetectors`
+    instead of a hardcoded `lpr_nanov11_640`/`sam3` option list.
+  - **W0 — `GET {API_PREFIX}/review/tabs`**: a new `reviewTabsVocabularyStore`
+    (`$stores/reviewTabsVocabulary.svelte`), also loaded once from the
+    root layout, serves each review tab/preset's `{id, label,
+description}`. `/review`'s tab bar and preset chips render the
+    served label (falling back to the existing static label) and the
+    served description as a `title` tooltip; the tab id `coco_blind_spots`
+    is unchanged for now.
+  - New e2e stub defaults for both endpoints in `e2e/conftest.py`
+    (shapes lifted from the vendored OpenAPI description), plus a new
+    e2e test (`test_plate_gallery_detector_filter.py`) proving the
+    real browser-rendered plate-gallery detector filter reflects a
+    served vocabulary rather than a hardcoded list.
 - Adopted the OpenProcessor `main` findings pass (07cc061 — B2/M6/M8/V1
   region+VLM write integrity and undo), per
   docs/design/interactive-pass-2026-09-24.md §6:
@@ -236,6 +261,14 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
 
 ### Changed
 
+- OpenProcessor 1327181 naming sweep, F6/F9: `DatasetStats.in_progress`'s
+  `sam_drain_total_unfinished` field is renamed
+  `region_drain_total_unfinished` (`DatasetStats.svelte`'s in-flight-
+  pipeline panel, ETA/drain-rate math, and copy text updated); `GET
+{API_PREFIX}/crops`'s `?hdd_source=` param was removed outright — every
+  frontend site that sent it (`CropFilter.source`, `/review`'s source
+  filter and its diverse-selection scope's term filters) now sends
+  `?source=` instead.
 - The pre-push hook also runs the stubbed e2e suite (`e2e-pre-push`), so a
   failing e2e test can't be pushed. It adds about a minute per push.
 - The crop detail panel reads the source image's metadata and sibling
@@ -906,6 +939,14 @@ check`/`test`/`lint`/`build` all green.
 
 ### Removed
 
+- W0 finding m9: `builtinDetectors.ts`'s hardcoded per-model-id
+  `labels`/`palettes`/`prefixes` tables and `detectorRegistry.ts`'s
+  `labelForDetector`/`paletteForDetector` — both a private-model-id →
+  label/color naming table the backend now serves via `GET
+{API_PREFIX}/regions/vocabulary`. `builtinDetectors.ts` keeps only the
+  `mutedTagPattern` (outcome/tag business logic, not a naming table);
+  `detectorRegistry.ts` keeps only the display-only role→palette map
+  (`paletteForRole`) and `isMutedTag`.
 - `src/lib/annotations/regionWireContract.test.ts`, replaced by the
   contract tests.
 

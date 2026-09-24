@@ -1948,6 +1948,80 @@ export function getRegionStatuses(signal?: AbortSignal): Promise<RegionStatusesR
   );
 }
 
+/** What kind of writer a detector/source/chain-actor vocabulary entry names
+ *  (`GET {API_PREFIX}/regions/vocabulary`, W0 naming-sweep finding m9). Forward-tolerant —
+ *  an unrecognized role string is still carried through, it just falls
+ *  back to the neutral chip color. */
+export type RegionVocabularyRole =
+  | 'detector'
+  | 'segmenter'
+  | 'ocr'
+  | 'verifier'
+  | 'human'
+  | 'classifier'
+  | 'proposal'
+  | (string & {});
+
+export interface RegionVocabularyEntry {
+  id: string;
+  label: string;
+  role: RegionVocabularyRole;
+  /** Only present on `detectors` entries — marks the values that can
+   *  actually appear in stored `region_detector` (the detector filter's
+   *  exact option list). */
+  filterable?: boolean;
+}
+
+export interface RegionVocabularyResponse {
+  detectors: RegionVocabularyEntry[];
+  region_sources: RegionVocabularyEntry[];
+  chain_actors: RegionVocabularyEntry[];
+}
+
+/** The deployment-configured detector/segmenter/verifier vocabulary
+ *  (`GET {API_PREFIX}/regions/vocabulary`, W0 finding m9), built from the active region
+ *  profile / ingest profiles / `OP_VLM_MODEL` — never a hardcoded model id.
+ *  Meant to be loaded once by a store — see `$stores/regionVocabulary.svelte`. */
+export async function getRegionVocabulary(
+  signal?: AbortSignal,
+): Promise<RegionVocabularyResponse> {
+  const res = await apiFetch<Partial<RegionVocabularyResponse>>(
+    `${API_PREFIX}${REGION_BASE}/vocabulary`,
+    {},
+    signal,
+  );
+  return {
+    detectors: res.detectors ?? [],
+    region_sources: res.region_sources ?? [],
+    chain_actors: res.chain_actors ?? [],
+  };
+}
+
+/** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served
+ *  label/description for a review tab or preset id. */
+export interface ReviewTabVocabularyEntry {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+/** Every review tab's served `id`/`label`/`description`, in `KNOWN_TABS`
+ *  order. The frontend keeps its own tab structure/ids (`reviewTabs.ts`)
+ *  and only overlays the served label/description on top, falling back to
+ *  the static label when the endpoint is absent. */
+export async function getReviewTabsVocabulary(
+  signal?: AbortSignal,
+): Promise<ReviewTabVocabularyEntry[]> {
+  const res = await apiFetch<{ tabs?: ReviewTabVocabularyEntry[] }>(
+    `${API_PREFIX}/review/tabs`,
+    {},
+    signal,
+  );
+  return (res.tabs ?? []).filter(
+    (t) => typeof t?.id === 'string' && t.id.length > 0 && typeof t.label === 'string',
+  );
+}
+
 /**
  * Update or clear the plate sub-bbox on a crop.
  *

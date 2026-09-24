@@ -18,19 +18,21 @@
    * The `raw` form parses entries from `region_detector_chain` so the
    * meta panel can render the full cascade story as a chip strip.
    *
-   * Label/palette resolution is config-driven (P2.2,
-   * docs/genericization-plan-2026-09-13.md §3.2): this component used
-   * to hand-code a 20-arm label switch and a 10-branch palette
-   * if-chain; both are now data (`builtinDetectorRegistry`), proven
-   * equivalent to the old functions by a 23-case snapshot test
-   * (`annotations/builtinDetectors.test.ts`) before they were deleted.
+   * Label/palette resolution is now backend-driven (W0 naming-sweep
+   * finding m9): this component used to hand-code a 20-arm label switch
+   * and a 10-branch palette if-chain, then (P2.2) moved that same table
+   * into a config object. Both are gone — the label comes from
+   * `GET {API_PREFIX}/regions/vocabulary` (`regionVocabularyStore`), and the chip
+   * COLOR comes from that vocabulary entry's `role` via
+   * `paletteForRole` (display-only, still local). An id the vocabulary
+   * doesn't know about renders verbatim with the neutral chip.
    */
   import {
-    labelForDetector,
-    paletteForDetector,
+    paletteForRole,
     isMutedTag as isMutedTagFor,
   } from '$lib/annotations/detectorRegistry';
   import { builtinDetectorRegistry } from '$lib/annotations/profiles/builtinDetectors';
+  import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
   interface Props {
     /** The detector that produced the stored bbox. Maps to a color family. */
@@ -59,7 +61,8 @@
     return { detector: detector ?? null, tag: tag ?? null };
   });
 
-  const palette = $derived(paletteForDetector(builtinDetectorRegistry, parsed.detector));
+  const role = $derived(regionVocabularyStore.roleFor(parsed.detector));
+  const palette = $derived(paletteForRole(role));
   const muted = $derived(isMutedTagFor(builtinDetectorRegistry, parsed.tag));
   const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
 </script>
@@ -70,7 +73,7 @@
     : ''}"
   title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}
 >
-  <span>{labelForDetector(builtinDetectorRegistry, parsed.detector)}</span>
+  <span>{regionVocabularyStore.labelFor(parsed.detector)}</span>
   {#if parsed.tag}
     <span class="text-[9px] uppercase tracking-wide opacity-80">{parsed.tag}</span>
   {/if}

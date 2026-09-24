@@ -1,22 +1,23 @@
 /**
- * Config-driven detector label/palette resolution.
+ * Role-driven detector chip color resolution.
  *
- * `DetectorChip.svelte`'s `labelFor()`/`paletteFor()` are a hand-written
- * switch/if-chain over one deployment's specific detector ids. This module is
- * the generalized, data-driven replacement: `builtinDetectors.ts` (the
- * profile) reproduces those two functions' exact resolution — including
- * palette-lookup order, since it's semantically load-bearing (an exact
- * match must be checked before prefix rules) — as data, and a future
- * deployment can swap in its own registry with no component change.
+ * Detector/verifier/segmenter LABELS now come from the backend's served
+ * vocabulary (`GET {API_PREFIX}/regions/vocabulary`, W0 naming-sweep finding m9 —
+ * see `$stores/regionVocabulary.svelte`), not from a hand-copied
+ * name→label table: those model ids are deployment config, and a
+ * hardcoded map drifted from them the moment a deployment swapped
+ * detectors. Chip COLOR is still a purely-display concern this module
+ * owns — it's keyed off the vocabulary entry's `role`
+ * (`detector | segmenter | ocr | verifier | human | classifier |
+ * proposal`), not the id, so a new deployment's detector automatically
+ * gets a sensible color the moment the backend reports its role.
  *
- * Not yet wired into `DetectorChip.svelte` — see
- * docs/genericization-plan-2026-09-13.md §3.2 / P2.2 for that migration
- * (ships with a 21-id-plus-unknown-plus-null equivalence snapshot test
- * proving the swap is pixel-identical). This module and its equivalence
- * test (`builtinDetectors.test.ts`) are that migration's prerequisite.
+ * `mutedTagPattern` (outcome/tag business logic, not a naming table)
+ * still lives per-deployment in `builtinDetectors.ts`.
  */
 
 import type { Palette } from './types';
+import type { RegionVocabularyRole } from '$lib/api';
 
 export const PALETTES = {
   blue: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-200' },
@@ -49,37 +50,33 @@ export const PALETTES = {
 
 export type PaletteName = keyof typeof PALETTES;
 
-export interface DetectorRegistry {
-  /** Exact detector id → short label. Falls through to the raw id when
-   *  absent, so a newly-deployed detector is never silently swallowed. */
-  labels: Record<string, string>;
-  /** Exact detector id → palette. Evaluated BEFORE `prefixes`. */
-  palettes: Record<string, PaletteName>;
-  /** Ordered prefix rules. FIRST MATCH WINS — order is behavior. */
-  prefixes: Array<{ startsWith: string; palette: PaletteName }>;
-  fallback: PaletteName;
-  /** Tags rendered at reduced opacity. */
+/** Role → palette. Every role the vocabulary contract documents gets an
+ *  entry; an unrecognized role (or no role at all — an id the vocabulary
+ *  doesn't know about) falls back to the neutral `zinc` chip. */
+const ROLE_PALETTES: Record<string, PaletteName> = {
+  detector: 'blue',
+  segmenter: 'purple',
+  ocr: 'amber',
+  verifier: 'teal',
+  human: 'emerald',
+  classifier: 'indigo',
+  proposal: 'sky',
+};
+
+export function paletteForRole(role: RegionVocabularyRole | null | undefined): Palette {
+  if (!role) return PALETTES.zinc;
+  const name = ROLE_PALETTES[role];
+  return name ? PALETTES[name] : PALETTES.zinc;
+}
+
+/** Tags rendered at reduced opacity — outcome/business logic, not a
+ *  naming table, so it stays a small per-deployment config
+ *  (`builtinDetectors.ts`) rather than served vocabulary. */
+export interface MutedTagConfig {
   mutedTagPattern: RegExp;
 }
 
-export function labelForDetector(registry: DetectorRegistry, d: string | null): string {
-  if (!d) return '—';
-  return registry.labels[d] ?? d;
-}
-
-export function paletteForDetector(
-  registry: DetectorRegistry,
-  d: string | null,
-): Palette {
-  if (!d) return PALETTES[registry.fallback];
-  const exact = registry.palettes[d];
-  if (exact) return PALETTES[exact];
-  const prefixMatch = registry.prefixes.find((p) => d.startsWith(p.startsWith));
-  if (prefixMatch) return PALETTES[prefixMatch.palette];
-  return PALETTES[registry.fallback];
-}
-
-export function isMutedTag(registry: DetectorRegistry, tag: string | null): boolean {
+export function isMutedTag(config: MutedTagConfig, tag: string | null): boolean {
   if (!tag) return false;
-  return registry.mutedTagPattern.test(tag);
+  return config.mutedTagPattern.test(tag);
 }

@@ -17,6 +17,8 @@
   import { classesStore } from '$stores/classes.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
+  import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
   import { healthStore } from '$stores/health.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -40,6 +42,8 @@
     const releaseClasses = classesStore.acquire();
     void classSourcesStore.init();
     void regionStatusesStore.init();
+    void regionVocabularyStore.init();
+    void reviewTabsVocabularyStore.init();
     return () => {
       releaseHealth();
       releaseClasses();

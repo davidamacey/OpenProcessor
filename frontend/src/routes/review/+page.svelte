@@ -66,6 +66,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
@@ -154,12 +155,12 @@
 
   function termFilters(): Record<string, unknown> {
     // Server-side, scope.filters on POST {API_PREFIX}/select/diverse only supports
-    // term/terms filters (class_id, hdd_source) — NOT conf_min/conf_max/
+    // term/terms filters (class_id, source) — NOT conf_min/conf_max/
     // min_blur_ratio/max_rank/plate text. Those controls are disabled in
     // the UI while diverseMode is active (see the filter bar below) so
     // this never silently drops something the operator thinks is applied.
     const f: Record<string, unknown> = {};
-    if (sourceFilter) f.hdd_source = sourceFilter;
+    if (sourceFilter) f.source = sourceFilter;
     if (classFilter != null) f.class_id = classFilter;
     return f;
   }
@@ -368,9 +369,9 @@
   // Filter bar. `sourceFilter` sends `source` to {API_PREFIX}/review/{tab} (item
   // 14/G3, 2026-09-24 logic-moves — renamed off the old `hdd_source`
   // control, which the endpoint never actually read). `termFilters()`
-  // below (the diverse-selection scope, a different endpoint) still
-  // sends the same value under `hdd_source` — that contract hasn't
-  // changed.
+  // below (the diverse-selection scope, a different endpoint) now sends
+  // the same value under `source` too — the OpenProcessor 1327181 naming
+  // sweep (F9) removed `?hdd_source=` outright, so both call sites agree.
   let sourceFilter = $state<string>('');
   let classFilter = $state<number | null>(null);
   let confMin = $state<number>(0);
@@ -1395,6 +1396,7 @@
           class="shrink-0 px-3 py-2.5 text-sm border-b-2 {tab === t.id
             ? 'border-blue-500 text-white'
             : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
+          title={reviewTabsVocabularyStore.descriptionFor(t.endpointId) ?? undefined}
           onclick={() => {
             tab = t.id;
             pendingCropId = null;
@@ -1410,7 +1412,7 @@
             closePicker();
           }}
         >
-          {t.label}
+          {reviewTabsVocabularyStore.labelFor(t.endpointId, t.label)}
         </button>
       {/each}
     </div>
@@ -1637,10 +1639,10 @@
               ? 'border-blue-500/60 bg-blue-500/15 text-blue-100'
               : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
             aria-pressed={preset === p.id}
-            title={p.description}
+            title={reviewTabsVocabularyStore.descriptionFor(p.id) ?? p.description}
             onclick={() => togglePreset(p.id)}
           >
-            {p.label}
+            {reviewTabsVocabularyStore.labelFor(p.id, p.label)}
           </button>
         {/each}
         {#if preset}

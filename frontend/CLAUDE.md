@@ -112,6 +112,17 @@ preset)` is the single place that decides which queue actually gets
   `sample_crop_ids`) entirely — `bulkLabel` itself is unchanged and
   still used by `/clusters` drag-and-drop. Degrades to an inline error
   banner on a backend failure (observed live: an opensearch aggregation 503) rather than breaking the page.
+- **Served tab/preset labels** (OpenProcessor 1327181 naming sweep, W0
+  finding m9): tab and preset _structure/ids_ above are still entirely
+  frontend-owned (`REVIEW_TABS`/`REVIEW_PRESETS`), but their displayed
+  `label` and tooltip `description` are now overlaid from `GET
+{API_PREFIX}/review/tabs` (`reviewTabsVocabularyStore`,
+  `$stores/reviewTabsVocabulary.svelte`, loaded once from the root
+  layout) when the served vocabulary has an entry for that endpoint id —
+  every core tab and slot tab keyed by its `endpointId` (core tabs:
+  `id === endpointId`; the Plates tab: `'regions'`), every preset keyed
+  by its own id. Absent or missing an id ⇒ the tab's/preset's existing
+  static label, no tooltip — a missing endpoint never breaks the tab bar.
 
 ## Review-queue deep links and filters (2026-09-24 logic-moves W5)
 
@@ -509,7 +520,12 @@ render via the shared chip components.
   timestamp as a banner.
 - `source` replaces the dead `hdd_source` Crop field (`mapRawCrop` never
   populated `hdd_source` — the backend only ever emitted `source`).
-  `/review`'s source-image panel reads `current.source`.
+  `/review`'s source-image panel reads `current.source`. The OpenProcessor
+  1327181 naming sweep (F9) removed the `?hdd_source=` query param
+  outright — `CropFilter.source`/`?source=` is now the only spelling
+  everywhere, including `/review`'s diverse-selection scope's term
+  filters (`termFilters()`), which used to send the same value under the
+  now-dead param name.
 
 There is no shape-plausibility warning: the ⚠ badge (and the client-side
 envelope check that computed it — `shapeGate.ts`, `PLATE_SHAPE_ENVELOPE`,
@@ -522,9 +538,24 @@ check with no client mirror.
 during the genericization pass — see `docs/genericization-plan-2026-09-13.md`):
 
 - `src/lib/components/ProvenanceChip.svelte` (formerly `DetectorChip.svelte`)
-  — color-coded chip (LPR=blue, SAM3=purple, Paddle=amber, Human=green,
-  Gemma=teal, v6=rose, YOLO11=sky). Accepts a `raw="lpr_nanov11_640:miss"`
-  chain entry directly. Miss/reject tags get a muted variant.
+  — color-coded chip. Since the OpenProcessor 1327181 naming sweep (W0,
+  finding m9) both the label and the color are backend-driven: the label
+  comes from `regionVocabularyStore` (`GET {API_PREFIX}/regions/vocabulary`,
+  `$stores/regionVocabulary.svelte`), and the chip COLOR comes from that
+  vocabulary entry's served `role` (`detector | segmenter | ocr |
+verifier | human | classifier | proposal`) via `paletteForRole`
+  (`src/lib/annotations/detectorRegistry.ts` — `detector`=blue,
+  `segmenter`=purple, `ocr`=amber, `verifier`=teal, `human`=emerald,
+  `classifier`=indigo, `proposal`=sky, unknown/absent role=neutral zinc).
+  The old hardcoded per-model-id label/palette tables
+  (`builtinDetectors.ts`) are gone; that file now only keeps the
+  `mutedTagPattern` (outcome/tag muting is genuine per-deployment logic,
+  not a naming table). Accepts a `raw="lpr_nanov11_640:miss"` chain entry
+  directly (still parsed client-side); an id not in the served vocabulary
+  renders verbatim with the neutral chip. `SlotGallery.svelte`'s
+  plate-gallery Detector filter `<select>` similarly renders
+  `regionVocabularyStore.filterableDetectors` instead of a hardcoded
+  option list.
 - `src/lib/components/SlotCard.svelte` (formerly `PlateCard.svelte`) —
   128px annotation-slot thumbnail (via `{API_PREFIX}/crops/{id}/region_thumbnail`),
   parent class chip, score, provenance chip strip, slot text inline (plus

@@ -181,6 +181,44 @@ class Stub:
                 "false_positive_status": "false_positive",
             },
         )
+        # W0 naming-sweep finding m9: the deployment-configured detector/
+        # segmenter/verifier vocabulary. Shapes lifted from the vendored
+        # OpenAPI description (contracts/openprocessor/openapi/curation.json,
+        # `/curation/regions/vocabulary`) — `{detectors, region_sources,
+        # chain_actors}`, each a list of `{id, label, role, filterable?}`.
+        # Defaults reproduce this deployment's two live detector ids
+        # (`lpr_nanov11_640`, `sam3`) so the plate gallery's detector
+        # filter and provenance chips render sensibly without every test
+        # having to stub the endpoint itself.
+        self.on(
+            "GET",
+            r"/regions/vocabulary(\?|$)",
+            {
+                "detectors": [
+                    {
+                        "id": "lpr_nanov11_640",
+                        "label": "LPR",
+                        "role": "detector",
+                        "filterable": True,
+                    },
+                    {"id": "sam3", "label": "SAM3", "role": "segmenter", "filterable": True},
+                    {"id": "human", "label": "Human", "role": "human", "filterable": True},
+                ],
+                "region_sources": [
+                    {"id": "detector", "label": "Detector", "role": "detector"},
+                    {"id": "segmenter", "label": "Segmenter", "role": "segmenter"},
+                ],
+                "chain_actors": [
+                    {"id": "gemma-4-e4b", "label": "Gemma", "role": "verifier"},
+                ],
+            },
+        )
+        # W0 naming-sweep finding m9: every review tab's served
+        # id/label/description (contracts/openprocessor/openapi/curation.json,
+        # `/curation/review/tabs`). Empty by default — the frontend's own
+        # static REVIEW_TABS labels are the documented fallback when a
+        # served id isn't present, so most tests don't need this stubbed.
+        self.on("GET", r"/review/tabs(\?|$)", {"tabs": []})
         self.on("GET", r"/bakeoff/runs(\?|$)", {"runs": []})
 
         page.route(f"**{api_prefix}/**", self._dispatch)
