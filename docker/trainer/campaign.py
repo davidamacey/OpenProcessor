@@ -294,10 +294,10 @@ def write_quant_bakeoff_job(spec: JobSpec, state: StatusState) -> None:
             'formats': ['fp32_onnx', 'fp16_onnx', 'int8_onnx'],
             'n_calib': 1000,
             'out_root': str(BAKEOFF_OUT_DIR / 'quant'),
-            # Also run the steady-state throughput sweep and the CoreML export
-            # leg (both best-effort inside the evaluator).
+            # Also run the steady-state throughput sweep (best-effort inside the
+            # evaluator). No 'coreml': that export leg is not shipped, and asking
+            # for it only records a failed stage in the job status.
             'throughput': True,
-            'coreml': True,
         },
     }
     tmp = BAKEOFF_JOBS_DIR / f'.{bakeoff_id}.job.json.tmp'

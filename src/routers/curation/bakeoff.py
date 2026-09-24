@@ -211,6 +211,10 @@ async def bakeoff_run(payload: BakeoffRequest) -> dict[str, Any]:
     """Enqueue a bake-off job for the evaluator container to execute."""
     if not payload.models and not payload.quantize:
         raise HTTPException(status_code=400, detail='no models specified')
+    if payload.quantize and payload.quantize.get('coreml'):
+        from scripts.curation.bakeoff.bakeoff_runner import COREML_UNAVAILABLE
+
+        raise HTTPException(status_code=400, detail=COREML_UNAVAILABLE)
     if not payload.datasets and not payload.dataset:
         raise HTTPException(status_code=400, detail='provide datasets or dataset')
     _check_profile(payload.profile)
@@ -296,24 +300,53 @@ async def bakeoff_eval_datasets() -> dict[str, Any]:
 
 @router.get('/bakeoff/profiles')
 async def bakeoff_profiles() -> dict[str, Any]:
-    """Registered + example BakeoffProfiles (name -> full field set)."""
+    """Registered + example BakeoffProfiles, flagging the default.
+
+    ``kind`` says where a profile comes from (``registered`` in code,
+    ``example`` from ``examples/<name>/profile.json``, ``configured`` for a
+    default that is neither -- e.g. ``OP_BAKEOFF_PROFILE`` naming a .json
+    path). ``default`` marks the profile a job gets when it names none
+    (``OP_BAKEOFF_PROFILE``, else ``generic`` plus ``OP_BAKEOFF_PROFILE_*``
+    overrides); the default row carries those effective field values. The
+    top-level ``default_profile`` repeats its name (null if the configured
+    default does not resolve -- see ``default_error``). Resolved from this
+    API process's environment, which the deployment is expected to share
+    with the evaluator.
+    """
     from scripts.curation.bakeoff.profile import (
         example_profile_names,
         registered_profiles,
         resolve_profile,
     )
 
+    registered = registered_profiles()
     profiles: list[dict[str, Any]] = [
-        {**prof.to_dict(), 'kind': 'registered'} for prof in registered_profiles().values()
+        {**prof.to_dict(), 'kind': 'registered', 'default': False} for prof in registered.values()
     ]
     for name in example_profile_names():
-        if name in registered_profiles():
+        if name in registered:
             continue
         try:
-            profiles.append({**resolve_profile(name).to_dict(), 'kind': 'example'})
+            profiles.append(
+                {**resolve_profile(name).to_dict(), 'kind': 'example', 'default': False}
+            )
         except (OSError, ValueError, TypeError) as exc:
             logger.warning('bakeoff_profile_invalid', profile=name, error=str(exc))
-    return {'profiles': profiles, 'count': len(profiles)}
+
+    body: dict[str, Any] = {'default_profile': None}
+    try:
+        default = resolve_profile(None)
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning('bakeoff_default_profile_invalid', error=str(exc))
+        body['default_error'] = str(exc)
+    else:
+        body['default_profile'] = default.name
+        row = next((p for p in profiles if p['name'] == default.name), None)
+        if row is None:
+            profiles.append({**default.to_dict(), 'kind': 'configured', 'default': True})
+        else:
+            row.update(default.to_dict(), default=True)
+    return {'profiles': profiles, 'count': len(profiles), **body}
 
 
 @router.get('/bakeoff/baseline_models')

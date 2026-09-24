@@ -244,6 +244,16 @@ def test_bakeoff_run_rejects_unknown_profile(
     assert not (tmp_path / 'jobs').exists()
 
 
+@pytest.fixture
+def clean_profile_env(monkeypatch) -> None:
+    import os
+
+    for key in list(os.environ):
+        if key.startswith('OP_BAKEOFF_PROFILE'):
+            monkeypatch.delenv(key)
+
+
+@pytest.mark.usefixtures('clean_profile_env')
 def test_bakeoff_profiles_lists_generic_and_examples(app_client: TestClient) -> None:
     r = app_client.get('/curation/bakeoff/profiles')
     assert r.status_code == 200
@@ -252,6 +262,68 @@ def test_bakeoff_profiles_lists_generic_and_examples(app_client: TestClient) -> 
     assert by_name['generic']['context_class_ids'] == []
     assert by_name['license_plate']['kind'] == 'example'
     assert by_name['license_plate']['context_class_ids'] == [2, 3, 5, 7]
+    assert r.json()['default_profile'] == 'generic'
+    assert by_name['generic']['default'] is True
+    assert by_name['license_plate']['default'] is False
+
+
+@pytest.mark.usefixtures('clean_profile_env')
+def test_bakeoff_profiles_default_follows_env_example(app_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE', 'license_plate')
+    body = app_client.get('/curation/bakeoff/profiles').json()
+    by_name = {p['name']: p for p in body['profiles']}
+    assert body['default_profile'] == 'license_plate'
+    assert by_name['license_plate']['default'] is True
+    assert by_name['license_plate']['kind'] == 'example'  # kind stays honest
+    assert by_name['generic']['default'] is False
+    assert sum(p['default'] for p in body['profiles']) == 1
+
+
+@pytest.mark.usefixtures('clean_profile_env')
+def test_bakeoff_profiles_default_from_json_path_and_field_overrides(
+    app_client: TestClient, monkeypatch, tmp_path: Path
+) -> None:
+    f = tmp_path / 'widgets.json'
+    f.write_text(json.dumps({'name': 'widgets', 'target_class_name': 'widget'}))
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE', str(f))
+    body = app_client.get('/curation/bakeoff/profiles').json()
+    [row] = [p for p in body['profiles'] if p['default']]
+    assert (row['name'], row['kind'], row['target_class_name']) == (
+        'widgets',
+        'configured',
+        'widget',
+    )
+    assert body['count'] == len(body['profiles'])
+
+    monkeypatch.delenv('OP_BAKEOFF_PROFILE')
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE_CONTEXT_CLASS_IDS', '4')
+    body = app_client.get('/curation/bakeoff/profiles').json()
+    [row] = [p for p in body['profiles'] if p['default']]
+    assert (row['name'], row['kind'], row['context_class_ids']) == ('generic', 'registered', [4])
+
+
+@pytest.mark.usefixtures('clean_profile_env')
+def test_bakeoff_profiles_bad_default_is_reported(app_client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv('OP_BAKEOFF_PROFILE', 'no_such_profile')
+    body = app_client.get('/curation/bakeoff/profiles').json()
+    assert body['default_profile'] is None
+    assert 'unknown bake-off profile' in body['default_error']
+    assert not any(p['default'] for p in body['profiles'])
+
+
+def test_bakeoff_run_rejects_coreml_leg(
+    app_client: TestClient, monkeypatch, tmp_path: Path
+) -> None:
+    from src.routers.curation import bakeoff
+
+    monkeypatch.setattr(bakeoff, 'JOBS_DIR', tmp_path / 'jobs')
+    r = app_client.post(
+        '/curation/bakeoff/run',
+        json={'dataset': '/d', 'quantize': {'checkpoint': '/c.pt', 'coreml': True}},
+    )
+    assert r.status_code == 400
+    assert 'CoreML export is not available' in r.json()['detail']
+    assert not (tmp_path / 'jobs').exists()
 
 
 def test_default_baseline_registry_is_domain_neutral(app_client: TestClient) -> None:
