@@ -132,6 +132,21 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
 
+### Training cohorts — `GET /training_cohorts?class_id=`
+
+`{cohorts: [{id, label, description, cutoffs, endpoint, params, row_kind}]}`
+(source: `src/services/curation/training_cohorts.py`). Fetch a cohort's
+rows with `GET {prefix}{endpoint}` + `params` (`class_id` already folded
+in). Core cohorts (always): `validated`, `needs_labeling`,
+`low_confidence` (`cutoffs: {classifier_conf_lt: 0.75}` — the backend's
+review band; the frontend's `0.5` is gone), `model_disagreements`
+(`row_kind: crop`). With a region profile configured, the
+`/regions/training_candidates` modes follow (`row_kind: region`,
+`params.mode`): `detector_blind_spots`, `low_conf_correct` (`cutoffs:
+{region_score_lt: 0.6}`), `disagreement`, `human_corrected`,
+`false_positives`; each `description` is exactly the `selection_reason`
+that endpoint returns.
+
 ### Per-class dataset thresholds
 
 One definition (`src/services/curation/dataset_thresholds.py`), enforced by

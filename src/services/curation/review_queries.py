@@ -21,6 +21,7 @@ from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
+from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 
 
 KNOWN_TABS: tuple[str, ...] = (
@@ -243,7 +244,7 @@ def build_tab_query(
             {
                 'bool': {
                     'should': [
-                        {'range': {'classifier_raw_confidence': {'lt': 0.75}}},
+                        {'range': {'classifier_raw_confidence': {'lt': LOW_CONFIDENCE_MAX}}},
                         {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
                         {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
                     ],

@@ -36,17 +36,16 @@ from src.services.curation.region_writes import (
     region_box_doc,
     validate_bbox_norm,
 )
+from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_source_excludes, region_wire_key, serialize_item
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
-_TRAINING_CANDIDATE_MODES = (
-    'detector_blind_spots',
-    'low_conf_correct',
-    'disagreement',
-    'human_corrected',
-    'false_positives',
-)
+_TRAINING_CANDIDATE_MODES = tuple(TRAINING_CANDIDATE_MODES)
+
+
+def _reason(mode: str) -> str:
+    return TRAINING_CANDIDATE_MODES[mode].description
 
 
 def _region_item(src: dict[str, Any], crop_id: str) -> dict[str, Any]:
@@ -194,7 +193,7 @@ def _training_candidate_query(
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
             },
-            'Primary detector missed; secondary segmenter found the region, VLM confirmed',
+            _reason('detector_blind_spots'),
         )
     if mode == 'low_conf_correct':
         return (
@@ -203,12 +202,12 @@ def _training_candidate_query(
                     'must': [
                         {'term': {F.detector: profile.detector_model}},
                         {'term': {F.verified: True}},
-                        {'range': {F.score: {'lt': 0.6}}},
+                        {'range': {F.score: {'lt': REGION_LOW_SCORE_MAX}}},
                     ],
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
             },
-            'Primary detector hit but with low confidence; useful as high-loss training rows',
+            _reason('low_conf_correct'),
         )
     if mode == 'disagreement':
         # Both the primary detector and secondary segmenter fired. The
@@ -227,7 +226,7 @@ def _training_candidate_query(
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
             },
-            'Primary detector + secondary segmenter both fired; bboxes may disagree',
+            _reason('disagreement'),
         )
     if mode == 'human_corrected':
         # Rows where a human PUT a region AND there was a prior detector
@@ -243,7 +242,7 @@ def _training_candidate_query(
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
             },
-            'Human corrected a prior detector output',
+            _reason('human_corrected'),
         )
     if mode == 'false_positives':
         # Human marked a detected box as "not a region" but the box +
@@ -260,7 +259,7 @@ def _training_candidate_query(
                     'must_not': [{'term': {'test_holdout': True}}],
                 }
             },
-            'Human marked a detector box as a false positive (box retained)',
+            _reason('false_positives'),
         )
     raise HTTPException(
         status_code=400,
