@@ -71,6 +71,9 @@ describe('builtinDetectorRegistry equivalence with DetectorChip.svelte', () => {
       'degenerate',
       'unparseable',
       'gemma_reject',
+      // 2026-09-24 logic-moves W8: `accepted_unverified` chain step —
+      // muted, same as a miss/reject, so it reads as lower-confidence.
+      'accepted_unverified',
     ]) {
       expect(builtinDetectorRegistry.mutedTagPattern.test(tag)).toBe(true);
     }

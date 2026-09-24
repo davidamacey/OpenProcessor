@@ -126,6 +126,14 @@ export interface TextCapability {
   sourceField?: WireField;
   confidenceField?: WireField;
   engineVersionField?: WireField;
+  /** Wire field carrying the VLM's own reading, independent of `valueField`
+   *  (the backend's chosen reading). Plates: `region_text_vlm`. */
+  vlmValueField?: WireField;
+  /** Wire field carrying the OCR engine's own reading. Plates: `region_text_ocr`. */
+  ocrValueField?: WireField;
+  /** Wire field: boolean, true when `vlmValueField` and `ocrValueField`
+   *  disagree. Plates: `region_text_disagreement`. */
+  disagreementField?: WireField;
   label: string;
   placeholder?: string;
   transform?: 'none' | 'uppercase' | 'lowercase' | 'trim';
@@ -284,6 +292,12 @@ export interface SlotData {
     source: string | null;
     confidence: number | null;
     engineVersion: string | null;
+    /** The VLM's own reading, when the slot declares `vlmValueField`. */
+    vlmValue: string | null;
+    /** The OCR engine's own reading, when the slot declares `ocrValueField`. */
+    ocrValue: string | null;
+    /** True when `vlmValue` and `ocrValue` disagree ("readers disagree"). */
+    disagreement: boolean | null;
   };
   provenance?: {
     detector: string | null;

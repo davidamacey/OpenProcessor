@@ -217,6 +217,16 @@ export interface BBoxNorm {
   h: number;
 }
 
+/** One OCR text line on the item crop (wire `ItemTextLine` —
+ *  `box_norm` is already normalized in the item-crop frame, `rel_height`
+ *  is line height / crop height). Populates `Crop.item_text_lines`. */
+export interface ItemTextLine {
+  text: string | null;
+  confidence: number | null;
+  box_norm: number[] | null;
+  rel_height: number | null;
+}
+
 export interface Crop {
   id: string;
   source_image_path: string;
@@ -270,8 +280,24 @@ export interface Crop {
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
   class_labeler?: string | null;
-  hdd_source?: string | null;
+  /** Ingest source tag (`lpr_frozen_test_sample`, …). Wire `source` —
+   *  replaces the dead `hdd_source` field the backend never emitted
+   *  (2026-09-24 logic-moves W7: `hdd_source` only ever existed as a
+   *  `CropFilter` query param). */
+  source?: string | null;
   test_holdout: boolean;
+  // -- Exclude / Ignore (G7) ----------------------------------------------
+  /** True when the crop is in the excluded/"Ignored" bucket
+   *  (`cluster_id=-2`) — set by `POST /crops/batch_exclude`, cleared by
+   *  `POST /crops/batch_unexclude`. */
+  class_excluded?: boolean;
+  /** Free-text tag recorded at exclude time (`'ignore'`, `'blurry'`, …). */
+  excluded_reason?: string | null;
+  excluded_at?: string | null;
+  /** Item-crop-frame OCR text lines (G-series item text; wire
+   *  `item_text_lines`, `ItemTextLine[]`). Empty array when the item has
+   *  no detected text, never absent. */
+  item_text_lines?: ItemTextLine[];
   outlier_flagged?: boolean;
   outlier_score?: number | null;
   // -- Primary-subject rank + blur quality -------------------------------
@@ -521,6 +547,57 @@ export interface CropFilter {
   classifier_conf_lt?: number | null;
   /** Crops permanently dismissed from every /review queue via {API_PREFIX}/crops/{id}/review_dismiss. */
   review_dismissed?: boolean;
+  /** Include excluded ("Ignored") crops — off by default server-side, so
+   *  the "Ignored" bucket view is the only caller that sets this. */
+  include_excluded?: boolean;
+  /** Free-text OCR search over `item_text_lines` (G-series item text).
+   *  A query with no letter/digit 400s server-side — see `getCrops`. */
+  item_text?: string;
+}
+
+/** `GET {API_PREFIX}/crops/{id}/history` — the item's class history, oldest
+ *  first. Each entry is the item's class state *before* one write, plus
+ *  who made it (`writer`) and when (`at`). Untyped on the wire
+ *  (`additionalProperties: true`) beyond `writer`/`at`, so every other key
+ *  is read tolerantly. */
+export interface CropHistoryEntry {
+  writer: string | null;
+  at: string | null;
+  class_id?: number | null;
+  class_name?: string | null;
+  class_source?: string | null;
+  label_source?: string | null;
+  confidence?: number | null;
+  class_detector?: string | null;
+  class_detector_version?: string | null;
+  class_labeler?: string | null;
+  class_labeled_at?: string | null;
+  class_validated?: boolean | null;
+  cluster_id?: number | null;
+  cluster_subid?: string | null;
+  review_dismissed_at?: string | null;
+  review_dismissed_by?: string | null;
+}
+
+export interface CropHistoryResponse {
+  crop_id: string;
+  entries: CropHistoryEntry[];
+}
+
+/** `GET {API_PREFIX}/crops/{id}/image` — the shared source image plus every
+ *  item cropped from it (siblings, including the requested crop itself). */
+export interface CropImageMeta {
+  image_id: string;
+  image_path: string;
+  width: number | null;
+  height: number | null;
+  source: string | null;
+  indexed_at: string | null;
+}
+
+export interface CropImageResponse {
+  image: CropImageMeta;
+  items: Crop[];
 }
 
 export interface ClusterFilter {

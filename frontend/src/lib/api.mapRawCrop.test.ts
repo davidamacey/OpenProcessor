@@ -69,6 +69,13 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.mistakenness_version).toBe(raw.mistakenness_version);
     expect(crop.mistakenness_scored_at).toBe(raw.mistakenness_scored_at);
     expect(crop.updated_at).toBe(raw.updated_at);
+    // 2026-09-24 logic-moves W7: source (replaces the dead hdd_source),
+    // exclude/ignore provenance, and item-text OCR lines.
+    expect(crop.source).toBe(raw.source);
+    expect(crop.class_excluded).toBe(true);
+    expect(crop.excluded_reason).toBe(raw.excluded_reason);
+    expect(crop.excluded_at).toBe(raw.excluded_at);
+    expect(crop.item_text_lines).toEqual(raw.item_text_lines);
 
     // image_id and thumbnail_url are declared on RawCrop but intentionally
     // not carried onto Crop by mapRawCrop today — documented here so a
@@ -87,6 +94,7 @@ describe('mapRawCrop full field mapping', () => {
       cluster_distance: 0,
       crop_rank_in_image: 0,
       mistakenness_score: 0,
+      class_excluded: false,
     });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
 
@@ -99,6 +107,36 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.similarity_to_centroid).toBe(1);
     expect(crop.crop_rank_in_image).toBe(0);
     expect(crop.mistakenness_score).toBe(0);
+    expect(crop.class_excluded).toBe(false);
+  });
+
+  it('parses item_text_lines tolerantly, dropping malformed entries instead of throwing', async () => {
+    const raw = makeItem({
+      item_text_lines: [
+        { text: 'OK', confidence: 0.5, box_norm: [0, 0, 1, 1], rel_height: 0.2 },
+        'not-an-object',
+        null,
+        { confidence: 'nope' },
+      ] as never,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
+
+    const crop = await getCrop(raw.crop_id);
+
+    expect(crop.item_text_lines).toEqual([
+      { text: 'OK', confidence: 0.5, box_norm: [0, 0, 1, 1], rel_height: 0.2 },
+      { text: null, confidence: null, box_norm: null, rel_height: null },
+    ]);
+  });
+
+  it('defaults item_text_lines to [] when the wire omits it entirely', async () => {
+    const { item_text_lines: _omit, ...raw } = makeItem();
+    void _omit;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
+
+    const crop = await getCrop(raw.crop_id);
+
+    expect(crop.item_text_lines).toEqual([]);
   });
 
   it('leaves similarity_to_centroid null when cluster_distance is null, rather than computing 1 - null', async () => {

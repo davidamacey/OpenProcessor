@@ -28,6 +28,9 @@ import type {
   ClassThresholds,
   ClusterFilter,
   CropFilter,
+  CropHistoryResponse,
+  CropImageResponse,
+  ItemTextLine,
   RegistryClass,
   RegistryClassCreate,
   RegistryClassMerge,
@@ -1230,6 +1233,11 @@ export type RawCrop = {
   mistakenness_scored_at?: string | null;
   thumbnail_url?: string;
   updated_at?: string;
+  source?: string | null;
+  class_excluded?: boolean;
+  excluded_reason?: string | null;
+  excluded_at?: string | null;
+  item_text_lines?: unknown;
 };
 
 /**
@@ -1273,6 +1281,11 @@ export const RAW_CROP_KEYS = [
   'mistakenness_scored_at',
   'thumbnail_url',
   'updated_at',
+  'source',
+  'class_excluded',
+  'excluded_reason',
+  'excluded_at',
+  'item_text_lines',
 ] as const satisfies readonly (keyof RawCrop)[];
 // Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
 type _RawCropKeysExhaustive =
@@ -1283,6 +1296,25 @@ type _RawCropKeysExhaustive =
         Exclude<keyof RawCrop, (typeof RAW_CROP_KEYS)[number]>,
       ];
 const _rawCropKeysExhaustive: _RawCropKeysExhaustive = true;
+
+/** Parses the wire `ItemTextLine[]` tolerantly — a malformed/absent entry
+ *  is dropped rather than throwing, since this is OCR output the backend
+ *  may not have backfilled for every item. */
+function asItemTextLines(v: unknown): ItemTextLine[] {
+  if (!Array.isArray(v)) return [];
+  const out: ItemTextLine[] = [];
+  for (const raw of v) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const r = raw as Record<string, unknown>;
+    out.push({
+      text: typeof r.text === 'string' ? r.text : null,
+      confidence: typeof r.confidence === 'number' ? r.confidence : null,
+      box_norm: Array.isArray(r.box_norm) ? (r.box_norm as number[]) : null,
+      rel_height: typeof r.rel_height === 'number' ? r.rel_height : null,
+    });
+  }
+  return out;
+}
 
 function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
@@ -1318,6 +1350,11 @@ function mapRawCrop(c: RawCrop): Crop {
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
     mistakenness_scored_at: c.mistakenness_scored_at ?? null,
+    source: c.source ?? null,
+    class_excluded: !!c.class_excluded,
+    excluded_reason: c.excluded_reason ?? null,
+    excluded_at: c.excluded_at ?? null,
+    item_text_lines: asItemTextLines(c.item_text_lines),
     slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
@@ -1456,6 +1493,47 @@ export async function getCrops(
     page: raw.page,
     page_size: raw.page_size,
   };
+}
+
+/**
+ * `GET {API_PREFIX}/crops/{id}/history` — the item's label-write history,
+ * oldest first. Untyped on the wire beyond `crop_id`/`entries`
+ * (`additionalProperties: true`); each entry's other keys are read
+ * tolerantly by the caller (`CropHistoryEntry`'s fields are all
+ * optional). Used by `CropMetaPanel`'s lazy-on-open history section (G7).
+ */
+export function getCropHistory(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<CropHistoryResponse> {
+  return apiFetch<CropHistoryResponse>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/history`,
+    {},
+    signal,
+  );
+}
+
+/**
+ * `GET {API_PREFIX}/crops/{id}/image` — the crop's shared source image
+ * metadata plus every item cropped from it (siblings, including the
+ * requested crop). `max_dim` isn't passed here — this call is for the
+ * metadata/sibling list, not the burned-in-bbox preview image
+ * (`getSourceImageWithBbox` already serves that).
+ */
+export async function getCropImage(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<CropImageResponse> {
+  type Raw = {
+    image: CropImageResponse['image'];
+    items: RawCrop[];
+  };
+  const raw = await apiFetch<Raw>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/image`,
+    {},
+    signal,
+  );
+  return { image: raw.image, items: raw.items.map(mapRawCrop) };
 }
 
 export function putCropLabel(

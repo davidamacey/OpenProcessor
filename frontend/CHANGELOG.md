@@ -81,6 +81,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `statusWantsRejectionReason`. `licensePlateSlot`'s own
     `capabilities.lifecycle.states` is kept as the fallback for when the
     endpoint is unavailable.
+- Item detail and OCR display now match OpenProcessor `main` (`d037be8`,
+  see `docs/design/logic-moves-adoption-plan-2026-09-24.md` W7/W8):
+  - `Crop.source` replaces the dead `hdd_source` field (`mapRawCrop`
+    never populated it — the backend only ever emitted `source`).
+    `/review`'s source-image panel reads `current.source`.
+  - New `Crop` fields: `class_excluded`, `excluded_reason`,
+    `excluded_at`, `item_text_lines`. New API calls: `getCropHistory`
+    (`GET {API_PREFIX}/crops/{id}/history`) and `getCropImage`
+    (`GET {API_PREFIX}/crops/{id}/image`).
+  - `CropMetaPanel` (the `/clusters` detail modal, now also embedded
+    behind a collapsed "Details" disclosure on `/review`) shows: an
+    "Ignored" banner with `excluded_reason`/`excluded_at`; a lazy,
+    on-open label-history list; the source image's metadata plus a
+    sibling-crop thumbnail strip; `item_text_lines` with an optional
+    box overlay (drawn directly from `box_norm`, already in the
+    item-crop frame); and, for a slot with OCR candidates, the VLM/OCR
+    readings plus a "readers disagree" flag and the text engine
+    version.
+  - `/clusters` gets an "Ignored" bucket toggle
+    (`cluster_id=-2&include_excluded=true`) with a "Restore selected"
+    action (`batch_unexclude`), and an item-text search box
+    (`GET {API_PREFIX}/crops?item_text=`) — a 400 (no letter/digit in
+    the query) renders as an inline hint, not a toast.
+  - `TextCapability` gains `vlmValueField`/`ocrValueField`/
+    `disagreementField`; `licensePlateSlot` wires them to
+    `region_text_vlm`/`region_text_ocr`/`region_text_disagreement`.
+    `SlotCard` and `/review`'s inline slot panel both show a "readers
+    disagree" badge when set.
+  - `ProvenanceChip`'s muted-tag pattern now includes
+    `accepted_unverified`, so that chain step renders like a
+    miss/reject rather than a confirmed one.
 
 ### Removed
 

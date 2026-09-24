@@ -194,8 +194,16 @@
   </div>
   <div class="flex flex-col gap-1 p-2 text-[11px]">
     <div class="flex items-center justify-between gap-1 font-mono">
-      <span class="truncate text-zinc-300">
-        {data.text?.value ?? '—'}
+      <span class="flex min-w-0 items-center gap-1 truncate text-zinc-300">
+        <span class="truncate">{data.text?.value ?? '—'}</span>
+        {#if data.text?.disagreement}
+          <span
+            class="shrink-0 rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[9px] font-sans text-orange-200"
+            title="vlm: {data.text.vlmValue ?? '∅'} · ocr: {data.text.ocrValue ?? '∅'}"
+          >
+            ⚠ disagree
+          </span>
+        {/if}
       </span>
       <span class="text-zinc-500">
         {data.subBox?.score != null ? `${(data.subBox.score * 100).toFixed(0)}%` : '—'}

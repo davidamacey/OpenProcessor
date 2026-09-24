@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { Crop } from '$lib/types';
+  import type { Crop, CropHistoryEntry, CropImageMeta } from '$lib/types';
+  import { getCropHistory, getCropImage, getThumbUrl } from '$lib/api';
   import ProvenanceChip from './ProvenanceChip.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
@@ -30,7 +31,77 @@
   function pct(value: number | null | undefined): string {
     return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
   }
+
+  // -- History (G7) — lazy, fetched once per crop.id, never blocks the
+  // rest of the panel from rendering. ------------------------------------
+  let historyEntries = $state<CropHistoryEntry[] | null>(null);
+  let historyError = $state<string | null>(null);
+  let historyLoading = $state(false);
+
+  // -- Source image + siblings (G7/G8) — same lazy-on-open pattern. ------
+  let imageMeta = $state<CropImageMeta | null>(null);
+  let siblings = $state<Crop[] | null>(null);
+  let imageError = $state<string | null>(null);
+  let imageLoading = $state(false);
+
+  let showTextBoxes = $state(false);
+
+  $effect(() => {
+    const id = crop.id;
+    historyEntries = null;
+    historyError = null;
+    historyLoading = true;
+    const controller = new AbortController();
+    getCropHistory(id, controller.signal)
+      .then((res) => {
+        historyEntries = res.entries;
+      })
+      .catch((e: unknown) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        historyError = (e as Error).message;
+      })
+      .finally(() => {
+        historyLoading = false;
+      });
+    return () => controller.abort();
+  });
+
+  $effect(() => {
+    const id = crop.id;
+    imageMeta = null;
+    siblings = null;
+    imageError = null;
+    imageLoading = true;
+    const controller = new AbortController();
+    getCropImage(id, controller.signal)
+      .then((res) => {
+        imageMeta = res.image;
+        siblings = res.items.filter((it) => it.id !== id);
+      })
+      .catch((e: unknown) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        imageError = (e as Error).message;
+      })
+      .finally(() => {
+        imageLoading = false;
+      });
+    return () => controller.abort();
+  });
 </script>
+
+{#if crop.class_excluded}
+  <div
+    class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200"
+  >
+    <span class="font-medium">Ignored</span>
+    {#if crop.excluded_reason}
+      <span class="ml-1 text-amber-300/80">({crop.excluded_reason})</span>
+    {/if}
+    {#if crop.excluded_at}
+      <span class="ml-1 font-mono text-amber-300/60">{crop.excluded_at}</span>
+    {/if}
+  </div>
+{/if}
 
 <dl class="grid grid-cols-2 gap-y-1 text-xs">
   <dt class="text-zinc-500">Class</dt>
@@ -167,7 +238,38 @@
                 {pct(data.text.confidence)}
               </span>
             {/if}
+            {#if data.text.disagreement}
+              <span
+                class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                title="The VLM and OCR readers disagree on this text"
+              >
+                readers disagree
+              </span>
+            {/if}
           </dd>
+        {/if}
+
+        {#if data?.text?.vlmValue != null || data?.text?.ocrValue != null}
+          <dt class="text-zinc-500">Candidates</dt>
+          <dd class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+            {#if data.text.vlmValue != null}
+              <span>
+                <span class="text-zinc-500">vlm:</span>
+                <span class="font-mono text-zinc-200">{data.text.vlmValue || '∅'}</span>
+              </span>
+            {/if}
+            {#if data.text.ocrValue != null}
+              <span>
+                <span class="text-zinc-500">ocr:</span>
+                <span class="font-mono text-zinc-200">{data.text.ocrValue || '∅'}</span>
+              </span>
+            {/if}
+          </dd>
+        {/if}
+
+        {#if data?.text?.engineVersion}
+          <dt class="text-zinc-500">Text engine</dt>
+          <dd class="font-mono text-zinc-400">{data.text.engineVersion}</dd>
         {/if}
 
         {#if data?.lifecycle?.rejectionReason}
@@ -178,6 +280,126 @@
     </div>
   {/if}
 {/each}
+
+{#if crop.item_text_lines && crop.item_text_lines.length > 0}
+  <div class="mt-4 border-t border-zinc-800 pt-3">
+    <div
+      class="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider text-zinc-500"
+    >
+      <span>Item text</span>
+      <button
+        type="button"
+        class="lowercase tracking-normal text-zinc-400 hover:text-zinc-200"
+        onclick={() => (showTextBoxes = !showTextBoxes)}
+      >
+        {showTextBoxes ? 'hide boxes' : 'show boxes'}
+      </button>
+    </div>
+    {#if showTextBoxes}
+      <div class="relative mb-2 aspect-square w-full overflow-hidden rounded bg-zinc-900">
+        <img
+          src={getThumbUrl(crop.id, 320)}
+          alt="item text overlay"
+          class="h-full w-full object-contain"
+        />
+        {#each crop.item_text_lines as line, i (i)}
+          {#if line.box_norm && line.box_norm.length === 4}
+            {@const [x1, y1, x2, y2] = line.box_norm}
+            <div
+              class="pointer-events-none absolute border border-cyan-400/80"
+              style="left:{x1 * 100}%; top:{y1 * 100}%; width:{(x2 - x1) *
+                100}%; height:{(y2 - y1) * 100}%;"
+            ></div>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+    <ul class="space-y-0.5 text-xs">
+      {#each crop.item_text_lines as line, i (i)}
+        <li class="flex items-center gap-1.5">
+          <span
+            class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
+          >
+            {line.text || '∅'}
+          </span>
+          {#if line.confidence != null}
+            <span class="font-mono text-[10px] text-zinc-500">{pct(line.confidence)}</span
+            >
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  </div>
+{/if}
+
+<div class="mt-4 border-t border-zinc-800 pt-3">
+  <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">History</div>
+  {#if historyLoading}
+    <p class="text-[11px] text-zinc-500">Loading…</p>
+  {:else if historyError}
+    <p class="text-[11px] text-red-300">History unavailable: {historyError}</p>
+  {:else if !historyEntries || historyEntries.length === 0}
+    <p class="text-[11px] text-zinc-500">No prior writes recorded.</p>
+  {:else}
+    <ul class="space-y-1 text-[11px]">
+      {#each historyEntries as entry, i (i)}
+        <li class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-zinc-400">
+          <span class="font-mono text-zinc-300">{entry.writer ?? 'unknown'}</span>
+          {#if entry.class_name}
+            <span>→ {entry.class_name}</span>
+          {/if}
+          {#if entry.class_source}
+            <span class="text-zinc-600">({entry.class_source})</span>
+          {/if}
+          {#if entry.at}
+            <span class="font-mono text-zinc-600">{entry.at}</span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+</div>
+
+<div class="mt-4 border-t border-zinc-800 pt-3">
+  <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+    Source image
+  </div>
+  {#if imageLoading}
+    <p class="text-[11px] text-zinc-500">Loading…</p>
+  {:else if imageError}
+    <p class="text-[11px] text-red-300">Source image unavailable: {imageError}</p>
+  {:else if imageMeta}
+    <dl class="grid grid-cols-2 gap-y-1 text-[11px] text-zinc-400">
+      {#if imageMeta.width != null && imageMeta.height != null}
+        <dt class="text-zinc-500">Size</dt>
+        <dd class="font-mono">{imageMeta.width}×{imageMeta.height}</dd>
+      {/if}
+      {#if imageMeta.source}
+        <dt class="text-zinc-500">Source</dt>
+        <dd>{imageMeta.source}</dd>
+      {/if}
+      {#if imageMeta.indexed_at}
+        <dt class="text-zinc-500">Indexed</dt>
+        <dd class="font-mono">{imageMeta.indexed_at}</dd>
+      {/if}
+    </dl>
+    {#if siblings && siblings.length > 0}
+      <div class="mt-2 text-[10px] uppercase tracking-wider text-zinc-500">
+        Siblings ({siblings.length})
+      </div>
+      <div class="mt-1 flex flex-wrap gap-1.5">
+        {#each siblings as sib (sib.id)}
+          <img
+            src={getThumbUrl(sib.id, 64)}
+            alt="sibling crop"
+            title={sib.class_name ?? sib.id}
+            class="h-12 w-12 rounded border border-zinc-800 bg-zinc-900 object-contain"
+          />
+        {/each}
+      </div>
+    {/if}
+  {/if}
+</div>
 
 {#if crop.source_image_path || crop.updated_at}
   <div class="mt-4 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
