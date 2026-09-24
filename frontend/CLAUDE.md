@@ -112,6 +112,22 @@ preset)` is the single place that decides which queue actually gets
   `sample_crop_ids`) entirely — `bulkLabel` itself is unchanged and
   still used by `/clusters` drag-and-drop. Degrades to an inline error
   banner on a backend failure (observed live: an opensearch aggregation 503) rather than breaking the page.
+  - **Flagged terms (DQ-M11, dq-queues cutover 2026-09-24).** The
+    summary now also serves `without_term` (pending items with no
+    proposed term at all — shown as help text, not a row) and splits
+    every named term into `top_terms` (`flag: null` — the only kind
+    offered "Create class & assign") and `flagged_terms`
+    (`existing_class` / `generic_parent` / `non_object`). `/classes`
+    renders `flagged_terms` in a collapsed `<details>` with the served
+    reason ("generic parent" / "not an object" / "existing class → map
+    to X") and offers **no create action** for any of them —
+    `existing_class` alone gets a one-click "Map to `<class>`" using the
+    server's own `class_id` (`mapFlaggedTermToClass`, never an
+    operator-picked select). This is a server-side fix for the original
+    DQ-M11 bug (a one-click create was offered over super-category/junk
+    terms like "motorcycle" 89×) — the frontend just renders what's now
+    served. `term_rules` (the deployment's generic/non-object term lists)
+    renders as help text under the section intro.
 - **Served tab/preset labels** (OpenProcessor 1327181 naming sweep, W0
   finding m9): tab and preset _structure/ids_ above are still entirely
   frontend-owned (`REVIEW_TABS`/`REVIEW_PRESETS`), but their displayed
@@ -123,6 +139,22 @@ preset)` is the single place that decides which queue actually gets
   `id === endpointId`; the Plates tab: `'regions'`), every preset keyed
   by its own id. Absent or missing an id ⇒ the tab's/preset's existing
   static label, no tooltip — a missing endpoint never breaks the tab bar.
+- **Served per-tab filters (dq-queues cutover, 2026-09-24).** The same
+  `GET {API_PREFIX}/review/tabs` response now also carries each entry's
+  `filters` (the query params that tab honours) and `filter_defaults`
+  (values applied when a filter is omitted — `{max_rank: 2}` for the two
+  primary-subject tabs, `{}` elsewhere). `reviewTabsVocabularyStore`
+  gained `filtersFor`/`filterSupported`/`filterDefault` for this.
+  `/review`'s filter bar (Source / Class / Conf / plate-text / subject /
+  clarity) renders each control gated on `filterVisible(param)` —
+  `reviewTabsVocabularyStore.filterSupported(activeTabEndpointId, param)`
+  — instead of unconditionally, and the subject/max_rank toggle's
+  "unset" option label reads the served default (`servedMaxRankDefault`
+  → `` `Top ${n}` `` when set, else "All ranks") instead of a hardcoded
+  "Top 2". `filterSupported` defaults to **visible** when a tab's
+  `filters` is absent/unknown (older backend, or an id `GET
+{API_PREFIX}/review/tabs` doesn't know) — a control never disappears
+  because the vocabulary endpoint is stale or hasn't loaded yet.
 
 ## Review-queue deep links and filters (2026-09-24 logic-moves W5)
 
@@ -239,6 +271,39 @@ breaks page load. Flags are OpenProcessor env vars
 (`OP_SCORES_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`,
 `OP_VIZ_PROJECTION_ENABLED`, `OP_SEMANTIC_SEARCH_ENABLED`), all default
 off.
+
+## Cluster purity (DQ-M2, dq-queues cutover 2026-09-24)
+
+`GET {API_PREFIX}/clusters`' `purity` used to be tautological for a class
+cluster — computed from members' own `class_id`, so `cluster_id ===
+class_id` made it read ~1.0 ("pure") by construction regardless of
+actual visual/embedding coherence. It's now **nearest-centroid geometry
+purity**: the share of the `purity_n` members the cluster-geometry pass
+measured for this cluster whose _nearest cluster centroid_ is this
+cluster's own — independent of the labels that placed them.
+`purity_basis` names the method (`'nearest_centroid'` today, served
+rather than hardcoded); `purity_n` is how many members were measured
+(purity is noisy at low n). The **old** label-based number survives as
+`label_purity` (largest-class share among labelled members — still 1.0
+for a class cluster by construction), alongside `labelled_share`
+(fraction of members with any label at all). `promotable` is gated on
+`label_purity`, not the new `purity`.
+
+`purity_tier` (the pure/mixed/noisy badge/border color) is **unchanged**
+by this — still server-banded against `purity_thresholds`, still the
+single signal driving `/clusters`' card border and badge.
+
+- `/clusters` cards show `"<purity_tier text> NN% · n=NNN"` next to the
+  size chip, with `purity_basis`/`label_purity`/`labelled_share` in the
+  chip's tooltip. The legend strip's tooltip also names the basis now.
+- `/clusters/[id]`'s header gained a `"purity (nearest-centroid) NN% ·
+n=NNN"` line it previously lacked entirely (label_purity/
+  labelled_share in its tooltip).
+- All four new fields (`purity_n`, `purity_basis`, `label_purity`,
+  `labelled_share`) are optional on `RawCluster`/`Cluster` and render
+  gated on non-null — an older backend that doesn't serve them shows the
+  same purity number as before, just without the n/basis/label-purity
+  detail.
 
 ## Training UI — `/train` (Phase 2 of the training pipeline)
 

@@ -8,6 +8,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adopted OpenProcessor `main` 7254ec4 (cutover/dq-queues):
+  - **Item confidence fields.** `class_confidence`/`class_confidence_source`
+    (VLM high/medium/low mapped to 0.92/0.70/0.40 server-side, or the
+    classifier's own score; null for a human label), `vlm_raw_class`,
+    `vlm_class_attempted_at`/`vlm_class_empty_reason`, and
+    `cluster_nearest_id`/`cluster_distance` now map onto `Crop`
+    (`mapRawCrop`) and render on `CropCard`, the `/review` item panel and
+    `CropMetaPanel` — a "Label confidence" row separate from the existing
+    detector-score `confidence` row, "VLM said: …", and the empty reason
+    when set.
+  - **Per-tab review filters.** `GET {API_PREFIX}/review/tabs` now serves
+    each tab's `filters`/`filter_defaults`. `reviewTabsVocabularyStore`
+    gained `filtersFor`/`filterSupported`/`filterDefault`; `/review`'s
+    filter bar renders only the controls the active tab's served list
+    names, and the subject/max_rank toggle's "unset" label reads the
+    served default (`Top ${n}` / "All ranks") instead of a hardcoded
+    "Top 2". Unknown/absent (older backend) still shows every control.
+  - **New-class proposals (DQ-M11).** `GET {API_PREFIX}/review/
+new_class_proposals/summary` now serves `without_term`, `term_rules`,
+    and splits terms into `top_terms` (actionable) and `flagged_terms`
+    (`existing_class`/`generic_parent`/`non_object`). `/classes` renders
+    flagged terms in a collapsed section with the served reason and no
+    create action — `existing_class` gets a one-click map-to-class_id
+    instead.
+  - **Cluster purity (DQ-M2).** `purity` is now nearest-centroid geometry
+    purity (`purity_basis: 'nearest_centroid'`, `purity_n` measured),
+    independent of the new `label_purity`/`labelled_share`. `/clusters`
+    cards show "purity NN% · n=NNN" with the rest in the chip tooltip;
+    `/clusters/[id]`'s header gains a purity line it previously lacked
+    entirely. `purity_tier` (the pure/mixed/noisy badge) is unchanged.
+  - **Cluster moves on accept.** `acceptVlmForCrop`/`acceptAllVlmOnPage`
+    (`/clusters/[id]`) now drop a crop from the grid — via the same
+    `exclusionGuard` optimistic-removal pattern as a manual label move —
+    when the accepted class differs from the current cluster's own,
+    since labeling a crop now moves it into its class cluster
+    server-side; a suggestion matching the cluster's own class still
+    applies in place.
+  - Verified already-correct with no source change: `/review/mismatches`'
+    per-item `reason`, `/export` and `/train`'s generic 422-detail and
+    preflight-check rendering (new `export_not_empty`/`export_generation`
+    checks render with zero component changes).
 - Adopted OpenProcessor `main` 1327181's naming-sweep waves W0/W1 (finding
   m9) and the small F4-F11 renames that shipped alongside it:
   - **W0 — `GET {API_PREFIX}/regions/vocabulary`**: a new `regionVocabularyStore`
