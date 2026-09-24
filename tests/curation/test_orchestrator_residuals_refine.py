@@ -26,6 +26,12 @@ class _FakeScrollBulkOS:
         self._docs = docs
         self.bulk_calls: list[list[dict[str, Any]]] = []
 
+        class _Indices:
+            async def refresh(self, *, index: str) -> None:
+                pass
+
+        self.indices = _Indices()
+
     async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         hits = [{'_id': d['_id'], '_source': d['_source']} for d in self._docs]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
@@ -70,15 +76,17 @@ async def test_refine_region_cluster_splits_two_separated_groups() -> None:
     assert result['n_members'] == 6
     assert result['n_subclusters'] == 2
 
-    # Wrote through RegionFields.cluster_subid (not the vehicle-class field).
-    written_fields = set()
+    # Wrote through RegionFields.cluster_subid (not the vehicle-class field)
+    # via a guarded script (F-3) — noop unless the doc's cluster_id_field
+    # still equals the cluster being refined.
     subids_written = set()
     for chunk in client.bulk_calls:
         for action, doc in zip(chunk[0::2], chunk[1::2], strict=True):
             assert '_index' in action['update']
-            written_fields.update(doc['doc'].keys())
-            subids_written.add(doc['doc'][F.cluster_subid])
-    assert F.cluster_subid in written_fields
+            script = doc['script']
+            assert F.cluster_id in script['source']
+            assert script['params']['cid'] == 42
+            subids_written.add(script['params']['subid'])
     # Two distinct subcluster labels sharing the parent id prefix.
     assert len(subids_written) == 2
     assert all(sid.startswith('42') for sid in subids_written)
@@ -222,7 +230,8 @@ async def test_cluster_residuals_writes_land_in_the_residual_band(
     written_cluster_ids = []
     for chunk in bulk_calls:
         for _action, doc in zip(chunk[0::2], chunk[1::2], strict=True):
-            written_cluster_ids.append(doc['doc']['cluster_id'])
+            # F-3: guarded script, not a blind 'doc' update.
+            written_cluster_ids.append(doc['script']['params']['cid'])
     assert written_cluster_ids  # something was written
     for cid in written_cluster_ids:
         assert cid >= orch.RESIDUAL_CLUSTER_ID_OFFSET
