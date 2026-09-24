@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 import psutil
 import torch
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
 from src.clients.triton_pool import get_async_triton_client, get_client_pool_stats
@@ -223,6 +223,23 @@ async def health() -> JSONResponse:
     (liveness) or /ready (readiness) explicitly.
     """
     return await ready()
+
+
+@router.get('/health/pe_text')
+def pe_text_health(request: Request) -> JSONResponse:
+    """PE-Core text encoder status (backs ``GET /curation/search/text``).
+
+    200 with the active backend (``onnx`` / ``triton`` / ``torch``) once
+    warmed; 503 while cold or when no backend could load. Local to this
+    process — does not probe Triton.
+    """
+    encoder = getattr(request.app.state, 'pe_encoder', None)
+    if encoder is None:
+        return JSONResponse(
+            status_code=503, content={'ready': False, 'detail': 'PE encoder not constructed'}
+        )
+    status = encoder.text_status()
+    return JSONResponse(status_code=200 if status['ready'] else 503, content=status)
 
 
 @router.get('/metrics')
