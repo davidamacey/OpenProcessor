@@ -251,6 +251,9 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/curation/export_support.py',
     'src/routers/curation/export_single_class.py',
     'tests/curation/test_export_single_class.py',
+    # Operator tooling — probe-inference backfill driver.
+    'scripts/curation/run_probe.py',
+    'tests/curation/test_run_probe_cli.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.

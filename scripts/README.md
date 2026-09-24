@@ -69,6 +69,7 @@ see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
 | `sam_worker_main.py` | Detection-cascade worker entrypoint (`curation-detection-worker` service). |
 | `worker/` | Shared worker library: cascade runner, HTTP clients (segmenter, VLM), state/checkpoint handling. |
 | `backfill_scores.py` | One-off CLI to backfill item-quality scores onto existing indexed items. |
+| `run_probe.py` | Probe-inference backfill: runs a probe detector ONNX over every non-holdout item and writes the `probe_pred_*` fields behind the `/review` uncertainty + model-disagreement tabs and the `mistakenness` score. Dry-run by default; `--resume` skips items already scored by the same `--model-version`. |
 | `seed_live_harness.py` | Seeds the throwaway `docker/test/compose.yml` live-verification stack with deterministic data — **never point this at a real deployment** (it refuses to run against an index without a `verify_` prefix). |
 | `bakeoff/` | Detector bake-off evaluation harness (`curation-evaluator` compose service runs this on demand). |
 

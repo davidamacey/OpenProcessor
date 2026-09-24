@@ -345,6 +345,8 @@ async def run_probe_inference(
     max_crops: int | None = None,
     model_version: str | None = None,
     architecture: str = 'yolo11',
+    page_size: int = 1000,
+    resume: bool = False,
 ) -> int:
     """Run the probe checkpoint over every non-holdout item and record
     uncertainty.
@@ -365,6 +367,12 @@ async def run_probe_inference(
         model_version: Provenance tag stamped onto ``probe_model_version``.
             Defaults to ``model_path.name``.
         architecture: ``'yolo11'`` (default) or ``'v6'``.
+        page_size: Items per scroll page. Every page is fully inferred
+            before the next scroll call, so a slow (CPU) probe needs a
+            page small enough to finish inside the scroll keep-alive.
+        resume: Skip items whose ``probe_model_version`` already equals
+            this run's version tag, so an interrupted pass picks up
+            where it stopped instead of re-scoring everything.
 
     Returns:
         Number of item docs updated.
@@ -381,14 +389,9 @@ async def run_probe_inference(
     predict_fn, default_version = _build_predictor(model_path, architecture)
     version_tag = model_version or default_version
 
-    # Pull items that are NOT in the test holdout.
     body: dict[str, Any] = {
-        'size': 1000,
-        'query': {
-            'bool': {
-                'must_not': [{'term': {'test_holdout': True}}],
-            }
-        },
+        'size': page_size,
+        'query': probe_candidate_query(skip_version=version_tag if resume else None),
         '_source': [
             'crop_id',
             'image_path',
@@ -470,6 +473,30 @@ async def run_probe_inference(
                 logger.warning('probe_clear_scroll_failed', err=str(exc))
     logger.info('probe_done', processed=processed)
     return processed
+
+
+def probe_candidate_query(*, skip_version: str | None = None) -> dict[str, Any]:
+    """Items the probe scores: every non-holdout item, optionally minus those
+    already stamped with ``skip_version`` (resume)."""
+    must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
+    if skip_version:
+        must_not.append({'term': {'probe_model_version': skip_version}})
+    return {'bool': {'must_not': must_not}}
+
+
+async def count_probe_candidates(
+    opensearch: AsyncOpenSearch,
+    *,
+    config: CurationConfig | None = None,
+    skip_version: str | None = None,
+) -> int:
+    """How many items :func:`run_probe_inference` would visit (no model load)."""
+    cfg = config or get_curation_config()
+    resp = await opensearch.count(
+        index=cfg.items_index,
+        body={'query': probe_candidate_query(skip_version=skip_version)},
+    )
+    return int(resp.get('count', 0))
 
 
 def _entropy(probs: list[float]) -> float:
@@ -588,5 +615,7 @@ async def build_uncertainty_queue(
 
 __all__ = [
     'build_uncertainty_queue',
+    'count_probe_candidates',
+    'probe_candidate_query',
     'run_probe_inference',
 ]
