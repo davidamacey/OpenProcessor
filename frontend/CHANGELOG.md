@@ -184,6 +184,11 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
 
 ### Changed
 
+- The crop detail panel reads the source image's metadata and sibling
+  crops from `GET /crops/{id}/context`, which the backend added to end the
+  route collision on `/crops/{id}/image`. `getCropImage` is now
+  `getCropContext`. `/crops/{id}/image` serves the image itself again.
+
 - `clusterMoveRace.test.ts`'s `describe('wiring: ... actually uses the
 exclusion set', ...)` block (6 source-scan tests regexing
   `excludedCropIds.add`/`.delete` call sites across
