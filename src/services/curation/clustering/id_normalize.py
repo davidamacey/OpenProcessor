@@ -99,6 +99,27 @@ _SCOPE_CHUNK = 10_000
 """Crop ids per scoped update_by_query (well under the 65,536 terms cap)."""
 
 
+def class_cluster_placement(update: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """Cluster fields a class write should carry so the item lands in its
+    class cluster at write time — the rule :func:`force_cluster_id_equals_class_id`
+    applies in bulk, for one write (DQ-m3).
+
+    Returns ``{'cluster_id': class_id, 'cluster_subid': None}`` when
+    ``update`` sets a class from a confident source and ``current`` (the
+    freshly read doc) is elsewhere and not excluded; ``{}`` otherwise.
+    """
+    from src.services.curation.ingest_class_sources import confident_class_sources
+
+    class_id = update.get('class_id')
+    if not isinstance(class_id, int) or isinstance(class_id, bool):
+        return {}
+    if update.get('class_source') not in confident_class_sources():
+        return {}
+    if current.get('class_excluded') or current.get('cluster_id') == class_id:
+        return {}
+    return {'cluster_id': class_id, 'cluster_subid': None}
+
+
 async def force_cluster_id_equals_class_id(
     client: AsyncOpenSearch,
     *,

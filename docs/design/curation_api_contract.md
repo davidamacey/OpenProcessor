@@ -516,7 +516,12 @@ returned fields (`vlm_confidence`, `vlm_raw_label`, …), `class_source`
 values (`vlm`, `vlm_unmatched`, …), the review tab `vlm_low_conf`, the
 auto-label params and the stats keys (see B3).
 
-- `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`
+- `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`. A reply that
+  resolves to a registry class also sets `cluster_id = class_id` (and clears
+  `cluster_subid`) unless the item is excluded, as the worker's combined call
+  and the pipeline's normalize do (DQ-m3) — the item no longer waits in its
+  candidate or old class cluster for the next clustering run. Undo restores
+  the prior placement.
 - `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`
 - `VlmVerifyRegionBatchItem`: `crop_id`, `region_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
 - `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
