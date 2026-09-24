@@ -254,11 +254,20 @@ async def vlm_label_batch(
     crops: list[ItemCrop] = []
     cache_hits = 0
     cache_misses = 0
+    # F-26: one mget_crops() call instead of N separate opensearch.get()
+    # round trips.
+    from src.clients.curation_opensearch import mget_crops
+
+    docs_by_id = await mget_crops(
+        opensearch,
+        list(payload.crop_ids),
+        index=ITEMS_INDEX,
+        source_includes=['class_source', 'class_validated', 'image_path', 'bbox_norm'],
+    )
     for crop_id in payload.crop_ids:
-        try:
-            doc = await opensearch.get(index=ITEMS_INDEX, id=crop_id)
-        except Exception as exc:
-            logger.warning('curation_vlm_crop_missing', crop_id=crop_id, error=str(exc))
+        doc = docs_by_id.get(crop_id)
+        if doc is None:
+            logger.warning('curation_vlm_crop_missing', crop_id=crop_id)
             continue
         src = doc.get('_source') or {}
         # Never send a human-owned or class-validated crop to the VLM for
@@ -439,10 +448,19 @@ async def vlm_verify_regions(
     # never retried against).
     updates_by_id: dict[str, dict[str, Any]] = {}
     now = _now_iso()
+    # F-26: one mget_crops() call instead of N separate opensearch.get()
+    # round trips.
+    from src.clients.curation_opensearch import mget_crops
+
+    docs_by_id = await mget_crops(
+        opensearch,
+        list(payload.crop_ids),
+        index=ITEMS_INDEX,
+        source_includes=[_F.bbox_norm, 'image_path'],
+    )
     for crop_id in payload.crop_ids:
-        try:
-            doc = await opensearch.get(index=ITEMS_INDEX, id=crop_id)
-        except Exception:
+        doc = docs_by_id.get(crop_id)
+        if doc is None:
             logger.debug('curation_vlm_region_verify_skip_missing', crop_id=crop_id)
             continue
         src = doc.get('_source') or {}

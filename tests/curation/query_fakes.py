@@ -175,6 +175,7 @@ class QueryFakeOpenSearch:
         self.seq: dict[tuple[str, str], int] = {}
         self.searched_indexes: list[str] = []
         self.bulk_calls = 0
+        self.mget_calls = 0
         self.indices = _Indices(self)
 
     # ------------------------------------------------------------------ helpers
@@ -268,6 +269,7 @@ class QueryFakeOpenSearch:
     async def mget(
         self, *, body: dict[str, Any], index: str | None = None, **_kw: Any
     ) -> dict[str, Any]:
+        self.mget_calls += 1
         out = []
         specs = body.get('docs') or [{'_id': i, '_index': index} for i in body.get('ids', [])]
         for spec in specs:

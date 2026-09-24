@@ -394,14 +394,20 @@ class TestVlmLabelBatchHumanGuard:
         monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: fake_reg)
 
         fake_os = AsyncMock()
-        fake_os.get = AsyncMock(
+        fake_os.mget = AsyncMock(
             return_value={
-                '_source': {
-                    'class_source': 'human',
-                    'class_validated': True,
-                    'image_path': '/dev/null/never-read.jpg',
-                    'bbox_norm': [0.0, 0.0, 1.0, 1.0],
-                }
+                'docs': [
+                    {
+                        '_id': crop_id,
+                        'found': True,
+                        '_source': {
+                            'class_source': 'human',
+                            'class_validated': True,
+                            'image_path': '/dev/null/never-read.jpg',
+                            'bbox_norm': [0.0, 0.0, 1.0, 1.0],
+                        },
+                    }
+                ]
             }
         )
 
