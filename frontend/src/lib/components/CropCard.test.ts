@@ -73,7 +73,9 @@ describe('CropCard — source badge', () => {
     classSourcesStore.list = [{ id: 'vlm_write', label: 'VLM', role: 'vlm' }] as never;
 
     // class_validated=false, label_validated=true (region validated, class
-    // is not) — the badge must still render the unvalidated "VLM?" form.
+    // is not) — the badge must still render the unvalidated form. p4
+    // (2026-09-24 interactive pass): no longer a literal "?" suffix — the
+    // unvalidated state now lives in the title tooltip instead.
     const el = renderCard({
       crop: baseCrop({
         label_source: 'vlm_write',
@@ -81,8 +83,8 @@ describe('CropCard — source badge', () => {
         label_validated: true,
       }),
     });
-    const badge = el.querySelector('span[title="sedan"]');
-    expect(badge?.textContent?.trim()).toBe('VLM?');
+    const badge = el.querySelector('span[title="sedan — not yet validated"]');
+    expect(badge?.textContent?.trim()).toBe('VLM ·');
   });
 
   it('renders the validated form when class_validated is true regardless of label_validated', () => {

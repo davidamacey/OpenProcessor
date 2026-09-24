@@ -34,3 +34,18 @@ export function resolveStatsUpdate(
   }
   return { stats: payload as unknown as DatasetStats, error: null };
 }
+
+/**
+ * m29 (2026-09-24 interactive pass): the stats-unavailable banner dumped
+ * the raw served exception verbatim ("HTTPException: 503: opensearch
+ * error: RequestError(400, 'search_phase_execution_exception', 'Text
+ * fields are not optimised…"), which is backend internals, not an
+ * operator-facing message. This shortens it to a headline — still the
+ * server's own words, just capped — the full string stays available via
+ * a `title` attribute in the component, never dropped.
+ */
+export function summarizeStatsError(raw: string, maxLen = 90): string {
+  const trimmed = raw.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen).trimEnd()}…`;
+}

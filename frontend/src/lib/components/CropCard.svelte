@@ -294,7 +294,9 @@
   <div class="flex items-center gap-1 px-2 py-1.5">
     <span
       class="truncate rounded-sm border px-1 py-0.5 text-[10px] font-medium {badge.cls}"
-      title={crop.class_name ?? 'unlabeled'}
+      title={badge.unvalidated
+        ? `${crop.class_name ?? 'unlabeled'} — not yet validated`
+        : (crop.class_name ?? 'unlabeled')}
     >
       {badge.text}
     </span>

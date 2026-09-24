@@ -1980,7 +1980,14 @@ export async function batchPlateStatus(
     crop_ids: cropIds,
     [lc.statusField]: plateStatus,
   };
-  if (lc.verifiedField) body[lc.verifiedField] = opts.plateVerified ?? null;
+  // p5 (2026-09-24 interactive pass): used to always send
+  // `[verifiedField]: opts.plateVerified ?? null`, so a bulk call that
+  // never passed `plateVerified` (e.g. reject/mark-false-positive) sent
+  // an explicit `null` the server ignores. Omit the key entirely unless
+  // the caller actually asked to set it.
+  if (lc.verifiedField && opts.plateVerified !== undefined) {
+    body[lc.verifiedField] = opts.plateVerified;
+  }
   if (lc.labelSourceField) body[lc.labelSourceField] = opts.labelSource ?? 'human';
   return apiFetch(
     `${API_PREFIX}${path}`,

@@ -275,12 +275,19 @@
   <div class="flex items-center justify-between gap-3">
     <div>
       <h2 class="text-base font-semibold">Data integrity — recluster</h2>
+      <!-- m27 (2026-09-24 interactive pass): this used to say "AHC"
+           (the deployment's live clustering method is IVF, with AHC
+           only as a refine step over residuals — see CLAUDE.md's
+           `/clusters` strategy-bar section) and "runs the VLM", though
+           `run_vlm` defaults off (see the checkbox below, off unless
+           scoped). -->
       <p class="mt-0.5 text-xs text-zinc-400">
         Aligns <code class="text-zinc-300">cluster_id</code> with
-        <code class="text-zinc-300">class_id</code>, re-clusters unlabeled residuals
-        (AHC), promotes high-purity clusters, and runs the VLM over remaining unvalidated
-        crops. v6's confident labels and human validations are never overwritten. Hours at
-        350k-crop scale. Safe to cancel.
+        <code class="text-zinc-300">class_id</code>, re-clusters unlabeled residuals (IVF
+        + AHC refine), and promotes high-purity clusters. Optionally also runs the VLM
+        over remaining unvalidated crops (off by default — see "Run VLM labeling stage"
+        below). v6's confident labels and human validations are never overwritten. Hours
+        at 350k-crop scale. Safe to cancel.
       </p>
     </div>
     {#if !isRunning}

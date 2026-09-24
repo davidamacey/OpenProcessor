@@ -1058,6 +1058,29 @@ which the old check (`combo === 'shift+\``) never matched — fixed
     selection there — so the summary named a registry-wide count with
     no bearing on what would train. Replaced with a plain note when
     `singleClassExport` is true.
+  - **m27** — the dashboard recluster panel's blurb said the residual
+    stage uses "AHC" (the live method is IVF, with AHC only as a refine
+    step) and that it "runs the VLM over remaining unvalidated crops",
+    though `run_vlm` defaults off. Fixed both claims.
+  - **m29** — the dashboard's stats badge stayed green "LIVE" even
+    while the panel below showed "Stats unavailable" (it only tracked
+    SSE transport connectivity, not payload validity) — now reads
+    "degraded" (amber) whenever the last frame was an error envelope.
+    The banner also dumped the raw served exception in full; added
+    `summarizeStatsError()` (`$lib/datasetStats.ts`) to cap it to a
+    headline, with the full string still available via `title`.
+  - **p4** — the VLM source badge suffixed an unconfirmed label with a
+    bare "?" straight into the badge text ("Labeled by the VLM?"),
+    which read as a literal question. `sourceBadge()` now returns an
+    `unvalidated` flag instead of baking "?" into the text; the crop
+    card puts the real explanation ("— not yet validated") in the
+    title tooltip. (Long source-label truncation, the other half of
+    this finding, needs a served `short_label` — not fixed here.)
+  - **p5** — `batchPlateStatus()` always sent `region_verified: null`
+    when the caller didn't pass `plateVerified` (true of every bulk
+    reject/false-positive call from the plate gallery) — a field the
+    backend ignores. The key is now omitted entirely unless the caller
+    actually sets it.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —

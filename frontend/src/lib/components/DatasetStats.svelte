@@ -26,7 +26,7 @@
   import { type DatasetStats } from '$lib/api';
   import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
-  import { resolveStatsUpdate } from '$lib/datasetStats';
+  import { resolveStatsUpdate, summarizeStatsError } from '$lib/datasetStats';
 
   // The slot whose `stats` capability titles this panel (today:
   // license_plate's 'plates'/'Plate detections'/'Plate coverage', all
@@ -285,15 +285,27 @@
       <span title={lastUpdated ? new Date(lastUpdated).toLocaleString() : ''}>
         updated {fmtRelative(lastUpdated)}
       </span>
+      <!-- m29 (2026-09-24 interactive pass): this badge tracked only the
+           SSE transport (`connected`), so it kept reading "LIVE" in
+           green even while the stats banner below said the last frame
+           was an error envelope — a transport that's connected but
+           streaming errors isn't "live" in any sense an operator cares
+           about. -->
       <span
         class="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
-        class:bg-emerald-500={connected}
-        class:text-emerald-50={connected}
+        class:bg-emerald-500={connected && !error}
+        class:text-emerald-50={connected && !error}
+        class:bg-amber-600={connected && !!error}
+        class:text-amber-50={connected && !!error}
         class:bg-zinc-700={!connected}
         class:text-zinc-300={!connected}
-        title={connected ? 'Live via the pipeline/events SSE stream' : 'Reconnecting…'}
+        title={!connected
+          ? 'Reconnecting…'
+          : error
+            ? 'Connected, but the last stats frame was an error — showing last known values'
+            : 'Live via the pipeline/events SSE stream'}
       >
-        {connected ? 'live' : '…'}
+        {!connected ? '…' : error ? 'degraded' : 'live'}
       </span>
     </div>
   </header>
@@ -301,8 +313,9 @@
   {#if error}
     <div
       class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+      title={error}
     >
-      Stats unavailable: {error}
+      Stats unavailable: {summarizeStatsError(error)}
       {#if stats}(showing the last known values){/if}
     </div>
   {/if}

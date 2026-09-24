@@ -15,21 +15,41 @@ const TONE = {
   model: 'bg-blue-500/20 text-blue-200 border-blue-500/40',
 } as const;
 
+export interface SourceBadge {
+  text: string;
+  cls: string;
+  /** p4 (2026-09-24 interactive pass): whether `text` carries the
+   *  "unvalidated" marker — was a bare trailing "?" appended straight
+   *  into the badge text, which read as a question ("Labeled by the
+   *  VLM?") rather than a validation-state affordance. Callers use this
+   *  to put the real explanation in a `title`/tooltip instead. */
+  unvalidated: boolean;
+}
+
 export function sourceBadge(
   src: string | null | undefined,
   validated: boolean,
   role: ClassSourceRole | null,
   label: string,
-): { text: string; cls: string } {
+): SourceBadge {
   if (!src || src === 'unknown') {
-    return { text: validated ? 'auto' : 'unlabeled', cls: TONE.proposal };
+    return {
+      text: validated ? 'auto' : 'unlabeled',
+      cls: TONE.proposal,
+      unvalidated: false,
+    };
   }
   const r = role ?? '';
   const text = label || src;
-  if (r === 'human') return { text: 'human', cls: TONE.human };
-  if (r.startsWith('vlm')) return { text: validated ? text : `${text}?`, cls: TONE.vlm };
-  if (r === 'cluster') return { text, cls: TONE.cluster };
-  if (r === 'proposal' || r === 'low_conf') return { text, cls: TONE.proposal };
-  if (r === 'model') return { text, cls: TONE.model };
-  return { text, cls: TONE.proposal };
+  if (r === 'human') return { text: 'human', cls: TONE.human, unvalidated: false };
+  if (r.startsWith('vlm')) {
+    return validated
+      ? { text, cls: TONE.vlm, unvalidated: false }
+      : { text: `${text} ·`, cls: TONE.vlm, unvalidated: true };
+  }
+  if (r === 'cluster') return { text, cls: TONE.cluster, unvalidated: false };
+  if (r === 'proposal' || r === 'low_conf')
+    return { text, cls: TONE.proposal, unvalidated: false };
+  if (r === 'model') return { text, cls: TONE.model, unvalidated: false };
+  return { text, cls: TONE.proposal, unvalidated: false };
 }

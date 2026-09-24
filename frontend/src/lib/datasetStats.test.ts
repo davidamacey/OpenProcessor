@@ -7,7 +7,7 @@
  * 'sam_drain_total_unfinished')`.
  */
 import { describe, expect, it } from 'vitest';
-import { resolveStatsUpdate } from './datasetStats';
+import { resolveStatsUpdate, summarizeStatsError } from './datasetStats';
 import type { DatasetStats } from './api';
 
 const GOOD: DatasetStats = {
@@ -56,5 +56,24 @@ describe('resolveStatsUpdate', () => {
     const result = resolveStatsUpdate({ error: 'boom' }, null);
     expect(result.stats).toBeNull();
     expect(result.error).toBe('boom');
+  });
+});
+
+describe('summarizeStatsError (m29, 2026-09-24 interactive pass)', () => {
+  it('passes a short message through unchanged', () => {
+    expect(summarizeStatsError('opensearch unavailable')).toBe('opensearch unavailable');
+  });
+
+  it('truncates a long raw exception to a headline, appending an ellipsis', () => {
+    const raw =
+      "HTTPException: 503: opensearch error: RequestError(400, 'search_phase_execution_exception', 'Text fields are not optimised for operations that require per-document field data')";
+    const result = summarizeStatsError(raw);
+    expect(result.length).toBeLessThan(raw.length);
+    expect(result.endsWith('…')).toBe(true);
+    expect(raw.startsWith(result.slice(0, -1))).toBe(true);
+  });
+
+  it('respects a custom max length', () => {
+    expect(summarizeStatsError('abcdefghij', 5)).toBe('abcde…');
   });
 });

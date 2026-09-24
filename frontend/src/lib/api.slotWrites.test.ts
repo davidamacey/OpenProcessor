@@ -171,4 +171,26 @@ describe('batchPlateStatus', () => {
       region_label_source: 'human',
     });
   });
+
+  it('p5 (2026-09-24 interactive pass): omits region_verified entirely when the caller never passed plateVerified, instead of sending an ignored null', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        okResponse({ updated: 1, conflicts: [], invalid: [], items: [] }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    // The plate gallery's bulk reject/false-positive calls never pass
+    // `plateVerified` at all (SlotGallery.svelte / plateGalleryController).
+    await batchPlateStatus(licensePlateSlot, ['a'], 'no_region_visible');
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body).toEqual({
+      crop_ids: ['a'],
+      region_status: 'no_region_visible',
+      region_label_source: 'human',
+    });
+    expect('region_verified' in body).toBe(false);
+  });
 });

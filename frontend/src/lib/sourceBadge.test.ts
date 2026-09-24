@@ -8,9 +8,18 @@ describe('sourceBadge', () => {
     expect(b.cls).toContain('zinc');
   });
 
-  it('marks an unconfirmed VLM label with ?', () => {
-    expect(sourceBadge('vlm', false, 'vlm', 'VLM').text).toBe('VLM?');
-    expect(sourceBadge('vlm', true, 'vlm', 'VLM').text).toBe('VLM');
+  it('marks an unconfirmed VLM label with the unvalidated flag, not a literal "?" (p4, 2026-09-24 interactive pass)', () => {
+    // p4: a bare "?" suffixed straight into the badge text read as a
+    // question ("Labeled by the VLM?"). The badge text itself no longer
+    // contains "?" — callers render the real explanation via `title`
+    // using the `unvalidated` flag instead.
+    const unconfirmed = sourceBadge('vlm', false, 'vlm', 'VLM');
+    expect(unconfirmed.text).not.toContain('?');
+    expect(unconfirmed.unvalidated).toBe(true);
+
+    const confirmed = sourceBadge('vlm', true, 'vlm', 'VLM');
+    expect(confirmed.text).toBe('VLM');
+    expect(confirmed.unvalidated).toBe(false);
   });
 
   it('colors by role, so a renamed detector keeps its meaning', () => {
