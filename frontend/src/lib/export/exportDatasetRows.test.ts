@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { buildExportRows } from './exportDatasetRows';
-import type { StatsSummary, TestHoldoutStats } from '$lib/types';
+import { buildExportRows, hasCurrentMulticlassExport } from './exportDatasetRows';
+import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
+
+function dataset(over: Partial<ExportDataset>): ExportDataset {
+  return {
+    kind: 'yolo',
+    export_dir: '/exports/x',
+    version_tag: 'v1',
+    is_current: false,
+    ...over,
+  };
+}
 
 function perClass(
   over: Partial<StatsSummary['per_class'][number]>,
@@ -78,5 +88,43 @@ describe('buildExportRows — W4: server-served aug_target/aug_gap/deficient, no
     // min_test_per_class: 0 means "no minimum enforced" — 0 test crops is
     // NOT deficient. A hardcoded "< 5" would wrongly flag this row.
     expect(rows[0]?.testDeficient).toBe(false);
+  });
+
+  it('m16: surfaces the served adequacy tier verbatim, null when unserved', () => {
+    const rows = buildExportRows(perClass({ adequacy: 'warn' }), null);
+    expect(rows[0]?.adequacy).toBe('warn');
+
+    const rowsUnset = buildExportRows(perClass({}), null);
+    expect(rowsUnset[0]?.adequacy).toBeNull();
+  });
+});
+
+describe('hasCurrentMulticlassExport (m15)', () => {
+  it('false when the list is empty', () => {
+    expect(hasCurrentMulticlassExport([])).toBe(false);
+  });
+
+  it('false when only a single_class dataset (e.g. license_plate) is current — the actual bug case', () => {
+    expect(
+      hasCurrentMulticlassExport([
+        dataset({
+          kind: 'single_class',
+          profile_name: 'license_plate',
+          is_current: true,
+        }),
+      ]),
+    ).toBe(false);
+  });
+
+  it('false when a yolo dataset exists but is not the current one', () => {
+    expect(
+      hasCurrentMulticlassExport([dataset({ kind: 'yolo', is_current: false })]),
+    ).toBe(false);
+  });
+
+  it('true only for a current yolo (multi-class) dataset', () => {
+    expect(
+      hasCurrentMulticlassExport([dataset({ kind: 'yolo', is_current: true })]),
+    ).toBe(true);
   });
 });

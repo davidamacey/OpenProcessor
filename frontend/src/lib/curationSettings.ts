@@ -99,10 +99,15 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
     axis: 'sort',
     label: 'Review queue sort',
     bucket: 'review_sorts',
+    // m10 (2026-09-24 interactive pass): this used to say the pinned
+    // default REPLACES each tab's own tuned default — the server does
+    // the opposite (review_sorts.py's _TAB_DEFAULTS wins when a tab has
+    // one). Only a tab with no tuned default of its own (today: All,
+    // New Class Proposals) falls back to this pinned sort.
     blurb:
-      'Applied to every /review tab that does not request its own sort — which is ' +
-      'every tab on a fresh load. This REPLACES each tab’s own tuned default ' +
-      '(Uncertainty, Model Disagreements, COCO Blind Spots, Plates).',
+      'Applied only to /review tabs that have no tuned default of their own (today: ' +
+      'All, New Class Proposals). Uncertainty, Model Disagreements, COCO Blind Spots ' +
+      'and Plates keep applying their own default sort regardless of this setting.',
     // Was irreversible (H-1) until the backend added a clear path; the
     // page's "Clear" button now covers this axis like any other.
     irreversibleWarning: null,

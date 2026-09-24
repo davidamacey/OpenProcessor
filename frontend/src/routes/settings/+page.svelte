@@ -28,6 +28,16 @@
   } from '$lib/curationSettings';
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
+  import { hasFieldCoverage, type MethodInfoBase } from '$lib/strategies';
+
+  // `axisOptions()` returns the shared `MethodInfoBase[]` (it serves every
+  // axis, not just review_sorts), which doesn't itself declare
+  // `field_coverage` — the real runtime entries do (`ReviewSortInfo` etc.,
+  // same structural gap StrategyBar.svelte's local `hasFieldCoverage`
+  // wrapper works around).
+  function coverageOf(opt: MethodInfoBase): boolean {
+    return hasFieldCoverage(opt as { field_coverage?: number | null });
+  }
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -223,10 +233,20 @@
               >
                 {#each options as opt (opt.id)}
                   <option value={opt.id}>
-                    {opt.label}{opt.status === 'experimental' ? ' · beta' : ''}
+                    {opt.label}{opt.status === 'experimental'
+                      ? ' · beta'
+                      : ''}{coverageOf(opt) ? '' : ' · no coverage yet'}
                   </option>
                 {/each}
               </select>
+              {@const selectedOpt = options.find((o) => o.id === (selected ?? effective))}
+              {#if selectedOpt && !coverageOf(selectedOpt)}
+                <span
+                  class="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-200"
+                >
+                  0 coverage — pinning this sorts by tie-break only
+                </span>
+              {/if}
               <button
                 type="button"
                 class="btn"

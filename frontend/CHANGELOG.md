@@ -971,6 +971,28 @@ which the old check (`combo === 'shift+\``) never matched — fixed
   - **p2** — `AutoLabelPanel`'s "Recluster now" fired with no
     confirmation (Run VLM on `/clusters/[id]` already gained one in the
     earlier merge pass fix). It now opens a confirm dialog first.
+  - **m16** — `/export`'s served per-class `adequacy` tier (`block`/
+    `warn`/`ok`) wasn't rendered anywhere; added an Adequacy column.
+    The `by_source` HDD distribution fetch also failed silently on a
+    503/non-JSON response — it now shows an inline "Dataset totals
+    unavailable" notice instead of just rendering nothing.
+  - **m15** — the `class_registry.json`/`data.yaml`/`manifest.json`
+    download buttons gated on the shared export-job-status slot
+    (`exportState?.status === 'success'`), which stayed "success" with
+    no _current_ frozen multi-class (`yolo`) export on disk and 404ed.
+    Added `hasCurrentMulticlassExport()` (`exportDatasetRows.ts`),
+    which reads the served `GET {API_PREFIX}/export/datasets` list, and
+    gated the three buttons on that instead.
+  - **m10** — `/settings`' sort-axis blurb claimed the pinned default
+    "REPLACES each tab's own tuned default", which is backwards — a
+    tab with its own tuned default (Uncertainty, Model Disagreements,
+    COCO Blind Spots, Plates) keeps it regardless of this setting; only
+    All and New Class Proposals fall back to the pinned sort. Fixed the
+    copy, and every settable axis's `<select>` now marks a
+    zero-`field_coverage` option "· no coverage yet" (shared
+    `hasFieldCoverage()`, same predicate `StrategyBar` uses), plus an
+    inline warning when the currently-selected/effective option has no
+    coverage.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —

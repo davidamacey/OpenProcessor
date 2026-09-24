@@ -10,9 +10,14 @@
     getManifestUrl,
     getStats,
     getTestHoldoutStats,
+    listDatasets,
   } from '$lib/api';
   import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
-  import { buildExportRows, type ExportRow } from '$lib/export/exportDatasetRows';
+  import {
+    buildExportRows,
+    hasCurrentMulticlassExport,
+    type ExportRow,
+  } from '$lib/export/exportDatasetRows';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -40,6 +45,13 @@
   let exportState = $state<ExportStatus | null>(null);
   let pollHandle: ReturnType<typeof setInterval> | null = null;
   let exportModalOpen = $state<boolean>(false);
+  // m15 (2026-09-24 interactive pass): the registry download buttons used
+  // to gate on `exportState?.status === 'success'` alone, which is a
+  // single shared job-status slot (see m28's dashboard finding) and
+  // stayed "success" even with no *current* frozen multi-class (`yolo`)
+  // export on disk — so the buttons looked enabled and 404ed. Gated on
+  // the served `GET {API_PREFIX}/export/datasets` list instead.
+  let hasMulticlassExport = $state<boolean>(false);
 
   // Test holdout freeze
   let freezeOpen = $state<boolean>(false);
@@ -51,14 +63,17 @@
     loading = true;
     error = null;
     try {
-      const [s, h, e] = await Promise.allSettled([
+      const [s, h, e, d] = await Promise.allSettled([
         getStats(),
         getTestHoldoutStats(),
         exportStatus(),
+        listDatasets({ kind: 'yolo' }),
       ]);
       stats = s.status === 'fulfilled' ? s.value : null;
       holdout = h.status === 'fulfilled' ? h.value : null;
       exportState = e.status === 'fulfilled' ? e.value : null;
+      hasMulticlassExport =
+        d.status === 'fulfilled' && hasCurrentMulticlassExport(d.value.datasets);
       if (s.status === 'rejected' && h.status === 'rejected') {
         error = 'API unavailable';
       }
@@ -108,6 +123,17 @@
     return deficient
       ? 'bg-red-500/20 text-red-200 border-red-500/40'
       : 'bg-zinc-800 text-zinc-300 border-zinc-700';
+  }
+
+  // m16 (2026-09-24 interactive pass): the served per-class `adequacy`
+  // tier wasn't rendered anywhere on this page. Just a display of the
+  // server's own value — no client-side threshold logic.
+  function adequacyClass(adequacy: string | null): string {
+    if (adequacy === 'block') return 'bg-red-500/20 text-red-200 border-red-500/40';
+    if (adequacy === 'warn')
+      return 'bg-orange-500/20 text-orange-200 border-orange-500/40';
+    if (adequacy === 'ok') return 'bg-green-500/20 text-green-200 border-green-500/40';
+    return 'bg-zinc-800 text-zinc-400 border-zinc-700';
   }
 
   // ---- export ------------------------------------------------------------
@@ -219,6 +245,11 @@
     doc_count: number;
   }
   let hddSources = $state<HddBucket[]>([]);
+  // m16 (2026-09-24 interactive pass): this fetch used to fail silently —
+  // a 503/non-JSON response just left hddSources empty with no visible
+  // sign anything had gone wrong, so the "totals failed" case looked
+  // identical to "no source data at all".
+  let hddSourcesError = $state<string | null>(null);
   // Pull from the same {API_PREFIX}/stats/dataset response — the existing `getStats`
   // surface only exposes per_class + ingestion summary; we hit the
   // dataset-stats endpoint directly via fetch for the by_source bucket.
@@ -231,13 +262,24 @@
         const res = await fetch(`${apiBase}${API_PREFIX}/stats/dataset`, {
           method: 'GET',
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          hddSourcesError = `Dataset totals unavailable (API ${res.status}) — by-source breakdown may be stale or missing.`;
+          return;
+        }
         const ct = res.headers.get('content-type') ?? '';
-        if (!ct.includes('application/json')) return;
-        const json = (await res.json()) as { by_source?: HddBucket[] };
+        if (!ct.includes('application/json')) {
+          hddSourcesError = 'Dataset totals unavailable (non-JSON response).';
+          return;
+        }
+        const json = (await res.json()) as { by_source?: HddBucket[]; error?: string };
+        if (json.error) {
+          hddSourcesError = `Dataset totals unavailable: ${json.error}`;
+          return;
+        }
+        hddSourcesError = null;
         if (Array.isArray(json.by_source)) hddSources = json.by_source;
-      } catch {
-        /* ignore */
+      } catch (e) {
+        hddSourcesError = `Dataset totals unavailable: ${(e as Error).message}`;
       }
     })();
   });
@@ -296,7 +338,13 @@
   </section>
 
   <!-- HDD source distribution -->
-  {#if hddSources.length > 0}
+  {#if hddSourcesError}
+    <section
+      class="surface border-orange-500/40 bg-orange-500/10 p-3 text-xs text-orange-200"
+    >
+      {hddSourcesError}
+    </section>
+  {:else if hddSources.length > 0}
     <section class="surface p-4">
       <h2 class="mb-2 text-sm font-semibold text-zinc-300">HDD source distribution</h2>
       <ul class="flex flex-wrap gap-2 text-xs">
@@ -351,6 +399,7 @@
               onclick={() => setSort('gap')}>Gap</th
             >
             <th class="px-3 py-2 text-right font-medium">Test</th>
+            <th class="px-3 py-2 text-right font-medium">Adequacy</th>
           </tr>
         </thead>
         <tbody>
@@ -390,6 +439,19 @@
                   {row.test_count}
                 </span>
               </td>
+              <td class="px-3 py-1.5 text-right">
+                {#if row.adequacy == null}
+                  <span class="font-mono text-xs text-zinc-500">—</span>
+                {:else}
+                  <span
+                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
+                      row.adequacy,
+                    )}"
+                  >
+                    {row.adequacy}
+                  </span>
+                {/if}
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -425,12 +487,15 @@
 
       <span class="grow"></span>
 
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <button
           type="button"
           class="btn"
           onclick={() => downloadUrl(getClassRegistryUrl(), 'class_registry.json')}
-          disabled={exportState?.status !== 'success'}
+          disabled={!hasMulticlassExport}
+          title={hasMulticlassExport
+            ? ''
+            : 'No frozen multi-class (yolo) export on disk yet'}
         >
           class_registry.json
         </button>
@@ -438,7 +503,10 @@
           type="button"
           class="btn"
           onclick={() => downloadUrl(getDataYamlUrl(), 'data.yaml')}
-          disabled={exportState?.status !== 'success'}
+          disabled={!hasMulticlassExport}
+          title={hasMulticlassExport
+            ? ''
+            : 'No frozen multi-class (yolo) export on disk yet'}
         >
           data.yaml
         </button>
@@ -446,10 +514,16 @@
           type="button"
           class="btn"
           onclick={() => downloadUrl(getManifestUrl(), 'manifest.json')}
-          disabled={exportState?.status !== 'success'}
+          disabled={!hasMulticlassExport}
+          title={hasMulticlassExport
+            ? ''
+            : 'No frozen multi-class (yolo) export on disk yet'}
         >
           manifest.json
         </button>
+        {#if !hasMulticlassExport}
+          <span class="text-[11px] text-zinc-500">No frozen multi-class export yet</span>
+        {/if}
       </div>
     </div>
 

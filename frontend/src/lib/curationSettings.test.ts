@@ -173,3 +173,15 @@ describe('effectiveDefaultId / isPinned', () => {
     expect(effectiveDefaultId(EMPTY_CURATION_SETTINGS, bareMethods, spec)).toBeNull();
   });
 });
+
+describe('sort axis blurb (m10, 2026-09-24 interactive pass)', () => {
+  it('does not claim the pinned default REPLACES a tab’s own tuned sort', () => {
+    const sortSpec = axisSpec('sort')!;
+    expect(sortSpec.blurb).not.toMatch(/REPLACES/i);
+  });
+
+  it('states the actual precedence: only tabs with no tuned default of their own use it', () => {
+    const sortSpec = axisSpec('sort')!;
+    expect(sortSpec.blurb).toMatch(/no tuned default of their own/i);
+  });
+});

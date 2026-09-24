@@ -84,4 +84,29 @@ describe('/settings deployment-defaults page', () => {
     const slice = src.slice(start, sectionCloseIdx === -1 ? undefined : sectionCloseIdx);
     expect(slice).not.toMatch(/>\s*Clear\s*</);
   });
+
+  // m10 (2026-09-24 interactive pass): the select used to offer every
+  // axis option with no signal a 0-coverage sort is offered unmarked.
+  // `hasFieldCoverage()` itself is behaviorally covered (mutation-tested)
+  // in strategies.test.ts — this checks the page actually calls it rather
+  // than re-deriving the predicate inline.
+  it('marks zero-coverage options via the shared hasFieldCoverage predicate, not an inline check', () => {
+    expect(src).toMatch(/hasFieldCoverage/);
+    expect(src).toMatch(/from\s*['"]\$lib\/strategies['"]/);
+    expect(src).toMatch(/coverageOf\(\s*opt\s*,?\s*\)/);
+    expect(src).not.toMatch(/field_coverage\s*===\s*0/);
+  });
+
+  it('the option label appends " · no coverage yet" exactly when coverageOf(opt) is false, not true', () => {
+    // Pins the ternary's branch order — a flipped `? '' : '…'` would
+    // label every *covered* option as having no data instead.
+    expect(src).toMatch(
+      /coverageOf\(opt\)\s*\n?\s*\?\s*''\s*\n?\s*:\s*'\s*·\s*no coverage yet'/,
+    );
+  });
+
+  it('shows an explicit 0-coverage warning gated on !coverageOf(selectedOpt), not coverageOf(selectedOpt)', () => {
+    expect(src).toMatch(/!coverageOf\(selectedOpt\)/);
+    expect(src).toMatch(/0 coverage/);
+  });
 });

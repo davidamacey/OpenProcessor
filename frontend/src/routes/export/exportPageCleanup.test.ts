@@ -12,7 +12,10 @@ import { describe, expect, it } from 'vitest';
  * @testing-library/svelte in this repo — see clusterMoveRace.test.ts /
  * reviewFilterConsistency.test.ts for the established precedent) proving:
  * the stale panel is gone, a `/train` link points the operator to the real
- * next step, and the registry download buttons are gated on export success.
+ * next step, and the registry download buttons are gated on the served
+ * `GET {API_PREFIX}/export/datasets` availability flag (m15, 2026-09-24
+ * interactive pass — see exportDatasetRows.test.ts for the behavioral
+ * coverage of the gating logic itself, `hasCurrentMulticlassExport()`).
  */
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
@@ -37,7 +40,7 @@ describe('export page: stale training-command panel removed', () => {
   });
 });
 
-describe('export page: registry download buttons gated on export success', () => {
+describe('export page: registry download buttons gated on the served dataset list (m15)', () => {
   function buttonBlock(marker: string): string {
     const idx = src.indexOf(marker);
     expect(idx).toBeGreaterThan(-1);
@@ -46,22 +49,22 @@ describe('export page: registry download buttons gated on export success', () =>
     return src.slice(start, end);
   }
 
-  it('class_registry.json button is disabled until export success', () => {
+  it('class_registry.json button is disabled without a current multi-class export', () => {
     const block = buttonBlock("getClassRegistryUrl(), 'class_registry.json'");
-    expect(block).toMatch(/disabled=\{exportState\?\.status !== 'success'\}/);
+    expect(block).toMatch(/disabled=\{!hasMulticlassExport\}/);
   });
 
-  it('data.yaml button is disabled until export success', () => {
+  it('data.yaml button is disabled without a current multi-class export', () => {
     const block = buttonBlock("getDataYamlUrl(), 'data.yaml'");
-    expect(block).toMatch(/disabled=\{exportState\?\.status !== 'success'\}/);
+    expect(block).toMatch(/disabled=\{!hasMulticlassExport\}/);
   });
 
-  it('manifest.json download button (main panel) is disabled until export success', () => {
-    const idx = src.indexOf("getManifestUrl(), 'manifest.json'");
-    expect(idx).toBeGreaterThan(-1);
-    const start = src.lastIndexOf('<button', idx);
-    const end = src.indexOf('</button>', idx);
-    const block = src.slice(start, end);
-    expect(block).toMatch(/disabled=\{exportState\?\.status !== 'success'\}/);
+  it('manifest.json download button (registry row) is disabled without a current multi-class export', () => {
+    const block = buttonBlock("getManifestUrl(), 'manifest.json'");
+    expect(block).toMatch(/disabled=\{!hasMulticlassExport\}/);
+  });
+
+  it('no longer gates any of the three on the shared export-job-status slot', () => {
+    expect(src).not.toMatch(/disabled=\{exportState\?\.status !== 'success'\}/);
   });
 });

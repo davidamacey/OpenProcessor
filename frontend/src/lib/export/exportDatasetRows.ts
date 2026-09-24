@@ -10,7 +10,7 @@
  * has zero test crops, which is compared against the served
  * `min_test_per_class`. With no holdout stats at all nothing is flagged.
  */
-import type { StatsSummary, TestHoldoutStats } from '$lib/types';
+import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
 
 export interface ExportRow {
   class_id: number;
@@ -22,6 +22,8 @@ export interface ExportRow {
   gap: number | null;
   test_count: number;
   testDeficient: boolean;
+  /** Served adequacy tier (`block`/`warn`/`ok`); null when unserved (m16). */
+  adequacy: string | null;
 }
 
 export function buildExportRows(
@@ -47,6 +49,20 @@ export function buildExportRows(
       gap: c.aug_gap ?? null,
       test_count: test?.count ?? 0,
       testDeficient: test?.deficient ?? (minTest != null && (test?.count ?? 0) < minTest),
+      adequacy: c.adequacy ?? null,
     };
   });
+}
+
+/**
+ * m15 (2026-09-24 interactive pass): the registry download buttons
+ * (class_registry.json/data.yaml/manifest.json) only make sense for a
+ * frozen multi-class (`yolo`) export — they used to gate on the shared
+ * export-job-status slot instead, which stayed "success" with no current
+ * `yolo` dataset on disk and 404ed. Whether a served `yolo` dataset is
+ * current is exactly what `GET {API_PREFIX}/export/datasets` reports —
+ * no client-side inference.
+ */
+export function hasCurrentMulticlassExport(datasets: ExportDataset[]): boolean {
+  return datasets.some((d) => d.kind === 'yolo' && d.is_current);
 }
