@@ -192,7 +192,7 @@ class RowCollector:
         hits = await scroll_hits(
             self.opensearch,
             index=self.config.items_index,
-            query=self._region_query({'terms': {f'{f.status}.keyword': wanted}}),
+            query=self._region_query({'terms': {f.status: wanted}}),
             source=source,
         )
         rows = self._build_region_rows(hits, image_mode=image_mode)
@@ -204,9 +204,7 @@ class RowCollector:
             empty_hits = await scroll_hits(
                 self.opensearch,
                 index=self.config.items_index,
-                query=self._region_query(
-                    {'terms': {f'{f.status}.keyword': sorted(EMPTY_REGION_STATUSES)}}
-                ),
+                query=self._region_query({'terms': {f.status: sorted(EMPTY_REGION_STATUSES)}}),
                 source=source,
                 # Over-read: empty frames carry several items each, and this
                 # export needs distinct FRAMES, not documents.

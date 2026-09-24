@@ -293,6 +293,28 @@ def _items_body() -> dict[str, Any]:
                 F.verifier_version: {'type': 'keyword'},
                 F.verified_at: {'type': 'date'},
                 F.rejection_reason: {'type': 'keyword'},
+                # Region lifecycle + VLM read-back. Explicit so none of these
+                # fall to dynamic `text` mapping, where terms aggregations and
+                # sorts on the bare field name fail.
+                F.status: {'type': 'keyword'},
+                F.bbox_correct: {'type': 'boolean'},
+                F.confidence: {'type': 'keyword'},
+                F.text: {'type': 'keyword', 'fields': {'search': {'type': 'text'}}},
+                F.text_raw: {'type': 'keyword'},
+                F.text_confidence: {'type': 'float'},
+                F.text_source: {'type': 'keyword'},
+                F.text_engine_version: {'type': 'keyword'},
+                F.class_id: {'type': 'integer'},
+                F.label_source: {'type': 'keyword'},
+                F.source: {'type': 'keyword'},
+                F.pairing: {'type': 'keyword'},
+                F.skip_verify: {'type': 'boolean'},
+                # Item label fields written by ingest and the VLM labeler.
+                'proposal_name': {'type': 'keyword'},
+                'vlm_confidence': {'type': 'keyword'},
+                'vlm_raw_class': {'type': 'keyword'},
+                'vlm_proposed_class': {'type': 'keyword'},
+                'needs_new_class': {'type': 'boolean'},
                 # Quarantine bookkeeping — a legacy-region quarantine script
                 # copies the original values into these fields before
                 # clearing the live fields and re-running detection.

@@ -443,7 +443,7 @@ async def ingest_sam_drain(opensearch: OpenSearchDep) -> dict[str, int]:
         'size': 0,
         'aggs': {
             'by_status': {
-                'terms': {'field': f'{fields.status}.keyword', 'size': 16},
+                'terms': {'field': fields.status, 'size': 16},
             },
         },
     }

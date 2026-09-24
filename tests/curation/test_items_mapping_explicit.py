@@ -1,0 +1,82 @@
+"""Every field the curation writers put on items must be explicitly mapped.
+
+A field left to OpenSearch dynamic mapping becomes ``text`` + ``.keyword``,
+so terms aggregations and sorts on the bare name fail outright (a live
+deployment's ``region_status`` breakdown 400'd this way) and exact-match
+filters only work by accident of tokenization.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+
+import pytest
+
+from src.clients.curation_opensearch import _items_body
+from src.config.region_fields import RegionFields
+
+
+_PROPS = _items_body()['mappings']['properties']
+
+# Status/provenance fields the API and workers filter, aggregate or sort on.
+_MUST_BE_KEYWORD = {
+    'status',
+    'text_source',
+    'text_engine_version',
+    'label_source',
+    'source',
+    'pairing',
+    'detector',
+    'bbox_frame',
+    'confidence',
+}
+
+
+@pytest.mark.parametrize(
+    'attr', [f.name for f in dataclasses.fields(RegionFields) if f.name != 'prefix']
+)
+def test_every_region_field_is_explicitly_mapped(attr: str) -> None:
+    name = getattr(RegionFields(), attr)
+    assert name in _PROPS, f'RegionFields.{attr} ({name}) has no explicit items mapping'
+
+
+@pytest.mark.parametrize('attr', sorted(_MUST_BE_KEYWORD))
+def test_aggregatable_region_fields_are_keyword(attr: str) -> None:
+    assert _PROPS[getattr(RegionFields(), attr)]['type'] == 'keyword'
+
+
+@pytest.mark.parametrize(
+    ('field', 'expected'),
+    [
+        ('proposal_name', 'keyword'),
+        ('vlm_confidence', 'keyword'),
+        ('vlm_raw_class', 'keyword'),
+        ('vlm_proposed_class', 'keyword'),
+        ('needs_new_class', 'boolean'),
+    ],
+)
+def test_item_label_fields_are_mapped(field: str, expected: str) -> None:
+    assert _PROPS.get(field, {}).get('type') == expected
+
+
+def test_region_text_supports_exact_and_partial_search() -> None:
+    mapping = _PROPS[RegionFields().text]
+    assert mapping['type'] == 'keyword'
+    assert mapping['fields']['search']['type'] == 'text'
+
+
+def test_no_query_targets_a_dynamic_keyword_subfield_of_a_region_field() -> None:
+    """Explicitly keyword-mapped fields have no ``.keyword`` subfield."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    pattern = re.compile(r'\{\w+\.\w+\}\.keyword')
+    offenders = [
+        f'{p.relative_to(root)}:{i}'
+        for base in ('src', 'scripts')
+        for p in (root / base).rglob('*.py')
+        for i, line in enumerate(p.read_text(encoding='utf-8').splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert not offenders, offenders

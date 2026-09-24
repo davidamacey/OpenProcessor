@@ -1092,7 +1092,7 @@ async def cluster_region_residuals(
     query = {
         'bool': {
             'must': must,
-            'must_not': [{'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}}],
+            'must_not': [{'term': {F.status: RegionStatus.FALSE_POSITIVE}}],
         }
     }
 
@@ -1319,7 +1319,7 @@ async def _count_false_positives(client: AsyncOpenSearch) -> int:
     try:
         resp = await client.count(
             index=ITEMS_INDEX,
-            body={'query': {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}}},
+            body={'query': {'term': {F.status: RegionStatus.FALSE_POSITIVE}}},
         )
         return int(resp.get('count', 0))
     except Exception as exc:
@@ -1456,7 +1456,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
     query = {
         'bool': {
             'must': [
-                {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
+                {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
                 {'exists': {'field': F.embedding}},
             ]
         }
@@ -1556,9 +1556,9 @@ def fp_candidate_must_not() -> list[dict[str, Any]]:
     not shield a real false positive. Only a human's decision is final.
     """
     return [
-        {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
+        {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
         {'term': {'test_holdout': True}},
-        {'term': {f'{F.label_source}.keyword': 'human'}},
+        {'term': {F.label_source: 'human'}},
         {'term': {F.verifier: 'human'}},
     ]
 

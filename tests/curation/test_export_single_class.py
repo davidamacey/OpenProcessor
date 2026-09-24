@@ -73,7 +73,7 @@ class _FakeOpenSearch:
         wanted: set[str] = set()
         for clause in clauses:
             for field_name, values in clause.get('terms', {}).items():
-                if field_name.endswith('.keyword'):
+                if field_name == _F.status:
                     wanted.update(values)
         if not wanted:
             return self._docs
