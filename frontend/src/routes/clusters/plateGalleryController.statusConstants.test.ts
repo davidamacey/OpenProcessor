@@ -23,6 +23,12 @@ import {
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 
 describe('plateGalleryController status constants', () => {
+  // Kept (test-audit-2026-09-24.md T2/P2-2): this is a real regression
+  // guard — it fails if PLATE_CONFIRM_STATE/etc. are ever re-hardcoded
+  // instead of derived from the profile. No mount/controller test
+  // reaches this: it's a module-level `export const` computed once at
+  // import time, not something a component render or a controller call
+  // exercises.
   it('are read from licensePlateSlot, not hardcoded', () => {
     const lifecycle = licensePlateSlot.capabilities.lifecycle!;
     expect(PLATE_CONFIRM_STATE).toBe(lifecycle.confirmState);
@@ -30,9 +36,10 @@ describe('plateGalleryController status constants', () => {
     expect(PLATE_FALSE_POSITIVE_STATE).toBe(lifecycle.falsePositiveState);
   });
 
-  it("today's values match the pre-C4b hardcoded literals (no behavior change)", () => {
-    expect(PLATE_CONFIRM_STATE).toBe('detected');
-    expect(PLATE_REJECT_STATE).toBe('no_region_visible');
-    expect(PLATE_FALSE_POSITIVE_STATE).toBe('false_positive');
-  });
+  // Deleted (test-audit-2026-09-24.md T2): "today's values match the
+  // pre-C4b hardcoded literals" only re-asserted the profile's own
+  // literal values back at itself — it never fails for a real
+  // regression, only when someone edits licensePlate.ts's lifecycle
+  // states on purpose, and the test would get updated in the same
+  // commit.
 });

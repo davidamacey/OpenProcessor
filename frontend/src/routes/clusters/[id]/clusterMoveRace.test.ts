@@ -37,6 +37,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { createPager } from '$lib/pager.svelte';
 import { buildGroups, createGridGroups } from '$lib/gridGroups.svelte';
+import { extractBalanced, extractFunction, normalize } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
@@ -244,96 +245,119 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
   });
 });
 
+// P2-2 (docs/design/test-audit-2026-09-24.md T1): every extraction below
+// went through `$lib/testing/sourceScan.ts`'s `extractFunction`/
+// `extractBalanced` (brace-balanced) or `normalize` (comment-stripped,
+// whitespace-collapsed) instead of a `\n {2}\}`/`\n {4}\}?\);`-anchored
+// regex, which broke on a harmless prettier re-wrap or indentation-width
+// change — verified against a mutated /tmp copy that reformatted
+// `onGroupFinalize` and inserted a double space in the
+// `excludedCropIds` declaration; both still pass here, and dropping the
+// `excludedCropIds.add` call still fails.
+const normalizedSrc = normalize(src);
+
+/** `dropOnClassStore.register(async (cls, droppedIds) => { ... });`'s
+ *  handler body — the sidebar-drop / class-hotkey path. */
+function sidebarDropHandler(): string {
+  const h = extractBalanced(src, /dropOnClassStore\.register\(\s*async \([^)]*\) => \{/);
+  expect(h).not.toBeNull();
+  return h!;
+}
+
 describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapshotting it', () => {
   it('gridGroups is a $derived off createGridGroups, not a writable $state snapshot', () => {
-    expect(src).toMatch(/const gridGroups = \$derived\(grid\.groups\)/);
-    expect(src).not.toMatch(/let gridGroups = \$state/);
+    expect(normalizedSrc).toMatch(/const gridGroups = \$derived\(grid\.groups\)/);
+    expect(normalizedSrc).not.toMatch(/let gridGroups = \$state/);
     // The old rebuild effect and its hand-rolled snapshot writer are gone.
-    expect(src).not.toMatch(/gridGroups = buildGroups\(/);
-    expect(src).not.toMatch(/function _setGroupItems/);
+    expect(normalizedSrc).not.toMatch(/gridGroups = buildGroups\(/);
+    expect(normalizedSrc).not.toMatch(/function _setGroupItems/);
   });
 
   it('the grid state is told what is still live so a dnd event cannot resurrect a moved crop', () => {
-    const wiring = src.match(
-      /const grid = createGridGroups<Crop>\(\{[\s\S]*?\n {2}\}\);/,
-    )?.[0];
-    expect(wiring).toBeDefined();
-    expect(wiring).toMatch(
+    const wiring = extractBalanced(src, /const grid = createGridGroups<Crop>\(\{/);
+    expect(wiring).not.toBeNull();
+    expect(normalize(wiring!)).toMatch(
       /liveIds: \(\) => new Set\(cropPager\.items\.map\(\(c\) => c\.id\)\)/,
     );
   });
 
   it('onGroupFinalize discards the drag override rather than adopting the library’s stale list', () => {
-    const fn = src.match(/function onGroupFinalize\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
-    expect(fn).toMatch(/grid\.reset\(\)/);
+    const fn = extractFunction(src, 'onGroupFinalize');
+    expect(fn).not.toBeNull();
+    expect(normalize(fn!)).toMatch(/grid\.reset\(\)/);
     // Strip comments before asserting the payload is never adopted — the
     // comment above the reset() names e.detail.items on purpose.
-    const code = fn!.replace(/\/\/.*$/gm, '');
-    expect(code).not.toMatch(/setZoneItems/);
-    expect(code).not.toMatch(/e\.detail\.items/);
+    // normalize() already strips comments; check against it directly.
+    expect(normalize(fn!)).not.toMatch(/setZoneItems/);
+    expect(normalize(fn!)).not.toMatch(/e\.detail\.items/);
   });
 
   it('the sidebar-drop handler resets the grid override right after the optimistic removal', () => {
-    const handler = src.match(
-      /dropOnClassStore\.register\(\s*async[\s\S]*?\n {4}\}?\);/,
-    )?.[0];
-    expect(handler).toBeDefined();
+    const handler = normalize(sidebarDropHandler());
+    // Whitespace-collapsed, so order-adjacency survives reformatting —
+    // was previously bounded by a `[\s\S]{0,600}?` character-count gap
+    // that would silently stop matching if a comment between the two
+    // statements grew (T1).
     expect(handler).toMatch(
-      /cropPager\.total = Math\.max\(0, cropPager\.total - ids\.length\);[\s\S]{0,600}?grid\.reset\(\);/,
+      /cropPager\.total = Math\.max\(0, cropPager\.total - ids\.length\);.*?grid\.reset\(\);/,
     );
   });
 });
 
 describe('wiring: /clusters/[id] +page.svelte actually uses the exclusion set', () => {
   it('declares a page-local excludedCropIds set', () => {
-    expect(src).toMatch(/const excludedCropIds = new Set<string>\(\)/);
+    // \s+ (not a literal single space) so this survives the exact
+    // whitespace mutation the audit found breaking the old literal-space
+    // version: `const excludedCropIds  = new Set<string>()`.
+    expect(normalizedSrc).toMatch(/const excludedCropIds = new Set<string>\(\)/);
   });
 
   it("wires cropPager's accept to the exclusion set (closes the stale-fetch race for every fetchPage call, loadFirst included)", () => {
-    expect(src).toMatch(/accept:\s*\(c\)\s*=>\s*!excludedCropIds\.has\(c\.id\)/);
+    expect(normalizedSrc).toMatch(
+      /accept:\s*\(c\)\s*=>\s*!excludedCropIds\.has\(c\.id\)/,
+    );
   });
 
   it('the sidebar-drop (dropOnClassStore) handler claims dragged ids before awaiting bulkLabel', () => {
-    const handler = src.match(
-      /dropOnClassStore\.register\(\s*async[\s\S]*?\n {4}\}?\);/,
-    )?.[0];
-    expect(handler).toBeDefined();
+    const handler = normalize(sidebarDropHandler());
     expect(handler).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);
     // Conflicted ids never actually left -- must be released before the resync.
     expect(handler).toMatch(/excludedCropIds\.delete\(c\.crop_id\)/);
     // Hard failure reverts the optimistic removal -- must release too.
     expect(handler).toMatch(
-      /catch[\s\S]*?for \(const id of ids\) excludedCropIds\.delete\(id\)/,
+      /catch.*?for \(const id of ids\) excludedCropIds\.delete\(id\)/,
     );
   });
 
   it('moveCropIds (M hotkey / move picker) claims ids before awaiting moveCropsToCluster', () => {
-    const fn = src.match(/async function moveCropIds\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
-    expect(fn).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);
-    expect(fn).toMatch(/excludedCropIds\.delete\(c\.crop_id\)/);
-    expect(fn).toMatch(
-      /catch[\s\S]*?for \(const id of ids\) excludedCropIds\.delete\(id\)/,
-    );
+    const fn = extractFunction(src, 'moveCropIds');
+    expect(fn).not.toBeNull();
+    const norm = normalize(fn!);
+    expect(norm).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);
+    expect(norm).toMatch(/excludedCropIds\.delete\(c\.crop_id\)/);
+    expect(norm).toMatch(/catch.*?for \(const id of ids\) excludedCropIds\.delete\(id\)/);
   });
 
   it('ignoreSelected claims ids and undoIgnore releases them', () => {
-    const ignoreFn = src.match(/async function ignoreSelected\([\s\S]*?\n {2}\}/)?.[0];
-    const undoIgnoreFn = src.match(/async function undoIgnore\([\s\S]*?\n {2}\}/)?.[0];
-    expect(ignoreFn).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);
-    expect(undoIgnoreFn).toMatch(/for \(const id of ids\) excludedCropIds\.delete\(id\)/);
+    const ignoreFn = extractFunction(src, 'ignoreSelected');
+    const undoIgnoreFn = extractFunction(src, 'undoIgnore');
+    expect(normalize(ignoreFn!)).toMatch(
+      /for \(const id of ids\) excludedCropIds\.add\(id\)/,
+    );
+    expect(normalize(undoIgnoreFn!)).toMatch(
+      /for \(const id of ids\) excludedCropIds\.delete\(id\)/,
+    );
   });
 
   it('the discard (D) hotkey handler claims successfully-discarded ids', () => {
-    expect(src).toMatch(
-      /cropPager\.items = cropPager\.items\.filter\(\(c\) => !succeededSet\.has\(c\.id\)\);\s*\n\s*for \(const id of succeededIds\) excludedCropIds\.add\(id\)/,
+    expect(normalizedSrc).toMatch(
+      /cropPager\.items = cropPager\.items\.filter\(\(c\) => !succeededSet\.has\(c\.id\)\); for \(const id of succeededIds\) excludedCropIds\.add\(id\)/,
     );
   });
 
   it('undoLast releases the restored crop id back so it can reappear', () => {
-    const fn = src.match(/async function undoLast\([\s\S]*?\n {2}\}/)?.[0];
-    expect(fn).toBeDefined();
-    expect(fn).toMatch(/excludedCropIds\.delete\(crop\.id\)/);
+    const fn = extractFunction(src, 'undoLast');
+    expect(fn).not.toBeNull();
+    expect(normalize(fn!)).toMatch(/excludedCropIds\.delete\(crop\.id\)/);
   });
 });

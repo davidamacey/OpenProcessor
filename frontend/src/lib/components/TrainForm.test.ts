@@ -1,135 +1,69 @@
 /**
- * Mount-based behavior test for TrainForm's GPU picker
- * (docs/design/test-audit-2026-09-24.md P1-4): it must render the served
- * options and preselect the backend's marked default. `getTrainGpus` goes
- * through the real `api.ts` fetch path, mocked at the `fetch` boundary so
- * the assertion covers the actual wiring (effect -> getTrainGpus ->
- * defaultGpuValue -> radio checked state), not a re-implementation.
+ * `<TrainForm>`'s GPU picker renders the backend's allowed claims
+ * (`GET /train/gpus`, fetched by `getTrainGpus`) rather than a hardcoded
+ * list. The fetch and default selection are unit-tested in
+ * `api.trainGpus.test.ts`; the actual rendered picker (options, checked
+ * default, advisory text) is now mount-tested in
+ * `TrainForm.gpuPicker.test.ts` (test-audit-2026-09-24.md P1-4).
+ *
+ * What's left here is source-scan only, and only for checks a DOM mount
+ * can't reach: an *absence* of dead code/literals, and payload wiring a
+ * mount test would need to drive Start/campaign submission to reach
+ * (out of scope for a render-only assertion). Each `it()` below carries
+ * its own one-line "why this can't be a mount test" reason (P2-2).
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mount, unmount, flushSync } from 'svelte';
-import TrainForm from './TrainForm.svelte';
 
-let target: HTMLDivElement;
-let instance: unknown;
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { extractFunction } from '$lib/testing/sourceScan';
 
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'content-type': 'application/json' },
-  });
-}
+const here = path.dirname(fileURLToPath(import.meta.url));
+const src = readFileSync(path.resolve(here, './TrainForm.svelte'), 'utf-8');
 
-// fetch() -> res.json() -> state update each add their own microtask/tick,
-// so a couple of bare Promise.resolve() flushes aren't reliably enough
-// (verified empirically against this mock's Response.json() path); a
-// zero-delay macrotask settles it.
-async function flushMicrotasks(): Promise<void> {
-  await new Promise((r) => setTimeout(r, 0));
-}
-
-afterEach(() => {
-  if (instance) {
-    unmount(instance);
-    instance = undefined;
-  }
-  target?.remove();
-  vi.unstubAllGlobals();
-});
-
-describe('TrainForm — GPU picker', () => {
-  it('renders the served GPU options and preselects the backend default', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        options: [
-          {
-            value: '0',
-            label: 'GPU 0 (A6000)',
-            advisory: null,
-            stops_containers: [],
-            default: false,
-          },
-          {
-            value: '1',
-            label: 'GPU 1 (3080 Ti)',
-            advisory: 'shared with desktop',
-            stops_containers: [],
-            default: true,
-          },
-          {
-            value: '2',
-            label: 'GPU 2 (A6000)',
-            advisory: null,
-            stops_containers: [],
-            default: false,
-          },
-        ],
-        allowed_ids: [0, 1, 2],
-        unrestricted: false,
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    target = document.createElement('div');
-    document.body.appendChild(target);
-    instance = mount(TrainForm, {
-      target,
-      props: {
-        datasetExportDir: '/data/export',
-        profiles: [],
-        presets: [],
-        preflight: null,
-        preflighting: false,
-        starting: false,
-        onPreflight: () => {},
-        onStart: () => {},
-        onStartCampaign: () => {},
-      },
-    });
-    flushSync();
-    await flushMicrotasks();
-    flushSync();
-
-    const radios = Array.from(
-      target.querySelectorAll<HTMLInputElement>('input[name="cuda-devices"]'),
-    );
-    expect(radios.map((r) => r.value)).toEqual(['0', '1', '2']);
-    expect(target.textContent).toContain('GPU 1 (3080 Ti)');
-
-    const checked = radios.find((r) => r.checked);
-    expect(checked?.value).toBe('1');
-    expect(target.textContent).toContain('shared with desktop');
+describe('TrainForm.svelte GPU picker', () => {
+  // A mount test can prove a list is rendered; it can't prove a SECOND,
+  // dead list doesn't also exist somewhere in the file. Absence-of-code
+  // checks stay scans.
+  it('keeps no GPU list of its own', () => {
+    expect(src).not.toMatch(/GPU_OPTIONS/);
+    expect(src).not.toMatch(/trainGpuOptions/);
   });
 
-  it('shows a free-text field when the backend is unrestricted', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ options: [], allowed_ids: [], unrestricted: true }),
-      );
-    vi.stubGlobal('fetch', fetchMock);
+  // Same reasoning: GPU 1 is reserved for another project (CLAUDE.md) —
+  // this guards against ever reintroducing it as a literal default,
+  // which a mount test asserting "the served default renders" wouldn't
+  // catch if someone also left a hardcoded fallback in the source.
+  it('never hardcodes the literal host GPU id 1 anywhere in the component', () => {
+    // Broad net: any bare `'1'` / `"1"` string literal that could plausibly
+    // be a stray GPU id. False positives (e.g. a completely unrelated
+    // '1' string) would need updating this regex, but there are none
+    // today — see the full match list below if this ever fails.
+    const suspicious = src.match(/(?:cuda|gpu)[a-zA-Z]*\s*[:=]\s*['"]1['"]/gi) ?? [];
+    expect(suspicious).toEqual([]);
+  });
 
-    target = document.createElement('div');
-    document.body.appendChild(target);
-    instance = mount(TrainForm, {
-      target,
-      props: {
-        datasetExportDir: '/data/export',
-        profiles: [],
-        presets: [],
-        preflight: null,
-        preflighting: false,
-        starting: false,
-        onPreflight: () => {},
-        onStart: () => {},
-        onStartCampaign: () => {},
-      },
-    });
-    flushSync();
-    await flushMicrotasks();
-    flushSync();
+  // Reaching this by mount would mean driving the full Start/Start
+  // campaign submit flow and inspecting the constructed request body —
+  // out of scope for a render-focused mount test. extractFunction is
+  // brace-balanced (P2-2), so this survives reformatting that the old
+  // `/function buildSpec\(\)[\s\S]*?\n {2}\}/`-style regex didn't.
+  it('threads the selected cudaDevices value into both the single-run and campaign payloads', () => {
+    // buildSpec() -> POST {API_PREFIX}/train/start; buildCampaign() -> POST
+    // {API_PREFIX}/train/start_campaign. Both must carry whatever the user picked.
+    const buildSpecMatch = extractFunction(src, 'buildSpec');
+    const buildCampaignMatch = extractFunction(src, 'buildCampaign');
+    expect(buildSpecMatch).not.toBeNull();
+    expect(buildCampaignMatch).not.toBeNull();
+    expect(buildSpecMatch).toMatch(/cuda_visible_devices:\s*cudaDevices/);
+    expect(buildCampaignMatch).toMatch(/cuda_visible_devices:\s*cudaDevices/);
+  });
 
-    expect(target.querySelector('input[aria-label="CUDA visible devices"]')).toBeTruthy();
-    expect(target.querySelectorAll('input[name="cuda-devices"]').length).toBe(0);
+  // Absence-of-a-domain-specific-literal check (no mount can prove a
+  // string never appears anywhere in the source).
+  it('takes the generic singleClassExport prop, not the domain-specific lpr one', () => {
+    expect(src).toMatch(/singleClassExport\?:\s*boolean/);
+    expect(src).not.toMatch(/\blpr\b/);
   });
 });

@@ -24,6 +24,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const libRoot = here;
@@ -58,13 +59,14 @@ const BARE_PREFIX_PATTERN = /(?:['"`]|\})\/curation(?:[/'"`]|\$)/;
  * (`components/MonitoringLinks.svelte:33`). Over-stripping can only
  * cause a missed violation, never a false alarm, but there is no reason
  * to accept even that.
+ *
+ * Moved to `$lib/testing/sourceScan.ts` (P2-2,
+ * docs/design/test-audit-2026-09-24.md) so every scan shares one
+ * implementation instead of each hand-rolling its own — re-exported here
+ * too, for back-compat with any existing import of this name from this
+ * file.
  */
-export function stripComments(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/(?<!:)\/\/[^\n]*/g, ' ');
-}
+export { stripComments };
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

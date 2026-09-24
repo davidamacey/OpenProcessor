@@ -9,7 +9,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { stripComments } from '../../apiPrefixScan.test';
+import { stripComments } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const annotationsRoot = path.resolve(here, '..');

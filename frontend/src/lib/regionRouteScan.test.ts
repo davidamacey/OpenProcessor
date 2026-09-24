@@ -24,32 +24,22 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+// Safe to import from here (a non-test module), unlike importing from a
+// sibling `.test.ts` file, which would re-register its whole
+// describe/it tree as a side effect of the module import and double-run
+// it under `vitest run` — the reason this file used to hand-roll its own
+// copy instead (P2-2, docs/design/test-audit-2026-09-24.md).
+import { stripComments } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const apiSrc = readFileSync(path.resolve(here, 'api.ts'), 'utf-8');
 
-/** Local copy of apiPrefixScan.test.ts's helper — deliberately NOT
- *  imported from that sibling `.test.ts` file, which would re-register
- *  its whole describe/it tree as a side effect of the module import
- *  and double-run it under `vitest run`. */
-function stripComments(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/(?<!:)\/\/[^\n]*/g, ' ');
-}
-
-describe('api.ts declares exactly one REGION_BASE constant', () => {
-  it('exports/declares REGION_BASE with the current backend value', () => {
-    const m = apiSrc.match(/const REGION_BASE = '([^']*)';/);
-    expect(m).not.toBeNull();
-    // Pinned to the backend's CURRENT name. When OpenProcessor renames
-    // this route family, update the value here in the SAME commit that
-    // flips the constant (C14) — this assertion is the deliberate,
-    // single, expected diff line of that lockstep change.
-    expect(m![1]).toBe('/regions');
-  });
-});
+// The "REGION_BASE === '/regions'" constant re-assertion that used to
+// live here was deleted (test-audit-2026-09-24.md T2): it only fails
+// when someone edits the constant on purpose, never for a real
+// regression, and the edit + the test update always land in the same
+// commit. The composition-ratchet checks below (which fail for an
+// actual accidental-`/plates`-literal regression) are the real guard.
 
 describe('no bare /plates route-family literal survives outside REGION_BASE', () => {
   /**
