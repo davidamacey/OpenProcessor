@@ -81,3 +81,35 @@ class TestResizeCropRgbNonDegenerate:
         rgb = np.random.default_rng(0).integers(0, 256, size=(10, 500, 3), dtype=np.uint8)
         out = resize_crop_rgb(rgb, target=32)
         assert out.shape == (32, 32, 3)
+
+
+class TestWholeFrameFromBytes:
+    """Byte-upload ingest embeds from memory; it must land in the same space
+    as the from-disk path for the same file."""
+
+    def test_bytes_path_matches_file_path(self, tmp_path) -> None:
+        import io
+
+        from PIL import Image
+
+        from src.services.detection.pe_preprocess import whole_frame_chw, whole_frame_chw_from_bytes
+
+        arr = np.random.default_rng(3).integers(0, 256, size=(480, 640, 3), dtype=np.uint8)
+        buf = io.BytesIO()
+        Image.fromarray(arr).save(buf, format='JPEG', quality=90)
+        data = buf.getvalue()
+        path = tmp_path / 'frame.jpg'
+        path.write_bytes(data)
+
+        from_disk = whole_frame_chw(str(path))
+        from_bytes = whole_frame_chw_from_bytes(data)
+        assert from_disk is not None
+        assert from_bytes is not None
+        assert from_bytes.shape == (3, PE_SIZE, PE_SIZE)
+        np.testing.assert_array_equal(from_bytes, from_disk)
+
+    def test_undecodable_and_empty_bytes_return_none(self) -> None:
+        from src.services.detection.pe_preprocess import whole_frame_chw_from_bytes
+
+        assert whole_frame_chw_from_bytes(b'') is None
+        assert whole_frame_chw_from_bytes(b'not an image') is None

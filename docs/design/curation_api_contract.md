@@ -67,7 +67,7 @@ by router module; every path is relative to the configured
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
-| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
+| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |

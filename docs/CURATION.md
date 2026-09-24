@@ -279,7 +279,10 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    constructed instance) — ingest 503s until one is set.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
-   walk with a resumable progress file.
+   walk with a resumable progress file. If the images are not on storage
+   the API container can mount, use `scripts/curation/ingest_upload.py`
+   instead — it reads the files locally and uploads the bytes to
+   `POST /curation/ingest/upload` (resume = server-side content dedup).
 6. Optionally bring up the async workers (`--profile curation`) so
    detection/labeling/clustering keep running without you driving each
    step by hand.

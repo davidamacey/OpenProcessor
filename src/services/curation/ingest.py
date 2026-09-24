@@ -294,6 +294,7 @@ class CurationIngestService:
         prefilled_image: Image.Image | None = None,
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary_raw: np.ndarray | None = None,
+        whole_frame_from_bytes: bool = False,
     ) -> IngestResult:
         """Run the full pipeline on a single image.
 
@@ -312,6 +313,10 @@ class CurationIngestService:
                 treated as "not prefilled".
             prefilled_secondary_raw: Secondary-detector raw tensor from
                 :meth:`_run_secondary_detector_raw_batch`; same deal.
+            whole_frame_from_bytes: Compute the whole-frame embedding from
+                ``image_bytes`` instead of re-reading ``image_path``. Set by
+                byte-upload ingest, where ``image_path`` is a client-side
+                identifier the server cannot open.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -395,7 +400,10 @@ class CurationIngestService:
 
         whole_frame_embedding = None
         try:
-            whole_frame_embedding = await self.pe_encoder.embed_whole_frame(image_path)
+            if whole_frame_from_bytes:
+                whole_frame_embedding = await self.pe_encoder.embed_whole_frame_bytes(image_bytes)
+            else:
+                whole_frame_embedding = await self.pe_encoder.embed_whole_frame(image_path)
         except Exception as exc:
             logger.warning('ingest_embed_whole_frame_failed', path=image_path, error=str(exc))
 
@@ -515,6 +523,7 @@ class CurationIngestService:
         source: str = 'batch',
         label_source: str = '',
         detect_mismatches: bool = False,
+        whole_frame_from_bytes: bool = False,
     ) -> BatchIngestResult:
         """Batch ingest: msearch dedup, batched detector inference, per-image finish.
 
@@ -537,6 +546,7 @@ class CurationIngestService:
             detect_mismatches: Record (and count) labels whose IoU-matched
                 item carried a different detector class — the
                 model-vs-ground-truth disagreement report.
+            whole_frame_from_bytes: See :meth:`ingest_one`.
 
         Raises:
             ValueError: If ``image_paths`` or ``label_paths`` is not the
@@ -552,6 +562,7 @@ class CurationIngestService:
             source=source,
             label_source=label_source,
             detect_mismatches=detect_mismatches,
+            whole_frame_from_bytes=whole_frame_from_bytes,
         )
 
 

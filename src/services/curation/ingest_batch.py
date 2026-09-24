@@ -162,6 +162,7 @@ async def run_ingest_batch(
     source: str = 'batch',
     label_source: str = '',
     detect_mismatches: bool = False,
+    whole_frame_from_bytes: bool = False,
 ) -> BatchIngestResult:
     """Implementation behind :meth:`CurationIngestService.ingest_batch`.
 
@@ -204,6 +205,7 @@ async def run_ingest_batch(
                 prefilled_image=prefilled_imgs.get(i),
                 prefilled_items=prefilled_items.get(i),
                 prefilled_secondary_raw=prefilled_secondary.get(i),
+                whole_frame_from_bytes=whole_frame_from_bytes,
             )
 
     results = list(

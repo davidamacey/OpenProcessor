@@ -48,7 +48,7 @@ def iter_image_paths(
         sorted — callers needing a stable order should sort the result).
     """
     exts = frozenset(e.lower() for e in extensions)
-    out: queue.Queue[Path | None] = queue.Queue(maxsize=4096)
+    out: queue.Queue[Path] = queue.Queue(maxsize=4096)
     pending = 0
     pending_lock = threading.Lock()
     pending_zero = threading.Event()

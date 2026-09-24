@@ -63,6 +63,7 @@ see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
 | Path | What it is |
 |---|---|
 | `ingest_walker.py`, `_fast_walk.py` | Parallel bulk-directory ingest: `os.scandir` walker → reader threads → bounded queue → concurrent `POST /curation/ingest/batch`, with a resumable progress file. |
+| `ingest_upload.py` | Byte-upload bulk ingest for storage the API container cannot mount: walker → reader thread pool → bounded queue → concurrent multipart `POST /curation/ingest/upload`. Resumes via `/ingest/path_lookup` pre-filter + server-side content-hash (imohash) dedup. |
 | `vlm_worker.py` | Long-lived VLM labeling/verification loop (`curation-vlm-worker` service). |
 | `auto_label_worker.py` | Drives the `/curation/pipeline/auto_label` protocol as a long-lived process (`curation-auto-label-worker` service). |
 | `cluster_refresh_daemon.py` | Periodic residual-clustering retrain/refresh (`curation-cluster-refresh` service). |
