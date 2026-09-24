@@ -1320,8 +1320,8 @@
   >
     <span class="text-zinc-500">source:</span>
     <label class="flex items-center gap-1.5">
-      <span class="text-zinc-500">source</span>
       <select
+        aria-label="Filter by label source"
         class="select-sm"
         value={classSourceFilter ?? ''}
         onchange={(e) => {
