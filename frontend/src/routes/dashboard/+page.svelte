@@ -124,7 +124,14 @@
     vlmJob = null;
     try {
       vlmJob = await runVlmOnCluster(id);
-      const final = await pollAutoLabelJob((j) => (vlmJob = j));
+      // M7: poll only the job we just started, by id — see
+      // pollAutoLabelJob's `expectedJobId` doc comment.
+      const final = await pollAutoLabelJob(
+        (j) => (vlmJob = j),
+        undefined,
+        undefined,
+        vlmJob.job_id,
+      );
       const stages = (final.result?.stages ?? {}) as Record<
         string,
         Record<string, unknown>

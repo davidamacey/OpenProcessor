@@ -8,6 +8,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adopted the OpenProcessor `main` findings pass (07cc061 — B2/M6/M8/V1
+  region+VLM write integrity and undo), per
+  docs/design/interactive-pass-2026-09-24.md §6:
+  - **D-4** (`docs/design/curation_query_performance_audit.md`):
+    `getClusters` forwards `representatives_offset`/`representatives_limit`
+    as `offset`/`limit` to `GET {API_PREFIX}/clusters`. `/clusters`' card
+    grid now requests representatives only for the currently-visible
+    window (`clusterQuery`'s first `pageSize` cards), backfilling later
+    windows via a new `loadMoreRepresentatives()` as the operator scrolls,
+    merged into the already-loaded cards in place rather than a second
+    full re-fetch.
+  - **M7**: `pollAutoLabelJob`'s `expectedJobId` path now polls the new
+    `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}`
+    (`getAutoLabelJobStatus`) directly instead of the old client-side
+    job-id-match workaround over the single "current job"
+    `.../status` slot. `/dashboard`'s `runVlm` now also passes its
+    started job's id (previously only `/clusters/[id]` did).
+  - **M11**: `StrategyBar`'s summary chip gained a `fallbackReason` prop
+    rendering `sort_fallback_reason` next to `sort_applied` (both
+    collapsed and expanded views); `/review` wires it from both
+    `GET {API_PREFIX}/review/{tab}` and `.../locate` (the latter's result
+    type gained `sort_fallback_reason`), replacing the old page-level
+    banner. Verified `/settings`' existing generic `ApiError` 422 handling
+    already surfaces a 0-coverage-sort rejection with no code change
+    needed.
+  - **M6**: region-write undo — `POST {API_PREFIX}/crops/{id}/region/undo`,
+    `.../crops/region/undo_batch`, and VLM-dismiss undo
+    (`.../crops/{id}/vlm_dismiss/undo`, closing V1) via new
+    `undoCropRegion`/`undoCropRegionBatch`/`undoVlmDismiss` in `api.ts`.
+    `UndoEntry` gained a `kind: 'label' | 'region' | 'vlm_dismiss'` tag
+    (default `'label'`) so the existing `undoStore` ring buffer — kept as
+    ONE stack, not a separate one per kind, so Z reverses whatever
+    actually happened last chronologically across kinds — routes `Z` to
+    the matching backend undo route. Wired into `/review`'s
+    confirm/reject/false-positive/box-edit slot actions (Z now works on
+    the Plates/slot tabs, previously a no-op there), `/clusters/[id]`'s
+    Reject-VLM (`rejectVlmForCrop`), and the plate gallery's bulk status
+    change / bbox edit (new `Z` binding + `undoLastPlateAction()` in
+    `plateGalleryController.svelte.ts`). Renamed the Plates tab's
+    misleading "← back"/"← to go back" copy (implied Back itself undid
+    the write) to "step back" throughout — Back only re-queues the crop
+    locally; Z undoes the server write.
+  - **m21**: verified live that `cluster_distance` is mid-rollout on this
+    deployment's index — `GET /clusters`' `representatives` now carry it
+    for some cards (background residual runs since 07cc061 landed) but
+    `GET /crops` still returns `null` for other clusters' members not yet
+    re-run. `/clusters/[id]`'s cut-line (`cutLineIndex`) already degrades
+    correctly either way (stops at index 0 when `cluster_is_core` is
+    `null`), so no frontend change was needed — it renders correctly for
+    a cluster as soon as that cluster's own residual run backfills the
+    field.
+  - Contracts re-synced to OpenProcessor main 07cc061 (from f934f32).
 - Component-mount vitest support: `vite.config.ts` sets
   `resolve.conditions: ['browser']` under `VITEST` so Svelte 5's
   `mount`/`unmount`/`flushSync` work under jsdom (no new dependency).

@@ -281,7 +281,9 @@
     const missing = ids.filter((id) => !clusterMetaMap.has(id));
     if (missing.length === 0) return;
     try {
-      const res = await getClusters({});
+      // Badge lookup only reads dominant_class_name/purity/etc — no
+      // representatives needed, so skip that window entirely (D-4).
+      const res = await getClusters({ representatives_limit: 0 });
       const m = new Map(clusterMetaMap);
       for (const c of res.items) m.set(c.id, c);
       clusterMetaMap = m;
@@ -464,10 +466,59 @@
       page_size: pageSize,
       max_rank: maxRank,
       min_blur_ratio: minBlurRatio,
+      // D-4: the card list itself always comes back in full in one call
+      // (the endpoint ignores page/page_size for that) — only
+      // representatives are windowed, and only the first screenful is
+      // worth asking for up front. loadMoreRepresentatives() backfills
+      // later windows as the operator scrolls.
+      representatives_offset: 0,
+      representatives_limit: pageSize,
     };
   }
 
+  // D-4 (docs/design/curation_query_performance_audit.md): representatives
+  // window already backfilled past the initial clusterQuery() call above.
+  // Reset alongside clusterPager on every loadFirst() (a fresh filter
+  // means a fresh size-desc card order, so the old window no longer lines
+  // up with anything).
+  let repsOffset = $state(pageSize);
+  let repsLoading = $state(false);
+  const repsHasMore = $derived(repsOffset < clusterPager.total);
+
+  async function loadMoreRepresentatives(): Promise<void> {
+    if (repsLoading || clusterPager.loading || !repsHasMore) return;
+    repsLoading = true;
+    try {
+      const res = await getClusters({
+        ...clusterQuery(1),
+        representatives_offset: repsOffset,
+        representatives_limit: pageSize,
+      });
+      // Merge representatives into the already-loaded cards by id — the
+      // card list itself doesn't grow (it was all returned by the first
+      // call), only which cards carry thumbnails does. Mutating in place
+      // (not replacing clusterPager.items) keeps every other bit of
+      // component state (selection, drag, scroll position) untouched.
+      const byId = new Map(res.items.map((c) => [c.id, c]));
+      for (const item of clusterPager.items) {
+        const upd = byId.get(item.id);
+        if (upd && upd.representative_crop_ids.length > 0) {
+          item.representative_crop_ids = upd.representative_crop_ids;
+        }
+      }
+      repsOffset = res.representatives_offset + res.representatives_limit;
+    } catch (e) {
+      toastStore.warn(`Could not load more cluster thumbnails: ${(e as Error).message}`);
+      // Advance anyway so a persistently-failing window doesn't retry-loop
+      // forever on every scroll tick.
+      repsOffset += pageSize;
+    } finally {
+      repsLoading = false;
+    }
+  }
+
   async function loadFirst(): Promise<void> {
+    repsOffset = pageSize;
     await clusterPager.loadFirst();
     if (clusterPager.error == null) await loadLicensePlateCard();
   }
@@ -634,10 +685,28 @@
     clusterPager.items.filter((c) => c.cluster_kind !== 'class').length,
   );
 
-  const loadMore = () => clusterPager.loadMore();
+  const loadMore = () => {
+    void clusterPager.loadMore();
+    void loadMoreRepresentatives();
+  };
 
   $effect(() => {
     keyboardStore.setScope('clusters');
+  });
+
+  // M6: Z on the plate gallery reverses the most recent region write
+  // (bulk status change or a single bbox edit) — same key, same
+  // undoStore, as the card-grid view's label-undo Z above; see
+  // plateGalleryController's undoLastPlateAction doc comment.
+  $effect(() => {
+    if (!isLicensePlateFilter) return;
+    const off = keyboardStore.register(
+      'z',
+      () => void plateGallery.undoLastPlateAction(),
+      'clusters',
+      'Undo last plate action',
+    );
+    return off;
   });
 
   // Re-load on class-filter change — but only for the cluster view.
@@ -1142,7 +1211,8 @@
         use:infiniteScroll={{
           onload: loadMore,
           disabled:
-            clusterPager.loadingMore || !clusterPager.hasMore || clusterPager.loading,
+            (clusterPager.loadingMore || !clusterPager.hasMore || clusterPager.loading) &&
+            (repsLoading || !repsHasMore),
         }}
         class="mt-4 h-1"
         aria-hidden="true"

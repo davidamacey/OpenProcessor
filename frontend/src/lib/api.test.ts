@@ -11,6 +11,7 @@ import {
   API_PREFIX,
   ApiError,
   cancelSelect,
+  getAutoLabelJobStatus,
   getCluster,
   getClusters,
   getClassRegistryUrl,
@@ -457,6 +458,7 @@ describe('locateInReviewQueue', () => {
       total: 109,
       reason: null,
       sort_applied: 'atypicality',
+      sort_fallback_reason: null,
     });
   });
 
@@ -1476,6 +1478,65 @@ describe('runVlmOnCluster', () => {
   });
 });
 
+describe('getAutoLabelJobStatus', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns the job state on 200', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          job_id: 'job-1',
+          status: 'running',
+          stage: 'vlm',
+          processed: 1,
+          total: 2,
+          started_at: 0,
+          finished_at: null,
+          error: null,
+          args: {},
+          eta_seconds: null,
+          elapsed_seconds: 0,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const job = await getAutoLabelJobStatus('job-1');
+
+    expect(job?.job_id).toBe('job-1');
+    expect(fetchMock.mock.calls[0][0]).toContain('/pipeline/auto_label/status/job-1');
+  });
+
+  it('returns null on 404 (unknown job id)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'not found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const job = await getAutoLabelJobStatus('job-unknown');
+
+    expect(job).toBeNull();
+  });
+
+  it('rethrows a non-404 error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'boom' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getAutoLabelJobStatus('job-1')).rejects.toThrow(ApiError);
+  });
+});
+
 describe('pollAutoLabelJob', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -1541,6 +1602,56 @@ describe('pollAutoLabelJob', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(final.status).toBe('failed');
     expect(final.error).toBe('boom');
+  });
+
+  /**
+   * M7 (docs/design/interactive-pass-2026-09-24.md): with `expectedJobId`,
+   * polls `GET {API_PREFIX}/pipeline/auto_label/status/{job_id}` — the
+   * per-job endpoint the backend now serves (07cc061) — not the
+   * "current/most recent job" `.../status` slot, and no longer needs to
+   * skip a mismatched `job_id` client-side.
+   */
+  it('with expectedJobId, polls the per-job status/{job_id} endpoint directly', async () => {
+    const bodies = [
+      { status: 'running', stage: 'vlm', processed: 1, total: 3 },
+      { status: 'completed', stage: 'finalize', processed: 3, total: 3, result: {} },
+    ];
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      expect(url).toContain('/pipeline/auto_label/status/job-vlm-2');
+      return Promise.resolve(
+        statusResponse({
+          job_id: 'job-vlm-2',
+          started_at: 0,
+          finished_at: 0,
+          error: null,
+          args: {},
+          eta_seconds: null,
+          elapsed_seconds: 0,
+          ...bodies.shift(),
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const final = await pollAutoLabelJob(() => {}, undefined, 0, 'job-vlm-2');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(final.status).toBe('completed');
+  });
+
+  it('with expectedJobId, treats a 404 as still-waiting and keeps polling until maxWaitMs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'not found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      pollAutoLabelJob(() => {}, undefined, 0, 'job-never-appears', 5),
+    ).rejects.toThrow(/Timed out waiting for job job-never-appears/);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
   });
 });
 
@@ -1713,6 +1824,91 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
     expect(res.cluster.purity_tier).toBeNull();
     expect(res.cluster.promotable).toBe(false);
     expect(res.cluster.core_similarity_min).toBeNull();
+  });
+});
+
+/**
+ * D-4 (docs/design/curation_query_performance_audit.md): `/clusters`
+ * representatives are paged by offset/limit independent of the card list
+ * itself. `getClusters` forwards `representatives_offset`/
+ * `representatives_limit` as `offset`/`limit` query params and echoes the
+ * response's window back so a caller can advance past exactly what it got.
+ */
+describe('getClusters D-4 representatives windowing', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends representatives_offset/representatives_limit as offset/limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [],
+        total: 0,
+        total_class_clusters: 0,
+        total_candidate_clusters: 0,
+        cluster_id_offset: 10000,
+        representatives_offset: 24,
+        representatives_limit: 24,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getClusters({ representatives_offset: 24, representatives_limit: 24 });
+
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    expect(calledUrl).toContain('offset=24');
+    expect(calledUrl).toContain('limit=24');
+  });
+
+  it('echoes the response window back on ClustersResponse, not the requested one', async () => {
+    // The backend can serve a smaller window than requested (e.g. near the
+    // end of the list) — the caller must advance by what actually came
+    // back, not by what it asked for, or it'll skip/repeat cards.
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [],
+        total: 30,
+        total_class_clusters: 30,
+        total_candidate_clusters: 0,
+        cluster_id_offset: 10000,
+        representatives_offset: 24,
+        representatives_limit: 6,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getClusters({
+      representatives_offset: 24,
+      representatives_limit: 24,
+    });
+
+    expect(res.representatives_offset).toBe(24);
+    expect(res.representatives_limit).toBe(6);
+  });
+
+  it('omits offset/limit query params when no window is requested', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [],
+        total: 0,
+        total_class_clusters: 0,
+        total_candidate_clusters: 0,
+        cluster_id_offset: 10000,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getClusters({});
+
+    const calledUrl = fetchMock.mock.calls[0][0] as string;
+    expect(calledUrl).not.toContain('offset=');
+    expect(calledUrl).not.toContain('limit=');
   });
 });
 

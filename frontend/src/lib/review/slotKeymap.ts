@@ -84,7 +84,7 @@ export function buildSlotKeymap(
       entries.push({
         combo: c,
         fn: h.back,
-        description: `Back to last confirmed ${label}`,
+        description: `Step back to last confirmed ${label}`,
       });
     }
   }

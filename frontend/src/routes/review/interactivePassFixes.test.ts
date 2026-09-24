@@ -148,9 +148,14 @@ describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front wh
     expect(promptIdx).toBeLessThan(setBoxIdx);
   });
 
-  it('persists a given reason via patchSlotMeta after the box clears', () => {
+  it('sends the reject status and the reason in ONE region write, so one Z undoes it', () => {
     expect(fn).toMatch(
-      /if \(reason\) \{\s*\n\s*await patchSlotMeta\(activeSlot, item\.id, \{ rejectionReason: reason \}\);/,
+      /await patchSlotMeta\(activeSlot, item\.id, \{\s*status: rejectStatus,\s*\.\.\.\(reason \? \{ rejectionReason: reason \} : \{\}\),\s*\}\);/,
+    );
+    // Exactly one region write is recorded for the undo stack.
+    expect(fn?.match(/recordRegionWrites\(/g)?.length).toBe(1);
+    expect(fn).not.toMatch(
+      /patchSlotMeta\(activeSlot, item\.id, \{ rejectionReason: reason \}\)/,
     );
   });
 });

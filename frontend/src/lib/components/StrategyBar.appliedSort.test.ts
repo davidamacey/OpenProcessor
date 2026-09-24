@@ -65,3 +65,30 @@ describe('StrategyBar — applied-sort summary', () => {
     expect(el.textContent).not.toContain('→');
   });
 });
+
+/**
+ * M11 (docs/design/interactive-pass-2026-09-24.md): `sort_fallback_reason`
+ * renders inside the collapsed summary chip, next to `sort_applied` —
+ * not as a page-level banner the caller has to render separately.
+ */
+describe('StrategyBar — fallback-reason summary', () => {
+  it('shows the fallback reason next to the applied sort when both are set', () => {
+    const bar = createStrategyBar();
+    bar.sort = 'mistakenness';
+    const el = render({
+      bar,
+      appliedSort: 'atypicality',
+      fallbackReason: "'mistakenness' has 0% coverage",
+    });
+
+    expect(el.textContent).toContain('→ atypicality');
+    expect(el.textContent).toContain("fallback: 'mistakenness' has 0% coverage");
+  });
+
+  it('shows nothing when no fallback reason was reported', () => {
+    const bar = createStrategyBar();
+    const el = render({ bar, appliedSort: null, fallbackReason: null });
+
+    expect(el.textContent).not.toContain('fallback:');
+  });
+});

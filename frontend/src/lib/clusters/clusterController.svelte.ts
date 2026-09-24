@@ -259,6 +259,11 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     try {
       const item = await vlmDismissCrop(crop.id);
       cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? item : c));
+      // M6/V1: Z reverses a Reject-VLM the same way it reverses a label
+      // write or move — see undo.svelte.ts's header comment for why this
+      // shares the one undoStore stack (kind: 'vlm_dismiss') rather than
+      // its own.
+      undoStore.recordVlmDismiss(crop.id);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         toastStore.info('No VLM suggestion to reject.');
