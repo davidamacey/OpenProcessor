@@ -32,8 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   422. `GET /methods` entries carry `settable: bool`.
 - The detector bake-off harness is domain-neutral by default (`generic`
   `BakeoffProfile`; `--backend triton` requires a model); plate baselines moved
-  to the `license_plate` example profile; paper-only scripts moved to
-  `examples/bakeoff_lpr_paper/`.
+  to the `license_plate` example profile; paper-only scripts (a dedup-threshold
+  sweep and a LaTeX-number generator that hardcoded a private model id and a
+  live-deployment URL) removed from the public tree (W7).
 - **Naming sweep, wave W1 — stored-data renames** (`docs/design/naming_sweep_plan.md`
   S1-S8; re-ingest required):
   - Items index kNN field `v6_embedding` → `backbone_embedding`

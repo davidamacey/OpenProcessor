@@ -95,12 +95,12 @@ def test_patch_region_metadata_writes_text_and_source(
     crop_id = region_cohort[3]
     resp = client.patch(
         f'/crops/{crop_id}/region_meta',
-        json={'plate_text': 'LIVE-HARNESS-7', 'label_source': 'human'},
+        json={'region_text_reply': 'LIVE-HARNESS-7', 'label_source': 'human'},
     )
     assert resp.status_code == 200, resp.text
     # updated_fields echoes the frozen plate_* wire contract, never the
     # RegionFields storage key (region_text) checked below via `src`.
-    assert 'plate_text' in resp.json()['updated_fields']
+    assert 'region_text_reply' in resp.json()['updated_fields']
 
     src = _source(opensearch, crop_id)
     assert src['region_text'] == 'LIVE-HARNESS-7'

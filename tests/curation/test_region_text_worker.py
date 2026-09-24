@@ -93,7 +93,7 @@ async def _drive(
     vlm.label_combined_batch = AsyncMock(
         side_effect=lambda crops, **_kw: {c.crop_id: reply for c in crops}
     )
-    vlm.plate_visible_batch = AsyncMock(
+    vlm.region_visible_batch = AsyncMock(
         side_effect=lambda crops, **_kw: dict.fromkeys((c.crop_id for c in crops), True)
     )
     vlm_cls = MagicMock(return_value=vlm)
@@ -197,10 +197,10 @@ class TestBothReaders:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='ABC 1284',
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='ABC 1284',
+            region_confidence='high',
         )
         mocks = await _drive(
             tmp_path,
@@ -230,10 +230,10 @@ class TestBothReaders:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text=None,
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply=None,
+            region_confidence='high',
         )
         await _drive(
             tmp_path,
@@ -258,10 +258,10 @@ class TestBothReaders:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='ABC1234',
-            plate_confidence='medium',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='ABC1234',
+            region_confidence='medium',
         )
         mocks = await _drive(
             tmp_path,

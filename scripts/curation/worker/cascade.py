@@ -442,7 +442,7 @@ async def _process_crop(
                         detector_version=det_version,
                         chain=task.detection_trace,
                         auto_confirmed=bool(auto),
-                        plate_text=outcome.text,
+                        region_text_reply=outcome.text,
                         plate_text_confidence=outcome.text_confidence,
                     )
                     raise _CascadeDoneError
@@ -494,7 +494,7 @@ async def _process_crop(
                             detector_version=det_version,
                             chain=task.detection_trace,
                             auto_confirmed=bool(auto),
-                            plate_text=outcome.text,
+                            region_text_reply=outcome.text,
                             plate_text_confidence=outcome.text_confidence,
                         )
                         raise _CascadeDoneError
@@ -576,7 +576,7 @@ async def _process_crop(
                         detector_version=seg_version,
                         chain=task.detection_trace,
                         auto_confirmed=bool(auto),
-                        plate_text=outcome.text,
+                        region_text_reply=outcome.text,
                         plate_text_confidence=outcome.text_confidence,
                     )
                     raise _CascadeDoneError
@@ -654,7 +654,7 @@ async def _process_crop(
                             detector_version=seg_version,
                             chain=task.detection_trace,
                             auto_confirmed=bool(auto),
-                            plate_text=text_out,
+                            region_text_reply=text_out,
                             plate_text_confidence=text_conf_out,
                         )
                         raise _CascadeDoneError

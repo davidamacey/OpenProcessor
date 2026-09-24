@@ -140,7 +140,7 @@ class TestWorkerKeepsTheCandidate:
             fake_os=fake,
             primary=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.77, source='det'),
             segmenter=None,
-            reply=VlmCombinedReply(img_id='c1', plate_visible=True, plate_bbox_correct=False),
+            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=False),
         )
         doc = fake.live['c1']
         det = _profile().detector_model

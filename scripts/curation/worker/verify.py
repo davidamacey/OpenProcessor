@@ -64,13 +64,13 @@ async def _verify_with_vlm(
     threads into :func:`_region_write_doc`.
 
     Returns ``None`` when the VLM answered with no usable verdict (see
-    :py:meth:`VlmLabeler.verify_plate`) so the cascade can leave the
+    :py:meth:`VlmLabeler.verify_region`) so the cascade can leave the
     crop pending for a retry instead of treating "no answer" as a
     rejection and falling through to the next detector. Raises
     :class:`VlmTransportError` when the call itself failed, so an outage
     is never counted as a no-verdict reply.
     """
-    verdict = await vlm.verify_plate(
+    verdict = await vlm.verify_region(
         RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
     )
     if verdict is None:
@@ -156,7 +156,7 @@ def _region_write_doc(
     auto_confirmed: bool = False,
     verifier: str | None = VLM_MODEL_ID,
     verifier_version: str | None = '1',
-    plate_text: str | None = None,
+    region_text_reply: str | None = None,
     plate_text_confidence: str | None = None,
     plate_text_source: str | None = None,
     extra: dict[str, Any] | None = None,
@@ -192,19 +192,19 @@ def _region_write_doc(
     doc.update(dict.fromkeys(candidate_fields(F)))
     doc[F.rejection_reason] = None
     invalid = (
-        region_text_rules(region_profile_or_neutral()).invalid_reason(plate_text)
-        if plate_text
+        region_text_rules(region_profile_or_neutral()).invalid_reason(region_text_reply)
+        if region_text_reply
         else None
     )
-    if plate_text and invalid:
+    if region_text_reply and invalid:
         # Not text (a prompt placeholder, a "can't read it" answer, ...):
         # keep the reading for audit, write no region text.
-        doc[F.text_vlm] = plate_text
+        doc[F.text_vlm] = region_text_reply
         doc[F.text_vlm_invalid] = invalid
         doc[F.text_choice] = TEXT_CHOICE_NONE
-    elif plate_text:
-        doc[F.text] = plate_text
-        doc[F.text_raw] = plate_text
+    elif region_text_reply:
+        doc[F.text] = region_text_reply
+        doc[F.text_raw] = region_text_reply
         doc[F.text_source] = plate_text_source or VLM_MODEL_ID
         doc[F.text_engine_version] = '1'
         doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
@@ -308,7 +308,7 @@ def _combined_class_update(
 ) -> dict[str, Any]:
     """Build the class-side update dict from a combined VLM reply.
 
-    Always-applicable fields (make/model/plate_visible/vlm_verify_completed_at)
+    Always-applicable fields (make/model/region_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
     ``class_name`` only land when the reply contains a usable index into
     ``class_names``. A reply that *named* a label outside the catalog
@@ -327,7 +327,7 @@ def _combined_class_update(
 
     Pass ``class_names=None`` (or an empty list) when the caller already
     has a trusted class label and the reply was generated with
-    ``classify=False``; only the make/model/plate_visible fields are
+    ``classify=False``; only the make/model/region_visible fields are
     persisted in that case so the class column is preserved.
     """
     update: dict[str, Any] = {}
@@ -387,7 +387,7 @@ def _combined_class_update(
         update['vlm_item_make'] = reply.make
     if reply.model:
         update['vlm_item_model'] = reply.model
-    update[get_region_fields().visible] = bool(reply.plate_visible)
+    update[get_region_fields().visible] = bool(reply.region_visible)
     update['updated_at'] = ts
     # Marker: class + region resolved in one VLM call. Downstream
     # pipeline stages read this to skip a redundant class call.
@@ -423,8 +423,8 @@ def _combined_write_doc(
         detector_version=detector_version,
         chain=chain,
         auto_confirmed=auto_confirmed,
-        plate_text=reply.plate_text,
-        plate_text_confidence=reply.plate_confidence,
+        region_text_reply=reply.region_text_reply,
+        plate_text_confidence=reply.region_confidence,
     )
     region_doc.update(_combined_class_update(reply, class_names, now=ts, name_to_id=name_to_id))
     return region_doc

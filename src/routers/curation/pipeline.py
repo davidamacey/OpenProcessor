@@ -475,8 +475,8 @@ async def pipeline_auto_label(
                 _vlm_extras['vlm_item_make'] = p.make
             if p.model:
                 _vlm_extras['vlm_item_model'] = p.model
-            if p.plate_visible is not None:
-                _vlm_extras[get_region_fields().visible] = p.plate_visible
+            if p.region_visible is not None:
+                _vlm_extras[get_region_fields().visible] = p.region_visible
             update, proposal = prediction_class_update(
                 p,
                 name_to_id=name_to_id,

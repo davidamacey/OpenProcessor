@@ -369,7 +369,7 @@ def _gemma_mock(*, is_region: bool):
     from src.services.labeling.vlm_labeler import VlmRegionVerdict
 
     g = MagicMock()
-    g.verify_plate = AsyncMock(
+    g.verify_region = AsyncMock(
         return_value=VlmRegionVerdict(
             crop_id='ignored', is_region=is_region, confidence='medium', reason='test'
         )

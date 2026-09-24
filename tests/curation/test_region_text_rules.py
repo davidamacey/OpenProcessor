@@ -185,7 +185,7 @@ class TestWriters:
             detector='det',
             detector_version='1',
             chain=[],
-            plate_text='999',
+            region_text_reply='999',
             plate_text_confidence='high',
         )
         assert F.text not in doc
@@ -206,10 +206,10 @@ class TestWriters:
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         reply = VlmCombinedReply(
             img_id='c1',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='XYZ987',
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='XYZ987',
+            region_confidence='high',
         )
         await _drive(
             tmp_path,

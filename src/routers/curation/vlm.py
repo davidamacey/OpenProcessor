@@ -462,7 +462,7 @@ async def vlm_verify_regions(
         except Exception as exc:
             logger.warning('curation_vlm_region_thumb_failed', crop_id=crop_id, error=str(exc))
             continue
-        verdict = await labeler.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
+        verdict = await labeler.verify_region(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
         if verdict is None:
             # No usable answer at all -- leave this crop's verify state
             # untouched for a retry rather than writing a verified=False
@@ -517,7 +517,7 @@ async def vlm_verify_region_batch(
     chunked-fan-out pattern from ``/curation/vlm/label_batch``: pack
     several region JPEGs per upstream call (the deployment's
     images-per-prompt cap), fire chunks in parallel via
-    :py:meth:`VlmLabeler.verify_plate_batch`, and return verdicts
+    :py:meth:`VlmLabeler.verify_region_batch`, and return verdicts
     ordered by input ``crop_id``.
 
     Unlike ``/curation/vlm/verify_regions`` (which re-derives the region
@@ -562,9 +562,9 @@ async def vlm_verify_region_batch(
         candidate_text_by_id[item.crop_id] = item.candidate_text
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
-    verdicts = await labeler.verify_plate_batch(crops)
+    verdicts = await labeler.verify_region_batch(crops)
 
-    # Re-order to input order (verify_plate_batch already preserves it,
+    # Re-order to input order (verify_region_batch already preserves it,
     # but the explicit reorder defends against future implementation
     # changes and gives a deterministic contract).
     by_id = {v.crop_id: v for v in verdicts}
@@ -642,7 +642,7 @@ async def vlm_region_visible_batch(
         crops.append(RegionCrop(crop_id=item.crop_id, jpeg_bytes=jpeg_bytes))
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
-    visible = await labeler.plate_visible_batch(crops)
+    visible = await labeler.region_visible_batch(crops)
     return VlmRegionVisibleBatchResponse(visible=visible)
 
 

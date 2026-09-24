@@ -1490,7 +1490,7 @@ def _write_region_cluster_job(state: dict[str, Any]) -> None:
         tmp.write_text(json.dumps(state))
         tmp.replace(_JOB_FILE)  # atomic rename
     except Exception as exc:
-        logger.warning('legacy_plate_cluster_job_write_failed', error=str(exc))
+        logger.warning('curation_region_cluster_job_write_failed', error=str(exc))
 
 
 def region_cluster_job_status() -> dict[str, Any]:
@@ -1526,7 +1526,7 @@ def mark_region_refine(cluster_id: int) -> None:
         )
         tmp.replace(_REGION_REFINE_MARKER)
     except Exception as exc:
-        logger.warning('legacy_plate_refine_marker_write_failed', error=str(exc))
+        logger.warning('curation_region_refine_marker_write_failed', error=str(exc))
 
 
 def _read_region_refine_marker() -> dict[str, Any]:
@@ -1546,7 +1546,7 @@ def _write_region_partition_marker(fp_count: int) -> None:
         )
         tmp.replace(_REGION_PARTITION_MARKER)
     except Exception as exc:
-        logger.warning('legacy_plate_partition_marker_write_failed', error=str(exc))
+        logger.warning('curation_region_partition_marker_write_failed', error=str(exc))
 
 
 def _read_region_partition_marker() -> dict[str, Any]:
@@ -1616,7 +1616,7 @@ async def start_region_cluster_job(
                     extra['fp_centroids'] = await build_region_fp_centroids(client)
                 except Exception as exc:
                     extra['fp_centroids'] = {'status': 'error', 'error': str(exc)}
-                    logger.error('legacy_plate_job_fp_build_failed', error=str(exc))
+                    logger.error('curation_region_job_fp_build_failed', error=str(exc))
             if auto_fp_threshold and auto_fp_threshold > 0:
                 try:
                     extra['auto_fp'] = await auto_assign_fp_from_centroids(
@@ -1624,7 +1624,7 @@ async def start_region_cluster_job(
                     )
                 except Exception as exc:
                     extra['auto_fp'] = {'status': 'error', 'error': str(exc)}
-                    logger.error('legacy_plate_job_auto_fp_failed', error=str(exc))
+                    logger.error('curation_region_job_auto_fp_failed', error=str(exc))
             # TTL gate: a re-partition clears good-plate sub-ids, so skip it
             # while a recent manual refine is still fresh — UNLESS forced, or a
             # substantial batch of FPs accumulated since the last partition
@@ -1657,7 +1657,7 @@ async def start_region_cluster_job(
             result = {**result, **extra}
         except Exception as exc:
             error = str(exc)
-            logger.error('legacy_plate_cluster_job_failed', error=str(exc))
+            logger.error('curation_region_cluster_job_failed', error=str(exc))
         finally:
             _write_region_cluster_job(
                 {
@@ -1791,7 +1791,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
             'dim': int(centroids.shape[1]),
         },
     )
-    logger.info('legacy_build_plate_fp_centroids_done', n_members=n, k=int(k))
+    logger.info('curation_build_region_fp_centroids_done', n_members=n, k=int(k))
     return {'status': 'success', 'n_members': n, 'k': int(k), 'subids': subids}
 
 
@@ -1947,7 +1947,7 @@ def _write_region_fp_job(state: dict[str, Any]) -> None:
         tmp.write_text(json.dumps(state))
         tmp.replace(_FP_JOB_FILE)
     except Exception as exc:
-        logger.warning('legacy_plate_fp_job_write_failed', error=str(exc))
+        logger.warning('curation_region_fp_job_write_failed', error=str(exc))
 
 
 def region_fp_centroid_job_status() -> dict[str, Any]:
@@ -1988,7 +1988,7 @@ async def start_region_fp_centroid_job(client: AsyncOpenSearch) -> dict[str, Any
             result = await build_region_fp_centroids(client)
         except Exception as exc:
             error = str(exc)
-            logger.error('legacy_plate_fp_job_failed', error=str(exc))
+            logger.error('curation_region_fp_job_failed', error=str(exc))
         finally:
             _write_region_fp_job(
                 {

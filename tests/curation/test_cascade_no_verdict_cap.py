@@ -69,18 +69,18 @@ def _task(**kw: Any) -> Any:
 
 
 def _vlm(*answers: Any) -> MagicMock:
-    """``verify_plate`` answering ``answers`` in turn (an exception type is
+    """``verify_region`` answering ``answers`` in turn (an exception type is
     raised), then the last answer forever."""
     seq = list(answers)
 
-    async def verify_plate(_crop: RegionCrop, **_kw: Any) -> Any:
+    async def verify_region(_crop: RegionCrop, **_kw: Any) -> Any:
         a = seq.pop(0) if len(seq) > 1 else seq[0]
         if isinstance(a, type) and issubclass(a, Exception):
             raise a('upstream down')
         return a
 
     g = MagicMock()
-    g.verify_plate = AsyncMock(side_effect=verify_plate)
+    g.verify_region = AsyncMock(side_effect=verify_region)
     g.aclose = AsyncMock()
     return g
 
@@ -161,14 +161,14 @@ class TestCascadeVerifyNoVerdictIsCapped:
         for _ in range(no_verdict.DEFAULT_MAX_NO_VERDICT_ATTEMPTS * 3):
             task = await _pass(gemma)
             assert task.update_doc == {}
-        assert gemma.verify_plate.await_args.kwargs == {'raise_on_transport': True}
+        assert gemma.verify_region.await_args.kwargs == {'raise_on_transport': True}
 
 
 class TestCombinedCohortNoVerdictIsCapped:
     @pytest.mark.asyncio
     async def test_null_box_verdict_is_parked_after_the_cap(self) -> None:
         F = get_region_fields()
-        reply = VlmCombinedReply(img_id='c1', plate_visible=True, plate_bbox_correct=None)
+        reply = VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=None)
         vlm = MagicMock()
         vlm.class_names = []
         vlm.label_combined = AsyncMock(return_value=reply)
@@ -207,13 +207,15 @@ class TestVerifyPlateTransportSignal:
     @pytest.mark.asyncio
     async def test_opt_in_raises_on_transport_failure(self) -> None:
         with pytest.raises(VlmTransportError):
-            await self._labeler().verify_plate(
+            await self._labeler().verify_region(
                 RegionCrop(crop_id='r1', jpeg_bytes=b'x'), raise_on_transport=True
             )
 
     @pytest.mark.asyncio
     async def test_default_still_returns_no_verdict(self) -> None:
-        assert await self._labeler().verify_plate(RegionCrop(crop_id='r1', jpeg_bytes=b'x')) is None
+        assert (
+            await self._labeler().verify_region(RegionCrop(crop_id='r1', jpeg_bytes=b'x')) is None
+        )
 
     @pytest.mark.asyncio
     async def test_unparseable_reply_is_no_verdict_even_with_opt_in(self) -> None:
@@ -222,7 +224,7 @@ class TestVerifyPlateTransportSignal:
             return_value={'choices': [{'message': {'content': 'not json'}}]}
         )
         crop = RegionCrop(crop_id='r1', jpeg_bytes=b'x')
-        assert await lab.verify_plate(crop, raise_on_transport=True) is None
+        assert await lab.verify_region(crop, raise_on_transport=True) is None
 
     def test_combined_transport_failure_is_a_transport_error(self) -> None:
         from src.services.labeling.vlm_labeler import CombinedTransportError

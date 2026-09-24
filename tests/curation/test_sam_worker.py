@@ -80,9 +80,9 @@ def _make_task(
 
 
 def _gemma_mock(*, is_region: bool, confidence: str = 'high') -> MagicMock:
-    """A VlmLabeler stub whose ``verify_plate`` returns a fixed verdict."""
+    """A VlmLabeler stub whose ``verify_region`` returns a fixed verdict."""
     g = MagicMock()
-    g.verify_plate = AsyncMock(
+    g.verify_region = AsyncMock(
         return_value=VlmRegionVerdict(
             crop_id='ignored', is_region=is_region, confidence=confidence, reason='test'
         )
@@ -164,7 +164,7 @@ class TestRouting:
         gemma = MagicMock()
         # First call: reject the primary-detector candidate. Second
         # call: accept the secondary segmenter.
-        gemma.verify_plate = AsyncMock(
+        gemma.verify_region = AsyncMock(
             side_effect=[
                 VlmRegionVerdict(
                     crop_id='c', is_region=False, confidence='high', reason='not a plate'
@@ -190,7 +190,7 @@ class TestRouting:
         # Re-projected via crop_norm_to_source_norm: vehicle_bbox is the
         # full image so source == crop here.
         assert task.update_doc[F.bbox_norm] == list(sam_cand.bbox_norm)
-        assert gemma.verify_plate.await_count == 2
+        assert gemma.verify_region.await_count == 2
 
     @pytest.mark.asyncio
     async def test_pending_secondary_shape_skips_lpr_calls_sam3(self) -> None:
@@ -247,7 +247,7 @@ class TestRouting:
         )
         sam_cand = RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79, source='sam3')
         gemma = MagicMock()
-        gemma.verify_plate = AsyncMock(
+        gemma.verify_region = AsyncMock(
             side_effect=[
                 VlmRegionVerdict(crop_id='c', is_region=False, confidence='high', reason='no'),
                 VlmRegionVerdict(crop_id='c', is_region=True, confidence='high', reason='yes'),
@@ -351,12 +351,12 @@ class TestRouting:
 class TestNoVerdictLeavesItemPending:
     @pytest.mark.asyncio
     async def test_pending_verify_no_verdict_leaves_task_untouched(self) -> None:
-        """``verify_plate`` returning ``None`` (no usable answer) must not be
+        """``verify_region`` returning ``None`` (no usable answer) must not be
         treated as a reject -- the crop is left pending for a retry rather
         than falling through to the secondary segmenter or writing a
         terminal status."""
         gemma = MagicMock()
-        gemma.verify_plate = AsyncMock(return_value=None)
+        gemma.verify_region = AsyncMock(return_value=None)
         gemma.aclose = AsyncMock()
         sam3 = _sam3_mock(RegionCandidate(bbox_norm=(0.4, 0.5, 0.6, 0.55), score=0.77))
         task = _make_task(
@@ -384,7 +384,7 @@ class TestNoVerdictLeavesItemPending:
             bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
         )
         gemma = MagicMock()
-        gemma.verify_plate = AsyncMock(return_value=None)
+        gemma.verify_region = AsyncMock(return_value=None)
         gemma.aclose = AsyncMock()
         sam3 = _sam3_mock(RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79))
         task = _make_task(

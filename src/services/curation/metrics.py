@@ -149,14 +149,14 @@ LEGACY_STAGE_A_SAM_DURATION_SECONDS = Histogram(
 
 LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS = Histogram(
     'legacy_stage_a_gemma_visible_duration_seconds',
-    'Stage A.gemma_visible plate_visible_batch call duration in seconds.',
+    'Stage A.gemma_visible region_visible_batch call duration in seconds.',
     labelnames=('outcome',),  # ok / parse_failed / error
     buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
 )
 
 LEGACY_STAGE_B_GEMMA_VERIFY_DURATION_SECONDS = Histogram(
     'legacy_stage_b_gemma_verify_duration_seconds',
-    'Stage B VLM verify_plate_batch call duration in seconds.',
+    'Stage B VLM verify_region_batch call duration in seconds.',
     labelnames=('outcome',),  # ok / parse_failed / error
     buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
 )

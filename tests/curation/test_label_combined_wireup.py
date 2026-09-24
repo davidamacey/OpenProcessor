@@ -19,7 +19,7 @@ Cohort detection criterion (mirrors ``combined._is_combined_cohort``):
   primary detector / secondary segmenter produced one).
 
 When the cohort fires, ``VlmLabeler.label_combined`` must be invoked
-exactly once and the legacy ``verify_plate`` / ``label_or_propose_batch``
+exactly once and the legacy ``verify_region`` / ``label_or_propose_batch``
 paths must NOT be called for that crop. The bulk-update doc must carry
 ``vlm_verify_completed_at``, ``class_source='vlm'``, and the
 make/model fields when reported.
@@ -96,7 +96,7 @@ def _gemma_with_combined(
     # return a mock instead of the resolved id.
     g.name_to_id = {name: i for i, name in enumerate(g.class_names)}
     g.label_combined = AsyncMock(return_value=reply)
-    g.verify_plate = AsyncMock(
+    g.verify_region = AsyncMock(
         return_value=VlmRegionVerdict(
             crop_id='ignored', is_region=False, confidence='low', reason='unused'
         )
@@ -109,15 +109,15 @@ def _gemma_with_combined(
 class TestCohortRouting:
     @pytest.mark.asyncio
     async def test_pending_verification_cohort_uses_combined_call(self) -> None:
-        """primary-missed + existing bbox → one label_combined call, no verify_plate."""
+        """primary-missed + existing bbox → one label_combined call, no verify_region."""
         reply = VlmCombinedReply(
             img_id='crop-1',
             class_id=2,  # 'audi'
             class_confidence='high',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='XYZ-9999',
-            plate_confidence='high',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='XYZ-9999',
+            region_confidence='high',
             make='Audi',
             model='A4',
         )
@@ -135,7 +135,7 @@ class TestCohortRouting:
         )
 
         gemma.label_combined.assert_awaited_once()
-        gemma.verify_plate.assert_not_awaited()
+        gemma.verify_region.assert_not_awaited()
         gemma.label_or_propose_batch.assert_not_awaited()
 
         doc = task.update_doc
@@ -154,10 +154,10 @@ class TestCohortRouting:
             img_id='crop-low',
             class_id=1,
             class_confidence='medium',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='LOW-0001',
-            plate_confidence='medium',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='LOW-0001',
+            region_confidence='medium',
         )
         gemma = _gemma_with_combined(reply=reply)
         task = _make_task(
@@ -178,7 +178,7 @@ class TestCohortRouting:
             gemma=gemma,
         )
         gemma.label_combined.assert_awaited_once()
-        gemma.verify_plate.assert_not_awaited()
+        gemma.verify_region.assert_not_awaited()
         gemma.label_or_propose_batch.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
         assert task.update_doc['class_source'] == 'vlm'
@@ -188,7 +188,7 @@ class TestCohortRouting:
     async def test_high_conf_v6_skips_label_combined(self) -> None:
         """Phase C: primary classifier with conf >= 0.80 → legacy 2-call path."""
         gemma = _gemma_with_combined(reply=VlmCombinedReply(img_id='x', class_id=None))
-        gemma.verify_plate = AsyncMock(
+        gemma.verify_region = AsyncMock(
             return_value=VlmRegionVerdict(
                 crop_id='c', is_region=True, confidence='high', reason='ok'
             )
@@ -210,7 +210,7 @@ class TestCohortRouting:
             gemma=gemma,
         )
         gemma.label_combined.assert_not_awaited()
-        gemma.verify_plate.assert_awaited()
+        gemma.verify_region.assert_awaited()
         assert task.update_doc[F.status] == 'detected'
         assert 'vlm_verify_completed_at' not in task.update_doc
 
@@ -259,10 +259,10 @@ class TestCohortRouting:
             img_id='crop-2',
             class_id=0,  # 'sedan'
             class_confidence='medium',
-            plate_visible=True,
-            plate_bbox_correct=True,
-            plate_text='AAA1111',
-            plate_confidence='medium',
+            region_visible=True,
+            region_bbox_correct=True,
+            region_text_reply='AAA1111',
+            region_confidence='medium',
         )
         gemma = _gemma_with_combined(reply=reply)
         task = _make_task(
@@ -282,7 +282,7 @@ class TestCohortRouting:
             gemma=gemma,
         )
         gemma.label_combined.assert_awaited_once()
-        gemma.verify_plate.assert_not_awaited()
+        gemma.verify_region.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
         assert task.update_doc['class_id'] == 0
         assert task.update_doc['class_source'] == 'vlm'

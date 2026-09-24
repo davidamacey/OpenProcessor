@@ -8,7 +8,7 @@ property (the index-mapping builder produces the same key set as a
 
 This file is one of the two hardcoded exemptions in
 ``scripts/codegen/check_no_literal_region_fields.py`` — it legitimately
-constructs a ``plate_*``-named instance to prove overridability without
+constructs a ``roi_*``-named instance to prove overridability without
 a reindex.
 """
 
@@ -59,71 +59,71 @@ def test_overridability_expresses_a_pre_existing_deployment_shape() -> None:
     a future overlay instance (never authored on this branch).
     """
     f = RegionFields(
-        prefix='plate',
-        bbox_norm='plate_bbox_norm',
-        bbox_frame='plate_bbox_frame',
-        bbox_correct='plate_bbox_correct',
-        status='plate_status',
-        score='plate_score',
-        confidence='plate_confidence',
-        reason='plate_reason',
-        rejection_reason='plate_rejection_reason',
-        text='plate_text',
-        text_raw='plate_text_raw',
-        text_confidence='plate_text_confidence',
-        text_source='plate_text_source',
-        text_engine_version='plate_text_engine_version',
-        text_vlm='plate_text_vlm',
-        text_ocr='plate_text_ocr',
-        text_disagreement='plate_text_disagreement',
-        text_choice='plate_text_choice',
-        text_vlm_invalid='plate_text_vlm_invalid',
-        validated='plate_validated',
-        auto_confirmed='plate_auto_confirmed',
-        verified='plate_verified',
-        verified_at='plate_verified_at',
-        verifier='plate_verifier',
-        verifier_version='plate_verifier_version',
-        visible='plate_visible',
-        detector='plate_detector',
-        detector_version='plate_detector_version',
-        detector_chain='plate_detector_chain',
-        detected_at='plate_detected_at',
-        candidate_bbox_norm='plate_candidate_bbox_norm',
-        candidate_score='plate_candidate_score',
-        candidate_detector='plate_candidate_detector',
-        candidate_detector_version='plate_candidate_detector_version',
-        candidate_source='plate_candidate_source',
-        embedding='plate_pe_embedding',
-        cluster_id='plate_cluster_id',
-        cluster_subid='plate_cluster_subid',
-        cluster_distance='plate_cluster_distance',
-        class_id='plate_class_id',
-        label_source='plate_label_source',
-        source='plate_source',
-        pairing='plate_pairing',
-        skip_verify='plate_skip_vlm_verify',
-        bbox_norm_legacy='plate_bbox_norm_legacy',
-        score_legacy='plate_score_legacy',
-        status_legacy='plate_status_legacy',
+        prefix='roi',
+        bbox_norm='roi_bbox_norm',
+        bbox_frame='roi_bbox_frame',
+        bbox_correct='roi_bbox_correct',
+        status='roi_status',
+        score='roi_score',
+        confidence='roi_confidence',
+        reason='roi_reason',
+        rejection_reason='roi_rejection_reason',
+        text='roi_text',
+        text_raw='roi_text_raw',
+        text_confidence='roi_text_confidence',
+        text_source='roi_text_source',
+        text_engine_version='roi_text_engine_version',
+        text_vlm='roi_text_vlm',
+        text_ocr='roi_text_ocr',
+        text_disagreement='roi_text_disagreement',
+        text_choice='roi_text_choice',
+        text_vlm_invalid='roi_text_vlm_invalid',
+        validated='roi_validated',
+        auto_confirmed='roi_auto_confirmed',
+        verified='roi_verified',
+        verified_at='roi_verified_at',
+        verifier='roi_verifier',
+        verifier_version='roi_verifier_version',
+        visible='roi_visible',
+        detector='roi_detector',
+        detector_version='roi_detector_version',
+        detector_chain='roi_detector_chain',
+        detected_at='roi_detected_at',
+        candidate_bbox_norm='roi_candidate_bbox_norm',
+        candidate_score='roi_candidate_score',
+        candidate_detector='roi_candidate_detector',
+        candidate_detector_version='roi_candidate_detector_version',
+        candidate_source='roi_candidate_source',
+        embedding='roi_pe_embedding',
+        cluster_id='roi_cluster_id',
+        cluster_subid='roi_cluster_subid',
+        cluster_distance='roi_cluster_distance',
+        class_id='roi_class_id',
+        label_source='roi_label_source',
+        source='roi_source',
+        pairing='roi_pairing',
+        skip_verify='roi_skip_vlm_verify',
+        bbox_norm_legacy='roi_bbox_norm_legacy',
+        score_legacy='roi_score_legacy',
+        status_legacy='roi_status_legacy',
     )
-    assert f.status == 'plate_status'
-    assert f.bbox_norm == 'plate_bbox_norm'
-    assert f.embedding == 'plate_pe_embedding'
-    assert f.status_legacy == 'plate_status_legacy'
+    assert f.status == 'roi_status'
+    assert f.bbox_norm == 'roi_bbox_norm'
+    assert f.embedding == 'roi_pe_embedding'
+    assert f.status_legacy == 'roi_status_legacy'
     # Every field really did take the override — nothing silently kept
     # its generic default.
     for field in dataclasses.fields(f):
         value = getattr(f, field.name)
-        assert value.startswith('plate') or field.name == 'prefix', (
+        assert value.startswith('roi') or field.name == 'prefix', (
             f'{field.name} did not take its override: {value!r}'
         )
 
 
 def test_from_env_overrides_single_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_REGION_FIELD_STATUS', 'plate_status')
+    monkeypatch.setenv('OP_REGION_FIELD_STATUS', 'roi_status')
     f = RegionFields.from_env()
-    assert f.status == 'plate_status'
+    assert f.status == 'roi_status'
     # Unset fields keep their generic default.
     assert f.bbox_norm == 'region_bbox_norm'
 
@@ -149,11 +149,11 @@ def test_get_region_fields_singleton_observes_env_override(monkeypatch: pytest.M
     """
     import src.config.region_fields as region_fields_module
 
-    monkeypatch.setenv('OP_REGION_FIELD_STATUS', 'plate_status_env_override')
+    monkeypatch.setenv('OP_REGION_FIELD_STATUS', 'roi_status_env_override')
     monkeypatch.setattr(region_fields_module, '_default_region_fields', None)
     try:
         f = get_region_fields()
-        assert f.status == 'plate_status_env_override'
+        assert f.status == 'roi_status_env_override'
         # Unset fields keep their generic default even on the singleton.
         assert f.bbox_norm == 'region_bbox_norm'
     finally:

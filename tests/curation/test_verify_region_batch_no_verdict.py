@@ -19,7 +19,7 @@ class _Labeler:
     def __init__(self, verdicts: list[VlmRegionVerdict]) -> None:
         self._verdicts = verdicts
 
-    async def verify_plate_batch(self, _crops: list[Any]) -> list[VlmRegionVerdict]:
+    async def verify_region_batch(self, _crops: list[Any]) -> list[VlmRegionVerdict]:
         return self._verdicts
 
 

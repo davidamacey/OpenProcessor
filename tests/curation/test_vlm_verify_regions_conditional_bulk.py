@@ -49,7 +49,7 @@ class _FakeVerdict:
 
 
 class _Labeler:
-    async def verify_plate(self, _crop: Any) -> _FakeVerdict:
+    async def verify_region(self, _crop: Any) -> _FakeVerdict:
         return _FakeVerdict()
 
 
@@ -62,7 +62,7 @@ class _RacingLabeler:
     def __init__(self, fake: QueryFakeOpenSearch) -> None:
         self._fake = fake
 
-    async def verify_plate(self, crop: Any) -> _FakeVerdict:
+    async def verify_region(self, crop: Any) -> _FakeVerdict:
         if crop.crop_id == 'raced':
             self._fake.docs(ITEMS)['raced'].update(
                 **{F.verifier: 'human', F.verified: False, F.reason: 'not a real region'}

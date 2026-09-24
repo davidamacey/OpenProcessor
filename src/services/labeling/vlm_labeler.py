@@ -136,7 +136,7 @@ class CombinedCrop(BaseModel):
 
     crop_id: str = Field(..., description='Caller-controlled crop identifier.')
     jpeg_bytes: bytes = Field(..., description='Item crop JPEG bytes.')
-    plate_bbox_norm: tuple[float, float, float, float] | None = Field(
+    region_bbox_norm: tuple[float, float, float, float] | None = Field(
         default=None,
         description=(
             'Optional candidate sub-region bbox in normalized crop coords '
@@ -180,7 +180,7 @@ class VlmClassPrediction(BaseModel):
     )
     make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
     model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
-    plate_visible: bool | None = Field(
+    region_visible: bool | None = Field(
         default=None,
         description='Whether the VLM sees a sub-region-of-interest on this crop; None when '
         'not reported.',
@@ -232,15 +232,15 @@ class VlmCombinedReply(BaseModel):
         description='Predicted class id, or -1 if no class matches, or None when skipped.',
     )
     class_confidence: ConfidenceLevel | None = None
-    plate_visible: bool = False
-    plate_bbox_correct: bool | None = Field(
+    region_visible: bool = False
+    region_bbox_correct: bool | None = Field(
         default=None,
         description='True if the proposed region bbox correctly outlines the sub-region; '
         'False if the sub-region is visible elsewhere; None when the reply gave no '
         'verdict on the box (no candidate supplied, or the answer was null / absent).',
     )
-    plate_text: str | None = None
-    plate_confidence: ConfidenceLevel | None = None
+    region_text_reply: str | None = None
+    region_confidence: ConfidenceLevel | None = None
     make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
     model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
     class_raw: str = Field(
@@ -256,7 +256,7 @@ class CombinedParseFailure(Exception):  # noqa: N818 - documented public symbol
     """Raised when ``label_combined`` cannot parse the VLM's response.
 
     Callers should fall back to the existing separate-call paths
-    (``label_vehicle_batch`` + ``verify_plate_batch``) for the affected
+    (``label_vehicle_batch`` + ``verify_region_batch``) for the affected
     crop.
     """
 
@@ -589,10 +589,10 @@ def _combined_reply_from_entry(
         class_confidence=(
             _normalize_confidence(class_conf_raw) if class_conf_raw is not None else None
         ),
-        plate_visible=visible,
-        plate_bbox_correct=_coerce_bool(entry.get(fields.bbox_correct)),
-        plate_text=_clean_combined_region_text(entry.get(fields.text), echoes=echoes),
-        plate_confidence=(
+        region_visible=visible,
+        region_bbox_correct=_coerce_bool(entry.get(fields.bbox_correct)),
+        region_text_reply=_clean_combined_region_text(entry.get(fields.text), echoes=echoes),
+        region_confidence=(
             _normalize_confidence(region_conf_raw) if region_conf_raw is not None else None
         ),
         make=make,
@@ -1062,7 +1062,7 @@ class VlmLabeler:
                     raw_response=per_crop_raw,
                     make=make,
                     model=model,
-                    plate_visible=visible,
+                    region_visible=visible,
                 )
             )
         return out
@@ -1186,7 +1186,7 @@ class VlmLabeler:
             return _request_failed(chunk)
         return self._parse_class_reply(response, chunk)
 
-    async def verify_plate(
+    async def verify_region(
         self, crop: RegionCrop, *, raise_on_transport: bool = False
     ) -> VlmRegionVerdict | None:
         """Verify whether a single sub-region crop is real.
@@ -1242,9 +1242,9 @@ class VlmLabeler:
             return None
 
         raw = _strip_markdown_fences(extract_message_content(response))
-        return self._parse_plate_response(raw, crop)
+        return self._parse_region_response(raw, crop)
 
-    async def verify_plate_batch(
+    async def verify_region_batch(
         self,
         crops: list[RegionCrop],
         *,
@@ -1264,7 +1264,7 @@ class VlmLabeler:
         reply, an individual crop missing from an otherwise-aligned
         reply, or a whole-chunk upstream failure). A missing crop_id is
         not a rejection; callers must retry it, the same contract
-        :py:meth:`plate_visible_batch` uses for its map.
+        :py:meth:`region_visible_batch` uses for its map.
         """
 
         if not crops:
@@ -1275,7 +1275,7 @@ class VlmLabeler:
 
         chunks = [crops[i : i + per_call] for i in range(0, len(crops), per_call)]
         chunk_results_list = await asyncio.gather(
-            *[self._verify_plate_chunk(c) for c in chunks],
+            *[self._verify_region_chunk(c) for c in chunks],
             return_exceptions=False,
         )
         results: list[VlmRegionVerdict] = []
@@ -1283,14 +1283,14 @@ class VlmLabeler:
             results.extend(cr)
         return results
 
-    async def _verify_plate_chunk(self, chunk: list[RegionCrop]) -> list[VlmRegionVerdict]:
+    async def _verify_region_chunk(self, chunk: list[RegionCrop]) -> list[VlmRegionVerdict]:
         """Run one upstream verify call over up to ``max_images_per_call`` crops.
 
         Crops the VLM gave no usable answer for -- a whole-chunk upstream
         failure, an empty/unparseable/misaligned reply, or an individual
         crop missing from an otherwise-aligned reply -- are left out of
         the returned list entirely; absence is never recorded as a
-        rejection (see :py:meth:`verify_plate_batch`).
+        rejection (see :py:meth:`verify_region_batch`).
         """
 
         if not chunk:
@@ -1300,7 +1300,7 @@ class VlmLabeler:
         # single-call path's accuracy when callers happen to pass a
         # length-1 list.
         if len(chunk) == 1:
-            verdict = await self.verify_plate(chunk[0])
+            verdict = await self.verify_region(chunk[0])
             return [] if verdict is None else [verdict]
 
         user_text = f'{self._pack.region_batch_user}\n{_RESULTS_ENVELOPE}'
@@ -1351,13 +1351,13 @@ class VlmLabeler:
             return []
 
         content = _strip_markdown_fences(extract_message_content(response))
-        verdicts = self._parse_plate_batch_response(content, chunk)
+        verdicts = self._parse_region_batch_response(content, chunk)
         if verdicts:
             return verdicts
         reasoning = extract_reasoning_content(response)
         if not reasoning:
             return verdicts
-        from_reasoning = self._parse_plate_batch_response(reasoning, chunk, log_failures=False)
+        from_reasoning = self._parse_region_batch_response(reasoning, chunk, log_failures=False)
         if from_reasoning:
             logger.info(
                 'vlm_labeler.plate_batch_reply_from_reasoning',
@@ -1373,7 +1373,7 @@ class VlmLabeler:
         jpeg_bytes: bytes,
         *,
         class_names: list[str] | None = None,
-        plate_bbox_norm: tuple[float, float, float, float] | None = None,
+        region_bbox_norm: tuple[float, float, float, float] | None = None,
         draw_overlay: bool = True,
     ) -> VlmCombinedReply:
         """One VLM call returns class + region-verify + region-text.
@@ -1384,10 +1384,10 @@ class VlmLabeler:
             class_names: Class-name slice to classify against. Pass
                 None / [] when the caller only wants the region-side
                 answers; ``class_id`` returns None.
-            plate_bbox_norm: Candidate sub-region bbox in normalized
+            region_bbox_norm: Candidate sub-region bbox in normalized
                 crop coords ``[x1, y1, x2, y2]`` from an upstream
                 detector. None when no candidate exists — the VLM
-                still answers ``plate_visible``.
+                still answers ``region_visible``.
             draw_overlay: If True (default), draw the region bbox as a
                 colored rectangle on the crop bytes before encoding so
                 the VLM reasons about it visually. Falls back to
@@ -1403,8 +1403,8 @@ class VlmLabeler:
         """
         bytes_to_send = jpeg_bytes
         overlay_drawn = False
-        if draw_overlay and plate_bbox_norm is not None:
-            drew = _draw_bbox_overlay(jpeg_bytes, plate_bbox_norm)
+        if draw_overlay and region_bbox_norm is not None:
+            drew = _draw_bbox_overlay(jpeg_bytes, region_bbox_norm)
             if drew is not None:
                 bytes_to_send = drew
                 overlay_drawn = True
@@ -1418,9 +1418,9 @@ class VlmLabeler:
         else:
             class_block = "Don't classify (the caller already has a class). Set class_id=null. "
 
-        if plate_bbox_norm is not None and not overlay_drawn:
-            region_block = f'The proposed region bbox (normalized) is {list(plate_bbox_norm)}. '
-        elif plate_bbox_norm is not None:
+        if region_bbox_norm is not None and not overlay_drawn:
+            region_block = f'The proposed region bbox (normalized) is {list(region_bbox_norm)}. '
+        elif region_bbox_norm is not None:
             region_block = f'In this image {OVERLAY_DESCRIPTION}. '
         else:
             region_block = 'No region-bbox candidate was provided. '
@@ -1558,7 +1558,7 @@ class VlmLabeler:
                     img_id=crop.crop_id,
                     jpeg_bytes=crop.jpeg_bytes,
                     class_names=class_names if crop.classify else None,
-                    plate_bbox_norm=crop.plate_bbox_norm,
+                    region_bbox_norm=crop.region_bbox_norm,
                     draw_overlay=draw_overlay,
                 )
                 return {crop.crop_id: reply}
@@ -1581,8 +1581,8 @@ class VlmLabeler:
         for i, crop in enumerate(chunk, start=1):
             bytes_to_send = crop.jpeg_bytes
             overlay_drawn = False
-            if draw_overlay and crop.plate_bbox_norm is not None:
-                drew = _draw_bbox_overlay(crop.jpeg_bytes, crop.plate_bbox_norm)
+            if draw_overlay and crop.region_bbox_norm is not None:
+                drew = _draw_bbox_overlay(crop.jpeg_bytes, crop.region_bbox_norm)
                 if drew is not None:
                     bytes_to_send = drew
                     overlay_drawn = True
@@ -1592,11 +1592,11 @@ class VlmLabeler:
             else:
                 directive_class = 'skip classification (set ``class_id``=null)'
 
-            if crop.plate_bbox_norm is not None and overlay_drawn:
+            if crop.region_bbox_norm is not None and overlay_drawn:
                 directive_region = OVERLAY_DESCRIPTION
-            elif crop.plate_bbox_norm is not None:
+            elif crop.region_bbox_norm is not None:
                 directive_region = (
-                    f'the proposed region bbox (normalized) is {list(crop.plate_bbox_norm)}'
+                    f'the proposed region bbox (normalized) is {list(crop.region_bbox_norm)}'
                 )
             else:
                 directive_region = 'no region-bbox candidate was provided'
@@ -1678,7 +1678,7 @@ class VlmLabeler:
     ) -> dict[str, VlmCombinedReply | None]:
         """Parse a batched combined response into ``{crop_id: reply | None}``.
 
-        Mirrors the tolerant pattern of :py:meth:`_parse_plate_batch_response`:
+        Mirrors the tolerant pattern of :py:meth:`_parse_region_batch_response`:
         accepts a bare JSON array OR an array embedded in reasoning prose,
         unwraps ``{"results": [...]}`` envelopes, and tolerates positional
         entries that omit the ``img`` index. Per-crop parse failures (or
@@ -1763,7 +1763,7 @@ class VlmLabeler:
         return out
 
     @staticmethod
-    def _parse_plate_batch_response(
+    def _parse_region_batch_response(
         raw: str,
         chunk: list[RegionCrop],
         *,
@@ -1777,12 +1777,12 @@ class VlmLabeler:
         that crop is left out of the returned list. A crop with no
         answer is not evidence of a rejection; synthesizing
         ``is_region=False`` here would record a verdict the VLM never
-        gave (mirrors :py:meth:`_parse_plate_visible_response`'s
+        gave (mirrors :py:meth:`_parse_region_visible_response`'s
         empty-reply handling). ``log_failures=False`` suppresses the
         parse-failure warnings for a second attempt against the
         reasoning channel, matching :py:meth:`_parse_vehicle_response`.
 
-        Tolerates the same VLM quirks as :py:meth:`_parse_plate_response`:
+        Tolerates the same VLM quirks as :py:meth:`_parse_region_response`:
         leading reasoning prose, ``{"results":[...]}`` envelopes, and
         1-based ``img`` indices.
         """
@@ -1865,7 +1865,7 @@ class VlmLabeler:
             )
         return out
 
-    async def plate_visible_batch(
+    async def region_visible_batch(
         self,
         crops: list[RegionCrop],
         *,
@@ -1901,7 +1901,7 @@ class VlmLabeler:
 
         chunks = [crops[i : i + per_call] for i in range(0, len(crops), per_call)]
         chunk_results = await asyncio.gather(
-            *[self._plate_visible_chunk(c) for c in chunks],
+            *[self._region_visible_chunk(c) for c in chunks],
             return_exceptions=False,
         )
         merged: dict[str, bool] = {}
@@ -1909,7 +1909,7 @@ class VlmLabeler:
             merged.update(d)
         return merged
 
-    async def _plate_visible_chunk(self, chunk: list[RegionCrop]) -> dict[str, bool]:
+    async def _region_visible_chunk(self, chunk: list[RegionCrop]) -> dict[str, bool]:
         """Run one yes/no upstream call over up to ``max_images_per_call`` crops."""
 
         if not chunk:
@@ -1964,10 +1964,10 @@ class VlmLabeler:
             return {c.crop_id: True for c in chunk}
 
         raw = _strip_markdown_fences(extract_message_content(response))
-        return self._parse_plate_visible_response(raw, chunk, self._fields)
+        return self._parse_region_visible_response(raw, chunk, self._fields)
 
     @staticmethod
-    def _parse_plate_visible_response(
+    def _parse_region_visible_response(
         raw: str,
         chunk: list[RegionCrop],
         fields: RegionFields,
@@ -2068,7 +2068,7 @@ class VlmLabeler:
         return out
 
     @staticmethod
-    def _parse_plate_response(raw: str, crop: RegionCrop) -> VlmRegionVerdict | None:
+    def _parse_region_response(raw: str, crop: RegionCrop) -> VlmRegionVerdict | None:
         """Parse a single-region verdict, or ``None`` for no usable answer.
 
         Returns ``None`` -- not a low-confidence reject -- when ``raw``

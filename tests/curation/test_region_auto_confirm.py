@@ -54,7 +54,7 @@ class TestWorkerWrites:
 
     def test_combined_accept_never_validates(self) -> None:
         doc = _combined_write_doc(
-            reply=VlmCombinedReply(img_id='c1', plate_visible=True, plate_bbox_correct=True),
+            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=True),
             candidate_in_source=(0.1, 0.1, 0.2, 0.2),
             candidate_score=0.9,
             detector='det_model',
@@ -80,10 +80,10 @@ class TestWorkerWrites:
             segmenter=None,
             reply=VlmCombinedReply(
                 img_id='c1',
-                plate_visible=True,
-                plate_bbox_correct=True,
-                plate_text='DNV20',
-                plate_confidence='high',
+                region_visible=True,
+                region_bbox_correct=True,
+                region_text_reply='DNV20',
+                region_confidence='high',
             ),
         )
         doc = fake.live['c1']

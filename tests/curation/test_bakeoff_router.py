@@ -35,7 +35,7 @@ _HARNESS_SUFFIXES = {'.py', '.json', '.txt', '.md'}
 
 def _bakeoff_harness_files() -> list[str]:
     files = ['src/routers/curation/bakeoff.py']
-    for root in ('scripts/curation/bakeoff', 'examples/bakeoff_lpr_paper'):
+    for root in ('scripts/curation/bakeoff',):
         files += [
             p.relative_to(REPO_ROOT).as_posix()
             for p in sorted((REPO_ROOT / root).rglob('*'))

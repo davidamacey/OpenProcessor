@@ -71,7 +71,7 @@ class TestDirective:
         lab._post_chat = post  # type: ignore[method-assign]
         crops = [
             CombinedCrop(
-                crop_id=f'c{i}', jpeg_bytes=_gray_jpeg(), plate_bbox_norm=(0.2, 0.2, 0.6, 0.6)
+                crop_id=f'c{i}', jpeg_bytes=_gray_jpeg(), region_bbox_norm=(0.2, 0.2, 0.6, 0.6)
             )
             for i in range(2)
         ]
@@ -90,7 +90,7 @@ class TestDirective:
         reply = {'region_visible': True, 'region_bbox_correct': True}
         post = AsyncMock(return_value=_chat(json.dumps(reply)))
         lab._post_chat = post  # type: ignore[method-assign]
-        await lab.label_combined('c1', _gray_jpeg(), plate_bbox_norm=(0.2, 0.2, 0.6, 0.6))
+        await lab.label_combined('c1', _gray_jpeg(), region_bbox_norm=(0.2, 0.2, 0.6, 0.6))
         assert post.await_args is not None
         user = post.await_args.args[0]['messages'][1]['content'][0]['text']
         assert 'red rectangle' in user
@@ -99,7 +99,7 @@ class TestDirective:
 class TestVisibilityNoVerdict:
     def test_empty_reply_is_no_verdict(self) -> None:
         crops = [RegionCrop(crop_id=c, jpeg_bytes=b'x') for c in ('a', 'b')]
-        assert VlmLabeler._parse_plate_visible_response('', crops, F) == {}
+        assert VlmLabeler._parse_region_visible_response('', crops, F) == {}
 
     @pytest.mark.asyncio
     @pytest.mark.usefixtures('reference_region_profile')
@@ -115,9 +115,9 @@ class TestVisibilityNoVerdict:
             fake_os=fake_os,
             primary=None,
             segmenter=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.5, source='seg'),
-            reply=VlmCombinedReply(img_id='c1', plate_visible=True, plate_bbox_correct=True),
+            reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=True),
             visible=None,
         )
-        assert mocks['vlm'].plate_visible_batch.await_count >= 2
+        assert mocks['vlm'].region_visible_batch.await_count >= 2
         assert fake_os.writes == []
         assert fake_os.live['c1'][F.status] == 'pending_detection'

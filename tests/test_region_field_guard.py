@@ -156,9 +156,12 @@ def test_is_ported_does_not_match_a_lookalike_sibling_file() -> None:
     assert guard._is_ported('src/routers/curation/regions_extra.py') is False
 
 
-def test_is_exempt_true_for_the_two_hardcoded_exemptions() -> None:
-    assert guard._is_exempt('src/config/region_fields.py') is True
-    assert guard._is_exempt('tests/curation/test_region_fields.py') is True
+def test_is_exempt_false_for_the_former_hardcoded_exemptions() -> None:
+    """`src/config/region_fields.py` and `test_region_fields.py` now use
+    `roi_*` (not `plate_*`) as their illustrative override example, so
+    neither needs (or gets) a guard exemption anymore."""
+    assert guard._is_exempt('src/config/region_fields.py') is False
+    assert guard._is_exempt('tests/curation/test_region_fields.py') is False
 
 
 def test_is_exempt_true_for_anything_under_docs() -> None:

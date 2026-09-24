@@ -19,13 +19,7 @@ newly-ported paths in the same commit that ports them. This gives a
 ratchet: once a module is ported, it can never regress to hardcoding a
 `plate_*` literal again.
 
-Two hardcoded exemptions (never driven by ``PORTED_PATHS``):
-- ``src/config/region_fields.py`` — its docstrings legitimately name
-  `plate_*` as the illustrative override example.
-- ``tests/curation/test_region_fields.py`` — the overridability fixture
-  legitimately constructs a `plate_*`-named instance.
-
-Plus two line-level skips for the frozen HTTP wire contract of the
+Two line-level skips for the frozen HTTP wire contract of the
 generic curation API (see ``docs/design/curation_api_contract.md``) —
 never an OpenSearch field reference, and explicitly out of
 ``RegionFields``' scope:
@@ -65,9 +59,9 @@ from pathlib import Path
 # commit that ports them — see §3.2 "Per-chunk enforcement guard".
 #
 # Chunk 1 (foundations). Note: `test_region_fields_mapping_
-# coverage.py` is deliberately NOT listed here — like
-# `test_region_fields.py`, it legitimately constructs a `plate_*`-named
-# RegionFields instance to prove overridability (§3.2).
+# coverage.py` and `test_region_fields.py` construct a `roi_*`-named
+# RegionFields instance to prove overridability (§3.2) — not `plate_*`,
+# so they never needed a guard exemption in the first place.
 PORTED_PATHS: tuple[str, ...] = (
     # commit (a) — OpenSearch client
     'src/clients/curation_opensearch.py',
@@ -160,7 +154,6 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_gpu_arbiter_config.py',
     'src/routers/curation/bakeoff.py',
     'scripts/curation/bakeoff/',
-    'examples/bakeoff_lpr_paper/dedup_sweep.py',
     'tests/curation/test_bakeoff_router.py',
     # Chunk 7 commit (a) — VLM client (transport) + PromptPack (prompt
     # data). `vlm_prompts.py` carries no `RegionFields`-governed literals
@@ -265,14 +258,6 @@ PORTED_PATHS: tuple[str, ...] = (
     'tests/curation/test_labels_export_roundtrip.py',
 )
 
-# Hardcoded exemptions — never touched by PORTED_PATHS growth.
-_FULLY_EXEMPT_FILES = frozenset(
-    {
-        'src/config/region_fields.py',
-        'tests/curation/test_region_fields.py',
-    }
-)
-
 _LITERAL_RE = re.compile(r"""['"](plate_[a-z_]+)['"]""")
 _PYDANTIC_ATTR_RE = re.compile(r'^\s*plate_[a-z_]+\s*:')
 # Wire-response dict key whose value is visibly RegionFields-routed, a
@@ -301,8 +286,6 @@ def _is_ported(rel_posix: str) -> bool:
 
 
 def _is_exempt(rel_posix: str) -> bool:
-    if rel_posix in _FULLY_EXEMPT_FILES:
-        return True
     return rel_posix.startswith('docs/')
 
 

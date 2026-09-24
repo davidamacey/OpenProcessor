@@ -2,8 +2,8 @@
 
 This is the settled design documented in
 ``docs/design/curation_design_rationale.md`` §4: an
-existing deployment's live OpenSearch field names (e.g. ``plate_status``,
-``plate_bbox_norm``, …) are NOT renamed — there is zero data migration and
+existing deployment's live OpenSearch field names (e.g. ``roi_status``,
+``roi_bbox_norm``, …) are NOT renamed — there is zero data migration and
 zero reindex risk. Instead, code stops hardcoding those literal strings and
 routes every OpenSearch document-field reference through a
 :class:`RegionFields` instance. The generic OSS defaults use ``region_*``
@@ -40,8 +40,8 @@ class RegionFields:
     sub-annotation (e.g. the license plate on a vehicle crop).
 
     Defaults are the generic OSS names. A deployment that already has
-    data under different names (e.g. ``plate_status``,
-    ``plate_bbox_norm``, etc.) constructs an instance with the existing
+    data under different names (e.g. ``roi_status``,
+    ``roi_bbox_norm``, etc.) constructs an instance with the existing
     names instead — no reindex required.
     """
 
@@ -121,14 +121,14 @@ class RegionFields:
     # docs/design/curation_design_rationale.md §4.)
     skip_verify: str = 'region_skip_verify'
 
-    # Legacy-suffixed columns kept for rollback (e.g. plate_*_legacy).
+    # Legacy-suffixed columns kept for rollback (e.g. roi_*_legacy).
     bbox_norm_legacy: str = 'region_bbox_norm_legacy'
     score_legacy: str = 'region_score_legacy'
     status_legacy: str = 'region_status_legacy'
 
     @classmethod
     def from_env(cls, env_prefix: str = 'OP_REGION_FIELD_') -> RegionFields:
-        """Per-field env override: ``OP_REGION_FIELD_STATUS=plate_status``, …
+        """Per-field env override: ``OP_REGION_FIELD_STATUS=roi_status``, …
 
         Unset env vars fall back to the dataclass default for that field.
         """

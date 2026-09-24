@@ -766,7 +766,7 @@ async def run(args: argparse.Namespace) -> int:
                         if gemma is None:
                             msg = 'visibility stage fed without a VLM'
                             raise RuntimeError(msg)
-                        verdicts = await gemma.plate_visible_batch(plate_crops)
+                        verdicts = await gemma.region_visible_batch(plate_crops)
                         LEGACY_STAGE_A_GEMMA_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
                             time.monotonic() - _vis_t0
                         )
@@ -1037,19 +1037,19 @@ async def run(args: argparse.Namespace) -> int:
         reads the region text.
 
         Per-crop branches on the reply:
-          - plate_bbox_correct=True, plate_visible=True (+ bbox passes
+          - region_bbox_correct=True, region_visible=True (+ bbox passes
             sanity gate) -> write 'detected' with full region + class
             fields via :func:`_combined_write_doc`.
-          - plate_visible=True, plate_bbox_correct=None (null / absent)
+          - region_visible=True, region_bbox_correct=None (null / absent)
             -> no verdict: no write, the item stays pending for a retry,
             up to the no-verdict cap; then 'verify_rejected' with reason
             ``verifier_no_verdict`` (candidate kept, bbox verdict null).
-          - plate_visible=True but plate_bbox_correct=False (or sanity
+          - region_visible=True but region_bbox_correct=False (or sanity
             gate fails) -> write 'verify_rejected' + class fields. Do
             NOT re-loop the secondary segmenter (would re-introduce 2
             VLM calls). ``combined_bbox_wrong`` counter tracks this
             cohort.
-          - plate_visible=False -> write 'no_region_visible' + class fields.
+          - region_visible=False -> write 'no_region_visible' + class fields.
           - reply missing / parse failure -> drop from in_flight, leave
             plate_status unchanged so the next producer poll re-fetches;
             counts toward the same no-verdict cap.
@@ -1085,7 +1085,7 @@ async def run(args: argparse.Namespace) -> int:
                         CombinedCrop(
                             crop_id=t.crop_id,
                             jpeg_bytes=t.crop_jpeg,
-                            plate_bbox_norm=t.candidate_in_crop,
+                            region_bbox_norm=t.candidate_in_crop,
                             classify=_should_classify(t, registry_loaded=registry_loaded),
                         )
                     )
@@ -1166,7 +1166,7 @@ async def run(args: argparse.Namespace) -> int:
                             t.detection_trace.append(f'{actor}:hit')
 
                         if reply is None or (
-                            reply.plate_visible and reply.plate_bbox_correct is None
+                            reply.region_visible and reply.region_bbox_correct is None
                         ):
                             # No verdict: the entry is missing/unparseable,
                             # or the VLM sees a region but answered null /
@@ -1219,8 +1219,8 @@ async def run(args: argparse.Namespace) -> int:
                         combined_no_verdict.clear(t.crop_id)
 
                         if (
-                            reply.plate_bbox_correct
-                            and reply.plate_visible
+                            reply.region_bbox_correct
+                            and reply.region_visible
                             and t.candidate_in_source is not None
                             and t.candidate_in_crop is not None
                         ):
@@ -1251,7 +1251,7 @@ async def run(args: argparse.Namespace) -> int:
                             auto = await _auto_confirm_or_pending(
                                 sam_score=t.candidate_score,
                                 bbox_in_crop=t.candidate_in_crop,
-                                vlm_high_conf=reply.plate_confidence == 'high',
+                                vlm_high_conf=reply.region_confidence == 'high',
                             )
                             t.detection_trace.append(f'{actor}:combined_verify_ok')
                             t.update_doc = _combined_write_doc(
@@ -1275,8 +1275,8 @@ async def run(args: argparse.Namespace) -> int:
                                 region_in_crop=t.candidate_in_crop,
                                 profile=profile,
                                 crop_id=t.crop_id,
-                                vlm_text=reply.plate_text,
-                                vlm_confidence=reply.plate_confidence,
+                                vlm_text=reply.region_text_reply,
+                                vlm_confidence=reply.region_confidence,
                                 vlm_available=True,
                                 rules=text_rules,
                             )
@@ -1292,8 +1292,8 @@ async def run(args: argparse.Namespace) -> int:
                                 profile=profile,
                                 rules=text_rules,
                             )
-                        elif reply.plate_visible:
-                            # plate_bbox_correct is False but the VLM says
+                        elif reply.region_visible:
+                            # region_bbox_correct is False but the VLM says
                             # a region IS visible. Write verify_rejected +
                             # class fields and do NOT re-loop the
                             # secondary segmenter (would re-introduce 2 VLM
@@ -1318,7 +1318,7 @@ async def run(args: argparse.Namespace) -> int:
                                 ),
                             }
                         else:
-                            # plate_visible=False — no region in this crop.
+                            # region_visible=False — no region in this crop.
                             metrics['combined_no_plate_visible'] += 1
                             t.detection_trace.append(f'{actor}:combined_no_region_visible')
                             t.update_doc = {

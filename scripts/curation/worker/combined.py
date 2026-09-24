@@ -129,7 +129,7 @@ async def _try_combined_class_region(
             img_id=task.crop_id,
             jpeg_bytes=task.crop_jpeg or b'',
             class_names=list(class_names),
-            plate_bbox_norm=candidate_in_crop,
+            region_bbox_norm=candidate_in_crop,
             draw_overlay=True,
         )
     except CombinedParseFailure as exc:
@@ -143,7 +143,7 @@ async def _try_combined_class_region(
         reply, list(class_names), name_to_id=name_to_id
     )
 
-    if reply.plate_visible and reply.plate_bbox_correct is None:
+    if reply.region_visible and reply.region_bbox_correct is None:
         # A visible region but no verdict on the box (null / absent): not a
         # reject. Resolve the crop with no write so it stays pending and the
         # next pass retries it.
@@ -160,12 +160,12 @@ async def _try_combined_class_region(
         )
         return True
 
-    if reply.plate_bbox_correct and reply.plate_visible:
+    if reply.region_bbox_correct and reply.region_visible:
         gate_ok, gate_reason = is_plausible_region_bbox(candidate_in_crop, task.vehicle_bbox_norm)
         if gate_ok:
             task.detection_trace.append(f'{detector_chain_tag}:hit')
             task.detection_trace.append(f'{detector_chain_tag}:combined_verify_ok')
-            high_conf = reply.plate_confidence == 'high'
+            high_conf = reply.region_confidence == 'high'
             auto = await _auto_confirm_or_pending(
                 sam_score=candidate_score,
                 bbox_in_crop=candidate_in_crop,
