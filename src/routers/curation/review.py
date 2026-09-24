@@ -26,6 +26,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_queries
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
@@ -283,7 +284,7 @@ RegionStatusQ = Annotated[
             "Regions tab only (ignored elsewhere). One of 'all' (default: "
             'accepted-but-unvalidated boxes plus a verifier-rejected '
             "candidate that still has a box), 'detected', 'verify_rejected'. "
-            'See GET /review/tabs filter_options.region_status.'
+            'See GET /review/tabs filter_specs (param region_status).'
         )
     ),
 ]
@@ -305,12 +306,12 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.get('/review/tabs')
+@router.get('/review/tabs', response_model=ReviewTabsResponse)
 async def review_tabs() -> dict[str, list[dict[str, Any]]]:
     """Every review tab's ``id``/``label``/``description`` (W0: naming
     sweep finding m9) plus ``filters`` (the query parameters it honours)
-    and ``filter_defaults`` (values it applies when one is omitted) — the
-    frontend renders this instead of hardcoding tab labels or assuming a
+    ``filter_defaults`` (values it applies when one is omitted) and
+    ``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a
     filter works everywhere. Must be registered before ``GET /review/{tab}``
     so it isn't shadowed as ``tab='tabs'``."""
     return {'tabs': review_queries.review_tab_catalog()}

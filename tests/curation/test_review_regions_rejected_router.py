@@ -3,7 +3,7 @@ reachable from the review queue (DQ-B2 follow-up).
 
 Unit-level match logic lives in ``test_review_regions_tab.py``; this
 exercises the real router (``region_status`` query param wiring, the
-``filter_options`` catalog on ``GET /review/tabs``, and the per-item
+``filter_specs`` catalog on ``GET /review/tabs``, and the per-item
 ``reason``) against ``QueryFakeOpenSearch``, which actually evaluates the
 query/sort instead of just recording the call.
 """

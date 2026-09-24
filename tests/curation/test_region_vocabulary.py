@@ -130,26 +130,38 @@ def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None
     assert by_id['coco_blind_spots']['label'] == 'Classifier blind spots'
 
 
-def test_review_tabs_serves_region_status_filter_options(client: TestClient) -> None:
-    """DQ-B2 follow-up: the regions tab's ``region_status`` filter is a
-    fixed enum, served with value/label options so the frontend can
-    render it without hardcoding the values (same shape as the existing
-    ``filters``/``filter_defaults`` catalog fields)."""
+def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> None:
+    """DQ-B2 follow-up: the regions tab's ``region_status`` filter is served
+    as a self-describing enum spec (param, kind, label, value/label options)
+    so the frontend renders any enum filter generically, with no per-filter
+    code; its default rides the existing ``filter_defaults`` map."""
     resp = client.get('/curation/review/tabs')
     assert resp.status_code == 200, resp.text
     by_id = {t['id']: t for t in resp.json()['tabs']}
     regions = by_id['regions']
     assert 'region_status' in regions['filters']
     assert regions['filter_defaults']['region_status'] == 'all'
-    options = regions['filter_options']['region_status']
-    assert {o['value'] for o in options} == {'all', 'detected', 'verify_rejected'}
-    for o in options:
-        assert o['label']
-    # Every other tab either has no filter_options at all, or one that
-    # doesn't include region_status (regions-only filter).
+    specs = {s['param']: s for s in regions['filter_specs']}
+    spec = specs['region_status']
+    assert spec['kind'] == 'enum'
+    assert spec['label']
+    assert {o['value'] for o in spec['options']} == {'all', 'detected', 'verify_rejected'}
+    assert all(o['label'] for o in spec['options'])
+    assert regions['filter_defaults']['region_status'] in {o['value'] for o in spec['options']}
     for tab_id, tab in by_id.items():
+        # Every spec'd filter is one the tab honours.
+        assert {s['param'] for s in tab['filter_specs']} <= set(tab['filters'])
         if tab_id != 'regions':
-            assert 'region_status' not in tab.get('filter_options', {})
+            assert 'region_status' not in {s['param'] for s in tab['filter_specs']}
+
+
+def test_review_tabs_response_is_typed_in_the_contract(client: TestClient) -> None:
+    """The tab catalog (incl. ``filter_specs``) is a declared response model,
+    so it lands in the generated OpenAPI contract the frontend vendors."""
+    schema = client.get('/openapi.json').json()
+    op = schema['paths']['/curation/review/tabs']['get']
+    ref = op['responses']['200']['content']['application/json']['schema']
+    assert '$ref' in ref, ref
 
 
 def test_review_tabs_route_not_shadowed_by_the_tab_path_param(client: TestClient) -> None:

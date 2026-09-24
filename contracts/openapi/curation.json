@@ -3300,6 +3300,121 @@
         "title": "ResolveNewClassResponse",
         "type": "object"
       },
+      "ReviewFilterOption": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "ReviewFilterOption",
+        "type": "object"
+      },
+      "ReviewFilterSpec": {
+        "properties": {
+          "kind": {
+            "const": "enum",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFilterOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "param": {
+            "description": "Query parameter on GET /review/{tab} and its locate route.",
+            "title": "Param",
+            "type": "string"
+          }
+        },
+        "required": [
+          "param",
+          "kind",
+          "label",
+          "options"
+        ],
+        "title": "ReviewFilterSpec",
+        "type": "object"
+      },
+      "ReviewTab": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "filter_defaults": {
+            "additionalProperties": true,
+            "description": "Value the tab applies when a parameter is omitted.",
+            "title": "Filter Defaults",
+            "type": "object"
+          },
+          "filter_specs": {
+            "description": "Self-describing spec for each honoured filter with a fixed value set.",
+            "items": {
+              "$ref": "#/components/schemas/ReviewFilterSpec"
+            },
+            "title": "Filter Specs",
+            "type": "array"
+          },
+          "filters": {
+            "description": "Query parameters the tab honours.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Filters",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "filters",
+          "filter_defaults",
+          "filter_specs"
+        ],
+        "title": "ReviewTab",
+        "type": "object"
+      },
+      "ReviewTabsResponse": {
+        "properties": {
+          "tabs": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewTab"
+            },
+            "title": "Tabs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tabs"
+        ],
+        "title": "ReviewTabsResponse",
+        "type": "object"
+      },
       "RunsListResponse": {
         "properties": {
           "items": {
@@ -10037,22 +10152,14 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\nand ``filter_defaults`` (values it applies when one is omitted) — the\nfrontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "additionalProperties": true,
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "title": "Response Review Tabs Curation Review Tabs Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ReviewTabsResponse"
                 }
               }
             },
@@ -10344,7 +10451,7 @@
             }
           },
           {
-            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
             "in": "query",
             "name": "region_status",
             "required": false,
@@ -10357,7 +10464,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }
           }
@@ -10623,7 +10730,7 @@
             }
           },
           {
-            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
             "in": "query",
             "name": "region_status",
             "required": false,
@@ -10636,7 +10743,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_options.region_status.",
+              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
               "title": "Region Status"
             }
           }

@@ -587,16 +587,17 @@ of the generic "needs human confirmation" string. `locate` honours the
 same parameter.
 
 `GET /review/tabs` → `{tabs: [{id, label, description, filters,
-filter_defaults, filter_options}]}`: `filters` is the list of query
+filter_defaults, filter_specs}]}` (typed: `ReviewTabsResponse`): `filters` is the list of query
 parameters the tab honours (a parameter not listed is accepted and
 ignored), `filter_defaults` the values it applies when one is omitted
 (`{"max_rank": 2}` for the two primary-subject tabs, `{"region_status":
-"all"}` for `regions`, else `{}`). `filter_options` serves `{value, label}`
-choices for any filter with a fixed enum (today, only `regions`'
-`region_status`: `[{"value": "all", "label": "..."}, {"value": "detected",
-"label": "..."}, {"value": "verify_rejected", "label": "..."}]`) — `{}` for
-a tab with none, so the frontend can render an enum filter generically
-instead of hardcoding its values. The queue query reads the same
+"all"}` for `regions`, else `{}`). `filter_specs` is a self-describing
+entry for each honoured filter with a fixed value set — `{param, kind:
+"enum", label, options: [{value, label}]}` (today only `regions`:
+`{"param": "region_status", "kind": "enum", "label": "Status", "options":
+[{"value": "all", ...}, {"value": "detected", ...}, {"value":
+"verify_rejected", ...}]}`), `[]` for a tab with none — so the frontend
+renders any enum filter generically instead of hardcoding its values. The queue query reads the same
 `filters`/`filter_defaults` table, so the catalog can't advertise a filter
 a tab ignores (DQ-M6: `max_rank` used to be honoured only by the two
 primary tabs). Response: `total`, `page`, `page_size`,

@@ -104,8 +104,7 @@ TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
 # (DQ-B2 follow-up: a verifier-rejected candidate is reviewable but was
 # unreachable from the queue). ``'all'`` is the default -- today's
 # accepted-but-unvalidated boxes plus a rejected candidate that still has
-# a box to show. Served as ``filter_options`` on ``GET /review/tabs`` so
-# the frontend renders it without hardcoding the values/labels.
+# a box to show. Served through ``FILTER_SPECS`` below.
 REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
     {'value': 'all', 'label': 'All (accepted + rejected candidates)'},
     {'value': RegionStatus.DETECTED.value, 'label': 'Detected only'},
@@ -117,10 +116,16 @@ REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
 REGION_STATUS_FILTER_VALUES: frozenset[str] = frozenset(
     o['value'] for o in REGION_STATUS_FILTER_OPTIONS
 )
-# Per-filter served ``{value, label}`` options, keyed by filter name --
-# only filters with a fixed, enumerable value set need an entry here.
-FILTER_OPTIONS: dict[str, tuple[dict[str, str], ...]] = {
-    'region_status': REGION_STATUS_FILTER_OPTIONS,
+# Self-describing specs for filters with a fixed, enumerable value set,
+# keyed by query parameter. Served as ``filter_specs`` on
+# ``GET /review/tabs`` so the frontend renders any enum filter generically.
+FILTER_SPECS: dict[str, dict[str, Any]] = {
+    'region_status': {
+        'param': 'region_status',
+        'kind': 'enum',
+        'label': 'Status',
+        'options': REGION_STATUS_FILTER_OPTIONS,
+    },
 }
 
 
@@ -131,14 +136,14 @@ def tab_filters(tab: str) -> tuple[str, ...]:
 
 def review_tab_catalog() -> list[dict[str, Any]]:
     """``[{id, label, description, filters, filter_defaults,
-    filter_options}, ...]`` for every ``KNOWN_TABS`` entry.
+    filter_specs}, ...]`` for every ``KNOWN_TABS`` entry.
 
     ``filters`` lists the query parameters the tab honours (anything else
     is accepted but ignored); ``filter_defaults`` the value a tab applies
-    when that parameter is omitted (``{}`` for none); ``filter_options``
-    the ``{value, label}`` choices for any of those filters that have a
-    fixed enum (``{}`` for a tab with none), so the frontend can render an
-    enum filter generically instead of hardcoding its values.
+    when that parameter is omitted (``{}`` for none); ``filter_specs`` a
+    self-describing ``{param, kind, label, options: [{value, label}]}``
+    entry for each of those filters that has a fixed enum (``[]`` for a
+    tab with none), so the frontend renders it without per-filter code.
 
     Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
     a matching ``TAB_LABELS`` entry -- the same "one source of truth"
@@ -151,11 +156,11 @@ def review_tab_catalog() -> list[dict[str, Any]]:
             'description': TAB_LABELS[tab][1],
             'filters': list(tab_filters(tab)),
             'filter_defaults': dict(TAB_FILTER_DEFAULTS.get(tab, {})),
-            'filter_options': {
-                name: [dict(o) for o in FILTER_OPTIONS[name]]
+            'filter_specs': [
+                {**FILTER_SPECS[name], 'options': [dict(o) for o in FILTER_SPECS[name]['options']]}
                 for name in tab_filters(tab)
-                if name in FILTER_OPTIONS
-            },
+                if name in FILTER_SPECS
+            ],
         }
         for tab in KNOWN_TABS
     ]
@@ -512,7 +517,7 @@ def build_tab_query(
 
 __all__ = [
     'COMMON_FILTERS',
-    'FILTER_OPTIONS',
+    'FILTER_SPECS',
     'KNOWN_TABS',
     'REGION_STATUS_FILTER_OPTIONS',
     'REGION_STATUS_FILTER_VALUES',
