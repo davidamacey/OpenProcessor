@@ -86,7 +86,7 @@ by router module; every path is relative to the configured
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
 | `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
-| `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
+| `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
 | `bakeoff.py` | `GET,POST /bakeoff/*` |
 | `curation_images.py`, `curation_train.py`, `curation_umap.py` (outside the `curation` package, registered directly in `src/main.py`) | `GET /images/*`, `POST,GET /train/*`, `POST /cluster/umap/rebuild` |
@@ -443,6 +443,25 @@ queue depth) — use it for `/review?crop_id=` deep links instead of paging.
 `{total_pending, top_terms: [{label, count, sample_crop_ids}]}`: the VLM's
 proposed new-class names over unvalidated `vlm_new_class_pending` items,
 most common first.
+
+`POST /review/new_class_proposals/resolve?dry_run=` (`ResolveNewClassRequest`
+→ `ResolveNewClassResponse`): bulk-resolves **every** unvalidated
+`vlm_new_class_pending` item proposing `label`, not just the summary's
+capped `sample_crop_ids`. Exactly one of `class_id` (map to an existing
+registry class) / `create` (`{class_name, group, notes}`, registered
+through the same path as `POST /classes`) — else `422`; unknown `class_id`
+→ `400`; duplicate `create.class_name` → `409` with no item writes.
+`create` runs before any item write (a zero-match resolve still creates
+the class and reports `matched: 0`). Each item is written independently
+(bounded concurrency), re-checked at write time to still be pending this
+exact proposal — one that changed state in between lands in `skipped`,
+not `updated_ids`. Response: `{class_id, class_name, created, label,
+matched, matched_ids, updated, updated_ids, conflicts:
+[{crop_id, current_source}], skipped}`. `dry_run=true` reports the match
+(`matched`, `matched_ids`) without writing or creating anything
+(`class_id` is `null` when `create` was given). Writes are undoable via
+`POST /crops/label/undo_batch` on `updated_ids`, same as
+`PUT /crops/batch_label`.
 
 - `TestHoldoutFreezeRequest`: `percent`, `seed` (accepted but ignored — selection is deterministic, SHA1-of-crop_id)
 - `TestHoldoutFreezeResponse`: `n_frozen`, `n_classes_covered`, `test_holdout_sha`, `per_class_counts`

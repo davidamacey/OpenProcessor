@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/bakeoff_lpr_paper/`.
 
 ### Added
+- `POST /curation/review/new_class_proposals/resolve` — bulk-resolves
+  every pending `vlm_new_class_pending` item proposing a term in one call
+  (map to an existing class or create one, `?dry_run=` to preview),
+  instead of relabeling only the summary endpoint's capped
+  `sample_crop_ids` one page at a time. Explicitly mapped
+  `vlm_verify_completed_at` (`date`) on the items index — it was being
+  written and range-queried but left to dynamic mapping.
 - `GET /curation/train/gpus` — served training GPU picker (values, human
   labels, stop advisories, and the resolved default), so the frontend no
   longer hardcodes GPU ids/labels. `OP_GPU_ARBITER_CONTAINERS` entries may
