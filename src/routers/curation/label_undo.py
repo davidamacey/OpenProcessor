@@ -31,6 +31,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.class_sources import vlm_suggestion
+from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.exclusion import park_restored_state_while_excluded
 from src.services.curation.history import (
     CLASS_STATE_FIELDS,
@@ -72,7 +73,7 @@ async def _undo_one(opensearch: Any, crop_id: str, *, require_history: bool) -> 
             opensearch,
             doc_id=crop_id,
             merger=_undo_merger(require_history=require_history),
-            refresh=True,
+            refresh='wait_for',
             writer_id=HUMAN_UNLABEL_WRITER,
         )
     except (NothingToUndoError, OCCFinalConflictError):
@@ -218,7 +219,7 @@ async def _discard_one(opensearch: Any, crop_id: str, payload: CropDiscardReques
             opensearch,
             doc_id=crop_id,
             merger=_discard_merger(payload),
-            refresh=True,
+            refresh='wait_for',
             writer_id=HUMAN_DISCARD_WRITER,
         )
     except OCCFinalConflictError:
@@ -296,8 +297,9 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
     ``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,
     ``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer
     apply it. The class itself is untouched (label or discard it as a
-    separate write). Returns the post-write item; ``409`` when the item has
-    no VLM suggestion.
+    separate write). ``POST /crops/{crop_id}/vlm_dismiss/undo`` reverses it.
+    Returns the post-write item; ``409`` when the item has no VLM
+    suggestion.
     """
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
@@ -308,12 +310,19 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
             'vlm_dismissed_class_id': class_id,
             'vlm_dismissed_class_name': class_name,
             'vlm_dismissed_at': _now_iso(),
+            EDIT_HISTORY_FIELD: record_edit(
+                current, kind=EditKind.VLM_DISMISS, writer='human:vlm_dismiss'
+            ),
             'updated_at': _now_iso(),
         }
 
     try:
         await occ_update_one(
-            opensearch, doc_id=crop_id, merger=_merge, refresh=True, writer_id='human:vlm_dismiss'
+            opensearch,
+            doc_id=crop_id,
+            merger=_merge,
+            refresh='wait_for',
+            writer_id='human:vlm_dismiss',
         )
     except _NoSuggestionError as exc:
         raise HTTPException(status_code=409, detail=f'no VLM suggestion on {crop_id}') from exc
@@ -372,7 +381,7 @@ async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
                 'review_dismissed_by': None,
                 'updated_at': _now_iso(),
             },
-            refresh=True,
+            refresh='wait_for',
             writer_id='human:review_undismiss',
         )
     except OCCFinalConflictError:

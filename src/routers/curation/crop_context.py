@@ -13,7 +13,11 @@ from src.routers.curation._common import (
     is_not_found,
     router,
 )
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import (
+    item_list_source_excludes,
+    item_source_excludes,
+    serialize_item,
+)
 
 
 _MAX_SIBLINGS = 500
@@ -31,7 +35,7 @@ async def _get_source(opensearch: Any, index: str, doc_id: str, **kw: Any) -> di
     return resp.get('_source') or {}
 
 
-@router.get('/crops/{crop_id}/image')
+@router.get('/crops/{crop_id}/context')
 async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
     """The item's source image and every item detected in it.
 
@@ -40,7 +44,15 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
     ``crop_rank_in_image`` (largest first), at most 500. ``image`` is null
     when the images index has no record of the frame.
     """
-    item = await _get_source(opensearch, CURATION_ITEMS_INDEX, crop_id)
+    # F-25 (adjacent fix): this endpoint's bare .get() had zero _source
+    # excludes at all -- not even the embedding vectors every other item
+    # endpoint drops. Bring it in line: exclude vectors like a
+    # single-item fetch (item_source_excludes), and the sibling list
+    # below additionally drops class_id_history (item_list_source_excludes
+    # -- undo-only, no list renderer reads it).
+    item = await _get_source(
+        opensearch, CURATION_ITEMS_INDEX, crop_id, _source_excludes=item_source_excludes()
+    )
     if item is None:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
     image_id = item.get('image_id')
@@ -61,7 +73,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
             'size': _MAX_SIBLINGS,
             'query': {'term': {'image_id': image_id}},
             'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
-            '_source': {'excludes': item_source_excludes()},
+            '_source': {'excludes': item_list_source_excludes()},
         }
         try:
             resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)

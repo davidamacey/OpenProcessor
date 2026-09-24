@@ -16,6 +16,7 @@ from PIL import Image
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
     RegionCandidate,
@@ -58,7 +59,7 @@ if TYPE_CHECKING:
     from src.services.labeling.vlm_labeler import VlmLabeler
 
 
-def _build_pending_query() -> dict[str, Any]:
+def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]:
     """Crops needing the worker's attention — pending or pending_verify.
 
     Skips crops whose region status is already terminal so we never
@@ -71,11 +72,17 @@ def _build_pending_query() -> dict[str, Any]:
     region-fields-stay-unconditional rule. The test_holdout guard for
     this worker is scoped to the class-field write path only — see
     ``runner.py:_should_classify`` (checks ``task.test_holdout``).
+
+    F-20: none of these clauses score, so they belong in filter context
+    (cacheable, no scoring pass) rather than ``must``. ``exclude_ids`` —
+    the caller's in-flight set — is pushed server-side via
+    ``must_not: {ids: ...}`` instead of being filtered out in Python
+    after over-fetching ``batch_size + len(in_flight)`` docs.
     """
     F = get_region_fields()
-    return {
+    query: dict[str, Any] = {
         'bool': {
-            'must': [
+            'filter': [
                 {'exists': {'field': 'image_path'}},
                 {'exists': {'field': 'bbox_norm'}},
                 # Pull both legacy short names AND the renamed forms
@@ -95,10 +102,25 @@ def _build_pending_query() -> dict[str, Any]:
             ],
         },
     }
+    if exclude_ids:
+        query['bool']['must_not'] = [{'ids': {'values': exclude_ids}}]
+    return query
 
 
-async def _fetch_pending(opensearch: AsyncOpenSearch, *, batch_size: int) -> list[_ItemTask]:
-    """Pull up to ``batch_size`` pending crops, oldest first."""
+async def _fetch_pending(
+    opensearch: AsyncOpenSearch,
+    *,
+    batch_size: int,
+    exclude_ids: list[str] | None = None,
+) -> list[_ItemTask]:
+    """Pull up to ``batch_size`` pending crops, oldest first.
+
+    F-20: ``track_total_hits: False`` (the exact match count is never
+    read here) and a ``crop_id`` sort tiebreaker for stable ordering
+    among same-``created_at`` crops. ``_source`` stays an explicit
+    includes list (unlike the VLM worker's ids-only fetch) — this
+    worker needs bbox/class fields for every task it dispatches.
+    """
     F = get_region_fields()
     body = {
         'size': batch_size,
@@ -110,15 +132,16 @@ async def _fetch_pending(opensearch: AsyncOpenSearch, *, batch_size: int) -> lis
             F.bbox_norm,
             F.score,
             'class_name',
-            'group',
             'class_source',
             'class_validated',
             'confidence',
             'request_id',
             'test_holdout',
+            *CLASS_GUARD_SOURCE_FIELDS,
         ],
-        'query': _build_pending_query(),
-        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}],
+        'track_total_hits': False,
+        'query': _build_pending_query(exclude_ids=exclude_ids),
+        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
     hits = (resp.get('hits') or {}).get('hits') or []
@@ -149,7 +172,6 @@ async def _fetch_pending(opensearch: AsyncOpenSearch, *, batch_size: int) -> lis
                 ),
                 plate_status=src.get(F.status),
                 class_name=str(src.get('class_name') or ''),
-                group=str(src.get('group') or ''),
                 class_source=str(src.get('class_source') or ''),
                 class_confidence=float(src.get('confidence') or 0.0),
                 class_validated=bool(src.get('class_validated') or False),
@@ -157,6 +179,7 @@ async def _fetch_pending(opensearch: AsyncOpenSearch, *, batch_size: int) -> lis
                 lpr_plate_in_source=lpr_in_source,
                 lpr_score=float(src.get(F.score) or 0.0),
                 request_id=str(src.get('request_id') or '-'),
+                class_token=class_state_token(src),
             )
         )
     return tasks

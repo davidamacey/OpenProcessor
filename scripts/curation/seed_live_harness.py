@@ -294,7 +294,6 @@ def _build_items(
                     'blur_lap_ratio': round(0.3 + (global_index % 60) / 100.0, 3),
                     'test_holdout': False,
                     'class_excluded': cohort.excluded,
-                    'classifier_raw_confidence': round(0.3 + (global_index % 60) / 100.0, 3),
                     # Stored probe predictions so the review-queue sorting and
                     # the mistakenness scorer need no model at all.
                     'probe_pred_class': class_name or CLASS_NAMES[global_index % 8],

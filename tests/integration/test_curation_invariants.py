@@ -52,7 +52,13 @@ class _VersionedFakeOpenSearch(FakeUpsertOpenSearch):
     OpenSearch client would suspend on the network round trip.
     """
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(
+        self,
+        *,
+        index: str,  # noqa: ARG002
+        id: str,  # noqa: A002
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
         source = dict(self._docs[id])
         seq_no = self._seq.get(id, -1)
         await asyncio.sleep(0)

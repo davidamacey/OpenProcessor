@@ -112,21 +112,23 @@ def _value_filter(field: str, values: tuple[str, ...]) -> dict[str, Any]:
 
 def requeue_query(sel: RequeueSelection, fields: RegionFields | None = None) -> dict[str, Any]:
     F = fields or get_region_fields()
-    must: list[dict[str, Any]] = []
+    # F-19: every clause is a pure predicate (term/exists/should-of-terms
+    # via _value_filter) -- filter context, not must.
+    filt: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = [{'term': {F.validated: True}}]
     if sel.status is None:
         must_not.append({'exists': {'field': F.status}})
     else:
-        must.append({'term': {F.status: sel.status.value}})
+        filt.append({'term': {F.status: sel.status.value}})
     if sel.detectors:
-        must.append(_value_filter(F.detector, sel.detectors))
+        filt.append(_value_filter(F.detector, sel.detectors))
     if sel.reasons:
-        must.append(_value_filter(F.rejection_reason, sel.reasons))
+        filt.append(_value_filter(F.rejection_reason, sel.reasons))
     if sel.missing_provenance:
         must_not.append({'exists': {'field': F.detector_chain}})
     if sel.target == RegionStatus.PENDING_VERIFICATION:
-        must.append({'exists': {'field': F.bbox_norm}})
-    return {'bool': {'must': must, 'must_not': must_not}}
+        filt.append({'exists': {'field': F.bbox_norm}})
+    return {'bool': {'filter': filt, 'must_not': must_not}}
 
 
 def detection_fields(fields: RegionFields | None = None) -> tuple[str, ...]:

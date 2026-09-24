@@ -545,6 +545,22 @@ async def render_image_with_multiple_bboxes(
 # =============================================================================
 
 
+def _crop_source_includes() -> list[str]:
+    """``_source_includes`` for :func:`_fetch_crop`.
+
+    Every field any ``crops_router`` route actually reads off the
+    returned doc: ``image_path`` + ``bbox_norm`` (all three routes),
+    ``class_name`` (``crop_full_image``'s overlay label), and the
+    region-of-interest bbox field (``crop_full_image`` overlay +
+    ``crop_region_thumbnail``). Without this, a bare ``.get()`` also
+    decompresses the item's embedding vectors + nested history JSON,
+    none of which any caller reads (see F-14).
+    """
+    from src.config import get_region_fields
+
+    return ['image_path', 'bbox_norm', 'class_name', get_region_fields().bbox_norm]
+
+
 async def _fetch_crop(
     crop_id: str,
     opensearch_client: Any,
@@ -560,6 +576,11 @@ async def _fetch_crop(
     - region-of-interest bbox (optional): see
       ``src.config.region_fields.RegionFields.bbox_norm``
 
+    Fetches only :func:`_crop_source_includes` via ``_source_includes``
+    — embedding vectors and history arrays are never read by any
+    ``crops_router`` route, so there's no reason to decompress them on
+    every thumbnail/image request (F-14).
+
     Tests mock this function; production wires the real OpenSearch
     client through the router dependency.
 
@@ -571,7 +592,11 @@ async def _fetch_crop(
         # ``AsyncOpenSearch.get`` raises ``opensearchpy.NotFoundError`` if
         # the doc is missing. We avoid a hard import on opensearchpy here
         # so unit tests can pass a plain mock with ``.get``.
-        result = await opensearch_client.get(index=cfg.items_index, id=crop_id)
+        result = await opensearch_client.get(
+            index=cfg.items_index,
+            id=crop_id,
+            _source_includes=_crop_source_includes(),
+        )
     except Exception as exc:
         msg = str(exc).lower()
         if 'notfound' in msg or 'not found' in msg or '404' in msg:

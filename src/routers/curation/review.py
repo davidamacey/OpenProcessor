@@ -18,6 +18,7 @@ from src.routers.curation._common import (
     TestHoldoutFreezeResponse,
     _ensure_indexes,
     _now_iso,
+    guard_page_depth,
     is_not_found,
     logger,
     router,
@@ -43,7 +44,7 @@ from src.services.curation.review_request import (
     before_query,
     build_review_request,
 )
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
 @router.get('/review/unmatched_terms')
@@ -321,6 +322,7 @@ async def review_queue(
         conf_min,
         conf_max,
     )
+    guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
     body = {
         'from': (page - 1) * page_size,
@@ -329,8 +331,9 @@ async def review_queue(
         'sort': req.sort,
         # Exact totals: the default 10k cap makes large queues look smaller.
         'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors to the review grid.
-        '_source': {'excludes': item_source_excludes()},
+        # Never ship the 1024-d embedding vectors or class_id_history to
+        # the review grid (F-25 — history is undo-only).
+        '_source': {'excludes': item_list_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -352,8 +355,9 @@ async def review_queue(
         'page_size': page_size,
         'items': items,
         'sort_applied': req.sort_applied,
-        # Reserved; always None today.
-        'sort_fallback_reason': None,
+        # Set when the default sort's field has 0% coverage and
+        # sort_applied is its fallback.
+        'sort_fallback_reason': req.sort_fallback_reason,
     }
 
 
@@ -379,7 +383,7 @@ async def review_locate(
     for the same filters and sort.
 
     ``{crop_id, in_queue, rank, page, page_size, total, reason,
-    sort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of
+    sort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of
     ``page_size`` holding it. Out of the queue: ``rank``/``page`` null and
     ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
     items sorting before it, so any depth costs the same.
@@ -407,6 +411,7 @@ async def review_locate(
         'total': None,
         'reason': None,
         'sort_applied': req.sort_applied,
+        'sort_fallback_reason': req.sort_fallback_reason,
     }
 
     async def _count(query: dict[str, Any]) -> int:
@@ -456,7 +461,7 @@ async def review_new_class_summary(
         'size': 0,
         'query': {
             'bool': {
-                'must': [{'term': {'class_source': 'vlm_new_class_pending'}}],
+                'filter': [{'term': {'class_source': 'vlm_new_class_pending'}}],
                 'must_not': [{'term': {'class_validated': True}}],
             }
         },
@@ -593,6 +598,7 @@ async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
         'size': 0,
         'query': {'term': {'test_holdout': True}},
         'aggs': {'by_class': {'terms': {'field': 'class_id', 'size': 1000}}},
+        'track_total_hits': True,
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)

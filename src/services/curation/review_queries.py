@@ -17,10 +17,13 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from src.config.curation import ITEM_EMBEDDING_FIELD
+from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
-from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
+from src.services.curation.ingest_class_sources import (
+    classifier_class_sources,
+    unlabeled_proposal_class_sources,
+)
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 
 
@@ -43,6 +46,25 @@ def _escape_wildcard(text: str) -> str:
     return text.replace('\\', '\\\\').replace('*', '\\*').replace('?', '\\?')
 
 
+def region_text_clause(field: str, text: str) -> dict[str, Any]:
+    """Substring match on ``field`` (typically :attr:`RegionFields.text`),
+    case-insensitive and with user input escaped so wildcard metacharacters
+    in the search string match literally (F-9). Stored case depends on
+    whichever writer set the text, so this never assumes an uppercase
+    canonical form -- unlike a naive ``f'*{text.upper()}*'`` wildcard, which
+    is both case-sensitive against mixed-case stored values and vulnerable
+    to a user-supplied ``*``/``?`` being interpreted as a wildcard.
+    """
+    return {
+        'wildcard': {
+            field: {
+                'value': f'*{_escape_wildcard(text)}*',
+                'case_insensitive': True,
+            }
+        }
+    }
+
+
 def build_tab_query(
     tab: str,
     *,
@@ -63,6 +85,9 @@ def build_tab_query(
         # dismiss_from_review, or the legacy review_dismiss) stay out of
         # every queue until undone / POST /crops/{id}/review_undismiss.
         {'exists': {'field': 'review_dismissed_at'}},
+        # F-4: an excluded item (POST /crops/{id}/exclude) must never
+        # reappear in any review tab, regardless of what else flags it.
+        {'term': {'class_excluded': True}},
     ]
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
@@ -80,16 +105,18 @@ def build_tab_query(
                         {'term': {'class_source': 'vlm_unmatched'}},
                         {'term': {'class_source': 'vlm_new_class_pending'}},
                         {'terms': {'vlm_confidence': ['medium', 'low']}},
-                        # NOTE: outlier_flagged is never written anywhere in the repo — permanent no-op; see below.
-                        {'term': {'outlier_flagged': True}},
                         {'range': {'cluster_distance': {'gte': 0.35}}},
-                        {'exists': {'field': 'probe_pred_entropy'}},
+                        # D-1 (F-6): `exists probe_pred_entropy` matches
+                        # almost every non-holdout item after one probe
+                        # run -- a no-op filter in practice. Gate on an
+                        # actual uncertainty threshold instead.
+                        {'range': {'probe_pred_entropy': {'gte': PROBE_ENTROPY_REVIEW_MIN}}},
                         # Crops with no class assigned at all (YOLO11 found a
                         # vehicle but neither the classifier nor the VLM got a usable label)
                         {
                             'bool': {
                                 'must_not': [{'exists': {'field': 'class_id'}}],
-                                'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
+                                'filter': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
                             }
                         },
                     ],
@@ -115,18 +142,9 @@ def build_tab_query(
         must.append({'range': {'confidence': {'lt': 0.80}}})
         reason = 'VLM confidence below high'
     elif tab == 'outliers':
-        # NOTE: outlier_flagged is never written anywhere in the repo, so this queue is effectively cluster_distance >= 0.35 only.
-        must.append(
-            {
-                'bool': {
-                    'should': [
-                        {'term': {'outlier_flagged': True}},
-                        {'range': {'cluster_distance': {'gte': 0.35}}},
-                    ],
-                    'minimum_should_match': 1,
-                },
-            }
-        )
+        # D-1 (F-6): outlier_flagged is never written anywhere in the
+        # repo -- deleted. This queue is cluster_distance >= 0.35 only.
+        must.append({'range': {'cluster_distance': {'gte': 0.35}}})
         # Default sort: 'atypicality' — see review_sorts.py.
         reason = 'outlier — far from cluster centroid'
     elif tab == 'uncertainty':
@@ -145,7 +163,7 @@ def build_tab_query(
         # label_validated=true. High-confidence triple-agreement crops are
         # already ``label_validated=true`` and skip this queue entirely.
         must.append({'exists': {'field': fields.bbox_norm}})
-        must_not = []
+        must_not = [{'term': {'class_excluded': True}}]
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
         # Already auto-confirmed by the SAM worker — no human needed.
@@ -167,16 +185,7 @@ def build_tab_query(
         # depends on whichever writer set the text, so don't assume an
         # uppercase canonical form.
         if text:
-            must.append(
-                {
-                    'wildcard': {
-                        fields.text: {
-                            'value': f'*{_escape_wildcard(text)}*',
-                            'case_insensitive': True,
-                        }
-                    }
-                }
-            )
+            must.append(region_text_clause(fields.text, text))
         # Default sort: region score desc, so the high-confidence detections
         # are reviewed first (likely accept), low-score later (more
         # corrections expected) — see review_sorts.py.
@@ -191,7 +200,7 @@ def build_tab_query(
         must.append({'term': {'class_validated': True}})
         must.append({'exists': {'field': 'probe_pred_class'}})
         # Override the default must_not — we WANT validated crops here.
-        must_not = []
+        must_not = [{'term': {'class_excluded': True}}]
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
         # Inequality requires a script — the index is small enough at
@@ -239,19 +248,29 @@ def build_tab_query(
         # (or no classifier box at all) and let rank + the clarity slider strip the
         # junk, so a large clear crop the classifier whiffed on at 0.05 still surfaces.
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
+        # D-1 (F-6): classifier_raw_confidence is never written in
+        # production -- point the "unsure" branch at the stored
+        # `confidence` field, restricted to items a classifier actually
+        # scored (unlabeled_proposal_class_sources() below already covers
+        # "no classifier box at all").
         must.append(
             {
                 'bool': {
                     'should': [
-                        {'range': {'classifier_raw_confidence': {'lt': LOW_CONFIDENCE_MAX}}},
-                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
+                        {
+                            'bool': {
+                                'filter': [
+                                    {'terms': {'class_source': sorted(classifier_class_sources())}},
+                                    {'range': {'confidence': {'lt': LOW_CONFIDENCE_MAX}}},
+                                ]
+                            }
+                        },
                         {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
                     ],
                     'minimum_should_match': 1,
                 }
             }
         )
-        must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'primary_low_conf_default' — see review_sorts.py.
         reason = 'largest subject — classifier unsure or missed'
     elif tab == 'coco_blind_spots':
@@ -261,7 +280,6 @@ def build_tab_query(
         # proposal score lives in ``confidence``.
         must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
         must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
-        must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
     elif tab == 'new_class_proposals':

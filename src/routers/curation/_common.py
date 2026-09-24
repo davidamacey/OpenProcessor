@@ -7,10 +7,11 @@ sub-modules import from here. _common.py MUST NOT import from sub-modules.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
@@ -75,9 +76,31 @@ CURATION_CLASSES_INDEX = index_name(config, IndexRole.CLASSES)
 
 _INDEXES_BOOTSTRAPPED = False
 
+# OpenSearch's index.max_result_window default. from+size past this 500s
+# ("Result window is too large") instead of paging -- reject it explicitly
+# with a 422 before it ever reaches OpenSearch (F-7).
+MAX_RESULT_WINDOW = 10_000
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def guard_page_depth(page: int, page_size: int) -> None:
+    """Raise ``HTTPException(422)`` when ``(page-1)*page_size + page_size``
+    would exceed :data:`MAX_RESULT_WINDOW` -- otherwise OpenSearch 500s past
+    ``index.max_result_window`` and the app would surface that as a bare
+    503/500 instead of a clear, cheap client-side rejection. Cursor-based
+    pagination (``search_after``) is the documented way past this limit;
+    Wave 1 doesn't add a cursor param, so depth is capped instead."""
+    if (page - 1) * page_size + page_size > MAX_RESULT_WINDOW:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f'page {page} at page_size {page_size} exceeds the {MAX_RESULT_WINDOW} '
+                'result-window depth limit; use a smaller page_size or narrow the filter'
+            ),
+        )
 
 
 def is_not_found(exc: BaseException) -> bool:
@@ -106,11 +129,69 @@ async def _raw_opensearch_dep() -> Any:
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
 
 
+async def warm_knn_indexes(opensearch: Any) -> None:
+    """Warm the kNN native-engine graph cache for the items + images indexes.
+
+    F-24: without this, the first semantic-search / kNN query after a
+    restart (or after a shard relocation) pays the cost of loading the
+    faiss/HNSW graph off disk cold. The warmup endpoint forces that load
+    to happen once, up front, off the request path.
+
+    Callers should fire this via ``asyncio.create_task`` at startup — it
+    must never block app boot, and a failure (endpoint unavailable,
+    OpenSearch not up yet, plugin disabled) is logged and swallowed
+    rather than raised.
+    """
+    import time as _time
+
+    indexes = f'{CURATION_ITEMS_INDEX},{CURATION_IMAGES_INDEX}'
+    started = _time.monotonic()
+    try:
+        await opensearch.transport.perform_request('GET', f'/_plugins/_knn/warmup/{indexes}')
+    except Exception as exc:
+        logger.warning(
+            'curation_knn_warmup_failed',
+            indexes=indexes,
+            duration_s=round(_time.monotonic() - started, 2),
+            error=str(exc),
+        )
+        return
+    logger.info(
+        'curation_knn_warmup_done',
+        indexes=indexes,
+        duration_s=round(_time.monotonic() - started, 2),
+    )
+
+
+# F-28.4: guards the whole ~5-exists + N-put_mapping bootstrap sequence
+# below. Without this, concurrent requests that all arrive before the
+# first one flips _INDEXES_BOOTSTRAPPED each independently race through
+# the full migration sequence against OpenSearch (redundant `exists` +
+# `put_mapping` calls, all discarded but the first to finish).
+_ensure_indexes_lock = asyncio.Lock()
+
+
 async def _ensure_indexes(opensearch: Any) -> None:
-    """Create curation indexes on first request (idempotent)."""
-    global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag
+    """Create curation indexes on first request (idempotent).
+
+    Cheap fast path (no lock) once bootstrapped; the lock only guards the
+    (at most once) cold-start race.
+    """
     if _INDEXES_BOOTSTRAPPED:
         return
+    async with _ensure_indexes_lock:
+        # Re-check inside the lock: another request may have completed
+        # the whole bootstrap sequence while we were waiting to acquire.
+        if _INDEXES_BOOTSTRAPPED:
+            return
+        await _ensure_indexes_locked(opensearch)
+
+
+async def _ensure_indexes_locked(opensearch: Any) -> None:
+    """The actual bootstrap sequence — only ever called while holding
+    :data:`_ensure_indexes_lock`. Split out so :func:`_ensure_indexes`'s
+    fast path / lock / re-check logic stays readable."""
+    global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag
     try:
         await create_curation_indexes(opensearch, force_recreate=False)
         try:
@@ -255,13 +336,13 @@ class CropLabelRequest(BaseModel):
 
 
 class CropBatchLabelRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     class_id: int
     label_source: HumanLabelSource = 'human'
 
 
 class CropMoveRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     cluster_id: int
 
 
@@ -275,20 +356,20 @@ class CropExcludeRequest(BaseModel):
     record why (e.g. a whole cluster of blurry cruisers).
     """
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     reason: str = 'ignore'
 
 
 class CropUnexcludeRequest(BaseModel):
     """Reverse an exclusion (the labeler's Undo path for Ignore)."""
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class CropUndoBatchRequest(BaseModel):
     """Undo the most recent human class write on each crop."""
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class CropDiscardRequest(BaseModel):
@@ -303,7 +384,7 @@ class CropDiscardRequest(BaseModel):
 
 
 class CropDiscardBatchRequest(CropDiscardRequest):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class ItemRegionRequest(BaseModel):
@@ -330,7 +411,7 @@ class ItemBatchRegionRequest(BaseModel):
 
     model_config = {'extra': 'forbid'}
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     region_bbox_norm: tuple[float, float, float, float] | None
     region_label_source: str = 'human'
     # 'parent' boxes are projected through each item's own bbox_norm.
@@ -356,7 +437,7 @@ class CropBatchStatusRequest(BaseModel):
 
     model_config = {'extra': 'forbid'}
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     region_status: str
     region_verified: bool | None = Field(
         default=None, deprecated=True, description='Ignored; derived from region_status.'
@@ -386,100 +467,6 @@ class ItemRegionMetaRequest(BaseModel):
     region_status: str | None = None
     region_rejection_reason: str | None = None
     region_label_source: str = 'human'
-
-
-class ClassEntry(BaseModel):
-    class_id: int
-    class_name: str
-    group: str = ''
-    sample_count: int = 0
-    validated_count: int = 0
-    # FAISS-cluster bucket size: crops whose cluster_id == this class_id.
-    # Includes unlabeled candidates that landed near the cluster — i.e.
-    # everything visible on /clusters/{id}. The sidebar chip shows this
-    # so the operator's eyes match what they'll see when they click in.
-    cluster_size: int = 0
-    deprecated: bool = False
-    # Optional single-character keyboard shortcut. Persisted in the class
-    # registry so user customizations survive across sessions and devices.
-    # Validated server-side: must be one ASCII char, unique across active
-    # classes, not collide with reserved shortcuts.
-    hotkey_letter: str | None = None
-    # ok / warn / block from validated_count (dataset_thresholds.py).
-    adequacy: Literal['ok', 'warn', 'block'] = 'block'
-    added_at: str | None = None
-
-
-class ClassListResponse(BaseModel):
-    classes: list[ClassEntry]
-    thresholds: dict[str, int] = Field(default_factory=dict)
-    # Single keys a class hotkey may not use (labeling actions).
-    reserved_hotkeys: list[str] = Field(default_factory=list)
-
-
-# Class names are slugs: they become export / training class names.
-CLASS_NAME_PATTERN = r'^[a-z0-9_]+$'
-
-
-class ClassCreateRequest(BaseModel):
-    name: str = Field(pattern=CLASS_NAME_PATTERN)
-    group: str = 'unknown'
-    notes: str = ''
-    # Optional; same rules as on update (one char, not reserved, unique).
-    hotkey_letter: str | None = None
-
-
-class ClassUpdateRequest(BaseModel):
-    name: str | None = Field(default=None, pattern=CLASS_NAME_PATTERN)
-    group: str | None = None
-    # ``""`` clears the binding; ``None`` leaves it unchanged. Single ASCII
-    # char only; uniqueness checked server-side at write time.
-    hotkey_letter: str | None = None
-
-
-class ClassMergeRequest(BaseModel):
-    source_id: int
-    target_id: int
-
-
-class ResolveNewClassCreate(BaseModel):
-    """``create`` payload on ``POST /review/new_class_proposals/resolve``:
-    register a brand-new registry class before resolving the term. Same
-    slug rule as ``ClassCreateRequest.name`` (``class_name`` here, to
-    match the term the VLM proposed rather than an internal field name)."""
-
-    class_name: str = Field(pattern=CLASS_NAME_PATTERN)
-    group: str = 'unknown'
-    notes: str | None = None
-
-
-class ResolveNewClassRequest(BaseModel):
-    """Bulk-resolve every pending ``vlm_new_class_pending`` item proposing
-    ``label``. Exactly one of ``class_id`` (map to an existing registry
-    class) / ``create`` (register a new one first) must be set."""
-
-    label: str = Field(min_length=1)
-    class_id: int | None = None
-    create: ResolveNewClassCreate | None = None
-    label_source: HumanLabelSource = 'new_class_proposal'
-
-
-class ResolveConflict(BaseModel):
-    crop_id: str
-    current_source: str | None = None
-
-
-class ResolveNewClassResponse(BaseModel):
-    class_id: int | None
-    class_name: str
-    created: bool
-    label: str
-    matched: int
-    matched_ids: list[str] = Field(default_factory=list)
-    updated: int
-    updated_ids: list[str] = Field(default_factory=list)
-    conflicts: list[ResolveConflict] = Field(default_factory=list)
-    skipped: list[str] = Field(default_factory=list)
 
 
 class TestHoldoutFreezeRequest(BaseModel):
@@ -593,7 +580,7 @@ class CropFlagNewClassRequest(BaseModel):
     """Marks crops as needing a class that doesn't exist in the registry
     yet — for batch curator review (typically weekly)."""
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     note: str = ''
 
 

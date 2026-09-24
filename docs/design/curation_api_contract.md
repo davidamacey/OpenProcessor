@@ -63,7 +63,7 @@ Full route list (123 distinct paths / 128 method routes under
 logic-move routes: `GET /regions/statuses`, `POST /crops/{crop_id}/discard`,
 `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`,
 `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history`,
-`GET /crops/{crop_id}/image`, `GET /review/{tab}/locate`,
+`GET /crops/{crop_id}/context`, `GET /review/{tab}/locate`,
 `GET /review/new_class_proposals/summary`, `POST /vlm/label_cluster/{cluster_id}`,
 `GET /training_cohorts`), grouped
 by router module; every path is relative to the configured
@@ -74,7 +74,8 @@ by router module; every path is relative to the configured
 | `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
 | `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label`, `POST /crops/{crop_id}/discard`, `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`, `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history` |
-| `crop_context.py` | `GET /crops/{crop_id}/image` |
+| `crop_context.py` | `GET /crops/{crop_id}/context` |
+| `edit_undo.py` | `POST /crops/{crop_id}/region/undo`, `POST /crops/region/undo_batch`, `POST /crops/{crop_id}/vlm_dismiss/undo` |
 | `cohorts.py` | `GET /training_cohorts` |
 | `regions.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
@@ -84,7 +85,7 @@ by router module; every path is relative to the configured
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
-| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
+| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `GET /pipeline/auto_label/status/{job_id}`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
 | `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
@@ -132,7 +133,7 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
-- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (`[x1,y1,x2,y2]` in `frame`, or `null` = "no region visible"), `region_label_source` (default `human`), `frame` (`source` default = source-image frame; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none). Stored boxes are always source-frame (`region_bbox_frame: "source"`). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
+- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (`[x1,y1,x2,y2]` in `frame`, or `null` = "no region visible"), `region_label_source` (default `human`), `frame` (`source` default = source-image frame; `parent` = the item crop's own frame, projected server-side through the item's stored `bbox_norm`, `422` if the item has none). Stored boxes are always source-frame (`region_bbox_frame: "source"`). A box equal to the stored one (each coordinate within `1e-4`, after projection) is a **confirmation**: status/verified/validated/verifier are written and `region_detector`, `region_detector_version`, `region_score`, `region_detected_at` are kept; any other box is human geometry (`region_detector` = the human, `region_score` 1.0). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
 - `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`, `frame` (`parent` projects through each item's own box; items without one land in `invalid`). Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
 - `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_label_source`; `region_status` must be human-writable (see "Region lifecycle" below). `region_verified` is still accepted but **ignored** (deprecated): the server derives it. Response: `updated`, `conflicts` (`[{crop_id, current_source}]`), `invalid` (`[{crop_id, detail}]`, e.g. `detected` on a crop with no box), `items` (post-write wire items).
 - `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`), `item` (post-write wire item). `422` when the status write would break an invariant (`detected` with no box).
@@ -192,7 +193,23 @@ of members selected; on completion `result.stages.unvalidated_after_promote`
 is that count, `result.stages.vlm` `{predicted, updated, …}`, and
 `result.unvalidated_remaining` counts what is still unvalidated in the cluster.
 The same scope is available as `?cluster_id=` on `POST
-/pipeline/auto_label[/start]`.
+/pipeline/auto_label[/start]`. A cluster-scoped job writes **only** to the
+members it selected: the index-wide stages (`cluster_id_normalize`,
+`cluster_residuals`, `auto_promote`) are skipped even if requested
+(`result.stages.<stage>` = `{skipped: true, reason: "cluster-scoped run: …"}`),
+and the post-VLM `cluster_id = class_id` pass runs on the selected items
+only (same for a `?class_id=`-scoped VLM stage).
+
+### Auto-label job by id — `GET /pipeline/auto_label/status/{job_id}`
+
+Poll the job a client started with the `job_id` its start response
+returned. Same body as `GET /pipeline/auto_label/status` (`job_id`,
+`status` `queued|running|completed|failed|cancelled|interrupted`, `stage`,
+`processed`, `total`, `started_at`, `finished_at`, `error`,
+`error_detail`, `result`, `args`, `pipeline`, backend/VRAM telemetry,
+`stage_durations`, `eta_seconds`, `elapsed_seconds`). The current job is
+read live; a job replaced by a later start answers with its final state
+(the newest 50 are kept). `404` for an id no job had (or not a 32-hex id).
 
 ### Region shape warnings — deliberately none
 
@@ -233,10 +250,41 @@ Every human region writer (`PUT /crops/{id}/region`, `PUT
   from the request (`detected` → `true`, every other human status → `false`);
 - `detected` on a crop with no box is refused (`422` single / `invalid[]` batch);
 - human writes set `region_validated=true`; `false_positive` parks the region
-  in the FP cluster, any other status releases it.
+  in the FP cluster, any other status releases it;
+- a write that re-asserts the stored status re-derives nothing:
+  `region_verified` and the region-cluster placement stay as stored
+  (confirming still sets `region_verified=true`);
+- every write snapshots the pre-write region state for undo (see "Undo of
+  region writes" below).
 
 Each returns the post-write item, so a client adopts it rather than
 re-deriving the result.
+
+### Undo of region writes and VLM dismissals
+
+Every human region writer snapshots the item's pre-write region state
+(`region_bbox_norm`, `region_bbox_frame`, `region_status`, `region_score`,
+`region_verified*`, `region_verifier*`, `region_validated`,
+`region_label_source`, `region_detector*`, `region_detected_at`,
+`region_rejection_reason`, `region_text*`, `region_cluster_*`) into the
+item's `edit_history` (stored, not indexed, not on the wire; see
+`src/services/curation/edit_history.py` for why it is a kind-tagged list
+separate from `class_id_history`).
+
+- `POST /crops/{crop_id}/region/undo` — restore the region to its state
+  before the most recent not-yet-undone human region write (confirm,
+  reject, false positive, box edit, status or text change). Repeated calls
+  step back. Class fields are untouched. Response: the restored item.
+  `404` unknown crop; `409` nothing left to undo.
+- `POST /crops/region/undo_batch` (`CropRegionUndoBatchRequest`:
+  `crop_ids`) — the same per crop; undo a `batch_status` / `batch_region`
+  by passing the same `crop_ids`. Response: `items`, `undone`,
+  `nothing_to_undo`, `conflicts`, `not_found`. `409` when no crop had
+  anything to undo.
+- `POST /crops/{crop_id}/vlm_dismiss/undo` — put the `vlm_dismissed_*`
+  fields back to their state before the latest `vlm_dismiss`, so the
+  dismissed suggestion is live again. Response: the restored item. `409`
+  no dismissal to undo.
 
 ### Undo of human class writes
 
@@ -308,7 +356,7 @@ Which one to call:
   restores the class. Response: the item. List hidden items with
   `GET /crops?review_dismissed=true`; every item carries
   `review_dismissed_at`.
-- `GET /crops/{crop_id}/image` → `{image: {image_id, image_path, width,
+- `GET /crops/{crop_id}/context` → `{image: {image_id, image_path, width,
   height, source, indexed_at} | null, items: [...]}`: the source frame and
   every item detected in it (wire items, `crop_rank_in_image` ascending,
   max 500).
@@ -362,10 +410,50 @@ promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
 denominator (it used to count only the top-5 classes, overstating purity
 on many-class clusters).
 
+**Representatives are now paged (F-15 / D-4, breaking change).**
+`GET /clusters` used to attach representative crops to *every* returned
+card via a `top_hits` sub-aggregation, which decompressed stored
+`_source` for every representative across every bucket in the response
+regardless of what the client actually displayed. It now returns every
+card (still up to `max_clusters`, still carrying `size`/`purity`/etc.)
+but only fills in `representatives` for cards in the
+`[representatives_offset, representatives_offset + representatives_limit)`
+window of the *returned, kind-filtered, `_count`-desc-ordered* card
+list — new query params `offset` (default `0`) and `limit` (default
+`50`, max `500`). Cards outside that window still carry the
+`representatives` key, but as an empty list `[]` — the field never
+disappears, so existing clients that only read `card.representatives`
+degrade to "no thumbnails for this card" rather than a KeyError. The
+response also now reports `representatives_offset` /
+`representatives_limit` so the frontend knows which window was served.
+Passing `per_cluster=0` (as before) skips representative computation
+entirely — no `_msearch` is issued.
+
+Representatives are computed by one `_msearch` (one query per cluster
+in the window, each `{size: per_cluster, query: {bool: {filter:
+[{term: {cluster_id}}], must_not: [{term: {class_excluded: true}}]}},
+_source: [crop_id, cluster_distance, class_name, cluster_subid], sort:
+[{cluster_distance: asc}, {crop_id: asc}]}`) instead of a per-bucket
+`top_hits` sub-agg on the cards aggregation itself.
+
+**Frontend action required:** paginate the cluster grid by requesting
+successive `offset`/`limit` windows (matching whatever page of cards is
+actually rendered) rather than assuming every card in one `GET
+/clusters` response already carries thumbnails.
+
+`GET /clusters/representatives` has the same shape change: the
+`clusters` dict in the response now only contains keys for cluster ids
+in the `[offset, offset + max_clusters)` window (ordered by member
+count desc) — call again with a larger `offset` for the next page. New
+`offset` query param (default `0`); response gains `offset` and
+`max_clusters` fields. Previously this endpoint returned representatives
+for every cluster (up to `max_clusters` total) in one response with no
+paging concept at all.
+
 `GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
 50), `limit` (1–500; alias for `page_size`, wins when both are set),
 `sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
-`updated_at`, `created_at`, `confidence`, `classifier_raw_confidence`,
+`updated_at`, `created_at`, `confidence`,
 `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`,
 `cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
 else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
@@ -424,17 +512,25 @@ Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
 **`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
 `400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
 `items` (item + `reason`), `sort_applied` (the sort id that actually ran),
-`sort_fallback_reason` (always `null`).
+`sort_fallback_reason` (`null`, or a human-readable string when the
+resolved default was replaced — see below).
 
-Sort: an explicit `sort` wins; omitted (or `default`) → the **tab's own
-default** (a deployment `sort` default from `PUT /settings` never overrides
-it — it only applies to a tab without one, e.g. `new_class_proposals`, else
-`recent`). Every queue ends in a `crop_id` ascending tiebreak so pages are
+Sort: an explicit `sort` wins (honored even if its field has no coverage);
+omitted (or `default`) → the **tab's own default** (a deployment `sort`
+default from `PUT /settings` never overrides it — it only applies to a tab
+without one, e.g. `new_class_proposals`, else `recent`). If that resolved
+default orders by a field **no item in the index has** (0% coverage), the
+queue falls back to the tab's next covered sort (`all`: `mistakenness`;
+`uncertainty`: `mistakenness`, then `atypicality`; every tab ends at
+`recent`), `sort_applied` names the sort that ran and
+`sort_fallback_reason` says which default was skipped and why. Unknown
+coverage (count failed) never triggers a fallback. `PUT /settings` refuses
+(`422`) a `sort` default whose field has 0% coverage. Every queue ends in a `crop_id` ascending tiebreak so pages are
 stable and positions are exact.
 
 `GET /review/{tab}/locate?crop_id=…` (same filters + `sort`, plus
 `page_size`) → `{crop_id, in_queue, rank, page, page_size, total, reason,
-sort_applied}`: `rank` is 0-based, `page` the 1-based page holding it;
+sort_applied, sort_fallback_reason}`: `rank` is 0-based, `page` the 1-based page holding it;
 out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
 `filtered_out`. It counts the items sorting before the crop (one count, any
 queue depth) — use it for `/review?crop_id=` deep links instead of paging.
@@ -615,7 +711,7 @@ always all present (a value is `null` when the stored doc has no value;
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (57): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
+Item keys (56): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
 
 Region keys (34, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
@@ -634,6 +730,11 @@ Derived keys (computed by the serializer, never stored):
 - `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
   without a distance); `cluster_is_core` — `cluster_similarity >=
   core_similarity_min` (served on `GET /clusters`, `0.75`).
+  `cluster_distance` is the cosine distance to the item's candidate-cluster
+  centroid, written by every residual clustering run whatever the method
+  (IVF's own centroids; otherwise the cluster's member-mean centroid). It
+  is `null` for noise and for items placed without a clustering pass
+  (class clusters via labeling, until they are clustered).
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the

@@ -161,7 +161,7 @@ async def fetch_residual_v6_embeddings(
     operator-initiated cancel takes effect within a single scroll
     batch (~50 ms) instead of waiting for the full fetch to finish.
     """
-    must: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
     # Exclude confidently-labeled crops from the residual pool. The
     # previous filter (class_validated != true) only caught the 102
     # human-validated rows because item_model and gemma writers don't
@@ -181,7 +181,7 @@ async def fetch_residual_v6_embeddings(
         # Include items with no cluster_id OR cluster_id below the
         # candidate threshold. Items already in a candidate cluster
         # (>= threshold) are excluded so they aren't re-pooled.
-        must.append(
+        filt.append(
             {
                 'bool': {
                     'should': [
@@ -195,7 +195,7 @@ async def fetch_residual_v6_embeddings(
     if extra_must:
         # Primary-subject clustering gate (rank / blur). Narrows the pool
         # to the crops that should train centroids + be assigned.
-        must.extend(extra_must)
+        filt.extend(extra_must)
 
     # Pre-count so the progress bar has a real total. A separate count
     # query is cheap (no _source, no scroll) and lets the dashboard show
@@ -205,7 +205,7 @@ async def fetch_residual_v6_embeddings(
         try:
             count_resp = await client.count(
                 index=ITEMS_INDEX,
-                body={'query': {'bool': {'must': must, 'must_not': must_not}}},
+                body={'query': {'bool': {'filter': filt, 'must_not': must_not}}},
             )
             total_estimate = int(count_resp.get('count', 0))
             progress.update(processed=0, total=total_estimate)
@@ -215,7 +215,7 @@ async def fetch_residual_v6_embeddings(
     body: dict[str, Any] = {
         'size': 1000,
         '_source': [RESIDUAL_EMBEDDING_FIELD],
-        'query': {'bool': {'must': must, 'must_not': must_not}},
+        'query': {'bool': {'filter': filt, 'must_not': must_not}},
     }
     ids: list[str] = []
     embs: list[np.ndarray] = []
@@ -292,7 +292,7 @@ async def fetch_residual_v6_embeddings_parallel(
     (older OpenSearch, missing _shard_doc sort support, etc.) so the
     pipeline never breaks on a fetch-layer issue.
     """
-    must: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
     # Same residual-pool gate as the scroll variant — exclude
     # confidently-labeled crops so clustering only touches the truly
     # residual cohort. See CONFIDENT_CLASS_SOURCES for the rule.
@@ -304,7 +304,7 @@ async def fetch_residual_v6_embeddings_parallel(
         {'term': {'class_excluded': True}},
     ]
     if not include_candidate_clusters and candidate_cluster_id_min is not None:
-        must.append(
+        filt.append(
             {
                 'bool': {
                     'should': [
@@ -317,8 +317,8 @@ async def fetch_residual_v6_embeddings_parallel(
         )
     if extra_must:
         # Primary-subject clustering gate (rank / blur).
-        must.extend(extra_must)
-    query = {'bool': {'must': must, 'must_not': must_not}}
+        filt.extend(extra_must)
+    query = {'bool': {'filter': filt, 'must_not': must_not}}
 
     # Pre-count for progress.
     total_estimate = 0

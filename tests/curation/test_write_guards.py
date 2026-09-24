@@ -38,6 +38,7 @@ from scripts.curation.worker.runner import _should_classify
 from scripts.curation.worker.state import _ItemTask
 from scripts.curation.worker.verify import _combined_class_update
 from src.config import get_region_fields
+from src.services.curation.class_write_guard import class_state_token
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
@@ -193,7 +194,8 @@ class TestAutomatedClassWritersExcludeTestHoldout:
                     'clusters': {
                         'buckets': [
                             {
-                                'key': 7,
+                                # F-29: composite-agg bucket key is a dict.
+                                'key': {'cluster_id': 7},
                                 'doc_count': 10,
                                 'top_class': {
                                     'buckets': [{'key': 'sedan', 'doc_count': 9}],
@@ -206,13 +208,15 @@ class TestAutomatedClassWritersExcludeTestHoldout:
         )
         captured: dict[str, Any] = {}
 
-        async def _fake_scroll_ids(_client: Any, *, index: str, query: dict[str, Any]) -> list[str]:
+        async def _fake_scroll_hits(
+            _client: Any, *, index: str, query: dict[str, Any]
+        ) -> dict[str, dict[str, Any]]:
             captured['index'] = index
             captured['query'] = query
-            return []
+            return {}
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(auto_promote_mod, '_scroll_ids', _fake_scroll_ids)
+            mp.setattr(auto_promote_mod, '_scroll_hits', _fake_scroll_hits)
             await auto_promote_mod.auto_promote_clusters(fake_client, min_purity=0.5, min_members=1)
 
         assert captured, 'auto_promote_clusters never reached the scroll query'
@@ -223,7 +227,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
     async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
         import src.routers.curation.classes as classes_mod
         from src.clients.curation_opensearch import ClassRegistry
-        from src.routers.curation._common import ClassMergeRequest
+        from src.routers.curation._class_models import ClassMergeRequest
 
         registry = ClassRegistry(path=tmp_path / 'class_registry.json')
         registry.add_class('sedan', group='vehicle')
@@ -302,7 +306,7 @@ class TestMergeClassRefusesFrozenCrops:
     @pytest.mark.asyncio
     async def test_merge_refuses_with_409_when_holdout_members_exist(self) -> None:
         import src.routers.curation.classes as classes_mod
-        from src.routers.curation._common import ClassMergeRequest
+        from src.routers.curation._class_models import ClassMergeRequest
 
         fake_os = AsyncMock()
         fake_os.count = AsyncMock(return_value={'count': 2})
@@ -393,14 +397,20 @@ class TestVlmLabelBatchHumanGuard:
         monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: fake_reg)
 
         fake_os = AsyncMock()
-        fake_os.get = AsyncMock(
+        fake_os.mget = AsyncMock(
             return_value={
-                '_source': {
-                    'class_source': 'human',
-                    'class_validated': True,
-                    'image_path': '/dev/null/never-read.jpg',
-                    'bbox_norm': [0.0, 0.0, 1.0, 1.0],
-                }
+                'docs': [
+                    {
+                        '_id': crop_id,
+                        'found': True,
+                        '_source': {
+                            'class_source': 'human',
+                            'class_validated': True,
+                            'image_path': '/dev/null/never-read.jpg',
+                            'bbox_norm': [0.0, 0.0, 1.0, 1.0],
+                        },
+                    }
+                ]
             }
         )
 
@@ -499,19 +509,12 @@ class TestDetectionWorkerBulkWriterHumanGuard:
             group='cars',
         )
         t.update_doc = {'class_id': 9, 'class_source': 'vlm', 'region_status': 'detected'}
+        current = {'class_source': 'v6_model', 'class_validated': False, 'region_status': 'pending'}
+        # Fetched in the same class state it is written onto.
+        t.class_token = class_state_token(current)
 
         opensearch = AsyncMock()
-        opensearch.mget = AsyncMock(
-            return_value=make_mget_response(
-                {
-                    'crop-1': {
-                        'class_source': 'v6_model',
-                        'class_validated': False,
-                        'region_status': 'pending',
-                    }
-                }
-            )
-        )
+        opensearch.mget = AsyncMock(return_value=make_mget_response({'crop-1': current}))
         opensearch.bulk = AsyncMock(
             return_value=make_bulk_response([make_bulk_update_item('crop-1', status=200)])
         )

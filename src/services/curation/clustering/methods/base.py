@@ -54,8 +54,10 @@ class ClusterResult:
     distances: np.ndarray | None = None
     """Optional float32 per-crop cosine distance to the assigned centroid,
     aligned 1:1 with ``labels``. IVF populates this (drives the labeler's
-    outlier sort / review queue); label-only methods (AHC, HDBSCAN) leave
-    it ``None`` since they have no centroid."""
+    outlier sort / review queue); label-only methods (AHC, HDBSCAN) and
+    IVF's single-bucket fallback leave it ``None`` and ``cluster_residuals``
+    derives it from each cluster's member-mean centroid instead
+    (:mod:`~src.services.curation.clustering.centroid_distance`)."""
 
     params: dict[str, Any] = field(default_factory=dict)
     """Method-specific knobs echoed for reproducibility

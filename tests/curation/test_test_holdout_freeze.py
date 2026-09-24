@@ -147,12 +147,12 @@ def _make_search_dispatcher(
             buckets, after_key = strata_pages[idx]
             return _strata_response(buckets, after_key=after_key)
 
-        must = body['query']['bool']['must']
+        filt = body['query']['bool']['filter']
         class_id = next(
-            m['term']['class_id'] for m in must if 'term' in m and 'class_id' in m['term']
+            m['term']['class_id'] for m in filt if 'term' in m and 'class_id' in m['term']
         )
         hdd_source = next(
-            m['term']['hdd_source'] for m in must if 'term' in m and 'hdd_source' in m['term']
+            m['term']['hdd_source'] for m in filt if 'term' in m and 'hdd_source' in m['term']
         )
         if body.get('search_after') is not None:
             return {'hits': {'hits': []}}
@@ -193,7 +193,7 @@ def test_freeze_selects_human_validated_cohort(app_client: Any, fake_opensearch:
     body = call.kwargs['body']
     assert body['query'] == {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {'class_validated': True}},
                 {'term': {'class_source': 'human'}},
             ]
@@ -430,3 +430,78 @@ def test_select_test_holdout_min_five_floor_and_determinism() -> None:
     # class 2 has 50 candidates at fraction 0.1 -> 5, at/above the floor.
     assert per_class_a['2'] == 5
     assert compute_holdout_sha(chosen_a) == compute_holdout_sha(list(reversed(chosen_a)))
+
+
+# =============================================================================
+# F-8 — class_id 0 must not be misbucketed as "unknown", and docs missing
+# class_id/hdd_source must get an explicit stratum instead of being
+# silently dropped from the composite agg.
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_fetch_cohort_strata_class_zero_is_not_treated_as_missing() -> None:
+    """``int(key.get('class_id') or -1)`` collapses class_id == 0 into the
+    "unknown" sentinel (-1), because ``0 or -1`` is ``-1`` in Python. A
+    class-0 stratum must come back with class_id == 0."""
+    from src.services.curation.holdout import fetch_cohort_strata
+
+    fake = AsyncMock()
+
+    async def _dispatch(*_args: Any, **kwargs: Any) -> dict[str, Any]:
+        body = kwargs['body']
+        if 'strata' in (body.get('aggs') or {}):
+            return _strata_response([_bucket(0, 'hdd:demo_hdd01', 6)])
+        return {
+            'hits': {
+                'hits': [
+                    {'_source': {'crop_id': cid}, 'sort': [cid, cid]} for cid in _crop_ids('z', 6)
+                ]
+            }
+        }
+
+    fake.search = AsyncMock(side_effect=_dispatch)
+
+    strata = await fetch_cohort_strata(fake, 'test_items', {'match_all': {}})
+    assert [b['class_id'] for b in strata] == [0]
+
+
+@pytest.mark.asyncio
+async def test_fetch_cohort_strata_missing_class_id_and_hdd_source_get_a_stratum() -> None:
+    """A doc with no class_id/hdd_source must still surface as its own
+    stratum (composite ``missing_bucket: true``), not vanish from the
+    strata enumeration entirely."""
+    from src.services.curation.holdout import (
+        _MISSING_CLASS_ID_STRATUM,
+        _MISSING_HOLDOUT_SOURCE_STRATUM,
+        fetch_cohort_strata,
+    )
+
+    fake = AsyncMock()
+
+    async def _dispatch(*_args: Any, **kwargs: Any) -> dict[str, Any]:
+        body = kwargs['body']
+        if 'strata' in (body.get('aggs') or {}):
+            return _strata_response(
+                [{'key': {'class_id': None, 'hdd_source': None}, 'doc_count': 2}]
+            )
+        # Per-stratum scan for the missing-key bucket: assert it queries by
+        # must_not exists rather than a literal term match on the sentinel.
+        filt = body['query']['bool']['filter']
+        assert {'bool': {'must_not': [{'exists': {'field': 'class_id'}}]}} in filt
+        assert {'bool': {'must_not': [{'exists': {'field': 'hdd_source'}}]}} in filt
+        return {
+            'hits': {
+                'hits': [
+                    {'_source': {'crop_id': cid}, 'sort': [cid, cid]} for cid in _crop_ids('m', 2)
+                ]
+            }
+        }
+
+    fake.search = AsyncMock(side_effect=_dispatch)
+
+    strata = await fetch_cohort_strata(fake, 'test_items', {'match_all': {}})
+    assert len(strata) == 1
+    assert strata[0]['class_id'] == _MISSING_CLASS_ID_STRATUM
+    assert strata[0]['hdd_source'] == _MISSING_HOLDOUT_SOURCE_STRATUM
+    assert strata[0]['crop_ids'] == _crop_ids('m', 2)

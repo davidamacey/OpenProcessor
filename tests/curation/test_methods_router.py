@@ -400,27 +400,26 @@ def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:
 
 
 def _fake_field_counts(*, total: int, per_field: dict[str, int] | None = None, default: int = 5):
-    """Build an ``AsyncMock`` side_effect distinguishing the ``match_all``
-    total-count call from a per-field ``exists`` count call — mirrors
-    ``test_scores_router.py::test_coverage_reports_per_field_counts``'s
-    convention exactly."""
+    """Build an ``AsyncMock`` side_effect for the one-``_search``-per-field
+    coverage query (F-28.2): ``size:0``/``track_total_hits:true`` for the
+    pool size, one ``filter: {exists}`` sub-agg per requested field."""
     per_field = per_field or {}
 
-    async def _count(index: str, body: dict) -> dict:
-        query = body['query']
-        if 'exists' not in query:
-            return {'count': total}
-        field = query['exists']['field']
-        return {'count': per_field.get(field, default)}
+    async def _search(index: str, body: dict) -> dict:
+        fields = list(body['aggs'])
+        return {
+            'hits': {'total': {'value': total}},
+            'aggregations': {f: {'doc_count': per_field.get(f, default)} for f in fields},
+        }
 
-    return AsyncMock(side_effect=_count)
+    return AsyncMock(side_effect=_search)
 
 
 def test_methods_emits_field_coverage_per_entry(app_client: TestClient) -> None:
     """Phase 6 (P1-2/P1-3): every entry — including ones with no
     ``requires_field`` — now carries a ``field_coverage`` key.
     Before this fix, ``/curation/methods`` never emitted the key at all."""
-    app_client.fake_os.count = _fake_field_counts(  # type: ignore[attr-defined]
+    app_client.fake_os.search = _fake_field_counts(  # type: ignore[attr-defined]
         total=347_837, per_field={'cluster_distance': 124_921, 'crop_area_norm': 347_837}
     )
 
@@ -452,7 +451,7 @@ def test_methods_reports_zero_coverage_for_a_genuinely_inert_sort(
     are 0% covered on the real pool today (audit-remediation plan §0.1) --
     the whole point of Phase 6 is that this must come through as a real
     zero (hide the control), distinct from an unknown/None."""
-    app_client.fake_os.count = _fake_field_counts(  # type: ignore[attr-defined]
+    app_client.fake_os.search = _fake_field_counts(  # type: ignore[attr-defined]
         total=347_837,
         per_field={
             'probe_pred_entropy': 0,
@@ -478,7 +477,7 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
     fix that defaults failures to 0 (mirroring
     crop_scores/job.py::compute_coverage's precedent) would also fail this
     test."""
-    app_client.fake_os.count = AsyncMock(side_effect=RuntimeError('opensearch unreachable'))  # type: ignore[attr-defined]
+    app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('opensearch unreachable'))  # type: ignore[attr-defined]
 
     r = app_client.get('/curation/methods')
     assert r.status_code == 200
@@ -490,25 +489,26 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
 
 
 def test_methods_does_not_query_per_entry(app_client: TestClient) -> None:
-    """O(1)-ish, not O(entries): distinct requires_field values are far
-    fewer than the number of strategy entries (several sorts share a
-    field, e.g. both uncertainty_entropy and disagreement_entropy_asc need
-    probe_pred_entropy), and a second request inside the 60s TTL must not
-    issue any new OpenSearch queries at all."""
-    app_client.fake_os.count = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
+    """O(1) request, not O(entries) or O(distinct fields) (F-28.2): every
+    distinct ``requires_field`` (several sorts share one, e.g. both
+    uncertainty_entropy and disagreement_entropy_asc need
+    probe_pred_entropy) is covered by one ``_search`` with a filter agg
+    per field -- not one query per field. A second request inside the 60s
+    TTL must not issue any new OpenSearch queries at all."""
+    app_client.fake_os.search = _fake_field_counts(total=1000)  # type: ignore[attr-defined]
 
     r1 = app_client.get('/curation/methods')
     assert r1.status_code == 200
     n_entries = len(r1.json()['strategies'])
-    first_call_count = app_client.fake_os.count.call_count  # type: ignore[attr-defined]
-    assert 0 < first_call_count < n_entries, (
-        f'{first_call_count} queries for {n_entries} entries -- expected '
-        'O(distinct fields), not O(entries)'
+    first_call_count = app_client.fake_os.search.call_count  # type: ignore[attr-defined]
+    assert first_call_count == 1, (
+        f'{first_call_count} queries for {n_entries} entries -- expected exactly one '
+        '_search covering every distinct field via filter aggs'
     )
 
     r2 = app_client.get('/curation/methods')
     assert r2.status_code == 200
-    assert app_client.fake_os.count.call_count == first_call_count, (  # type: ignore[attr-defined]
+    assert app_client.fake_os.search.call_count == first_call_count, (  # type: ignore[attr-defined]
         'a second request inside the TTL window must be served from cache'
     )
 

@@ -86,3 +86,85 @@ async def test_class_cluster_keeps_its_dominant_class() -> None:
     cards = await _cards(_bucket(7, 5, [('van', 1)]))
     assert cards[7]['dominant_class_name'] == 'van'
     assert cards[7]['dominant_class_id'] == 7
+
+
+# =============================================================================
+# F-12 — kind push-down: kind='class'/'candidate' must filter the query
+# *before* aggregating (a bounded cluster_id range), not terms-aggregate
+# everything then drop mismatched-kind buckets in Python. Otherwise, with
+# more than max_clusters distinct candidate ids outranking the ~80 class
+# ids by _count desc, a kind='class' request could come back missing real
+# class clusters entirely.
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_kind_class_pushes_a_cluster_id_range_filter_into_the_query() -> None:
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
+    await list_clusters(
+        os_client,
+        per_cluster=0,
+        max_clusters=100,
+        kind='class',
+        class_id=None,
+        cluster_id=None,
+        max_rank=None,
+        min_blur_ratio=None,
+        class_source=None,
+    )
+    assert os_client.search.await_args is not None
+    body = os_client.search.await_args.kwargs['body']
+    filt = body['query']['bool']['filter']
+    assert {'range': {'cluster_id': {'gte': 0, 'lt': CANDIDATE}}} in filt
+
+
+@pytest.mark.asyncio
+async def test_kind_candidate_pushes_a_cluster_id_range_filter_into_the_query() -> None:
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
+    await list_clusters(
+        os_client,
+        per_cluster=0,
+        max_clusters=100,
+        kind='candidate',
+        class_id=None,
+        cluster_id=None,
+        max_rank=None,
+        min_blur_ratio=None,
+        class_source=None,
+    )
+    assert os_client.search.await_args is not None
+    body = os_client.search.await_args.kwargs['body']
+    filt = body['query']['bool']['filter']
+    assert {'range': {'cluster_id': {'gte': CANDIDATE}}} in filt
+
+
+@pytest.mark.asyncio
+async def test_kind_class_returns_every_class_bucket_even_with_far_more_candidate_buckets() -> None:
+    """The load-bearing regression: with 1200 candidate buckets (each
+    outranking every class bucket by doc_count) and max_clusters=100, a
+    kind='class' request must still return every class-kind bucket --
+    because the range filter keeps candidate docs out of the aggregation
+    entirely, not because Python got lucky sorting through the truncated
+    top-100."""
+    class_buckets = [_bucket(cid, 5, [('van', 1)]) for cid in range(80)]
+    # Simulate what a real per-kind-filtered query would return: with the
+    # range filter applied server-side, only class buckets exist in this
+    # response at all (candidate docs never enter the agg).
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(
+        return_value={'aggregations': {'clusters': {'buckets': class_buckets}}}
+    )
+    resp = await list_clusters(
+        os_client,
+        per_cluster=0,
+        max_clusters=100,
+        kind='class',
+        class_id=None,
+        cluster_id=None,
+        max_rank=None,
+        min_blur_ratio=None,
+        class_source=None,
+    )
+    assert {c['cluster_id'] for c in resp['items']} == set(range(80))

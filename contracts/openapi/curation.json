@@ -691,6 +691,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -720,6 +721,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -765,6 +767,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -805,6 +808,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -827,6 +831,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -875,6 +880,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -886,6 +892,23 @@
         "title": "CropMoveRequest",
         "type": "object"
       },
+      "CropRegionUndoBatchRequest": {
+        "description": "Undo the most recent human region write on each crop.",
+        "properties": {
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "crop_ids"
+        ],
+        "title": "CropRegionUndoBatchRequest",
+        "type": "object"
+      },
       "CropUndoBatchRequest": {
         "description": "Undo the most recent human class write on each crop.",
         "properties": {
@@ -893,6 +916,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -910,6 +934,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -1459,6 +1484,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -1620,17 +1646,6 @@
             "default": false,
             "title": "Class Validated",
             "type": "boolean"
-          },
-          "classifier_raw_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classifier Raw Confidence"
           },
           "cluster_distance": {
             "anyOf": [
@@ -3855,6 +3870,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -4029,6 +4045,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -5089,6 +5106,33 @@
               ],
               "title": "Class Source"
             }
+          },
+          {
+            "description": "Offset into the card list for representatives",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Offset into the card list for representatives",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cards to compute representatives for",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Cards to compute representatives for",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5270,7 +5314,7 @@
     },
     "/curation/clusters/representatives": {
       "get": {
-        "description": "Return up to ``per_cluster`` representative crop_ids for every cluster.\n\nSingle OpenSearch query using ``terms`` aggregation on ``cluster_id`` with a\n``top_hits`` sub-aggregation sorted by ascending cluster_distance (i.e.,\nclosest to centroid first). Designed for the labeler's clusters grid so it\ncan render all card thumbnails without N round-trips.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
+        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nF-15 / D-4: the cluster id list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster ids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
         "operationId": "cluster_representatives_curation_clusters_representatives_get",
         "parameters": [
           {
@@ -5316,6 +5360,19 @@
               "description": "Restrict to clusters containing this class",
               "title": "Class Id"
             }
+          },
+          {
+            "description": "Offset into the _count-desc cluster list",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Offset into the _count-desc cluster list",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5350,7 +5407,7 @@
     },
     "/curation/crops": {
       "get": {
-        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops whose ``classifier_raw_confidence`` is below the value OR that have no classifier\nprediction at all (blind spots).",
+        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops a classifier scored below the value (``confidence``) OR that have no classifier\nprediction at all (blind spots).",
         "operationId": "list_crops_curation_crops_get",
         "parameters": [
           {
@@ -5397,7 +5454,7 @@
             }
           },
           {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, classifier_raw_confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -5410,7 +5467,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, classifier_raw_confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
               "title": "Sort"
             }
           },
@@ -6078,7 +6135,7 @@
     },
     "/curation/crops/move": {
       "post": {
-        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  or a class-range id that isn't in the registry. Nothing is written.",
+        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  a class-range id that isn't in the registry, or a candidate id with\n  no current members (it doesn't exist). Nothing is written.",
         "operationId": "move_crops_curation_crops_move_post",
         "requestBody": {
           "content": {
@@ -6115,6 +6172,50 @@
           }
         },
         "summary": "Move Crops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/region/undo_batch": {
+      "post": {
+        "description": "Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk\nregion write by passing the same ``crop_ids``. Each crop is restored\nindependently. Returns ``items`` (restored wire items), ``undone``, and\nper-crop ``nothing_to_undo`` / ``conflicts`` / ``not_found`` id lists.\n``409`` when no crop had anything to undo.",
+        "operationId": "undo_crop_regions_curation_crops_region_undo_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropRegionUndoBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Crop Regions Curation Crops Region Undo Batch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Crop Regions",
         "tags": [
           "Curation"
         ]
@@ -6158,6 +6259,51 @@
           }
         },
         "summary": "Get Crop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/context": {
+      "get": {
+        "description": "The item's source image and every item detected in it.\n\n``{image: {image_id, image_path, width, height, source, indexed_at} |\nnull, items: [wire item, ...]}`` — items ordered by\n``crop_rank_in_image`` (largest first), at most 500. ``image`` is null\nwhen the images index has no record of the frame.",
+        "operationId": "crop_image_context_curation_crops__crop_id__context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Crop Image Context Curation Crops  Crop Id  Context Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crop Image Context",
         "tags": [
           "Curation"
         ]
@@ -6469,7 +6615,7 @@
     },
     "/curation/crops/{crop_id}/region": {
       "put": {
-        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. Returns ``item``, the post-write\nwire item.",
+        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. A box equal to the stored one\n(within float noise) confirms the region: status, verified, validated\nand verifier are written, the detector / version / score / detection\ntime are kept. A different box is human geometry (detector = human,\nscore 1.0). Returns ``item``, the post-write wire item.",
         "operationId": "set_crop_region_curation_crops__crop_id__region_put",
         "parameters": [
           {
@@ -6517,6 +6663,51 @@
           }
         },
         "summary": "Set Crop Region",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/region/undo": {
+      "post": {
+        "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",
+        "operationId": "undo_crop_region_curation_crops__crop_id__region_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Crop Region Curation Crops  Crop Id  Region Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Crop Region",
         "tags": [
           "Curation"
         ]
@@ -6779,7 +6970,7 @@
     },
     "/curation/crops/{crop_id}/vlm_dismiss": {
       "post": {
-        "description": "Reject the VLM's class suggestion on this item.\n\nRecords ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /\n``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,\n``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer\napply it. The class itself is untouched (label or discard it as a\nseparate write). Returns the post-write item; ``409`` when the item has\nno VLM suggestion.",
+        "description": "Reject the VLM's class suggestion on this item.\n\nRecords ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /\n``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,\n``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer\napply it. The class itself is untouched (label or discard it as a\nseparate write). ``POST /crops/{crop_id}/vlm_dismiss/undo`` reverses it.\nReturns the post-write item; ``409`` when the item has no VLM\nsuggestion.",
         "operationId": "dismiss_vlm_suggestion_curation_crops__crop_id__vlm_dismiss_post",
         "parameters": [
           {
@@ -6817,6 +7008,51 @@
           }
         },
         "summary": "Dismiss Vlm Suggestion",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/vlm_dismiss/undo": {
+      "post": {
+        "description": "Undo the most recent ``POST /crops/{crop_id}/vlm_dismiss``: the\n``vlm_dismissed_*`` fields go back to what they were before it, so the\ndismissed VLM suggestion is live again (``vlm_proposed_class_*`` /\n``proposed_class_*`` apply it). Returns the restored item; ``409`` when\nthere is no dismissal left to undo.",
+        "operationId": "undo_vlm_dismiss_curation_crops__crop_id__vlm_dismiss_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Vlm Dismiss Curation Crops  Crop Id  Vlm Dismiss Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Vlm Dismiss",
         "tags": [
           "Curation"
         ]
@@ -7989,7 +8225,7 @@
             }
           },
           {
-            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -8002,12 +8238,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
               "title": "Class Id"
             }
           },
           {
-            "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -8020,7 +8256,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
               "title": "Cluster Id"
             }
           },
@@ -8107,7 +8343,7 @@
     },
     "/curation/pipeline/auto_label/start": {
       "post": {
-        "description": "Kick off auto_label as a background job. Returns immediately.\n\nThe labeler polls ``GET /pipeline/auto_label/status`` for progress.\nOnly one job runs at a time; a second start request returns HTTP 409\nwhile a job is in flight.",
+        "description": "Kick off auto_label as a background job. Returns immediately.\n\nPoll ``GET /pipeline/auto_label/status/{job_id}`` (the returned\n``job_id``) for this job's progress.\nOnly one job runs at a time; a second start request returns HTTP 409\nwhile a job is in flight.",
         "operationId": "pipeline_auto_label_start_curation_pipeline_auto_label_start_post",
         "parameters": [
           {
@@ -8309,7 +8545,7 @@
             }
           },
           {
-            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -8322,12 +8558,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
               "title": "Class Id"
             }
           },
           {
-            "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -8340,7 +8576,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
               "title": "Cluster Id"
             }
           },
@@ -8412,6 +8648,51 @@
           }
         },
         "summary": "Pipeline Auto Label Status",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/pipeline/auto_label/status/{job_id}": {
+      "get": {
+        "description": "State of one auto_label job by the ``job_id`` its start returned.\n\nSame shape as ``GET /pipeline/auto_label/status``. Answers for the job\neven after a later job replaced it as the current one (its final\nstate is kept; the newest 50 are retained). ``404`` for an unknown id.",
+        "operationId": "pipeline_auto_label_job_status_curation_pipeline_auto_label_status__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pipeline Auto Label Job Status Curation Pipeline Auto Label Status  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pipeline Auto Label Job Status",
         "tags": [
           "Curation"
         ]
@@ -9700,7 +9981,7 @@
     },
     "/curation/review/{tab}/locate": {
       "get": {
-        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
+        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
         "operationId": "review_locate_curation_review__tab__locate_get",
         "parameters": [
           {
@@ -11463,7 +11744,7 @@
     },
     "/curation/vlm/label_cluster/{cluster_id}": {
       "post": {
-        "description": "VLM-label every unvalidated member of one cluster, as a background job.\n\nQueues the auto-label job scoped to ``cluster_id`` with only the VLM\nstage (no re-clustering, no auto-promote, no cap): the server selects\nevery unvalidated, non-holdout, non-excluded member and chunks them.\nReturns the job state; poll ``GET /pipeline/auto_label/status`` —\n``total`` is the number selected, ``result.stages.vlm`` the outcome.\n``409`` while another auto-label job runs.",
+        "description": "VLM-label every unvalidated member of one cluster, as a background job.\n\nQueues the auto-label job scoped to ``cluster_id`` with only the VLM\nstage (no re-clustering, no auto-promote, no cap): the server selects\nevery unvalidated, non-holdout, non-excluded member and chunks them.\nReturns the job state; poll ``GET /pipeline/auto_label/status/{job_id}`` —\n``total`` is the number selected, ``result.stages.vlm`` the outcome.\n``409`` while another auto-label job runs.",
         "operationId": "vlm_label_cluster_curation_vlm_label_cluster__cluster_id__post",
         "parameters": [
           {

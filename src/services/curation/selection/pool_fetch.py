@@ -63,6 +63,12 @@ async def fetch_pool_embeddings(
     it; a truncated pool means "give up on this cap", not "here's a
     partial answer").
     """
+    # F-16: count first — a pool far past `cap` should never pay for a
+    # scroll (even a break-early one) just to discover it's too large.
+    count_resp = await client.count(index=index, body={'query': query})
+    if int((count_resp or {}).get('count', 0)) > cap:
+        return [], np.zeros((0, 0), dtype=np.float32), True
+
     ids: list[str] = []
     vecs: list[list[float]] = []
     body = {'size': _SCROLL_PAGE, 'query': query, '_source': [embedding_field]}

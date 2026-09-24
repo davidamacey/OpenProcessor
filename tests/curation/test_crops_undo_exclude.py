@@ -293,6 +293,50 @@ async def test_unexclude_restores_a_live_candidate_cluster(crops, registry, ids)
     assert u['cluster_subid'] == '10003b'
 
 
+@pytest.mark.asyncio
+async def test_unexclude_returns_unvalidated_item_to_its_class_cluster(crops, ids) -> None:
+    """An unvalidated class-kind item (VLM label, sitting in its class
+    cluster) comes back to that class cluster, not the residual pool."""
+    doc = _proposal_doc('cv')
+    doc.update(
+        class_id=ids['widget'],
+        class_name='widget',
+        class_source='vlm',
+        label_source='vlm',
+        class_validated=False,
+        cluster_id=ids['widget'],
+        cluster_subid=f'{ids["widget"]}c',
+    )
+    fake = QueryFakeOpenSearch({ITEMS: {'cv': doc}})
+    await _exclude(crops, fake, ['cv'])
+    assert fake.docs(ITEMS)['cv']['cluster_id'] == -2
+    await _unexclude(crops, fake, ['cv'])
+    cv = fake.docs(ITEMS)['cv']
+    assert cv['class_excluded'] is False
+    assert cv['class_validated'] is False
+    assert cv['cluster_id'] == ids['widget']
+    assert cv['cluster_subid'] == f'{ids["widget"]}c'
+
+
+@pytest.mark.asyncio
+async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residual(
+    crops, ids
+) -> None:
+    """The class-cluster restore only applies to the item's own class."""
+    doc = _proposal_doc('oc')
+    doc.update(
+        class_id=ids['widget'],
+        class_name='widget',
+        class_source='vlm',
+        class_validated=False,
+        cluster_id=ids['gadget'],
+    )
+    fake = QueryFakeOpenSearch({ITEMS: {'oc': doc}})
+    await _exclude(crops, fake, ['oc'])
+    await _unexclude(crops, fake, ['oc'])
+    assert fake.docs(ITEMS)['oc']['cluster_id'] is None
+
+
 # =============================================================================
 # Bug C — moving into a candidate cluster is placement, not a class label
 # =============================================================================
@@ -304,7 +348,9 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
 
     doc = _proposal_doc('m')
     doc.update(cluster_id=None, cluster_subid=None)
-    fake = QueryFakeOpenSearch({ITEMS: {'m': doc}})
+    peer = _proposal_doc('peer')
+    peer.update(cluster_id=10000, cluster_subid=None)
+    fake = QueryFakeOpenSearch({ITEMS: {'m': doc, 'peer': peer}})
     before = _class_state(fake.docs(ITEMS)['m'])
 
     out = await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=10000), fake)
@@ -325,7 +371,7 @@ async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) ->
     class; keeping it validated would leak the old class into export."""
     from src.routers.curation._common import CropMoveRequest
 
-    fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h')}})
+    fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h'), 'peer': _proposal_doc('peer')}})
     await _label(crops, fake, registry, 'h', ids['widget'])
     await crops.move_crops(CropMoveRequest(crop_ids=['h'], cluster_id=10003), fake)
     h = fake.docs(ITEMS)['h']
@@ -346,6 +392,23 @@ async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry,
     with pytest.raises(HTTPException) as exc:
         await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=target), fake)
     assert exc.value.status_code == 400
+    assert fake.docs(ITEMS)['m'] == before
+
+
+@pytest.mark.asyncio
+async def test_move_rejects_a_candidate_target_with_no_members(crops, registry) -> None:
+    """A candidate id nobody is in (never existed, or renumbered away) is
+    not a move target; writing it would invent a phantom cluster."""
+    from fastapi import HTTPException
+
+    from src.routers.curation._common import CropMoveRequest
+
+    fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
+    before = dict(fake.docs(ITEMS)['m'])
+    with pytest.raises(HTTPException) as exc:
+        await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=99999), fake)
+    assert exc.value.status_code == 400
+    assert '99999' in str(exc.value.detail)
     assert fake.docs(ITEMS)['m'] == before
 
 

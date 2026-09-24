@@ -125,86 +125,67 @@ MIN_FREE_DISK_GB = 50
 # =============================================================================
 
 
-async def _count_validated_per_class(
+async def _count_validated_and_test_per_class(
     opensearch: Any,
     class_ids: list[int],
-) -> dict[int, int]:
-    """Return ``{class_id: validated_crop_count}`` for each requested class.
+) -> tuple[dict[int, int], dict[int, int]]:
+    """Return ``({class_id: validated_crop_count}, {class_id: test_holdout_count})``.
 
-    Uses the ``legacy_vehicle_crops`` index. Validated crops are those with
-    ``label_state == 'confirmed'``. We issue one bool-filter aggregation
-    rather than N count requests.
+    F-28.3: preflight used to issue these as two separate
+    ``_search`` round trips (identical ``class_id`` scope, one with an
+    extra ``test_holdout`` filter) -- merged into one ``_search`` with
+    two sibling ``filter`` aggs, each with its own ``by_class`` terms
+    sub-agg, since both share the same base document set.
+
+    The ``legacy_vehicle_crops`` schema uses a boolean ``label_validated``
+    field (set true by both human-confirmation and auto-promotion). The
+    design doc's earlier reference to ``label_state == 'confirmed'``
+    predated the schema settling on the boolean -- we keep the boolean
+    as the source of truth and treat both human and auto-promoted
+    labels as eligible training data. Test-holdout coverage (design
+    §15.1, ≥5 per class) is a subset of validated crops.
     """
     if not class_ids:
-        return {}
-    # The legacy_vehicle_crops schema uses a boolean ``label_validated`` field
-    # (set true by both human-confirmation and auto-promotion). The design
-    # doc's earlier reference to ``label_state == 'confirmed'`` predated
-    # the schema settling on the boolean — we keep the boolean as the
-    # source of truth and treat both human and auto-promoted labels as
-    # eligible training data.
+        return {}, {}
+    size = max(len(class_ids), 1)
     body = {
         'size': 0,
-        'query': {
-            'bool': {
-                'must': [
-                    {'term': {'class_validated': True}},
-                    {'terms': {'class_id': class_ids}},
-                ]
-            }
-        },
+        'query': {'bool': {'filter': [{'terms': {'class_id': class_ids}}]}},
         'aggs': {
-            'by_class': {
-                'terms': {'field': 'class_id', 'size': max(len(class_ids), 1)},
-            }
+            'validated_by_class': {
+                'filter': {'term': {'class_validated': True}},
+                'aggs': {'by_class': {'terms': {'field': 'class_id', 'size': size}}},
+            },
+            'test_by_class': {
+                'filter': {
+                    'bool': {
+                        'filter': [
+                            {'term': {'class_validated': True}},
+                            {'term': {'test_holdout': True}},
+                        ]
+                    }
+                },
+                'aggs': {'by_class': {'terms': {'field': 'class_id', 'size': size}}},
+            },
         },
     }
+    empty = dict.fromkeys(class_ids, 0)
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
     except Exception as exc:
         logger.warning('train_class_count_failed', error=str(exc))
-        return dict.fromkeys(class_ids, 0)
-    counts = dict.fromkeys(class_ids, 0)
-    for bucket in (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', []):
-        cid = bucket.get('key')
-        if isinstance(cid, int):
-            counts[cid] = int(bucket.get('doc_count', 0))
-    return counts
+        return dict(empty), dict(empty)
+    aggs = resp.get('aggregations') or {}
 
+    def _by_class(agg_name: str) -> dict[int, int]:
+        counts = dict(empty)
+        for bucket in (aggs.get(agg_name) or {}).get('by_class', {}).get('buckets', []):
+            cid = bucket.get('key')
+            if isinstance(cid, int):
+                counts[cid] = int(bucket.get('doc_count', 0))
+        return counts
 
-async def _count_test_per_class(
-    opensearch: Any,
-    class_ids: list[int],
-) -> dict[int, int]:
-    """``{class_id: test_holdout_count}`` — design §15.1 requires ≥5 each."""
-    if not class_ids:
-        return {}
-    body = {
-        'size': 0,
-        'query': {
-            'bool': {
-                'must': [
-                    {'term': {'class_validated': True}},
-                    {'term': {'test_holdout': True}},
-                    {'terms': {'class_id': class_ids}},
-                ]
-            }
-        },
-        'aggs': {
-            'by_class': {'terms': {'field': 'class_id', 'size': max(len(class_ids), 1)}},
-        },
-    }
-    try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
-    except Exception as exc:
-        logger.warning('train_test_count_failed', error=str(exc))
-        return dict.fromkeys(class_ids, 0)
-    counts = dict.fromkeys(class_ids, 0)
-    for bucket in (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', []):
-        cid = bucket.get('key')
-        if isinstance(cid, int):
-            counts[cid] = int(bucket.get('doc_count', 0))
-    return counts
+    return _by_class('validated_by_class'), _by_class('test_by_class')
 
 
 async def _count_pending_ingest(opensearch: Any) -> int:
@@ -662,7 +643,9 @@ async def _run_preflight(
             )
         )
     else:
-        counts = await _count_validated_per_class(opensearch, target_classes)
+        # F-28.3: one search covers both per-class validated counts and
+        # per-class test-holdout counts (used in check 5 below).
+        counts, test_counts = await _count_validated_and_test_per_class(opensearch, target_classes)
         registry = get_class_registry()
         sub_blocking: list[dict[str, Any]] = []
         sub_warn: list[dict[str, Any]] = []
@@ -714,7 +697,7 @@ async def _run_preflight(
             )
 
         # ---- 5. test holdout coverage ----------------------------------------
-        test_counts = await _count_test_per_class(opensearch, target_classes)
+        # test_counts came from the merged query above (F-28.3).
         thin_test: list[dict[str, Any]] = []
         for cid in target_classes:
             n = test_counts.get(cid, 0)

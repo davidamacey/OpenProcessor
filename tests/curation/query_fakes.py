@@ -119,6 +119,39 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
             size = spec['top_hits'].get('size', 3)
             out[name] = {'hits': {'hits': [{'_source': copy.deepcopy(d)} for d in docs[:size]]}}
             continue
+        if 'composite' in spec:
+            csize = spec['composite'].get('size', 10)
+            ((src_name, src_spec),) = spec['composite']['sources'][0].items()
+            field = src_spec['terms']['field']
+            composite_groups: dict[Any, list[dict[str, Any]]] = {}
+            for doc in docs:
+                for v in _values(doc, field):
+                    composite_groups.setdefault(v, []).append(doc)
+            sorted_keys = sorted(composite_groups.keys())
+            after = spec['composite'].get('after')
+            if after is not None:
+                after_val = after[src_name]
+                sorted_keys = [k for k in sorted_keys if k > after_val]
+            page_keys = sorted_keys[:csize]
+            composite_buckets = []
+            for key in page_keys:
+                members = composite_groups[key]
+                composite_bucket = {'key': {src_name: key}, 'doc_count': len(members)}
+                if spec.get('aggs'):
+                    composite_bucket.update(_aggregate(members, spec['aggs']))
+                composite_buckets.append(composite_bucket)
+            result: dict[str, Any] = {'buckets': composite_buckets}
+            if composite_buckets:
+                result['after_key'] = {src_name: page_keys[-1]}
+            out[name] = result
+            continue
+        if 'filter' in spec:
+            kept = [d for d in docs if matches(d, spec['filter'])]
+            filter_bucket: dict[str, Any] = {'doc_count': len(kept)}
+            if spec.get('aggs'):
+                filter_bucket.update(_aggregate(kept, spec['aggs']))
+            out[name] = filter_bucket
+            continue
         if 'terms' not in spec:
             raise NotImplementedError(f'agg not supported by fake: {spec}')
         field = spec['terms']['field']
@@ -149,6 +182,7 @@ class QueryFakeOpenSearch:
         self.seq: dict[tuple[str, str], int] = {}
         self.searched_indexes: list[str] = []
         self.bulk_calls = 0
+        self.mget_calls = 0
         self.indices = _Indices(self)
 
     # ------------------------------------------------------------------ helpers
@@ -242,6 +276,7 @@ class QueryFakeOpenSearch:
     async def mget(
         self, *, body: dict[str, Any], index: str | None = None, **_kw: Any
     ) -> dict[str, Any]:
+        self.mget_calls += 1
         out = []
         specs = body.get('docs') or [{'_id': i, '_index': index} for i in body.get('ids', [])]
         for spec in specs:

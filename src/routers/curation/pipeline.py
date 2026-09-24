@@ -21,6 +21,7 @@ from src.routers.curation.pipeline_params import (
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
     CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
+    CLUSTER_SCOPED_SKIP,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
@@ -29,16 +30,20 @@ from src.routers.curation.pipeline_params import (
 )
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.event_hub import publish_crop_classified
 
 
 # Fields the VLM sweep reads per unvalidated item.
+# The class-state fields are the state the sweep decides on; the VLM
+# write lands only if it is unchanged at write time.
 VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
     'crop_id',
     'image_path',
     'bbox_norm',
     ITEM_EMBEDDING_FIELD,
+    *CLASS_GUARD_SOURCE_FIELDS,
 )
 
 
@@ -68,7 +73,8 @@ async def pipeline_auto_label_start(
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
-    The labeler polls ``GET /pipeline/auto_label/status`` for progress.
+    Poll ``GET /pipeline/auto_label/status/{job_id}`` (the returned
+    ``job_id``) for this job's progress.
     Only one job runs at a time; a second start request returns HTTP 409
     while a job is in flight.
     """
@@ -186,7 +192,12 @@ async def pipeline_auto_label(
     # labeled items; the residual clusterer handles the rest.
     # with_elapsed_tick advances the dashboard during callback-less
     # stages (update_by_query etc.).
-    if train_clusters:
+    if train_clusters and cluster_id is not None:
+        # Both stages rewrite cluster ids index-wide; a cluster-scoped job
+        # writes only to the members it selected.
+        for stage in ('cluster_id_normalize', 'cluster_residuals'):
+            summary['stages'][stage] = dict(CLUSTER_SCOPED_SKIP)
+    elif train_clusters:
         if progress is not None:
             progress.start_stage('cluster_id_normalize')
             progress.raise_if_cancelled()
@@ -247,6 +258,8 @@ async def pipeline_auto_label(
         # entirely until a confidence-gated rewrite lands; operators can
         # opt in via ?run_auto_promote=true.
         summary['stages']['auto_promote'] = {'skipped': True, 'reason': 'disabled by default'}
+    elif cluster_id is not None:
+        summary['stages']['auto_promote'] = dict(CLUSTER_SCOPED_SKIP)
     else:
         try:
             await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
@@ -312,6 +325,7 @@ async def pipeline_auto_label(
     }
     cap = max_vlm_crops if max_vlm_crops > 0 else None
     unvalidated_ids: list[str] = []
+    guard = ClassWriteGuard('vlm_pipeline')
     scroll_id: str | None = None
     try:
         resp = await opensearch.search(
@@ -326,6 +340,7 @@ async def pipeline_auto_label(
                 cid = (h.get('_source') or {}).get('crop_id') or h.get('_id')
                 if cid:
                     unvalidated_ids.append(cid)
+                    guard.remember(cid, h.get('_source') or {})
                     if cap is not None and len(unvalidated_ids) >= cap:
                         break
             if cap is not None and len(unvalidated_ids) >= cap:
@@ -532,7 +547,9 @@ async def pipeline_auto_label(
             # on conflict; class_id_history snapshots the prior
             # assignment when this write changes class_id.
             def _merge_pipeline(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-                if current.get('class_validated'):  # validated since the scroll
+                # Only onto the class state the sweep selected on: a human
+                # write (or validation) since the scroll wins.
+                if not guard.allows(doc_id, current):
                     return {}
                 update = dict(updates_by_id[doc_id])
                 if 'class_id' in update:
@@ -602,7 +619,7 @@ async def pipeline_auto_label(
     # Final cluster_id normalization — the VLM may have changed class_id
     # on items without rewriting cluster_id, which fragments the labeler
     # view. One last pass ensures cluster_id equals class_id everywhere a
-    # class is set.
+    # class is set — only on the selected items when the job is scoped.
     if progress is not None:
         progress.start_stage('finalize')
     try:
@@ -610,7 +627,11 @@ async def pipeline_auto_label(
             force_cluster_id_equals_class_id as _force_cluster_eq_class,
         )
 
-        post_normalize = await with_elapsed_tick(progress, _force_cluster_eq_class(opensearch))
+        scoped = cluster_id is not None or class_id is not None
+        post_normalize = await with_elapsed_tick(
+            progress,
+            _force_cluster_eq_class(opensearch, crop_ids=unvalidated_ids if scoped else None),
+        )
         summary['stages']['cluster_id_normalize_post_vlm'] = post_normalize
     except Exception as exc:
         logger.warning('pipeline_post_normalize_failed', error=str(exc))

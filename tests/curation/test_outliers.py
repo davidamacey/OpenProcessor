@@ -30,6 +30,9 @@ class _FakeScrollOS:
     async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         return {}
 
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {'count': len(self._docs)}
+
 
 @pytest.fixture(autouse=True)
 def _clear_cache() -> None:
@@ -139,8 +142,36 @@ async def test_members_missing_embedding_field_are_skipped() -> None:
         async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
             return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
+        async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+            return {'count': 2}
+
         async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
             return {}
 
     order = await compute_outlier_order(_PartialOS(), 'op_items', {'term': {'cluster_id': 7}})
     assert order == ['has-embedding']
+
+
+@pytest.mark.asyncio
+async def test_too_large_cluster_never_issues_a_search_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-16: the count-first check must skip the scroll entirely (not just
+    break out of it early) when the pool is already known to be too large."""
+    monkeypatch.setattr(outliers_mod, '_MAX_MEMBERS', 2)
+
+    class _CountOnlyOS:
+        def __init__(self) -> None:
+            self.search_calls = 0
+
+        async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+            return {'count': 500}
+
+        async def search(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG002
+            self.search_calls += 1
+            raise AssertionError('must not scroll a pool already known to exceed _MAX_MEMBERS')
+
+    client = _CountOnlyOS()
+    order = await compute_outlier_order(client, 'op_items', {'term': {'cluster_id': 9}})
+    assert order is None
+    assert client.search_calls == 0

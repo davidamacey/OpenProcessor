@@ -108,3 +108,8 @@ async def test_label_batch_never_overwrites_validated_class(
     # Non-regression: an unvalidated item still records the VLM's miss.
     assert docs['plain']['class_source'] == 'vlm_unmatched'
     assert docs['plain']['class_validated'] is False
+    # F-26: one mget_crops() call for the initial read of all 3 crop_ids
+    # (instead of 3 separate opensearch.get() round trips), plus the
+    # write path's own batched mget (occ_skip_on_conflict_bulk) -- 2
+    # total, not one per crop.
+    assert fake.mget_calls == 2

@@ -425,15 +425,12 @@ async def run(args: argparse.Namespace) -> int:
     async def producer() -> None:
         """Fetch eligible crops and queue task DESCRIPTORS only.
 
-        Critical: fetch SIZE must exceed the in_flight set so we don't
-        keep re-fetching the same oldest crops that are already being
-        processed by Stage A or Stage B. Bug observed in production:
-        with batch_size=96 and in_flight=132 (mostly stuck in Stage B
-        waiting for the VLM), fetch returned the 96 oldest crops which
-        were ALL in_flight, so fresh=0 every poll → Stage A starved.
-
-        Fix: fetch batch_size + in_flight_count so we always get at
-        least batch_size beyond the currently-processing window.
+        F-20: in-flight crops are now excluded server-side (``must_not
+        ids``), so the fetch no longer needs to over-fetch
+        ``batch_size + in_flight_count`` and then filter in Python — the
+        old bug this over-fetch fixed (batch_size=96, in_flight=132, the
+        96 oldest all in-flight, fresh=0) can't recur when the query
+        itself already excludes in-flight ids.
         """
         while not stop_event.is_set():
             await _wait_for_sentinel_clear(sentinel, sleep_s=args.sentinel_sleep)
@@ -443,19 +440,16 @@ async def run(args: argparse.Namespace) -> int:
             if in_q.full():
                 await asyncio.sleep(0.05)
                 continue
-            # Size the fetch to skip past everything currently in flight.
-            # The OS query returns oldest-first, so we need to fetch
-            # past the ages of in_flight crops to get to fresh ones.
-            async with in_flight_lock:
-                in_flight_count = len(in_flight)
-            fetch_n = args.batch_size + in_flight_count
-            # OpenSearch caps a single search hits at 10000 by default.
-            # If in_flight ever blows past that, we'd need search_after
-            # or scroll. For now cap at 9000 to stay safely under.
-            fetch_n = min(fetch_n, 9000)
+            # OpenSearch caps a single search hits at 10000 by default;
+            # stay safely under that.
+            fetch_n = min(args.batch_size, 9000)
             fetch_started = time.monotonic()
+            async with in_flight_lock:
+                exclude_ids = list(in_flight)
             try:
-                tasks = await _fetch_pending(opensearch, batch_size=fetch_n)
+                tasks = await _fetch_pending(
+                    opensearch, batch_size=fetch_n, exclude_ids=exclude_ids
+                )
             except Exception as exc:
                 logger.warning('producer_fetch_error', error=str(exc))
                 await asyncio.sleep(args.poll_interval)

@@ -271,7 +271,13 @@ async def test_worker_disables_segmenter_when_profile_has_no_prompt(
     mocks['Sam3Client'].assert_called_once_with('', text_prompt='')
 
 
-def test_secondary_shape_routing_follows_env_groups(region_env: pytest.MonkeyPatch) -> None:
+def test_secondary_shape_routing_follows_env_groups(
+    region_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-11: group resolution comes from the class registry
+    (class_name -> group), not the dead ``_ItemTask.group`` field."""
+    import scripts.curation.worker.state as worker_state
+
     region_env.setenv('OP_REGION_PROFILE', 'license_plate')
     region_env.setenv(f'{_ENV_PREFIX}SECONDARY_SHAPE_GROUPS', 'tall_things')
     task = worker._ItemTask(
@@ -280,16 +286,18 @@ def test_secondary_shape_routing_follows_env_groups(region_env: pytest.MonkeyPat
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         plate_status=None,
         class_name='audi',
-        group='tall_things',
     )
+    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'tall_things')
     assert worker._is_secondary_shape(task)
-    task.group = 'sportbikes'
+    monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'sportbikes')
     assert not worker._is_secondary_shape(task)
 
 
 def test_no_secondary_shape_routing_when_profile_has_no_groups(
-    region_env: pytest.MonkeyPatch,
+    region_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    import scripts.curation.worker.state as worker_state
+
     region_env.setenv(f'{_ENV_PREFIX}NAME', 'shipping_label')
     task = worker._ItemTask(
         crop_id='c',
@@ -297,6 +305,6 @@ def test_no_secondary_shape_routing_when_profile_has_no_groups(
         vehicle_bbox_norm=(0.0, 0.0, 1.0, 1.0),
         plate_status=None,
         class_name='cruiserbike',
-        group='',
     )
+    monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
     assert not worker._is_secondary_shape(task)

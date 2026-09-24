@@ -22,8 +22,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.core.logging import get_logger
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
@@ -53,14 +54,28 @@ logger = get_logger(__name__)
 
 _SCROLL_PAGE = 500
 
+_classifier_sources_empty_warned = False
 
-async def _scroll_ids(
+
+def _warn_classifier_sources_empty_once() -> None:
+    """Log once (not per cluster) that classifier_class_sources() is empty
+    in this environment, so the promote_query's classifier-source gate is
+    dropped rather than emitted as a dead terms:[] clause (F-11)."""
+    global _classifier_sources_empty_warned  # noqa: PLW0603 - warn-once flag
+    if not _classifier_sources_empty_warned:
+        _classifier_sources_empty_warned = True
+        logger.warning('auto_promote_classifier_sources_empty')
+
+
+async def _scroll_hits(
     client: AsyncOpenSearch,
     *,
     index: str,
     query: dict[str, Any],
-) -> list[str]:
-    """Return every doc id matching ``query``, scrolled in pages.
+) -> dict[str, dict[str, Any]]:
+    """Every doc matching ``query`` -> its class-state ``_source``
+    (:data:`CLASS_GUARD_SOURCE_FIELDS`), scrolled in pages. The merger
+    promotes a doc only if that state is unchanged at write time.
 
     Phase 3 (b): replaces the direct-target scroll a painless
     ``update_by_query`` script would otherwise need — we need doc ids so
@@ -69,13 +84,13 @@ async def _scroll_ids(
     have to reimplement the dedupe + cap logic in-cluster, which is the
     riskier of the two options the plan calls out).
     """
-    ids: list[str] = []
-    body = {'size': _SCROLL_PAGE, 'query': query, '_source': False}
+    found: dict[str, dict[str, Any]] = {}
+    body = {'size': _SCROLL_PAGE, 'query': query, '_source': list(CLASS_GUARD_SOURCE_FIELDS)}
     resp = await client.search(index=index, body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
     hits = resp['hits']['hits']
     while hits:
-        ids.extend(h['_id'] for h in hits)
+        found.update((h['_id'], h.get('_source') or {}) for h in hits)
         resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
         scroll_id = resp.get('_scroll_id')
         hits = resp['hits']['hits']
@@ -84,7 +99,72 @@ async def _scroll_ids(
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:  # nosec B110 — advisory cleanup only
             logger.info('legacy_auto_promote_clear_scroll_failed', error=str(exc))
-    return ids
+    return found
+
+
+_CLUSTER_AGG_PAGE_SIZE = 1000
+
+
+async def _scroll_cluster_buckets(client: AsyncOpenSearch, *, index: str) -> list[dict[str, Any]]:
+    """Page every ``cluster_id`` bucket via a ``composite`` aggregation
+    (F-29), instead of a single ``terms`` agg capped at ``size: 10000`` —
+    a single oversized terms agg both costs one big heap allocation and,
+    past 10000 distinct cluster_ids, silently drops the rest instead of
+    erroring. ``composite`` pages exhaustively via ``after_key``.
+    """
+    buckets: list[dict[str, Any]] = []
+    after: dict[str, Any] | None = None
+    while True:
+        composite: dict[str, Any] = {
+            'size': _CLUSTER_AGG_PAGE_SIZE,
+            'sources': [{'cluster_id': {'terms': {'field': 'cluster_id'}}}],
+        }
+        if after is not None:
+            composite['after'] = after
+        body = {
+            'size': 0,
+            'query': {
+                'bool': {
+                    'filter': [{'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}}],
+                    'must_not': [{'term': {'class_excluded': True}}],
+                },
+            },
+            'aggs': {
+                'clusters': {
+                    'composite': composite,
+                    'aggs': {
+                        'top_class': {
+                            # class_name is mapped keyword directly on the
+                            # live index — no .keyword subfield exists. See
+                            # legacy_clusters.py's top_class agg for the full
+                            # story.
+                            'terms': {
+                                'field': 'class_name',
+                                'size': 5,
+                                'order': {'_count': 'desc'},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+        resp = await client.search(index=index, body=body)
+        clusters_agg = resp.get('aggregations', {}).get('clusters', {})
+        page_buckets = clusters_agg.get('buckets', [])
+        if not page_buckets:
+            break
+        buckets.extend(
+            {
+                'key': b['key']['cluster_id'],
+                'doc_count': b['doc_count'],
+                'top_class': b.get('top_class', {}),
+            }
+            for b in page_buckets
+        )
+        after = clusters_agg.get('after_key')
+        if after is None or len(page_buckets) < _CLUSTER_AGG_PAGE_SIZE:
+            break
+    return buckets
 
 
 async def auto_promote_clusters(
@@ -98,7 +178,7 @@ async def auto_promote_clusters(
 
     Returns a summary keyed by ``promoted``, ``skipped``, ``clusters``.
     """
-    # Aggregation: per-cluster top class. Purity is computed across ALL
+    # Per-cluster top class, paged (F-29). Purity is computed across ALL
     # labelled members (validated + unvalidated) so a cluster with 99
     # v6 honda + 1 unvalidated cruiserbike isn't deemed 100% cruiserbike.
     #
@@ -114,40 +194,14 @@ async def auto_promote_clusters(
     # CM-2: exclude class_excluded items from the aggregation too, so an
     # excluded item's class can't skew a cluster's purity/top-class call
     # for the *other* members that do get promoted.
-    body = {
-        'size': 0,
-        'query': {
-            'bool': {
-                'filter': [{'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}}],
-                'must_not': [{'term': {'class_excluded': True}}],
-            },
-        },
-        'aggs': {
-            'clusters': {
-                'terms': {'field': 'cluster_id', 'size': 10000},
-                'aggs': {
-                    'top_class': {
-                        # class_name is mapped keyword directly on the live
-                        # index — no .keyword subfield exists. See
-                        # legacy_clusters.py's top_class agg for the full story.
-                        'terms': {
-                            'field': 'class_name',
-                            'size': 5,
-                            'order': {'_count': 'desc'},
-                        },
-                    },
-                },
-            },
-        },
-    }
-    resp = await client.search(index=ITEMS_INDEX, body=body)
+    cluster_buckets = await _scroll_cluster_buckets(client, index=ITEMS_INDEX)
 
     summaries: list[dict[str, Any]] = []
     total_promoted = 0
     total_skipped = 0
     now = datetime.now(UTC).isoformat()
 
-    for bucket in resp.get('aggregations', {}).get('clusters', {}).get('buckets', []):
+    for bucket in cluster_buckets:
         cluster_id = int(bucket['key'])
         members = int(bucket['doc_count'])
         cls_buckets = bucket.get('top_class', {}).get('buckets', [])
@@ -203,13 +257,23 @@ async def auto_promote_clusters(
         # why the pipeline defaults to skipping this stage. A
         # confidence-gated rewrite is the prerequisite to enabling
         # ``run_auto_promote=true`` in production.
+        promote_filter: list[dict[str, Any]] = [
+            {'term': {'cluster_id': cluster_id}},
+            {'term': {'class_name': top_name}},
+        ]
+        classifier_sources = sorted(classifier_class_sources())
+        if classifier_sources:
+            promote_filter.append({'terms': {'class_source': classifier_sources}})
+        else:
+            # F-11: an empty terms:[] clause in filter context matches
+            # nothing, so the write below would silently promote zero
+            # crops even though dry-run's total_promoted counted them.
+            # Drop the gate instead when no classifier sources are
+            # configured, and log once.
+            _warn_classifier_sources_empty_once()
         promote_query = {
             'bool': {
-                'must': [
-                    {'term': {'cluster_id': cluster_id}},
-                    {'terms': {'class_source': sorted(classifier_class_sources())}},
-                    {'term': {'class_name': top_name}},
-                ],
+                'filter': promote_filter,
                 'must_not': [
                     {'term': {'class_validated': True}},
                     # P0-3: never auto-promote a frozen test_holdout
@@ -232,15 +296,20 @@ async def auto_promote_clusters(
             continue
 
         try:
-            doc_ids = await _scroll_ids(client, index=ITEMS_INDEX, query=promote_query)
+            read = await _scroll_hits(client, index=ITEMS_INDEX, query=promote_query)
         except Exception as exc:
             logger.warning('legacy_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc))
             total_skipped += members
             continue
-        if not doc_ids:
+        if not read:
             continue
+        guard = ClassWriteGuard('auto_promote')
+        for doc_id, source in read.items():
+            guard.remember(doc_id, source)
 
-        def _merge_promote(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+        def _merge_promote(
+            doc_id: str, current: dict[str, Any], _guard: ClassWriteGuard = guard
+        ) -> dict[str, Any]:
             # Phase 3 (b): this used to be a bare update_by_query painless
             # script with no class_id_history append. Converting to a
             # per-doc OCC bulk pass (same shape as legacy_gemma.py's
@@ -249,13 +318,12 @@ async def auto_promote_clusters(
             # apply uniformly) and re-checks the human/holdout guards
             # against the freshest doc state at write time, not just at
             # scroll time.
-            if is_human_owned_class(current) or current.get('test_holdout'):
+            if current.get('test_holdout'):
                 return {}
-            # Query already excludes class_validated=true / class_excluded=true;
-            # re-check the freshest state too in case a concurrent writer
-            # validated or excluded this doc between the scroll fetch and
-            # this merge (CM-2).
-            if current.get('class_validated') or current.get('class_excluded'):
+            # Promote only the class state the cluster vote was taken on: a
+            # human write, validation or exclusion since the scroll read
+            # (CM-2) — even an undo back to a classifier label — wins.
+            if not _guard.allows(doc_id, current):
                 return {}
             update: dict[str, Any] = {
                 'class_validated': True,
@@ -269,10 +337,13 @@ async def auto_promote_clusters(
         try:
             result = await occ_skip_on_conflict_bulk(
                 client,
-                doc_ids=doc_ids,
+                doc_ids=list(read),
                 merger=_merge_promote,
                 index=ITEMS_INDEX,
-                refresh=True,
+                # F-29: refresh once at the end of the whole promote
+                # operation instead of forcing a refresh on every
+                # per-cluster (and, within that, every per-page) bulk call.
+                refresh=False,
                 writer_id='auto_promote',
             )
         except Exception as exc:
@@ -287,6 +358,12 @@ async def auto_promote_clusters(
                 cluster_id=cluster_id,
                 errors=len(result['errors']),
             )
+
+    if not dry_run and total_promoted:
+        try:
+            await client.indices.refresh(index=ITEMS_INDEX)
+        except Exception as exc:  # nosec B110 - advisory; next scheduled refresh covers it
+            logger.info('curation_auto_promote_final_refresh_failed', error=str(exc))
 
     return {
         'status': 'success',

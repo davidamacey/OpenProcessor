@@ -211,10 +211,16 @@ async def compute_diverse_order(
     if not ids:
         return []
 
+    # F-16: cache 'count' must be the pool size (len(ids)), the same value
+    # a fresh call compares against via current_count — NOT len(order),
+    # which is capped at k and so (for k < pool size, the common case)
+    # could never match current_count on a later lookup, making the cache
+    # permanently miss.
+    pool_count = len(ids)
     n_pick = len(ids) if k is None else min(k, len(ids))
     order_idx = k_center_greedy(l2_normalize(embeddings), n_pick)
     order = [ids[i] for i in order_idx.tolist()]
-    _ORDER_CACHE[key] = {'order': order, 'count': len(order), 'at': now}
+    _ORDER_CACHE[key] = {'order': order, 'count': pool_count, 'at': now}
     return order
 
 

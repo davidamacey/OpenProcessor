@@ -61,9 +61,14 @@ def _bucket(
     members: int,
     classes: list[tuple[str, int]],
 ) -> dict[str, Any]:
-    """Build an OpenSearch bucket like the one ``auto_promote_clusters`` consumes."""
+    """Build an OpenSearch bucket like the one ``auto_promote_clusters`` consumes.
+
+    F-29: cluster buckets now come from a ``composite`` agg (paged by
+    cluster_id) rather than a single ``terms: size=10000`` agg — the
+    composite bucket key is a dict of source-name -> value.
+    """
     return {
-        'key': cluster_id,
+        'key': {'cluster_id': cluster_id},
         'doc_count': members,
         'top_class': {
             'buckets': [{'key': name, 'doc_count': count} for name, count in classes],
@@ -85,6 +90,15 @@ def _make_client(search_response: dict[str, Any], *, count: int = 0) -> MagicMoc
     # promote_query instead of computing members - top_count locally.
     client.count = AsyncMock(return_value={'count': count})
     return client
+
+
+_PRE_WRITE_SOURCE: dict[str, Any] = {
+    'class_id': 1,
+    'class_name': 'cruiserbike',
+    'class_source': 'v6_model',
+    'class_validated': False,
+    'test_holdout': False,
+}
 
 
 class _FakeAutoPromoteClient:
@@ -116,12 +130,14 @@ class _FakeAutoPromoteClient:
         self.search_calls.append(body)
         if 'aggs' in body:
             return self._agg_response
-        must = body['query']['bool']['must']
+        filt = body['query']['bool']['filter']
         cluster_id = next(
-            int(m['term']['cluster_id']) for m in must if 'cluster_id' in m.get('term', {})
+            int(m['term']['cluster_id']) for m in filt if 'cluster_id' in m.get('term', {})
         )
         ids = self._crop_ids_by_cluster.get(cluster_id, [])
-        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': [{'_id': i} for i in ids]}}
+        # The promote scroll reads the class state the write re-checks.
+        hits = [{'_id': i, '_source': dict(_PRE_WRITE_SOURCE)} for i in ids]
+        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': hits}}
 
     async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
@@ -130,14 +146,7 @@ class _FakeAutoPromoteClient:
         return {}
 
     async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
-        source = {
-            'class_id': 1,
-            'class_name': 'cruiserbike',
-            'class_source': 'v6_model',
-            'class_validated': False,
-            'test_holdout': False,
-        }
-        found = {d['_id']: source for d in body['docs']}
+        found = {d['_id']: dict(_PRE_WRITE_SOURCE) for d in body['docs']}
         return make_mget_response(found)
 
     async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
@@ -205,11 +214,11 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
 
     # The scroll-for-ids query targets the right cluster/class/holdout shape.
     scroll_init_call = next(c for c in client.search_calls if 'aggs' not in c)
-    must = scroll_init_call['query']['bool']['must']
+    filt = scroll_init_call['query']['bool']['filter']
     must_not = scroll_init_call['query']['bool']['must_not']
-    assert {'term': {'cluster_id': 1}} in must
-    assert {'terms': {'class_source': ['v6_model']}} in must
-    assert {'term': {'class_name': 'cruiserbike'}} in must
+    assert {'term': {'cluster_id': 1}} in filt
+    assert {'terms': {'class_source': ['v6_model']}} in filt
+    assert {'term': {'class_name': 'cruiserbike'}} in filt
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'test_holdout': True}} in must_not
 
@@ -307,8 +316,10 @@ async def test_auto_promote_clusters_search_targets_correct_index() -> None:
     ]
     # CM-2: excluded items never contribute to a cluster's purity call.
     assert {'term': {'class_excluded': True}} in body['query']['bool']['must_not']
-    # Aggregation shape matches what the helper expects to consume.
-    assert body['aggs']['clusters']['terms']['field'] == 'cluster_id'
+    # Aggregation shape matches what the helper expects to consume (F-29:
+    # composite agg paged by cluster_id, not a single terms:size=10000).
+    sources = body['aggs']['clusters']['composite']['sources']
+    assert sources == [{'cluster_id': {'terms': {'field': 'cluster_id'}}}]
     # ``class_name`` is mapped keyword directly on the live index — no
     # ``.keyword`` subfield.
     assert body['aggs']['clusters']['aggs']['top_class']['terms']['field'] == 'class_name'
@@ -333,14 +344,17 @@ class _FilteringAutoPromoteClient(_FakeAutoPromoteClient):
         if 'aggs' in body:
             min_cluster_id = body['query']['bool']['filter'][0]['range']['cluster_id']['gte']
             buckets = self._agg_response['aggregations']['clusters']['buckets']
-            kept = [b for b in buckets if int(b['key']) >= min_cluster_id]
+            kept = [b for b in buckets if int(b['key']['cluster_id']) >= min_cluster_id]
             return {'aggregations': {'clusters': {'buckets': kept}}}
-        must = body['query']['bool']['must']
+        # F-19: pure predicates live in bool.filter now (bool.must before).
+        clauses = body['query']['bool'].get('filter', []) + body['query']['bool'].get('must', [])
         cluster_id = next(
-            int(m['term']['cluster_id']) for m in must if 'cluster_id' in m.get('term', {})
+            int(m['term']['cluster_id']) for m in clauses if 'cluster_id' in m.get('term', {})
         )
         ids = self._crop_ids_by_cluster.get(cluster_id, [])
-        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': [{'_id': i} for i in ids]}}
+        # The promote scroll reads the class state the write re-checks.
+        hits = [{'_id': i, '_source': dict(_PRE_WRITE_SOURCE)} for i in ids]
+        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': hits}}
 
 
 @pytest.mark.asyncio

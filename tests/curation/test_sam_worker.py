@@ -28,6 +28,7 @@ import pytest
 from PIL import Image
 
 import scripts.curation.sam_worker_main as worker
+import scripts.curation.worker.state as worker_state
 from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
 from src.config import get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_source_norm
@@ -635,15 +636,33 @@ class TestSignalHandling:
 
 
 class TestIsSecondaryShape:
-    def test_explicit_groups(self) -> None:
+    """F-11: group resolution now comes from the class registry
+    (class_name -> group), not the dead ``_ItemTask.group`` field nothing
+    ever wrote or mapped on the item doc."""
+
+    def test_explicit_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in worker.region_profile().secondary_shape_groups:
-            assert worker._is_secondary_shape(_make_task(group=grp))
+            monkeypatch.setattr(worker_state, '_class_group', lambda _name, grp=grp: grp)
+            assert worker._is_secondary_shape(_make_task(class_name='some-class'))
 
-    def test_non_secondary_groups(self) -> None:
+    def test_non_secondary_groups(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for grp in ('cars', 'sportycars', 'exotics'):
-            assert not worker._is_secondary_shape(_make_task(group=grp, class_name='audi'))
+            monkeypatch.setattr(worker_state, '_class_group', lambda _name, grp=grp: grp)
+            assert not worker._is_secondary_shape(_make_task(class_name='audi'))
 
-    def test_fallback_name_suffix(self) -> None:
-        # No group set, but the class name ends in 'bike'.
-        t = _make_task(group='', class_name='cruiserbike')
+    def test_fallback_name_suffix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Class not in the registry (no group resolves), but the class
+        # name ends in 'bike'.
+        monkeypatch.setattr(worker_state, '_class_group', lambda _name: None)
+        t = _make_task(class_name='cruiserbike')
         assert worker._is_secondary_shape(t)
+
+    def test_registry_group_takes_priority_over_name_suffix(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A registry group of 'cars' for a *-bike-named class must not be
+        overridden by the name-suffix fallback -- the fallback only
+        applies when the registry has no answer at all."""
+        monkeypatch.setattr(worker_state, '_class_group', lambda _name: 'cars')
+        t = _make_task(class_name='cruiserbike')
+        assert not worker._is_secondary_shape(t)

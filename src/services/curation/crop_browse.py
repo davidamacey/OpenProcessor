@@ -12,7 +12,6 @@ CROP_SORT_FIELDS: dict[str, str] = {
     'updated_at': 'date',
     'created_at': 'date',
     'confidence': 'float',
-    'classifier_raw_confidence': 'float',
     'crop_rank_in_image': 'integer',
     'crop_area_norm': 'float',
     'blur_lap_ratio': 'float',
@@ -48,7 +47,12 @@ def parse_crop_sort(sort: str | None) -> list[dict[str, Any]]:
                 'missing': '_last',
                 'unmapped_type': CROP_SORT_FIELDS[field],
             }
-        }
+        },
+        # F-7: stable tiebreaker. crop_id is a mapped keyword field equal to
+        # _id -- sort on it directly rather than _id (which uses fielddata,
+        # disabled on these indexes) so ties on the primary sort key don't
+        # produce duplicate/skipped rows across pages.
+        {'crop_id': {'order': 'asc'}},
     ]
 
 
@@ -65,6 +69,37 @@ def confidence_band(conf_min: float | None, conf_max: float | None) -> dict[str,
     if conf_max is not None:
         rng['lte'] = conf_max
     return {'range': {'confidence': rng}}
+
+
+def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
+    """``classifier_conf_lt`` filter (D-1 / F-6): ``classifier_raw_confidence``
+    is never written in production (only a seed/test harness writes it), so a
+    filter keyed on it was a permanent no-op. Points at the stored
+    ``confidence`` field instead, restricted to items a classifier actually
+    scored -- OR no classifier prediction at all (COCO/VLM-only blind spots),
+    not silently dropped by a plain range clause.
+    """
+    from src.services.curation.ingest_class_sources import (
+        classifier_class_sources,
+        unlabeled_proposal_class_sources,
+    )
+
+    return {
+        'bool': {
+            'should': [
+                {
+                    'bool': {
+                        'filter': [
+                            {'terms': {'class_source': sorted(classifier_class_sources())}},
+                            {'range': {'confidence': {'lt': lt}}},
+                        ]
+                    }
+                },
+                {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
+            ],
+            'minimum_should_match': 1,
+        }
+    }
 
 
 def crops_page(
@@ -89,10 +124,34 @@ def crops_page(
     }
 
 
+def with_exists_filter(query_clause: dict[str, Any], field: str) -> dict[str, Any]:
+    """AND an ``exists`` filter onto ``query_clause`` (F-16) — docs without
+    the ranking field can't be scored, so excluding them up front keeps
+    the outliers/diverse pool query and its exact count in sync with
+    what the ranker actually fetches."""
+    exists_clause = {'exists': {'field': field}}
+    if 'bool' in query_clause:
+        merged = dict(query_clause['bool'])
+        merged['filter'] = [*(merged.get('filter') or []), exists_clause]
+        return {'bool': merged}
+    return {'bool': {'filter': [query_clause, exists_clause]}}
+
+
+async def embedding_pool_query_and_count(
+    opensearch: Any, index: str, query_clause: dict[str, Any], field: str
+) -> tuple[dict[str, Any], int]:
+    """Narrow ``query_clause`` to docs with ``field`` + its exact count."""
+    pool_query = with_exists_filter(query_clause, field)
+    resp = await opensearch.count(index=index, body={'query': pool_query})
+    return pool_query, int((resp or {}).get('count', 0))
+
+
 __all__ = [
     'CROP_SORT_FIELDS',
     'DEFAULT_CROP_SORT',
     'confidence_band',
     'crops_page',
+    'embedding_pool_query_and_count',
     'parse_crop_sort',
+    'with_exists_filter',
 ]

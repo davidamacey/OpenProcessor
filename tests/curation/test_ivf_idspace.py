@@ -84,14 +84,18 @@ def _make_scroll_client(ids: list[str], embeddings: np.ndarray) -> Any:
 
 
 def _bulk_calls_to_cluster_ids(client: Any) -> dict[str, int]:
-    """Reconstruct {crop_id: cluster_id} from the mocked ``client.bulk`` calls."""
+    """Reconstruct {crop_id: cluster_id} from the mocked ``client.bulk`` calls.
+
+    F-3 changed these writers to a guarded painless ``script`` update
+    (``params.cid``) instead of a blind ``doc`` update.
+    """
     out: dict[str, int] = {}
     for call in client.bulk.await_args_list:
         body = call.kwargs.get('body') or call.args[0]
         for i in range(0, len(body), 2):
             action = body[i]['update']
-            doc = body[i + 1]['doc']
-            out[action['_id']] = doc['cluster_id']
+            script = body[i + 1]['script']
+            out[action['_id']] = script['params']['cid']
     return out
 
 

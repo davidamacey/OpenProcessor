@@ -59,6 +59,13 @@ class _FakeOpenSearch:
     async def update(self, index: str, id: str, body: dict[str, Any]) -> None:  # noqa: A002
         self.updates.append({'index': index, 'id': id, 'doc': body['doc']})
 
+    async def bulk(self, *, body: list[dict[str, Any]], refresh: bool | str = False) -> dict:  # noqa: ARG002
+        self.bulk_calls = getattr(self, 'bulk_calls', 0) + 1
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            meta = action['update']
+            self.updates.append({'index': meta['_index'], 'id': meta['_id'], 'doc': doc['doc']})
+        return {'errors': False, 'items': [{'update': {'status': 200}}] * (len(body) // 2)}
+
 
 # =============================================================================
 # Fixtures
@@ -141,6 +148,47 @@ async def test_probe_writes_all_seven_fields(
     assert doc['probe_model_version'] == 'canned-v1'
     assert isinstance(doc['probe_scored_at'], str)
     assert doc['probe_scored_at']
+
+
+@pytest.mark.asyncio
+async def test_probe_writes_one_bulk_call_per_page_not_per_item(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
+) -> None:
+    """F-26: probe scoring must issue one bulk() per scroll page, not one
+    update() per crop -- these fakes' single search() call returns every
+    doc as one page, so N crops should still cost exactly 1 bulk call."""
+    from src.services.curation import probe_predictions as pp
+
+    _install_canned_predictor(monkeypatch, ('sedan', 0.81, 1.23, 0.44))
+    monkeypatch.setattr(
+        pp,
+        '_resolve_image',
+        lambda image_path, *, config: tiny_image,  # noqa: ARG005
+    )
+
+    docs = [
+        {
+            'crop_id': f'crop-{i}',
+            'image_path': 'whatever.jpg',
+            'bbox_norm': [0.0, 0.0, 1.0, 1.0],
+            'class_name': 'suv',
+        }
+        for i in range(5)
+    ]
+    fake_os = _FakeOpenSearch(docs)
+
+    processed = await pp.run_probe_inference(
+        tmp_path / 'fake_checkpoint.onnx',
+        fake_os,  # type: ignore[arg-type]
+        model_version=None,
+        architecture='v6',
+    )
+
+    assert processed == 5
+    assert len(fake_os.updates) == 5
+    assert fake_os.bulk_calls == 1
+    # sort: ['_doc'] on the scroll body (hygiene, no relevance needed).
+    assert fake_os.search_bodies[0]['sort'] == ['_doc']
 
 
 @pytest.mark.asyncio

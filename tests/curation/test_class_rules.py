@@ -108,7 +108,8 @@ def test_merge_dry_run_reports_counts_without_writing(
 ) -> None:
     async def _count(*, index: str, body: dict[str, Any]) -> dict[str, int]:
         text = str(body)
-        if "'test_holdout': True}}]" in text and 'filter' in text:
+        if 'must_not' not in text:
+            # holdout-blocking query: source class AND test_holdout, no negation.
             return {'count': 2}
         if 'class_validated' in text:
             return {'count': 7}

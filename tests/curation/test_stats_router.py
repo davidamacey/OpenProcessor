@@ -9,7 +9,15 @@ fixture.
 
 from __future__ import annotations
 
-from src.routers.curation.stats import _build_dataset_query_body, _rollup_class_sources
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.routers.curation.stats import (
+    _build_dataset_query_body,
+    _rollup_class_sources,
+    stats_dataset,
+)
 
 
 def test_missing_class_source_bucket_key_lands_in_other() -> None:
@@ -53,3 +61,14 @@ def test_class_sources_agg_configures_a_missing_bucket() -> None:
     # not just present in a comment.
     body = _build_dataset_query_body(get_region_fields())
     assert body['aggs']['class_sources']['terms']['missing'] == '__none__'
+
+
+@pytest.mark.asyncio
+async def test_stats_dataset_uses_request_cache() -> None:
+    """F-21: request_cache=True lets identical size:0 stats queries
+    within an OpenSearch shard-cache refresh window skip re-execution."""
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}})
+    await stats_dataset(os_client)
+    assert os_client.search.await_args is not None
+    assert os_client.search.await_args.kwargs['request_cache'] is True
