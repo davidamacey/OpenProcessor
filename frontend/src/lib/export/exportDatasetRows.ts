@@ -55,6 +55,27 @@ export function buildExportRows(
 }
 
 /**
+ * DQ-M9 frontend half (docs/design/data-quality-pass-2026-09-24.md):
+ * whether the served per-class rows add up to "nothing to export" — 0
+ * `class_validated` items total, or every class at the served `block`
+ * adequacy tier. The audit found `POST /export/yolo` has no readiness
+ * gate of its own and the Export button was enabled over a table that
+ * was all red "block" (every class at 0 validated) — this is the pure
+ * rule the button's `disabled` reads, built entirely from server-served
+ * `validated`/`adequacy`, never a hardcoded count/threshold (those —
+ * `block_below`/`warn_below`/`min_test` — already come from the server
+ * and are what produced `adequacy` in the first place; this function
+ * doesn't re-derive or duplicate them).
+ */
+export function isNothingExportable(rows: ExportRow[]): boolean {
+  if (rows.length === 0) return true;
+  const totalValidated = rows.reduce((sum, r) => sum + r.validated, 0);
+  if (totalValidated === 0) return true;
+  if (rows.every((r) => r.adequacy === 'block')) return true;
+  return false;
+}
+
+/**
  * m15 (2026-09-24 interactive pass): the registry download buttons
  * (class_registry.json/data.yaml/manifest.json) only make sense for a
  * frozen multi-class (`yolo`) export — they used to gate on the shared

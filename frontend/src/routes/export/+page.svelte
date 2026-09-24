@@ -16,6 +16,7 @@
   import {
     buildExportRows,
     hasCurrentMulticlassExport,
+    isNothingExportable,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
   import { focusOnMount } from '$lib/actions/focusOnMount';
@@ -103,6 +104,15 @@
     });
     return list;
   });
+
+  // DQ-M9 frontend half (docs/design/data-quality-pass-2026-09-24.md): the
+  // Export button used to be enabled unconditionally — the audit's repro
+  // was every class at the served "block" adequacy tier (0
+  // class_validated dataset-wide) with Export still clickable, since
+  // `POST /export/yolo` itself has no readiness gate. `loading` guards the
+  // window before `stats` has ever arrived, where `rows` is legitimately
+  // `[]` — don't flash "nothing to export" before the served data is in.
+  const nothingExportable = $derived(!loading && isNothingExportable(rows));
 
   function setSort(k: SortKey): void {
     if (sortKey === k) {
@@ -382,9 +392,21 @@
               class="cursor-pointer px-3 py-2 font-medium hover:text-zinc-100"
               onclick={() => setSort('class_id')}>ID</th
             >
+            <!-- DQ-m9 (docs/design/data-quality-pass-2026-09-24.md): this
+                 "Total" is every crop with that class_id
+                 (GET {API_PREFIX}/stats/classes) — a DIFFERENT number than the
+                 sidebar's / /classes' "Total" (GET {API_PREFIX}/classes'
+                 sample_count, the class-cluster bucket size). The two can
+                 legitimately disagree by a lot: license_plate shows 1,000
+                 in the sidebar/classes but this column shows 0, because
+                 no crop's class_id is literally "license_plate" — plates
+                 are sub-boxes on vehicle crops, counted in the cluster
+                 bucket but not in the class-id total. -->
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-              onclick={() => setSort('total')}>Total</th
+              onclick={() => setSort('total')}
+              title="Crops with this class_id (GET {API_PREFIX}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes."
+              >Total (labelled)</th
             >
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
@@ -476,7 +498,10 @@
         type="button"
         class="btn btn-primary"
         onclick={() => void runExport()}
-        disabled={exportRunning}
+        disabled={exportRunning || nothingExportable}
+        title={nothingExportable
+          ? 'Nothing to export yet — every class is at 0 validated crops or the served block adequacy tier.'
+          : undefined}
       >
         {exportRunning
           ? 'Exporting…'

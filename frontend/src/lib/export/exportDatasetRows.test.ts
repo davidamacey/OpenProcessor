@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildExportRows, hasCurrentMulticlassExport } from './exportDatasetRows';
+import {
+  buildExportRows,
+  hasCurrentMulticlassExport,
+  isNothingExportable,
+  type ExportRow,
+} from './exportDatasetRows';
 import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
 
 function dataset(over: Partial<ExportDataset>): ExportDataset {
@@ -126,5 +131,57 @@ describe('hasCurrentMulticlassExport (m15)', () => {
     expect(
       hasCurrentMulticlassExport([dataset({ kind: 'yolo', is_current: true })]),
     ).toBe(true);
+  });
+});
+
+function row(over: Partial<ExportRow>): ExportRow {
+  return {
+    class_id: 1,
+    class_name: 'bmw',
+    total: 10,
+    validated: 5,
+    aug_target: 0,
+    gap: null,
+    test_count: 0,
+    testDeficient: false,
+    adequacy: 'ok',
+    ...over,
+  };
+}
+
+describe('isNothingExportable (DQ-M9 frontend half)', () => {
+  it('true when there are no rows at all', () => {
+    expect(isNothingExportable([])).toBe(true);
+  });
+
+  it('true when every row has 0 validated crops (the live repro: 0 class_validated dataset-wide)', () => {
+    expect(
+      isNothingExportable([
+        row({ validated: 0 }),
+        row({ validated: 0, adequacy: 'block' }),
+      ]),
+    ).toBe(true);
+  });
+
+  it('true when every class is at the served block adequacy tier, even with some validated crops', () => {
+    expect(
+      isNothingExportable([
+        row({ validated: 3, adequacy: 'block' }),
+        row({ validated: 2, adequacy: 'block' }),
+      ]),
+    ).toBe(true);
+  });
+
+  it('false when at least one class has validated crops and is not blocked', () => {
+    expect(
+      isNothingExportable([
+        row({ validated: 0, adequacy: 'block' }),
+        row({ validated: 20, adequacy: 'ok' }),
+      ]),
+    ).toBe(false);
+  });
+
+  it('false when adequacy is unserved (null) but validated crops exist — never guesses a threshold', () => {
+    expect(isNothingExportable([row({ validated: 20, adequacy: null })])).toBe(false);
   });
 });
