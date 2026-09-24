@@ -523,46 +523,59 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     global _COVERAGE_CACHE, _COVERAGE_CACHE_AT  # noqa: PLW0603 - module-level TTL cache, same pattern as select.py
 
     now = time.monotonic()
-    if (
-        _COVERAGE_CACHE is not None
-        and (now - _COVERAGE_CACHE_AT) < _COVERAGE_TTL_S
-        and fields <= (_COVERAGE_CACHE.keys() - {_COVERAGE_TOTAL_KEY})
-    ):
-        return _COVERAGE_CACHE
+    cache = _COVERAGE_CACHE if (now - _COVERAGE_CACHE_AT) < _COVERAGE_TTL_S else None
+    fresh = cache is not None
+    if cache is not None and fields <= (cache.keys() - {_COVERAGE_TOTAL_KEY}):
+        return cache
 
     from src.config.curation import IndexRole, get_curation_config, index_name
 
     index = index_name(get_curation_config(), IndexRole.ITEMS)
-    sorted_fields = sorted(fields)
-    counts: dict[str, int | None] = {}
-
+    # Callers ask for different field sets (GET /methods: every sort field;
+    # a review tab: its own fallback chain), so a fresh cache is extended
+    # rather than replaced -- otherwise they evict each other every call.
+    counts: dict[str, int | None] = dict(cache) if cache is not None else {}
+    missing = sorted(fields - counts.keys())
+    need_total = cache is None
     try:
         resp = await opensearch.search(
             index=index,
             body={
                 'size': 0,
-                'track_total_hits': True,
-                'aggs': {
-                    field: {'filter': {'exists': {'field': field}}} for field in sorted_fields
-                },
+                'track_total_hits': need_total,
+                'aggs': {field: {'filter': {'exists': {'field': field}}} for field in missing},
             },
         )
-        counts[_COVERAGE_TOTAL_KEY] = int(
-            ((resp.get('hits') or {}).get('total') or {}).get('value', 0)
-        )
+        if need_total:
+            counts[_COVERAGE_TOTAL_KEY] = int(
+                ((resp.get('hits') or {}).get('total') or {}).get('value', 0)
+            )
         aggs = resp.get('aggregations') or {}
-        for field in sorted_fields:
+        for field in missing:
             bucket = aggs.get(field)
             counts[field] = int(bucket['doc_count']) if bucket is not None else None
     except Exception as exc:
         logger.warning('legacy_methods_field_coverage_failed', error=str(exc))
-        counts[_COVERAGE_TOTAL_KEY] = None
-        for field in sorted_fields:
+        if need_total:
+            counts[_COVERAGE_TOTAL_KEY] = None
+        for field in missing:
             counts[field] = None
 
     _COVERAGE_CACHE = counts
-    _COVERAGE_CACHE_AT = now
+    if not fresh:
+        _COVERAGE_CACHE_AT = now
     return counts
+
+
+def invalidate_field_coverage() -> None:
+    """Drop cached coverage so the next lookup counts live."""
+    _reset_field_coverage_cache()
+
+
+async def field_coverage(opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
+    """``{field: exists_count}`` over the items index (``None`` = unknown,
+    never ``0``); TTL-cached. Public face of :func:`_compute_field_coverage`."""
+    return await _compute_field_coverage(opensearch, fields)
 
 
 def _reset_field_coverage_cache() -> None:
@@ -668,6 +681,8 @@ __all__ = [
     'StrategyAxis',
     'StrategyStatus',
     'effective_scorer_status',
+    'field_coverage',
     'get_registry',
+    'invalidate_field_coverage',
     'resolve_effective_default',
 ]

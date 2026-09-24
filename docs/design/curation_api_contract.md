@@ -84,7 +84,7 @@ by router module; every path is relative to the configured
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
-| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
+| `pipeline.py` / `pipeline_control.py` / `pipeline_events.py` | `POST /pipeline/auto_label`, `POST /pipeline/auto_label/start`, `GET /pipeline/auto_label/status`, `GET /pipeline/auto_label/status/{job_id}`, `POST /pipeline/auto_label/cancel`, `POST /vlm/label_cluster/{cluster_id}`, `GET /pipeline/events` |
 | `clusters.py` / `viz.py` | `GET /clusters`, `GET /clusters/representatives`, `POST /clusters/auto_promote`, `POST /clusters/refine/{cluster_id}`, `GET,POST /viz/projection*`, `POST /cluster/umap/rebuild` |
 | `review.py` / `scores.py` / `select.py` / `methods.py` / `settings.py` | `GET /review/{tab}`, `GET /review/{tab}/locate`, `GET /review/new_class_proposals/summary`, `POST /review/new_class_proposals/resolve`, `GET /review/raw_label_clusters`, `GET /review/unmatched_terms`, `POST /test_holdout/freeze`, `GET /test_holdout/stats`, `POST,GET /scores/*`, `POST,GET /select/*`, `GET /methods`, `GET,PUT /settings` |
 | `vlm.py` | `POST /vlm/label_batch`, `POST /vlm/verify_regions`, `POST /vlm/verify_region_batch`, `POST /vlm/region_visible_batch` |
@@ -192,7 +192,23 @@ of members selected; on completion `result.stages.unvalidated_after_promote`
 is that count, `result.stages.vlm` `{predicted, updated, …}`, and
 `result.unvalidated_remaining` counts what is still unvalidated in the cluster.
 The same scope is available as `?cluster_id=` on `POST
-/pipeline/auto_label[/start]`.
+/pipeline/auto_label[/start]`. A cluster-scoped job writes **only** to the
+members it selected: the index-wide stages (`cluster_id_normalize`,
+`cluster_residuals`, `auto_promote`) are skipped even if requested
+(`result.stages.<stage>` = `{skipped: true, reason: "cluster-scoped run: …"}`),
+and the post-VLM `cluster_id = class_id` pass runs on the selected items
+only (same for a `?class_id=`-scoped VLM stage).
+
+### Auto-label job by id — `GET /pipeline/auto_label/status/{job_id}`
+
+Poll the job a client started with the `job_id` its start response
+returned. Same body as `GET /pipeline/auto_label/status` (`job_id`,
+`status` `queued|running|completed|failed|cancelled|interrupted`, `stage`,
+`processed`, `total`, `started_at`, `finished_at`, `error`,
+`error_detail`, `result`, `args`, `pipeline`, backend/VRAM telemetry,
+`stage_durations`, `eta_seconds`, `elapsed_seconds`). The current job is
+read live; a job replaced by a later start answers with its final state
+(the newest 50 are kept). `404` for an id no job had (or not a 32-hex id).
 
 ### Region shape warnings — deliberately none
 
@@ -464,17 +480,25 @@ Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
 **`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
 `400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
 `items` (item + `reason`), `sort_applied` (the sort id that actually ran),
-`sort_fallback_reason` (always `null`).
+`sort_fallback_reason` (`null`, or a human-readable string when the
+resolved default was replaced — see below).
 
-Sort: an explicit `sort` wins; omitted (or `default`) → the **tab's own
-default** (a deployment `sort` default from `PUT /settings` never overrides
-it — it only applies to a tab without one, e.g. `new_class_proposals`, else
-`recent`). Every queue ends in a `crop_id` ascending tiebreak so pages are
+Sort: an explicit `sort` wins (honored even if its field has no coverage);
+omitted (or `default`) → the **tab's own default** (a deployment `sort`
+default from `PUT /settings` never overrides it — it only applies to a tab
+without one, e.g. `new_class_proposals`, else `recent`). If that resolved
+default orders by a field **no item in the index has** (0% coverage), the
+queue falls back to the tab's next covered sort (`all`: `mistakenness`;
+`uncertainty`: `mistakenness`, then `atypicality`; every tab ends at
+`recent`), `sort_applied` names the sort that ran and
+`sort_fallback_reason` says which default was skipped and why. Unknown
+coverage (count failed) never triggers a fallback. `PUT /settings` refuses
+(`422`) a `sort` default whose field has 0% coverage. Every queue ends in a `crop_id` ascending tiebreak so pages are
 stable and positions are exact.
 
 `GET /review/{tab}/locate?crop_id=…` (same filters + `sort`, plus
 `page_size`) → `{crop_id, in_queue, rank, page, page_size, total, reason,
-sort_applied}`: `rank` is 0-based, `page` the 1-based page holding it;
+sort_applied, sort_fallback_reason}`: `rank` is 0-based, `page` the 1-based page holding it;
 out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
 `filtered_out`. It counts the items sorting before the crop (one count, any
 queue depth) — use it for `/review?crop_id=` deep links instead of paging.
@@ -674,6 +698,11 @@ Derived keys (computed by the serializer, never stored):
 - `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
   without a distance); `cluster_is_core` — `cluster_similarity >=
   core_similarity_min` (served on `GET /clusters`, `0.75`).
+  `cluster_distance` is the cosine distance to the item's candidate-cluster
+  centroid, written by every residual clustering run whatever the method
+  (IVF's own centroids; otherwise the cluster's member-mean centroid). It
+  is `null` for noise and for items placed without a clustering pass
+  (class clusters via labeling, until they are clustered).
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the

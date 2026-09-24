@@ -145,6 +145,13 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
                 result['after_key'] = {src_name: page_keys[-1]}
             out[name] = result
             continue
+        if 'filter' in spec:
+            kept = [d for d in docs if matches(d, spec['filter'])]
+            filter_bucket: dict[str, Any] = {'doc_count': len(kept)}
+            if spec.get('aggs'):
+                filter_bucket.update(_aggregate(kept, spec['aggs']))
+            out[name] = filter_bucket
+            continue
         if 'terms' not in spec:
             raise NotImplementedError(f'agg not supported by fake: {spec}')
         field = spec['terms']['field']

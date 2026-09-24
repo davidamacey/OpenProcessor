@@ -71,7 +71,9 @@ def unexclusion_update(
 
     A validated item returns to its class cluster (``cluster_id =
     class_id``), keeping its sub-cluster only if it was recorded in that
-    same cluster. An unvalidated item excluded from a candidate cluster
+    same cluster. An unvalidated item excluded from its own class cluster
+    (``prior == class_id``) returns there too. An unvalidated item
+    excluded from a candidate cluster
     that still has members (``live_candidate_ids``, resolved by the
     caller) returns to it. Anything else drops to the residual pool
     (``cluster_id=None``) for a fresh candidate assignment on the next
@@ -106,7 +108,7 @@ def unexclusion_update(
         'updated_at': now,
     }
     prior = current.get(PRIOR_CLUSTER_ID)
-    if validated:
+    if validated or (class_id is not None and cluster_kind(prior) == 'class' and prior == class_id):
         update['cluster_id'] = class_id
         if prior == class_id:
             update['cluster_subid'] = current.get(PRIOR_CLUSTER_SUBID)
@@ -122,10 +124,15 @@ async def live_candidate_ids(opensearch: Any, index: str, crop_ids: list[str]) -
     docs = [d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')]
     live: set[int] = set()
     for cid in prior_candidate_ids(docs):
-        n = await opensearch.count(index=index, body={'query': {'term': {'cluster_id': cid}}})
-        if int((n or {}).get('count', 0)) > 0:
+        if await cluster_member_count(opensearch, index, cid) > 0:
             live.add(cid)
     return frozenset(live)
+
+
+async def cluster_member_count(opensearch: Any, index: str, cluster_id: int) -> int:
+    """Items currently in ``cluster_id``."""
+    n = await opensearch.count(index=index, body={'query': {'term': {'cluster_id': cluster_id}}})
+    return int((n or {}).get('count', 0))
 
 
 def prior_candidate_ids(docs: list[dict[str, Any]]) -> set[int]:
@@ -156,6 +163,7 @@ __all__ = [
     'PRIOR_CLUSTER_ID',
     'PRIOR_CLUSTER_SUBID',
     'PRIOR_VALIDATED',
+    'cluster_member_count',
     'exclusion_update',
     'live_candidate_ids',
     'park_restored_state_while_excluded',

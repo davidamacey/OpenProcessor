@@ -20,10 +20,11 @@ raises :class:`ValueError` so the router turns it into
 ``?sort=<shadow-id>`` returns 400", plan §3). This is deliberately NOT a
 silent fallback to the tab default — that would hide a mistaken/stale
 client request behind a result that looks fine but isn't what was asked for.
-Graceful degradation for a sort whose backing field simply isn't backfilled
-yet (0% coverage) is a *different* concern the frontend owns per Phase 0
-(only offer sorts ``/curation/scores/coverage`` reports nonzero for) — nothing in
-this module invents that behavior.
+A *resolved default* (the tab's own, or the deployment-pinned one) whose
+backing field no item carries (0% coverage) is different: it would order
+nothing, so :func:`build_sort` walks the tab's fallback chain
+(:data:`_TAB_FALLBACKS`, always ending at ``'recent'``) and reports why in
+``fallback_reason``. An explicit ``?sort=`` is honored as asked.
 """
 
 from __future__ import annotations
@@ -324,6 +325,50 @@ tabs hardcoded before this registry existed, keyed by the sort id whose
 edit without re-checking the router against this table."""
 
 
+_TAB_FALLBACKS: dict[str, tuple[str, ...]] = {
+    'all': ('mistakenness',),
+    'uncertainty': ('mistakenness', 'atypicality'),
+}
+"""Sorts tried, in order, after a resolved default with 0% field coverage
+and before the terminal ``'recent'`` (``updated_at``, which every item
+has). Entries not currently selectable (shadow/disabled) are skipped."""
+
+
+async def _first_covered(
+    primary: str, tab: str, registry: dict[str, ReviewSort], opensearch: Any
+) -> tuple[str, str | None]:
+    """``(sort_id, fallback_reason)``: ``primary`` unless its field has
+    zero coverage, else the first covered sort in the tab's chain. Unknown
+    coverage (count failed) counts as covered -- a transient error must
+    never reorder a queue."""
+    chain = [primary]
+    for sid in (*_TAB_FALLBACKS.get(tab, ()), 'recent'):
+        rs = registry.get(sid)
+        if rs is not None and sid not in chain and rs.status in ('stable', 'experimental'):
+            chain.append(sid)
+    fields = frozenset(f for sid in chain if (f := registry[sid].requires_field))
+    if registry[primary].requires_field is None or not fields:
+        return primary, None
+    from src.services.curation.strategy_registry import field_coverage
+
+    coverage = await field_coverage(opensearch, fields)
+    chosen = next(
+        (
+            sid
+            for sid in chain
+            if (f := registry[sid].requires_field) is None or coverage.get(f) != 0
+        ),
+        chain[-1],
+    )
+    if chosen == primary:
+        return primary, None
+    field = registry[primary].requires_field
+    return chosen, (
+        f'default sort {primary!r} orders by {field!r}, which no item has yet; '
+        f'using {chosen!r} instead'
+    )
+
+
 def default_sort_for_tab(tab: str) -> str:
     """The legacy default sort id for ``tab``. Raises :class:`ValueError`
     for a tab this registry doesn't know about (should never happen in
@@ -359,12 +404,10 @@ async def build_sort(
       the honest response is "that's not a valid choice," not quietly
       substituting the tab default.
 
-    ``fallback_reason`` is always ``None`` in this phase — the field exists
-    per the plan's response-envelope contract so the frontend can render
-    it, but nothing in this module currently produces a non-``None`` value;
-    graceful degradation for an unbackfilled field is the frontend's job
-    (plan §0/§5: only offer a sort once ``/curation/scores/coverage`` reports
-    nonzero for its ``requires_field``), not a backend fallback path.
+    ``fallback_reason`` is non-``None`` only when a resolved default (the
+    first bullet) orders by a field with 0% coverage in the items index:
+    the returned clause/id are then the first covered sort in the tab's
+    fallback chain (see :func:`_first_covered`). Needs ``opensearch``.
 
     ``opensearch``, when given, is threaded into
     :func:`~src.services.curation.strategy_registry.resolve_effective_default`
@@ -384,7 +427,10 @@ async def build_sort(
             applied_id = await resolve_effective_default('sort', opensearch)
         if applied_id is None:
             applied_id = 'recent'
-        return list(registry[applied_id].clause), applied_id, None
+        reason = None
+        if opensearch is not None:
+            applied_id, reason = await _first_covered(applied_id, tab, registry, opensearch)
+        return list(registry[applied_id].clause), applied_id, reason
 
     rs = registry.get(sort_id)
     if rs is None:

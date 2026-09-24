@@ -95,10 +95,34 @@ async def run_update_by_query_polled(
         await asyncio.sleep(poll_interval_s)
 
 
+_SCOPE_CHUNK = 10_000
+"""Crop ids per scoped update_by_query (well under the 65,536 terms cap)."""
+
+
 async def force_cluster_id_equals_class_id(
     client: AsyncOpenSearch,
+    *,
+    crop_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Set ``cluster_id = class_id`` for every item where they disagree.
+
+    ``crop_ids`` limits the pass to those items (a scoped job's
+    selection); ``None`` is the whole index, ``[]`` touches nothing.
+    """
+    if crop_ids is None:
+        return await _normalize(client, None)
+    totals = {'status': 'ok', 'updated': 0, 'batches': 0, 'version_conflicts': 0, 'failures': 0}
+    for i in range(0, len(crop_ids), _SCOPE_CHUNK):
+        part = await _normalize(client, crop_ids[i : i + _SCOPE_CHUNK])
+        if part.get('status') != 'ok':
+            return part
+        for key in ('updated', 'batches', 'version_conflicts', 'failures'):
+            totals[key] += part[key]
+    return totals
+
+
+async def _normalize(client: AsyncOpenSearch, crop_ids: list[str] | None) -> dict[str, Any]:
+    """One ``update_by_query`` pass over the index, or over ``crop_ids``.
 
     Implementation (post-K2): uses ``update_by_query`` with
     ``ctx._source`` semantics. This:
@@ -141,6 +165,7 @@ async def force_cluster_id_equals_class_id(
             'bool': {
                 'filter': [
                     {'exists': {'field': 'class_id'}},
+                    *([{'terms': {'crop_id': crop_ids}}] if crop_ids is not None else []),
                     {
                         'bool': {
                             'should': [

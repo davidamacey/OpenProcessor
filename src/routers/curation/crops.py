@@ -473,7 +473,8 @@ async def move_crops(
       class), a machine suggestion is kept, and nothing is validated —
       the group has no class until one is assigned.
     * ``400`` for an unassigned (negative) target (use exclude/discard)
-      or a class-range id that isn't in the registry. Nothing is written.
+      a class-range id that isn't in the registry, or a candidate id with
+      no current members (it doesn't exist). Nothing is written.
     """
     target_id = int(payload.cluster_id)
     kind = cluster_kind(target_id)
@@ -487,6 +488,13 @@ async def move_crops(
         target = get_class_registry().get(target_id)
         if target is None:
             raise HTTPException(status_code=400, detail=f'unknown class_id {target_id}')
+    if kind == 'candidate':
+        from src.services.curation.exclusion import cluster_member_count
+
+        if await cluster_member_count(opensearch, CURATION_ITEMS_INDEX, target_id) == 0:
+            raise HTTPException(
+                status_code=400, detail=f'candidate cluster {target_id} has no members'
+            )
     if not payload.crop_ids:
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 

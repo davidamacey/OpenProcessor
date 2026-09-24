@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import Query
+from fastapi import HTTPException, Query
 
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import PROMPT_PACK_DESC
@@ -22,6 +22,22 @@ async def pipeline_auto_label_status() -> dict[str, Any]:
     from src.services.curation.autolabel import job as auto_label_job
 
     return auto_label_job.get_state()
+
+
+@router.get('/pipeline/auto_label/status/{job_id}')
+async def pipeline_auto_label_job_status(job_id: str) -> dict[str, Any]:
+    """State of one auto_label job by the ``job_id`` its start returned.
+
+    Same shape as ``GET /pipeline/auto_label/status``. Answers for the job
+    even after a later job replaced it as the current one (its final
+    state is kept; the newest 50 are retained). ``404`` for an unknown id.
+    """
+    from src.services.curation.autolabel import job as auto_label_job
+
+    state = auto_label_job.get_job_state(job_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f'unknown auto_label job {job_id!r}')
+    return state
 
 
 @router.post('/pipeline/auto_label/cancel')
@@ -44,7 +60,7 @@ async def vlm_label_cluster(
     Queues the auto-label job scoped to ``cluster_id`` with only the VLM
     stage (no re-clustering, no auto-promote, no cap): the server selects
     every unvalidated, non-holdout, non-excluded member and chunks them.
-    Returns the job state; poll ``GET /pipeline/auto_label/status`` —
+    Returns the job state; poll ``GET /pipeline/auto_label/status/{job_id}`` —
     ``total`` is the number selected, ``result.stages.vlm`` the outcome.
     ``409`` while another auto-label job runs.
     """
