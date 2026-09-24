@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The `/train` GPU picker shows the backend's allowed GPUs
+  (`GET /train/gpus`) with each option's advisory, and preselects the one
+  the backend marks default. It shows a free-text field when the backend
+  has no allowlist.
+  - `trainGpuOptions.ts` and its hardcoded list are deleted. The list
+    offered GPU 0, which is now reserved for another project.
+  - The form no longer defaults to GPUs `0,2`, which the backend rejects.
+    Until the options load, the request omits the claim and the backend
+    picks from its allowlist.
+
 ### Added
 
 - Tests now check the frontend against the backend's real API contract.

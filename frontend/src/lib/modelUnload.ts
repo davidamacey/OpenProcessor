@@ -2,7 +2,7 @@
  * Pure logic for the `/models` page's unload action (follow-up gap 2,
  * docs/design/audit-remediation-plan-2026-09.md Appendix D item 3,
  * 2026-09-11 — "No way to unload/remove a promoted Triton model from the
- * UI"). Extracted from the Svelte component (mirroring `trainGpuOptions.ts`'s
+ * UI"). Extracted from the Svelte component (mirroring the extracted-helper
  * pattern) so the guard behavior is directly unit-testable — this repo has
  * no `@testing-library/svelte` (see `StrategyBar.test.ts`).
  *

@@ -14,7 +14,7 @@
   import AugmentationPanel from './AugmentationPanel.svelte';
   import ClassSubsetPicker from './ClassSubsetPicker.svelte';
   import { classesStore } from '$stores/classes.svelte';
-  import { GPU_OPTIONS, gpuAdvisory } from '$lib/trainGpuOptions';
+  import { defaultGpuValue, getTrainGpus, type TrainGpuOptionsResponse } from '$lib/api';
   import type {
     AugmentationSpec,
     CampaignRunSpec,
@@ -76,7 +76,27 @@
   ];
   let modelSize = $state<ModelSize>('m');
   let profileName = $state<ProfileName>('medium');
-  let cudaDevices = $state<string>('0,2');
+  // '' until the served options load; an omitted claim lets the backend
+  // default from its allowlist.
+  let cudaDevices = $state<string>('');
+  let gpuOptions = $state<TrainGpuOptionsResponse | null>(null);
+  let gpuError = $state<string | null>(null);
+  const gpuAdvisory = $derived(
+    gpuOptions?.options.find((o) => o.value === cudaDevices)?.advisory ?? null,
+  );
+
+  $effect(() => {
+    const ctrl = new AbortController();
+    getTrainGpus(ctrl.signal)
+      .then((res) => {
+        gpuOptions = res;
+        if (!cudaDevices) cudaDevices = defaultGpuValue(res);
+      })
+      .catch((e: unknown) => {
+        if ((e as Error).name !== 'AbortError') gpuError = (e as Error).message;
+      });
+    return () => ctrl.abort();
+  });
 
   // Class subset selection. `null` means "all classes".
   let selectedClasses = $state<number[] | null>(null);
@@ -174,7 +194,7 @@
       model_family: 'yolo26',
       model_size: modelSize,
       profile: profileName,
-      cuda_visible_devices: cudaDevices,
+      cuda_visible_devices: cudaDevices || undefined,
       // The LPR export is already a single-class (class 0) dataset, so never
       // filter it by the multi-class registry ids (e.g. license_plate=80) —
       // that drops every label. Send no class subset for LPR runs.
@@ -203,7 +223,7 @@
       dataset_export_dir: datasetExportDir,
       include_classes: singleClassExport ? null : selectedClasses,
       single_cls: singleClassExport ? true : singleCls,
-      cuda_visible_devices: cudaDevices,
+      cuda_visible_devices: cudaDevices || undefined,
       augmentation: augmentation && augmentation.enabled ? augmentation : null,
       runs,
       stop_when: stopWhen,
@@ -321,23 +341,37 @@
   <!-- GPU -->
   <div class="rounded-md border border-zinc-800 bg-zinc-900 p-3">
     <span class="mb-2 block text-[11px] uppercase tracking-wide text-zinc-500">GPUs</span>
-    <div class="flex flex-wrap gap-3 text-sm">
-      {#each GPU_OPTIONS as opt (opt.value)}
-        <label class="flex cursor-pointer items-center gap-2">
-          <input
-            type="radio"
-            name="cuda-devices"
-            value={opt.value}
-            checked={cudaDevices === opt.value}
-            onchange={() => (cudaDevices = opt.value)}
-            class="accent-blue-500"
-          />
-          <span class="text-zinc-200">{opt.label}</span>
-        </label>
-      {/each}
-    </div>
-    {#if gpuAdvisory(cudaDevices)}
-      <p class="mt-2 text-[11px] text-yellow-300">{gpuAdvisory(cudaDevices)}</p>
+    {#if gpuError}
+      <p class="text-[11px] text-red-300">GPU options unavailable: {gpuError}</p>
+    {:else if !gpuOptions}
+      <p class="text-[11px] text-zinc-500">Loading GPU options…</p>
+    {:else if gpuOptions.unrestricted}
+      <input
+        type="text"
+        class="input-sm w-40 font-mono"
+        placeholder="e.g. 0 or 0,2"
+        aria-label="CUDA visible devices"
+        bind:value={cudaDevices}
+      />
+    {:else}
+      <div class="flex flex-wrap gap-3 text-sm">
+        {#each gpuOptions.options as opt (opt.value)}
+          <label class="flex cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="cuda-devices"
+              value={opt.value}
+              checked={cudaDevices === opt.value}
+              onchange={() => (cudaDevices = opt.value)}
+              class="accent-blue-500"
+            />
+            <span class="text-zinc-200">{opt.label}</span>
+          </label>
+        {/each}
+      </div>
+    {/if}
+    {#if gpuAdvisory}
+      <p class="mt-2 text-[11px] text-yellow-300">{gpuAdvisory}</p>
     {/if}
   </div>
 

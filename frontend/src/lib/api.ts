@@ -2832,6 +2832,36 @@ export function getTrainProfiles(signal?: AbortSignal): Promise<ProfilesResponse
   return apiFetch<ProfilesResponse>(`${API_PREFIX}/train/profiles`, {}, signal);
 }
 
+/** One GPU claim the backend allows for a training run. */
+export interface TrainGpuOption {
+  /** The exact `cuda_visible_devices` value to send. */
+  value: string;
+  gpu_ids: number[];
+  label: string;
+  /** What the claim does to other services (e.g. which containers stop). */
+  advisory: string | null;
+  stops_containers: string[];
+  default: boolean;
+}
+
+/** `GET {API_PREFIX}/train/gpus`. `unrestricted` means no allowlist is
+ *  configured, so any `cuda_visible_devices` value may be entered. */
+export interface TrainGpuOptionsResponse {
+  options: TrainGpuOption[];
+  allowed_ids: number[];
+  unrestricted: boolean;
+}
+
+export function getTrainGpus(signal?: AbortSignal): Promise<TrainGpuOptionsResponse> {
+  return apiFetch<TrainGpuOptionsResponse>(`${API_PREFIX}/train/gpus`, {}, signal);
+}
+
+/** The served default claim, or '' when none is marked (the backend then
+ *  picks from its allowlist when `cuda_visible_devices` is omitted). */
+export function defaultGpuValue(res: TrainGpuOptionsResponse): string {
+  return res.options.find((o) => o.default)?.value ?? '';
+}
+
 export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> {
   return apiFetch<PresetsResponse>(`${API_PREFIX}/train/presets`, {}, signal);
 }
