@@ -222,3 +222,109 @@ def test_suspected_false_positives_mget_uses_source_excludes_kwarg(
 
     # And the fix actually restores non-empty item fields end-to-end.
     assert body['items'][0]['image_path'] == '/x.jpg'
+
+
+class _FakeScrollOS:
+    """Fake covering the scroll surface ``suspected_false_positives`` uses:
+    ``search`` (scroll-open), ``scroll`` (paging), ``clear_scroll``, ``mget``."""
+
+    def __init__(
+        self, hits_pages: list[list[dict[str, Any]]], *, raise_on_scroll: bool = False
+    ) -> None:
+        self.hits_pages = hits_pages
+        self.raise_on_scroll = raise_on_scroll
+        self.search_calls = 0
+        self.scroll_calls = 0
+        self.clear_scroll_calls = 0
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        self.search_calls += 1
+        page = self.hits_pages[0] if self.hits_pages else []
+        return {'_scroll_id': 'sid-0', 'hits': {'hits': page}}
+
+    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:  # noqa: ARG002
+        self.scroll_calls += 1
+        if self.raise_on_scroll:
+            msg = 'transport boom mid-scroll'
+            raise RuntimeError(msg)
+        if self.scroll_calls < len(self.hits_pages):
+            return {
+                '_scroll_id': f'sid-{self.scroll_calls}',
+                'hits': {'hits': self.hits_pages[self.scroll_calls]},
+            }
+        return {'_scroll_id': None, 'hits': {'hits': []}}
+
+    async def clear_scroll(self, *, scroll_id: str) -> None:  # noqa: ARG002
+        self.clear_scroll_calls += 1
+
+    async def mget(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {'docs': [{'_id': i, 'found': True, '_source': {}} for i in body['ids']]}
+
+
+def _patch_fp_store(monkeypatch: pytest.MonkeyPatch, *, trained_at: str = 'T1') -> None:
+    import numpy as np
+
+    from src.services.detection.fp_store import FalsePositiveCentroidStore
+
+    monkeypatch.setattr(
+        FalsePositiveCentroidStore,
+        '__init__',
+        lambda self: setattr(self, 'metadata', {'trained_at': trained_at, 'subids': ['s1']}),
+    )
+    monkeypatch.setattr(FalsePositiveCentroidStore, 'load', lambda _self: True)
+    monkeypatch.setattr(
+        FalsePositiveCentroidStore,
+        'search',
+        lambda _self, embs: (np.zeros(len(embs), dtype=np.float32), np.zeros(len(embs), dtype=int)),
+    )
+
+
+def test_suspected_fp_second_page_within_ttl_does_not_rescroll(
+    app_client_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-18: the scored-list cache means a page-2 request shortly after
+    page-1 doesn't re-scroll the whole region-embedding pool."""
+    from src.routers.curation import regions_fp as regions_fp_mod
+
+    regions_fp_mod._suspected_fp_cache.clear()
+    _patch_fp_store(monkeypatch)
+
+    hits = [{'_id': f'r{i}', '_source': {F.embedding: [0.1, 0.2, 0.3, 0.4]}} for i in range(3)]
+    os_fake = _FakeScrollOS([hits])
+    client = app_client_factory(os_fake)
+
+    r1 = client.get('/curation/regions/suspected_false_positives?page=1&page_size=2')
+    assert r1.status_code == 200, r1.text
+    r2 = client.get('/curation/regions/suspected_false_positives?page=2&page_size=2')
+    assert r2.status_code == 200, r2.text
+
+    assert os_fake.search_calls == 1
+
+
+def test_suspected_fp_scroll_exception_still_clears_scroll(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-18: an exception mid-scroll must still hit clear_scroll (finally),
+    not leak an open scroll context."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from src.routers.curation import (
+        _raw_opensearch_dep,
+        regions_fp as regions_fp_mod,
+        router as curation_router,
+    )
+
+    regions_fp_mod._suspected_fp_cache.clear()
+    _patch_fp_store(monkeypatch, trained_at='T2')
+
+    hits_page_1 = [{'_id': 'r0', '_source': {F.embedding: [0.1, 0.2, 0.3, 0.4]}}]
+    os_fake = _FakeScrollOS([hits_page_1, []], raise_on_scroll=True)
+
+    app = FastAPI()
+    app.include_router(curation_router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: os_fake
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get('/curation/regions/suspected_false_positives')
+
+    assert resp.status_code == 500
+    assert os_fake.clear_scroll_calls == 1

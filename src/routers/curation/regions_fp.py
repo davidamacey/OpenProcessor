@@ -47,6 +47,18 @@ SUSPECTED_FP_MAX_DISTANCE = 0.35
 suggested as a false positive (served as ``default_threshold``)."""
 
 
+_SUSPECTED_FP_CACHE_TTL_SEC = 60.0
+"""F-18 interim fix: ``/regions/suspected_false_positives`` scrolled the
+entire region-embedding pool on every single page request (the pool is
+independent of ``page``/``page_size``). Cache the scored
+``[(dist, crop_id, subid)]`` list keyed by ``(trained_at, threshold)`` for
+60s so paging through results doesn't re-scroll. The persisted-write
+version (store ``region_fp_distance`` at write time) is the long-term
+fix but is out of scope here — see the audit doc."""
+
+_suspected_fp_cache: dict[tuple[Any, float], tuple[float, list[tuple[float, str, str | None]]]] = {}
+
+
 @router.post('/regions/cluster')
 async def cluster_regions(
     opensearch: OpenSearchDep,
@@ -251,6 +263,8 @@ async def suspected_false_positives(
     the permanent FP bucket). Requires :func:`build_fp_centroids_endpoint` to
     have run; otherwise returns an empty result with ``centroids_built=false``.
     """
+    import time
+
     import numpy as np
 
     from src.services.curation.clustering.orchestrator import fp_candidate_must_not
@@ -280,47 +294,57 @@ async def suspected_false_positives(
             ),
         }
 
-    # Same candidate pool as the auto-pull: everything except already-FP,
-    # test-holdout, and HUMAN-decided crops. VLM-validated/detected crops are
-    # included (their distance to the FP centroids decides) — real regions
-    # sit far away and never surface, so include_detected is no longer a
-    # useful gate.
-    must = [{'exists': {'field': F.embedding}}]
-    must_not = fp_candidate_must_not()
-    subids = store.metadata.get('subids', [])
-    scored: list[tuple[float, str, str | None]] = []
-    body = {
-        'size': 2000,
-        'query': {'bool': {'must': must, 'must_not': must_not}},
-        '_source': {'includes': [F.embedding]},
-    }
-    try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body, scroll='5m')
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    while hits:
-        embs = np.asarray(
-            [(h.get('_source') or {}).get(F.embedding) for h in hits],
-            dtype=np.float32,
-        )
-        embs /= np.linalg.norm(embs, axis=1, keepdims=True) + 1e-12
-        dist, idx = store.search(embs)
-        for h, d, ci in zip(hits, dist, idx, strict=True):
-            if float(d) <= threshold:
-                sub = subids[int(ci)] if 0 <= int(ci) < len(subids) else None
-                scored.append((float(d), h['_id'], sub))
-        resp = await opensearch.scroll(scroll_id=scroll_id, scroll='5m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-    if scroll_id:
+    cache_key = (store.metadata.get('trained_at'), threshold)
+    cached = _suspected_fp_cache.get(cache_key)
+    now_ts = time.monotonic()
+    if cached is not None and (now_ts - cached[0]) < _SUSPECTED_FP_CACHE_TTL_SEC:
+        scored = cached[1]
+    else:
+        # Same candidate pool as the auto-pull: everything except already-FP,
+        # test-holdout, and HUMAN-decided crops. VLM-validated/detected crops
+        # are included (their distance to the FP centroids decides) — real
+        # regions sit far away and never surface, so include_detected is no
+        # longer a useful gate.
+        must = [{'exists': {'field': F.embedding}}]
+        must_not = fp_candidate_must_not()
+        subids = store.metadata.get('subids', [])
+        scored = []
+        body = {
+            'size': 2000,
+            'query': {'bool': {'must': must, 'must_not': must_not}},
+            '_source': {'includes': [F.embedding]},
+            'sort': ['_doc'],
+        }
         try:
-            await opensearch.clear_scroll(scroll_id=scroll_id)
+            resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body, scroll='5m')
         except Exception as exc:
-            logger.debug('legacy_suspected_fp_clear_scroll_failed', error=str(exc))
+            raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+        scroll_id = resp.get('_scroll_id')
+        try:
+            hits = resp['hits']['hits']
+            while hits:
+                embs = np.asarray(
+                    [(h.get('_source') or {}).get(F.embedding) for h in hits],
+                    dtype=np.float32,
+                )
+                embs /= np.linalg.norm(embs, axis=1, keepdims=True) + 1e-12
+                dist, idx = store.search(embs)
+                for h, d, ci in zip(hits, dist, idx, strict=True):
+                    if float(d) <= threshold:
+                        sub = subids[int(ci)] if 0 <= int(ci) < len(subids) else None
+                        scored.append((float(d), h['_id'], sub))
+                resp = await opensearch.scroll(scroll_id=scroll_id, scroll='5m')
+                scroll_id = resp.get('_scroll_id')
+                hits = resp['hits']['hits']
+        finally:
+            if scroll_id:
+                try:
+                    await opensearch.clear_scroll(scroll_id=scroll_id)
+                except Exception as exc:
+                    logger.debug('curation_suspected_fp_clear_scroll_failed', error=str(exc))
 
-    scored.sort(key=lambda t: t[0])
+        scored.sort(key=lambda t: t[0])
+        _suspected_fp_cache[cache_key] = (now_ts, scored)
     total = len(scored)
     page_slice = scored[(page - 1) * page_size : (page - 1) * page_size + page_size]
     items: list[dict[str, Any]] = []
