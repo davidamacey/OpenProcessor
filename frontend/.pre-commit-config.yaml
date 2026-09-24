@@ -87,6 +87,15 @@ repos:
         pass_filenames: false
         stages: [pre-push]
         always_run: true
+      # Stubbed e2e suite (no live backend needed). A red e2e test once
+      # reached master because only CI ran it.
+      - id: e2e-pre-push
+        name: e2e (stubbed Playwright suite)
+        entry: npm run -s test:e2e
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
 
   # Secret detection
   - repo: https://github.com/gitleaks/gitleaks

@@ -236,6 +236,8 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
 
 ### Changed
 
+- The pre-push hook also runs the stubbed e2e suite (`e2e-pre-push`), so a
+  failing e2e test can't be pushed. It adds about a minute per push.
 - The crop detail panel reads the source image's metadata and sibling
   crops from `GET /crops/{id}/context`, which the backend added to end the
   route collision on `/crops/{id}/image`. `getCropImage` is now
