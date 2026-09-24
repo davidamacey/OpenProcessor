@@ -7,7 +7,6 @@ training pipeline (Phase 3a). Two regimes:
   service; a paired worker (if configured) is paused via a sentinel file
   so it doesn't fight the trainer for CPU/RAM, but its model server stays
   loaded — no cold-start penalty when training finishes.
-
 * **Multi-GPU training**: the trainer claims every configured GPU-resident
   container. We **stop those containers entirely** for the run and restart
   them afterward, so all configured GPUs are fully free for training.
@@ -15,32 +14,29 @@ training pipeline (Phase 3a). Two regimes:
 The API claims GPUs on job start (``claim_gpus_for_training``), which
 writes a **training lock** and stops the configured containers. The API's
 reconcile loop (``reconcile_on_startup``) then *enforces* that state on
-every tick: while the lock / an active job owns the GPUs it re-stops any
-service that comes back up (blocking the hand-off), and once nothing is
-active it clears the lock and restarts the services — which doubles as
-crash recovery.
-
-That loop is not self-starting: it is wired into the FastAPI lifespan in
-:mod:`src.main` (one reconcile at startup, then a task ticking every
-``src.main.ARBITER_RECONCILE_INTERVAL_SECONDS``, cancelled on shutdown).
-Without that wiring nothing ever releases a crashed trainer's claim, so
-any host embedding this module in a different app must start an
-equivalent loop — see ``tests/integration/test_gpu_arbiter_lifespan.py``.
+every tick: re-stops anything that comes back up while a run is active,
+and once nothing is active clears the lock and restarts services (also
+crash recovery). Not self-starting -- wired into the FastAPI lifespan in
+:mod:`src.main` (startup reconcile + a task ticking every
+``ARBITER_RECONCILE_INTERVAL_SECONDS``); an embedding host needs the
+equivalent (see ``tests/integration/test_gpu_arbiter_lifespan.py``).
 
 **Deployment facts vs. mechanism.** Which GPU ids a job may target, which
-containers to stop/start, and which container is "the trainer" for
-reachability probing are deployment facts — see
-:class:`src.config.gpu_arbiter.GpuArbiterConfig`. Every public function
-here takes them as parameters with a config-derived default, so a generic
-install with nothing configured degrades to a no-op rather than crashing
-(see ``tests/curation/test_gpu_arbiter_config.py``).
+containers to stop/start, and which container is "the trainer" are
+deployment facts (:class:`src.config.gpu_arbiter.GpuArbiterConfig`).
+Every public function takes them as config-derived-default parameters,
+so an unconfigured install degrades to a no-op
+(``tests/curation/test_gpu_arbiter_config.py``).
 
 Implementation note: container control uses the docker SDK over the
-mounted host socket (``/var/run/docker.sock``), stopping/starting
-containers by name so restart preserves each container's original config
-(GPU pins included). When the SDK/socket is unavailable it falls back to
-the sentinel-pause path only and logs a warning; single-GPU runs still
-work.
+mounted host socket (``/var/run/docker.sock``), by name, so restart
+preserves each container's config (GPU pins included). S-5: a claim
+that must stop a configured container and can't (SDK/socket
+unavailable, or the stop fails) raises
+:class:`GpuArbiterStopFailedError` rather than falling back to a
+sentinel-only pause, which pauses a paired worker but leaves a sibling
+container running on the shared GPU. Release/resume keeps a logged
+best-effort fallback.
 """
 
 from __future__ import annotations
@@ -69,7 +65,8 @@ def _state_dir() -> Path:
 
 
 def _default_sentinel_path() -> Path:
-    return _state_dir() / 'training_worker' / 'pause.sentinel'
+    # S-4: suffix must match CurationConfig.pause_sentinel_path (readers).
+    return _state_dir() / 'vlm_worker' / 'pause.sentinel'
 
 
 def _default_lock_path() -> Path:
@@ -130,6 +127,16 @@ class ArbiterAction:
 
     action: str  # 'sentinel_set' | 'sentinel_cleared' | 'gpu_services_stopped' | 'gpu_services_started' | 'noop'
     detail: str = ''
+
+
+class GpuArbiterStopFailedError(RuntimeError):
+    """S-5: a claim needed to stop a configured GPU-resident container and
+    couldn't (docker SDK/socket unavailable, or the stop call failed).
+    Used to fall back to a sentinel-only pause instead, which doesn't
+    stop the container -- training could start next to it on the same
+    GPU. Callers (``/train/start``, ``/train/start_campaign``) must
+    catch this and refuse with 409 rather than proceed.
+    """
 
 
 # =============================================================================
@@ -298,11 +305,9 @@ async def resume_gpu_worker(
 def _docker_client() -> Any:
     """Return a docker SDK client over the mounted socket, or ``None``.
 
-    Imported lazily so the module stays importable in environments
-    without the ``docker`` package or the socket (unit tests, hosts with
-    no GPU-resident sibling containers). Any failure (no package, no
-    socket, no permission) returns ``None`` so callers fall back to the
-    sentinel-only path.
+    Imported lazily so the module stays importable without the
+    ``docker`` package or socket (unit tests, no sibling containers).
+    Any failure (no package, no socket, no permission) returns ``None``.
     """
     try:
         import docker  # type: ignore[import-untyped]
@@ -313,6 +318,11 @@ def _docker_client() -> Any:
     except Exception as exc:
         logger.warning('arbiter_docker_unavailable', error=str(exc))
         return None
+
+
+def docker_client_available() -> bool:
+    """S-5: preflight probe -- can a docker client reach the daemon?"""
+    return _docker_client() is not None
 
 
 def _stop_containers_sync(client: Any, names: tuple[str, ...]) -> list[str]:
@@ -354,32 +364,31 @@ async def stop_gpu_services(
 ) -> ArbiterAction:
     """Stop the configured GPU-resident containers to free every configured GPU.
 
-    ``containers`` defaults to ``GpuArbiterConfig.containers``. If that is
-    empty (the generic-install default), this is a pure no-op -- it does
-    not touch the docker SDK at all, so an unconfigured install never
-    logs a spurious "docker unavailable" warning.
+    ``containers`` defaults to ``GpuArbiterConfig.containers``. Empty
+    (generic-install default) = pure no-op, no docker SDK touched.
 
     Otherwise uses the docker SDK over the mounted socket; restart later
     preserves each container's original config (GPU pins included).
-    Falls back to the sentinel-only pause if the socket/SDK is
-    unavailable.
+
+    S-5: fails closed -- raises :class:`GpuArbiterStopFailedError` if the
+    docker SDK/socket is unavailable or the stop call fails, rather than
+    falling back to a sentinel (which pauses a paired *worker*, not a
+    sibling container sharing the GPU). Callers must not proceed (or
+    write job.json) when this raises.
     """
     names = containers if containers is not None else get_gpu_arbiter_config().containers
     if not names:
         return ArbiterAction(action='noop', detail='no GPU-resident containers configured')
     client = _docker_client()
     if client is None:
-        await pause_gpu_worker()
-        return ArbiterAction(
-            action='sentinel_set',
-            detail='docker SDK unavailable; fell back to sentinel-only',
+        raise GpuArbiterStopFailedError(
+            f'docker SDK/socket unavailable in the API container -- cannot stop {names!r}'
         )
     try:
         stopped = await asyncio.to_thread(_stop_containers_sync, client, names)
     except Exception as exc:
         logger.warning('arbiter_gpu_stop_failed', error=str(exc))
-        await pause_gpu_worker()
-        return ArbiterAction(action='sentinel_set', detail=f'stop failed: {exc}; sentinel set')
+        raise GpuArbiterStopFailedError(f'stop failed for {names!r}: {exc}') from exc
     # Belt-and-suspenders: also set the sentinel so a worker that somehow
     # comes back up mid-run still pauses.
     await pause_gpu_worker()
@@ -439,22 +448,17 @@ async def probe_trainer_reachable(
 ) -> tuple[bool, str]:
     """Check whether the configured trainer container is up and running.
 
-    Without this, submitting a training job can write ``job.json`` and
-    have the run sit in ``queued`` forever with no error if the trainer
-    container was never started. Preflight calls this so submitting into
-    a void is a blocking failure instead of a silent forever-queue.
+    Without this, submitting a job writes ``job.json`` and sits in
+    ``queued`` forever with no error if the trainer was never started;
+    preflight calls this to make that a blocking failure instead.
 
     ``container_name`` defaults to ``GpuArbiterConfig.trainer_container``.
-    When that is unset (the generic-install default -- no separate
-    trainer container to probe), this returns ``(True, ...)`` rather than
-    treating "not configured" as a failure: a generic install may run
-    training in-process with no sibling container at all.
+    Unset (generic-install default, no sibling container to probe) ->
+    ``(True, ...)`` rather than treating "not configured" as a failure.
 
     Returns ``(reachable, detail)``. Any failure to determine the real
-    state -- missing docker SDK, no socket, permission error -- reports
-    ``reachable=False`` rather than silently passing: we can't tell
-    "trainer is fine" from "we can't see it," and the whole point of this
-    check is to not queue into an unknown.
+    state (missing SDK, no socket, permission error) reports
+    ``reachable=False`` -- we can't tell "fine" from "can't see it."
     """
     name = (
         container_name if container_name is not None else get_gpu_arbiter_config().trainer_container
@@ -497,15 +501,21 @@ async def claim_gpus_for_training(
     Which containers stop is decided by GPU scope
     (:func:`containers_to_stop`), not claim size: a single-GPU claim that
     intersects a *scoped* container's GPU set stops that container just
-    like a multi-GPU claim would. ``stop_gpu_services`` sets the pause
-    sentinel too (belt-and-suspenders), so the paired worker never fights
-    a stopped service either way.
+    like a multi-GPU claim would. ``stop_gpu_services`` also sets the
+    pause sentinel (belt-and-suspenders). S-5: if it raises
+    :class:`GpuArbiterStopFailedError`, the lock written above is
+    cleared before the exception propagates -- a refused claim never
+    leaves a stale lock behind.
     """
     set_training_lock(cuda_visible_devices)
     names = containers_to_stop(cuda_visible_devices)
-    if names:
+    if not names:
+        return await pause_gpu_worker()
+    try:
         return await stop_gpu_services(containers=names)
-    return await pause_gpu_worker()
+    except GpuArbiterStopFailedError:
+        clear_training_lock()
+        raise
 
 
 async def release_gpus_after_training(
@@ -514,11 +524,10 @@ async def release_gpus_after_training(
     """Inverse of :func:`claim_gpus_for_training`.
 
     Restarts exactly the containers :func:`containers_to_stop` says this
-    claim stopped; otherwise just clears the pause sentinel. Idempotent --
-    safe to call when nothing was stopped (e.g. crash before claim). In
-    practice the API's reconcile loop (:func:`reconcile_on_startup`) is
-    the backstop that restarts services once no run is active, since the
-    trainer container may have no docker socket.
+    claim stopped; otherwise clears the pause sentinel. Idempotent --
+    safe when nothing was stopped (e.g. crash before claim). The API's
+    reconcile loop (:func:`reconcile_on_startup`) is the real backstop
+    since the trainer container may have no docker socket.
     """
     clear_training_lock()
     names = containers_to_stop(cuda_visible_devices)
@@ -554,37 +563,27 @@ async def reconcile_on_startup(
     directory (:func:`_resolve_train_jobs_dir`); callers pass it
     explicitly only to point at a test fixture.
 
-    This runs once at API startup *and* on a periodic loop (both wired
-    in :mod:`src.main`'s lifespan), in every uvicorn worker. It is the
-    single authority that decides whether the configured GPU-resident
-    containers should be **down** (a training run owns the GPUs) or
-    **up** (no run active), and it actively drives the containers toward
-    that state on every tick. Because
-    :func:`stop_gpu_services` / :func:`start_gpu_services` only act on
-    containers not already in the target state, running this in all
-    workers is harmless idempotent re-enforcement, not a race.
+    Runs once at API startup *and* on a periodic loop (wired in
+    :mod:`src.main`'s lifespan), in every uvicorn worker. Single
+    authority for whether the configured GPU-resident containers should
+    be down (a run owns the GPUs) or up (nothing active), and drives
+    them toward that state every tick -- idempotent, so running in every
+    worker is safe re-enforcement, not a race.
 
-    A run is considered to own the GPUs when **either**:
+    A run owns the GPUs when either: a ``*.job.json`` exists whose
+    ``*.status.json`` hasn't reached a :data:`TRAINER_TERMINAL_STATES`
+    state (no status yet = just-claimed; unknown/non-terminal = still
+    live); or the training lock is present and younger than
+    :data:`LOCK_GRACE_SECONDS` (written by
+    :func:`claim_gpus_for_training` before job.json exists, closing the
+    claim->write race window).
 
-    * a ``*.job.json`` exists whose ``*.status.json`` has *not* reached a
-      :data:`TRAINER_TERMINAL_STATES` state (no status yet = just-claimed;
-      any non-terminal/unknown state = still live, so a multi-day
-      ``running`` run is never misread as idle); **or**
-    * the training lock is present and younger than
-      :data:`LOCK_GRACE_SECONDS`. The lock is written by
-      :func:`claim_gpus_for_training` *before* job.json exists, closing
-      the claim->write window where the file-based check alone would see
-      "idle".
-
-    The active run's ``cuda_visible_devices`` (read from job.json, or the
-    lock) decides the enforcement via :func:`containers_to_stop`: the
-    **union** of ``containers_to_stop(cvd)`` over every active run is kept
+    The active run's ``cuda_visible_devices`` decides enforcement via
+    :func:`containers_to_stop`: the union over every active run stays
     stopped; every other configured container is (re)started; the pause
-    sentinel stays set the whole time a run is active. An unknown device
-    set (unreadable ``job.json``) is treated conservatively -- every
-    configured container is kept stopped, since we can't tell which GPUs
-    it actually claims. When nothing is active we clear the lock +
-    sentinel and start every configured container back up.
+    sentinel stays set while any run is active. An unreadable job.json
+    is treated conservatively -- keep every configured container
+    stopped. Nothing active -> clear lock + sentinel, start everything.
     """
     sentinel_target = sentinel_path(sentinel)
     jobs_dir = train_jobs_dir if train_jobs_dir is not None else _resolve_train_jobs_dir()
@@ -678,10 +677,12 @@ __all__ = [
     'LOCK_GRACE_SECONDS',
     'TRAINER_TERMINAL_STATES',
     'ArbiterAction',
+    'GpuArbiterStopFailedError',
     'bakeoff_active',
     'claim_gpus_for_training',
     'clear_training_lock',
     'containers_to_stop',
+    'docker_client_available',
     'lock_path',
     'needs_multi_gpu_stop',
     'needs_service_stop',

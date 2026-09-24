@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
 from src.core.logging import get_logger
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
     PROMOTE_MIN_PURITY,
@@ -100,8 +101,27 @@ async def auto_promote_clusters(
     # Aggregation: per-cluster top class. Purity is computed across ALL
     # labelled members (validated + unvalidated) so a cluster with 99
     # v6 honda + 1 unvalidated cruiserbike isn't deemed 100% cruiserbike.
+    #
+    # CM-1: restrict to candidate clusters (cluster_id >= the residual
+    # offset). Class clusters (0..RESIDUAL_CLUSTER_ID_OFFSET-1) have
+    # cluster_id == class_id by construction, so their purity is always
+    # 1.0 -- every member "agrees" with the cluster because the cluster
+    # IS the class. Without this filter, any classifier label with at
+    # least min_members siblings gets stamped class_validated=true from
+    # nothing but the classifier's own earlier output: a circular
+    # self-validation, not an independent signal.
+    #
+    # CM-2: exclude class_excluded items from the aggregation too, so an
+    # excluded item's class can't skew a cluster's purity/top-class call
+    # for the *other* members that do get promoted.
     body = {
         'size': 0,
+        'query': {
+            'bool': {
+                'filter': [{'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}}],
+                'must_not': [{'term': {'class_excluded': True}}],
+            },
+        },
         'aggs': {
             'clusters': {
                 'terms': {'field': 'cluster_id', 'size': 10000},
@@ -178,10 +198,6 @@ async def auto_promote_clusters(
             total_skipped += members
             continue
 
-        if dry_run:
-            total_promoted += members - top_count
-            continue
-
         # WARNING: this rule has no v6-confidence floor; even v6 @ 61%
         # passes if its prediction matches the cluster majority. That's
         # why the pipeline defaults to skipping this stage. A
@@ -200,9 +216,21 @@ async def auto_promote_clusters(
                     # crop's class fields — this writer is class-only,
                     # so an unconditional exclusion is correct here.
                     {'term': {'test_holdout': True}},
+                    # CM-2: never auto-promote an excluded item's class.
+                    {'term': {'class_excluded': True}},
                 ],
             },
         }
+
+        if dry_run:
+            # CM-2: `members - top_count` counted every non-majority
+            # member of the cluster, not the set this query actually
+            # touches (which is also gated on class_source and
+            # class_validated=false). Count the real query instead.
+            count_resp = await client.count(index=ITEMS_INDEX, body={'query': promote_query})
+            total_promoted += int(count_resp.get('count', 0))
+            continue
+
         try:
             doc_ids = await _scroll_ids(client, index=ITEMS_INDEX, query=promote_query)
         except Exception as exc:
@@ -223,10 +251,11 @@ async def auto_promote_clusters(
             # scroll time.
             if is_human_owned_class(current) or current.get('test_holdout'):
                 return {}
-            # Query already excludes class_validated=true; re-check the
-            # freshest state too in case a concurrent writer validated
-            # this doc between the scroll fetch and this merge.
-            if current.get('class_validated'):
+            # Query already excludes class_validated=true / class_excluded=true;
+            # re-check the freshest state too in case a concurrent writer
+            # validated or excluded this doc between the scroll fetch and
+            # this merge (CM-2).
+            if current.get('class_validated') or current.get('class_excluded'):
                 return {}
             update: dict[str, Any] = {
                 'class_validated': True,

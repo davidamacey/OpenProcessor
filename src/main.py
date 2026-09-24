@@ -278,6 +278,26 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning('gpu_arbiter_reconcile_skipped', error=str(exc))
 
+    # TR-4: Triton in explicit-control mode only loads its --load-model
+    # list at startup. A model promoted through POST
+    # {api_prefix}/train/promote/{job_id} stays on disk (with a
+    # promote.json marker) but drops to UNAVAILABLE after any Triton
+    # restart until something POSTs /load again -- without this, a
+    # Triton bounce silently strands every previously-promoted model.
+    # One-shot, best-effort: never blocks API startup.
+    try:
+        from src.services.training.triton_promote import reload_promoted_models
+
+        reload_result = await reload_promoted_models()
+        if reload_result.get('reloaded') or reload_result.get('failed'):
+            logger.info(
+                'promoted_models_reload_on_startup',
+                reloaded=reload_result.get('reloaded'),
+                failed=reload_result.get('failed'),
+            )
+    except Exception as exc:
+        logger.warning('promoted_models_reload_skipped', error=str(exc))
+
     # Best-effort: warm the PE-Core text encoder for GET /curation/search/text
     # (ONNX Runtime when OP_PE_TEXT_ONNX_PATH exists, else Triton's
     # pe_text_encoder if ready, else PyTorch — see src/clients/pe_encoder.py).

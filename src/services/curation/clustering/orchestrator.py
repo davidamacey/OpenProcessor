@@ -7,7 +7,7 @@ This module is the thin orchestrator. The actual residual-pool algorithm
 implementations live in :py:mod:`src.services.curation.clustering.methods`
 behind a small registry (HDBSCAN by default on cuML GPU, AHC as a
 fallback). The refine endpoint still uses sklearn AHC directly because
-the per-cluster cap (``MAX_REFINE_MEMBERS=2000``) keeps it fast and the
+the per-cluster cap (``MAX_REFINE_MEMBERS``, default 8000) keeps it fast and the
 ``distance_threshold`` knob is the right tool for splitting an existing
 cluster.
 
@@ -33,7 +33,8 @@ Why complete + cosine + threshold (for the refine path):
 
 Skip-rules:
 
-- Refine: > 2000 members (skip+warn); < 50 members (skip+info).
+- Refine: > MAX_REFINE_MEMBERS (default 8000) members (skip+warn);
+  < MIN_REFINE_MEMBERS (4) members (skip+info).
 - Residual pool: < 32 residuals → no-op (return empty summary).
 """
 
@@ -133,7 +134,8 @@ async def _fetch_cluster_members(
 
     Reads ``embedding_field`` (default the vehicle residual field
     ``pe_embedding``; the region path passes ``RegionFields.embedding``),
-    1024x4B ≈ 4KB each, so 2000 members ≈ 8MB — safe to load into RAM. The
+    1024x4B ≈ 4KB each, so MAX_REFINE_MEMBERS (default 8000) members ≈
+    32MB — safe to load into RAM. The
     embedding is normalized to the ``'embedding'`` key so ``refine_cluster``
     stays field-name-agnostic.
     """
@@ -226,7 +228,8 @@ async def refine_cluster(
 
     Steps:
     1. Pull all crops in the cluster from ``index``.
-    2. Skip if < 50 members (too small) or > 2000 members (too expensive).
+    2. Skip if < MIN_REFINE_MEMBERS (4) members (too small) or
+       > MAX_REFINE_MEMBERS (default 8000) members (too expensive).
     3. ``AgglomerativeClustering(linkage='complete', distance_threshold=0.25,
        metric='cosine')`` over the embeddings.
     4. Bulk-write ``subid_field`` (e.g. ``"47a"``, ``"47b"``) back to each doc.
@@ -311,7 +314,7 @@ async def refine_cluster(
         metric=AHC_METRIC,
     )
     # Off-load to a worker thread so a large cluster (close to
-    # MAX_REFINE_MEMBERS=2000) doesn't block the FastAPI event loop —
+    # MAX_REFINE_MEMBERS, default 8000) doesn't block the FastAPI event loop —
     # refine_cluster runs in the yolo-api process, not the dedicated
     # worker container, so a sync fit_predict here would starve every
     # other request.
@@ -1121,6 +1124,14 @@ async def cluster_region_residuals(
     from sklearn.cluster import MiniBatchKMeans
 
     x = np.asarray(vecs, dtype=np.float32)
+    # CM-3: re-normalize defensively. The k-means/cosine-distance math
+    # below assumes unit-norm rows, but this reads region_embedding
+    # straight off the index with no guarantee the writer's normalization
+    # survived (or that every historical row was written by a
+    # normalizing writer). A norm drift here silently breaks the
+    # "cosine-ish distance to centroid" comment two lines down.
+    norms = np.linalg.norm(x, axis=1, keepdims=True)
+    x = x / np.maximum(norms, 1e-12)
     k = max(8, round(n / REGION_TARGET_BUCKET_SIZE))
     k = min(k, n)  # never more clusters than points
 
@@ -1497,8 +1508,15 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
             return c.astype(np.float32), labels, np.linalg.norm(x - c[labels], axis=1)
         km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=4096)
         labels = km.fit_predict(x)
-        dists = np.linalg.norm(x - km.cluster_centers_[labels], axis=1)
-        return km.cluster_centers_.astype(np.float32), labels, dists
+        # CM-3: k-means centroids (an arithmetic mean of unit-norm
+        # members) are not themselves unit-norm. FalsePositiveCentroidStore
+        # persists these into an IndexFlatL2 that fp_store.search() maps
+        # to cosine similarity assuming every stored vector is unit-norm
+        # -- an un-normalized centroid silently shifts that mapping.
+        centers = km.cluster_centers_
+        centers = centers / (np.linalg.norm(centers, axis=1, keepdims=True) + 1e-12)
+        dists = np.linalg.norm(x - centers[labels], axis=1)
+        return centers.astype(np.float32), labels, dists
 
     centroids, labels, dists = await asyncio.to_thread(_fit)
 

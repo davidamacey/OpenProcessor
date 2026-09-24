@@ -103,7 +103,36 @@ class TestFalsePositiveCentroidStore:
 
         dist, idx = store.search(np.array([[0.9, 0.1]], dtype=np.float32))
         assert idx[0] == 0
-        assert dist[0] == pytest.approx(0.02, abs=1e-4)
+        # CM-3: plain L2, not faiss.IndexFlatL2's raw squared L2.
+        # Squared distance is (0.1)^2 + (0.1)^2 = 0.02; plain L2 is its
+        # square root.
+        assert dist[0] == pytest.approx(np.sqrt(0.02), abs=1e-4)
+
+    def test_search_returns_plain_l2_not_squared_l2(self, tmp_path: Path) -> None:
+        """CM-3: orthogonal unit vectors -> sqrt(2); identical -> 0.
+
+        Every caller (auto-assign FP threshold in orchestrator.py,
+        suspected-FP threshold in regions_fp.py, both documented as "L2
+        on unit-norm") assumes plain L2. faiss.IndexFlatL2 returns
+        *squared* L2 by design -- orthogonal unit vectors give 2.0, not
+        sqrt(2) -- so the store must take the square root before
+        returning.
+        """
+        cfg = CurationConfig(state_dir=tmp_path)
+        store = FalsePositiveCentroidStore(config=cfg)
+        orthogonal = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
+        store.save(orthogonal, {'subtypes': ['a', 'b']})
+
+        # Query identical to centroid 0 -> distance 0.
+        dist_identical, idx_identical = store.search(np.array([[1.0, 0.0, 0.0]], dtype=np.float32))
+        assert idx_identical[0] == 0
+        assert dist_identical[0] == pytest.approx(0.0, abs=1e-6)
+
+        # Query orthogonal to both centroids (nearest is a tie broken by
+        # index order) -> plain L2 between orthogonal unit vectors is
+        # sqrt(2), not faiss's raw squared-L2 value of 2.0.
+        dist_orthogonal, _idx = store.search(np.array([[0.0, 0.0, 1.0]], dtype=np.float32))
+        assert dist_orthogonal[0] == pytest.approx(np.sqrt(2.0), abs=1e-4)
 
     def test_two_deployments_with_different_prefixes_do_not_collide(self, tmp_path: Path) -> None:
         cfg = CurationConfig(state_dir=tmp_path)

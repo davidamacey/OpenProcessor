@@ -46,7 +46,9 @@ DEFAULT_GEMMA = (
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',
-        str(_config.state_dir / 'vlm_worker' / 'pause.sentinel'),
+        # S-4: must match CurationConfig.pause_sentinel_path -- the
+        # gpu_arbiter writer resolves through the same property.
+        str(_config.pause_sentinel_path),
     )
 )
 JPEG_QUALITY = 90

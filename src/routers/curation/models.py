@@ -41,10 +41,11 @@ from src.routers.curation._common import (
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.training.triton_promote import (
-    DEFAULT_TRITON_MODELS_DIR,
     ModelNotPromotedError,
     PromoteError,
     UnloadResult,
+    resolve_triton_http_url,
+    resolve_triton_models_dir,
     unload_triton_model,
 )
 
@@ -252,7 +253,7 @@ def _core_pipeline_models() -> frozenset[str]:
 
 
 def _discover_promoted_models(
-    models_dir: Path = DEFAULT_TRITON_MODELS_DIR,
+    models_dir: Path | None = None,
 ) -> list[dict[str, Any]]:
     """Models promoted through this pipeline that aren't one of the fixed
     :func:`_core_models`.
@@ -268,10 +269,11 @@ def _discover_promoted_models(
     rather than failing the whole `/models/status` response — this is
     supplementary discovery, not the pipeline's core models.
     """
+    resolved_dir = models_dir if models_dir is not None else resolve_triton_models_dir()
     fixed_names = {name for name, *_ in _core_models()}
     out: list[dict[str, Any]] = []
     try:
-        entries = sorted(models_dir.iterdir())
+        entries = sorted(resolved_dir.iterdir())
     except OSError:
         return out
     for entry in entries:
@@ -343,7 +345,7 @@ async def models_status() -> dict[str, Any]:
     carries enough metadata for the labeler ``/models`` page to render a
     self-explanatory card without requiring access to Triton/Prometheus directly.
     """
-    triton_http = os.environ.get('TRITON_HTTP_URL', 'http://triton-server:8000')
+    triton_http = resolve_triton_http_url()
     triton_metrics_url = os.environ.get('TRITON_METRICS_URL', 'http://triton-server:8002/metrics')
 
     state_by_name: dict[str, dict[str, Any]] = {}

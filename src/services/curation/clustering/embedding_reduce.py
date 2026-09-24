@@ -1,22 +1,30 @@
-"""UMAP residual-pool reducer for the curation AHC clustering pipeline.
+"""UMAP residual-pool reducer — visualization only (CM-7 doc fix).
 
-Responsibilities:
+Two genuinely separate things live in this module, and only one of
+them touches real clustering:
 
-1. Pull v6/PE embeddings for residual crops (no ``cluster_id`` assigned).
-2. UMAP-reduce them to 50 dimensions with a deterministic seed and
-   ``cosine`` metric. CPU path uses ``umap-learn``; GPU path uses
-   ``cuml.manifold.UMAP`` when the worker container has a usable GPU
-   and free VRAM (see :mod:`src.services.curation.clustering.backend`).
-3. Persist the fitted reducer in two places (local joblib + OpenSearch
-   ``legacy_umap_state`` index) so a fresh container or a refit-less rerun
-   can keep the same manifold and emit stable cluster IDs. Cache slots
-   are per-backend — sklearn and cuML pickle incompatible class
-   instances, so a worker that flipped from CPU to GPU (or back) refits
-   on the new side rather than failing at unpickle.
+1. :func:`fetch_residual_v6_embeddings_parallel` — pulls v6/PE
+   embeddings for residual crops (no ``cluster_id`` assigned). This
+   part IS shared with the real clustering path:
+   :func:`~src.services.curation.clustering.orchestrator.cluster_residuals`
+   calls it directly for its embedding fetch.
+2. UMAP reduction to 50 dimensions with a deterministic seed and
+   ``cosine`` metric (CPU: ``umap-learn``; GPU: ``cuml.manifold.UMAP``
+   when the worker container has a usable GPU and free VRAM — see
+   :mod:`src.services.curation.clustering.backend`), plus persisting
+   the fitted reducer (local joblib + OpenSearch ``op_umap_state``
+   index, cache slots per-backend since sklearn/cuML pickle
+   incompatible class instances).
 
-This module **only** handles embedding fetch + UMAP reduction. The
-actual clustering (Agglomerative Hierarchical) lives in
-:mod:`src.services.curation.clustering.orchestrator`.
+**The UMAP-reduced output from (2) is never fed into AHC or IVF.**
+``cluster_residuals`` clusters the raw, L2-normalized 1024-d embeddings
+fetched in (1) directly — that's also what makes the AHC
+``distance_threshold=0.25`` cosine cut dimensionally correct against
+the source vectors, not a reduced projection. The only caller of the
+UMAP-reduce path is ``POST /curation/cluster/umap/rebuild``
+(:mod:`src.routers.curation_umap`), which exists purely to feed the
+labeler's 2D/3D scatter visualization. Any design note claiming "UMAP
+feeds the clustering pipeline" is wrong; correct it if you find one.
 
 Defaults are tuned for the reference embedding pipeline (a private
 design doc's Appendix C.12
@@ -636,9 +644,12 @@ async def get_or_fit_reducer(
 async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
     """Force a UMAP refit over the current residual pool.
 
-    Exposed via ``POST /curation/cluster/umap/rebuild``. Re-clustering
-    happens on the next auto-label run (AHC over the freshly-fit
-    manifold).
+    Exposed via ``POST /curation/cluster/umap/rebuild``. CM-7: this is
+    visualization-only -- it refits the manifold cache the labeler's
+    scatter view reads, and has no effect on the next auto-label run.
+    AHC/IVF cluster the raw 1024-d embeddings directly and never
+    consume this module's UMAP-reduced output; see the module
+    docstring.
     """
     ids, embeddings = await fetch_residual_v6_embeddings(client)
     if len(ids) == 0:

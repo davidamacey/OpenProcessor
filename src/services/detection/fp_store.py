@@ -107,10 +107,24 @@ class FalsePositiveCentroidStore:
         self.metadata = metadata
 
     def search(self, embeddings: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Return ``(distances, subtype_indices)`` to the nearest FP centroid."""
+        """Return ``(distances, subtype_indices)`` to the nearest FP centroid.
+
+        CM-3: ``faiss.IndexFlatL2`` returns *squared* L2 distance, not L2.
+        Every caller (auto-assign FP threshold, suspected-FP threshold,
+        the "L2 on unit-norm" comments at the call sites) was written
+        assuming plain L2, where orthogonal unit vectors are ``sqrt(2)``
+        and identical vectors are 0. Left squared, a distance of 0.20
+        (documented as an ~0.90 cosine cut) is actually an ~0.90 *squared*
+        distance -> cosine similarity 1 - 0.20/2 = 0.90, which happened to
+        read right by coincidence at small values but diverges badly
+        everywhere else (e.g. the 0.35 suspected-FP threshold was really
+        cosine >= 0.825, not the documented ~0.94). Taking the square root
+        here makes every downstream threshold comparison correct in L2
+        units without touching the call sites' math.
+        """
         x = np.ascontiguousarray(embeddings, dtype=np.float32)
         dist, idx = self._index.search(x, 1)
-        return dist.reshape(-1), idx.reshape(-1)
+        return np.sqrt(np.maximum(dist.reshape(-1), 0.0)), idx.reshape(-1)
 
 
 __all__ = ['FalsePositiveCentroidStore', 'fp_store_dir']

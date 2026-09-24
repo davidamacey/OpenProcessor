@@ -28,6 +28,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import get_curation_config
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
 
 CFG = get_curation_config()
@@ -68,13 +69,16 @@ def fake() -> QueryFakeOpenSearch:
         'm1': _item('m1', image='img4'),
         'never': _item('never', image='img5'),
     }
-    # One high-purity cluster: 4 members all predicted 'gadget' by the
-    # detector -> auto-promote validates them.
+    # One high-purity CANDIDATE cluster (cluster_id >= the residual
+    # offset -- CM-1 excludes class-range clusters, cluster_id ==
+    # class_id, from auto-promote entirely since their purity is 1.0 by
+    # construction): 4 members all predicted 'gadget' by the detector ->
+    # auto-promote validates them.
     for i in range(4):
         items[f'ap{i}'] = _item(
             f'ap{i}',
             image=f'ap_img{i}',
-            cluster_id=42,
+            cluster_id=RESIDUAL_CLUSTER_ID_OFFSET + 42,
             class_id=1,
             class_name='gadget',
             class_source='v6_model',

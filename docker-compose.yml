@@ -227,10 +227,11 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
     command:
       - python
-      - scripts/curation/vlm_worker.py
+      - -m
+      - scripts.curation.vlm_worker
       - --continuous
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'scripts/curation/vlm_worker.py' || exit 1"]
+      test: ["CMD-SHELL", "pgrep -f 'scripts.curation.vlm_worker' || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -476,12 +477,22 @@ services:
       - training
     restart: unless-stopped
     command:
+      # ML-1: serve artifacts through the tracking server's HTTP proxy
+      # instead of a bare local path. The trainer container never mounts
+      # the `mlflow_data` volume, so a local `--default-artifact-root`
+      # makes every `mlflow.log_artifact(...)` call in
+      # `on_train_end` (uninstrumented in Ultralytics' own MLflow
+      # integration) raise PermissionError and fail the run at the last
+      # step. `mlflow-artifacts:/` routes the upload over the network
+      # connection the trainer already has (MLFLOW_TRACKING_URI).
       - mlflow
       - server
       - --host=0.0.0.0
       - --port=5000
       - --backend-store-uri=sqlite:////mlflow/mlflow.db
-      - --default-artifact-root=/mlflow/artifacts
+      - --serve-artifacts
+      - --artifacts-destination=/mlflow/artifacts
+      - --default-artifact-root=mlflow-artifacts:/
     volumes:
       - mlflow_data:/mlflow
     ports:

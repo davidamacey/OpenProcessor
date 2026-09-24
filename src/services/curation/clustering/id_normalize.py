@@ -120,12 +120,29 @@ async def force_cluster_id_equals_class_id(
         # Restrict to docs that actually have a class assignment.
         # update_by_query then evaluates the script on each matched doc;
         # the script no-ops when cluster_id is already correct.
-        'query': {'bool': {'must': [{'exists': {'field': 'class_id'}}]}},
+        #
+        # CM-6: also exclude class_excluded items at the query level.
+        # Exclusion (exclusion.py) keeps class_id but sets
+        # cluster_id=-2, precisely so an excluded item drops out of its
+        # class cluster. Without this filter, this normalizer pulls
+        # every excluded item straight back in on its next run.
+        'query': {
+            'bool': {
+                'must': [{'exists': {'field': 'class_id'}}],
+                'must_not': [{'term': {'class_excluded': True}}],
+            },
+        },
         'script': {
             'source': (
                 # `def` rather than `int` so we can hold either an int
                 # or null without painless complaining. `Objects.equals`
                 # handles the null case correctly.
+                # CM-6 defense in depth: re-check class_excluded inside
+                # the script too, in case a concurrent exclusion write
+                # lands between the query match and this doc's update.
+                'if (ctx._source.class_excluded == true) {'
+                "  ctx.op = 'noop'; return;"
+                '}'
                 'def cid = ctx._source.class_id;'
                 "if (cid == null) { ctx.op = 'noop'; return; }"
                 'if (java.util.Objects.equals(ctx._source.cluster_id, cid)) {'

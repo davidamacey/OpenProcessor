@@ -372,6 +372,66 @@ def _is_oom_error(exc: Exception) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# ML-1 defense in depth
+# ---------------------------------------------------------------------------
+
+
+def _guard_ultralytics_mlflow_artifact_root(experiment_name: str) -> None:
+    """Disable Ultralytics' own MLflow integration if its artifact root
+    is a local path this process cannot write.
+
+    The primary fix is serving MLflow artifacts through the tracking
+    server's HTTP proxy (``--serve-artifacts
+    --default-artifact-root=mlflow-artifacts:/``, see ``docker-compose.yml``).
+    This guard is a second line of defense against a misconfigured or
+    stale experiment whose ``artifact_location`` is still a bare local
+    path (e.g. an experiment created before that fix, or a deployment
+    that reverts it): Ultralytics' own ``on_train_end`` MLflow callback
+    (``ultralytics/utils/callbacks/mlflow.py``) has no try/except around
+    ``mlflow.log_artifact(...)``, so a PermissionError there escapes
+    ``model.train()`` and fails an entire multi-hour run at the last
+    step, after every epoch already succeeded. The project's own
+    callbacks in ``mlflow_callbacks.py`` are unaffected -- they already
+    catch their own artifact-logging failures.
+    """
+    try:
+        import importlib
+
+        import mlflow
+
+        ultralytics_settings = importlib.import_module('ultralytics.utils').SETTINGS
+    except Exception as exc:  # pragma: no cover - optional dependency wiring
+        logger.warning('mlflow artifact-root guard: import failed', error=str(exc))
+        return
+
+    if not ultralytics_settings.get('mlflow', False):
+        return  # Ultralytics' own integration isn't enabled; nothing to guard.
+
+    try:
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment is None:
+            return  # not created yet; the server will apply --default-artifact-root
+        location = experiment.artifact_location or ''
+        is_local_path = location.startswith(('/', 'file:'))
+        if not is_local_path:
+            return  # proxied (mlflow-artifacts:) or remote (s3:, gs:, ...) -- fine
+        probe_dir = Path(location.removeprefix('file:'))
+        probe_dir.mkdir(parents=True, exist_ok=True)
+        test_file = probe_dir / '.write_probe'
+        test_file.write_text('ok')
+        test_file.unlink()
+    except Exception as exc:
+        logger.warning(
+            "mlflow artifact root is unwritable; disabling Ultralytics' built-in "
+            "MLflow integration for this run (the project's own mlflow_callbacks.py "
+            'still records params/metrics)',
+            artifact_location=location if 'location' in locals() else None,
+            error=str(exc),
+        )
+        ultralytics_settings.update({'mlflow': False})
+
+
+# ---------------------------------------------------------------------------
 # The run itself
 # ---------------------------------------------------------------------------
 
@@ -596,6 +656,9 @@ def run_job(spec: JobSpec) -> None:
                 'MLFLOW_TRACKING_URI', os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow:5000')
             )
             os.environ['MLFLOW_RUN'] = spec.mlflow_run_name
+            _guard_ultralytics_mlflow_artifact_root(
+                os.environ.get('MLFLOW_EXPERIMENT_NAME', 'openprocessor')
+            )
 
             train_kwargs, seed, deterministic = build_train_kwargs(
                 spec, data_yaml_path, local_device
