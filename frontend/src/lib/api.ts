@@ -1430,29 +1430,13 @@ export async function getCrop(cropId: string, signal?: AbortSignal): Promise<OpC
   return mapRawCrop(raw);
 }
 
-export function setCropPlate(
-  cropId: string,
-  bbox: [number, number, number, number] | null,
-  signal?: AbortSignal,
-): Promise<OpCrop> {
-  return apiFetch<OpCrop>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/region`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ bbox_norm: bbox }),
-    },
-    signal,
-  );
-}
-
 /**
  * PUT a slot's sub-box via the spec's declared endpoint, or clear it
  * (`xyxy === null`) via `clearBox` when the profile declares a distinct
- * one, falling back to `setBox` with a null body otherwise (matching
- * `setCropPlate`'s existing "PUT with bbox_norm: null clears" contract —
- * licensePlateSlot doesn't declare a separate clearBox URL, so this
- * degrades to that same call for the one profile that's actually wired
- * today).
+ * one, falling back to `setBox` with a null box otherwise (the backend's
+ * "PUT with a null box clears" contract). The body key is the slot's own
+ * `subBox.bboxField`, so a slot's writes use the same wire name its reads
+ * do.
  */
 export function setSlotBox(
   spec: SlotSpec,
@@ -1463,14 +1447,15 @@ export function setSlotBox(
   const path =
     (xyxy === null ? spec.endpoints.clearBox?.(cropId) : undefined) ??
     spec.endpoints.setBox?.(cropId);
-  if (!path) {
+  const bboxField = spec.capabilities.subBox?.bboxField;
+  if (!path || !bboxField) {
     return Promise.reject(
-      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint`),
+      new Error(`slot "${spec.key}" has no setBox/clearBox endpoint or subBox field`),
     );
   }
   return apiFetch<OpCrop>(
     `${API_PREFIX}${path}`,
-    { method: 'PUT', body: JSON.stringify({ bbox_norm: xyxy }) },
+    { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy }) },
     signal,
   );
 }
@@ -1540,17 +1525,19 @@ export function batchPlateStatus(
   conflicts: { crop_id: string; current_source: string | null }[];
 }> {
   const path = spec.endpoints.batchStatus?.() ?? `${REGION_BASE}/batch_status`;
+  const lc = spec.capabilities.lifecycle;
+  if (!lc) {
+    return Promise.reject(new Error(`slot "${spec.key}" has no lifecycle capability`));
+  }
+  const body: Record<string, unknown> = {
+    crop_ids: cropIds,
+    [lc.statusField]: plateStatus,
+  };
+  if (lc.verifiedField) body[lc.verifiedField] = opts.plateVerified ?? null;
+  if (lc.labelSourceField) body[lc.labelSourceField] = opts.labelSource ?? 'human';
   return apiFetch(
     `${API_PREFIX}${path}`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        crop_ids: cropIds,
-        region_status: plateStatus,
-        region_verified: opts.plateVerified ?? null,
-        label_source: opts.labelSource ?? 'human',
-      }),
-    },
+    { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
 }

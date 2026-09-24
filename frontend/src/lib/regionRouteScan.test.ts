@@ -81,7 +81,7 @@ describe('no bare /plates route-family literal survives outside REGION_BASE', ()
       /\$\{API_PREFIX\}\$\{REGION_BASE\}\/fp_centroids\/status`/,
       /\$\{API_PREFIX\}\$\{REGION_BASE\}\/suspected_false_positives\$\{qs\(\{/,
       /\$\{API_PREFIX\}\$\{REGION_BASE\}\/training_candidates\$\{qs\(\{ mode, \.\.\.params \}\)\}`/,
-      /\$\{API_PREFIX\}\$\{path\}`,\s*\n\s*\{\s*\n\s*method: 'POST',\s*\n\s*body: JSON\.stringify\(\{\s*\n\s*crop_ids/,
+      /const path = spec\.endpoints\.batchStatus\?\.\(\) \?\? `\$\{REGION_BASE\}\/batch_status`;/,
     ];
     for (const re of CALLS) {
       expect(apiSrc).toMatch(re);

@@ -69,6 +69,7 @@ export const licensePlateSlot: SlotSpec = {
       statusField: 'region_status',
       verifiedField: 'region_verified',
       rejectionReasonField: 'region_rejection_reason',
+      labelSourceField: 'region_label_source',
       states: [
         {
           value: 'pending_detection',

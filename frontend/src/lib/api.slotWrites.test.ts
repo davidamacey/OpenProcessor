@@ -7,7 +7,7 @@
  * (region_text / region_status / region_rejection_reason).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setSlotBox, patchSlotMeta, API_PREFIX } from './api';
+import { setSlotBox, patchSlotMeta, batchPlateStatus, API_PREFIX } from './api';
 import { licensePlateSlot } from './annotations/profiles/licensePlate';
 
 function okResponse(body: unknown = {}) {
@@ -82,7 +82,7 @@ describe('setSlotBox', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body)).toEqual({ bbox_norm: [0.1, 0.1, 0.2, 0.2] });
+    expect(JSON.parse(init.body)).toEqual({ region_bbox_norm: [0.1, 0.1, 0.2, 0.2] });
   });
 
   it('clearing (null) falls back to setBox when no distinct clearBox is declared', async () => {
@@ -94,11 +94,33 @@ describe('setSlotBox', () => {
     const [url, init] = fetchMock.mock.calls[0];
     // licensePlateSlot's clearBox and setBox are the same URL today.
     expect(url).toBe(`${API_PREFIX}/crops/c1/region`);
-    expect(JSON.parse(init.body)).toEqual({ bbox_norm: null });
+    expect(JSON.parse(init.body)).toEqual({ region_bbox_norm: null });
   });
 
   it('rejects when the slot declares no setBox endpoint', async () => {
     const noEndpointSpec = { ...licensePlateSlot, endpoints: {} };
     await expect(setSlotBox(noEndpointSpec, 'c1', null)).rejects.toThrow(/no setBox/);
+  });
+});
+
+describe('batchPlateStatus', () => {
+  it("writes the slot's own lifecycle wire fields (B3 region_* body)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(okResponse({ updated: 2, conflicts: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await batchPlateStatus(licensePlateSlot, ['a', 'b'], 'detected', {
+      plateVerified: true,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${API_PREFIX}/regions/batch_status`);
+    expect(JSON.parse(init.body)).toEqual({
+      crop_ids: ['a', 'b'],
+      region_status: 'detected',
+      region_verified: true,
+      region_label_source: 'human',
+    });
   });
 });

@@ -849,6 +849,12 @@ function parseLifecycle(
     );
     return null;
   }
+  if (raw.labelSourceField !== undefined && !isWireField(raw.labelSourceField)) {
+    errors.push(
+      `slot "${key}": capabilities.lifecycle.labelSourceField is invalid — skipped`,
+    );
+    return null;
+  }
   const states = parseStates(raw.states, key, errors);
   if (states === null) return null;
   const values = new Set(states.map((s) => s.value));
@@ -882,6 +888,8 @@ function parseLifecycle(
   if (raw.verifiedField !== undefined) out.verifiedField = raw.verifiedField as string;
   if (raw.rejectionReasonField !== undefined)
     out.rejectionReasonField = raw.rejectionReasonField as string;
+  if (raw.labelSourceField !== undefined)
+    out.labelSourceField = raw.labelSourceField as string;
   if (raw.falsePositiveState !== undefined)
     out.falsePositiveState = raw.falsePositiveState as string;
   return out;

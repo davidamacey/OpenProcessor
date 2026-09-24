@@ -189,6 +189,9 @@ export interface LifecycleCapability {
    *  (Finding C.3). */
   verifiedField?: WireField;
   rejectionReasonField?: WireField;
+  /** Who made a human write (e.g. `region_label_source`). Sent as
+   *  `'human'` on batch status writes when declared. */
+  labelSourceField?: WireField;
   states: SlotState[];
   confirmState: string;
   rejectState: string;
