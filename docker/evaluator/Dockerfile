@@ -32,7 +32,11 @@ LABEL org.opencontainers.image.title="OpenProcessor Curation Evaluator" \
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
     curl \
+    git \
+    pkg-config \
     libgl1 \
     libglib2.0-0t64 \
     libgomp1 \
