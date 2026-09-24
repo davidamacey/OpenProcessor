@@ -138,3 +138,47 @@ describe('mapRawCrop slots mapping', () => {
     expect(after.aircraft_tail_number?.lifecycle?.status).toBe('detected');
   });
 });
+
+// B3 item keys the crop grid's accept-suggestion flow and meta panel read.
+// Before this mapping existed the suggestion chip and G/Shift+Enter could
+// never fire: nothing populated the fields.
+describe('mapRawCrop VLM fields', () => {
+  it('maps the VLM proposal and categorical confidence', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          crop_id: 'v1',
+          image_path: '/x.jpg',
+          bbox_norm: [0, 0, 1, 1],
+          label_source: 'vlm',
+          vlm_confidence: 'medium',
+          vlm_proposed_class_id: 12,
+          vlm_proposed_class_name: 'forklift',
+        }),
+      ),
+    );
+    const out = await getCrop('v1');
+    expect(out.vlm_suggested_class_id).toBe(12);
+    expect(out.vlm_suggested_class_name).toBe('forklift');
+    expect(out.vlm_confidence).toBe('medium');
+    expect(out.label_source).toBe('vlm');
+  });
+
+  it("defaults an empty label_source to 'unknown', not an invented writer", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          crop_id: 'v2',
+          image_path: '/x.jpg',
+          bbox_norm: [],
+          label_source: '',
+        }),
+      ),
+    );
+    const out = await getCrop('v2');
+    expect(out.label_source).toBe('unknown');
+    expect(out.vlm_suggested_class_id).toBeNull();
+  });
+});

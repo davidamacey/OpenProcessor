@@ -246,7 +246,7 @@
       <p class="mt-0.5 text-xs text-zinc-400">
         Aligns <code class="text-zinc-300">cluster_id</code> with
         <code class="text-zinc-300">class_id</code>, re-clusters unlabeled residuals
-        (AHC), promotes high-purity clusters, and runs Gemma over remaining unvalidated
+        (AHC), promotes high-purity clusters, and runs the VLM over remaining unvalidated
         crops. v6's confident labels and human validations are never overwritten. Hours at
         350k-crop scale. Safe to cancel.
       </p>

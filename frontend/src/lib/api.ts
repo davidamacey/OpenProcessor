@@ -1161,6 +1161,9 @@ type RawCrop = {
   blur_lap_ratio?: number | null;
   classifier_raw_confidence?: number | null;
   proposal_name?: string | null;
+  vlm_confidence?: string | null;
+  vlm_proposed_class_id?: number | null;
+  vlm_proposed_class_name?: string | null;
   // Curation scores (Phase 3, docs/curation-strategy-plan-2026-09.md §4).
   // Optional/forward-tolerant: an un-backfilled pool just omits these.
   mistakenness_score?: number | null;
@@ -1180,7 +1183,7 @@ function mapRawCrop(c: RawCrop): OpCrop {
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
     class_source: c.class_source ?? null,
-    label_source: (c.label_source || 'model') as OpCrop['label_source'],
+    label_source: c.label_source || 'unknown',
     label_validated: !!c.label_validated,
     label_confidence: c.confidence ?? null,
     cluster_id: c.cluster_id ?? null,
@@ -1197,6 +1200,9 @@ function mapRawCrop(c: RawCrop): OpCrop {
     blur_lap_ratio: c.blur_lap_ratio ?? null,
     classifier_raw_confidence: c.classifier_raw_confidence ?? null,
     proposal_name: c.proposal_name ?? null,
+    vlm_confidence: c.vlm_confidence ?? null,
+    vlm_suggested_class_id: c.vlm_proposed_class_id ?? null,
+    vlm_suggested_class_name: c.vlm_proposed_class_name ?? null,
     mistakenness_score: c.mistakenness_score ?? null,
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
@@ -1542,7 +1548,7 @@ export function batchPlateStatus(
   );
 }
 
-export async function runGemmaOnCluster(
+export async function runVlmOnCluster(
   clusterId: number,
   signal?: AbortSignal,
 ): Promise<{ predicted: number; updated: number; new_class_proposals?: unknown[] }> {

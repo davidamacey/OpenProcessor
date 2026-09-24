@@ -11,7 +11,7 @@
     moveCropsToCluster,
     putCropLabel,
     refineCluster,
-    runGemmaOnCluster,
+    runVlmOnCluster,
     unexcludeCrops,
     type ExcludeReason,
   } from '$lib/api';
@@ -527,19 +527,19 @@
     }
   }
 
-  async function acceptGemmaForCrop(crop: OpCrop): Promise<void> {
-    if (crop.gemma_suggested_class_id == null) return;
+  async function acceptVlmForCrop(crop: OpCrop): Promise<void> {
+    if (crop.vlm_suggested_class_id == null) return;
     const entry = undoStore.snapshotOf(crop);
     undoStore.push(entry);
     applyLocalLabel(
       crop.id,
-      crop.gemma_suggested_class_id,
-      crop.gemma_suggested_class_name ?? null,
+      crop.vlm_suggested_class_id,
+      crop.vlm_suggested_class_name ?? null,
     );
     try {
-      await putCropLabel(crop.id, crop.gemma_suggested_class_id);
+      await putCropLabel(crop.id, crop.vlm_suggested_class_id);
     } catch (e) {
-      toastStore.error(`Accept Gemma failed: ${(e as Error).message}`);
+      toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
       const prevCls =
         entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
       revertLocalLabel(entry, prevCls?.name ?? null);
@@ -547,21 +547,21 @@
     }
   }
 
-  async function rejectGemmaForCrop(crop: OpCrop): Promise<void> {
+  async function rejectVlmForCrop(crop: OpCrop): Promise<void> {
     // Reject = clear the suggestion locally; the server clears on next batch.
     cropPager.items = cropPager.items.map((c) =>
       c.id === crop.id
-        ? { ...c, gemma_suggested_class_id: null, gemma_suggested_class_name: null }
+        ? { ...c, vlm_suggested_class_id: null, vlm_suggested_class_name: null }
         : c,
     );
   }
 
-  async function acceptAllGemmaOnPage(): Promise<void> {
+  async function acceptAllVlmOnPage(): Promise<void> {
     const targets = filteredCrops.filter(
-      (c) => c.gemma_suggested_class_id != null && !c.label_validated,
+      (c) => c.vlm_suggested_class_id != null && !c.label_validated,
     );
     if (targets.length === 0) {
-      toastStore.info('No Gemma suggestions on this page.');
+      toastStore.info('No VLM suggestions on this page.');
       return;
     }
     // Shift+Enter is already a deliberate two-finger gesture; the snapshots
@@ -573,13 +573,13 @@
     // every later group locally green but never sent.
     const snaps = new Map<string, UndoEntry>();
     for (const t of targets) {
-      const k = t.gemma_suggested_class_id!;
+      const k = t.vlm_suggested_class_id!;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(t.id);
       const entry = undoStore.snapshotOf(t);
       snaps.set(t.id, entry);
       undoStore.push(entry);
-      applyLocalLabel(t.id, k, t.gemma_suggested_class_name ?? null);
+      applyLocalLabel(t.id, k, t.vlm_suggested_class_name ?? null);
     }
     let ok = 0;
     let lastError: string | null = null;
@@ -685,20 +685,20 @@
   // In-flight guards so the operator gets feedback and can't double-fire
   // these long-running cluster ops.
   let refining = $state<boolean>(false);
-  let gemmaRunning = $state<boolean>(false);
+  let vlmRunning = $state<boolean>(false);
 
-  async function runGemma(): Promise<void> {
-    if (gemmaRunning) return;
-    gemmaRunning = true;
+  async function runVlm(): Promise<void> {
+    if (vlmRunning) return;
+    vlmRunning = true;
     try {
-      const res = await runGemmaOnCluster(clusterId);
+      const res = await runVlmOnCluster(clusterId);
       toastStore.success(
-        `Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
+        `VLM labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
       );
     } catch (e) {
-      toastStore.error(`Gemma run failed: ${(e as Error).message}`);
+      toastStore.error(`VLM run failed: ${(e as Error).message}`);
     } finally {
-      gemmaRunning = false;
+      vlmRunning = false;
     }
   }
 
@@ -1011,17 +1011,17 @@
     // do here?" friction.
 
     reg('enter', confirmSelected, 'Confirm selected & advance');
-    reg('shift+enter', acceptAllGemmaOnPage, 'Confirm all Gemma suggestions on page');
+    reg('shift+enter', acceptAllVlmOnPage, 'Confirm all VLM suggestions on page');
     reg(
       'g',
       async () => {
         const ids = [...sel.ids];
         for (const id of ids) {
           const c = cropPager.items.find((cc) => cc.id === id);
-          if (c) await acceptGemmaForCrop(c);
+          if (c) await acceptVlmForCrop(c);
         }
       },
-      'Accept Gemma for selected',
+      'Accept VLM suggestion for selected',
     );
     reg(
       'n',
@@ -1251,22 +1251,22 @@
       <button
         class="btn"
         type="button"
-        onclick={acceptAllGemmaOnPage}
-        title="Shift+Enter — accept all Gemma suggestions on this page"
+        onclick={acceptAllVlmOnPage}
+        title="Shift+Enter — accept all VLM suggestions on this page"
       >
-        Accept Gemma <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧↵</kbd>
+        Accept VLM <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧↵</kbd>
       </button>
 
       <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
-      <button class="btn" type="button" onclick={runGemma} disabled={gemmaRunning}>
-        {#if gemmaRunning}
+      <button class="btn" type="button" onclick={runVlm} disabled={vlmRunning}>
+        {#if vlmRunning}
           <span
             class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"
           ></span>
           Running…
         {:else}
-          Run Gemma
+          Run VLM
         {/if}
       </button>
       <button
@@ -1552,8 +1552,8 @@
                   {crop}
                   selected={sel.has(crop.id)}
                   onclick={(c, e) => clickSelect(c.id, e)}
-                  onacceptGemma={(c) => void acceptGemmaForCrop(c)}
-                  onrejectGemma={(c) => void rejectGemmaForCrop(c)}
+                  onacceptVlm={(c) => void acceptVlmForCrop(c)}
+                  onrejectVlm={(c) => void rejectVlmForCrop(c)}
                   ondetail={(c) => (detailCrop = c)}
                 />
                 {#if searchModeActive && searchScores.has(crop.id)}

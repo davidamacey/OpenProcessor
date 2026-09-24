@@ -166,13 +166,13 @@ export interface ReviewPresetDef {
 export const REVIEW_PRESETS: ReviewPresetDef[] = [
   {
     id: 'mismatches',
-    label: 'Gemma mismatches',
-    description: "Gemma's suggestion disagrees with the crop's current label",
+    label: 'VLM mismatches',
+    description: "The VLM's suggestion disagrees with the crop's current label",
   },
   {
     id: 'vlm_low_conf',
-    label: 'Gemma low-conf',
-    description: "Gemma's suggestion confidence is below the review threshold",
+    label: 'VLM low-conf',
+    description: "The VLM's suggestion confidence is below the review threshold",
   },
   {
     id: 'primary_low_conf',

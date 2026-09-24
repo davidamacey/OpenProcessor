@@ -9,16 +9,16 @@
 
 import type { SlotKey, SlotData } from './annotations/types';
 
+/** Who wrote a crop's current label. Same vocabulary as `class_source`
+ *  (curation_api_contract.md "class_source values"): `human*`, the fixed
+ *  VLM writer values, or an ingest detector's config-derived value — so
+ *  it stays an open string. */
 export type LabelSource =
-  | 'v6_original_label'
-  | 'hdd_user_label'
-  | 'model_suggestion'
-  | 'gemma_suggestion'
   | 'human'
   | 'human_confirmed'
-  | 'cluster_propagation'
-  | 'ensemble'
-  | 'unknown';
+  | 'vlm'
+  | 'vlm_human_confirmed'
+  | (string & {});
 
 export type ClassSource = 'registry' | 'derived' | 'imported';
 
@@ -192,10 +192,13 @@ export interface OpCrop {
   label_source: LabelSource;
   label_validated: boolean;
   label_confidence: number | null;
-  /** Gemma's most-recent suggestion if any. */
-  gemma_suggested_class_id?: number | null;
-  gemma_suggested_class_name?: string | null;
-  gemma_suggested_confidence?: number | null;
+  /** The VLM's registry-matched class for this crop when it did not
+   *  auto-apply it (wire `vlm_proposed_class_id`/`_name`). Drives the
+   *  accept-suggestion chip and the `G`/`Shift+Enter` keys. */
+  vlm_suggested_class_id?: number | null;
+  vlm_suggested_class_name?: string | null;
+  /** The VLM's categorical confidence: `high` | `medium` | `low`. */
+  vlm_confidence?: string | null;
   /** Cluster + similarity-to-centroid (0..1). */
   cluster_id: number | null;
   similarity_to_centroid: number | null;

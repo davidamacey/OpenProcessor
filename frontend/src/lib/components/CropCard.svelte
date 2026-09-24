@@ -14,8 +14,8 @@
     slot?: SlotSpec;
     selected?: boolean;
     onclick?: (crop: OpCrop, e: MouseEvent) => void;
-    onacceptGemma?: (crop: OpCrop) => void;
-    onrejectGemma?: (crop: OpCrop) => void;
+    onacceptVlm?: (crop: OpCrop) => void;
+    onrejectVlm?: (crop: OpCrop) => void;
     /**
      * Optional callback fired after the slot editor saves a new
      * source-frame sub-box (or null for "not visible"). Lets the page
@@ -35,8 +35,8 @@
     slot,
     selected = false,
     onclick,
-    onacceptGemma,
-    onrejectGemma,
+    onacceptVlm,
+    onrejectVlm,
     onslotsaved,
     ondetail,
   }: Props = $props();
@@ -144,18 +144,13 @@
     src: LabelSource | null | undefined,
     validated: boolean,
   ): string => {
-    if (!validated) {
-      if (src === 'gemma_suggestion')
-        return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
-      return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
-    }
-    if (src === 'human' || src === 'human_confirmed') {
+    if (src?.startsWith('vlm'))
+      return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+    if (!validated) return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
+    if (src?.startsWith('human')) {
       return 'bg-green-500/20 text-green-200 border-green-500/40';
     }
-    if (src === 'ensemble') return 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40';
-    if (src === 'gemma_suggestion')
-      return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
-    if (src === 'cluster_propagation')
+    if (src === 'cluster_majority_agreement')
       return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
     return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
   };
@@ -165,16 +160,13 @@
     validated: boolean,
   ): string => {
     if (!validated) {
-      if (src === 'gemma_suggestion') return 'gemma?';
-      return src ?? 'unlabeled';
+      if (src?.startsWith('vlm')) return 'vlm?';
+      return src && src !== 'unknown' ? src : 'unlabeled';
     }
-    if (src === 'human' || src === 'human_confirmed') return 'human';
-    if (src === 'ensemble') return 'ensemble';
-    if (src === 'gemma_suggestion') return 'gemma';
-    if (src === 'cluster_propagation') return 'cluster';
-    if (src === 'v6_original_label') return 'v6';
-    if (src === 'model_suggestion') return 'model';
-    return src ?? 'auto';
+    if (src?.startsWith('human')) return 'human';
+    if (src?.startsWith('vlm')) return 'vlm';
+    if (src === 'cluster_majority_agreement') return 'cluster';
+    return src && src !== 'unknown' ? src : 'auto';
   };
 
   const conf = $derived(
@@ -329,19 +321,17 @@
     </span>
   </div>
 
-  {#if crop.gemma_suggested_class_id != null && !crop.label_validated}
+  {#if crop.vlm_suggested_class_id != null && !crop.label_validated}
     <div
       class="flex items-center gap-1 border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs"
     >
       <span
         class="grow truncate text-yellow-200"
-        title={crop.gemma_suggested_class_name ?? ''}
+        title={crop.vlm_suggested_class_name ?? ''}
       >
-        Gemma: {crop.gemma_suggested_class_name ?? '—'}
-        {#if crop.gemma_suggested_confidence != null}
-          <span class="ml-1 text-yellow-400/70"
-            >{(crop.gemma_suggested_confidence * 100).toFixed(0)}%</span
-          >
+        VLM: {crop.vlm_suggested_class_name ?? '—'}
+        {#if crop.vlm_confidence}
+          <span class="ml-1 text-yellow-400/70">{crop.vlm_confidence}</span>
         {/if}
       </span>
       <button
@@ -349,9 +339,9 @@
         class="rounded border border-green-500/40 bg-green-500/20 px-1 text-green-200 hover:bg-green-500/30"
         onclick={(e) => {
           e.stopPropagation();
-          onacceptGemma?.(crop);
+          onacceptVlm?.(crop);
         }}
-        aria-label="Accept Gemma suggestion"
+        aria-label="Accept VLM suggestion"
       >
         ✓
       </button>
@@ -360,9 +350,9 @@
         class="rounded border border-red-500/40 bg-red-500/20 px-1 text-red-200 hover:bg-red-500/30"
         onclick={(e) => {
           e.stopPropagation();
-          onrejectGemma?.(crop);
+          onrejectVlm?.(crop);
         }}
-        aria-label="Reject Gemma suggestion"
+        aria-label="Reject VLM suggestion"
       >
         ×
       </button>

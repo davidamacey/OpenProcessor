@@ -29,13 +29,7 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
-  import {
-    exportYolo,
-    getCrops,
-    getStats,
-    getThumbUrl,
-    runGemmaOnCluster,
-  } from '$lib/api';
+  import { exportYolo, getCrops, getStats, getThumbUrl, runVlmOnCluster } from '$lib/api';
   import { adequacyLevel } from '$lib/adequacy';
   import type { OpCrop, OpStats } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
@@ -50,9 +44,9 @@
   let recent = $state<OpCrop[]>([]);
   let legacyLoading = $state<boolean>(false);
 
-  let gemmaOpen = $state<boolean>(false);
-  let gemmaClusterId = $state<string>('');
-  let gemmaBusy = $state<boolean>(false);
+  let vlmOpen = $state<boolean>(false);
+  let vlmClusterId = $state<string>('');
+  let vlmBusy = $state<boolean>(false);
 
   async function refreshLegacy(): Promise<void> {
     legacyLoading = true;
@@ -79,23 +73,23 @@
     return () => clearInterval(id);
   });
 
-  async function runGemma(): Promise<void> {
-    const id = Number(gemmaClusterId);
+  async function runVlm(): Promise<void> {
+    const id = Number(vlmClusterId);
     if (!Number.isFinite(id) || id < 0) {
       toastStore.error('Enter a valid cluster id');
       return;
     }
-    gemmaBusy = true;
+    vlmBusy = true;
     try {
-      const res = await runGemmaOnCluster(id);
+      const res = await runVlmOnCluster(id);
       toastStore.success(
-        `Gemma labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
+        `VLM labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
       );
-      gemmaOpen = false;
+      vlmOpen = false;
     } catch (e) {
-      toastStore.error(`Gemma run failed: ${(e as Error).message}`);
+      toastStore.error(`VLM run failed: ${(e as Error).message}`);
     } finally {
-      gemmaBusy = false;
+      vlmBusy = false;
     }
   }
 
@@ -152,8 +146,8 @@
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">
     <h2 class="mr-3 text-sm font-semibold text-zinc-400">Quick actions</h2>
-    <button class="btn btn-primary" type="button" onclick={() => (gemmaOpen = true)}>
-      Run Gemma Labeling
+    <button class="btn btn-primary" type="button" onclick={() => (vlmOpen = true)}>
+      Run VLM Labeling
     </button>
     <button class="btn" type="button" onclick={runExport}>Export Dataset (YOLO)</button>
     <span class="grow"></span>
@@ -231,7 +225,7 @@
   </section>
 </div>
 
-{#if gemmaOpen}
+{#if vlmOpen}
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
@@ -240,13 +234,13 @@
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
     >
-      <h3 class="mb-3 text-base font-semibold">Run Gemma on cluster</h3>
+      <h3 class="mb-3 text-base font-semibold">Run VLM on cluster</h3>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Cluster ID</span>
         <input
           type="number"
           min="0"
-          bind:value={gemmaClusterId}
+          bind:value={vlmClusterId}
           class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
           placeholder="e.g. 42"
         />
@@ -259,18 +253,13 @@
         <button
           type="button"
           class="btn"
-          onclick={() => (gemmaOpen = false)}
-          disabled={gemmaBusy}
+          onclick={() => (vlmOpen = false)}
+          disabled={vlmBusy}
         >
           Cancel
         </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={runGemma}
-          disabled={gemmaBusy}
-        >
-          {gemmaBusy ? 'Running...' : 'Run'}
+        <button type="button" class="btn btn-primary" onclick={runVlm} disabled={vlmBusy}>
+          {vlmBusy ? 'Running...' : 'Run'}
         </button>
       </div>
     </div>
