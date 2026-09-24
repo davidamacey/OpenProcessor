@@ -1192,44 +1192,53 @@
             </button>
           {/each}
         </div>
-      </div>
-    {/each}
-    {#if selectedCohortKey}
-      {@const activeCohort = cohortGroups
-        .flatMap((g) => g.cohorts.map((c) => ({ g, c })))
-        .find(({ g, c }) => cohortKey(g.classId, c) === selectedCohortKey)}
-      <div class="border-t border-zinc-800 px-3 py-3">
-        {#if cohortPreviewError}
-          <p class="text-xs text-red-300">Preview failed: {cohortPreviewError}</p>
-        {:else if cohortPreviewLoading && cohortPreview.length === 0}
-          <p class="text-xs text-zinc-500">Loading preview…</p>
-        {:else if cohortPreview.length === 0}
-          <p class="text-xs text-zinc-500">
-            No rows match this cohort yet — the re-detection drain may still be populating
-            provenance. Check back as the queue drains.
-          </p>
-        {:else if activeCohort}
-          <div
-            class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
-          >
-            {#each cohortPreview as item ('crop_id' in item ? item.crop_id : item.id)}
-              {#if activeCohort.c.rowKind === 'slot'}
-                <SlotCard
-                  crop={item as PlateBrowseItem}
-                  onclick={(p) => openCohortItem(activeCohort.g, activeCohort.c, p)}
-                  compact
-                />
+        <!-- M14 (2026-09-24 interactive pass): the preview used to render
+             once, after every one of the ~85 class groups — clicking a
+             chip near the top left the preview grid roughly 4,700px
+             below, off-screen with no scroll-into-view, so the click
+             looked like a no-op. Rendering it inline, right under the
+             group whose chip was clicked, means the preview always
+             appears exactly where the operator is already looking. -->
+        {#if selectedCohortKey}
+          {@const activeCohort = group.cohorts.find(
+            (c) => cohortKey(group.classId, c) === selectedCohortKey,
+          )}
+          {#if activeCohort}
+            <div class="mt-3 border-t border-zinc-800 pt-3">
+              {#if cohortPreviewError}
+                <p class="text-xs text-red-300">Preview failed: {cohortPreviewError}</p>
+              {:else if cohortPreviewLoading && cohortPreview.length === 0}
+                <p class="text-xs text-zinc-500">Loading preview…</p>
+              {:else if cohortPreview.length === 0}
+                <p class="text-xs text-zinc-500">
+                  No rows match this cohort yet — the re-detection drain may still be
+                  populating provenance. Check back as the queue drains.
+                </p>
               {:else}
-                <CropCard
-                  crop={item as Crop}
-                  onclick={(c) => openCohortItem(activeCohort.g, activeCohort.c, c)}
-                />
+                <div
+                  class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8"
+                >
+                  {#each cohortPreview as item ('crop_id' in item ? item.crop_id : item.id)}
+                    {#if activeCohort.rowKind === 'slot'}
+                      <SlotCard
+                        crop={item as PlateBrowseItem}
+                        onclick={(p) => openCohortItem(group, activeCohort, p)}
+                        compact
+                      />
+                    {:else}
+                      <CropCard
+                        crop={item as Crop}
+                        onclick={(c) => openCohortItem(group, activeCohort, c)}
+                      />
+                    {/if}
+                  {/each}
+                </div>
               {/if}
-            {/each}
-          </div>
+            </div>
+          {/if}
         {/if}
       </div>
-    {/if}
+    {/each}
   </section>
 
   <!-- Past runs -->
