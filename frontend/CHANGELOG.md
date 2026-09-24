@@ -1128,6 +1128,13 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- `/train`'s augmentation preset picker offered five ids the trainer
+  doesn't have (`outdoor_traffic`, `motorcycle_tilt`, `plates`,
+  `plates_aggressive`, `custom`). Picking one failed the run with
+  "unknown augmentation preset", but only after it had started and
+  stopped the VLM. It now lists the trainer's own ids. A contract test
+  (`src/lib/contract/augmentPresets.test.ts`) compares them against the
+  backend checkout's `docker/trainer/augment.py`.
 - Four bugs found by the `train-smoke` live UI smoke test
   (`artifacts_local/cw-live/train-smoke/`):
   - **`/export`** — after a successful export the "frozen multi-class
