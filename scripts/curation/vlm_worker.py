@@ -194,9 +194,8 @@ async def fetch_pending_ids(
 ) -> list[str]:
     """Pull up to ``batch_size`` crop IDs that need Gemma.
 
-    F-20: ``stored_fields: '_none_'`` skips loading the stored document
-    entirely (only ``_id``, always free metadata, is returned) — cheaper
-    than the previous ``_source: False`` for the same "ids only" result.
+    ``_source: False`` returns ids only. (Not ``stored_fields: '_none_'``:
+    OpenSearch drops the ``_id`` metadata field with it too.)
     ``track_total_hits: False`` skips the exact-count pass this producer
     never reads. ``exclude_ids`` (the caller's in-flight set) is pushed
     into the query itself instead of being filtered out in Python after
@@ -204,7 +203,7 @@ async def fetch_pending_ids(
     """
     body = {
         'size': batch_size,
-        'stored_fields': '_none_',
+        '_source': False,
         'track_total_hits': False,
         'query': _build_pending_query(v6_skip_conf, exclude_ids=exclude_ids),
         # Oldest pending first — fairness across crops added across the

@@ -111,7 +111,8 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
     )
     assert ids == ['c1', 'c2']
     body = captured['body']
-    assert body['stored_fields'] == '_none_'
+    assert body['_source'] is False
+    assert 'stored_fields' not in body
     assert body['track_total_hits'] is False
     assert body['sort'] == [
         {'created_at': {'order': 'asc', 'unmapped_type': 'date'}},
