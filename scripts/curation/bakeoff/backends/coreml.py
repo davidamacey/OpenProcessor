@@ -26,7 +26,7 @@ from .yolo_post import decode_yolo26_e2e, decode_yolo_v11, letterbox, nms
 
 
 class CoreMLDetector:
-    """Run a single-class YOLO plate ``.mlpackage`` (no embedded NMS) via CoreML."""
+    """Run a single-class YOLO ``.mlpackage`` (no embedded NMS) via CoreML."""
 
     runtime = 'coreml'
 

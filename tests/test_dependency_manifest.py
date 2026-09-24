@@ -193,6 +193,11 @@ _ALLOWLIST = {
     # src/services/curation/autolabel/job.py falls back to polling
     # (_watch_state_file_poll) inside a try/except ImportError.
     'inotify_simple': 'optional inotify-based watch with a polling fallback on ImportError',
+    # First-party, not a pip package: src/routers/curation/bakeoff.py lazily
+    # imports the stdlib-only scripts.curation.bakeoff.profile inside its
+    # handlers. The API image ships scripts/ (Dockerfile COPY) and the router
+    # already reads scripts/curation/bakeoff/baselines.json from it.
+    'scripts': 'first-party repo package shipped in the API image (bake-off profiles)',
 }
 
 # Files whose dependency lists are legitimately out of scope for the

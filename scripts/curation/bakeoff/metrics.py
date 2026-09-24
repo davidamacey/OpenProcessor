@@ -28,7 +28,7 @@ class CocoMetrics:
 
     ``ap_small/medium/large`` use COCO's area bins (small <32^2, medium
     32^2-96^2, large >96^2 px). For a small-object target in full frames
-    (e.g. a license plate) most boxes are small, so ``ap_small`` is the
+    most boxes are small, so ``ap_small`` is the
     discriminating localization number; ``map_50_95`` rewards tighter
     boxes (averaged over IoU).
     """

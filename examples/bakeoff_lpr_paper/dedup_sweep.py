@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Recompute the whole-frame near-duplicate threshold sweep for the paper.
+"""Recompute the whole-frame near-duplicate threshold sweep for an LPR paper.
+
+Example / write-up tooling, not part of the bake-off harness: it assumes the
+license-plate example domain (frames carrying a confirmed region).
 
 Pulls the images index's ``pe_embedding`` vector for every confirmed-plate
 frame (the region-status field set to 'detected') and reports, per cosine
 threshold, the number of near-duplicate groups, frames dropped (each group
 collapses to one representative), the drop fraction, and the largest group.
-This is the data behind ``tab:dedup`` in ``docs/paper/lpr_bakeoff.tex`` and
-the justification for the adopted tau=0.98 cut. Re-run whenever the
-confirmed-plate pool changes::
+This is the data behind a paper's dedup-threshold table and the justification
+for the adopted tau=0.98 cut. Re-run whenever the confirmed-plate pool changes
+(from the repo root)::
 
-    .venv/bin/python scripts/curation/bakeoff/dedup_sweep.py
+    .venv/bin/python -m examples.bakeoff_lpr_paper.dedup_sweep
 
 Reuses the production near-dup core (``frame_dedup.near_dup_groups``) so the
 sweep groups frames identically to the exporter.

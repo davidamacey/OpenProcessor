@@ -1,0 +1,20 @@
+{
+  "_comment": "Example/reference bake-off profile for license-plate detection. Not the default; select with --profile license_plate. triton_model is intentionally empty -- set it (or pass --triton-model) to the plate detector your Triton server actually serves.",
+  "name": "license_plate",
+  "target_class_id": 0,
+  "target_class_name": "license_plate",
+  "context_class_ids": [2, 3, 5, 7],
+  "context_weights": "./weights/yolo11n.pt",
+  "context_imgsz": 960,
+  "context_conf": 0.25,
+  "triton_model": "",
+  "default_backend": "ultralytics",
+  "imgsz": 1280,
+  "conf_floor": 0.001,
+  "nms_iou": 0.7,
+  "op_conf": 0.25,
+  "op_iou": 0.45,
+  "rank_metric": "map_50_95",
+  "converter_modules": ["scripts.curation.bakeoff.examples.license_plate.converters"],
+  "baselines_path": "scripts/curation/bakeoff/examples/license_plate/baselines.json"
+}

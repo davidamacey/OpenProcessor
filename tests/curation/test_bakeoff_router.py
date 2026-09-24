@@ -28,19 +28,30 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # shebangs, etc.) -- narrow this to host-mount-shaped absolute paths
 # (/mnt/..., /home/..., /Users/...), which is exactly the shape the
 # original regression had and nothing legitimate in this harness needs.
-_BAKEOFF_HARNESS_FILES = (
-    'src/routers/curation/bakeoff.py',
-    'scripts/curation/bakeoff/baselines.json',
-    'scripts/curation/bakeoff/run.py',
-    'scripts/curation/bakeoff/bakeoff_runner.py',
-    'scripts/curation/bakeoff/paper_numbers.py',
-)
+# Every text file in the harness tree is scanned (not a hand-picked list: a
+# hand-picked list once missed a backend docstring carrying such a path).
+_HARNESS_SUFFIXES = {'.py', '.json', '.txt', '.md'}
+
+
+def _bakeoff_harness_files() -> list[str]:
+    files = ['src/routers/curation/bakeoff.py']
+    for root in ('scripts/curation/bakeoff', 'examples/bakeoff_lpr_paper'):
+        files += [
+            p.relative_to(REPO_ROOT).as_posix()
+            for p in sorted((REPO_ROOT / root).rglob('*'))
+            if p.is_file() and p.suffix in _HARNESS_SUFFIXES
+        ]
+    return files
+
+
 _HOST_MOUNT_PATH_RE = re.compile(r'/(?:mnt|home|Users)/[A-Za-z0-9_./\-]+')
 
 
 def test_bakeoff_harness_has_no_owner_private_absolute_path_defaults() -> None:
     offenders: list[str] = []
-    for rel in _BAKEOFF_HARNESS_FILES:
+    files = _bakeoff_harness_files()
+    assert 'scripts/curation/bakeoff/backends/lpdnet.py' in files
+    for rel in files:
         text = (REPO_ROOT / rel).read_text()
         offenders.extend(f'{rel}: {match.group(0)}' for match in _HOST_MOUNT_PATH_RE.finditer(text))
     assert not offenders, (
@@ -152,3 +163,130 @@ def test_bakeoff_baseline_models_empty_when_registry_missing(
     r = app_client.get('/curation/bakeoff/baseline_models')
     assert r.status_code == 200
     assert r.json() == {'baselines': [], 'count': 0}
+
+
+@pytest.fixture
+def no_gpu_claim(monkeypatch) -> None:
+    """Stub the GPU arbiter so POST /bakeoff/run touches no lock/containers."""
+    import src.services.training.gpu_arbiter as arbiter
+
+    class _Action:
+        action = 'noop'
+
+    async def _stop() -> _Action:
+        return _Action()
+
+    monkeypatch.setattr(arbiter, 'set_training_lock', lambda *_a, **_k: None)
+    monkeypatch.setattr(arbiter, 'stop_gpu_services', _stop)
+
+
+@pytest.mark.usefixtures('no_gpu_claim')
+def test_bakeoff_run_writes_profile_into_job_spec(
+    app_client: TestClient, monkeypatch, tmp_path: Path
+) -> None:
+    from src.routers.curation import bakeoff
+
+    monkeypatch.setattr(bakeoff, 'JOBS_DIR', tmp_path / 'jobs')
+    monkeypatch.setattr(bakeoff, 'OUT_DIR', tmp_path / 'out')
+    r = app_client.post(
+        '/curation/bakeoff/run',
+        json={
+            'dataset': '/data/ds',
+            'job_id': 'jp1',
+            'profile': 'license_plate',
+            'models': [{'backend': 'ultralytics', 'name': 'm1', 'profile': 'generic'}],
+        },
+    )
+    assert r.status_code == 200, r.text
+    spec = json.loads((tmp_path / 'jobs' / 'jp1.job.json').read_text())
+    assert spec['profile'] == 'license_plate'
+    assert spec['models'][0]['profile'] == 'generic'
+
+
+@pytest.mark.usefixtures('no_gpu_claim')
+def test_bakeoff_run_without_profile_omits_it(
+    app_client: TestClient, monkeypatch, tmp_path: Path
+) -> None:
+    from src.routers.curation import bakeoff
+
+    monkeypatch.setattr(bakeoff, 'JOBS_DIR', tmp_path / 'jobs')
+    monkeypatch.setattr(bakeoff, 'OUT_DIR', tmp_path / 'out')
+    r = app_client.post(
+        '/curation/bakeoff/run',
+        json={
+            'dataset': '/d',
+            'job_id': 'jp2',
+            'models': [{'backend': 'ultralytics', 'name': 'm'}],
+        },
+    )
+    assert r.status_code == 200
+    spec = json.loads((tmp_path / 'jobs' / 'jp2.job.json').read_text())
+    assert 'profile' not in spec
+    assert 'profile' not in spec['models'][0]
+
+
+@pytest.mark.parametrize('where', ['request', 'model'])
+def test_bakeoff_run_rejects_unknown_profile(
+    app_client: TestClient, monkeypatch, tmp_path: Path, where: str
+) -> None:
+    from src.routers.curation import bakeoff
+
+    monkeypatch.setattr(bakeoff, 'JOBS_DIR', tmp_path / 'jobs')
+    model = {'backend': 'ultralytics', 'name': 'm'}
+    body: dict = {'dataset': '/d', 'models': [model]}
+    if where == 'request':
+        body['profile'] = 'no_such_profile'
+    else:
+        model['profile'] = 'no_such_profile'
+    r = app_client.post('/curation/bakeoff/run', json=body)
+    assert r.status_code == 400
+    assert 'unknown bake-off profile' in r.json()['detail']
+    assert not (tmp_path / 'jobs').exists()
+
+
+def test_bakeoff_profiles_lists_generic_and_examples(app_client: TestClient) -> None:
+    r = app_client.get('/curation/bakeoff/profiles')
+    assert r.status_code == 200
+    by_name = {p['name']: p for p in r.json()['profiles']}
+    assert by_name['generic']['kind'] == 'registered'
+    assert by_name['generic']['context_class_ids'] == []
+    assert by_name['license_plate']['kind'] == 'example'
+    assert by_name['license_plate']['context_class_ids'] == [2, 3, 5, 7]
+
+
+def test_default_baseline_registry_is_domain_neutral(app_client: TestClient) -> None:
+    names = [
+        b['name'] for b in app_client.get('/curation/bakeoff/baseline_models').json()['baselines']
+    ]
+    assert names, 'default registry should still list the quantized variants'
+    assert all(n.startswith('ours_') for n in names), names
+
+
+def test_baseline_models_per_profile(app_client: TestClient) -> None:
+    r = app_client.get('/curation/bakeoff/baseline_models', params={'profile': 'license_plate'})
+    assert r.status_code == 200
+    names = {b['name'] for b in r.json()['baselines']}
+    assert 'lpdnet-usa' in names
+    assert 'lpr_nanov11_640' not in names
+    assert (
+        app_client.get('/curation/bakeoff/baseline_models', params={'profile': 'nope'}).status_code
+        == 400
+    )
+    assert (
+        app_client.get(
+            '/curation/bakeoff/baseline_models', params={'profile': '../../etc/x.json'}
+        ).status_code
+        == 400
+    )
+
+
+def test_bakeoff_router_docstring_section_exists() -> None:
+    from src.routers.curation import bakeoff
+
+    doc = bakeoff.__doc__ or ''
+    m = re.search(r'curation_design_rationale\.md`` §(\d+)', doc)
+    assert m, 'router docstring should cite a specific rationale section'
+    rationale = (REPO_ROOT / 'docs/design/curation_design_rationale.md').read_text()
+    heading = re.search(rf'^## {m.group(1)}\. (.+)$', rationale, re.M)
+    assert heading, f'rationale doc has no section {m.group(1)}'
+    assert 'bake-off' in heading.group(1).lower()

@@ -1,4 +1,4 @@
-# Extra Python deps for the LPR bake-off harness.
+# Extra Python deps for the detector bake-off harness.
 #
 # The harness must run in a YOLO26-capable container (the a YOLO-training-capable
 # image installs Ultralytics from a pinned git SHA + torch + GPU + mlflow
@@ -13,8 +13,8 @@
 # opencv-python-headless, mlflow, pydantic, opensearch-py.
 
 pycocotools>=2.0.7        # single shared detection metric across all models
-open-image-models>=0.5    # ankandrew YOLOv9-tiny public plate detector baseline
+open-image-models>=0.5    # open-image-models backend (license_plate example baseline)
 onnxruntime-gpu           # ONNX backends + INT8 static quantization (quantize_static)
 onnx>=1.12.0,<2.0.0       # ultralytics ONNX export + QDQ graph inspection (export/quantize.py)
 onnxslim>=0.1.71          # ultralytics ONNX export simplify=True
-tritonclient[all]>=2.40   # score the deployed lpr_nanov11_640 TRT engine over gRPC
+tritonclient[all]>=2.40   # score a deployed Triton TRT engine over gRPC

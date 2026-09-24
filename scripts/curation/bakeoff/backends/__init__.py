@@ -1,3 +1,3 @@
-"""Pluggable detector backends for the LPR bake-off."""
+"""Pluggable detector backends for the bake-off harness."""
 
 from __future__ import annotations

@@ -4,14 +4,16 @@ LPDNet is a DetectNet_v2 grid detector, not a YOLO head: it outputs a
 per-cell coverage map (``output_cov``) + per-cell bbox regressors
 (``output_bbox``) on a stride-16 grid. We decode with the standard TAO
 gridbox formula (cell-center +/- regressor*bbox_norm), threshold on
-coverage, and NMS-cluster. The USA variant (input 640x480) matches our
-US-plate domain; the CCPD variant (720x1168) is the China model.
+coverage, and NMS-cluster. The USA variant (input 640x480) targets US
+plates; the CCPD variant (720x1168) is the China model. LPDNet is a
+license-plate-only public model: it is a baseline backend for the
+``license_plate`` example profile, meaningless for other targets.
 
 Preprocessing follows the LPDNet nvinfer config: plain resize to the
 model's WxH, RGB, scale 1/255 (net-scale-factor), NCHW.
 
-Model files (unpacked, on nvm):
-    /data/datasets/models/lpdnet_pruned_v2.2.1/lpdnet_pruned_v2.2.1/
+Model files (NGC ``lpdnet:pruned_v2.2.1``, unpacked wherever you keep weights):
+    lpdnet_pruned_v2.2.1/
         LPDNet_usa_pruned_tao5.onnx     (input 3x480x640)
         LPDNet_CCPD_pruned_tao5.onnx    (input 3x1168x720)
 """

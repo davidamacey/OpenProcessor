@@ -372,3 +372,70 @@ end to end:**
    alongside the existing `class_validated`/`gemma_verify_completed_at`
    exclusions in `src/routers/curation/pipeline.py`) instead of
    labeling the entire pool.
+
+## 8. The detector bake-off harness: `BakeoffProfile`
+
+`scripts/curation/bakeoff/` scores any number of detectors on the same
+frozen YOLO test split with one shared metric (pycocotools COCOeval plus a
+fixed-threshold operating point), so an in-house model and public
+baselines are compared on identical ground.
+`src/routers/curation/bakeoff.py` only drops `<job_id>.job.json` specs into
+a shared directory; the evaluator container
+(`docker/evaluator/Dockerfile`, running `bakeoff_runner --watch`) does the
+scoring and writes `status.json` / `comparison.json` / `matrix.json`
+back. The harness lives under `scripts/` rather than `src/` because it
+needs a newer detection stack than the API image pins and never runs
+inside the API process.
+
+**Why a profile.** The harness was ported from the same license-plate
+reference deployment as the rest of this subsystem (§1), and it carried
+that domain in code: a hardcoded single-class id, a YOLO writer that
+always emitted `license_plate`, the COCO vehicle classes baked in as the
+crop-mode coarse stage, and plate-benchmark converters as its only input
+formats. Following the `DetectionProfile` pattern (§2.3), everything that
+decides *what* is measured now lives on a frozen `BakeoffProfile`
+dataclass (`scripts/curation/bakeoff/profile.py`):
+
+| Field(s) | Replaces |
+|---|---|
+| `target_class_id`, `target_class_name`, `class_names` | the hardcoded class-id constant and the fixed single-class `data.yaml` |
+| `context_class_ids`, `context_weights/imgsz/conf` | the hardcoded COCO vehicle ids used as the crop-mode coarse stage |
+| `triton_model` (empty by design) | a default Triton model name — `--backend triton` now requires one from the profile or `--triton-model` |
+| `default_backend`, `imgsz` | CLI defaults |
+| `conf_floor`, `nms_iou`, `op_conf`, `op_iou`, `rank_metric` | metric thresholds and the comparison's hardcoded ranking metric |
+| `converter_modules`, `baselines_path` | plate-benchmark converters and baseline models shipped as built-ins |
+
+Explicit CLI flags still win over the profile; the job spec's optional
+`profile` field (and `BakeoffRequest.profile` / per-model `profile` on
+`POST {prefix}/bakeoff/run`) selects one; `GET {prefix}/bakeoff/profiles`
+lists what is available. With no profile the neutral `generic` profile
+(class 0 `object`, no context classes, no Triton model) applies, overridable
+per field via `OP_BAKEOFF_PROFILE_*` env vars or wholesale via
+`OP_BAKEOFF_PROFILE`.
+
+**Datasets.** `datasets.py` is a converter registry around a generic
+`YoloWriter` whose `data.yaml` names come from the profile. Only
+domain-neutral formats are built in (`yolo` passthrough, Pascal `voc` with
+object-name → class-id mapping); a single-class profile collapses every
+source box onto its target class, a multi-class one keeps/maps ids and
+drops anything outside its label space. Domain formats register
+themselves from a profile's `converter_modules`.
+
+**The license-plate example.** `scripts/curation/bakeoff/examples/license_plate/`
+keeps the original configuration as a clearly-named reference, not a
+default: its `profile.json` (COCO vehicle classes as context), the public
+plate-benchmark converters (CCPD, UFPR-ALPR, OpenALPR), and a
+`baselines.json` of public plate detectors that
+`GET {prefix}/bakeoff/baseline_models?profile=license_plate` serves. The
+default baseline registry lists only the quantized ONNX variants of your
+own model. Two backends (`lpdnet`, `open-image-models`) wrap public
+plate-only models; they stay in `backends/` because they are backend
+adapters, and are only meaningful under that example profile.
+
+**What moved out.** Scripts that existed to produce one paper's tables and
+figures are not part of the harness: the dedup-threshold sweep and the
+LaTeX-number generator live under `examples/bakeoff_lpr_paper/`; the
+lean-angle sampling and deskew-figure prototypes were removed (their
+reusable core, `src/services/detection/region_lean.py`, stays).
+`tests/curation/test_bakeoff_harness.py` guards the harness core against
+domain vocabulary creeping back in.
