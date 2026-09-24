@@ -87,3 +87,50 @@ describe('/classes Proposals section', () => {
     expect(mapFn).toMatch(/await loadProposals\(\);/);
   });
 });
+
+/**
+ * DQ-M11 fix (dq-queues cutover, 2026-09-24): the backend now flags
+ * super-category/junk/already-registered terms (`flagged_terms`) instead
+ * of offering them through the same one-click "Create class & assign"
+ * path as `top_terms` — the original DQ-M11 bug was exactly a one-click
+ * create over 89 "motorcycle" crops making a super-class.
+ */
+describe('/classes Proposals section — flagged_terms (DQ-M11)', () => {
+  it('renders flagged terms in a collapsed <details> section, separate from the actionable list', () => {
+    const idx = src.indexOf('Flagged terms (');
+    expect(idx).toBeGreaterThan(-1);
+    const detailsIdx = src.lastIndexOf('<details', idx);
+    expect(detailsIdx).toBeGreaterThan(-1);
+    expect(idx - detailsIdx).toBeLessThan(400);
+  });
+
+  it('never offers "Create class & assign" for a flagged term', () => {
+    const start = src.indexOf('proposalsSummary.flagged_terms as term');
+    const end = src.indexOf('</details>', start);
+    const block = src.slice(start, end);
+    expect(block).not.toMatch(/Create class & assign/);
+    expect(block).not.toMatch(/createClassAndAssign/);
+  });
+
+  it('offers a map-to-class_id action only for existing_class-flagged terms', () => {
+    const start = src.indexOf('proposalsSummary.flagged_terms as term');
+    const end = src.indexOf('</details>', start);
+    const block = src.slice(start, end);
+    expect(block).toMatch(/term\.flag === 'existing_class' && term\.class_id != null/);
+    expect(block).toMatch(/mapFlaggedTermToClass\(term\)/);
+  });
+
+  it('flagReason renders the served flag as a human reason: generic parent / not an object / existing class → map to X', () => {
+    const fn = src.match(/function flagReason\([\s\S]*?\n {2}\}/)?.[0];
+    expect(fn).toBeDefined();
+    expect(fn).toMatch(/generic_parent.*generic parent/s);
+    expect(fn).toMatch(/non_object.*not an object/s);
+    expect(fn).toMatch(/existing_class/);
+    expect(fn).toMatch(/map to/);
+  });
+
+  it('shows without_term and term_rules as help text, not silently dropped', () => {
+    expect(src).toMatch(/proposalsSummary\.without_term/);
+    expect(src).toMatch(/proposalsSummary\.term_rules/);
+  });
+});

@@ -2458,22 +2458,89 @@ export async function locateInReviewQueue(
  *  `/classes`'s Proposals section renders (top VLM-proposed-but-unmatched
  *  terms, with counts and a handful of sample crop ids each), distinct
  *  from paging the `new_class_proposals` review tab item-by-item. */
+/** DQ-M11 fix (dq-queues cutover, 2026-09-24): `flag` is `null` for a
+ *  term worth one-click creating (the only kind `top_terms` holds now),
+ *  or the served reason it isn't: `existing_class` (map to `class_id`
+ *  instead of creating), `generic_parent` (a super-category, e.g.
+ *  "motorcycle"), or `non_object` (junk, e.g. "abstract_blur"). */
+export interface NewClassProposalTerm {
+  label: string;
+  count: number;
+  sample_crop_ids: string[];
+  flag: 'existing_class' | 'generic_parent' | 'non_object' | null;
+  class_id: number | null;
+}
+
+/** Server-side term-classification rules, rendered as help text —
+ *  `generic_terms`/`non_object_terms` name the deployment's configured
+ *  vocab (each overridable via its `_env` var). */
+export interface NewClassTermRules {
+  generic_terms: string[];
+  non_object_terms: string[];
+  registry_groups_are_generic: boolean;
+  existing_classes_flagged: boolean;
+  generic_terms_env: string;
+  non_object_terms_env: string;
+}
+
 export interface NewClassProposalsSummary {
   total_pending: number;
-  top_terms: Array<{ label: string; count: number; sample_crop_ids: string[] }>;
+  /** Queue items with no proposed term at all (a human "needs new
+   *  class" flag with no name) — not represented in top_terms/
+   *  flagged_terms, since there's no label to key a row on. */
+  without_term: number;
+  /** Only `flag: null` terms — every one is one-click "Create class &
+   *  assign". */
+  top_terms: NewClassProposalTerm[];
+  /** The rest: `existing_class` / `generic_parent` / `non_object`. No
+   *  create action is offered for these; `existing_class` offers
+   *  map-to-`class_id` instead. */
+  flagged_terms: NewClassProposalTerm[];
+  term_rules: NewClassTermRules | null;
+}
+
+function asProposalTerms(v: unknown): NewClassProposalTerm[] {
+  if (!Array.isArray(v)) return [];
+  const out: NewClassProposalTerm[] = [];
+  for (const raw of v) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const r = raw as Record<string, unknown>;
+    if (typeof r.label !== 'string') continue;
+    out.push({
+      label: r.label,
+      count: typeof r.count === 'number' ? r.count : 0,
+      sample_crop_ids: Array.isArray(r.sample_crop_ids)
+        ? (r.sample_crop_ids as string[])
+        : [],
+      flag:
+        r.flag === 'existing_class' ||
+        r.flag === 'generic_parent' ||
+        r.flag === 'non_object'
+          ? r.flag
+          : null,
+      class_id: typeof r.class_id === 'number' ? r.class_id : null,
+    });
+  }
+  return out;
 }
 
 export async function getNewClassProposalsSummary(
   signal?: AbortSignal,
 ): Promise<NewClassProposalsSummary> {
-  const raw = await apiFetch<Partial<NewClassProposalsSummary>>(
+  const raw = await apiFetch<Record<string, unknown>>(
     `${API_PREFIX}/review/new_class_proposals/summary`,
     {},
     signal,
   );
   return {
-    total_pending: raw.total_pending ?? 0,
-    top_terms: Array.isArray(raw.top_terms) ? raw.top_terms : [],
+    total_pending: typeof raw.total_pending === 'number' ? raw.total_pending : 0,
+    without_term: typeof raw.without_term === 'number' ? raw.without_term : 0,
+    top_terms: asProposalTerms(raw.top_terms),
+    flagged_terms: asProposalTerms(raw.flagged_terms),
+    term_rules:
+      raw.term_rules && typeof raw.term_rules === 'object'
+        ? (raw.term_rules as NewClassTermRules)
+        : null,
   };
 }
 

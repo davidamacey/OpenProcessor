@@ -8,6 +8,7 @@
     resolveNewClassProposal,
     syncClassesToOpensearch,
     type NewClassProposalsSummary,
+    type NewClassProposalTerm,
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
@@ -382,6 +383,46 @@
       proposalBusyTerm = null;
     }
   }
+
+  // DQ-M11 (dq-queues cutover, 2026-09-24): flagged_terms — super-category
+  // ('generic_parent'), junk ('non_object') and already-registered
+  // ('existing_class') proposed terms. No "create class" action is
+  // offered for any of these (that was the original DQ-M11 bug — a
+  // one-click create over 89 "motorcycle" crops would have made a
+  // super-class). `existing_class` still gets a one-click map action,
+  // using the server's own `class_id`, not an operator-picked select.
+  let flaggedSectionOpen = $state<boolean>(false);
+
+  function flagReason(term: NewClassProposalTerm): string {
+    if (term.flag === 'generic_parent') return 'generic parent';
+    if (term.flag === 'non_object') return 'not an object';
+    if (term.flag === 'existing_class') {
+      const cls = term.class_id != null ? classesStore.byId(term.class_id) : null;
+      return `existing class → map to ${cls?.name ?? term.class_id}`;
+    }
+    return '';
+  }
+
+  async function mapFlaggedTermToClass(term: NewClassProposalTerm): Promise<void> {
+    if (term.class_id == null) return;
+    proposalBusyTerm = term.label;
+    try {
+      const body: ResolveNewClassRequest = { label: term.label, class_id: term.class_id };
+      const preview = await resolveNewClassProposal(body, { dryRun: true });
+      const cls = classesStore.byId(term.class_id);
+      const ok = window.confirm(
+        `Assign ${preview.matched} crop(s) proposing "${term.label}" to "${cls?.name ?? term.class_id}"?`,
+      );
+      if (!ok) return;
+      const res = await resolveNewClassProposal(body);
+      reportResolve(res, `Assigned to "${cls?.name ?? res.class_name}"`);
+      await loadProposals();
+    } catch (e) {
+      toastStore.error(`Assign failed: ${(e as Error).message}`);
+    } finally {
+      proposalBusyTerm = null;
+    }
+  }
 </script>
 
 <div class="mx-auto flex h-full max-w-7xl flex-col p-6">
@@ -437,12 +478,13 @@
         retry
       </button>
     </div>
-  {:else if proposalsSummary && proposalsSummary.top_terms.length > 0}
+  {:else if proposalsSummary && (proposalsSummary.top_terms.length > 0 || proposalsSummary.flagged_terms.length > 0)}
     <section class="surface mb-4 p-4">
       <h2 class="mb-1 text-sm font-semibold text-zinc-200">
         New class proposals
         <span class="ml-1 font-normal text-zinc-500"
-          >({proposalsSummary.total_pending} pending)</span
+          >({proposalsSummary.total_pending} pending{#if proposalsSummary.without_term > 0},
+            {proposalsSummary.without_term} with no proposed term{/if})</span
         >
       </h2>
       <p class="mb-3 text-xs text-zinc-500">
@@ -452,7 +494,29 @@
         (not just the samples shown), after a confirm step showing the real count. Crops
         can still be triaged one at a time on <code>/review</code>'s "New Class Proposals"
         tab instead.
+        {#if proposalsSummary.without_term > 0}
+          {proposalsSummary.without_term} pending item(s) have no proposed term (a human "needs
+          new class" flag with no name) and aren't listed below — triage those on
+          <code>/review</code> instead.
+        {/if}
       </p>
+      {#if proposalsSummary.term_rules}
+        <p class="mb-3 text-[11px] text-zinc-600">
+          Terms are auto-flagged, not offered a one-click create, when they match this
+          deployment's generic-parent list ({proposalsSummary.term_rules.generic_terms.join(
+            ', ',
+          )}{proposalsSummary.term_rules.registry_groups_are_generic
+            ? ', plus any existing class-registry group name'
+            : ''}) or non-object list ({proposalsSummary.term_rules.non_object_terms.join(
+            ', ',
+          )}), or when the term already names a registered class.
+        </p>
+      {/if}
+      {#if proposalsSummary.top_terms.length === 0}
+        <p class="mb-3 text-xs text-zinc-500">
+          No actionable terms right now — see "flagged terms" below.
+        </p>
+      {/if}
       <ul class="flex flex-col gap-3">
         {#each proposalsSummary.top_terms as term (term.label)}
           <li
@@ -535,6 +599,44 @@
           </li>
         {/each}
       </ul>
+
+      {#if proposalsSummary.flagged_terms.length > 0}
+        <details
+          class="mt-3 rounded border border-zinc-800 p-2"
+          bind:open={flaggedSectionOpen}
+        >
+          <summary class="cursor-pointer text-xs text-zinc-400">
+            Flagged terms ({proposalsSummary.flagged_terms.length}) — not offered a
+            one-click create
+          </summary>
+          <ul class="mt-2 flex flex-col gap-2">
+            {#each proposalsSummary.flagged_terms as term (term.label)}
+              <li
+                class="flex flex-wrap items-center gap-3 rounded border border-zinc-800/60 p-2"
+              >
+                <div class="min-w-0 shrink-0">
+                  <div class="text-sm text-zinc-200">{term.label}</div>
+                  <div class="text-[11px] text-zinc-500">
+                    {term.count} crop(s) ·
+                    <span class="text-amber-300">{flagReason(term)}</span>
+                  </div>
+                </div>
+                <span class="grow"></span>
+                {#if term.flag === 'existing_class' && term.class_id != null}
+                  <button
+                    type="button"
+                    class="btn-sm"
+                    disabled={proposalBusyTerm === term.label}
+                    onclick={() => void mapFlaggedTermToClass(term)}
+                  >
+                    Map to {classesStore.byId(term.class_id)?.name ?? term.class_id}
+                  </button>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </details>
+      {/if}
     </section>
   {/if}
 

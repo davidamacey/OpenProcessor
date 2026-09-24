@@ -311,6 +311,69 @@ describe('getReviewQueue', () => {
     expect(res.items[0]?.mistakenness_version).toBe('v1');
   });
 
+  // dq-queues cutover (2026-09-24): /review/mismatches's `reason` is
+  // per-item, not the tab's static description repeated on every row —
+  // getReviewQueue must preserve each item's own `reason` verbatim.
+  it("maps each item's own reason verbatim, not a single tab-wide value", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 2,
+        page: 1,
+        page_size: 30,
+        items: [
+          {
+            crop_id: 'c1',
+            image_path: '/x/y.jpg',
+            bbox_norm: [0, 0, 1, 1],
+            reason: "VLM said 'coupe', no registry match",
+          },
+          {
+            crop_id: 'c2',
+            image_path: '/x/y2.jpg',
+            bbox_norm: [0, 0, 1, 1],
+            reason: "VLM said 'wagon-ish', low confidence",
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('mismatches', 1, 30, {});
+    expect(res.items[0]?.reason).toBe("VLM said 'coupe', no registry match");
+    expect(res.items[1]?.reason).toBe("VLM said 'wagon-ish', low confidence");
+    expect(res.items[0]?.reason).not.toBe(res.items[1]?.reason);
+  });
+
+  // dq-queues cutover: class_confidence/class_confidence_source/
+  // vlm_raw_class/vlm_class_empty_reason flow through the review queue
+  // mapping same as any other crop-shaped item field.
+  it('maps class_confidence/class_confidence_source/vlm_raw_class/vlm_class_empty_reason through', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [
+          {
+            crop_id: 'c1',
+            image_path: '/x/y.jpg',
+            bbox_norm: [0, 0, 1, 1],
+            class_confidence: 0.7,
+            class_confidence_source: 'vlm',
+            vlm_raw_class: 'coupe',
+            vlm_class_empty_reason: null,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('mismatches', 1, 30, {});
+    expect(res.items[0]?.class_confidence).toBe(0.7);
+    expect(res.items[0]?.class_confidence_source).toBe('vlm');
+    expect(res.items[0]?.vlm_raw_class).toBe('coupe');
+  });
+
   it('leaves mistakenness fields null when the server omits them (un-backfilled pool)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
@@ -504,7 +567,15 @@ describe('getNewClassProposalsSummary', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total_pending: 8,
-        top_terms: [{ label: 'boat', count: 5, sample_crop_ids: ['a', 'b'] }],
+        top_terms: [
+          {
+            label: 'boat',
+            count: 5,
+            sample_crop_ids: ['a', 'b'],
+            flag: null,
+            class_id: null,
+          },
+        ],
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -512,7 +583,13 @@ describe('getNewClassProposalsSummary', () => {
     const res = await getNewClassProposalsSummary();
     expect(res.total_pending).toBe(8);
     expect(res.top_terms).toEqual([
-      { label: 'boat', count: 5, sample_crop_ids: ['a', 'b'] },
+      {
+        label: 'boat',
+        count: 5,
+        sample_crop_ids: ['a', 'b'],
+        flag: null,
+        class_id: null,
+      },
     ]);
   });
 
@@ -525,6 +602,67 @@ describe('getNewClassProposalsSummary', () => {
     const res = await getNewClassProposalsSummary();
     expect(res.total_pending).toBe(0);
     expect(res.top_terms).toEqual([]);
+    expect(res.flagged_terms).toEqual([]);
+    expect(res.without_term).toBe(0);
+    expect(res.term_rules).toBeNull();
+  });
+
+  // DQ-M11 fix (dq-queues cutover, 2026-09-24): flagged_terms/
+  // without_term/term_rules are new response fields.
+  it('parses flagged_terms with their flag/class_id, without_term and term_rules', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total_pending: 191,
+        without_term: 12,
+        top_terms: [],
+        flagged_terms: [
+          {
+            label: 'motorcycle',
+            count: 89,
+            sample_crop_ids: ['a'],
+            flag: 'generic_parent',
+            class_id: null,
+          },
+          {
+            label: 'suv',
+            count: 4,
+            sample_crop_ids: ['b'],
+            flag: 'existing_class',
+            class_id: 67,
+          },
+          {
+            label: 'abstract_blur',
+            count: 2,
+            sample_crop_ids: [],
+            flag: 'non_object',
+            class_id: null,
+          },
+        ],
+        term_rules: {
+          generic_terms: ['car', 'motorcycle'],
+          non_object_terms: ['abstract_blur'],
+          registry_groups_are_generic: true,
+          existing_classes_flagged: true,
+          generic_terms_env: 'OP_NEW_CLASS_GENERIC_TERMS',
+          non_object_terms_env: 'OP_NEW_CLASS_NON_OBJECT_TERMS',
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getNewClassProposalsSummary();
+    expect(res.without_term).toBe(12);
+    expect(res.flagged_terms).toHaveLength(3);
+    expect(res.flagged_terms[0]).toEqual({
+      label: 'motorcycle',
+      count: 89,
+      sample_crop_ids: ['a'],
+      flag: 'generic_parent',
+      class_id: null,
+    });
+    expect(res.flagged_terms[1].flag).toBe('existing_class');
+    expect(res.flagged_terms[1].class_id).toBe(67);
+    expect(res.term_rules?.generic_terms).toEqual(['car', 'motorcycle']);
   });
 });
 
