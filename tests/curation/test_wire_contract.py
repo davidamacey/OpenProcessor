@@ -91,7 +91,7 @@ class _FakeItemsOS:
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {'hits': {'total': {'value': 1}, 'hits': [self._hit()]}}
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         if id != self.doc['crop_id']:
             raise KeyError(id)
         return {**self._hit(), 'found': True}
@@ -258,8 +258,8 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
     """The PUT response echoes wire keys, not the overridden storage keys."""
 
     class _WritableOS(_FakeItemsOS):
-        async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002
-            resp = await super().get(index=index, id=id)
+        async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+            resp = await super().get(index=index, id=id, **kw)
             return {**resp, '_seq_no': 0, '_primary_term': 1}
 
         async def update(self, **kwargs: Any) -> dict[str, Any]:

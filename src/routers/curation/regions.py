@@ -39,7 +39,7 @@ from src.services.curation.region_writes import (
 )
 from src.services.curation.review_queries import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
-from src.services.curation.wire import item_source_excludes, region_wire_key, serialize_item
+from src.services.curation.wire import item_list_source_excludes, region_wire_key, serialize_item
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
@@ -56,8 +56,9 @@ def _region_item(src: dict[str, Any], crop_id: str) -> dict[str, Any]:
     return serialize_item(src, crop_id)
 
 
-# Large embedding fields (1024 floats) — excluded from browse _source.
-_REGION_SOURCE_EXCLUDES = item_source_excludes()
+# Large embedding fields (1024 floats) + class_id_history (F-25, a
+# list-only field no browse renderer reads) — excluded from browse _source.
+_REGION_SOURCE_EXCLUDES = item_list_source_excludes()
 
 
 @router.get('/regions')

@@ -39,7 +39,7 @@ from src.services.curation.review_request import (
     before_query,
     build_review_request,
 )
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
 @router.get('/review/unmatched_terms')
@@ -326,8 +326,9 @@ async def review_queue(
         'sort': req.sort,
         # Exact totals: the default 10k cap makes large queues look smaller.
         'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors to the review grid.
-        '_source': {'excludes': item_source_excludes()},
+        # Never ship the 1024-d embedding vectors or class_id_history to
+        # the review grid (F-25 — history is undo-only).
+        '_source': {'excludes': item_list_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)

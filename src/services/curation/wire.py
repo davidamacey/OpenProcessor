@@ -59,6 +59,20 @@ def item_source_excludes(storage: RegionFields | None = None) -> list[str]:
     return [*_EMBEDDING_SOURCE_EXCLUDES, f.embedding]
 
 
+def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
+    """``_source.excludes`` for a *list* endpoint (card grid / review queue
+    / regions browse / semantic search) — :func:`item_source_excludes`
+    plus ``class_id_history``.
+
+    F-25: ``class_id_history`` (up to 32 entries) is only ever read by the
+    undo path (``label_undo.py``, which stays on
+    :func:`item_source_excludes` — it needs the history) — no list
+    renderer reads it. Shipping it in every row of a paginated list
+    response decompresses + serializes a field nobody displays.
+    """
+    return [*item_source_excludes(storage), 'class_id_history']
+
+
 def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> dict[str, Any]:
     """Read every wire region attribute from a stored doc, keyed by its
     fixed wire name."""
@@ -248,6 +262,7 @@ __all__ = [
     'SEARCH_EXTRA_KEYS',
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
+    'item_list_source_excludes',
     'item_source_excludes',
     'region_bbox_in_parent',
     'region_event_payload',

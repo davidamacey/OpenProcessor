@@ -26,7 +26,7 @@ from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation import review_queries
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import item_list_source_excludes, serialize_item
 
 
 logger = get_logger(__name__)
@@ -41,8 +41,9 @@ _MAX_K = 2000
 
 
 def _source_excludes(fields: RegionFields) -> list[str]:
-    """Never ship raw embedding vectors — same list every item endpoint uses."""
-    return item_source_excludes(fields)
+    """Never ship raw embedding vectors or class_id_history (F-25 — this
+    is a paginated list endpoint; history is undo-only)."""
+    return item_list_source_excludes(fields)
 
 
 class SemanticSearchDisabledError(RuntimeError):

@@ -392,8 +392,11 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
     )
     _args, kwargs = fake_os.search.call_args
     body = kwargs['body']
+    # F-25: also excludes class_id_history — this is a paginated list
+    # endpoint, and no list renderer reads it.
     assert set(body['_source']['excludes']) == {
         'pe_embedding',
         'v6_embedding',
         'region_embedding',
+        'class_id_history',
     }

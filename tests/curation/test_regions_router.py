@@ -44,7 +44,7 @@ class _FakeRegionOS:
         self.refresh_calls = 0
         self.indices = self._Indices(self)
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         if id not in self._docs:
             raise KeyError(id)
         return {

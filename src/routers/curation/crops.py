@@ -35,7 +35,11 @@ from src.services.curation.crop_browse import (
 )
 from src.services.curation.ingest_class_sources import HUMAN_CLASS_SOURCE
 from src.services.curation.item_text import item_text_query
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import (
+    item_list_source_excludes,
+    item_source_excludes,
+    serialize_item,
+)
 from src.services.detection.cascade_detect import class_provenance
 
 
@@ -238,8 +242,9 @@ async def list_crops(
         # queue sizes for filtered views — one count pass per query, fine at
         # this scale and matches the /curation/review endpoint.
         'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors to the card grid.
-        '_source': {'excludes': item_source_excludes()},
+        # Never ship the 1024-d embedding vectors or class_id_history
+        # to the card grid (F-25 -- history is undo-only).
+        '_source': {'excludes': item_list_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -302,7 +307,7 @@ async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]
     resp = await opensearch.mget(
         index=CURATION_ITEMS_INDEX,
         body={'ids': ids},
-        _source_excludes=item_source_excludes(),
+        _source_excludes=item_list_source_excludes(),
     )
     return [
         serialize_item(d.get('_source') or {}, d.get('_id', ''))
@@ -325,7 +330,13 @@ async def get_crop(
     storage names.
     """
     try:
-        resp = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
+        # F-25: still excludes the 1024-d embedding vectors (matching
+        # every other item endpoint's behavior) -- but not
+        # class_id_history, since a single-item view may legitimately
+        # want it, unlike a paginated list.
+        resp = await opensearch.get(
+            index=CURATION_ITEMS_INDEX, id=crop_id, _source_excludes=item_source_excludes()
+        )
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
