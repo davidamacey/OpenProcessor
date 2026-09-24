@@ -108,10 +108,6 @@
     }
   }
 
-  function snapshot(): void {
-    toastStore.info('op_* snapshot is wired to /curation/admin/snapshot in v1.1');
-  }
-
   const balance = $derived.by(() => {
     if (!legacyStats?.per_class) return [];
     const max = Math.max(1, ...legacyStats.per_class.map((c) => c.validated_count));
@@ -146,7 +142,7 @@
     <div
       class="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
     >
-      <strong>API unavailable.</strong> Check that openprocessor is running on
+      <strong>API unavailable.</strong> Check that the OpenProcessor API is reachable from
       <code class="font-mono"
         >{apiBase || (typeof window !== 'undefined' ? window.location.host : '')}</code
       >.
@@ -160,7 +156,6 @@
       Run Gemma Labeling
     </button>
     <button class="btn" type="button" onclick={runExport}>Export Dataset (YOLO)</button>
-    <button class="btn" type="button" onclick={snapshot}>Snapshot op_* indexes</button>
     <span class="grow"></span>
     <button
       class="btn"

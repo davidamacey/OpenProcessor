@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+
+- The dashboard's "Snapshot op\_\* indexes" button. It was a placeholder that
+  only showed a "coming in v1.1" toast, and no backend route exists for
+  it. The API-health banner and tooltip no longer name `openprocessor`.
+
 ### Added
 
 - `/bakeoff` profile picker, backed by OpenProcessor's B1 `BakeoffProfile`

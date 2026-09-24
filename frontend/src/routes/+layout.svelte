@@ -192,8 +192,8 @@
   const dotClass = $derived(healthStore.ok ? 'bg-green-500' : 'bg-red-500');
   const dotTitle = $derived(
     healthStore.ok
-      ? `openprocessor OK at ${data.apiBase} (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
-      : `openprocessor unavailable at ${data.apiBase}: ${healthStore.error ?? 'no response'}`,
+      ? `API OK at ${data.apiBase || window.location.host} (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
+      : `API unavailable at ${data.apiBase || window.location.host}: ${healthStore.error ?? 'no response'}`,
   );
 </script>
 
