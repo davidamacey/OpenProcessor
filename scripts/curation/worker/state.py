@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config
+from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.detection.profile_registry import get_active_region_profile
 
@@ -212,6 +212,22 @@ def _crop_jpeg_from_cache(crop_id: str) -> bytes | None:
         _cache_misses += 1
         logger.warning('crop_cache_read_error', crop_id=crop_id, error=str(exc))
         return None
+
+
+def unreadable_crop_update(task: _ItemTask) -> dict[str, Any]:
+    """Region update for an item whose source image could not be read.
+
+    ``detection_failed`` (retryable via the requeue tooling), never
+    ``no_region_box``: nothing was looked at, so recording "no region
+    found" would be a false verdict -- a missing mount once turned every
+    item in a batch into one.
+    """
+    F = get_region_fields()
+    return {
+        F.status: RegionStatus.DETECTION_FAILED,
+        F.reason: 'image_unavailable',
+        F.detector_chain: [*task.detection_trace, 'worker:image_unavailable'],
+    }
 
 
 def _crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]) -> bytes | None:

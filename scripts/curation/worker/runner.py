@@ -69,6 +69,7 @@ from scripts.curation.worker.state import (
     _ItemTask,
     _wait_for_sentinel_clear,
     region_profile,
+    unreadable_crop_update,
 )
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
@@ -533,8 +534,7 @@ async def run(args: argparse.Namespace) -> int:
                         t.vehicle_bbox_norm,
                     )
                 if t.crop_jpeg is None:
-                    F = get_region_fields()
-                    t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
+                    t.update_doc = unreadable_crop_update(t)
                     await out_q.put(t)
                     in_q.task_done()
                     continue
@@ -750,7 +750,7 @@ async def run(args: argparse.Namespace) -> int:
                     structlog.contextvars.bind_contextvars(request_id=t.request_id)
                     try:
                         if i in bad_indices:
-                            t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
+                            t.update_doc = unreadable_crop_update(t)
                             await out_q.put(t)
                             continue
                         # Default True (fail-open) when the crop is
@@ -794,7 +794,7 @@ async def run(args: argparse.Namespace) -> int:
             structlog.contextvars.bind_contextvars(request_id=t.request_id)
             try:
                 if t.crop_jpeg is None:
-                    t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
+                    t.update_doc = unreadable_crop_update(t)
                     await out_q.put(t)
                     sam_q.task_done()
                     continue
@@ -1068,7 +1068,7 @@ async def run(args: argparse.Namespace) -> int:
                     try:
                         if i in bad_indices:
                             # Defensive — Stage A should always set these.
-                            t.update_doc = {F.status: RegionStatus.NO_REGION_BOX}
+                            t.update_doc = unreadable_crop_update(t)
                             await out_q.put(t)
                             continue
                         reply = replies_by_id.get(t.crop_id)
