@@ -148,13 +148,12 @@
       // cluster instead of filtering the current page. Behaves the same on
       // /classes since /clusters/{id} is the canonical view.
       if (cls) {
-        // A class bound to a slot (e.g. license_plate) isn't a cluster —
-        // plates are sub-bboxes on vehicle crops (region_bbox_norm). Route
-        // to the gallery branch backed by {API_PREFIX}/regions so the operator sees
-        // every slot-bearing crop, not just the 1-2 rows whose PRIMARY
-        // class matches the slot's bound class name. Driven by
-        // registeredSlots (P2.10) instead of a hardcoded license_plate
-        // string literal so a new registered slot gets this routing for free.
+        // A class bound to a slot isn't a cluster — its regions are
+        // sub-bboxes on other items (region_bbox_norm). Route to the slot
+        // gallery so the operator sees every slot-bearing crop, not just
+        // the 1-2 rows whose PRIMARY class matches the slot's bound class
+        // name. Driven by registeredSlots, so a new registered slot gets
+        // this routing for free.
         const clsName = classesStore.classes.find((c) => c.id === cls.id)?.name;
         if (slotForClassName(clsName) != null) {
           void goto(`/clusters?class=${cls.id}`, {

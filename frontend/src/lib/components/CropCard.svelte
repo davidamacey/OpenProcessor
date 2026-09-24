@@ -49,7 +49,7 @@
   let editorOpen = $state<boolean>(false);
 
   // Track the natural pixel size of the rendered thumbnail so we can
-  // letterbox-compensate the plate-ring overlay. The thumbnail is
+  // letterbox-compensate the region-ring overlay. The thumbnail is
   // served as a *non-square* JPEG (PIL `crop.thumbnail((size, size))`
   // preserves aspect ratio), but we render it inside an aspect-square
   // container with `object-contain`. That means a 200x600 motorcycle
@@ -210,7 +210,7 @@
       </span>
     {:else if ringRectPct}
       <!--
-        Plate ring overlaid on the thumbnail. The thumbnail is served as
+        Region ring overlaid on the thumbnail. The thumbnail is served as
         a non-square JPEG (aspect-preserved) and rendered with
         object-contain inside an aspect-square container. We have to
         letterbox-compensate the ring placement so it lands on the

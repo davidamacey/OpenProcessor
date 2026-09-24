@@ -1,11 +1,9 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
   /**
-   * Single-crop sub-bbox editor (modal). Renamed from PlateEditor.svelte
-   * (P2.3, docs/genericization-plan-2026-09-13.md §3.1) — today the only
-   * configured sub-bbox is the license_plate slot, so every comment and
-   * call site below used to still read "plate"; C8 (docs/design/
-   * slot-generic-crop-mapping-plan-2026-09-21.md §7.1) closed that gap.
+   * Single-crop sub-bbox editor (modal) for the given slot
+   * (docs/genericization-plan-2026-09-13.md §3.1, docs/design/
+   * slot-generic-crop-mapping-plan-2026-09-21.md §7.1).
    *
    * Opens from CropCard's pencil button. Lets a curator draw, drag,
    * resize, and clear a sub-bbox on top of the parent crop thumbnail,
@@ -48,8 +46,8 @@
     /** Called when the user dismisses without saving. */
     onclose: () => void;
     /** Optional thumbnail size override (px). Defaults to the active
-     *  slot's own `capabilities.subBox.editor.thumbSize` (512 for
-     *  license_plate) — large enough for accurate hand-drawing. */
+     *  slot's own `capabilities.subBox.editor.thumbSize` (e.g. 512) —
+     *  large enough for accurate hand-drawing. */
     thumbSize?: number;
   }
 

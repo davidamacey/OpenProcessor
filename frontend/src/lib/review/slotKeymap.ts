@@ -1,10 +1,8 @@
 /**
- * Pure keymap-table builder for a slot's review queue tab, generalized
- * (docs/genericization-plan-2026-09-13.md §9.5/P2.8c) from the
- * plate-only `buildPlateKeymap` that used to hand-maintain a SECOND copy
- * of `licensePlateSlot.capabilities.queue.keymap` — same drift hazard as
- * Finding C.2, one layer down. This reads the spec's `queue.keymap`
- * directly, so a slot's combos are declared exactly once.
+ * Pure keymap-table builder for a slot's review queue tab
+ * (docs/genericization-plan-2026-09-13.md §9.5/P2.8c). It reads the spec's
+ * `queue.keymap` directly, so a slot's combos are declared exactly once
+ * (no second hand-maintained copy to drift, Finding C.2).
  *
  * Returns DATA (combo -> handler + description), not the
  * `keyboardStore.register` side effect itself — the page still owns
@@ -43,10 +41,9 @@ export interface KeymapEntry {
  * `arrowright` (advance). Edit mode: `enter` (save+exit) / `escape`
  * (cancel) only — the bbox canvas owns arrow/[ / ]/Backspace directly.
  *
- * For `licensePlateSlot` this produces the exact same
- * enter/d/f/e/arrowleft/b/arrowright sequence the old hand-written
- * `buildPlateKeymap` did — see `slotKeymap.test.ts`'s
- * `licensePlateSlot` case, the no-regression proof.
+ * For a slot with the standard region keymap this produces the
+ * enter/d/f/e/arrowleft/b/arrowright sequence — pinned in
+ * `slotKeymap.test.ts`.
  */
 export function buildSlotKeymap(
   spec: SlotSpec,

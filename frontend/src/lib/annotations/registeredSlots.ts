@@ -9,7 +9,7 @@
  * BboxCanvas/SlotBboxEditor, reviewTabs.ts's REVIEW_TABS,
  * clusters/+page.svelte's class-filter routing, +layout.svelte's
  * sidebar-click routing) reads from `registeredSlots`/`slotRegistry`
- * instead of hardcoding `'license_plate'`, so adding a second live slot
+ * instead of hardcoding a slot key, so adding a second live slot
  * is exactly: import its profile from `./profiles/`, add it to the
  * array below. No other production file changes for a build-time slot.
  *
@@ -98,7 +98,7 @@ export function resetDeploymentSlots(): void {
 }
 
 /** Case-insensitive class-name -> slot lookup, the common call-site shape
- *  (`class === 'license_plate'` checks used to do this by hand). */
+ *  (hand-written class-name checks used to do this). */
 export function slotForClassName(
   className: string | null | undefined,
 ): SlotSpec | undefined {

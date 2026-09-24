@@ -1,15 +1,9 @@
 <script lang="ts">
   /**
-   * Compact card for one slot detection. Renamed from PlateCard.svelte
-   * (P2.4) and parameterized (P2.7,
-   * docs/genericization-plan-2026-09-13.md §3.1/§5a) to read through the
-   * `readSlot` adapter instead of `RegionBrowseItem`'s hardcoded `plate_*`
-   * fields directly. `RegionBrowseItem`'s flat `plate_*` properties
-   * already match `licensePlateSlot`'s wire-field names exactly, so
-   * this is a safe, local parameterization: swap the `slot` prop and
-   * the card renders a completely different capability set (see
-   * `docs/genericization-plan-2026-09-13.md`'s §5.4 example slots) with
-   * zero further code change.
+   * Compact card for one slot detection, read through the `readSlot`
+   * adapter against the given `slot` (docs/genericization-plan-2026-09-13.md
+   * §3.1/§5a): swap the `slot` prop and the card renders a completely
+   * different capability set with zero further code change.
    *
    * `getRegions` (`api.ts`) now maps every row's `slots` server-side
    * (C2, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §4) —
@@ -17,13 +11,13 @@
    * falls back to calling `readSlot()` itself when the raw row never
    * went through `getRegions` (e.g. a locally-constructed fixture).
    *
-   * Used on the /clusters page when class=license_plate, and on the
-   * /train page's training-cohort sanity preview.
+   * Used on the /clusters slot gallery, and on the /train page's
+   * training-cohort sanity preview.
    *
    * Renders a sub-bbox thumbnail (cropped server-side to the child
    * bbox region, per the active slot's own `subBox.thumbnail`
-   * path/aspect — not a hardcoded plate URL/ratio) with the parent
-   * vehicle class, detector score, and a provenance chip strip.
+   * path/aspect — not a hardcoded URL/ratio) with the parent item
+   * class, detector score, and a provenance chip strip.
    * Clicking the card emits an `onclick` event so the parent can
    * navigate to the review queue.
    */
@@ -76,7 +70,7 @@
       ),
   );
 
-  // false_positive plates stay visible (kept as hard negatives) but are
+  // false_positive regions stay visible (kept as hard negatives) but are
   // dimmed + badged so the operator sees the triage state at a glance.
   const isFalsePositive = $derived(
     slot.capabilities.lifecycle?.falsePositiveState != null &&
@@ -95,7 +89,7 @@
   // cache-busted URL (see api.ts's region_thumbnail_url doc comment) —
   // it wins over a freshly-built one. Otherwise build from the active
   // slot's own thumbnail.path/defaultSize; a slot with no subBox
-  // capability at all falls back to the plate-shaped helper.
+  // capability at all falls back to the generic region-thumbnail helper.
   const thumbUrl = $derived(
     crop.region_thumbnail_url
       ? resolveApiUrl(crop.region_thumbnail_url)

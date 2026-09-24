@@ -1,14 +1,14 @@
 /**
- * Plate-bbox coordinate conversion between the source-image frame and the
- * vehicle-crop frame.
+ * Region-bbox coordinate conversion between the source-image frame and the
+ * item-crop frame.
  *
- * The backend (openprocessor commit 38b316e) stores `region_bbox_norm` in the
- * **source-image** frame, while the labeler renders the vehicle crop as a
- * thumbnail. To draw the plate ring on the crop thumbnail (or to let the
- * user edit the plate box on top of the crop), we need to map between the
- * two frames using the parent vehicle's `bbox_norm` (also in source frame).
+ * The backend stores `region_bbox_norm` in the **source-image** frame,
+ * while the labeler renders the item crop as a thumbnail. To draw the
+ * region ring on the crop thumbnail (or to let the user edit the region
+ * box on top of the crop), we need to map between the two frames using
+ * the parent item's `bbox_norm` (also in source frame).
  *
- *   plate_in_crop_x = (plate.x - vehicle.x1) / (vehicle.x2 - vehicle.x1)
+ *   region_in_crop_x = (region.x - item.x1) / (item.x2 - item.x1)
  *
  * Both helpers are pure and clamp the output to `[0, 1]`. The internal
  * representation is the project's center-form `BBoxNorm` ({cx, cy, w, h});
@@ -60,8 +60,8 @@ function fromXYXY(b: XYXY): BBoxNorm {
 }
 
 /**
- * Map a plate bbox from the source-image frame into the vehicle-crop
- * frame. Returns null when the parent vehicle box is degenerate (zero
+ * Map a region bbox from the source-image frame into the item-crop
+ * frame. Returns null when the parent item box is degenerate (zero
  * width or height) — in that case the divisor would explode.
  */
 export function sourceToCropFrame(
@@ -82,7 +82,7 @@ export function sourceToCropFrame(
 }
 
 /**
- * Map a plate bbox from the vehicle-crop frame back into the source-image
+ * Map a region bbox from the item-crop frame back into the source-image
  * frame. Always returns a value (no degeneracy guard needed since we're
  * multiplying, not dividing); the result is clamped to [0, 1].
  */

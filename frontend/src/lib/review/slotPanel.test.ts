@@ -90,9 +90,9 @@ describe('statusClearsBox', () => {
     expect(statusClearsBox(licensePlateSlot, '')).toBe(false);
   });
 
-  it('aircraftTailNumberSlot: its own rejectState (not_visible), not the plate one', () => {
+  it("aircraftTailNumberSlot: its own rejectState (not_visible), not another slot's", () => {
     expect(statusClearsBox(aircraftTailNumberSlot, 'not_visible')).toBe(true);
-    expect(statusClearsBox(aircraftTailNumberSlot, 'no_plate_visible')).toBe(false);
+    expect(statusClearsBox(aircraftTailNumberSlot, 'no_region_visible')).toBe(false);
   });
 
   it('reads clears_box off the served vocabulary when present', () => {

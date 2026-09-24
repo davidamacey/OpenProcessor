@@ -1,12 +1,10 @@
 /**
- * `license_plate` was briefly hidden from class-assignment surfaces
- * (2026-09-12) on the theory that it's a sub-bbox axis (the plate
- * detection/OCR workflow) wearing a vehicle-class-registry id, not a real
- * one-of-N vehicle body-type class, and that its huge cluster-size risked
- * accidental mis-assignment. Reverted the same day: David wants it fully
- * assignable — plates get relabeled/added to over time, and the goal is a
- * future unified vehicle+plate single-pass model, so keeping it a normal,
- * reachable class serves that better than hiding it. `isPickerHiddenClass`
+ * A slot-bound region class was briefly hidden from class-assignment
+ * surfaces (2026-09-12) on the theory that it's a sub-bbox axis wearing a
+ * class-registry id, and that its huge cluster size risked accidental
+ * mis-assignment. Reverted the same day: it stays fully assignable, so a
+ * future single-pass model over items and regions can use it.
+ * `isPickerHiddenClass`
  * is kept as a named, always-false predicate (rather than deleting the
  * concept outright) so every call site still routes through one chokepoint
  * — flipping visibility for a specific class in the future is a one-line
@@ -31,8 +29,8 @@ export function isPickerHiddenClass(_name: string): boolean {
  * binding). False for deprecated classes only today.
  *
  * Never filter `classesStore.classes` itself through this — the store must
- * stay globally unfiltered (the pinned plate-gallery card and its
- * click-routing resolve class 80 directly out of it).
+ * stay globally unfiltered (the pinned slot inventory cards and their
+ * click-routing resolve the slot's class directly out of it).
  */
 export function isAssignableClass(cls: { name: string; deprecated?: boolean }): boolean {
   if (cls.deprecated) return false;

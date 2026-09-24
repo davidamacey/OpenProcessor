@@ -1,11 +1,11 @@
 /**
- * Multi-select behavior shared by the crop grid and the plate gallery.
+ * Multi-select behavior shared by the crop grid and the region gallery.
  *
  * Both grids implement the same three-branch click contract — shift-range,
  * ctrl/cmd-toggle, plain — and differ only in what a plain click does:
  *
  * - `replace` (crop grid): plain click selects exactly that card.
- * - `toggle` (plate gallery): plain click adds/removes it, accumulating.
+ * - `toggle` (region gallery): plain click adds/removes it, accumulating.
  *
  * The range branch unions with the current selection so shift-after-ctrl
  * extends rather than replaces, and falls through to the plain branch when

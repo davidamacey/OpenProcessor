@@ -67,27 +67,27 @@ export function createSlotGalleryController(slot: SlotSpec) {
     keyOf: (p) => p.crop_id,
   });
 
-  // Plate triage: multi-select for bulk actions + the inline bbox editor.
+  // Region triage: multi-select for bulk actions + the inline bbox editor.
   // Plain click TOGGLES here (accumulating), unlike the crop grid where
-  // it replaces — plate triage is a bulk-marking flow.
+  // it replaces — region triage is a bulk-marking flow.
   const sel = createSelection({ plainClick: 'toggle' });
   let editCrop = $state<Crop | null>(null);
   let busy = $state<boolean>(false);
 
-  // Top-N largest-crop gate for plates. The sort is built on the largest
-  // 1-3 crops, so this is the key filter for finding the plates that matter.
+  // Top-N largest-crop gate. The sort is built on the largest 1-3 crops,
+  // so this is the key filter for finding the regions that matter.
   // null = all ranks.
   let maxRank = $state<number | null>(null);
 
-  // Plate clustering (AHC-refinable buckets over plate_pe_embedding).
+  // Region clustering (AHC-refinable buckets over the region embeddings).
   // selectedCluster narrows the gallery to one bucket; null shows the
   // bucket grid (or the flat gallery when no clustering has run).
   let clusters = $state<Cluster[]>([]);
   let selectedCluster = $state<number | null>(null);
   let clusterBusy = $state<boolean>(false);
 
-  // Sub-cluster delineation inside an open plate bucket — mirrors the vehicle
-  // cluster detail. null = "all" (the server returns plates ordered by subid so
+  // Sub-cluster delineation inside an open region bucket — mirrors the item
+  // cluster detail. null = "all" (the server returns regions ordered by subid so
   // AHC groups are contiguous; we render a labeled separator before each).
   // Selecting a chip filters the gallery to that one sub-cluster.
   let subTab = $state<string | null>(null);
@@ -96,27 +96,27 @@ export function createSlotGalleryController(slot: SlotSpec) {
   let refineMsg = $state<string | null>(null);
 
   // Suspected-FP review: crops the FP centroids flag as likely false
-  // positives. Loads into the same `plates` array so the beloved
-  // shift-select + Mark-FP workflow works unchanged; platesTotal is pinned to
-  // the loaded count so the infinite-scroll sentinel never pages in normal
-  // plates over the top.
+  // positives. Loads into the same `pager.items` so the shift-select +
+  // Mark-FP workflow works unchanged; `pager.total` is pinned to the loaded
+  // count so the infinite-scroll sentinel never pages in normal regions
+  // over the top.
   let suspectedFpView = $state<boolean>(false);
   let suspectedFpThreshold = $state<number>(0.35);
 
   // M3 (docs/design/interactive-pass-2026-09-24.md): the bucket-card grid
   // below only ever showed real AHC region clusters — when the only
   // cluster is the permanent false-positive bucket (the common case
-  // before "Cluster plates" has been run over the good plates), every
-  // other plate was unreachable from this view: no "unclustered" entry
+  // before "Cluster regions" has been run over the good regions), every
+  // other region was unreachable from this view: no "unclustered" entry
   // and no fallback flat grid. `viewingAll` opens the same flat
   // gallery `selectedCluster !== null` already renders, but with no
-  // `region_cluster_id` filter, so every plate — clustered or not — is
+  // `region_cluster_id` filter, so every region — clustered or not — is
   // browsable. Kept independent of `selectedCluster` (rather than
   // reusing it with a sentinel id) so `browseQuery` never needs to
   // distinguish "filter to real cluster 0" from "no filter".
   let viewingAll = $state<boolean>(false);
 
-  // Filter sidebar state — only active on the plates view.
+  // Filter sidebar state — only active on the gallery view.
   let detectorFilter = $state<string>('');
   let verifiedOnly = $state<boolean>(false);
   let minScore = $state<number>(0);
@@ -127,7 +127,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // auto-confirmed-but-unreviewed 'detected' rows, etc.
   let statusFilter = $state<string>('');
 
-  // Distinct sub-cluster ids present in the loaded plates, sorted lexically so
+  // Distinct sub-cluster ids present in the loaded regions, sorted lexically so
   // "9a","9aa","9ab"… land in human-expected order.
   const subclusterIds = $derived.by(() => {
     const set = new Set<string>();
@@ -152,9 +152,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
     selectedCluster != null && subTab == null && subclusterIds.length > 0,
   );
 
-  // Partition loaded plates into one group PER sub-cluster id. Built with a
+  // Partition loaded regions into one group PER sub-cluster id. Built with a
   // Map (not a contiguity walk) so it is robust to a non-contiguous list —
-  // e.g. the transient render right after opening a bucket, when `plates`
+  // e.g. the transient render right after opening a bucket, when the pager
   // still holds the previous mixed-bucket gallery before the bucket's own
   // (subid-sorted) data arrives. A contiguity walk would emit the same subid
   // as multiple groups there, producing duplicate {#each} keys and a Svelte
@@ -283,7 +283,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     clusterBusy = true;
     try {
       // One-click pipeline (rebuild FP centroids → auto-pull tight FPs →
-      // re-partition good plates) is a multi-minute background job, so we kick
+      // re-partition good regions) is a multi-minute background job, so we kick
       // it off and poll for completion instead of holding one request open.
       await clusterRegions(maxRank ?? undefined);
       toastStore.info(
@@ -335,7 +335,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         toastStore.info(`Bucket not refined: ${reason}.`);
       }
       // Drop back to the "all" tab so the freshly grouped view shows, then
-      // reload (server returns plates ordered by sub-cluster).
+      // reload (server returns regions ordered by sub-cluster).
       subTab = null;
       await loadFirst();
     } catch (e) {
@@ -357,8 +357,8 @@ export function createSlotGalleryController(slot: SlotSpec) {
     selectedCluster = id;
   }
 
-  /** M3: browse every plate with no `region_cluster_id` filter — the
-   *  entry point for plates that aren't in any AHC bucket yet (or when
+  /** M3: browse every region with no `region_cluster_id` filter — the
+   *  entry point for regions that aren't in any AHC bucket yet (or when
    *  the only bucket that exists is the false-positive one). */
   function openAll(): void {
     suspectedFpView = false;
@@ -383,7 +383,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     refineMsg = null;
     sel.clear();
     if (suspectedFpView) {
-      // Leaving the suspected-FP view: reload the real plate gallery the
+      // Leaving the suspected-FP view: reload the real region gallery the
       // filter effect would otherwise have populated.
       suspectedFpView = false;
       void loadFirst();
@@ -391,7 +391,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   }
 
   // Range selects span the currently displayed order, so hand the helper
-  // the loaded plate ids on each click.
+  // the loaded region ids on each click.
   function toggleSelect(p: RegionBrowseItem, e?: MouseEvent): void {
     sel.click(
       p.crop_id,
@@ -465,8 +465,8 @@ export function createSlotGalleryController(slot: SlotSpec) {
    * write via `setSlotBox` by the time this fires, and passes back the
    * server's own returned item. This function only patches the matching
    * card from that item; it must NOT re-PUT the box (a pre-C8 bug — this
-   * used to call `setCropPlate` a second time here, redundantly
-   * re-sending a box the editor had just saved), and must NOT re-derive
+   * used to write the box a second time here, redundantly re-sending a
+   * box the editor had just saved), and must NOT re-derive
    * confirmed-vs-rejected status client-side — it renders what the
    * server wrote.
    */
@@ -477,7 +477,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
     editCrop = null;
     const slotData = item.slots?.[slot.key];
     // Patch just this card in place rather than reloading page 1 (which
-    // would wipe the list and reset scroll). The plate thumbnail is a
+    // would wipe the list and reset scroll). The region thumbnail is a
     // server-rendered URL, so bust its cache to pull the re-cropped box.
     pager.items = pager.items.map((p) =>
       p.crop_id === cropId
@@ -497,7 +497,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   }
 
   /**
-   * M6: Z on the plate gallery reverses the most recent region write
+   * M6: Z on the region gallery reverses the most recent region write
    * (single-item bbox edit or bulk status change), the same way Z
    * reverses a label write on the card-grid `/clusters` view — see
    * `undo.svelte.ts`'s header comment for why this shares the ONE

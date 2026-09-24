@@ -92,10 +92,9 @@
   let presets = $state<ClassSubsetPreset[]>([]);
 
   /**
-   * The one registered slot that declares a dataset export. Today that is
-   * `license_plate` and only `license_plate` — but reading it off
-   * `registeredSlots` rather than importing `licensePlateSlot` directly
-   * keeps `/train` on the same "register a new domain in exactly one
+   * The one registered slot that declares a dataset export, read off
+   * `registeredSlots` rather than importing a specific profile, so
+   * `/train` follows the same "register a new domain in exactly one
    * file" rule every other slot-aware route follows (see
    * `registeredSlots.ts`'s header). `undefined` when no registered slot
    * declares one, in which case the panel never renders at all.
@@ -211,7 +210,7 @@
     return `${dir} (${n} imgs${samp}${tag}${cur}) ${when}`.trim();
   }
 
-  // ---- Single-class dataset export (today: license_plate) ---------------
+  // ---- Single-class dataset export (the export-capable slot) ------------
   // Built on demand via the active slot's `extras.datasetExport` spec,
   // through OpenProcessor's generic `POST /export/single_class`. Backend
   // is synchronous, so we just await it and surface the resulting dir +
@@ -227,8 +226,8 @@
   let singleClassImageMode = $state<'whole_frame' | 'item_crop'>('whole_frame');
   let singleClassImgSize = $state<640 | 1280>(1280);
   let singleClassDedup = $state<boolean>(true);
-  // Optional N: sample at most this many positive (plate-bearing) frames,
-  // spread EVENLY across plate clusters. Blank/0 == every positive. Lets us
+  // Optional N: sample at most this many positive (region-bearing) frames,
+  // spread EVENLY across region clusters. Blank/0 == every positive. Lets us
   // build progressively larger dataset versions from the same labeled pool.
   let singleClassMaxPositives = $state<number | null>(null);
 
@@ -635,7 +634,7 @@
   // `endpoint`/`params`/`row_kind` are served verbatim, already resolved
   // for the requested class (no client `{classId}` template compilation
   // for these). This replaces the old client-side `cohortsForClass()`
-  // (CORE_COHORTS + licensePlateSlot's 5 hand-tuned modes) as the
+  // (CORE_COHORTS + a slot's own declared modes) as the
   // primary source: the backend serves the same 4 core + N region
   // cohorts today, so nothing the operator sees changes, but a
   // threshold like `low_confidence`'s `classifier_conf_lt` now comes
@@ -744,8 +743,7 @@
    *  `{API_PREFIX}/training_cohorts`, or a tier-2 declared fallback
    *  compiled the same way) to the one existing api.ts function that
    *  already answers that endpoint shape — keyed structurally by
-   *  `cohortEndpointKind()` rather than a `path === '/plates/…'`
-   *  string-equality check (Wave 2 C12 — see cohorts.ts's doc comment
+   *  `cohortEndpointKind()` rather than a path string-equality check (Wave 2 C12 — see cohorts.ts's doc comment
    *  on `cohortEndpointKind` for why the old check silently broke on a
    *  base-path rename). Anything else (a future slot's endpoint cohort
    *  naming a path none of these three recognize) fails closed to an
@@ -875,8 +873,8 @@
     return regionSlots.length === 1 ? regionSlots[0] : undefined;
   }
 
-  /** Click target from `reviewTarget` (§9.3 step 7) — kills the last
-   *  hardcoded `?tab=plates` literal on this route. */
+  /** Click target from `reviewTarget` (§9.3 step 7): the owning slot's
+   *  queue tab, else the All tab. */
   function openCohortItem(
     group: CohortGroup,
     cohort: CohortSpec,
@@ -1140,9 +1138,9 @@
     />
   {/if}
 
-  <!-- Training cohorts (2026-09-24 logic-moves W6; originally P2.14,
-       "Plate training cohorts") — GET {API_PREFIX}/training_cohorts?class_id=
-       serves both license_plate's region cohorts AND every other
+  <!-- Training cohorts (2026-09-24 logic-moves W6; originally P2.14)
+       — GET {API_PREFIX}/training_cohorts?class_id=
+       serves both the region profile's cohorts AND every other
        class's 4 class-agnostic core cohorts; a tier-2 slot's own
        declared cohort fills in only if the server didn't already send
        that id (see loadGroupCohorts). Grouped by class so "pick the

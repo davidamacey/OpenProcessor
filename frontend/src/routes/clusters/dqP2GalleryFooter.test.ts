@@ -1,8 +1,8 @@
 /**
  * DQ-p2 (docs/design/data-quality-pass-2026-09-24.md §7 FRONTEND item 7):
  * the /clusters status bar always read off `clusterPager` (the cluster-
- * grid pager) — "102 / 102 all loaded" under a 60 / 1,000 plate grid,
- * because the plate-gallery view (`isSlotFilter`) renders
+ * grid pager) — "102 / 102 all loaded" under a much larger slot-gallery
+ * grid, because the slot-gallery view (`isSlotFilter`) renders
  * `slotGallery.pager.items`, a wholly different pager, but the
  * footer never switched to match it.
  *

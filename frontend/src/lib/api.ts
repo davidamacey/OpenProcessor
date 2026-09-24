@@ -634,22 +634,14 @@ export function cancelVizProjection(
   );
 }
 
-// -- plates browse / training-cohort selection ---------------------------
+// -- region browse / training-cohort selection --------------------------
 
 /**
  * Base path for the region/annotation-slot collection endpoints (the
- * license_plate profile's "plates browse" sub-system below — cluster,
- * FP centroids, training candidates, etc). The backend
- * (OpenProcessor/openprocessor) renames this `/plates` -> `/regions`
- * (merged to its `main` at `b3f928d`, 2026-09) — flipping this ONE
- * constant is the whole lockstep change (Wave 2, C13/C14 of
- * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md). Do not
- * reintroduce a bare '/plates' literal in any of the sites below;
- * `regionRouteScan.test.ts` fails the build if you do.
- *
- * Flipped 2026-09-21 (Wave 2 C14) — the backend's rename shipped; this
- * is the whole lockstep change. `git revert` this commit to restore
- * compatibility with a pre-rename backend.
+ * region browse sub-system below — cluster, FP centroids, training
+ * candidates, etc). The single place this path lives: every call site
+ * below builds on it, and `regionRouteScan.test.ts` fails the build if a
+ * bare path literal reappears.
  */
 const REGION_BASE = '/regions';
 
@@ -682,7 +674,7 @@ export interface RegionBrowseItem {
   /** Parent-crop rank by size in its image (1 = largest). */
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
-  /** Plate clustering assignment (independent of vehicle cluster_id). */
+  /** Region clustering assignment (independent of the item cluster_id). */
   region_cluster_id?: number | null;
   region_cluster_subid?: string | null;
   region_cluster_distance?: number | null;
@@ -710,13 +702,13 @@ export interface RegionsQuery {
   page_size?: number;
   class_id?: number;
   cluster_id?: number;
-  /** Plate clustering bucket (independent of the vehicle cluster_id). */
+  /** Region clustering bucket (independent of the item cluster_id). */
   region_cluster_id?: number;
-  /** AHC plate sub-cluster id (e.g. "17a"). */
+  /** AHC region sub-cluster id (e.g. "17a"). */
   region_cluster_subid?: string;
-  /** Order a bucket's plates by sub-cluster so AHC groups come back contiguous. */
+  /** Order a bucket's regions by sub-cluster so AHC groups come back contiguous. */
   sort_by_subid?: boolean;
-  /** Only plates on the top-N largest crops (crop_rank_in_image<=N). */
+  /** Only regions on the top-N largest crops (crop_rank_in_image<=N). */
   max_rank?: number;
   min_score?: number;
   max_score?: number;
@@ -755,7 +747,7 @@ export async function getRegions(
   };
 }
 
-/** Plate-clustering background-job snapshot. The one-click pipeline result also
+/** Region-clustering background-job snapshot. The one-click pipeline result also
  *  carries the FP-rebuild + auto-assign sub-steps, and may report a re-partition
  *  that was skipped to protect a fresh manual refine (TTL). */
 export interface RegionClusterJob {
@@ -775,9 +767,9 @@ export interface RegionClusterJob {
   error: string | null;
 }
 
-/** Launch the one-click plate-clustering pipeline (background job — 50k+ plates
- *  take minutes): rebuild FP sub-centroids → auto-pull tight FP matches → re-partition
- *  the good plates. Returns immediately; poll getRegionClusterStatus for completion. */
+/** Launch the one-click region-clustering pipeline (background job — a large
+ *  pool takes minutes): rebuild FP sub-centroids → auto-pull tight FP matches →
+ *  re-partition the good regions. Returns immediately; poll getRegionClusterStatus for completion. */
 export function clusterRegions(
   maxRank?: number,
   opts: { forceRepartition?: boolean; autoFpThreshold?: number } = {},
@@ -794,12 +786,12 @@ export function clusterRegions(
   );
 }
 
-/** Poll the background plate-clustering job. */
+/** Poll the background region-clustering job. */
 export function getRegionClusterStatus(signal?: AbortSignal): Promise<RegionClusterJob> {
   return apiFetch(`${API_PREFIX}${REGION_BASE}/cluster/status`, {}, signal);
 }
 
-/** Per-bucket AHC refine over plate_pe_embedding; writes region_cluster_subid. */
+/** Per-bucket AHC refine over the region embeddings; writes region_cluster_subid. */
 export function refineRegionCluster(
   clusterId: number,
   signal?: AbortSignal,
@@ -816,7 +808,7 @@ export function refineRegionCluster(
   );
 }
 
-/** Plate cluster cards (mirrors getClusters' Cluster shape). */
+/** Region cluster cards (mirrors getClusters' Cluster shape). */
 export function getRegionClusters(
   opts: { maxClusters?: number; perCluster?: number; maxRank?: number } = {},
   signal?: AbortSignal,
@@ -880,7 +872,7 @@ export interface SuspectedFpPage {
   message?: string;
 }
 
-/** Non-FP plate crops ranked by similarity to the known FP centroids. */
+/** Non-FP region crops ranked by similarity to the known FP centroids. */
 export function getSuspectedFalsePositives(
   opts: { threshold?: number; page?: number; pageSize?: number } = {},
   signal?: AbortSignal,
@@ -990,27 +982,27 @@ export interface DatasetStats {
   };
   regions: {
     /** Crops with a region_bbox_norm right now — the honest "crops with a
-     *  plate" count (matches the plate cluster view). */
+     *  region" count (matches the region cluster view). */
     boxed?: number;
-    /** Crops Gemma confirmed are real plates (region_status='detected'). */
+    /** Crops the verifier confirmed carry a real region (region_status='detected'). */
     confirmed?: number;
     /** Sum of region_detector credit — includes rejected/failed attempts,
-     *  so it OVERSTATES real plates. Kept for back-compat; not the headline. */
+     *  so it OVERSTATES real regions. Kept for back-compat; not the headline. */
     total_detected: number;
     by_detector: number;
     by_segmenter: number;
     /** Legacy alias for ``by_human_drew``. */
     by_human: number;
-    /** Crops where the operator drew a fresh plate bbox from scratch. */
+    /** Crops where the operator drew a fresh region bbox from scratch. */
     by_human_drew?: number;
-    /** Crops whose plate was verified by a human (Confirm Plate button). */
+    /** Crops whose region was verified by a human (the Confirm button). */
     verified_by_human?: number;
-    /** Crops whose plate was verified by Gemma (auto-verify). */
+    /** Crops whose region was verified by the VLM verifier (auto-verify). */
     verified_by_vlm?: number;
     /**
-     * Union: any plate the operator touched — drew the bbox OR
+     * Union: any region the operator touched — drew the bbox OR
      * confirmed an AI-proposed one. The dashboard surfaces this as
-     * the honest "you reviewed N plates" number.
+     * the honest "you reviewed N regions" number.
      */
     validated_by_human?: number;
   };
@@ -1872,7 +1864,7 @@ export async function discardCropsBatch(
  * Stamps ``review_dismissed_at`` + ``review_dismissed_by='human'`` on
  * the crop. The server's review_queue handler must_not's any crop with
  * ``review_dismissed_at``, so dismissed crops never reappear until
- * `reviewUndismissCrop` clears it. The crop's class / plate state is
+ * `reviewUndismissCrop` clears it. The crop's class / region state is
  * left intact — only review visibility changes.
  */
 export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise<void> {
@@ -2119,7 +2111,7 @@ export interface ReviewFilterOption {
 
 /** Self-describing spec for one of a review tab's filters with a fixed
  *  value set (`GET {API_PREFIX}/review/tabs`, 840beb8 adoption) — e.g. the
- *  Plates tab's `region_status` (all / detected only / verifier-rejected
+ *  region tab's `region_status` (all / detected only / verifier-rejected
  *  candidates only). `param` is the query parameter to send on both
  *  `GET {API_PREFIX}/review/{tab}` and its `/locate` route; an unknown value 400s.
  *  The frontend renders one `<select>` per entry generically — no
@@ -2205,21 +2197,17 @@ export async function getReviewTabsVocabulary(
 }
 
 /**
- * Update or clear the plate sub-bbox on a crop.
+ * Update or clear the region sub-bbox on a crop.
  *
  * - Pass an `[x1, y1, x2, y2]` tuple in **source-image normalized**
- *   coordinates to set/replace the plate box (server records
+ *   coordinates to set/replace the region box (server records
  *   `region_status='human_confirmed'`).
- * - Pass `null` to clear the plate; the backend interprets this as
+ * - Pass `null` to clear the region; the backend interprets this as
  *   `region_status='no_region_visible'`.
  *
- * Mirrors `putCropLabel` in shape. Endpoint: `PUT {API_PREFIX}/crops/{id}/region`
- * (renamed from `/plate`, Wave 2 C14), defined by backend task #32 to
- * match this contract.
+ * Mirrors `putCropLabel` in shape. Endpoint: `PUT {API_PREFIX}/crops/{id}/region`.
  *
- * Dead code as of Wave 1 (C6/C8): every call site now goes through
- * `setSlotBox(licensePlateSlot, …)` instead. Kept renamed rather than
- * deleted here — deleting it is orthogonal to the wire rename.
+ * Dead code: every call site goes through `setSlotBox(slot, …)` instead.
  */
 /**
  * Fetch a single crop by id from the authoritative store. Used by the
@@ -2282,9 +2270,9 @@ export async function setSlotBox(
 /**
  * PATCH a slot's metadata fields (status / text / rejection reason)
  * without touching the bbox. The BODY KEYS are the spec's own wire
- * field names — for `licensePlateSlot` this produces a body
- * byte-identical to the old `PlateMetaPatch` (`region_text` /
- * `region_status` / `region_rejection_reason`), pinned in api.test.ts.
+ * field names — for a `region_*` slot this produces a body of
+ * `region_text` / `region_status` / `region_rejection_reason`, pinned in
+ * api.test.ts.
  * Keys whose capability is absent, or whose value is `undefined`
  * (as opposed to `null`, which clears), are omitted.
  */
@@ -2322,10 +2310,9 @@ export async function patchSlotMeta(
 }
 
 /**
- * Bulk-set region_status over many crops. Backend: `POST {API_PREFIX}/regions/batch_status`
- *   (renamed from `{API_PREFIX}/plates/batch_status`, Wave 2 C14).
- * The cluster-view triage op: select outlier plates → mark all false_positive,
- * or bulk-confirm good plates (status='detected' + verified=true).
+ * Bulk-set region_status over many crops. Backend: `POST {API_PREFIX}/regions/batch_status`.
+ * The cluster-view triage op: select outlier regions → mark all false_positive,
+ * or bulk-confirm good regions (status='detected' + verified=true).
  *
  * Reads its path from `spec.endpoints.batchStatus` (Wave 2 C13,
  * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.2 trap 2)
@@ -3204,13 +3191,11 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
  *
  * The segment is `region_thumbnail`, which is the ONLY region-thumbnail
  * route the backend registers (`curation_images.py`'s
- * `@crops_router.get('/{crop_id}/region_thumbnail')`). It used to be
- * `plate_thumbnail`, which 404s — there is no alias and there will not
- * be one (cropwright_backend_integration_plan.md §3.2: no compatibility
- * surface lands on the contract-owning side).
+ * `@crops_router.get('/{crop_id}/region_thumbnail')`); there is no alias
+ * (cropwright_backend_integration_plan.md §3.2: no compatibility surface
+ * lands on the contract-owning side).
  *
  * Note the deliberate asymmetry with the JSON key: `/regions` responses
- *   (renamed from `/plates`, Wave 2 C14)
  * carry a field literally named `region_thumbnail_url` whose *value* now
  * points at `…/region_thumbnail`. The key is frozen wire contract; only
  * the path inside it is generic. Do not "fix" the key to match.

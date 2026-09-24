@@ -1,15 +1,10 @@
 <script lang="ts">
   /**
-   * Plates list view for /clusters, backed by {API_PREFIX}/regions — extracted
-   * verbatim from clusters/+page.svelte's `{:else if isSlotFilter}`
-   * template branch (P2.6, docs/genericization-plan-2026-09-13.md
-   * §3.4/§5a). All state/logic lives in the injected `gallery` controller
-   * (`slotGalleryController.svelte.ts`); this component is rendering
-   * only, unchanged from what the route used to inline.
-   *
-   * Deliberately NOT parameterized (P2.6 is a verbatim move; P2.7
-   * parameterizes by slot). Every class name, string, and behavior below
-   * is identical to before the extraction.
+   * A slot's region gallery for /clusters, backed by the slot's browse
+   * endpoint (docs/genericization-plan-2026-09-13.md §3.4/§5a). All
+   * state/logic lives in the injected `gallery` controller
+   * (`slotGalleryController.svelte.ts`), which carries the slot; this
+   * component renders it, naming regions by `gallery.slot.label`.
    */
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { resolveApiUrl } from '$lib/api';
@@ -31,14 +26,13 @@
   const label = $derived(gallery.slot.label);
 </script>
 
-<!-- Plates list view — backed by {API_PREFIX}/regions. Plates live as a
-     region_bbox_norm sub-bbox on each vehicle crop (not as their
-     own cluster docs), so this view surfaces them directly with
-     detector provenance + OCR text chips. -->
+<!-- Region gallery. Regions live as a region_bbox_norm sub-bbox on
+     each item crop (not as their own cluster docs), so this view
+     surfaces them directly with detector provenance + OCR text chips. -->
 <div class="flex min-h-0 flex-col gap-3">
   <!-- Sticky header: the filter strip + bulk-action toolbar stay pinned
        to the top of the scroll area, so the verify / false-positive /
-       no-plate controls remain reachable while scrolling deep into a
+       no-region controls remain reachable while scrolling deep into a
        bucket or sub-cluster. -mx-4/-mt-4 cancels the scroll container's
        p-4 so it spans edge-to-edge and pins at the very top. -->
   <div
@@ -109,7 +103,7 @@
       {/if}
 
       <!-- Top-N largest-crop gate. The sort runs on the largest 1-3
-         crops, so this is the key filter for the plates that matter. -->
+         crops, so this is the key filter for the regions that matter. -->
       <div class="inline-flex overflow-hidden rounded border border-zinc-700">
         {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
           <button
@@ -189,8 +183,8 @@
         >
           {gallery.clusterBusy ? 'Building…' : 'Build FP centroids'}
         </button>
-        <!-- M3: plate clusters only cover plates that have gone through
-             "Cluster plates" — before that (or for plates the run left
+        <!-- M3: region clusters only cover regions that have gone through
+             "Cluster regions" — before that (or for regions the run left
              out) the bucket grid below has no card for them at all, so
              this is the only way in. Always shown here, not gated on
              "no non-FP clusters exist", so it stays reachable once
@@ -263,7 +257,7 @@
       </span>
     </div>
 
-    <!-- Bulk-action toolbar — appears when plates are selected. Triage
+    <!-- Bulk-action toolbar — appears when regions are selected. Triage
        outliers without leaving the gallery (no /review round-trip). -->
     {#if gallery.sel.size > 0}
       <div
@@ -312,7 +306,7 @@
   {#if gallery.pager.error}
     <p class="text-sm text-red-300">API unavailable: {gallery.pager.error}</p>
   {:else if !gallery.suspectedFpView && !gallery.viewingAll && gallery.selectedCluster == null && gallery.clusters.length > 0}
-    <!-- Plate cluster cards. Click one to open its plates (with the
+    <!-- Region cluster cards. Click one to open its regions (with the
          bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
          get a blue border so refined buckets are easy to spot. The
          permanent false-positive bucket gets a red border + label. -->

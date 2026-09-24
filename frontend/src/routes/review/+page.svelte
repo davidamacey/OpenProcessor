@@ -103,8 +103,8 @@
   let awaitingDeepLink = $state<boolean>(deepLink.cropId != null);
   // The slot backing the current tab, if any — the single derived value
   // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
-  // hangs every former `tab === 'plates'` call site off, instead of a
-  // hand-maintained literal per site.
+  // hangs every slot-tab call site off, instead of a hand-maintained
+  // literal per site.
   const activeSlot = $derived(REVIEW_TABS.find((t) => t.id === tab)?.slot ?? null);
   // Active quick-filter preset chip on the All tab (null = plain All).
   // Only ever meaningful while tab === 'all' — resolveEffectiveTab drops
@@ -183,7 +183,7 @@
   function termFilters(): Record<string, unknown> {
     // Server-side, scope.filters on POST {API_PREFIX}/select/diverse only supports
     // term/terms filters (class_id, source) — NOT conf_min/conf_max/
-    // min_blur_ratio/max_rank/plate text. Those controls are disabled in
+    // min_blur_ratio/max_rank/region text. Those controls are disabled in
     // the UI while diverseMode is active (see the filter bar below) so
     // this never silently drops something the operator thinks is applied.
     const f: Record<string, unknown> = {};
@@ -315,7 +315,7 @@
       if (diverseMode) return fetchDiversePage(page);
       // effectiveTab is an internal id (slot:${key} for a slot tab,
       // per P2.8b) — the backend still expects the endpointId
-      // (e.g. 'plates'), so this resolves through endpointForTab()
+      // (e.g. 'regions'), so this resolves through endpointForTab()
       // rather than forwarding the internal id directly.
       const res = await getReviewQueue(
         endpointForTab(effectiveTab) as ReviewTab,
@@ -403,14 +403,13 @@
   let classFilter = $state<number | null>(null);
   let confMin = $state<number>(0);
   let confMax = $state<number>(1);
-  // Plate-text search — only meaningful on tab=plates; ignored elsewhere
-  // server-side. Surface in the filter strip when the operator is on
-  // the plates tab.
+  // Slot text search — only meaningful on a slot tab with a text filter;
+  // ignored elsewhere server-side.
   let slotTextQuery = $state<string>('');
 
   // Generic served-enum filter bar (840beb8 adoption) — one entry per
   // `ReviewFilterSpec.param` the active tab declares (e.g. `region_status`
-  // on the Plates tab). No param-specific code here or in `_filter()`
+  // on the Regions tab). No param-specific code here or in `_filter()`
   // below: a future spec on any tab just works. Reset whenever the tab
   // changes (see the immediate `$effect` below); seeded from the URL on
   // first load so `?region_status=verify_rejected` is bookmarkable, the
@@ -617,9 +616,9 @@
   // layout-level global keydown listener via dropOnClassStore. Pressing
   // a class's bound letter assigns the current crop and advances —
   // matching the cluster page's bulk-label dispatch shape so the same
-  // hotkey works everywhere it makes sense. The plates tab is a
+  // hotkey works everywhere it makes sense. The regions tab is a
   // different flow (confirming a bbox, not a class) so we no-op there
-  // and leave the letters free for plate actions.
+  // and leave the letters free for region actions.
   $effect(() => {
     if (isSlotSuppressedTab(tab)) return;
     const off = dropOnClassStore.register(async (cls: RegistryClass) => {
@@ -894,7 +893,7 @@
     // Discard = "permanently dismiss this crop from every review queue."
     // Stamps review_dismissed_at on the backend; the review queue's
     // must_not filter excludes any crop with that field set. The crop's
-    // class / plate state is left intact — this is NOT an unlabel. See
+    // class / region state is left intact — this is NOT an unlabel. See
     // reviewController.svelte.ts's `discard` for the undo-entry note.
     await queueController.discard(current);
   }
@@ -1046,7 +1045,7 @@
     rejectReasonPromptResolve = null;
   }
   // Status values an operator is allowed to write, for the ACTIVE slot —
-  // closes Finding D (the panel used to render licensePlateSlot's own
+  // closes Finding D (the panel used to render one fixed slot's
   // vocabulary regardless of which slot tab was active). Order matches
   // the deployment's served `GET {API_PREFIX}/regions/statuses` vocabulary
   // when loaded, falling back to the active slot's own
@@ -1463,10 +1462,10 @@
   // Keyboard shortcuts. Per-class letter hotkeys (configured on /classes)
   // are routed through dropOnClassStore by the layout-level keydown
   // listener and work on every tab. The shortcuts below are the
-  // tab-action shortcuts; on the plates tab Enter/D get rebound to plate
+  // tab-action shortcuts; on a slot tab Enter/D get rebound to the slot's
   // confirm/reject so the same finger pattern works for both flows.
   //
-  // On the plates tab, behavior splits between read-only scan mode
+  // On a slot tab, behavior splits between read-only scan mode
   // (default) and edit mode (operator pressed E or Edit bbox):
   //   - read-only: arrows page the queue, Enter confirms-and-advances,
   //     E enters edit mode — matches the other review tabs.
@@ -1580,7 +1579,7 @@
             url.searchParams.delete('crop_id');
             url.searchParams.delete('preset');
             // Generic served-enum filters are per-tab — a param from the
-            // previous tab (e.g. Plates' `region_status`) never carries
+            // previous tab (e.g. Regions' `region_status`) never carries
             // into the new one, in state or the URL.
             for (const param of Object.keys(enumFilterValues)) {
               url.searchParams.delete(param);
@@ -1780,7 +1779,7 @@
 
     <!-- Generic served-enum filter bar (840beb8 adoption) — one <select>
          per ReviewFilterSpec the active tab's GET {API_PREFIX}/review/tabs entry
-         declares (e.g. Plates' region_status: all / detected only /
+         declares (e.g. Regions' region_status: all / detected only /
          verifier-rejected candidates only). No param-specific markup —
          a future spec on any tab renders here unchanged. -->
     {#each activeFilterSpecs as spec (spec.param)}
@@ -1965,7 +1964,7 @@
              the 300px floor alone (before any tall crop even enters the
              picture) already pushed the action buttons 3px past the
              bottom edge — e2e/stubbed/test_review_crop_viewport.py
-             pins this exact budget. 210px keeps a plate sub-box legible
+             pins this exact budget. 210px keeps a region sub-box legible
              (BboxCanvas is still square-aspect within it) while fitting.
              Verified at 1280×720, 1600×1000 and 1920×1080 — see
              artifacts_local/cw-live/phase-b-fixes/. -->
@@ -2546,7 +2545,7 @@
              hotkey configured on /classes. Hotkey badges only show for
              classes the user has explicitly bound (otherwise the strip is
              still clickable, just no kbd hint). The class strip is hidden
-             on the plates tab; class assignment isn't relevant there. -->
+             on the regions tab; class assignment isn't relevant there. -->
           {#if !isSlotTab(tab)}
             <div class="mt-3 flex flex-wrap gap-1.5">
               {#each topClasses as cls (cls.id)}

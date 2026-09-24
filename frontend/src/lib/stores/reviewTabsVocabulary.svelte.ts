@@ -9,7 +9,7 @@
  * `endpointId`/preset id already used to call `GET {API_PREFIX}/review/{id}`
  * (core tabs and presets: `id === endpointId`; slot tabs: keyed by the
  * slot's `QueueCapability.endpointId`, e.g. `'regions'` for
- * `license_plate`'s Plates tab).
+ * a region slot's tab).
  *
  * On failure (or before `init()` resolves) the map is empty and every
  * caller falls back to the tab's own static `label`/no tooltip — a

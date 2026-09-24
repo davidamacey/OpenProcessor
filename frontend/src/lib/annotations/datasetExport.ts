@@ -57,7 +57,7 @@ function nonEmptyString(v: unknown): string | undefined {
 
 /**
  * The slot's declared dataset export, or `undefined` when it declares
- * none (every slot but `license_plate` today) or declares a malformed
+ * none or declares a malformed
  * one.
  *
  * `options[]` is deliberately NOT read here — `/train` still renders its

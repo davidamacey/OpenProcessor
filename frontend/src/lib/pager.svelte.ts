@@ -68,7 +68,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
   // loadFirst() has since started by the time a fetch resolves, its result
   // is discarded instead of applied. Without this, a loadMore() left in
   // flight when the caller triggers a fresh loadFirst() (e.g. /clusters'
-  // plate bucket view: the user has scrolled a bucket, loading page 2+, then
+  // region bucket view: the user has scrolled a bucket, loading page 2+, then
   // clicks "Refine AHC", whose handler reloads page 1 once the refine POST
   // resolves) can resolve *after* the reload and silently append its stale,
   // pre-reload page onto the freshly loaded buffer — with no error and no

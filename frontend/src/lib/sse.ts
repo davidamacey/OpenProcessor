@@ -40,9 +40,8 @@ export interface CropClassifiedEvent extends CurationBaseEvent {
 }
 
 /**
- * A slot's "human verified this box" event. Generalized off the
- * plate-only `CropPlateVerifiedEvent` (which typed `region_status`/
- * `region_text` directly) — `type` is now any `crop.<slot.key>_verified`
+ * A slot's "human verified this box" event. `type` is any
+ * `crop.<slot.key>_verified`
  * string (or the generic `'crop.region_verified'` OpenProcessor emits for
  * every region — see `slotVerifiedEventTypes()`), and
  * the slot-specific fields are carried untyped so a handler reads them
