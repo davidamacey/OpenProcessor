@@ -191,7 +191,7 @@ import). What is deliberately not included: any single-class /
 domain-specific dataset export (`/export/lpr` has no generic
 equivalent — a single-class exporter is inherently domain-shaped), a
 fixed class allowlist, or a region-status assignment policy tuned to
-one domain. The **backbone-embedding** (`v6_embedding`) chain is also
+one domain. The **backbone-embedding** (`backbone_embedding`) chain is also
 only half-wired: the producer side exists
 (`export/export_detector_dual_head.py` re-exports any YOLO-family
 detector with a `sppf_feat` feature-map output, and

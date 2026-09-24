@@ -154,14 +154,14 @@ trainer. A deployment supplies:
   worker's queue. An existing region status is never overwritten on
   re-ingest. The per-image `n_regions` count in the ingest response is
   the number of items seeded this way (`0` with no region profile), and
-  `GET {prefix}/ingest/sam_drain` reports them under
+  `GET {prefix}/ingest/region_drain` reports them under
   `pending_detection`. **Enabling a region profile on a deployment that
   already has ingested items:** those items have no region status and
   the worker will never see them; backfill them once with
   `python3 scripts/curation/requeue_regions.py --missing-status`
   (dry run: counts only) then `... --missing-status --apply`.
 - **A dual-head detector, if you want the backbone embedding**
-  (`v6_embedding`). Residual clustering, the embedding visualization,
+  (`backbone_embedding`). Residual clustering, the embedding visualization,
   item scores and the OCC conflict handler all read that field, and it
   is produced by RoI-pooling a detector's backbone feature map over each
   detection box (`src.services.detection.geometry.roi_pool_sppf`,
@@ -172,7 +172,7 @@ trainer. A deployment supplies:
   (`output0` + `sppf_feat`; see [`export/README.md`](../export/README.md)).
   Optional: by default residual clustering reduces `pe_embedding`
   instead (`OP_RESIDUAL_EMBEDDING_FIELD`), so a deployment that never
-  populates `v6_embedding` still clusters — it just has one fewer
+  populates `backbone_embedding` still clusters — it just has one fewer
   embedding space to compare against. Ingest fills the field from the
   **secondary** detector (the `secondary_profile` passed to
   `CurationIngestService`): when Triton's model metadata lists
@@ -199,7 +199,9 @@ trainer. A deployment supplies:
   everything else here.
 - **A VLM for labeling assist and region verification** — any
   OpenAI-compatible `/v1/chat/completions` endpoint, configured via
-  `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY`.
+  `OP_VLM_URL` / `OP_VLM_MODEL` / `OP_VLM_API_KEY`. `OP_VLM_MODEL` is
+  required whenever `OP_VLM_URL` is set — there is no default model id;
+  construction fails loudly without one.
   `src/services/labeling/vlm_client.py` is the only thing that talks to
   it; nothing hardcodes a specific vendor or model.
 - **A dataset and base weights for training.** `/curation/train/*` is a
@@ -391,7 +393,7 @@ be changed at runtime once the app has started.
 | Export | `OP_BUILD_SHA` |
 | Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE`, `OP_BAKEOFF_PROFILE_<FIELD>` |
 | Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
-| VLM connection | `OPENWEBUI_BASE_URL`, `OPENWEBUI_MODEL`, `OPENWEBUI_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `GEMMA_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
+| VLM connection | `OP_VLM_URL`, `OP_VLM_MODEL` (required whenever `OP_VLM_URL` is set — no default), `OP_VLM_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `GEMMA_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
 | Segmenter connection | `SAM3_URL`, `SAM3_URLS`, `SAM3_HTTPX_MAX_CONNECTIONS`, `SAM3_HTTPX_KEEPALIVE` |
 
 ## Naming you'll notice

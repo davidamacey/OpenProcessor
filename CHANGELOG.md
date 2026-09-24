@@ -34,8 +34,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `BakeoffProfile`; `--backend triton` requires a model); plate baselines moved
   to the `license_plate` example profile; paper-only scripts moved to
   `examples/bakeoff_lpr_paper/`.
+- **Naming sweep, wave W1 — stored-data renames** (`docs/design/naming_sweep_plan.md`
+  S1-S8; re-ingest required):
+  - Items index kNN field `v6_embedding` → `backbone_embedding`
+    (`CurationConfig.BACKBONE_EMBEDDING_FIELD`).
+  - Images + items ingest-source field `hdd_source` → `source`; `GET
+    /crops`'s `?hdd_source=` query param is removed (use the existing
+    `?source=`).
+  - Stored `region_source` / `candidate_source` provenance values:
+    `sam3` → `segmenter`, `sam3_text_hint` → `segmenter_text_hint`, `lpr` →
+    `detector`, `lpr_existing` → `detector_existing`.
+  - `class_id_history[].writer` value `sam_worker` → `region_worker`.
+  - `GET /curation/ingest/sam_drain` → `GET /curation/ingest/region_drain`;
+    its response and `GET /stats/dataset`'s `in_progress.*` drop the legacy
+    `pending`/`pending_verify` rollup keys (re-ingested data can never carry
+    those short names).
+  - Export manifest `dataset_kind` no longer accepts the alias
+    `lpr_single_class`; only `single_class` is recognized.
+  - No hardcoded model-id defaults: `OP_VLM_MODEL` has no default (was
+    `gemma-4-e4b`) and `VlmLabeler` construction fails loudly when a VLM
+    URL is configured without one; the reference license-plate profile's
+    `detector_model` is the neutral example id `license_plate_detector`
+    (was the proprietary Triton id `lpr_nanov11_640`).
+  - `DELETE /curation/models/{name}`'s unload guard drops its hardcoded
+    `lpr_` name prefix; a model is protected only via the active
+    `DetectionProfile`'s configured model ids or the fixed `paddleocr_`
+    prefix.
+  - `OPENWEBUI_BASE_URL` / `OPENWEBUI_MODEL` / `OPENWEBUI_API_KEY` /
+    `VLM_URL` / `GEMMA_URL` are retired; only `OP_VLM_URL` / `OP_VLM_MODEL`
+    / `OP_VLM_API_KEY` are read now (the remaining `VLM_*`/`GEMMA_*` env
+    vars — images-per-call, httpx pool sizing — are unchanged pending a
+    later wave).
 
 ### Added
+- **Naming sweep, wave W0 — served detector/segmenter/VLM vocabulary**
+  (`docs/design/naming_sweep_plan.md`): `GET {prefix}/regions/vocabulary`
+  serves `{detectors, region_sources, chain_actors}` (each entry `{id,
+  label, role, filterable}`) built from the active `DetectionProfile` /
+  ingest profiles / `OP_VLM_MODEL` — never a hardcoded model id — so the
+  frontend stops keying a label/palette map on private ids
+  (`lpr_nanov11_640`, `sam3`, `gemma-4-e4b`). `GET {prefix}/review/tabs`
+  serves `{id, label, description}` for every review tab.
 - `scripts/curation/backfill_region_embeddings.py` (dry-run default) and a
   shared region-embedding encode helper, so region false-positive clustering
   has embeddings to work with.
