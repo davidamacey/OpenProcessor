@@ -19,6 +19,14 @@ MIN_TEST_CROPS_PER_CLASS = 5
 """Every class in the frozen test holdout gets at least this many crops
 (or all of them, if it has fewer); preflight warns below it."""
 
+MIN_TRAIN_INSTANCES_PER_CLASS = 1
+"""Preflight blocks a class the run trains on with fewer train instances
+in the export."""
+
+MIN_VAL_INSTANCES_PER_CLASS = 1
+"""Preflight blocks a class the run trains on with fewer val instances in
+the export (no val instance = no validation signal for that class)."""
+
 AUG_TARGET_MIN = 500
 AUG_TARGET_MAX = 3000
 """A class's augmentation target is its validated count clamped to
@@ -45,6 +53,8 @@ def dataset_thresholds() -> dict[str, int]:
         'block_below': HARD_MIN_CROPS_PER_CLASS,
         'warn_below': WARN_MIN_CROPS_PER_CLASS,
         'min_test_per_class': MIN_TEST_CROPS_PER_CLASS,
+        'min_train_per_class': MIN_TRAIN_INSTANCES_PER_CLASS,
+        'min_val_per_class': MIN_VAL_INSTANCES_PER_CLASS,
         'aug_target_min': AUG_TARGET_MIN,
         'aug_target_max': AUG_TARGET_MAX,
     }
@@ -55,6 +65,8 @@ __all__ = [
     'AUG_TARGET_MIN',
     'HARD_MIN_CROPS_PER_CLASS',
     'MIN_TEST_CROPS_PER_CLASS',
+    'MIN_TRAIN_INSTANCES_PER_CLASS',
+    'MIN_VAL_INSTANCES_PER_CLASS',
     'WARN_MIN_CROPS_PER_CLASS',
     'Adequacy',
     'adequacy',

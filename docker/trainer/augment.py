@@ -15,7 +15,11 @@ Public API:
   copies to ``out_dir/{images,labels}``.
 * :func:`compute_auto_balance` -- compute per-class multipliers to lift
   under-represented classes toward a target count.
-* :data:`PRESETS` -- dict of preset name -> factory ``(hflip) -> A.Compose``.
+* :data:`PRESETS` -- dict of preset name -> factory ``(hflip) -> A.Compose``,
+  built from the preset catalog (``augmentation_presets``: a flat copy of
+  ``src/services/training/augmentation_presets.py``, the one list of preset
+  ids the API validates and serves). Each catalog id needs a
+  ``preset_<id>`` factory here.
 
 Preset names are deliberately domain-neutral scene/condition descriptors: the
 job spec (``job.json``'s ``augmentation.preset``, see
@@ -42,6 +46,11 @@ from typing import TYPE_CHECKING, Any
 # N812 is silenced.
 import albumentations as A  # noqa: N812
 import cv2
+from augmentation_presets import (
+    AUGMENTATION_PRESETS,
+    DEFAULT_AUGMENTATION_PRESET,
+    ORIENTATION_SENSITIVE_PRESET_IDS,
+)
 
 
 if TYPE_CHECKING:
@@ -64,7 +73,7 @@ class AugConfig:
     """Resolved augmentation config for a single training run."""
 
     enabled: bool = False
-    preset: str = 'balanced_default'
+    preset: str = DEFAULT_AUGMENTATION_PRESET
     multiplier: int = 1
     per_class_multiplier: dict[int, int] = field(default_factory=dict)
     # Class ids (in the *final* training id space) whose content is
@@ -205,19 +214,15 @@ def preset_text_targets_aggressive(hflip: bool = False) -> A.Compose:
     return A.Compose(transforms, bbox_params=_bbox_params())
 
 
+# A catalog id with no ``preset_<id>`` factory fails here, at import, rather
+# than mid-run.
 PRESETS: dict[str, Callable[[bool], A.Compose]] = {
-    'none': preset_none,
-    'balanced_default': preset_balanced_default,
-    'outdoor_scene': preset_outdoor_scene,
-    'heavy_tilt': preset_heavy_tilt,
-    'low_light': preset_low_light,
-    'text_targets': preset_text_targets,
-    'text_targets_aggressive': preset_text_targets_aggressive,
+    p.id: globals()[f'preset_{p.id}'] for p in AUGMENTATION_PRESETS
 }
 
 # Presets that are inherently orientation-sensitive: horizontal flip stays off
 # for these regardless of which classes the run includes.
-NO_HFLIP_PRESETS = frozenset({'text_targets', 'text_targets_aggressive'})
+NO_HFLIP_PRESETS = ORIENTATION_SENSITIVE_PRESET_IDS
 
 
 # ---------------------------------------------------------------------------

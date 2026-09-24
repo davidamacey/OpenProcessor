@@ -1,6 +1,58 @@
 {
   "components": {
     "schemas": {
+      "AugmentationPresetOption": {
+        "description": "One selectable ``augmentation.preset``.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "orientation_sensitive": {
+            "description": "Horizontal flip is disabled for the whole run with this preset.",
+            "title": "Orientation Sensitive",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "orientation_sensitive"
+        ],
+        "title": "AugmentationPresetOption",
+        "type": "object"
+      },
+      "AugmentationPresetsResponse": {
+        "properties": {
+          "default": {
+            "description": "Preset used when a job omits augmentation.preset.",
+            "title": "Default",
+            "type": "string"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/AugmentationPresetOption"
+            },
+            "title": "Presets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "presets",
+          "default"
+        ],
+        "title": "AugmentationPresetsResponse",
+        "type": "object"
+      },
       "AugmentationSpec": {
         "additionalProperties": true,
         "description": "Optional augmentation block in ``job.json``.",
@@ -1091,6 +1143,47 @@
         "title": "DatasetRef",
         "type": "object"
       },
+      "ExportClassSplitCounts": {
+        "description": "One class's instance counts per split, as recorded in the manifest.",
+        "properties": {
+          "class_id": {
+            "description": "Registry class id.",
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "export_id": {
+            "description": "Dense class id written into the label files.",
+            "title": "Export Id",
+            "type": "integer"
+          },
+          "test": {
+            "default": 0,
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "default": 0,
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "default": 0,
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "export_id",
+          "class_name"
+        ],
+        "title": "ExportClassSplitCounts",
+        "type": "object"
+      },
       "ExportSingleClassRequest": {
         "description": "Body for the narrowed single-class / class-subset dataset export.\n\nPositives come from either the items' own class-labeled boxes\n(``box_source='item'``) or their region-of-interest sub-annotation\n(``box_source='region'``). All ``detected`` positives and all human\n``false_positive`` hard negatives are kept in full; ``empty_bg_ratio``\nadds a small sample of genuinely empty frames as a fraction of\npositives so the detector still sees some no-target images.",
         "properties": {
@@ -1194,6 +1287,174 @@
           }
         },
         "title": "ExportSingleClassRequest",
+        "type": "object"
+      },
+      "ExportSplitCounts": {
+        "description": "Instance counts per split.",
+        "properties": {
+          "test": {
+            "default": 0,
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "default": 0,
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "default": 0,
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "title": "ExportSplitCounts",
+        "type": "object"
+      },
+      "ExportStatusResponse": {
+        "description": "``GET /export/status``: the last completed multi-class export.\n\n``idle`` = no export yet (every other field ``null``); ``unknown`` =\nthe ``current`` export exists but its manifest is missing or\nunreadable (only ``path``/``export_dir`` set); ``success`` = every\nfield below read from that export's ``manifest.json``.\n``class_split_counts`` is ``null`` for an export written before it was\nrecorded.",
+        "properties": {
+          "class_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Count"
+          },
+          "class_split_counts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExportClassSplitCounts"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Split Counts"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "export_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Same as ``path``.",
+            "title": "Export Dir"
+          },
+          "group_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Row attribute the split grouped on (``image_id``).",
+            "title": "Group Key"
+          },
+          "image_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Count"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Finish (else start) time, ISO 8601.",
+            "title": "Last Run"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved export directory.",
+            "title": "Path"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "split_counts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSplitCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "unknown",
+              "success"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Tag"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ExportStatusResponse",
         "type": "object"
       },
       "ExportYoloRequest": {
@@ -3568,17 +3829,14 @@
         "type": "object"
       },
       "TestHoldoutFreezeRequest": {
+        "additionalProperties": false,
+        "description": "Selection is deterministic (SHA1 of each ``crop_id``, per class — see\n``src/services/curation/holdout.py``), so there is no seed: an unknown\nfield such as ``seed`` is a ``422`` rather than silently ignored.",
         "properties": {
           "percent": {
             "default": 10,
             "maximum": 50.0,
             "minimum": 1.0,
             "title": "Percent",
-            "type": "integer"
-          },
-          "seed": {
-            "default": 42,
-            "title": "Seed",
             "type": "integer"
           }
         },
@@ -3587,6 +3845,11 @@
       },
       "TestHoldoutFreezeResponse": {
         "properties": {
+          "min_per_class": {
+            "description": "Floor per class (all of a class smaller than this is frozen).",
+            "title": "Min Per Class",
+            "type": "integer"
+          },
           "n_classes_covered": {
             "title": "N Classes Covered",
             "type": "integer"
@@ -3602,6 +3865,18 @@
             "title": "Per Class Counts",
             "type": "object"
           },
+          "percent": {
+            "description": "Target holdout percent per class (from the request).",
+            "title": "Percent",
+            "type": "integer"
+          },
+          "selection": {
+            "const": "sha1_per_class",
+            "default": "sha1_per_class",
+            "description": "Per class, the crops with the smallest sha1(crop_id); no seed.",
+            "title": "Selection",
+            "type": "string"
+          },
           "test_holdout_sha": {
             "title": "Test Holdout Sha",
             "type": "string"
@@ -3610,7 +3885,9 @@
         "required": [
           "n_frozen",
           "n_classes_covered",
-          "test_holdout_sha"
+          "test_holdout_sha",
+          "percent",
+          "min_per_class"
         ],
         "title": "TestHoldoutFreezeResponse",
         "type": "object"
@@ -7843,16 +8120,14 @@
     },
     "/curation/export/status": {
       "get": {
-        "description": "Last-export status — reads ``current`` symlink + manifest if present.",
+        "description": "Last completed export — the ``current`` symlink's manifest, if any.",
         "operationId": "export_status_curation_export_status_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Status Curation Export Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportStatusResponse"
                 }
               }
             },
@@ -11322,7 +11597,7 @@
     },
     "/curation/test_holdout/freeze": {
       "post": {
-        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed: the same cohort always freezes the same set.\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
+        "description": "Deterministic per-class sample of human-validated crops to ``test_holdout=true``.\n\nCohort: ``class_validated=true AND class_source='human'`` (Appendix C\nDecision 2). Selection: SHA1-of-``crop_id`` deterministic per-class\nsampling with a 5-crop floor via :func:`select_test_holdout` — the\nsingle canonical holdout algorithm shared with\nan offline promotion script (Appendix C\nDecision 1). No seed (a ``seed`` field is a ``422``): the same cohort\nalways freezes the same set. The response names the method in\n``selection`` (``sha1_per_class``).\n\nRefuses to run if a holdout already exists unless ``force=true``.\nRefuses (422) to freeze zero rows — a freeze that freezes nothing is\nnever a success, and silently returning 200 with ``sha256('')`` hid\nthat this endpoint has never actually frozen anything. Persists a\ndurable freeze record under ``OP_STATE_DIR/test_holdout/`` so a bad\nfreeze can be diagnosed and reverted from the recorded crop-id list.",
         "operationId": "freeze_test_holdout_curation_test_holdout_freeze_post",
         "parameters": [
           {
@@ -11397,6 +11672,28 @@
         "summary": "Test Holdout Stats",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/train/augmentation_presets": {
+      "get": {
+        "description": "The augmentation presets the trainer can build, for the form picker.\n\nServed from the catalog the trainer itself builds from\n(``src/services/training/augmentation_presets.py``); ``/preflight`` and\n``/start`` reject any other id.",
+        "operationId": "list_augmentation_presets_curation_train_augmentation_presets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AugmentationPresetsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Augmentation Presets",
+        "tags": [
+          "Curation - Train"
         ]
       }
     },
@@ -11812,7 +12109,7 @@
     },
     "/curation/train/start": {
       "post": {
-        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``. The trainer picks up the file out-of-band.",
+        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``, and 422 for an unknown augmentation preset even\nwith ``force`` (before the GPU claim). The trainer picks up the file\nout-of-band.",
         "operationId": "start_train_curation_train_start_post",
         "parameters": [
           {

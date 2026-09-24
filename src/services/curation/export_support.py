@@ -72,9 +72,9 @@ class _ExportRow:
     # Named to match frame_dedup._DedupRow's protocol attribute directly
     # (rather than a differently-named field + an adapter property) -- this
     # is also this export's frozen ``test_holdout`` flag: a row with
-    # has_test_crop=True forces its whole split group to 'test'.
+    # has_test_crop=True forces its whole split group (its source image) to
+    # 'test'.
     has_test_crop: bool = False
-    cluster_id: int | None = None
     export_class_id: int = -1
 
 
@@ -144,37 +144,90 @@ def even_stratified_sample(
     return picked
 
 
+DEFAULT_SPLIT_GROUP_KEY = 'image_id'
+"""The leakage unit :func:`stratified_split` groups on by default.
+
+Items cut from the same source image share pixels, so a group never
+straddles train/val/test. ``cluster_id`` is NOT a leakage unit: clustering
+assigns class-sized semantic clusters (``cluster_id == class_id`` for every
+validated item), so grouping on it put a whole class into one group.
+"""
+
+_SPLIT_PRIORITY = ('train', 'val', 'test')
+# Below this a ratio counts as zero (``1 - 0.89 - 0.11`` is ~1e-17, not 0).
+_RATIO_EPSILON = 1e-9
+
+
+def _allocate_group_counts(n: int, weights: dict[str, float]) -> dict[str, int]:
+    """Split ``n`` groups across the positive-weight splits.
+
+    Every active split (weight > 0) gets one group first, in
+    ``train -> val -> test`` priority order, as far as ``n`` reaches; the
+    rest go one at a time to whichever split is furthest below its target
+    ``n * weight`` (ties to the higher-priority split). Pure arithmetic on
+    counts, so it's deterministic and never depends on group identity.
+    """
+    active = [s for s in _SPLIT_PRIORITY if weights.get(s, 0.0) > _RATIO_EPSILON]
+    counts = dict.fromkeys(_SPLIT_PRIORITY, 0)
+    if n <= 0 or not active:
+        return counts
+    total = sum(weights[s] for s in active)
+    target = {s: n * weights[s] / total for s in active}
+    for split in active[:n]:
+        counts[split] = 1
+    for _ in range(n - min(n, len(active))):
+        best = max(active, key=lambda s: (target[s] - counts[s], -active.index(s)))
+        counts[best] += 1
+    return counts
+
+
 def stratified_split(
     rows: Sequence[SplittableRow],
     *,
     seed: int,
     train_ratio: float,
     val_ratio: float,
-    group_key: str | None = 'cluster_id',
+    group_key: str | None = DEFAULT_SPLIT_GROUP_KEY,
 ) -> dict[str, str]:
     """Per-class, per-group deterministic stratified split.
 
-    Rows sharing a ``group_key`` value (e.g. a near-duplicate burst's
-    ``cluster_id``) are always assigned to the split together — a group
-    can never straddle train/val/test, which is the general data-leakage
-    guard the reference exporter's unstratified ``hash_split`` didn't
-    have. Rows with no ``group_key`` value fall back to their own
-    ``item_id`` as a singleton group.
+    **Groups.** Rows sharing a ``group_key`` value (default ``image_id``:
+    every item cut from one source image) are always assigned to the same
+    split, so near-identical pixels never straddle train/val/test. A row
+    with no ``group_key`` value is its own singleton group (keyed by
+    ``item_id``). ``group_key=None`` makes every row a singleton.
 
-    Within each class stratum, groups are ordered by
-    ``sha256(seed:stratum:group_id)`` (deterministic, so the same seed
-    always reproduces the same split) and sliced by exact count
-    (``round(n * ratio)``) rather than an independent per-item
-    probabilistic hash bucket — this is what makes the *actual* per-class
-    ratio converge to the target even for small classes, where
-    :func:`hash_split` applied independently per item can drift far from
-    the target by chance.
+    **Frozen holdout.** A row with ``has_test_crop=True`` (the frozen
+    ``test_holdout`` flag) goes to ``test``, and so does every other row
+    of its group (a same-image mate), whatever its class — otherwise the
+    mate would leak the holdout's pixels into training.
 
-    A row with ``has_test_crop=True`` (the frozen ``test_holdout`` flag)
-    forces its entire group to ``test``, taking priority over the
-    stratified assignment.
+    **Strata.** Every remaining group belongs to the class stratum of its
+    most common ``class_id`` (ties to the smallest id). Within a stratum,
+    groups are ordered by ``sha256(seed:stratum:group_id)`` and cut by
+    exact counts, not an independent per-item hash bucket, so each class's
+    actual ratio tracks the target even when the class is small.
 
-    Returns ``{item_id: split}`` for every row.
+    **Per-class allocation of the remaining ``n`` groups:**
+
+    * a class with at least one frozen holdout row: its test split IS the
+      frozen holdout, so the remaining groups are split between train and
+      val only, in the ratio ``train_ratio : val_ratio``;
+    * a class with no frozen holdout: train / val / test in the ratio
+      ``train_ratio : val_ratio : (1 - train_ratio - val_ratio)``.
+
+    Each split with a positive ratio gets one group before any split gets
+    a second, in ``train -> val -> test`` priority order; the remainder
+    follows the target ratio (:func:`_allocate_group_counts`). So:
+
+    * ``n == 0`` — the class contributes only its holdout rows (to test);
+    * ``n == 1`` — train;
+    * ``n == 2`` — one train, one val;
+    * ``n >= 3`` — at least one train and one val; with no holdout, also
+      at least one test.
+
+    Deterministic: the same rows (in any order) and seed always give the
+    same assignment. Returns ``{item_id: split}`` for every row.
     """
 
     def _group_of(row: SplittableRow) -> str:
@@ -189,14 +242,13 @@ def stratified_split(
     for row in rows:
         groups.setdefault(_group_of(row), []).append(row)
 
+    holdout_classes = {row.class_id for row in rows if row.has_test_crop}
     forced_groups: set[str] = set()
     class_to_groups: dict[int, list[str]] = {}
     for gid, members in groups.items():
         if any(m.has_test_crop for m in members):
             forced_groups.add(gid)
             continue
-        # Stratum = the group's most common class_id (mode); ties broken
-        # toward the smallest class_id for determinism.
         counts: dict[int, int] = {}
         for m in members:
             counts[m.class_id] = counts.get(m.class_id, 0) + 1
@@ -204,21 +256,23 @@ def stratified_split(
         stratum = min(cid for cid, c in counts.items() if c == best_count)
         class_to_groups.setdefault(stratum, []).append(gid)
 
+    test_ratio = max(0.0, 1.0 - train_ratio - val_ratio)
     group_split: dict[str, str] = dict.fromkeys(forced_groups, 'test')
     for stratum, gids in class_to_groups.items():
         ordered = sorted(
             gids, key=lambda gid: hashlib.sha256(f'{seed}:{stratum}:{gid}'.encode()).hexdigest()
         )
-        n = len(ordered)
-        n_train = min(round(n * train_ratio), n)
-        n_val = min(round(n * val_ratio), n - n_train)
-        for i, gid in enumerate(ordered):
-            if i < n_train:
-                group_split[gid] = 'train'
-            elif i < n_train + n_val:
-                group_split[gid] = 'val'
-            else:
-                group_split[gid] = 'test'
+        weights = {
+            'train': train_ratio,
+            'val': val_ratio,
+            'test': 0.0 if stratum in holdout_classes else test_ratio,
+        }
+        allocation = _allocate_group_counts(len(ordered), weights)
+        cursor = 0
+        for split in _SPLIT_PRIORITY:
+            for gid in ordered[cursor : cursor + allocation[split]]:
+                group_split[gid] = split
+            cursor += allocation[split]
 
     item_split: dict[str, str] = {}
     for gid, members in groups.items():
@@ -471,6 +525,7 @@ def _code_sha() -> str:
 
 
 __all__ = [
+    'DEFAULT_SPLIT_GROUP_KEY',
     'SplittableRow',
     'atomic_symlink_flip',
     'atomic_write_text',

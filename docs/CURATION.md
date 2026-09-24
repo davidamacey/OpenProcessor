@@ -358,6 +358,16 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    content, `frozen_test_sha` over the test split's identity, an
    atomically-flipped per-profile `current` symlink).
 
+   Both exporters split by **source image** (`group_key: image_id`):
+   items cut from one image always land in the same split. Frozen
+   test-holdout items (`POST /curation/test_holdout/freeze`) and their
+   same-image mates go to `test`; a class with a frozen holdout splits
+   its other items between train and val only, and each split gets one
+   image before any gets a second (1 image → train, 2 → train + val).
+   `POST /curation/train/preflight` blocks an export with no train or no
+   val images, or with a trained class missing from train or val — see
+   the "Export" section of the API contract for the exact rules.
+
 ## Environment variables
 
 All `OP_*` curation vars are optional; unset vars fall back to the

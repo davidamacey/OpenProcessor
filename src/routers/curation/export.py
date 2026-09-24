@@ -10,10 +10,11 @@ page. The narrowed single-class export lives in
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from src.routers.curation._common import (
     ExportYoloRequest,
@@ -213,30 +214,87 @@ async def list_export_datasets(
     return {'datasets': datasets, 'count': len(datasets)}
 
 
-@router.get('/export/status')
-async def export_status() -> dict[str, Any]:
-    """Last-export status — reads ``current`` symlink + manifest if present."""
-    from src.services.curation.export import ARTIFACT_FILENAMES
+class ExportSplitCounts(BaseModel):
+    """Instance counts per split."""
 
+    train: int = 0
+    val: int = 0
+    test: int = 0
+
+
+class ExportClassSplitCounts(ExportSplitCounts):
+    """One class's instance counts per split, as recorded in the manifest."""
+
+    class_id: int = Field(description='Registry class id.')
+    export_id: int = Field(description='Dense class id written into the label files.')
+    class_name: str
+
+
+class ExportStatusResponse(BaseModel):
+    """``GET /export/status``: the last completed multi-class export.
+
+    ``idle`` = no export yet (every other field ``null``); ``unknown`` =
+    the ``current`` export exists but its manifest is missing or
+    unreadable (only ``path``/``export_dir`` set); ``success`` = every
+    field below read from that export's ``manifest.json``.
+    ``class_split_counts`` is ``null`` for an export written before it was
+    recorded.
+    """
+
+    status: Literal['idle', 'unknown', 'success']
+    path: str | None = Field(default=None, description='Resolved export directory.')
+    export_dir: str | None = Field(default=None, description='Same as ``path``.')
+    last_run: str | None = Field(default=None, description='Finish (else start) time, ISO 8601.')
+    version_tag: str | None = None
+    dataset_sha: str | None = None
+    seed: int | None = None
+    group_key: str | None = Field(
+        default=None, description='Row attribute the split grouped on (``image_id``).'
+    )
+    image_count: int | None = None
+    class_count: int | None = None
+    split_counts: ExportSplitCounts | None = None
+    class_split_counts: list[ExportClassSplitCounts] | None = None
+
+
+def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusResponse:
+    split_counts = meta.get('split_counts')
+    class_rows = meta.get('class_split_counts')
+    return ExportStatusResponse(
+        status='success',
+        path=str(target),
+        export_dir=str(target),
+        last_run=meta.get('finished_at') or meta.get('started_at'),
+        version_tag=meta.get('version_tag'),
+        dataset_sha=meta.get('dataset_sha'),
+        seed=meta.get('seed'),
+        group_key=meta.get('group_key'),
+        image_count=meta.get('image_count'),
+        class_count=meta.get('class_count'),
+        split_counts=ExportSplitCounts(**split_counts) if isinstance(split_counts, dict) else None,
+        class_split_counts=(
+            [ExportClassSplitCounts(**row) for row in class_rows]
+            if isinstance(class_rows, list)
+            else None
+        ),
+    )
+
+
+@router.get('/export/status', response_model=ExportStatusResponse)
+async def export_status() -> ExportStatusResponse:
+    """Last completed export — the ``current`` symlink's manifest, if any."""
     try:
         target = _resolve_current_export_dir()
     except FileNotFoundError:
-        return {'status': 'idle', 'last_run': None}
-    manifest = target / ARTIFACT_FILENAMES['manifest']
-    if not manifest.exists():
-        return {'status': 'unknown', 'last_run': None, 'export_dir': str(target)}
+        return ExportStatusResponse(status='idle')
+    meta = _read_manifest(target)
+    if meta is None:
+        return ExportStatusResponse(status='unknown', path=str(target), export_dir=str(target))
     try:
-        meta = json.loads(manifest.read_text(encoding='utf-8'))
-    except Exception as exc:
-        logger.warning('export_manifest_read_failed', error=str(exc))
-        return {'status': 'unknown', 'last_run': None, 'export_dir': str(target)}
-    return {
-        'status': 'success',
-        'export_dir': str(target),
-        'last_run': meta.get('finished_at') or meta.get('started_at'),
-        'dataset_sha': meta.get('dataset_sha'),
-        'class_count': meta.get('class_count'),
-    }
+        return _status_from_manifest(target, meta)
+    except (TypeError, ValueError) as exc:
+        logger.warning('export_manifest_malformed', dir=str(target), error=str(exc))
+        return ExportStatusResponse(status='unknown', path=str(target), export_dir=str(target))
 
 
 @router.get('/export/registry/{artifact}')
