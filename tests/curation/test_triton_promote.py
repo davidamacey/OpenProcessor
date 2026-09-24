@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
 from src.services.training.jobs import TrainJobStatus
@@ -649,3 +650,132 @@ def test_resolve_triton_models_dir_matches_promoter_default(
 ) -> None:
     monkeypatch.delenv('OP_TRITON_MODEL_REPO', raising=False)
     assert resolve_triton_models_dir() == DEFAULT_TRITON_MODELS_DIR
+
+
+# =============================================================================
+# TR-4: reload_promoted_models
+# =============================================================================
+
+
+class _FakeIndexAndLoadClient:
+    """Fake httpx.AsyncClient covering /v2/repository/index (GET-like POST)
+    and /v2/repository/models/<name>/load, for reload_promoted_models."""
+
+    def __init__(self, *, index_response: list[dict[str, Any]], load_ok: set[str]) -> None:
+        self._index_response = index_response
+        self._load_ok = load_ok
+        self.load_calls: list[str] = []
+
+    def __call__(self, *_args: Any, **_kwargs: Any) -> _FakeIndexAndLoadClient:
+        return self
+
+    async def __aenter__(self) -> _FakeIndexAndLoadClient:
+        return self
+
+    async def __aexit__(self, *_args: Any) -> None:
+        return None
+
+    async def post(self, url: str) -> Any:
+        class _Resp:
+            def __init__(self, status_code: int, payload: Any) -> None:
+                self.status_code = status_code
+                self._payload = payload
+                self.text = str(payload)
+
+            def json(self) -> Any:
+                return self._payload
+
+        if url.endswith('/v2/repository/index'):
+            return _Resp(200, self._index_response)
+        name = url.rsplit('/', 2)[1]
+        self.load_calls.append(name)
+        return _Resp(200 if name in self._load_ok else 500, {})
+
+
+@pytest.mark.asyncio
+async def test_reload_promoted_models_skips_already_ready_models(
+    scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.training.triton_promote import reload_promoted_models
+
+    _make_promoted_model_dir(scratch_models_dir, 'legacy_ready_v1')
+    fake_client = _FakeIndexAndLoadClient(
+        index_response=[{'name': 'legacy_ready_v1', 'state': 'READY'}], load_ok=set()
+    )
+    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+
+    result = await reload_promoted_models(_promoter(scratch_models_dir))
+
+    assert result == {'status': 'ok', 'reloaded': [], 'failed': []}
+    assert fake_client.load_calls == []
+
+
+@pytest.mark.asyncio
+async def test_reload_promoted_models_reloads_unavailable_promoted_models(
+    scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.training.triton_promote import reload_promoted_models
+
+    _make_promoted_model_dir(scratch_models_dir, 'legacy_stranded_v1')
+    fake_client = _FakeIndexAndLoadClient(
+        index_response=[{'name': 'legacy_stranded_v1', 'state': 'UNAVAILABLE'}],
+        load_ok={'legacy_stranded_v1'},
+    )
+    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+
+    result = await reload_promoted_models(_promoter(scratch_models_dir))
+
+    assert result == {'status': 'ok', 'reloaded': ['legacy_stranded_v1'], 'failed': []}
+    assert fake_client.load_calls == ['legacy_stranded_v1']
+
+
+@pytest.mark.asyncio
+async def test_reload_promoted_models_ignores_non_promoted_model_dirs(
+    scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model dir with no promote.json (e.g. a core pipeline model) is
+    never a reload target, ready or not."""
+    from src.services.training.triton_promote import reload_promoted_models
+
+    core_dir = scratch_models_dir / 'core_model'
+    (core_dir / '1').mkdir(parents=True)
+    (core_dir / 'config.pbtxt').write_text('# core, no promote.json')
+
+    fake_client = _FakeIndexAndLoadClient(
+        index_response=[{'name': 'core_model', 'state': 'UNAVAILABLE'}], load_ok=set()
+    )
+    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', fake_client)
+
+    result = await reload_promoted_models(_promoter(scratch_models_dir))
+
+    assert result == {'status': 'ok', 'reloaded': [], 'failed': []}
+    assert fake_client.load_calls == []
+
+
+@pytest.mark.asyncio
+async def test_reload_promoted_models_is_best_effort_on_unreachable_triton(
+    scratch_models_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.training.triton_promote import reload_promoted_models
+
+    _make_promoted_model_dir(scratch_models_dir, 'legacy_v1')
+
+    class _RaisingClient:
+        def __call__(self, *_a: Any, **_kw: Any) -> _RaisingClient:
+            return self
+
+        async def __aenter__(self) -> _RaisingClient:
+            return self
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        async def post(self, _url: str) -> Any:
+            raise httpx.ConnectError('unreachable')
+
+    monkeypatch.setattr('src.services.training.triton_promote.httpx.AsyncClient', _RaisingClient())
+
+    result = await reload_promoted_models(_promoter(scratch_models_dir))
+
+    assert result['status'] == 'error'
+    assert result['reloaded'] == []
