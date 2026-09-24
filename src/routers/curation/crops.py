@@ -23,6 +23,7 @@ from src.routers.curation._common import (
     _ensure_indexes,
     _now_iso,
     get_class_registry,
+    guard_page_depth,
     logger,
     router,
 )
@@ -155,6 +156,7 @@ async def list_crops(
         return crops_page(total=len(found), page=1, page_size=len(wanted), crops=found)
     if limit is not None:
         page_size = limit
+    guard_page_depth(page, page_size)
     try:
         sort_clause = parse_crop_sort(sort)
         conf_clause = confidence_band(conf_min, conf_max)

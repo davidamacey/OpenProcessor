@@ -13,6 +13,7 @@ from src.routers.curation._common import (
     TestHoldoutFreezeResponse,
     _ensure_indexes,
     _now_iso,
+    guard_page_depth,
     is_not_found,
     logger,
     router,
@@ -316,6 +317,7 @@ async def review_queue(
         conf_min,
         conf_max,
     )
+    guard_page_depth(page, page_size)
     req = await _request(tab, filters, sort, opensearch)
     body = {
         'from': (page - 1) * page_size,

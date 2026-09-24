@@ -48,7 +48,12 @@ def parse_crop_sort(sort: str | None) -> list[dict[str, Any]]:
                 'missing': '_last',
                 'unmapped_type': CROP_SORT_FIELDS[field],
             }
-        }
+        },
+        # F-7: stable tiebreaker. crop_id is a mapped keyword field equal to
+        # _id -- sort on it directly rather than _id (which uses fielddata,
+        # disabled on these indexes) so ties on the primary sort key don't
+        # produce duplicate/skipped rows across pages.
+        {'crop_id': {'order': 'asc'}},
     ]
 
 

@@ -25,6 +25,7 @@ from src.routers.curation._common import (
     OpenSearchDep,
     _ensure_indexes,
     _now_iso,
+    guard_page_depth,
     logger,
     router,
 )
@@ -143,6 +144,8 @@ async def list_regions(
         sort = [_distance_sort]
     else:
         sort = [{F.detected_at: {'order': 'desc', 'missing': '_last'}}]
+    sort.append({'crop_id': {'order': 'asc'}})
+    guard_page_depth(page, page_size)
     body: dict[str, Any] = {
         'from': (page - 1) * page_size,
         'size': page_size,
@@ -294,12 +297,16 @@ async def training_candidates(
         # Tack the class filter onto the bool.must of the mode query.
         query['bool']['must'] = [*query['bool']['must'], {'term': {'class_id': class_id}}]
 
+    guard_page_depth(page, page_size)
     body: dict[str, Any] = {
         'from': (page - 1) * page_size,
         'size': page_size,
         '_source': {'excludes': _REGION_SOURCE_EXCLUDES},
         'query': query,
-        'sort': [{F.detected_at: {'order': 'desc', 'missing': '_last'}}],
+        'sort': [
+            {F.detected_at: {'order': 'desc', 'missing': '_last'}},
+            {'crop_id': {'order': 'asc'}},
+        ],
         'track_total_hits': True,
     }
     try:
