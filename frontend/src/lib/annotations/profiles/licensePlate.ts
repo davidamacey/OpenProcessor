@@ -27,6 +27,12 @@ export const licensePlateSlot: SlotSpec = {
       scoreField: 'region_score',
       visibleField: 'region_visible',
       bboxInParentField: 'region_bbox_in_parent',
+      candidateBboxField: 'region_candidate_bbox_norm',
+      candidateBboxInParentField: 'region_candidate_bbox_in_parent',
+      candidateScoreField: 'region_candidate_score',
+      candidateDetectorField: 'region_candidate_detector',
+      candidateDetectorVersionField: 'region_candidate_detector_version',
+      candidateSourceField: 'region_candidate_source',
       thumbnail: {
         path: (id, size) =>
           `/crops/${encodeURIComponent(id)}/region_thumbnail?size=${size}`,
@@ -50,6 +56,8 @@ export const licensePlateSlot: SlotSpec = {
       vlmValueField: 'region_text_vlm',
       ocrValueField: 'region_text_ocr',
       disagreementField: 'region_text_disagreement',
+      choiceField: 'region_text_choice',
+      invalidReasonField: 'region_text_vlm_invalid',
       label: 'Plate text',
       placeholder: 'ABC123',
       transform: 'uppercase',
@@ -70,6 +78,8 @@ export const licensePlateSlot: SlotSpec = {
     lifecycle: {
       statusField: 'region_status',
       verifiedField: 'region_verified',
+      validatedField: 'region_validated',
+      autoConfirmedField: 'region_auto_confirmed',
       rejectionReasonField: 'region_rejection_reason',
       labelSourceField: 'region_label_source',
       states: [

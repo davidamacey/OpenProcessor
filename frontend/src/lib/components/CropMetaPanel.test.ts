@@ -84,3 +84,38 @@ describe('dq-queues cutover (2026-09-24): class_confidence / vlm_raw_class / vlm
     expect(src).toMatch(/VLM empty reason/);
   });
 });
+
+describe('dq-region (2026-09-24): validated/auto-confirmed split, candidate box, text choice', () => {
+  it('renders a Validation row distinguishing human-validated from auto-confirmed, gated on either being non-null', () => {
+    expect(src).toMatch(
+      /\{#if data\?\.lifecycle\?\.validated != null \|\| data\?\.lifecycle\?\.autoConfirmed != null\}/,
+    );
+    expect(src).toMatch(/human validated/);
+    expect(src).toMatch(/auto-confirmed \(unreviewed\)/);
+  });
+
+  it('shows the candidate score (suffixed) when there is no main subBox score', () => {
+    expect(src).toMatch(/data\?\.subBox\?\.candidate\?\.score != null/);
+    expect(src).toMatch(/\(candidate\)/);
+  });
+
+  it('renders a Candidate row (with provenance) only when there is no main box', () => {
+    expect(src).toMatch(
+      /\{#if data\?\.subBox\?\.rawXyxy == null && data\?\.subBox\?\.candidate\}/,
+    );
+    expect(src).toMatch(/not yet accepted/);
+  });
+
+  it('renders text choice / vlm-invalid-reason through regionVocabularyStore, not a hardcoded label table', () => {
+    expect(src).toMatch(/regionVocabularyStore\.textChoiceLabel\(data\.text\.choice\)/);
+    expect(src).toMatch(
+      /regionVocabularyStore\.invalidReasonLabel\(data\.text\.invalidReason\)/,
+    );
+  });
+
+  it('renders the rejection reason through regionVocabularyStore.rejectionReasonLabel, not the raw id directly', () => {
+    expect(src).toMatch(
+      /regionVocabularyStore\.rejectionReasonLabel\(data\.lifecycle\.rejectionReason\)/,
+    );
+  });
+});

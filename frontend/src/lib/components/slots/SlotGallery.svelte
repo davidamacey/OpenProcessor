@@ -24,6 +24,7 @@
   } from '../../../routes/clusters/plateGalleryController.svelte';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
+  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
   interface Props {
     gallery: PlateGalleryController;
@@ -69,6 +70,21 @@
           class="accent-blue-500"
         />
         <span class="text-zinc-400">Verified only</span>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <span class="text-zinc-400">Status</span>
+        <!-- dq-region (2026-09-24): backed by GET {API_PREFIX}/regions?status=
+             (400 on an unknown value) — options are the served status
+             vocabulary (GET {API_PREFIX}/regions/statuses), not a hardcoded
+             list, so a status this deployment doesn't have never
+             appears. Includes verify_rejected (candidate-only rows,
+             kept for reversal) alongside detected/no_region_visible/etc. -->
+        <select bind:value={gallery.plateStatusFilter} class="select-sm">
+          <option value="">any</option>
+          {#each regionStatusesStore.list as s (s.value)}
+            <option value={s.value}>{s.label}</option>
+          {/each}
+        </select>
       </label>
       <label class="flex items-center gap-1.5">
         <span class="text-zinc-400">Min score</span>

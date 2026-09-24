@@ -131,12 +131,42 @@ export function readSlot(
       : rawXyxy
         ? projectToParent(rawXyxy, parentXyxy, frame)
         : null;
+    // Candidate: a verifier-rejected box, only meaningful when there's no
+    // real box (mutually exclusive on the wire — see SubBoxCapability's
+    // candidateBboxField doc comment). Same server-projection preference
+    // as the main box above.
+    const candidateRawXyxy = asXyxy(pick(raw, cap.subBox.candidateBboxField));
+    const servedCandidateParentXyxy = cap.subBox.candidateBboxInParentField
+      ? asXyxy(pick(raw, cap.subBox.candidateBboxInParentField))
+      : null;
+    const candidateParent = servedCandidateParentXyxy
+      ? {
+          cx: (servedCandidateParentXyxy[0] + servedCandidateParentXyxy[2]) / 2,
+          cy: (servedCandidateParentXyxy[1] + servedCandidateParentXyxy[3]) / 2,
+          w: servedCandidateParentXyxy[2] - servedCandidateParentXyxy[0],
+          h: servedCandidateParentXyxy[3] - servedCandidateParentXyxy[1],
+        }
+      : candidateRawXyxy
+        ? projectToParent(candidateRawXyxy, parentXyxy, frame)
+        : null;
     out.subBox = {
       parent,
       rawXyxy,
       frame,
       score: asNumber(pick(raw, cap.subBox.scoreField)),
       visible: asBoolean(pick(raw, cap.subBox.visibleField)),
+      candidate: candidateRawXyxy
+        ? {
+            parent: candidateParent,
+            rawXyxy: candidateRawXyxy,
+            score: asNumber(pick(raw, cap.subBox.candidateScoreField)),
+            detector: asString(pick(raw, cap.subBox.candidateDetectorField)),
+            detectorVersion: asString(
+              pick(raw, cap.subBox.candidateDetectorVersionField),
+            ),
+            source: asString(pick(raw, cap.subBox.candidateSourceField)),
+          }
+        : null,
     };
   }
 
@@ -150,6 +180,8 @@ export function readSlot(
       vlmValue: asString(pick(raw, cap.text.vlmValueField)),
       ocrValue: asString(pick(raw, cap.text.ocrValueField)),
       disagreement: asBoolean(pick(raw, cap.text.disagreementField)),
+      choice: asString(pick(raw, cap.text.choiceField)),
+      invalidReason: asString(pick(raw, cap.text.invalidReasonField)),
     };
   }
 
@@ -176,6 +208,8 @@ export function readSlot(
       status,
       state,
       verified: asBoolean(pick(raw, cap.lifecycle.verifiedField)),
+      validated: asBoolean(pick(raw, cap.lifecycle.validatedField)),
+      autoConfirmed: asBoolean(pick(raw, cap.lifecycle.autoConfirmedField)),
       rejectionReason: asString(pick(raw, cap.lifecycle.rejectionReasonField)),
     };
   }

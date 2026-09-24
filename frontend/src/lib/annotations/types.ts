@@ -102,6 +102,25 @@ export interface SubBoxCapability {
    *  directly instead of projecting `bboxField` through `parentXyxy`
    *  itself — preferring the server's own projection over a client one. */
   bboxInParentField?: WireField;
+  /** Wire field holding a verifier-rejected candidate box (dq-region,
+   *  2026-09-24) — set when the detector proposed a box but the
+   *  verifier rejected it, so `bboxField` is empty. Plates:
+   *  `region_candidate_bbox_norm`. A human confirming (or marking false
+   *  positive on) this promotes the candidate into `bboxField`
+   *  server-side; the frontend never computes that promotion itself. */
+  candidateBboxField?: WireField;
+  /** Candidate box already projected into the parent frame, server-
+   *  computed (plates: `region_candidate_bbox_in_parent`). Same
+   *  preference-over-client-projection rule as `bboxInParentField`. */
+  candidateBboxInParentField?: WireField;
+  /** Candidate box's detector score (plates: `region_candidate_score`). */
+  candidateScoreField?: WireField;
+  /** Candidate box's detector id (plates: `region_candidate_detector`). */
+  candidateDetectorField?: WireField;
+  /** Candidate box's detector version (plates: `region_candidate_detector_version`). */
+  candidateDetectorVersionField?: WireField;
+  /** Candidate box's source tag (plates: `region_candidate_source`). */
+  candidateSourceField?: WireField;
   /** Server-side crop of the sub-bbox region, used as the gallery card image. */
   thumbnail?: {
     path: (cropId: string, size: number) => string;
@@ -134,6 +153,16 @@ export interface TextCapability {
   /** Wire field: boolean, true when `vlmValueField` and `ocrValueField`
    *  disagree. Plates: `region_text_disagreement`. */
   disagreementField?: WireField;
+  /** Wire field: why the chosen reading won — `readers_agree |
+   *  vlm_preferred | vlm_only | ocr_only | ocr_mode | vlm_invalid |
+   *  no_valid_reading | human` (dq-region, 2026-09-24). Plates:
+   *  `region_text_choice`. */
+  choiceField?: WireField;
+  /** Wire field: why the VLM's own reading was rejected as not text —
+   *  `placeholder | no_reading | sequence | charset | too_short |
+   *  too_long | format`, null when the VLM reading was valid or absent.
+   *  Plates: `region_text_vlm_invalid`. */
+  invalidReasonField?: WireField;
   label: string;
   placeholder?: string;
   transform?: 'none' | 'uppercase' | 'lowercase' | 'trim';
@@ -182,10 +211,23 @@ export interface SlotState {
 
 export interface LifecycleCapability {
   statusField: WireField;
-  /** Boolean "a human signed off". Plates: `region_verified`. This — not a
-   *  status value — is the correct predicate for the confirmed ring
-   *  (Finding C.3). */
+  /** Boolean "a verification pass ran" (human OR the VLM verifier).
+   *  Plates: `region_verified`. This — not a status value — is the
+   *  correct predicate for the confirmed ring (Finding C.3). Distinct
+   *  from `validatedField` below (dq-region, 2026-09-24): a
+   *  machine-auto-confirmed region is verified but not validated. */
   verifiedField?: WireField;
+  /** Boolean "a HUMAN confirmed (or drew/rejected) this region" — never
+   *  set by a machine verdict (dq-region, 2026-09-24). Plates:
+   *  `region_validated`. Use this, not `verifiedField`, to badge "human
+   *  reviewed" vs `autoConfirmedField`'s "machine accepted,
+   *  unreviewed". */
+  validatedField?: WireField;
+  /** Boolean "the worker's auto-confirm policy accepted this box
+   *  without a human" (dq-region, 2026-09-24) — an accepted-but-
+   *  unreviewed region that still sits in the human review queue.
+   *  Plates: `region_auto_confirmed`. */
+  autoConfirmedField?: WireField;
   rejectionReasonField?: WireField;
   /** Who made a human write (e.g. `region_label_source`). Sent as
    *  `'human'` on batch status writes when declared. */
@@ -285,6 +327,20 @@ export interface SlotData {
     frame: SlotFrame;
     score: number | null;
     visible: boolean | null;
+    /** A verifier-rejected candidate box (dq-region, 2026-09-24) — only
+     *  ever non-null when `rawXyxy` above is null (a box and a rejected
+     *  candidate are mutually exclusive on the wire). Confirming or
+     *  marking false-positive on this promotes it server-side into the
+     *  region box; the UI seeds its edit box from here so an unchanged
+     *  confirm goes through the normal write path. */
+    candidate: {
+      parent: BBoxNormLike | null;
+      rawXyxy: XYXY | null;
+      score: number | null;
+      detector: string | null;
+      detectorVersion: string | null;
+      source: string | null;
+    } | null;
   };
   text?: {
     value: string | null;
@@ -298,6 +354,11 @@ export interface SlotData {
     ocrValue: string | null;
     /** True when `vlmValue` and `ocrValue` disagree ("readers disagree"). */
     disagreement: boolean | null;
+    /** Why the chosen reading won — see `TextCapability.choiceField`. */
+    choice: string | null;
+    /** Why the VLM's own reading was rejected as not text, when it was —
+     *  see `TextCapability.invalidReasonField`. */
+    invalidReason: string | null;
   };
   provenance?: {
     detector: string | null;
@@ -312,6 +373,12 @@ export interface SlotData {
     status: string | null;
     state: SlotState | null;
     verified: boolean | null;
+    /** A human confirmed/drew/rejected this region — see
+     *  `LifecycleCapability.validatedField`. */
+    validated: boolean | null;
+    /** The worker's auto-confirm policy accepted this box without a
+     *  human — see `LifecycleCapability.autoConfirmedField`. */
+    autoConfirmed: boolean | null;
     rejectionReason: string | null;
   };
 }
@@ -325,6 +392,7 @@ export interface SlotData {
 export function slotIsPresent(d: SlotData | undefined | null): boolean {
   if (!d) return false;
   if (d.subBox && d.subBox.rawXyxy != null) return true;
+  if (d.subBox && d.subBox.candidate != null) return true;
   if (d.text && d.text.value != null) return true;
   if (d.provenance && d.provenance.detector != null) return true;
   if (d.lifecycle && d.lifecycle.status != null) return true;

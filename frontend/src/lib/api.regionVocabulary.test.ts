@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('getRegionVocabulary', () => {
-  it('GETs {API_PREFIX}/regions/vocabulary and returns detectors/region_sources/chain_actors', async () => {
+  it('GETs {API_PREFIX}/regions/vocabulary and returns detectors/region_sources/chain_actors/text_choices/text_rules', async () => {
     const payload = {
       detectors: [
         { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
@@ -30,6 +30,20 @@ describe('getRegionVocabulary', () => {
         { id: 'lpr_frozen_test_sample', label: 'LPR frozen test', role: 'human' },
       ],
       chain_actors: [{ id: 'gemma-4-e4b', label: 'Gemma', role: 'verifier' }],
+      // dq-region (2026-09-24): region_text_choice values + the active
+      // profile's text-validity rules.
+      text_choices: ['readers_agree', 'vlm_preferred', 'vlm_invalid'],
+      text_rules: {
+        uppercase: true,
+        charset: 'alnum',
+        len_min: 4,
+        len_max: 8,
+        format: '',
+        reject_sequences: true,
+        placeholders: ['ABC1234'],
+        no_reading_words: ['NULL'],
+        invalid_reasons: ['placeholder', 'sequence'],
+      },
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(payload));
     vi.stubGlobal('fetch', fetchMock);
@@ -41,12 +55,18 @@ describe('getRegionVocabulary', () => {
     expect(res).toEqual(payload);
   });
 
-  it('defaults each list to empty when the response omits it', async () => {
+  it('defaults each list to empty and text_rules to null when the response omits them', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
 
     const res = await getRegionVocabulary();
 
-    expect(res).toEqual({ detectors: [], region_sources: [], chain_actors: [] });
+    expect(res).toEqual({
+      detectors: [],
+      region_sources: [],
+      chain_actors: [],
+      text_choices: [],
+      text_rules: null,
+    });
   });
 });
 

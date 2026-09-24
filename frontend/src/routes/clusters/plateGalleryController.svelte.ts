@@ -136,6 +136,11 @@ export function createPlateGalleryController() {
   let plateVerifiedOnly = $state<boolean>(false);
   let plateMinScore = $state<number>(0);
   let plateTextQuery = $state<string>('');
+  // dq-region (2026-09-24): backed by GET {API_PREFIX}/regions?status=, options
+  // are the served region-status vocabulary (regionStatusesStore), not a
+  // hardcoded list — includes verify_rejected (candidate-only rows), the
+  // auto-confirmed-but-unreviewed 'detected' rows, etc.
+  let plateStatusFilter = $state<string>('');
 
   // Distinct sub-cluster ids present in the loaded plates, sorted lexically so
   // "9a","9aa","9ab"… land in human-expected order.
@@ -205,6 +210,7 @@ export function createPlateGalleryController() {
       verified: plateVerifiedOnly || undefined,
       min_score: plateMinScore > 0 ? plateMinScore : undefined,
       text: plateTextQuery || undefined,
+      status: plateStatusFilter || undefined,
       max_rank: plateMaxRank ?? undefined,
       region_cluster_id: selectedPlateCluster ?? undefined,
       // When a single sub-cluster tab is active, filter to it; otherwise (the
@@ -608,6 +614,12 @@ export function createPlateGalleryController() {
     },
     set plateTextQuery(v: string) {
       plateTextQuery = v;
+    },
+    get plateStatusFilter() {
+      return plateStatusFilter;
+    },
+    set plateStatusFilter(v: string) {
+      plateStatusFilter = v;
     },
     get plateSubclusterIds() {
       return plateSubclusterIds;

@@ -85,6 +85,13 @@
       data.lifecycle?.status === slot.capabilities.lifecycle.falsePositiveState,
   );
 
+  // dq-region (2026-09-24): a verifier-rejected candidate box, kept for
+  // human review/reversal — distinct from a false positive (which keeps
+  // the promoted region box; this has no region box at all yet).
+  const isRejectedCandidate = $derived(
+    data.subBox?.rawXyxy == null && data.subBox?.candidate != null,
+  );
+
   const thumbCap = $derived(slot.capabilities.subBox?.thumbnail);
   // crop.region_thumbnail_url, when present, is a server-provided,
   // cache-busted URL (see api.ts's region_thumbnail_url doc comment) —
@@ -190,6 +197,13 @@
       >
         false pos
       </span>
+    {:else if isRejectedCandidate}
+      <span
+        class="absolute top-1 right-1 rounded border border-amber-500/60 bg-amber-600/85 px-1 py-0.5 text-[9px] font-semibold text-white"
+        title={data.lifecycle?.rejectionReason ?? undefined}
+      >
+        candidate
+      </span>
     {/if}
   </div>
   <div class="flex flex-col gap-1 p-2 text-[11px]">
@@ -213,6 +227,24 @@
       <ProvenanceChip detector={data.provenance?.detector ?? null} size="sm" />
       {#if data.provenance?.verifier}
         <ProvenanceChip detector={data.provenance.verifier} tag="verify" size="sm" />
+      {/if}
+      <!-- dq-region (2026-09-24): human-validated vs auto-confirmed
+           (machine-accepted, unreviewed) — region_verified alone no
+           longer distinguishes the two. -->
+      {#if data.lifecycle?.validated}
+        <span
+          class="rounded border border-emerald-500/40 bg-emerald-500/15 px-1 text-[9px] text-emerald-200"
+          title="A human confirmed/drew/rejected this region"
+        >
+          human
+        </span>
+      {:else if data.lifecycle?.autoConfirmed}
+        <span
+          class="rounded border border-blue-500/40 bg-blue-500/15 px-1 text-[9px] text-blue-200"
+          title="Auto-confirmed by the worker's policy — accepted but not yet reviewed by a human"
+        >
+          auto
+        </span>
       {/if}
       {#if crop.class_name}
         <span

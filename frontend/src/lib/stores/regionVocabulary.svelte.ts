@@ -16,14 +16,30 @@
 
 import {
   getRegionVocabulary,
+  type RegionTextRules,
   type RegionVocabularyEntry,
   type RegionVocabularyRole,
 } from '$lib/api';
+
+/** Titlecases a `snake_case` id as a display-label placeholder for a
+ *  vocabulary the backend doesn't serve labels for yet (dq-region
+ *  `text_choices`/`invalid_reasons` today; rejection reasons until
+ *  openprocessor fix #29 lands `region_rejection_reason` labels on
+ *  `GET {API_PREFIX}/regions/vocabulary`). Replace the call site with the
+ *  served label the moment the backend adds one — this is a stand-in,
+ *  not a hand-maintained label table. */
+function titlecaseId(id: string): string {
+  return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 class RegionVocabularyStore {
   detectors = $state<RegionVocabularyEntry[]>([]);
   regionSources = $state<RegionVocabularyEntry[]>([]);
   chainActors = $state<RegionVocabularyEntry[]>([]);
+  /** `region_text_choice` values this deployment can serve. */
+  textChoices = $state<string[]>([]);
+  /** The active profile's region-text validity rules, or `null`. */
+  textRules = $state<RegionTextRules | null>(null);
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
 
@@ -52,10 +68,14 @@ class RegionVocabularyStore {
         this.detectors = res.detectors;
         this.regionSources = res.region_sources;
         this.chainActors = res.chain_actors;
+        this.textChoices = res.text_choices;
+        this.textRules = res.text_rules;
       } catch {
         this.detectors = [];
         this.regionSources = [];
         this.chainActors = [];
+        this.textChoices = [];
+        this.textRules = null;
       } finally {
         this.loaded = true;
         this.#inflight = null;
@@ -75,6 +95,40 @@ class RegionVocabularyStore {
   roleFor(id: string | null | undefined): RegionVocabularyRole | null {
     if (!id) return null;
     return this.#byId.get(id)?.role ?? null;
+  }
+
+  /** Human label for a `region_text_choice` id — served `text_choices` is
+   *  a plain id list today (no label), so this titlecases as a
+   *  placeholder. */
+  textChoiceLabel(id: string | null | undefined): string {
+    if (!id) return '—';
+    return titlecaseId(id);
+  }
+
+  /** Human label for a `region_text_vlm_invalid` reason id. */
+  invalidReasonLabel(id: string | null | undefined): string {
+    if (!id) return '—';
+    return titlecaseId(id);
+  }
+
+  /**
+   * Human label for a `region_rejection_reason` id (dq-region,
+   * 2026-09-24) — `sanity_reject:<gate>`, `region_visible_elsewhere`,
+   * `verifier_no_verdict`, or an older free-text reason. `openprocessor`
+   * fix #29 will add labeled entries to `GET {API_PREFIX}/regions/vocabulary`
+   * (with a flag distinguishing a model verdict from "needs human,
+   * verdict inconclusive"); until then this renders the raw served id
+   * titlecased, verbatim reason text unchanged — deliberately does NOT
+   * infer "wrong box" from `verify_rejected` alone, since
+   * `verifier_no_verdict` means the opposite (needs human review, not a
+   * model rejection). That distinction is `region_bbox_correct`
+   * (`false` = model said wrong box), not this reason id. */
+  rejectionReasonLabel(id: string | null | undefined): string {
+    if (!id) return '—';
+    if (id.startsWith('sanity_reject:')) {
+      return `Sanity check failed: ${titlecaseId(id.slice('sanity_reject:'.length))}`;
+    }
+    return titlecaseId(id);
   }
 }
 

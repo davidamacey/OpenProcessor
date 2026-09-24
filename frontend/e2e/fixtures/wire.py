@@ -146,11 +146,12 @@ _EXPLICIT: dict[str, Any] = {
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
-    # Backend main f7171cc (dq-region — a separate follow-up agent owns
-    # adopting these; not wired into any UI in this batch, same as the
-    # dq-queues fields above). Present only so make_item()'s fail-closed
-    # contract-key check passes.
-    "region_text_choice": "vlm",
+    # Backend main f7171cc (dq-region), adopted on the frontend by
+    # readSlot/licensePlateSlot (SlotData.text.choice/invalidReason,
+    # SlotData.subBox.candidate, SlotData.lifecycle.validated/
+    # autoConfirmed) and /review's candidate-box confirm flow. See
+    # test_plate_verify_rejected_confirm.py / test_plate_status_filter.py.
+    "region_text_choice": "vlm_preferred",  # one of region_text.TEXT_CHOICES
     "region_text_vlm_invalid": None,
     "region_auto_confirmed": True,
     "region_candidate_bbox_norm": _BBOX,

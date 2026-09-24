@@ -6,6 +6,7 @@
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotIsPresent } from '$lib/annotations/types';
   import { classSourcesStore } from '$stores/classSources.svelte';
+  import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
   interface Props {
     crop: Crop;
@@ -245,9 +246,57 @@
           <dd class="text-zinc-200">{data.lifecycle.status}</dd>
         {/if}
 
+        <!-- dq-region (2026-09-24): human-validated (region_validated,
+             now human-only) vs auto-confirmed (region_auto_confirmed,
+             machine-accepted but not yet reviewed). Neither reuses
+             region_verified, whose meaning ("a verification pass ran")
+             is now a third, distinct thing. -->
+        {#if data?.lifecycle?.validated != null || data?.lifecycle?.autoConfirmed != null}
+          <dt class="text-zinc-500">Validation</dt>
+          <dd class="flex flex-wrap items-center gap-1.5">
+            {#if data.lifecycle.validated}
+              <span
+                class="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200"
+              >
+                human validated
+              </span>
+            {:else if data.lifecycle.autoConfirmed}
+              <span
+                class="rounded border border-blue-500/40 bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-200"
+              >
+                auto-confirmed (unreviewed)
+              </span>
+            {:else}
+              <span class="text-zinc-500">not yet reviewed</span>
+            {/if}
+          </dd>
+        {/if}
+
         {#if data?.subBox?.score != null}
           <dt class="text-zinc-500">Score</dt>
           <dd class="font-mono">{pct(data.subBox.score)}</dd>
+        {:else if data?.subBox?.candidate?.score != null}
+          <dt class="text-zinc-500">Score</dt>
+          <dd class="font-mono">
+            {pct(data.subBox.candidate.score)}
+            <span class="text-[10px] text-zinc-500">(candidate)</span>
+          </dd>
+        {/if}
+
+        {#if data?.subBox?.rawXyxy == null && data?.subBox?.candidate}
+          <!-- Verifier-rejected candidate (dq-region): kept for human
+               review/reversal, not promoted into the region box yet. -->
+          <dt class="text-zinc-500">Candidate</dt>
+          <dd class="flex flex-wrap items-center gap-1.5">
+            {#if data.subBox.candidate.detector}
+              <ProvenanceChip
+                detector={data.subBox.candidate.detector}
+                version={data.subBox.candidate.detectorVersion}
+                size="sm"
+              />
+            {/if}
+            <span class="text-[10px] text-zinc-500">not yet accepted</span>
+          </dd>
         {/if}
 
         {#if data?.provenance?.detector || data?.provenance?.verifier}
@@ -329,9 +378,28 @@
           <dd class="font-mono text-zinc-400">{data.text.engineVersion}</dd>
         {/if}
 
+        <!-- dq-region: why the chosen reading won / why the VLM's own
+             reading was rejected as not text. Labels are a titlecase-id
+             placeholder until the backend serves real ones on
+             GET {API_PREFIX}/regions/vocabulary. -->
+        {#if data?.text?.choice && data.text.choice !== 'human'}
+          <dt class="text-zinc-500">Text choice</dt>
+          <dd class="text-zinc-300">
+            {regionVocabularyStore.textChoiceLabel(data.text.choice)}
+          </dd>
+        {/if}
+        {#if data?.text?.invalidReason}
+          <dt class="text-zinc-500">VLM text rejected</dt>
+          <dd class="text-red-300">
+            {regionVocabularyStore.invalidReasonLabel(data.text.invalidReason)}
+          </dd>
+        {/if}
+
         {#if data?.lifecycle?.rejectionReason}
           <dt class="text-zinc-500">Rejection</dt>
-          <dd class="text-zinc-300">{data.lifecycle.rejectionReason}</dd>
+          <dd class="text-zinc-300">
+            {regionVocabularyStore.rejectionReasonLabel(data.lifecycle.rejectionReason)}
+          </dd>
         {/if}
       </dl>
     </div>

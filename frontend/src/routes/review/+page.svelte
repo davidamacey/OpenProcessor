@@ -68,6 +68,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
   import { undoStore } from '$stores/undo.svelte';
@@ -916,6 +917,15 @@
   // touch the box" from "operator edited it" — a same-box confirm must
   // not go through the same write path as a real edit (see confirmSlot).
   let seededSlotBox: BBoxNorm | null = null;
+  // dq-region (2026-09-24): true when editedSlotBox above was seeded from
+  // a verifier-rejected CANDIDATE box (no real region box exists yet) —
+  // drives the dashed/candidate rendering and the "rejected — confirm to
+  // accept" hint. Confirming while this is true and the box is otherwise
+  // unchanged still goes through confirmSlot's normal boxUnchanged ->
+  // status-only-PATCH path; the backend promotes the candidate into the
+  // region box itself (candidate_promotion in region_writes.py) — the
+  // frontend never computes that promotion client-side.
+  let editedSlotBoxIsCandidate = $state(false);
   let slotCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(null);
   // Read-only by default: the canvas only becomes interactive when the
   // operator presses E (or clicks Edit bbox). Most cascade-detected
@@ -1046,10 +1056,18 @@
   }
 
   function _seedSlotFromCurrent(): void {
-    editedSlotBox =
-      current && activeSlot
-        ? (slotOf(current, activeSlot)?.subBox?.parent ?? null)
+    const slotData = current && activeSlot ? slotOf(current, activeSlot) : null;
+    // dq-region: no real box (rawXyxy null) but a verifier-rejected
+    // candidate exists -> seed the editor from the candidate instead, so
+    // an unchanged Confirm promotes it (see editedSlotBoxIsCandidate's
+    // doc comment above and confirmSlot below).
+    const mainBox = slotData?.subBox?.parent ?? null;
+    const candidateBox =
+      slotData?.subBox?.rawXyxy == null
+        ? (slotData?.subBox?.candidate?.parent ?? null)
         : null;
+    editedSlotBox = mainBox ?? candidateBox;
+    editedSlotBoxIsCandidate = mainBox == null && candidateBox != null;
     seededSlotBox = editedSlotBox;
   }
 
@@ -1871,19 +1889,23 @@
               viewBox={slotViewBox}
               busy={slotSaving}
               label={activeSlot.label.title}
+              dashed={editedSlotBoxIsCandidate}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else if activeSlot?.capabilities.subBox}
             <!-- Read-only default: same <img> layout as every other tab,
                  with a thin yellow ring overlay on the proposed bbox.
                  No grabbable handles, no pointer capture — the bbox is
-                 just shown. Press E to edit. -->
+                 just shown. Press E to edit. A dashed ring (dq-region,
+                 2026-09-24) marks a verifier-rejected CANDIDATE box (no
+                 region box exists yet) rather than an accepted one. -->
             <BboxCanvas
               cropId={current.id}
               bbox={editedSlotBox}
               viewBox={slotViewBox}
               readonly
               label={activeSlot.label.title}
+              dashed={editedSlotBoxIsCandidate}
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else}
@@ -2112,12 +2134,17 @@
             <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
               <span class="text-zinc-500">{slotLabels.scoreLabel}</span>
               <span class="font-mono text-zinc-200">
-                {slotData?.subBox?.score != null
-                  ? `${(slotData.subBox.score * 100).toFixed(1)}%`
-                  : '—'}
+                {#if slotData?.subBox?.score != null}
+                  {(slotData.subBox.score * 100).toFixed(1)}%
+                {:else if slotData?.subBox?.candidate?.score != null}
+                  {(slotData.subBox.candidate.score * 100).toFixed(1)}%
+                  <span class="text-[10px] text-zinc-500">(candidate)</span>
+                {:else}
+                  —
+                {/if}
               </span>
               <span class="text-zinc-500">{slotLabels.statusLabel}</span>
-              <span>
+              <span class="flex items-center gap-1.5">
                 <select
                   bind:value={editedSlotStatus}
                   onchange={() => void commitSlotStatus()}
@@ -2128,6 +2155,24 @@
                     <option value={opt.value}>{opt.label}</option>
                   {/each}
                 </select>
+                <!-- dq-region (2026-09-24): validated (human-only) vs
+                     auto_confirmed (machine accepted, unreviewed) —
+                     region_verified no longer distinguishes the two. -->
+                {#if slotData?.lifecycle?.validated}
+                  <span
+                    class="rounded border border-emerald-500/40 bg-emerald-500/15 px-1 text-[10px] text-emerald-200"
+                    title="A human confirmed/drew/rejected this region"
+                  >
+                    human validated
+                  </span>
+                {:else if slotData?.lifecycle?.autoConfirmed}
+                  <span
+                    class="rounded border border-blue-500/40 bg-blue-500/15 px-1 text-[10px] text-blue-200"
+                    title="Auto-confirmed by the worker's policy — accepted but not yet reviewed by a human"
+                  >
+                    auto-confirmed
+                  </span>
+                {/if}
               </span>
               <span class="text-zinc-500">Detector</span>
               <span class="flex flex-wrap items-center gap-1.5">
@@ -2156,7 +2201,25 @@
                     size="sm"
                   />
                 {/if}
-                {#if !editedSlotBox && !editMode}
+                {#if editedSlotBoxIsCandidate && !editMode}
+                  <!-- dq-region: a verifier-rejected candidate box exists
+                       (no region box yet). Confirm (or F) promotes it —
+                       the raw reason renders verbatim, never worded as
+                       "model said wrong box" (verifier_no_verdict means
+                       the opposite: needs human review, not a model
+                       rejection — that's region_bbox_correct===false,
+                       not this reason id). -->
+                  <span
+                    class="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200"
+                    title={slotData?.lifecycle?.rejectionReason
+                      ? regionVocabularyStore.rejectionReasonLabel(
+                          slotData.lifecycle.rejectionReason,
+                        )
+                      : 'Rejected candidate — Confirm to accept, F for false positive'}
+                  >
+                    rejected candidate · confirm to accept
+                  </span>
+                {:else if !editedSlotBox && !editMode}
                   <span
                     class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
                     title={slotLabels.noBoxHint}
@@ -2210,6 +2273,28 @@
                       .ocrValue ?? '∅'}"
                   >
                     readers disagree
+                  </span>
+                {/if}
+                <!-- dq-region (2026-09-24): why the chosen reading won /
+                     why the VLM's own reading was rejected as not text —
+                     labels are a titlecase-id placeholder until the
+                     backend serves them on GET {API_PREFIX}/regions/vocabulary. -->
+                {#if slotData?.text?.choice && slotData.text.choice !== 'human'}
+                  <span
+                    class="rounded border border-zinc-700 bg-zinc-900 px-1 text-[10px] text-zinc-400"
+                    title="How this reading was chosen"
+                  >
+                    {regionVocabularyStore.textChoiceLabel(slotData.text.choice)}
+                  </span>
+                {/if}
+                {#if slotData?.text?.invalidReason}
+                  <span
+                    class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+                    title="Why the VLM's own reading wasn't used as text"
+                  >
+                    vlm invalid: {regionVocabularyStore.invalidReasonLabel(
+                      slotData.text.invalidReason,
+                    )}
                   </span>
                 {/if}
               </span>
