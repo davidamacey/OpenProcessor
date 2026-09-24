@@ -5,6 +5,11 @@
  * the operator picked, and shows nothing when it matches or is absent.
  * `formatAppliedSort` already has its own pure-function test
  * (strategyBar.svelte.ts); this covers the actual DOM wiring on top of it.
+ *
+ * Kept as its own file rather than folded into `StrategyBar.test.ts`,
+ * which is a source-scan guarding a different, unrelated concern (the
+ * pointer-only / zero-global-keydown-listener constraint) that a mount
+ * test doesn't replace.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';

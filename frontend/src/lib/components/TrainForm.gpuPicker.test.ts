@@ -5,6 +5,11 @@
  * through the real `api.ts` fetch path, mocked at the `fetch` boundary so
  * the assertion covers the actual wiring (effect -> getTrainGpus ->
  * defaultGpuValue -> radio checked state), not a re-implementation.
+ *
+ * Supersedes the "loads the served options"/"renders one radio per
+ * option" scans that used to live in `TrainForm.test.ts` (now trimmed to
+ * only the checks a DOM mount can't reach — payload wiring, dead-code
+ * absence, prop naming).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
@@ -85,7 +90,7 @@ describe('TrainForm — GPU picker', () => {
         onStart: () => {},
         onStartCampaign: () => {},
       },
-    });
+    } as never);
     flushSync();
     await flushMicrotasks();
     flushSync();
@@ -124,7 +129,7 @@ describe('TrainForm — GPU picker', () => {
         onStart: () => {},
         onStartCampaign: () => {},
       },
-    });
+    } as never);
     flushSync();
     await flushMicrotasks();
     flushSync();
