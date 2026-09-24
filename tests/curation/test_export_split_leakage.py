@@ -324,6 +324,27 @@ async def test_export_status_serves_the_completed_run(
     manifest = json.loads(Path(result.manifest_path).read_text())
     assert body['class_split_counts'] == manifest['class_split_counts']
     assert body['last_run'] == manifest['finished_at']
+    assert body['skipped_items'] == manifest['skipped_items']
+    assert body['skipped_items'] is not None
+
+
+def test_export_status_skipped_items_is_null_for_a_legacy_manifest_without_the_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status_client: TestClient
+) -> None:
+    """An export written before ``skipped_items`` existed must report
+    ``null``, not a fabricated zero and not a validation error."""
+    export_dir = tmp_path / 'legacy-export'
+    export_dir.mkdir()
+    (export_dir / 'manifest.json').write_text(json.dumps({'version_tag': 'pre-skipped-items'}))
+    monkeypatch.setattr(
+        'src.routers.curation.export._resolve_current_export_dir',
+        lambda: export_dir,
+    )
+
+    body = status_client.get('/curation/export/status').json()
+
+    assert body['status'] == 'success'
+    assert body['skipped_items'] is None
 
 
 def test_export_status_is_idle_without_an_export(
