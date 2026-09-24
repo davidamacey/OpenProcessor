@@ -12,6 +12,7 @@ import {
   ApiError,
   cancelSelect,
   getCluster,
+  getClusters,
   getClassRegistryUrl,
   getCurationSettings,
   getDataYamlUrl,
@@ -23,8 +24,10 @@ import {
   getVizProjection,
   locateInReviewQueue,
   normalizeApiPrefix,
+  pollAutoLabelJob,
   putCurationDefaults,
   rebuildVizProjection,
+  runVlmOnCluster,
   searchCrops,
   selectDiverse,
   startAutoLabel,
@@ -1404,6 +1407,294 @@ describe('startAutoLabel', () => {
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('run_vlm');
+  });
+});
+
+/**
+ * `runVlmOnCluster` (2026-09-24 logic-moves W3) — a single
+ * `POST {API_PREFIX}/vlm/label_cluster/{id}[?prompt_pack=]`, replacing the
+ * old fetch-200-crops-then-chunk-of-64 loop against
+ * `{API_PREFIX}/vlm/label_batch`. No client-side crop selection or
+ * chunking remains.
+ */
+describe('runVlmOnCluster', () => {
+  const jobResponse = (overrides: Record<string, unknown> = {}) =>
+    new Response(
+      JSON.stringify({
+        job_id: 'job-vlm-1',
+        status: 'running',
+        stage: 'vlm',
+        processed: 0,
+        total: 12,
+        started_at: 0,
+        finished_at: 0,
+        error: null,
+        result: {},
+        args: {},
+        eta_seconds: null,
+        elapsed_seconds: 0,
+        ...overrides,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs {API_PREFIX}/vlm/label_cluster/{id} with no crop-fetch round trip', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const job = await runVlmOnCluster(42);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${API_PREFIX}/vlm/label_cluster/42`);
+    expect(init.method).toBe('POST');
+    expect(job.job_id).toBe('job-vlm-1');
+  });
+
+  it('forwards prompt_pack when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runVlmOnCluster(42, 'vehicle_plate_v1');
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('prompt_pack=vehicle_plate_v1');
+  });
+
+  it('omits prompt_pack entirely when null/undefined', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runVlmOnCluster(42, null);
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('prompt_pack');
+  });
+});
+
+describe('pollAutoLabelJob', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const statusResponse = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  it('polls {API_PREFIX}/pipeline/auto_label/status until the job leaves running, calling onUpdate each time', async () => {
+    const bodies = [
+      { status: 'running', stage: 'vlm', processed: 1, total: 3 },
+      { status: 'running', stage: 'vlm', processed: 2, total: 3 },
+      { status: 'completed', stage: 'finalize', processed: 3, total: 3, result: {} },
+    ];
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        statusResponse({
+          job_id: 'job-vlm-1',
+          started_at: 0,
+          finished_at: 0,
+          error: null,
+          args: {},
+          eta_seconds: null,
+          elapsed_seconds: 0,
+          ...bodies.shift(),
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const updates: string[] = [];
+    const final = await pollAutoLabelJob((j) => updates.push(j.status), undefined, 0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(updates).toEqual(['running', 'running', 'completed']);
+    expect(final.status).toBe('completed');
+  });
+
+  it('returns immediately (one fetch) when the first poll is already terminal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      statusResponse({
+        job_id: 'job-vlm-1',
+        status: 'failed',
+        stage: 'vlm',
+        processed: 0,
+        total: 0,
+        started_at: 0,
+        finished_at: 0,
+        error: 'boom',
+        result: {},
+        args: {},
+        eta_seconds: null,
+        elapsed_seconds: 0,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const final = await pollAutoLabelJob(() => {}, undefined, 0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(final.status).toBe('failed');
+    expect(final.error).toBe('boom');
+  });
+});
+
+/**
+ * `getClusters`/`getCluster` map the served `purity_tier`, `promotable`
+ * and `core_similarity_min` (2026-09-24 logic-moves W6) — no client 0.8
+ * "pure" threshold, no recomputation.
+ */
+describe('getClusters purity_tier/promotable/core_similarity_min', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('maps purity_tier, promotable and core_similarity_min from the response verbatim', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [
+          {
+            cluster_id: 67,
+            cluster_kind: 'class',
+            size: 37,
+            validated_count: 30,
+            labelled_count: 37,
+            dominant_class_id: 67,
+            dominant_class_name: 'suv',
+            dominant_count: 37,
+            purity: 1.0,
+            purity_tier: 'pure',
+            promotable: true,
+            is_unlabeled: false,
+            n_subclusters: 0,
+            updated_at: null,
+            representatives: [],
+          },
+          {
+            cluster_id: 10000,
+            cluster_kind: 'candidate',
+            size: 108,
+            validated_count: 0,
+            labelled_count: 3,
+            dominant_class_id: null,
+            dominant_class_name: null,
+            dominant_count: 1,
+            purity: 0.33,
+            purity_tier: 'noisy',
+            promotable: false,
+            is_unlabeled: false,
+            n_subclusters: 0,
+            updated_at: null,
+            representatives: [],
+          },
+        ],
+        total: 2,
+        total_class_clusters: 1,
+        total_candidate_clusters: 1,
+        cluster_id_offset: 10000,
+        purity_thresholds: {
+          pure_min: 0.85,
+          mixed_min: 0.6,
+          promote_min_members: 4,
+          promote_min_labelled_share: 0.5,
+        },
+        core_similarity_min: 0.75,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getClusters();
+
+    expect(res.items[0]).toMatchObject({
+      id: 67,
+      purity_tier: 'pure',
+      promotable: true,
+      core_similarity_min: 0.75,
+    });
+    expect(res.items[1]).toMatchObject({
+      id: 10000,
+      purity_tier: 'noisy',
+      promotable: false,
+      core_similarity_min: 0.75,
+    });
+  });
+
+  it('getCluster carries purity_tier/promotable/core_similarity_min through for the single-cluster lookup', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith(`${API_PREFIX}/crops`)) {
+        return Promise.resolve(
+          jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              cluster_id: 67,
+              cluster_kind: 'class',
+              size: 37,
+              validated_count: 30,
+              labelled_count: 37,
+              dominant_class_id: 67,
+              dominant_class_name: 'suv',
+              dominant_count: 37,
+              purity: 1.0,
+              purity_tier: 'pure',
+              promotable: true,
+              is_unlabeled: false,
+              n_subclusters: 0,
+              updated_at: null,
+              representatives: [],
+            },
+          ],
+          total: 1,
+          total_class_clusters: 1,
+          total_candidate_clusters: 0,
+          cluster_id_offset: 10000,
+          core_similarity_min: 0.75,
+        }),
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getCluster(67, 1, 60);
+
+    expect(res.cluster).toMatchObject({
+      id: 67,
+      cluster_kind: 'class',
+      purity_tier: 'pure',
+      promotable: true,
+      core_similarity_min: 0.75,
+    });
+  });
+
+  it('getCluster falls back to a null-identity stub (purity_tier null, promotable false) when the cluster-card lookup fails', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith(`${API_PREFIX}/crops`)) {
+        return Promise.resolve(
+          jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
+        );
+      }
+      return Promise.reject(new Error('network blip'));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getCluster(999, 1, 60);
+
+    expect(res.cluster.purity_tier).toBeNull();
+    expect(res.cluster.promotable).toBe(false);
+    expect(res.cluster.core_similarity_min).toBeNull();
   });
 });
 

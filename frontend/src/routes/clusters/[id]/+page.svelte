@@ -10,11 +10,13 @@
     flagNeedsNewClass,
     getCluster,
     moveCropsToCluster,
+    pollAutoLabelJob,
     putCropLabel,
     refineCluster,
     runVlmOnCluster,
     unexcludeCrops,
     vlmDismissCrop,
+    type AutoLabelJobState,
     type ExcludeReason,
   } from '$lib/api';
   import BlurSlider from '$components/BlurSlider.svelte';
@@ -46,16 +48,19 @@
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
-  // The backend guarantees cluster_id == class_id for `cluster_kind ===
-  // 'class'` clusters (src/lib/types.ts's `ClusterKind`), so the class
-  // entry for this page is whichever class shares the cluster's numeric
-  // id — null for candidate clusters (id >= 10000), which have no class.
-  // Drives the validated / labeled / cluster-total banner in the header.
-  const clsForCluster = $derived(
-    classesStore.classes.find((c) => c.id === clusterId) ?? null,
-  );
 
   let cluster = $state<Cluster | null>(null);
+
+  // The served `cluster_kind` (not an id-equality guess) decides whether
+  // this cluster has a class at all — 'class' clusters carry their own
+  // `dominant_class_id`, and a candidate/unassigned cluster has no class
+  // regardless of what its numeric id happens to collide with. Drives the
+  // validated / labeled / cluster-total banner in the header.
+  const clsForCluster = $derived(
+    cluster?.cluster_kind === 'class' && cluster.dominant_class_id != null
+      ? (classesStore.classes.find((c) => c.id === cluster!.dominant_class_id) ?? null)
+      : null,
+  );
 
   // Provenance echoed back by a pool-scale overlay ordering (Phase 4 —
   // order=diverse). Captured here (not by cropPager, which only retains
@@ -394,14 +399,18 @@
   });
   const gridGroups = $derived(grid.groups);
 
-  // Cut-line index: crops with similarity > 0.75 come first (already
-  // sorted by API). Only meaningful in the single '__all__' group;
-  // suppressed while grouping by sub-cluster (subid order wins).
+  // Cut-line index: the server's own `cluster_is_core` flag (computed
+  // against `{API_PREFIX}/clusters`' `core_similarity_min`, echoed onto
+  // `cluster.core_similarity_min` — no client 0.75 constant) decides which
+  // leading crops are "core". Crops are already sorted core-first by the
+  // API. Stops at the first non-core (false, or null when the backend
+  // hasn't computed it for that crop) rather than assuming core. Only
+  // meaningful in the single '__all__' group; suppressed while grouping
+  // by sub-cluster (subid order wins).
   const cutLineIndex = $derived.by(() => {
     let i = 0;
     for (; i < filteredCrops.length; i++) {
-      const s = filteredCrops[i]?.similarity_to_centroid ?? 1;
-      if (s <= 0.75) break;
+      if (filteredCrops[i]?.cluster_is_core !== true) break;
     }
     return i;
   });
@@ -608,15 +617,30 @@
   // these long-running cluster ops.
   let refining = $state<boolean>(false);
   let vlmRunning = $state<boolean>(false);
+  // Live status while POST /vlm/label_cluster/{id}'s job runs, polled via
+  // pollAutoLabelJob — rendered as a compact inline stage/progress string
+  // next to the Run VLM button (2026-09-24 logic-moves W3).
+  let vlmJob = $state<AutoLabelJobState | null>(null);
 
   async function runVlm(): Promise<void> {
     if (vlmRunning) return;
     vlmRunning = true;
+    vlmJob = null;
     try {
-      const res = await runVlmOnCluster(clusterId);
-      toastStore.success(
-        `VLM labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
-      );
+      vlmJob = await runVlmOnCluster(clusterId);
+      const final = await pollAutoLabelJob((j) => (vlmJob = j));
+      const stages = (final.result?.stages ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const vlm = stages.vlm ?? {};
+      if (final.status === 'failed') {
+        toastStore.error(`VLM run failed: ${final.error ?? 'unknown error'}`);
+      } else {
+        toastStore.success(
+          `VLM labeled ${Number(vlm.predicted ?? 0)} crops (${Number(vlm.updated ?? 0)} updated).`,
+        );
+      }
     } catch (e) {
       toastStore.error(`VLM run failed: ${(e as Error).message}`);
     } finally {
@@ -1187,6 +1211,13 @@
           Run VLM
         {/if}
       </button>
+      {#if vlmRunning && vlmJob}
+        <span class="text-xs text-zinc-400">
+          {vlmJob.stage || 'preparing…'}{vlmJob.total > 0
+            ? ` (${vlmJob.processed}/${vlmJob.total})`
+            : ''}
+        </span>
+      {/if}
       <button
         class="btn"
         type="button"

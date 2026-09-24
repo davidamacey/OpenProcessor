@@ -28,6 +28,8 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   confidence: 0.73,
   cluster_id: 17,
   cluster_distance: 0.33,
+  cluster_similarity: 0.81,
+  cluster_is_core: true,
   cluster_subid: '47a',
   label_validated: true,
   class_validated: true,

@@ -29,7 +29,15 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
-  import { exportYolo, getCrops, getStats, getThumbUrl, runVlmOnCluster } from '$lib/api';
+  import {
+    exportYolo,
+    getCrops,
+    getStats,
+    getThumbUrl,
+    pollAutoLabelJob,
+    runVlmOnCluster,
+    type AutoLabelJobState,
+  } from '$lib/api';
   import type { Crop, StatsSummary } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -46,6 +54,11 @@
   let vlmOpen = $state<boolean>(false);
   let vlmClusterId = $state<string>('');
   let vlmBusy = $state<boolean>(false);
+  // Live status while the cluster-scoped VLM job runs — polled via
+  // pollAutoLabelJob (POST /vlm/label_cluster/{id}, then GET
+  // /pipeline/auto_label/status), same job shape AutoLabelPanel shows
+  // for a full recluster.
+  let vlmJob = $state<AutoLabelJobState | null>(null);
 
   async function refreshLegacy(): Promise<void> {
     legacyLoading = true;
@@ -79,12 +92,23 @@
       return;
     }
     vlmBusy = true;
+    vlmJob = null;
     try {
-      const res = await runVlmOnCluster(id);
-      toastStore.success(
-        `VLM labeled ${res.predicted ?? 0} crops (${res.updated ?? 0} updated).`,
-      );
-      vlmOpen = false;
+      vlmJob = await runVlmOnCluster(id);
+      const final = await pollAutoLabelJob((j) => (vlmJob = j));
+      const stages = (final.result?.stages ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const vlm = stages.vlm ?? {};
+      if (final.status === 'failed') {
+        toastStore.error(`VLM run failed: ${final.error ?? 'unknown error'}`);
+      } else {
+        toastStore.success(
+          `VLM labeled ${Number(vlm.predicted ?? 0)} crops (${Number(vlm.updated ?? 0)} updated).`,
+        );
+        vlmOpen = false;
+      }
     } catch (e) {
       toastStore.error(`VLM run failed: ${(e as Error).message}`);
     } finally {
@@ -248,6 +272,13 @@
         Only un-validated crops in the cluster will be sent. Test-holdout crops are
         excluded by the API.
       </p>
+      {#if vlmJob}
+        <p class="mb-4 text-xs text-zinc-400">
+          {vlmJob.status === 'running'
+            ? `Running — stage: ${vlmJob.stage || 'preparing…'}${vlmJob.total > 0 ? ` (${vlmJob.processed}/${vlmJob.total})` : ''}`
+            : `Status: ${vlmJob.status}`}
+        </p>
+      {/if}
       <div class="flex justify-end gap-2">
         <button
           type="button"
