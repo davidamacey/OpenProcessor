@@ -2,23 +2,18 @@
   import { page } from '$app/state';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
-    ApiError,
-    bulkLabel,
-    discardCrop,
-    discardCropsBatch,
-    excludeCrops,
     flagNeedsNewClass,
     getCluster,
-    moveCropsToCluster,
     pollAutoLabelJob,
-    putCropLabel,
     refineCluster,
     runVlmOnCluster,
-    unexcludeCrops,
-    vlmDismissCrop,
     type AutoLabelJobState,
     type ExcludeReason,
   } from '$lib/api';
+  import {
+    createClusterActionController,
+    createExclusionGuard,
+  } from '$lib/clusters/clusterController.svelte';
   import BlurSlider from '$components/BlurSlider.svelte';
   import CropCard from '$components/CropCard.svelte';
   import CropDetailModal from '$components/CropDetailModal.svelte';
@@ -37,13 +32,12 @@
   import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strategies';
   import { isAssignableClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
-  import type { RegistryClass, Cluster, Crop, PaginatedResponse } from '$lib/types';
+  import type { Cluster, Crop, PaginatedResponse } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { classSourcesStore } from '$stores/classSources.svelte';
-  import { undoStore } from '$stores/undo.svelte';
   import { subscribeCurationEvents, type CurationEventSubscription } from '$lib/sse';
 
   const clusterIdParam = $derived(page.params.id);
@@ -91,15 +85,16 @@
   // if that GET's snapshot predates our write, its response would
   // otherwise silently overwrite the optimistic removal and the crop
   // would flicker back in and *stay* until a hard reload — the crop
-  // really did move, the grid just re-showed stale data. `accept`
-  // below re-applies this exclusion to every fetchPage result
-  // (loadFirst included) so a stale response can never resurrect a
-  // crop we already know left. Cleared per-id when the corresponding
-  // action is undone (see undoLast / undoIgnore) or reverted on
-  // failure, so a crop that never actually left is never hidden.
-  // Not `$state` — it's read only inside pager fetch callbacks, never
-  // by a template/derivation, so it doesn't need reactivity tracking.
-  const excludedCropIds = new Set<string>();
+  // really did move, the grid just re-showed stale data. `exclusionGuard`
+  // re-applies this exclusion to every fetchPage result (loadFirst
+  // included) so a stale response can never resurrect a crop we already
+  // know left. Created here (rather than inside the action controller
+  // below) so it can be wired into `cropPager`'s `accept` option without
+  // a forward-declared `let controller` — see `createExclusionGuard`'s
+  // doc comment in clusterController.svelte.ts. Cleared per-id when the
+  // corresponding action is undone or reverted on failure, so a crop
+  // that never actually left is never hidden.
+  const exclusionGuard = createExclusionGuard();
 
   // Crop pager. cropQuery() feeds page 1 and every later page, so a filter
   // can't be applied to the first request and silently dropped on the next.
@@ -118,7 +113,7 @@
       return res.crops as PaginatedResponse<Crop>;
     },
     keyOf: (c) => c.id,
-    accept: (c) => !excludedCropIds.has(c.id),
+    accept: (c) => exclusionGuard.accept(c),
     onLoadFirstError: () => {
       cluster = null;
     },
@@ -276,74 +271,11 @@
   // teardown so other pages don't accidentally receive cluster-page
   // drop dispatches.
   $effect(() => {
-    const off = dropOnClassStore.register(
-      async (cls: RegistryClass, droppedIds: string[]) => {
-        // Priority order matters. onGroupConsider captures the full drag
-        // set at drag-start time (Finder pattern — grab any selected card
-        // to drag all selected; grab an unselected card to drag just that
-        // one), and the ClassSidebar's own finalize only ever sees the
-        // single shadow item — so for a multi-drag drop droppedIds has 1 id
-        // while dragIds has N. dragIds must therefore win. The `selected`
-        // fallback serves the keyboard path: the layout's class-letter
-        // listener dispatches with an empty droppedIds and no drag context.
-        // Consume dragIds here — leaving it populated would make the NEXT
-        // hotkey press relabel the previously dragged crops.
-        const ids =
-          dragIds.length > 0
-            ? [...dragIds]
-            : droppedIds.length > 0
-              ? droppedIds
-              : [...sel.ids];
-        dragIds = [];
-        if (ids.length === 0) {
-          toastStore.warn('Select or drag crops first, then press a class hotkey.');
-          return;
-        }
-        // Optimistic: remove the dropped crops from the visible grid
-        // BEFORE the await, so the labeling feels real-time. The dragged
-        // selection is the source of truth — if the backend reports
-        // conflicts we re-sync, if it errors we restore the snapshot.
-        const snap = cropPager.items;
-        const snapTotal = cropPager.total;
-        const droppedSet = new Set(ids);
-        cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
-        cropPager.total = Math.max(0, cropPager.total - ids.length);
-        // Tear down any drag-local grid override *now*, so the grid repaints
-        // from the (already-corrected) pager instead of from whatever snapshot
-        // the in-flight drag left behind. Without this the grid's last word is
-        // whichever dnd event fires last, which is how moved crops came back.
-        grid.reset();
-        sel.ids = new Set();
-        // Claim these ids before the await resolves — see excludedCropIds
-        // above. A stale/concurrent fetch that lands between now and the
-        // await settling must not be allowed to resurrect them.
-        for (const id of ids) excludedCropIds.add(id);
-        try {
-          const res = await bulkLabel(ids, cls.id);
-          undoStore.recordWrites(res.updated_ids);
-          const conflicts = res.conflicts?.length ?? 0;
-          if (conflicts > 0) {
-            // A concurrent worker (typically the VLM worker) beat us on
-            // some crops. The backend kept those crops on their old class;
-            // re-fetch so the grid reflects truth. Only the crops that
-            // actually moved stay excluded — the conflicted ones never
-            // left cluster_id=clusterId, so they must be allowed back.
-            for (const c of res.conflicts) excludedCropIds.delete(c.crop_id);
-            toastStore.warn(
-              `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker). Reloading.`,
-            );
-            void loadFirst();
-          } else {
-            toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
-          }
-        } catch (e) {
-          // Revert the optimistic mutation on hard failure.
-          for (const id of ids) excludedCropIds.delete(id);
-          cropPager.items = snap;
-          cropPager.total = snapTotal;
-          toastStore.error(`Label failed: ${(e as Error).message}`);
-        }
-      },
+    // Body (Finder-pattern drag-set resolution, optimistic removal,
+    // excludedCropIds claim/release, conflict resync) now lives in
+    // clusterController.svelte.ts's handleClassDrop.
+    const off = dropOnClassStore.register((cls, droppedIds) =>
+      controller.handleClassDrop(cls, droppedIds),
     );
     return off;
   });
@@ -399,6 +331,27 @@
   });
   const gridGroups = $derived(grid.groups);
 
+  // Action controller (see clusterController.svelte.ts) — owns every
+  // optimistic mutation below; shares `exclusionGuard` (declared next to
+  // `cropPager` above) rather than a second copy of the race guard.
+  // filteredCrops/rememberTarget/loadFirst are captured by closure and
+  // resolved lazily, so this can sit ahead of their declarations further
+  // down the script.
+  const controller = createClusterActionController({
+    cropPager,
+    sel,
+    exclusionGuard,
+    resetGrid: () => grid.reset(),
+    getDragIds: () => dragIds,
+    setDragIds: (ids) => {
+      dragIds = ids;
+    },
+    getVisibleCrops: () => filteredCrops,
+    getClusterId: () => clusterId,
+    rememberTarget: (id) => rememberTarget(id),
+    loadFirst,
+  });
+
   // Cut-line index: the server's own `cluster_is_core` flag (computed
   // against `{API_PREFIX}/clusters`' `core_similarity_min`, echoed onto
   // `cluster.core_similarity_min` — no client 0.75 constant) decides which
@@ -441,140 +394,6 @@
 
   // ---------------- mutations ----------------
 
-  function applyLocalLabel(id: string, classId: number, className: string | null): void {
-    cropPager.items = cropPager.items.map((c) =>
-      c.id === id
-        ? {
-            ...c,
-            class_id: classId,
-            class_name: className,
-            label_validated: true,
-            class_validated: true,
-            label_source: 'human_confirmed',
-          }
-        : c,
-    );
-  }
-
-  /** Roll back an optimistic label that the server rejected. */
-  function revertLocalLabel(prior: Crop): void {
-    cropPager.items = cropPager.items.map((c) => (c.id === prior.id ? prior : c));
-  }
-
-  async function assignClassToSelected(classId: number): Promise<void> {
-    const ids = [...sel.ids];
-    if (ids.length === 0) {
-      toastStore.warn('Nothing selected.');
-      return;
-    }
-    const cls = classesStore.byId(classId);
-    if (!cls) {
-      toastStore.error('Unknown class id ' + classId);
-      return;
-    }
-    // No nag-confirm — undo is one keystroke (Z), so any mistake is
-    // instantly reversible. The prior crops are kept only to roll back
-    // the optimistic label if the write fails.
-    const priors = cropPager.items.filter((c) => ids.includes(c.id));
-    for (const id of ids) applyLocalLabel(id, classId, cls.name);
-    try {
-      if (ids.length === 1) {
-        await putCropLabel(ids[0]!, classId);
-        undoStore.recordWrites(ids);
-      } else {
-        const res = await bulkLabel(ids, classId);
-        undoStore.recordWrites(res.updated_ids);
-      }
-      toastStore.success(`Labeled ${ids.length} crop${ids.length === 1 ? '' : 's'}.`);
-      sel.ids = new Set();
-    } catch (e) {
-      toastStore.error(`Label failed: ${(e as Error).message}`);
-      for (const prior of priors) revertLocalLabel(prior);
-    }
-  }
-
-  async function acceptVlmForCrop(crop: Crop): Promise<void> {
-    if (crop.vlm_suggested_class_id == null) return;
-    applyLocalLabel(
-      crop.id,
-      crop.vlm_suggested_class_id,
-      crop.vlm_suggested_class_name ?? null,
-    );
-    try {
-      await putCropLabel(crop.id, crop.vlm_suggested_class_id);
-      undoStore.recordWrites([crop.id]);
-    } catch (e) {
-      toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
-      revertLocalLabel(crop);
-    }
-  }
-
-  async function rejectVlmForCrop(crop: Crop): Promise<void> {
-    // Reject = dismiss the VLM's proposed class on the server
-    // (POST {API_PREFIX}/crops/{id}/vlm_dismiss) and render the item it
-    // returns. A 409 means there was already nothing to dismiss.
-    try {
-      const item = await vlmDismissCrop(crop.id);
-      cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? item : c));
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        toastStore.info('No VLM suggestion to reject.');
-        return;
-      }
-      toastStore.error(`Reject VLM suggestion failed: ${(e as Error).message}`);
-    }
-  }
-
-  async function acceptAllVlmOnPage(): Promise<void> {
-    const targets = filteredCrops.filter(
-      // G2: class_validated, not label_validated (which also flips true on
-      // a region-only validation and would wrongly hide the accept chip).
-      (c) => c.vlm_suggested_class_id != null && !c.class_validated,
-    );
-    if (targets.length === 0) {
-      toastStore.info('No VLM suggestions on this page.');
-      return;
-    }
-    // Shift+Enter is already a deliberate two-finger gesture and Z undoes
-    // it, so no nag-confirm. Group by class id for bulk_label.
-    const groups = new Map<number, string[]>();
-    // Prior crop per id so a failing group can be rolled back precisely —
-    // a single try/catch around the whole loop left the failed group and
-    // every later group locally green but never sent.
-    const priors = new Map<string, Crop>();
-    for (const t of targets) {
-      const k = t.vlm_suggested_class_id!;
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k)!.push(t.id);
-      priors.set(t.id, t);
-      applyLocalLabel(t.id, k, t.vlm_suggested_class_name ?? null);
-    }
-    let ok = 0;
-    let lastError: string | null = null;
-    const failedIds: string[] = [];
-    for (const [k, ids] of groups) {
-      try {
-        const res = await bulkLabel(ids, k);
-        undoStore.recordWrites(res.updated_ids);
-        ok += ids.length;
-      } catch (e) {
-        lastError = (e as Error).message;
-        failedIds.push(...ids);
-      }
-    }
-    if (failedIds.length === 0) {
-      toastStore.success(`Accepted ${targets.length} suggestions.`);
-      return;
-    }
-    for (const id of failedIds) {
-      const prior = priors.get(id);
-      if (prior) revertLocalLabel(prior);
-    }
-    toastStore.error(
-      `Accepted ${ok}, failed ${failedIds.length} (reverted)${lastError ? `: ${lastError}` : '.'}`,
-    );
-  }
-
   /**
    * Flag the selection for curator review as needing a class the registry
    * doesn't have yet. Shared by the Shift+N binding and the toolbar chip.
@@ -596,23 +415,6 @@
       sel.ids = new Set();
     } catch (e) {
       toastStore.error(`Flag failed: ${(e as Error).message}`);
-    }
-  }
-
-  async function undoLast(): Promise<void> {
-    const crops = await undoStore.undoLast();
-    if (crops.length === 0) return;
-    // Render whatever the backend restored, one crop at a time. Each crop
-    // may have left this cluster's grid (sidebar-drop labels remove it),
-    // so re-insert it rather than assume it's still present.
-    for (const crop of crops) {
-      excludedCropIds.delete(crop.id);
-      if (cropPager.items.some((c) => c.id === crop.id)) {
-        cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? crop : c));
-      } else {
-        cropPager.items = [crop, ...cropPager.items];
-        cropPager.total += 1;
-      }
     }
   }
 
@@ -652,11 +454,11 @@
   }
 
   // -- Ignore / exclude --------------------------------------------------
-  // Excluded crops drop out of training + clustering (reversible). The
-  // backend sets class_excluded=true; we remove them from the grid and
-  // keep the last batch so 'U' can undo. Self-contained — does not use
-  // the label-revert undoStore (Z), which only handles class labels.
-  let lastExcludedIds = $state<string[]>([]);
+  // Excluded crops drop out of training + clustering (reversible). Actual
+  // request + excludedCropIds claim/release + last-batch bookkeeping now
+  // live in clusterController.svelte.ts (ignoreSelected/undoIgnore);
+  // ignoreMenuOpen/EXCLUDE_REASONS stay here — they're pure toolbar UI
+  // state, not action logic.
   let ignoreMenuOpen = $state<boolean>(false);
   const EXCLUDE_REASONS: { value: ExcludeReason; label: string }[] = [
     { value: 'ignore', label: 'Ignore (generic)' },
@@ -667,39 +469,8 @@
   ];
 
   async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
-    const ids = [...sel.ids];
-    if (ids.length === 0) {
-      toastStore.info('Select crops first to ignore.');
-      return;
-    }
-    ignoreMenuOpen = false;
-    try {
-      const res = await excludeCrops(ids, reason);
-      cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
-      for (const id of ids) excludedCropIds.add(id);
-      sel.ids = new Set();
-      lastExcludedIds = ids;
-      const tag = reason === 'ignore' ? '' : ` (${reason})`;
-      toastStore.success(`Ignored ${res.excluded}${tag}. Press U to undo.`);
-    } catch (e) {
-      toastStore.error(`Ignore failed: ${(e as Error).message}`);
-    }
-  }
-
-  async function undoIgnore(): Promise<void> {
-    if (lastExcludedIds.length === 0) {
-      toastStore.info('Nothing to un-ignore.');
-      return;
-    }
-    const ids = lastExcludedIds;
-    try {
-      const res = await unexcludeCrops(ids);
-      for (const id of ids) excludedCropIds.delete(id);
-      lastExcludedIds = [];
-      toastStore.success(`Restored ${res.unexcluded}. Re-cluster to re-sort them.`);
-    } catch (e) {
-      toastStore.error(`Un-ignore failed: ${(e as Error).message}`);
-    }
+    if (sel.size > 0) ignoreMenuOpen = false;
+    await controller.ignoreSelected(reason);
   }
 
   async function refine(): Promise<void> {
@@ -721,7 +492,7 @@
       toastStore.warn('Pick a class first.');
       return;
     }
-    await assignClassToSelected(confirmClassId);
+    await controller.assignClassToSelected(confirmClassId);
     void advance();
   }
 
@@ -749,52 +520,8 @@
     recentTargets = next;
   }
 
-  /**
-   * Issue a move from the source cluster to `targetClusterId`. On success
-   * the moved crops disappear from the local grid; on failure the grid is
-   * fully reloaded so we can't strand a stale optimistic state.
-   */
-  async function moveCropIds(ids: string[], targetClusterId: number): Promise<void> {
-    if (!Number.isFinite(targetClusterId) || targetClusterId === clusterId) {
-      toastStore.warn('Pick a different cluster id.');
-      return;
-    }
-    if (ids.length === 0) return;
-    // Snapshot for revert: full crops list before mutation.
-    const snap = cropPager.items;
-    cropPager.items = cropPager.items.filter((c) => !ids.includes(c.id));
-    sel.ids = new Set();
-    rememberTarget(targetClusterId);
-    // Claim these ids immediately — see excludedCropIds above. Without
-    // this, a GET for this cluster that was already in flight (or gets
-    // triggered by the SSE live-refresh effect) can resolve after this
-    // optimistic removal with data snapshotted before this move landed,
-    // silently un-removing the crop and leaving it stuck in the grid
-    // until a hard reload.
-    for (const id of ids) excludedCropIds.add(id);
-    try {
-      const res = await moveCropsToCluster(ids, targetClusterId);
-      const moved = res.updated ?? ids.length;
-      const conflicts = res.conflicts?.length ?? 0;
-      if (conflicts > 0) {
-        // These specific ids never actually left clusterId — let them
-        // back in once the reload below re-syncs.
-        for (const c of res.conflicts) excludedCropIds.delete(c.crop_id);
-        toastStore.warn(
-          `Moved ${moved} of ${ids.length} crop${ids.length === 1 ? '' : 's'} (${conflicts} blocked by worker). Reloading.`,
-        );
-        void loadFirst();
-      } else {
-        toastStore.success(
-          `Moved ${moved} crop${moved === 1 ? '' : 's'} → cluster #${targetClusterId}.`,
-        );
-      }
-    } catch (e) {
-      for (const id of ids) excludedCropIds.delete(id);
-      cropPager.items = snap;
-      toastStore.error(`Move failed: ${(e as Error).message}`);
-    }
-  }
+  // moveCropIds (the excludedCropIds claim/release + conflict resync +
+  // revert-on-failure) now lives in clusterController.svelte.ts.
 
   function openMovePicker(): void {
     if (sel.size === 0) {
@@ -818,7 +545,7 @@
       return;
     }
     movePickerOpen = false;
-    await moveCropIds([...sel.ids], id);
+    await controller.moveCropIds([...sel.ids], id);
   }
 
   /**
@@ -960,14 +687,18 @@
     // do here?" friction.
 
     reg('enter', confirmSelected, 'Confirm selected & advance');
-    reg('shift+enter', acceptAllVlmOnPage, 'Confirm all VLM suggestions on page');
+    reg(
+      'shift+enter',
+      controller.acceptAllVlmOnPage,
+      'Confirm all VLM suggestions on page',
+    );
     reg(
       'g',
       async () => {
         const ids = [...sel.ids];
         for (const id of ids) {
           const c = cropPager.items.find((cc) => cc.id === id);
-          if (c) await acceptVlmForCrop(c);
+          if (c) await controller.acceptVlmForCrop(c);
         }
       },
       'Accept VLM suggestion for selected',
@@ -987,55 +718,14 @@
       flagSelectedForNewClass,
       'Flag selected as needing new class (curator review)',
     );
-    reg(
-      'd',
-      async () => {
-        const ids = [...sel.ids];
-        if (ids.length === 0) return;
-        // Discard is recorded like a label write, so it's reversible via
-        // Z (POST {API_PREFIX}/crops/{id}/label/undo) — record undo
-        // entries for exactly the ids the server actually discarded.
-        let succeededIds: string[] = [];
-        let failedCount = 0;
-        let lastError: string | null = null;
-        try {
-          if (ids.length === 1) {
-            await discardCrop(ids[0]!);
-            succeededIds = [ids[0]!];
-          } else {
-            const res = await discardCropsBatch(ids);
-            succeededIds = res.items.map((c) => c.id);
-            failedCount = ids.length - succeededIds.length;
-          }
-        } catch (e) {
-          lastError = (e as Error).message;
-          failedCount = ids.length;
-        }
-        const succeededSet = new Set(succeededIds);
-        cropPager.items = cropPager.items.filter((c) => !succeededSet.has(c.id));
-        for (const id of succeededIds) excludedCropIds.add(id);
-        undoStore.recordWrites(succeededIds);
-        // Keep whatever didn't succeed visible and selected so the
-        // operator can retry.
-        sel.ids = new Set(ids.filter((id) => !succeededSet.has(id)));
-        if (succeededIds.length > 0) {
-          toastStore.success(`Discarded ${succeededIds.length}. Press Z to undo.`);
-        }
-        if (failedCount > 0) {
-          toastStore.error(
-            `${failedCount} discard(s) failed — still selected${lastError ? `: ${lastError}` : '.'}`,
-          );
-        }
-      },
-      'Discard selected',
-    );
-    reg('z', undoLast, 'Undo last action');
+    reg('d', controller.discardSelected, 'Discard selected');
+    reg('z', controller.undoLast, 'Undo last action');
     reg(
       'x',
       () => void ignoreSelected('ignore'),
       'Ignore selected (exclude from training)',
     );
-    reg('u', undoIgnore, 'Undo last ignore');
+    reg('u', controller.undoIgnore, 'Undo last ignore');
     reg('a', selectAllPage, 'Select all on page');
     // Arrow keys navigate within the loaded grid. With infinite scroll the
     // next-page concept is gone — left/right move selection by one position
@@ -1196,7 +886,7 @@
       <button
         class="btn"
         type="button"
-        onclick={acceptAllVlmOnPage}
+        onclick={controller.acceptAllVlmOnPage}
         title="Shift+Enter — accept all VLM suggestions on this page"
       >
         Accept VLM <kbd class="ml-1 font-mono text-[10px] text-zinc-400">⇧↵</kbd>
@@ -1510,8 +1200,8 @@
                   {crop}
                   selected={sel.has(crop.id)}
                   onclick={(c, e) => clickSelect(c.id, e)}
-                  onacceptVlm={(c) => void acceptVlmForCrop(c)}
-                  onrejectVlm={(c) => void rejectVlmForCrop(c)}
+                  onacceptVlm={(c) => void controller.acceptVlmForCrop(c)}
+                  onrejectVlm={(c) => void controller.rejectVlmForCrop(c)}
                   ondetail={(c) => (detailCrop = c)}
                 />
                 {#if searchModeActive && searchScores.has(crop.id)}
