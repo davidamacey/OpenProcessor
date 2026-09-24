@@ -113,7 +113,7 @@
         ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
-      title="Scope this run to one class, and pick a detection profile / prompt pack"
+      title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick a detection profile / prompt pack"
       {disabled}
     >
       <span class="text-zinc-500">assist:</span>

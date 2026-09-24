@@ -30,6 +30,7 @@
     cancelAutoLabel,
     getAutoLabelStatus,
     startAutoLabel,
+    unknownStrategyDetail,
     type AutoLabelJobState,
   } from '$lib/api';
   import { createAssistScope } from '$lib/assistScope.svelte';
@@ -158,7 +159,7 @@
       });
       toastStore.success(
         scopeClassName
-          ? `Recluster started — ${scopeClassName} only.`
+          ? `Recluster started — VLM labeling limited to ${scopeClassName}.`
           : 'Recluster started.',
       );
       schedule();
@@ -167,6 +168,11 @@
       if (msg.includes('409') || msg.includes('already in progress')) {
         toastStore.warn('A recluster run is already in progress.');
         void poll();
+      } else if (unknownStrategyDetail(e)) {
+        const d = unknownStrategyDetail(e)!;
+        toastStore.error(
+          `Start failed: unknown ${d.axis.replace('_', ' ')} "${d.requested}" — valid: ${d.valid_ids.join(', ') || 'none'}.`,
+        );
       } else {
         toastStore.error(`Start failed: ${msg}`);
       }
@@ -327,7 +333,7 @@
         </button>
       {:else}
         <button class="btn btn-primary" type="button" onclick={start} disabled={busy}>
-          {scopeClassName ? `Recluster · ${scopeClassName}` : 'Recluster now'}
+          {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
         </button>
       {/if}
     </div>

@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Adopted OpenProcessor's per-run auto-label contract (`profile-arbiter`):
+  - An unknown `prompt_pack`/`detection_profile` now produces a readable
+    "unknown prompt pack "x" — valid: …" toast from the 422's
+    `{axis, requested, valid_ids}` instead of a bare "API 422".
+    `ApiError` also reads the text of any structured `{detail: {error}}`
+    body.
+  - The class scope's copy now says what it really does: it limits the
+    VLM labeling sweep to that class, while clustering still covers the
+    whole pool.
+  - `/settings` makes the VLM prompt pack a real, settable deployment
+    default. It's honored by every auto-label run that doesn't pick its
+    own pack. The detection profile stays display-only, because nothing
+    that runs reads it.
+
 ### Fixed
 
 - The embedding plot's projection rebuild is no longer fire-and-forget. It

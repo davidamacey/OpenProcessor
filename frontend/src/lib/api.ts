@@ -124,6 +124,11 @@ function errorDetail(body: unknown): string | null {
   } else if (body && typeof body === 'object') {
     const rec = body as Record<string, unknown>;
     raw = rec.detail ?? rec.message ?? null;
+    // Structured FastAPI details (`{detail: {error, ...}}`) carry their
+    // human-readable text under `error`.
+    if (raw && typeof raw === 'object') {
+      raw = (raw as Record<string, unknown>).error ?? null;
+    }
   }
   if (typeof raw !== 'string') return null;
   const text = raw.trim();
@@ -131,6 +136,28 @@ function errorDetail(body: unknown): string | null {
   return text.length > DETAIL_MAX_CHARS
     ? `${text.slice(0, DETAIL_MAX_CHARS - 1)}…`
     : text;
+}
+
+/** The 422 `detail` an unknown per-run strategy id (e.g. `prompt_pack`)
+ *  produces on `auto_label/start`. */
+export interface UnknownStrategyDetail {
+  axis: string;
+  requested: string;
+  valid_ids: string[];
+}
+
+export function unknownStrategyDetail(e: unknown): UnknownStrategyDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 422) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.axis !== 'string' || typeof d.requested !== 'string') return null;
+  if (!Array.isArray(d.valid_ids)) return null;
+  return {
+    axis: d.axis,
+    requested: d.requested,
+    valid_ids: d.valid_ids.filter((v): v is string => typeof v === 'string'),
+  };
 }
 
 export class ApiError extends Error {

@@ -264,18 +264,34 @@ describe('curationSettingsStore', () => {
     );
   });
 
-  it('saveDefault for an advisory axis throws before any fetch — detection_profile and prompt_pack', async () => {
+  it('saveDefault for an advisory axis throws before any fetch — detection_profile', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
       curationSettingsStore.saveDefault('detection_profile', 'grounding_v2'),
     ).rejects.toThrow(/advertised but not honored/);
-    await expect(
-      curationSettingsStore.saveDefault('prompt_pack', 'warehouse_v1'),
-    ).rejects.toThrow(/advertised but not honored/);
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('saveDefault for prompt_pack (settable since auto_label honors it) reaches the wire', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        defaults: { prompt_pack: 'generic_item_v1' },
+        updated_at: '2026-09-23T00:00:00Z',
+        updated_by: null,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await curationSettingsStore.saveDefault('prompt_pack', 'generic_item_v1');
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string)).toEqual({
+      defaults: { prompt_pack: 'generic_item_v1' },
+    });
   });
 
   it('saveDefault for an unknown axis throws "unknown settings axis"', async () => {

@@ -64,13 +64,15 @@ describe('SETTINGS_AXES', () => {
     );
   });
 
-  it('settableAxes() ids are exactly cluster/sort — the honesty ratchet', () => {
-    expect(settableAxes().map((a) => a.axis)).toEqual(['cluster', 'sort']);
+  // prompt_pack flipped 2026-09-23: OpenProcessor main's auto_label
+  // resolves the shared default per run (resolve_run_selection).
+  it('settableAxes() ids are exactly cluster/sort/prompt_pack — the honesty ratchet', () => {
+    expect(settableAxes().map((a) => a.axis)).toEqual(['cluster', 'sort', 'prompt_pack']);
   });
 
-  it('advisoryAxes() ids are exactly detection_profile/prompt_pack, each blurb says Display only', () => {
+  it('advisoryAxes() ids are exactly detection_profile, and its blurb says Display only', () => {
     const advisory = advisoryAxes();
-    expect(advisory.map((a) => a.axis)).toEqual(['detection_profile', 'prompt_pack']);
+    expect(advisory.map((a) => a.axis)).toEqual(['detection_profile']);
     for (const a of advisory) {
       expect(a.blurb).toContain('Display only');
     }

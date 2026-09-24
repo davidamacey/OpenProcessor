@@ -270,10 +270,9 @@
         </h2>
         <p class="text-xs text-zinc-400">
           These axes appear on this backend's /methods response and the settings API would
-          accept a default for them, but no request path reads it yet — one profile / one
-          prompt pack is chosen per backend process at startup. Setting a default here
-          would change what /methods displays and nothing else, so Cropwright does not yet
-          offer one.
+          accept a default for them, but nothing that runs reads it — the backend picks
+          them from its startup config. Setting a default here would change what /methods
+          displays and nothing else, so Cropwright does not offer one.
         </p>
         {#each advisoryAxes() as spec (spec.axis)}
           {@const options = axisOptions(strategiesStore.methods, spec)}
