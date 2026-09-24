@@ -69,6 +69,9 @@
     "region_text_confidence",
     "region_text_source",
     "region_text_engine_version",
+    "region_text_vlm",
+    "region_text_ocr",
+    "region_text_disagreement",
     "region_validated",
     "region_verified",
     "region_verified_at",
@@ -86,9 +89,70 @@
     "region_label_source",
     "region_source",
     "region_pairing",
-    "region_skip_verify"
+    "region_skip_verify",
+    "item_text_lines"
   ],
   "json_schema": {
+    "$defs": {
+      "ItemTextLine": {
+        "description": "One OCR text line on the item crop (``box_norm`` in the item-crop\nframe; ``rel_height`` = line height / crop height).",
+        "properties": {
+          "box_norm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Box Norm"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence"
+          },
+          "rel_height": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Rel Height"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Text"
+          }
+        },
+        "title": "ItemTextLine",
+        "type": "object"
+      }
+    },
     "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
     "properties": {
       "bbox_norm": {
@@ -321,6 +385,13 @@
         "default": "",
         "title": "Image Path",
         "type": "string"
+      },
+      "item_text_lines": {
+        "items": {
+          "$ref": "#/$defs/ItemTextLine"
+        },
+        "title": "Item Text Lines",
+        "type": "array"
       },
       "label_source": {
         "anyOf": [
@@ -669,6 +740,18 @@
         "default": null,
         "title": "Region Text Confidence"
       },
+      "region_text_disagreement": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Disagreement"
+      },
       "region_text_engine_version": {
         "anyOf": [
           {
@@ -680,6 +763,18 @@
         ],
         "default": null,
         "title": "Region Text Engine Version"
+      },
+      "region_text_ocr": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Ocr"
       },
       "region_text_raw": {
         "anyOf": [
@@ -704,6 +799,18 @@
         ],
         "default": null,
         "title": "Region Text Source"
+      },
+      "region_text_vlm": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Vlm"
       },
       "region_thumbnail_url": {
         "default": "",
@@ -873,6 +980,9 @@
     "region_text_confidence",
     "region_text_source",
     "region_text_engine_version",
+    "region_text_vlm",
+    "region_text_ocr",
+    "region_text_disagreement",
     "region_validated",
     "region_verified",
     "region_verified_at",

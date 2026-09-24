@@ -1616,6 +1616,13 @@
             "title": "Image Path",
             "type": "string"
           },
+          "item_text_lines": {
+            "items": {
+              "$ref": "#/components/schemas/ItemTextLine"
+            },
+            "title": "Item Text Lines",
+            "type": "array"
+          },
           "label_source": {
             "anyOf": [
               {
@@ -1934,6 +1941,17 @@
             ],
             "title": "Region Text Confidence"
           },
+          "region_text_disagreement": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Disagreement"
+          },
           "region_text_engine_version": {
             "anyOf": [
               {
@@ -1944,6 +1962,17 @@
               }
             ],
             "title": "Region Text Engine Version"
+          },
+          "region_text_ocr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Ocr"
           },
           "region_text_raw": {
             "anyOf": [
@@ -1966,6 +1995,17 @@
               }
             ],
             "title": "Region Text Source"
+          },
+          "region_text_vlm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Vlm"
           },
           "region_thumbnail_url": {
             "default": "",
@@ -2197,6 +2237,60 @@
           "region_bbox_norm"
         ],
         "title": "ItemRegionRequest",
+        "type": "object"
+      },
+      "ItemTextLine": {
+        "description": "One OCR text line on the item crop (``box_norm`` in the item-crop\nframe; ``rel_height`` = line height / crop height).",
+        "properties": {
+          "box_norm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Norm"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rel_height": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rel Height"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "ItemTextLine",
         "type": "object"
       },
       "LogTailResponse": {
@@ -4995,6 +5089,25 @@
                 }
               ],
               "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
+            "in": "query",
+            "name": "item_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
+              "title": "Item Text"
             }
           },
           {
