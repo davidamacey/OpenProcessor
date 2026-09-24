@@ -155,3 +155,31 @@ async def test_manifest_export_id_map_is_invertible(tmp_path):
     assert len(inverse) == len(export_id_map)
     for registry_id_str, dense_id in export_id_map.items():
         assert inverse[dense_id] == int(registry_id_str)
+
+
+@pytest.mark.asyncio
+async def test_manifest_counts_rows_dropped_for_unregistered_class_ids(tmp_path):
+    """A validated item carrying a class id the registry doesn't have (e.g.
+    a candidate cluster id written as a class) must never become a label,
+    and the drop must be visible in the manifest, not only in a log line."""
+    reg = ClassRegistry(path=tmp_path / 'registry' / 'class_registry.json')
+    reg.add_class('car')
+    docs = [
+        {
+            'crop_id': cid,
+            'image_id': f'img-{cid}',
+            'image_path': f'{cid}.jpg',
+            'bbox_norm': [0.0, 0.0, 1.0, 1.0],
+            'class_id': class_id,
+            'class_name': name,
+        }
+        for cid, class_id, name in [('ok', 0, 'car'), ('ghost1', 10000, ''), ('ghost2', 10000, '')]
+    ]
+    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    service = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
+    result = await service.export_dataset()
+
+    manifest = json.loads((Path(result.export_dir) / 'manifest.json').read_text())
+    assert manifest['image_count'] == 1
+    assert manifest['dropped_unregistered_class_ids'] == {'10000': 2}
+    assert not list(Path(result.export_dir).glob('labels/*/ghost*.txt'))

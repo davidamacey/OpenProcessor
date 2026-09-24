@@ -71,4 +71,33 @@ def human_label_update(
     }
 
 
-__all__ = ['human_class_provenance', 'human_label_update']
+def candidate_move_update(current: dict[str, Any], *, cluster_id: int, now: str) -> dict[str, Any]:
+    """Merge body for ``move_crops`` into a candidate cluster: placement only.
+
+    The item joins the group unvalidated. A human-owned class is cleared --
+    the human just said the item isn't that class -- while a machine
+    suggestion is kept. The pre-write state is snapshotted so undo restores
+    it exactly.
+    """
+    from src.clients.occ import is_human_owned_class
+    from src.services.curation.history import CLASS_STATE_FIELDS, record_class_snapshot
+
+    update: dict[str, Any] = {
+        'class_id_history': record_class_snapshot(
+            current, writer='human:move_crops', restorable=True
+        ),
+    }
+    if is_human_owned_class(current):
+        update.update(dict.fromkeys(CLASS_STATE_FIELDS))
+    update.update(
+        {
+            'cluster_id': cluster_id,
+            'cluster_subid': None,
+            'class_validated': False,
+            'updated_at': now,
+        }
+    )
+    return update
+
+
+__all__ = ['candidate_move_update', 'human_class_provenance', 'human_label_update']

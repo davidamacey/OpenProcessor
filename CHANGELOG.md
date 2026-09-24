@@ -159,6 +159,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`gpu_arbiter` check). The `docker` SDK is now a dependency.
 - cuML kNN graph self-loops dropped (parity with sklearn).
 
+- `POST /crops/move` into a candidate cluster wrote the cluster id as a
+  validated class id; it now only sets placement (a human-owned class is
+  cleared, nothing is validated), and unassigned or unregistered targets
+  get 400. Export manifests record rows dropped for unregistered class ids
+  (`dropped_unregistered_class_ids`), and preflight warns on them.
+- `POST /crops/batch_unexclude` returns an unvalidated item to the
+  candidate cluster it was excluded from while that cluster still has
+  members, instead of leaving it outside every cluster until a recluster.
+
 ### Removed
 - `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`
   (`quantize.coreml` returns 400).

@@ -876,6 +876,25 @@ async def _run_preflight(
                     )
                 )
 
+    # ---- validated items the export dropped for unregistered class ids ------
+    dropped = _read_export_manifest(spec.dataset_export_dir).get('dropped_unregistered_class_ids')
+    if isinstance(dropped, dict):
+        total = sum(int(v) for v in dropped.values())
+        checks.append(
+            PreflightCheck(
+                name='unregistered_class_ids',
+                severity='warn' if total else 'ok',
+                message=(
+                    f'{total:,} item(s) were left out of this export because their '
+                    f'class id is not in the registry ({", ".join(sorted(dropped))}). '
+                    'Relabel or undo them in curation, then re-export.'
+                    if total
+                    else 'every exported item has a registered class id'
+                ),
+                detail={'dropped_unregistered_class_ids': dropped},
+            )
+        )
+
     # ---- active-ingest warning (claim stops GPU-scoped ingest containers) -
     if needs_service_stop(spec.cuda_visible_devices):
         stopped = containers_to_stop(spec.cuda_visible_devices)
