@@ -7,7 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+- **One generic curation wire vocabulary.** Every region field is `region_<attr>`
+  on the wire, fixed regardless of `OP_REGION_FIELD_*` storage overrides;
+  `plate_thumbnail_url` → `region_thumbnail_url`; `gemma_*` → `vlm_*` and `v6_*` →
+  `classifier_*` across item fields, `class_source` values, the `vlm_low_conf`
+  review tab, auto_label params, `/health` and `/stats/dataset` (`plates` →
+  `regions`); `coco_proposal_name` → `proposal_name`; ingest `n_plates` →
+  `n_regions`. Region write bodies use `region_*` keys and reject unknown keys.
+  Every item-returning endpoint (`/crops`, `/crops/{id}`, `/review/{tab}`,
+  `/regions`, training candidates, `/search/text`) returns the same serialized
+  item. Full old→new table: `docs/design/curation_api_contract.md` (B3).
+- **Region detection is off by default.** The reference license-plate profile no
+  longer self-registers; select it with `OP_REGION_PROFILE=license_plate` or
+  configure one via `OP_REGION_DETECTION_*`.
+- **`OP_DETECTION_*` is retired**; ingest detectors use `OP_INGEST_PRIMARY_*` and
+  `OP_INGEST_SECONDARY_*` (leftover `OP_DETECTION_*` vars fail with a rename
+  message). The secondary detector is now actually wired into ingest.
+- **The ingest primary is a proposer by default** (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`):
+  its detections are unlabeled `<name>_proposal` items carrying the model's own
+  label (`OP_INGEST_PRIMARY_LABELS_PATH`); the secondary assigns the class.
+- **`detection_profile` is read-only**: `?detection_profile=` on
+  `POST /pipeline/auto_label[/start]` and `PUT /settings` for that axis return
+  422. `GET /methods` entries carry `settable: bool`.
+- The detector bake-off harness is domain-neutral by default (`generic`
+  `BakeoffProfile`; `--backend triton` requires a model); plate baselines moved
+  to the `license_plate` example profile; paper-only scripts moved to
+  `examples/bakeoff_lpr_paper/`.
+
 ### Added
+- Curation operator tools: `run_probe.py` (probe-inference backfill),
+  `reclassify_after_registry_growth.py`, `requeue_regions.py` (incl.
+  `--missing-status` backfill), `seed_class_registry.py` (registry from ONNX
+  `names`, `--check`), `cluster_raw_labels.py`, `ingest_upload.py` +
+  `POST /curation/ingest/upload` (byte ingest with content dedup),
+  `import_labeled_dataset.py` (incl. `--images-only`) and
+  `eval_regions_vs_gt.py` (region cascade vs ground truth: recall, precision,
+  IoU, background false-positive gate).
+- `BakeoffProfile` + `GET /bakeoff/profiles` (with `default`/`default_profile`),
+  optional `profile` on bake-off runs, a ported quantize leg.
+- Ingest writes class provenance on every item, publishes `crop.created` SSE
+  events, writes the backbone embedding from the secondary detector's feature
+  map, and seeds `pending_detection` region status so the cascade picks new items up.
+- `GpuArbiterConfig.from_env` (`OP_GPU_ALLOWED_IDS`, `OP_GPU_ARBITER_*`),
+  `OP_VLM_MAX_IMAGES_PER_CALL`, `OP_SOURCE_PATH_ALIASES`, `OP_PROMPT_PACK_PATHS`
+  (several selectable prompt packs), `OP_INGEST_PRIMARY_CLASS_IDS`.
+- Per-run `?prompt_pack=` on auto_label (422 on unknown id, echoed in job args).
+- `vlm_proposed_class_id` / `vlm_proposed_class_name` on every item;
+  `GET /curation/class_sources`; `GET /curation/classes/{id}`; `GET /crops`
+  `limit`/`sort`/`conf_min`/`conf_max`/`k`; `/export/datasets` `kind`/`profile_name`.
+- Generated TypeScript `RegionStatus` contract (`contracts/ts/regionStatus.ts`)
+  with a `--check` pre-commit drift hook.
 - **Segmenter container (`docker/segmenter/`)**: a reference
   implementation of the detection cascade's segmenter leg — a FastAPI
   service wrapping Meta's SAM 3 that answers `POST
@@ -38,6 +88,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   experiment tracking of those runs.
 
 ### Fixed
+- Freshly ingested items never reached `/review/all`, the VLM worker or the
+  pipeline VLM sweep (queues gated on a nonexistent `embedding` field).
+- Region/label fields fell to dynamic `text` mapping on fresh indexes, breaking
+  aggregations; every field is now explicitly mapped and queries no longer
+  target `.keyword` subfields.
+- A generic proposer's class ids were looked up in the domain class registry.
+- Labels imported in the same `/ingest/batch` call were silently dropped.
+- Secondary-detector NMS no longer depends on an external YOLOv5 checkout
+  (native implementation following YOLOv5's documented semantics).
+- Fresh `/jobs` volumes are writable by the app user; the evaluator image builds again.
+- Bake-off quantize jobs silently scored nothing (missing module).
+- `crop.region_verified` events carry `region_status`; `/export/datasets` lists
+  single-class exports; server-built URLs and scripts follow `OP_API_PREFIX`.
+- Removed host-specific paths and a LAN hostname from public source and docs.
 - A subset-trained run now propagates its `class_remap.json` into the
   checkpoint's `weights/` directory *and* the run manifest, and reports
   `class_remap_copy_failed` on the job status when it cannot. This is
@@ -45,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`resolve_class_remap`): without it, promoting a subset run silently
   wrote a `labels.txt` from the full class registry, mislabeling every
   class the served model emits.
+
+### Removed
+- `DETECTION_YOLOV5_FORK`; the bake-off CoreML leg and `OP_COREML_HOST`
+  (`quantize.coreml` returns 400).
 
 ## [0.3.0] - 2026-09-21
 
