@@ -153,6 +153,7 @@ def test_region_wire_keys_are_the_stock_region_names() -> None:
     assert not any('plate' in k or 'gemma' in k for k in ITEM_WIRE_KEYS)
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_every_endpoint_emits_the_same_item_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, RegionFields()) as client:
         items = _endpoint_items(client)
@@ -194,6 +195,7 @@ def test_vlm_suggestion_keys_on_every_item() -> None:
     assert empty['vlm_proposed_class_name'] is None
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_vlm_suggestion_reaches_every_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     with _client(monkeypatch, RegionFields()) as client:
         items = _endpoint_items(client)
@@ -242,6 +244,7 @@ def test_review_falls_back_to_current_class_without_a_suggestion(
     assert (item['proposed_class_id'], item['proposed_class_name']) == (3, 'mystery')
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_storage_override_does_not_change_wire_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """``OP_REGION_FIELD_*`` picks where values are READ from; the wire
     keys and values are identical to a stock deployment's."""
@@ -254,6 +257,7 @@ def test_storage_override_does_not_change_wire_keys(monkeypatch: pytest.MonkeyPa
         assert not any(k.startswith('legacyroi') for k in item)
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) -> None:
     """The PUT response echoes wire keys, not the overridden storage keys."""
 
@@ -296,6 +300,7 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
         ('put', '/crops/batch_region', {'crop_ids': ['crop-1'], 'bbox_norm': None}),
     ],
 )
+@pytest.mark.usefixtures('reference_region_profile')
 def test_region_request_bodies_reject_old_key_names(
     monkeypatch: pytest.MonkeyPatch, method: str, path: str, body: dict[str, Any]
 ) -> None:
@@ -322,6 +327,7 @@ def test_region_thumbnail_url_is_non_empty_for_a_candidate_only_item() -> None:
     assert item['region_candidate_bbox_in_parent'] is not None
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_server_built_urls_follow_the_configured_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(wire, '_api_prefix', lambda: '/custom-mount')
     with _client(monkeypatch, RegionFields()) as client:

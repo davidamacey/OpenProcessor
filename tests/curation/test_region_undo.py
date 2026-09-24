@@ -20,6 +20,11 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_curation_config, get_region_fields
 
 
+# No-profile gating contract: this file exercises region routes, which
+# require an active region profile (409 otherwise).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 F = get_region_fields()
 INDEX = get_curation_config().items_index
 BOX = [0.2, 0.2, 0.4, 0.4]

@@ -114,6 +114,7 @@ def test_locate_uses_the_same_max_rank(monkeypatch: pytest.MonkeyPatch) -> None:
     assert body['total'] == 2
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_tabs_catalog_serves_filters_per_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: {}}), monkeypatch)
     tabs = {t['id']: t for t in client.get('/curation/review/tabs').json()['tabs']}

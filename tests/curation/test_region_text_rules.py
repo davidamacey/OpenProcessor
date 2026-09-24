@@ -229,6 +229,7 @@ class TestWriters:
         assert doc[F.text_choice] == 'vlm_invalid'
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_human_typed_text_records_the_human_choice() -> None:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

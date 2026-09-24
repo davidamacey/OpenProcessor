@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -16,6 +17,9 @@ from src.config import IndexRole, get_curation_config, get_region_fields, index_
 F = get_region_fields()
 CFG = get_curation_config()
 ITEMS = index_name(CFG, IndexRole.ITEMS)
+
+# GET /regions requires an active region profile (no-profile gating contract).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 
 def _client(fake: Any) -> TestClient:

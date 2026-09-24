@@ -432,6 +432,39 @@ def test_health_reports_down_when_opensearch_unreachable(
     assert body['status'] in ('degraded', 'down')
 
 
+def test_health_region_profile_is_null_without_an_active_profile(
+    app_client: Any, fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock
+) -> None:
+    fake_triton_pool.health_check = AsyncMock(return_value=True)
+    fake_vlm = MagicMock()
+    fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
+    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+        r = app_client.get('/curation/health')
+    assert r.status_code == 200, r.text
+    assert r.json()['region_profile'] is None
+
+
+def test_health_region_profile_reflects_the_active_profile(
+    app_client: Any,
+    fake_opensearch: AsyncMock,
+    fake_triton_pool: AsyncMock,
+    reference_region_profile: None,
+) -> None:
+    fake_triton_pool.health_check = AsyncMock(return_value=True)
+    fake_vlm = MagicMock()
+    fake_vlm.health = AsyncMock(return_value=MagicMock(reachable=True, model='x'))
+    with patch('src.routers.curation._get_vlm_labeler', return_value=fake_vlm):
+        r = app_client.get('/curation/health')
+    assert r.status_code == 200, r.text
+    region_profile = r.json()['region_profile']
+    assert region_profile == {
+        'name': 'license_plate',
+        'display_name': 'Plates',
+        'region_class_name': 'license_plate',
+        'text_reader': 'both',
+    }
+
+
 # =============================================================================
 # /curation/crops listing — server-side filters out test_holdout
 # =============================================================================

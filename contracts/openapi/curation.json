@@ -1265,6 +1265,17 @@
             "title": "Opensearch",
             "type": "object"
           },
+          "region_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionProfileSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The active region profile, or null when none is configured -- THE signal a client checks to decide whether region-scoped UI/routes are available."
+          },
           "registry": {
             "additionalProperties": true,
             "title": "Registry",
@@ -1295,7 +1306,8 @@
           "triton",
           "opensearch",
           "vlm",
-          "registry"
+          "registry",
+          "region_profile"
         ],
         "title": "HealthResponse",
         "type": "object"
@@ -3012,6 +3024,35 @@
         "title": "PromoteResponse",
         "type": "object"
       },
+      "RegionProfileSummary": {
+        "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "region_class_name": {
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "text_reader": {
+            "title": "Text Reader",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "region_class_name",
+          "text_reader"
+        ],
+        "title": "RegionProfileSummary",
+        "type": "object"
+      },
       "RegionVocabularyResponse": {
         "properties": {
           "chain_actors": {
@@ -3027,6 +3068,17 @@
             },
             "title": "Detectors",
             "type": "array"
+          },
+          "region_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionProfileSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The active region profile, or null when none is configured."
           },
           "region_sources": {
             "items": {
@@ -3064,6 +3116,7 @@
           }
         },
         "required": [
+          "region_profile",
           "detectors",
           "region_sources",
           "chain_actors",

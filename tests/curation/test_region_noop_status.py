@@ -24,6 +24,11 @@ from src.config.region_state import RegionStatus
 from src.services.curation.region_writes import human_status_fields
 
 
+# No-profile gating contract: this file exercises region routes, which
+# require an active region profile (409 otherwise).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 F = get_region_fields()
 BOX = [0.1, 0.2, 0.3, 0.4]
 

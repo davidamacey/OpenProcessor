@@ -20,6 +20,11 @@ from src.config import get_region_fields
 from src.services.curation.wire import serialize_item
 
 
+# No-profile gating contract: this file exercises region routes, which
+# require an active region profile (409 otherwise).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 F = get_region_fields()
 PARENT = [0.2, 0.4, 0.6, 0.8]  # item box in the source frame
 

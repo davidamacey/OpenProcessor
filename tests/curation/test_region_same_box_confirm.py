@@ -23,6 +23,11 @@ from src.config import get_curation_config, get_region_fields
 from src.services.detection.profile_registry import region_profile_or_neutral
 
 
+# No-profile gating contract: this file exercises region routes, which
+# require an active region profile (409 otherwise).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 F = get_region_fields()
 INDEX = get_curation_config().items_index
 BOX = [0.6430511474609375, 0.5797716302772215, 0.6966705322265625, 0.6243825534416916]

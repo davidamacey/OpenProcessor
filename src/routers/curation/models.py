@@ -124,12 +124,19 @@ async def curation_health(
     else:
         overall = 'down'
 
+    from src.services.curation.region_vocabulary import region_profile_summary
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    active_profile = get_active_region_profile()
+    region_profile = region_profile_summary(active_profile) if active_profile is not None else None
+
     return HealthResponse(
         status=overall,
         triton=triton_status,
         opensearch=os_status,
         vlm=vlm_status,
         registry=registry_status,
+        region_profile=region_profile,
     )
 
 

@@ -19,6 +19,7 @@ from src.config.region_state import RegionStatus, region_status_catalog
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
+    RegionProfileDep,
     _ensure_indexes,
     guard_page_depth,
     router,
@@ -53,6 +54,7 @@ _REGION_SOURCE_EXCLUDES = item_list_source_excludes()
 @router.get('/regions')
 async def list_regions(
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     class_id: int | None = Query(None),

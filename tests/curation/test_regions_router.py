@@ -24,6 +24,11 @@ from src.services.curation.wire import ITEM_WIRE_KEYS
 
 F = get_region_fields()
 
+# No-profile gating contract: every route in this file requires an
+# active region profile (409 otherwise) -- this file tests the region
+# write paths themselves, so a profile is always active.
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
 
 class _FakeRegionOS:
     """AsyncOpenSearch double covering exactly what regions.py's write

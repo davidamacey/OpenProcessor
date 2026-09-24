@@ -61,6 +61,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
 _IMG = base64.b64encode(b'\xff\xd8\xff\xd9').decode()
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_region_visible_batch_uses_settings_default_pack(
     client: tuple[TestClient, list[Any]],
 ) -> None:
@@ -73,6 +74,7 @@ def test_region_visible_batch_uses_settings_default_pack(
     assert requested == ['food_v2']
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 def test_verify_region_batch_uses_settings_default_pack(
     client: tuple[TestClient, list[Any]],
 ) -> None:

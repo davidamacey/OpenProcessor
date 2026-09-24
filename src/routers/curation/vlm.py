@@ -35,6 +35,7 @@ from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
+    RegionProfileDep,
     _now_iso,
     get_class_registry,
     logger,
@@ -411,6 +412,7 @@ async def vlm_label_batch(
 async def vlm_verify_regions(
     payload: VlmVerifyRegionsRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> dict[str, Any]:
     """Verify whether each crop's region-of-interest contains a real region.
 
@@ -506,6 +508,7 @@ async def vlm_verify_regions(
 async def vlm_verify_region_batch(
     payload: VlmVerifyRegionBatchRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> VlmVerifyRegionBatchResponse:
     """Verify region crops in batches of ``max_images_per_call`` per upstream VLM call.
 
@@ -592,6 +595,7 @@ async def vlm_verify_region_batch(
 async def vlm_region_visible_batch(
     payload: VlmRegionVisibleBatchRequest,
     opensearch: OpenSearchDep,
+    _profile: RegionProfileDep,
 ) -> VlmRegionVisibleBatchResponse:
     """Pre-filter item crops by asking the VLM whether a sub-region is visible.
 

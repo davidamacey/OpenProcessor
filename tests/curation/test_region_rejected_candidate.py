@@ -27,6 +27,11 @@ from src.services.labeling.vlm_labeler import VlmCombinedReply
 from .test_region_cascade_integrity import _drive_worker, _FakeOpenSearch, _item, _profile
 
 
+# No-profile gating contract: this file exercises region routes, which
+# require an active region profile (409 otherwise).
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 if TYPE_CHECKING:
     from pathlib import Path
 

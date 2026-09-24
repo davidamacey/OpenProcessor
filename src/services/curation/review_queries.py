@@ -136,7 +136,10 @@ def tab_filters(tab: str) -> tuple[str, ...]:
 
 def review_tab_catalog() -> list[dict[str, Any]]:
     """``[{id, label, description, filters, filter_defaults,
-    filter_specs}, ...]`` for every ``KNOWN_TABS`` entry.
+    filter_specs}, ...]`` for every ``KNOWN_TABS`` entry, EXCEPT
+    ``regions`` when no region profile is active (no-profile gating
+    contract: a client must not offer a tab for data that can never
+    exist).
 
     ``filters`` lists the query parameters the tab honours (anything else
     is accepted but ignored); ``filter_defaults`` the value a tab applies
@@ -151,9 +154,12 @@ def review_tab_catalog() -> list[dict[str, Any]]:
 
     The ``regions`` tab's label/description come from the active region
     profile's ``display_name`` when one is configured (e.g. "Plates"),
-    falling back to the generic ``TAB_LABELS`` entry ("Regions") when
-    there is no active profile or it set no ``display_name``.
+    falling back to the generic ``TAB_LABELS`` entry ("Regions") when it
+    set no ``display_name``.
     """
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    has_region_profile = get_active_region_profile() is not None
     return [
         {
             'id': tab,
@@ -168,6 +174,7 @@ def review_tab_catalog() -> list[dict[str, Any]]:
             ],
         }
         for tab in KNOWN_TABS
+        if tab != 'regions' or has_region_profile
     ]
 
 
