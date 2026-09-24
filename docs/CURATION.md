@@ -358,15 +358,35 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    content, `frozen_test_sha` over the test split's identity, an
    atomically-flipped per-profile `current` symlink).
 
+   The multi-class export writes **one image file and one label file per
+   source image** (`images/<split>/<image_id>.<ext>` +
+   `labels/<split>/<image_id>.txt`), with one `cls cx cy w h` line per
+   validated object on that image, relative to the full source image.
+   Its manifest counts images (`image_count`, `split_counts`) and
+   objects (`object_count`, `split_object_counts`, `class_split_counts`)
+   separately.
+
+   **Partially labeled images.** An image can also hold objects that
+   are not labeled yet (unreviewed, or on a class the export leaves
+   out). By default the image is still exported with its validated
+   objects labeled, and the manifest records
+   `unlabeled_items_on_exported_images` / `images_with_unlabeled_items`.
+   Training preflight then warns (`export_unlabeled_objects`), because
+   the detector learns an unlabeled object in a training image as
+   background. Pass `require_fully_labeled_images: true` to
+   `POST /curation/export/yolo` to leave those images out instead
+   (`images_dropped_not_fully_labeled` in the manifest). Excluded and
+   review-dismissed items are never counted as unlabeled.
+
    Both exporters split by **source image** (`group_key: image_id`):
-   items cut from one image always land in the same split. Frozen
-   test-holdout items (`POST /curation/test_holdout/freeze`) and their
-   same-image mates go to `test`; a class with a frozen holdout splits
-   its other items between train and val only, and each split gets one
-   image before any gets a second (1 image → train, 2 → train + val).
-   `POST /curation/train/preflight` blocks an export with no train or no
-   val images, or with a trained class missing from train or val — see
-   the "Export" section of the API contract for the exact rules.
+   items cut from one image always land in the same split. An image
+   with a frozen test-holdout item (`POST /curation/test_holdout/freeze`)
+   goes to `test` with all its objects; a class with a frozen holdout
+   splits its other images between train and val only, and each split
+   gets one image before any gets a second (1 image → train, 2 → train +
+   val). `POST /curation/train/preflight` blocks an export with no train
+   or no val images, or with a trained class missing from train or val
+   — see the "Export" section of the API contract for the exact rules.
 
 ## Environment variables
 

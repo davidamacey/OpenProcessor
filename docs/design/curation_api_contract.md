@@ -722,12 +722,104 @@ matched, matched_ids, updated, updated_ids, conflicts:
 
 ### Export
 
-- `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`
+- `ExportYoloRequest`: `export_dir`, `version_tag`, `seed`, `max_images`, `dedup_threshold`,
+  `require_fully_labeled_images` (default `false`)
 - `ExportSingleClassRequest`: `export_dir`, `version_tag`, `class_ids`,
   `box_source` (`item`/`region`), `region_class_name`, `profile_name`,
   `seed`, `skip_test_split`, `empty_bg_ratio`, `max_positive_images`,
   `dedup_threshold`, `image_mode` (`whole_frame`/`item_crop`),
   `img_max_side`, `copy_images`
+
+**Multi-class layout (`POST /export/yolo`): one image file and one label
+file per source image.** Validated items (one object each) are grouped
+by `image_id`. Each exported image is written once as
+`images/<split>/<image_id>.<ext>`, next to `labels/<split>/<image_id>.txt`
+with one `cls cx cy w h` line per validated, non-excluded, non-dismissed
+object on it. `cls` is the dense `export_id`; `cx cy w h` come from the
+item's `bbox_norm` (`[x1, y1, x2, y2]`, normalized to the full source
+frame), clamped to `[0, 1]`, so they are relative to the full source
+image. Objects in a file are ordered by item id, so re-runs are
+byte-identical. An item with no `image_id`, no usable box or no class is
+left out and counted in the manifest's `skipped_items`. `resize_mode` on
+the service accepts only `null` (copy as-is) or `aspect`; `letterbox` is
+refused because its padding would shift every box. (Earlier exports
+wrote one full-frame copy and one single-line label file per *item*, so
+an image with three validated objects became three copies each labeled
+with one object, and the detector learned the other two as background.)
+
+**Partial frames.** An exported image can also hold *unlabeled* objects:
+items on it that the export does not write — not validated yet,
+validated on a class with no dense id (unregistered or deprecated), or
+validated without a usable box. They are still in the pixels, so
+training learns them as background. `class_excluded` and
+review-dismissed items are not objects to label and never count.
+
+- Default (`require_fully_labeled_images: false`): the image is exported
+  with its validated objects labeled. The manifest records
+  `unlabeled_items_on_exported_images` and `images_with_unlabeled_items`,
+  and training preflight warns (`export_unlabeled_objects`).
+- `require_fully_labeled_images: true`: every image with at least one
+  unlabeled object is left out; the manifest records how many as
+  `images_dropped_not_fully_labeled`. If no image is fully labeled the
+  export is refused with `422` and nothing is written.
+
+The partial-frame policy runs first, then `dedup_threshold` (which
+collapses near-duplicate *images*; a kept image keeps all its objects,
+a frozen-holdout image is preferred as the survivor, and the manifest's
+`dedup.n_input_rows` / `n_output_rows` count images), then `max_images`
+(a cap on images: an even round-robin over each image's rarest class, so
+a rare class survives the cap).
+
+**Multi-class manifest counts.**
+
+| Field | Counts |
+|---|---|
+| `image_count` | exported images (= label files) |
+| `object_count` | exported objects (= label lines) |
+| `split_counts` | images per split, `{train, val, test}` |
+| `split_object_counts` | objects per split, `{train, val, test}` |
+| `class_split_counts` | objects per class per split (rows below) |
+| `unlabeled_items_on_exported_images` | unlabeled objects on the exported images |
+| `images_with_unlabeled_items` | exported images holding at least one unlabeled object |
+| `require_fully_labeled_images` | the request flag |
+| `images_dropped_not_fully_labeled` | images left out by that flag (`0` when off) |
+| `skipped_items` | `{no_image_id, no_usable_box_or_class}` validated items left out |
+
+`label_stats.json` (`{class_name: objects}`) sums `class_split_counts`
+per class.
+
+`POST /export/yolo` returns `status`, `export_dir`, `version_tag`,
+`manifest_path`, `dataset_sha`, `image_count`, `object_count`,
+`split_counts`, `split_object_counts`, `require_fully_labeled_images`,
+`unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
+`images_dropped_not_fully_labeled`, `dedup` (the requested threshold),
+`started_at`, `finished_at`.
+
+Example manifest excerpt (`img-a` with three objects of two classes,
+`img-b` with one, and `img-c` with one validated object next to one
+unreviewed item). It writes `labels/train/img-a.txt` (three lines, e.g.
+`0 0.200000 0.400000 0.200000 0.400000` for a `bbox_norm` of
+`[0.1, 0.2, 0.3, 0.6]`), `labels/train/img-b.txt` and
+`labels/val/img-c.txt`:
+
+```json
+{
+  "group_key": "image_id",
+  "image_count": 3,
+  "object_count": 5,
+  "split_counts": {"train": 2, "val": 1, "test": 0},
+  "split_object_counts": {"train": 4, "val": 1, "test": 0},
+  "class_split_counts": [
+    {"class_id": 1, "export_id": 0, "class_name": "alpha", "train": 2, "val": 1, "test": 0},
+    {"class_id": 2, "export_id": 1, "class_name": "beta", "train": 2, "val": 0, "test": 0}
+  ],
+  "require_fully_labeled_images": false,
+  "unlabeled_items_on_exported_images": 1,
+  "images_with_unlabeled_items": 1,
+  "images_dropped_not_fully_labeled": 0,
+  "skipped_items": {"no_image_id": 0, "no_usable_box_or_class": 0}
+}
+```
 
 `POST /export/single_class` builds a narrowed dataset for a single class
 or a class subset, with a stronger integrity envelope than the
@@ -742,9 +834,10 @@ or the multi-class dataset.
 
 **Readiness (DQ-M9).** Both exports refuse with `422`
 (`detail: "nothing to export: <reason>"`) when nothing is exportable —
-`POST /export/yolo`: no item is `class_validated` (and not
-review-dismissed), none has a box and class, or every one is on a class
-id missing from (or deprecated in) the registry; `POST
+`POST /export/yolo`: no item is `class_validated` (and not excluded or
+review-dismissed), none has an image id, a box and a class, every one is
+on a class id missing from (or deprecated in) the registry, or
+`require_fully_labeled_images` left no image; `POST
 /export/single_class`: no item matches the profile. Nothing is written
 and `current` keeps pointing at the previous export. Every manifest
 records `items_index: {index, uuid, created_at}` — the items index it was
@@ -755,9 +848,10 @@ read from (`null` if it could not be read).
 
 | Check | `block` when | `unknown` when |
 |---|---|---|
-| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` | no readable manifest / no count |
-| `export_splits_nonempty` | `split_counts.train` or `split_counts.val` is `0` (message names the empty split(s); `detail.empty_splits`) | the manifest records no train/val counts |
-| `export_class_split_coverage` | a class the run trains on (`include_classes`, else every class in `class_split_counts`) has fewer than `min_train_per_class` (`1`) train or `min_val_per_class` (`1`) val instances — message lists each as `name (class id): train=N, val=N`; `detail.classes[]` carries `class_id`, `class_name`, `train`, `val`, `test`, `missing_splits`. Always `ok` ("not applicable") for a single-class export, which `export_splits_nonempty` already covers | the manifest has no `class_split_counts` (exported before they were recorded — re-export) |
+| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` images | no readable manifest / no count |
+| `export_splits_nonempty` | `split_counts.train` or `split_counts.val` (images) is `0` (message names the empty split(s); `detail.empty_splits`) | the manifest records no train/val counts |
+| `export_class_split_coverage` | a class the run trains on (`include_classes`, else every class in `class_split_counts`) has fewer than `min_train_per_class` (`1`) train or `min_val_per_class` (`1`) val objects — message lists each as `name (class id): train=N, val=N`; `detail.classes[]` carries `class_id`, `class_name`, `train`, `val`, `test`, `missing_splits`. Always `ok` ("not applicable") for a single-class export, which `export_splits_nonempty` already covers | the manifest has no `class_split_counts` (exported before they were recorded — re-export) |
+| `export_unlabeled_objects` | never blocks: `warn` when `unlabeled_items_on_exported_images > 0` — message gives `images_with_unlabeled_items/image_count` and the object count, says training learns unlabeled objects as background, and points at `require_fully_labeled_images`; `detail` carries `image_count`, `unlabeled_items_on_exported_images`, `images_with_unlabeled_items`, `require_fully_labeled_images`, `images_dropped_not_fully_labeled`. `ok` when `0`, and always `ok` ("not applicable") for a single-class export | the manifest has no unlabeled counts (exported before per-image labels — re-export) |
 | `export_generation` | the manifest's `items_index.uuid` differs from the live items index's (the index was rebuilt since the export); for an unstamped export, its `exported_at` is before the live index's creation | the live index can't be read, or the manifest has neither a stamp nor `exported_at` |
 
 The index `uuid` is the staleness signal because it changes on every
@@ -769,17 +863,17 @@ past one is supported).
 `src/services/curation/export_support.py`; the manifest records
 `group_key` and `seed`):
 
-- **Group = source image** (`group_key: "image_id"`; an item with no
-  `image_id` is its own group). Items cut from one image never straddle
-  train/val/test. `cluster_id` is not a leakage unit — class clusters
+- **Group = source image** (`group_key: "image_id"`). Items cut from
+  one image never straddle train/val/test; the multi-class export writes
+  each image once, so the image and all its objects share one split. `cluster_id` is not a leakage unit — class clusters
   have `cluster_id == class_id`, so grouping on it made each class one
   group. Crop-level `dup_group_id` is not used either: it is written only
   by an opt-in scorer run, only for items in a multi-member group, and
   its ids (`dup_<n>`) are numbered per run, so two runs can reuse an id
   for unrelated items. Whole-frame near-duplicate bursts are handled
   before the split by the export's `dedup_threshold`.
-- **Frozen holdout**: every `test_holdout` item goes to `test`, together
-  with its same-image mates (any class).
+- **Frozen holdout**: an image carrying a `test_holdout` item goes to
+  `test` with every object on it (any class).
 - **Strata**: each remaining group counts toward its most common class.
   Within a class, groups are ordered by `sha256(seed:class:group)`, so
   the same data and seed always give the same split.
@@ -795,19 +889,50 @@ past one is supported).
 
 The multi-class manifest's `class_split_counts` lists every class in the
 export (`class_id` registry id, `export_id` dense id, `class_name`,
-`train`, `val`, `test` instance counts), including classes with no
-instances. `label_stats.json` keeps its flat `{class_name: count}` shape.
+`train`, `val`, `test` object counts), including classes with no
+objects. `label_stats.json` keeps its flat `{class_name: count}` shape
+(objects per class).
 
 **`GET /export/status`** (`ExportStatusResponse`) serves the last
 completed multi-class export — the `current` symlink's manifest:
 `status` (`idle` / `unknown` / `success`), `path` (resolved export dir;
 `export_dir` is the same value), `last_run` (finish, else start time),
-`version_tag`, `dataset_sha`, `seed`, `group_key`, `image_count`,
-`class_count`, `split_counts` (`{train, val, test}`), and
-`class_split_counts` (rows as in the manifest; `null` for an export
-written before they were recorded). `idle` sets every other field to
-`null`; `unknown` (manifest missing/unreadable) sets only `path` /
-`export_dir`.
+`version_tag`, `dataset_sha`, `seed`, `group_key`, `image_count`
+(images), `object_count` (objects), `class_count`, `split_counts`
+(images per split, `{train, val, test}`), `split_object_counts` (objects
+per split), `class_split_counts` (objects per class per split, rows as
+in the manifest), `require_fully_labeled_images`,
+`unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
+`images_dropped_not_fully_labeled`. A field the manifest does not record
+(an export written before it existed) is `null`. `idle` sets every other
+field to `null`; `unknown` (manifest missing/unreadable) sets only `path`
+/ `export_dir`.
+
+```json
+{
+  "status": "success",
+  "path": "/exports/20260924T120000Z",
+  "export_dir": "/exports/20260924T120000Z",
+  "last_run": "2026-09-24T12:00:04+00:00",
+  "version_tag": "v1",
+  "dataset_sha": "4c1f...",
+  "seed": 42,
+  "group_key": "image_id",
+  "image_count": 3,
+  "object_count": 5,
+  "class_count": 2,
+  "split_counts": {"train": 2, "val": 1, "test": 0},
+  "split_object_counts": {"train": 4, "val": 1, "test": 0},
+  "class_split_counts": [
+    {"train": 2, "val": 1, "test": 0, "class_id": 1, "export_id": 0, "class_name": "alpha"},
+    {"train": 2, "val": 0, "test": 0, "class_id": 2, "export_id": 1, "class_name": "beta"}
+  ],
+  "require_fully_labeled_images": false,
+  "unlabeled_items_on_exported_images": 1,
+  "images_with_unlabeled_items": 1,
+  "images_dropped_not_fully_labeled": 0
+}
+```
 
 ### Capability discovery — `GET /methods`
 
@@ -1290,7 +1415,8 @@ via `POST /events/publish`.
 Query: `kind` (`yolo` | `single_class` — the same ids the `/methods`
 export axis advertises), `profile_name`. Rows: `kind`, `profile_name`
 (`null` for multi-class), `export_dir`, `version_tag`, `image_count`,
-`split_counts`, `dataset_sha`, `exported_at`, `class_count`,
+`object_count` (`null` when the manifest does not record it, e.g. every
+single-class export), `split_counts`, `dataset_sha`, `exported_at`, `class_count`,
 `is_current`. Multi-class versions live directly under the export root;
 single-class versions under `<export_root>/<profile_name>/<version>/`, and
 `is_current` is judged against that profile's own `current` symlink.
