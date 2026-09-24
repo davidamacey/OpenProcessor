@@ -20,11 +20,7 @@ from src.clients.occ import (
 )
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
-from src.services.curation.history import (
-    MAX_PLATE_CHAIN_ENTRIES,
-    append_plate_chain_entry,
-    record_class_history,
-)
+from src.services.curation.history import merge_region_chain, record_class_history
 from src.services.curation.wire import region_event_payload
 
 
@@ -46,9 +42,9 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
     the doc and lets the human win. The next polling iteration will see
     the updated state and re-decide.
 
-    A-PR4: the merger uses :func:`append_plate_chain_entry` to extend
-    the existing ``RegionFields.detector_chain`` rather than
-    overwriting it, so concurrent chain mutations are preserved.
+    A-PR4: the merger uses :func:`merge_region_chain` to extend the
+    existing ``RegionFields.detector_chain`` rather than overwriting it,
+    so concurrent chain mutations are preserved.
 
     Returns ``(n_written, n_skipped)`` where ``n_skipped`` counts both
     tasks with empty ``update_doc`` and tasks that lost an OCC race.
@@ -86,48 +82,14 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         # here where the pre-write ``current`` doc is available.
         if 'class_id' in update:
             update['class_id_history'] = record_class_history(current, writer='sam_worker')
-        # The worker accumulates an in-iteration detection_trace; merge
-        # those new entries on top of any existing chain in OS (which
-        # may have been appended to by a human or a prior worker pass)
-        # so we never clobber prior provenance.
-        existing_chain = current.get(F.detector_chain) or []
-        if task.detection_trace:
-            existing = list(existing_chain)
-            existing_set = set(existing)
-            chain = list(existing)
-            for entry in task.detection_trace:
-                if entry in existing_set:
-                    continue
-                # Entry shape: "<detector>:<tag>" or
-                # "<detector>:<sub>:<tag>". Pass through
-                # append_plate_chain_entry so the cap + drop-oldest
-                # policy applies uniformly.
-                if ':' in entry:
-                    detector, _, outcome = entry.partition(':')
-                else:
-                    detector, outcome = entry, ''
-                chain = append_plate_chain_entry(
-                    chain,
-                    detector=detector,
-                    detector_version='',
-                    outcome=outcome,
-                )
-                existing_set.add(entry)
-            update[F.detector_chain] = chain
-        elif F.detector_chain in update:
-            # Worker built a chain in-task (e.g. final no_region_box).
-            # Union with the existing OS chain to preserve concurrent
-            # writes.
-            new_entries = list(update[F.detector_chain])
-            seen = set(existing_chain)
-            merged = list(existing_chain)
-            for entry in new_entries:
-                if entry not in seen:
-                    merged.append(entry)
-                    seen.add(entry)
-            if len(merged) > MAX_PLATE_CHAIN_ENTRIES:
-                merged = merged[-MAX_PLATE_CHAIN_ENTRIES:]
-            update[F.detector_chain] = merged
+        # Merge this pass's entries onto whatever chain is stored (a human
+        # or an earlier pass may have appended) — ordered, de-duplicated,
+        # normalized to ``<actor>:<event>``, capped.
+        new_entries = list(task.detection_trace) or list(update.get(F.detector_chain) or [])
+        if new_entries:
+            update[F.detector_chain] = merge_region_chain(
+                current.get(F.detector_chain), new_entries
+            )
         return update
 
     result = await occ_skip_on_conflict_bulk(

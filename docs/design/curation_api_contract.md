@@ -344,6 +344,35 @@ must match.
 | `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
 | `GET /search/text` | `items[]` | item + `semantic_score` |
 
+### `region_detector_chain` entries
+
+A list of strings, oldest first, each exactly `<actor>:<event>` — one
+colon after the actor, no version, no timestamp (`region_detected_at` /
+`region_verified_at` carry the times). Entries are unique within a doc
+and capped at 16 (oldest dropped). `<det>` is the profile's primary
+detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
+`<src>` is whichever of those produced the candidate box.
+
+| Entry | Meaning |
+|---|---|
+| `<det>:hit` / `<det>:miss` | primary detector found / found no candidate |
+| `<seg>:hit` / `<seg>:miss` | segmenter found / found no candidate |
+| `vlm_visible:yes` / `vlm_visible:no` | VLM pre-filter: a region is / isn't visible in the item |
+| `<src>:combined_verify_ok` | VLM confirmed the candidate box (region written `detected`) |
+| `<src>:combined_verify_reject` | VLM rejected the candidate box |
+| `<src>:combined_verify_reject:region_visible_elsewhere` | VLM sees a region, but not in the candidate box |
+| `<src>:combined_no_region_visible` | VLM sees no region at all |
+| `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
+| `<seg>:skip_vlm_verify` | high-score segmenter box written without a VLM call |
+| `<ocr>:text_hint:hit` / `:miss` / `:no_region_shape`, `<seg>:text_hint:miss` | OCR-hinted segmenter re-pass |
+
+Readers match whole entries with `term` queries — e.g. `GET
+/regions/training_candidates?mode=detector_blind_spots` requires
+`<det>:miss`, `mode=disagreement` requires both `<det>:hit` and
+`<seg>:hit`. Builds before 2026-09-24 wrote `<actor>::<event>@<iso>`;
+the worker rewrites such a chain to this form the next time it writes
+the doc.
+
 ### VLM class suggestion — `vlm_proposed_class_id` / `vlm_proposed_class_name`
 
 On every item, always present, derived from the stored doc by
@@ -584,7 +613,7 @@ backend rows of the frontend's contract audit
 | `class_source` value | `v6_gemma_agreement`, `cluster_v6_majority_agreement` | `classifier_vlm_agreement`, `cluster_majority_agreement` |
 | `class_source` value (queried) | hardcoded `v6_model`, `v6_low_conf`, `coco_yolo11_proposal` | the configured ingest profiles' values (`{secondary}_model`, `{primary}_proposal`, `{primary}_low_conf`, …) |
 | Item key + stored doc field | `coco_proposal_name` | `proposal_name` |
-| `region_detector_chain` entry | `<det>:gemma_verify_ok`, `<det>:gemma_reject`, `gemma_visible:yes` / `gemma_visible:no`, `<seg>:skip_gemma_verify` | `<det>:vlm_verify_ok`, `<det>:vlm_reject`, `vlm_visible:yes` / `vlm_visible:no`, `<seg>:skip_vlm_verify` |
+| `region_detector_chain` entry | `<det>:gemma_verify_ok`, `<det>:gemma_reject`, `gemma_visible:yes` / `gemma_visible:no`, `<seg>:skip_gemma_verify` | `<det>:combined_verify_ok`, `<det>:combined_verify_reject`, `vlm_visible:yes` / `vlm_visible:no`, `<seg>:skip_vlm_verify` — full vocabulary under "`region_detector_chain` entries" |
 | Writer id (`class_id_history`) | `gemma_pipeline` | `vlm_pipeline` |
 | Review tab (`GET /review/{tab}`) | `gemma_low_conf` | `vlm_low_conf` |
 | Review `reason` text | "gemma's reply did not match…", "gemma confidence below high", "…v6 unsure or missed", "COCO found a vehicle v6 missed…", "plate detected — needs human confirmation" | "VLM's reply did not match…", "VLM confidence below high", "…classifier unsure or missed", "detector proposed an item the classifier missed (blind spot)", "region detected — needs human confirmation" |

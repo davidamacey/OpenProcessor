@@ -9,7 +9,8 @@ The mapping for ``class_id_history`` lives in
 
 For region-of-interest writes, the ``RegionFields.detector_chain``
 keyword-array field already captures per-event provenance; this module
-exposes a helper that appends to it consistently.
+owns its entry format (``<actor>:<event>``, see :func:`region_chain_entry`)
+and the merge used by every writer.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ human-validated crop's audit trail is authoritative and must never be
 truncated. The check reads ``class_validated`` off the pre-write
 ``current_source`` passed to :func:`record_class_history`."""
 
-MAX_PLATE_CHAIN_ENTRIES = 16
+MAX_REGION_CHAIN_ENTRIES = 16
 """Cap the region detector-chain length. The cascade typically emits 2-4
 entries per detection (e.g. detector:hit, secondary:hit, verifier:verify_ok);
 16 entries covers ~4 re-detection events worth of history."""
@@ -108,42 +109,57 @@ def record_class_history(
     return history
 
 
-def append_plate_chain_entry(
-    current_chain: list[str] | None,
-    *,
-    detector: str,
-    detector_version: str,
-    outcome: str,
-    at: str | None = None,
-) -> list[str]:
-    """Append one cascade event to a region detector-chain array
-    (``RegionFields.detector_chain``).
+def region_chain_entry(actor: str, event: str) -> str:
+    """Format one ``RegionFields.detector_chain`` entry: ``<actor>:<event>``.
 
-    Each entry is a colon-delimited string ``{detector}:{version}:{outcome}@{iso}``.
-    The cap is :data:`MAX_PLATE_CHAIN_ENTRIES`; drop-oldest on overflow.
-
-    Args:
-        current_chain: Existing chain or None.
-        detector: Detector identifier, e.g. a primary detector name,
-            a secondary detector name, or ``human``.
-        detector_version: Detector version string.
-        outcome: ``hit``, ``miss``, ``verify_ok``, ``verify_rejected``, ``draw``.
-        at: Optional ISO-8601 timestamp; defaults to UTC now.
-
-    Returns:
-        The new chain array.
+    ``actor`` is a detector / segmenter / verifier name (or ``vlm_visible``,
+    ``human``); ``event`` may itself carry colon-separated detail
+    (``sanity_reject:aspect``). No version and no timestamp: the chain is
+    matched with exact ``term`` queries (``regions.py`` training-candidate
+    cohorts), and ``region_detected_at`` / ``region_verified_at`` already
+    carry the times.
     """
-    chain = list(current_chain or [])
-    entry = f'{detector}:{detector_version}:{outcome}@{at or _now_iso()}'
-    chain.append(entry)
-    if len(chain) > MAX_PLATE_CHAIN_ENTRIES:
-        chain = chain[-MAX_PLATE_CHAIN_ENTRIES:]
-    return chain
+    return f'{actor}:{event}'
+
+
+def normalize_region_chain_entry(entry: str) -> str:
+    """Rewrite a pre-fix ``<actor>::<event>@<iso>`` entry to ``<actor>:<event>``.
+
+    Earlier worker builds stamped an empty version slot and a timestamp
+    onto every entry, which no exact-match reader could hit. Normalizing
+    on merge heals a doc's chain the next time the worker writes it.
+    """
+    at = entry.rfind('@')
+    if at > 0 and entry[at + 1 : at + 2].isdigit():
+        entry = entry[:at]
+    return entry.replace('::', ':', 1)
+
+
+def merge_region_chain(existing: list[str] | None, new_entries: list[str] | None) -> list[str]:
+    """Ordered, de-duplicated union of ``existing`` and ``new_entries``.
+
+    Every entry is normalized to ``<actor>:<event>`` first, so a re-write
+    of the same cascade outcome never grows the chain. Capped at
+    :data:`MAX_REGION_CHAIN_ENTRIES`, dropping the oldest.
+    """
+    merged: list[str] = []
+    seen: set[str] = set()
+    for raw in [*(existing or []), *(new_entries or [])]:
+        entry = normalize_region_chain_entry(str(raw))
+        if entry in seen:
+            continue
+        seen.add(entry)
+        merged.append(entry)
+    if len(merged) > MAX_REGION_CHAIN_ENTRIES:
+        merged = merged[-MAX_REGION_CHAIN_ENTRIES:]
+    return merged
 
 
 __all__ = [
     'MAX_HISTORY_ENTRIES',
-    'MAX_PLATE_CHAIN_ENTRIES',
-    'append_plate_chain_entry',
+    'MAX_REGION_CHAIN_ENTRIES',
+    'merge_region_chain',
+    'normalize_region_chain_entry',
     'record_class_history',
+    'region_chain_entry',
 ]

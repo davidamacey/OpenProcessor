@@ -537,7 +537,7 @@ async def _process_crop(
                 task.detection_trace.append(f'{seg_name}:text_hint:hit')
                 task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
     elif ocr_regions:
-        task.detection_trace.append(f'{ocr_det_model}:text_hint:no_plate_shape')
+        task.detection_trace.append(f'{ocr_det_model}:text_hint:no_region_shape')
     else:
         task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
 
