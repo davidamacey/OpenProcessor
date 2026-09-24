@@ -47,3 +47,25 @@ export const PENDING_REGION_STATUSES: readonly RegionStatusValue[] = [
   'pending_detection',
   'pending_verification',
 ] as const;
+
+export const HUMAN_WRITABLE_REGION_STATUSES: readonly RegionStatusValue[] = [
+  'detected',
+  'verify_rejected',
+  'no_region_visible',
+  'false_positive',
+] as const;
+
+export const REGION_STATUS_ROLE: Readonly<Record<RegionStatusValue, string>> = {
+  pending_detection: 'pending',
+  pending_verification: 'pending',
+  detected: 'positive',
+  verify_rejected: 'rejected',
+  no_region_box: 'absent',
+  no_region_visible: 'absent',
+  detection_failed: 'failed',
+  false_positive: 'false_positive',
+};
+
+export const CONFIRM_STATUS_VALUE: RegionStatusValue = 'detected';
+export const REJECT_STATUS_VALUE: RegionStatusValue = 'no_region_visible';
+export const FALSE_POSITIVE_STATUS_VALUE: RegionStatusValue = 'false_positive';

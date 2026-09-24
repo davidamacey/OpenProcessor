@@ -32,7 +32,7 @@ from src.clients.curation_opensearch import (
     ensure_items_vlm_raw_label_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
-from src.config.region_state import RegionStatus
+from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
 from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_LABEL_SOURCE
@@ -406,18 +406,10 @@ class ItemBatchRegionRequest(BaseModel):
     region_label_source: str = 'human'
 
 
-# Whitelist of region status values an operator may write. The detector /
-# verify pipeline writes additional values ('pending_detection',
-# 'pending_verification', 'detection_failed') that represent transient
-# pipeline state — humans never set those by hand.
-HUMAN_REGION_STATUS_VALUES = frozenset(
-    {
-        RegionStatus.DETECTED,
-        RegionStatus.NO_REGION_VISIBLE,
-        RegionStatus.VERIFY_REJECTED,
-        RegionStatus.FALSE_POSITIVE,
-    }
-)
+# Region status values an operator may write — the lifecycle entries
+# marked human_writable in src/config/region_state.py. Transient pipeline
+# states ('pending_detection', …) are never set by hand.
+HUMAN_REGION_STATUS_VALUES = HUMAN_WRITABLE_STATUSES
 
 
 class CropBatchStatusRequest(BaseModel):
@@ -425,15 +417,19 @@ class CropBatchStatusRequest(BaseModel):
 
     Lets an operator select an outlier sub-cluster and mark every region
     ``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm
-    good regions (``region_status='detected'`` + ``region_verified=True``).
+    good regions (``region_status='detected'``).
     ``region_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
+    ``region_verified`` is accepted but ignored: the server derives it
+    from ``region_status``.
     """
 
     model_config = {'extra': 'forbid'}
 
     crop_ids: list[str]
     region_status: str
-    region_verified: bool | None = None
+    region_verified: bool | None = Field(
+        default=None, deprecated=True, description='Ignored; derived from region_status.'
+    )
     region_label_source: str = 'human'
 
 

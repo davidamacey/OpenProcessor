@@ -125,12 +125,45 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
 - `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
-- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (source-image frame `[x1,y1,x2,y2]`, or `null` = "no region visible"), `region_label_source` (default `human`). Response: `crop_id`, `region_bbox_norm`, `region_status`.
-- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`. Response: `updated`, `conflicts`.
-- `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_verified`, `region_label_source` — `region_status` must be one of `HUMAN_REGION_STATUS_VALUES` = `{'detected', 'no_region_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
-- `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`).
+- `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (source-image frame `[x1,y1,x2,y2]`, or `null` = "no region visible"), `region_label_source` (default `human`). Response: `crop_id`, `region_bbox_norm`, `region_status`, `item` (the post-write wire item).
+- `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`. Response: `updated`, `conflicts`, `invalid`, `items` (post-write wire items of the updated crops).
+- `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_label_source`; `region_status` must be human-writable (see "Region lifecycle" below). `region_verified` is still accepted but **ignored** (deprecated): the server derives it. Response: `updated`, `conflicts` (`[{crop_id, current_source}]`), `invalid` (`[{crop_id, detail}]`, e.g. `detected` on a crop with no box), `items` (post-write wire items).
+- `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`), `item` (post-write wire item). `422` when the status write would break an invariant (`detected` with no box).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
+
+### Region lifecycle — `GET /regions/statuses`
+
+The single source is `REGION_STATUS_INFO` in `src/config/region_state.py`
+(also emitted to `contracts/ts/regionStatus.ts` by the codegen:
+`HUMAN_WRITABLE_REGION_STATUSES`, `REGION_STATUS_ROLE`,
+`CONFIRM_STATUS_VALUE`, `REJECT_STATUS_VALUE`, `FALSE_POSITIVE_STATUS_VALUE`).
+
+```json
+{"statuses": [{"value": "no_region_visible", "label": "no region visible", "role": "absent",
+               "terminal": true, "human_writable": true, "clears_box": true, "wants_reason": true}, ...],
+ "confirm_status": "detected", "reject_status": "no_region_visible",
+ "false_positive_status": "false_positive"}
+```
+
+`statuses` lists every `RegionStatus` in enum order. `role` is one of
+`pending`, `positive`, `rejected`, `absent`, `false_positive`, `failed`.
+`wants_reason`: the UI may offer `region_rejection_reason` for it.
+
+Every human region writer (`PUT /crops/{id}/region`, `PUT
+/crops/batch_region`, `PATCH /crops/{id}/region_meta`, `POST
+/regions/batch_status`) enforces, server-side:
+
+- a status with `clears_box` (`no_region_visible`) clears `region_bbox_norm`
+  and `region_score`, whichever writer set it;
+- `region_verified` = (`region_status` == `confirm_status`), never taken
+  from the request (`detected` → `true`, every other human status → `false`);
+- `detected` on a crop with no box is refused (`422` single / `invalid[]` batch);
+- human writes set `region_validated=true`; `false_positive` parks the region
+  in the FP cluster, any other status releases it.
+
+Each returns the post-write item, so a client adopts it rather than
+re-deriving the result.
 
 ### Undo of human class writes
 

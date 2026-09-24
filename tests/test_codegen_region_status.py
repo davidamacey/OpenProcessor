@@ -86,3 +86,13 @@ def test_check_detects_enum_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     real = mod._members()
     monkeypatch.setattr(mod, '_members', lambda: [*real, ('NEW_STATE', 'new_state')])
     assert mod.main(['--check', str(target)]) == 1
+
+
+def test_human_writable_subset_and_roles_follow_python() -> None:
+    from src.config.region_state import HUMAN_WRITABLE_STATUSES, REGION_STATUS_INFO
+
+    text = _load_module().render_ts()
+    block = text.split('HUMAN_WRITABLE_REGION_STATUSES')[1].split('] as const;')[0]
+    for member in RegionStatus:
+        assert (f"'{member.value}'" in block) == (member in HUMAN_WRITABLE_STATUSES)
+        assert f"  {member.value}: '{REGION_STATUS_INFO[member].role}'," in text
