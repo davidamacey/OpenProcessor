@@ -713,3 +713,17 @@ class TestPaddleOcrTextRecognizer:
         rec = PaddleOcrTextRecognizer(pool)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert regions == []
+
+
+def test_reference_profile_secondary_shape_groups_match_registry_group_names() -> None:
+    """The reference profile's secondary-shape groups must be real class
+    registry ``group`` values -- a stale name (e.g. a bare 'dirtbikes')
+    silently never matches and routes those crops down the wrong path."""
+    assert REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups == frozenset(
+        {
+            'sportbikes',
+            'cruisers',
+            'touring-adventurebikes',
+            'trikes-dirtbikes-motards-scooters-bicycles',
+        }
+    )

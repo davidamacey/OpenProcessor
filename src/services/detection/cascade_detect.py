@@ -83,7 +83,15 @@ REFERENCE_LICENSE_PLATE_PROFILE = DetectionProfile(
     # Crop classes routed straight to the secondary segmenter, skipping
     # the primary detector — the reference LPR model is known weak on
     # motorcycle plates (near-square, off-axis mounting).
-    secondary_shape_groups=frozenset({'sportbikes', 'cruisers', 'dirtbikes'}),
+    # Must match the class registry's ``group`` values exactly.
+    secondary_shape_groups=frozenset(
+        {
+            'sportbikes',
+            'cruisers',
+            'touring-adventurebikes',
+            'trikes-dirtbikes-motards-scooters-bicycles',
+        }
+    ),
 )
 
 # Register as the default so GET /curation/methods' detection_profile axis
