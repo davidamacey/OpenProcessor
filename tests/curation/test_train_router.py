@@ -709,6 +709,125 @@ def test_presets_endpoint(app_client: TestClient) -> None:
 
 
 # =============================================================================
+# GET /train/gpus
+# =============================================================================
+
+
+def _set_arbiter_config(monkeypatch: pytest.MonkeyPatch, cfg: Any) -> None:
+    import src.config.gpu_arbiter as gpu_arbiter_config_module
+
+    monkeypatch.setattr(gpu_arbiter_config_module, '_default_gpu_arbiter_config', cfg)
+
+
+def test_train_gpus_single_allowed_with_label_and_scoped_container(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(
+        monkeypatch,
+        GpuArbiterConfig(
+            allowed_gpu_ids=frozenset({2}),
+            containers=('vllm-gemma4-e4b',),
+            container_gpus=(('vllm-gemma4-e4b', frozenset({2})),),
+            gpu_labels={0: 'RTX A6000', 1: 'RTX 3080 Ti', 2: 'RTX A6000'},
+        ),
+    )
+    r = app_client.get('/curation/train/gpus')
+    assert r.status_code == 200
+    body = r.json()
+    assert body['allowed_ids'] == [2]
+    assert body['unrestricted'] is False
+    assert len(body['options']) == 1
+    opt = body['options'][0]
+    assert opt['value'] == '2'
+    assert opt['gpu_ids'] == [2]
+    assert opt['label'] == 'RTX A6000 (GPU 2)'
+    assert opt['stops_containers'] == ['vllm-gemma4-e4b']
+    assert 'Stops vllm-gemma4-e4b' in opt['advisory']
+    assert opt['default'] is True
+
+
+def test_train_gpus_multi_id_allowlist(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(
+        monkeypatch,
+        GpuArbiterConfig(
+            allowed_gpu_ids=frozenset({0, 2}),
+            gpu_labels={0: 'RTX A6000', 2: 'RTX A6000'},
+        ),
+    )
+    r = app_client.get('/curation/train/gpus')
+    assert r.status_code == 200
+    body = r.json()
+    assert body['allowed_ids'] == [0, 2]
+    assert body['unrestricted'] is False
+    values = {o['value']: o for o in body['options']}
+    assert set(values) == {'0', '2', '0,2'}
+    single0 = values['0']
+    assert single0['gpu_ids'] == [0]
+    assert single0['label'] == 'RTX A6000 (GPU 0)'
+    assert single0['stops_containers'] == []
+    assert 'Shares GPU' in single0['advisory']
+    multi = values['0,2']
+    assert multi['gpu_ids'] == [0, 2]
+    assert multi['label'] == '2× RTX A6000 (GPUs 0,2)'
+    # Default is the value matching default_train_gpu_value() -- smallest
+    # allowed id when OP_TRAIN_DEFAULT_GPUS is unset.
+    defaults = [o for o in body['options'] if o['default']]
+    assert len(defaults) == 1
+    assert defaults[0]['value'] == '0'
+
+
+def test_train_gpus_unrestricted(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(monkeypatch, GpuArbiterConfig())
+    r = app_client.get('/curation/train/gpus')
+    assert r.status_code == 200
+    body = r.json()
+    assert body['allowed_ids'] == []
+    assert body['unrestricted'] is True
+    assert len(body['options']) == 1
+    assert body['options'][0]['value'] == '0'
+    assert body['options'][0]['default'] is True
+
+
+def test_train_gpus_no_labels_falls_back_to_gpu_id(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(monkeypatch, GpuArbiterConfig(allowed_gpu_ids=frozenset({3})))
+    r = app_client.get('/curation/train/gpus')
+    body = r.json()
+    assert body['options'][0]['label'] == 'GPU 3'
+
+
+def test_train_gpus_mixed_labels_multi_option_lists_ids_only(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the multi-GPU ids don't all share a label, the multi option is
+    just 'GPUs a,b', not a misleading '{n}x {label}'."""
+    from src.config import GpuArbiterConfig
+
+    _set_arbiter_config(
+        monkeypatch,
+        GpuArbiterConfig(
+            allowed_gpu_ids=frozenset({0, 1}),
+            gpu_labels={0: 'RTX A6000', 1: 'RTX 3080 Ti'},
+        ),
+    )
+    r = app_client.get('/curation/train/gpus')
+    body = r.json()
+    values = {o['value']: o for o in body['options']}
+    assert values['0,1']['label'] == 'GPUs 0,1'
+
+
+# =============================================================================
 # Promote gate (design §15.2)
 # =============================================================================
 
