@@ -83,17 +83,17 @@ class TestShouldClassifyHumanGuard:
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_skips_class_validated_true_regardless_of_source(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.2, class_validated=True)
+        t = _make_task(class_source='item_model', class_confidence=0.2, class_validated=True)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_still_classifies_low_conf_v6_non_human_non_holdout(self) -> None:
         # Non-regression: the fix must not swallow the legitimate cohort
         # the worker exists to serve.
-        t = _make_task(class_source='v6_model', class_confidence=0.3, class_validated=False)
+        t = _make_task(class_source='item_model', class_confidence=0.3, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is True
 
     def test_still_skips_high_conf_v6_cohort(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.9, class_validated=False)
+        t = _make_task(class_source='item_model', class_confidence=0.9, class_validated=False)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_registry_not_loaded_always_skips(self) -> None:
@@ -108,7 +108,7 @@ class TestShouldClassifyHumanGuard:
 
 class TestShouldClassifyHoldoutGuard:
     def test_skips_test_holdout_crop(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.2, test_holdout=True)
+        t = _make_task(class_source='item_model', class_confidence=0.2, test_holdout=True)
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_holdout_crop_with_coco_source_also_skipped(self) -> None:
@@ -116,7 +116,7 @@ class TestShouldClassifyHoldoutGuard:
         assert _should_classify(t, registry_loaded=True) is False
 
     def test_non_holdout_crop_unaffected(self) -> None:
-        t = _make_task(class_source='v6_model', class_confidence=0.2, test_holdout=False)
+        t = _make_task(class_source='item_model', class_confidence=0.2, test_holdout=False)
         assert _should_classify(t, registry_loaded=True) is True
 
 
@@ -129,15 +129,15 @@ class TestCombinedClassUpdateResetsProvenance:
     def test_resolved_class_resets_label_source_and_validated(self) -> None:
         reply = VlmCombinedReply(img_id='crop-1', class_id=0, class_confidence='high')
         update = _combined_class_update(reply, ['adventurebike'], name_to_id={'adventurebike': 1})
-        assert update['class_source'] == 'gemma'
-        assert update['label_source'] == 'gemma'
+        assert update['class_source'] == 'vlm'
+        assert update['label_source'] == 'vlm'
         assert update['class_validated'] is False
 
-    def test_gemma_unmatched_also_resets_provenance(self) -> None:
+    def test_vlm_unmatched_also_resets_provenance(self) -> None:
         reply = VlmCombinedReply(img_id='crop-1', class_id=-1, class_confidence='low')
         update = _combined_class_update(reply, ['adventurebike'])
-        assert update['class_source'] == 'gemma_unmatched'
-        assert update['label_source'] == 'gemma'
+        assert update['class_source'] == 'vlm_unmatched'
+        assert update['label_source'] == 'vlm'
         assert update['class_validated'] is False
 
     def test_classify_skipped_leaves_class_fields_untouched(self) -> None:
@@ -166,8 +166,8 @@ class TestCombinedClassUpdateResetsProvenance:
         )
         update = _combined_class_update(reply, None)
         assert update[get_region_fields().visible] is True
-        assert update['gemma_vehicle_make'] == 'Honda'
-        assert update['gemma_vehicle_model'] == 'CBR'
+        assert update['vlm_item_make'] == 'Honda'
+        assert update['vlm_item_model'] == 'CBR'
         assert 'class_source' not in update
 
 
@@ -332,8 +332,8 @@ class TestIsHumanOwnedClassPredicate:
     def test_false_for_machine_sources(self) -> None:
         from src.clients.occ import is_human_owned_class
 
-        assert is_human_owned_class({'class_source': 'gemma'}) is False
-        assert is_human_owned_class({'class_source': 'v6_model'}) is False
+        assert is_human_owned_class({'class_source': 'vlm'}) is False
+        assert is_human_owned_class({'class_source': 'item_model'}) is False
         assert is_human_owned_class({}) is False
 
 
@@ -343,8 +343,8 @@ class TestStripClassWriteFields:
 
         update = {
             'class_id': 5,
-            'class_source': 'gemma',
-            'label_source': 'gemma',
+            'class_source': 'vlm',
+            'label_source': 'vlm',
             'class_validated': False,
             'region_status': 'detected',
             'region_bbox_norm': [0.1, 0.1, 0.2, 0.2],
@@ -450,8 +450,8 @@ class TestDetectionWorkerBulkWriterHumanGuard:
         t.update_doc = {
             'class_id': 9,
             'class_name': 'camaro',
-            'class_source': 'gemma',
-            'label_source': 'gemma',
+            'class_source': 'vlm',
+            'label_source': 'vlm',
             'region_status': 'detected',
             'region_bbox_norm': [0.2, 0.2, 0.3, 0.3],
         }
@@ -491,12 +491,12 @@ class TestDetectionWorkerBulkWriterHumanGuard:
             class_name='audi',
             group='cars',
         )
-        t.update_doc = {'class_id': 9, 'class_source': 'gemma', 'region_status': 'detected'}
+        t.update_doc = {'class_id': 9, 'class_source': 'vlm', 'region_status': 'detected'}
 
         opensearch = AsyncMock()
         opensearch.mget = AsyncMock(
             return_value=make_mget_response(
-                {'crop-1': {'class_source': 'v6_model', 'class_validated': False}}
+                {'crop-1': {'class_source': 'item_model', 'class_validated': False}}
             )
         )
         opensearch.bulk = AsyncMock(

@@ -32,9 +32,9 @@ async def review_unmatched_terms(
     opensearch: OpenSearchDep,
     size: int = Query(100, ge=1, le=1000),
 ) -> dict[str, Any]:
-    """Aggregate Gemma's raw labels across every ``gemma_unmatched`` crop.
+    """Aggregate the VLM's raw labels across every ``vlm_unmatched`` crop.
 
-    Returns the top-N most common raw labels Gemma produced for crops the
+    Returns the top-N most common raw labels the VLM produced for crops the
     registry could not resolve. This is the main input to growing the
     registry: high-count labels are obvious candidates for new
     :py:class:`LegacyClassEntry` entries (or new ``SYNONYMS`` mappings if the
@@ -42,7 +42,7 @@ async def review_unmatched_terms(
 
     Pair with an offline registry-reclassification script (see ``scripts/``)
     once the registry has been updated to convert matched crops from
-    ``class_source='gemma_unmatched'`` to ``class_source='gemma_reclassified'``.
+    ``class_source='vlm_unmatched'`` to ``class_source='vlm_reclassified'``.
 
     Args:
         size: Maximum number of distinct raw labels to return. Capped at
@@ -54,11 +54,11 @@ async def review_unmatched_terms(
     await _ensure_indexes(opensearch)
     body = {
         'size': 0,
-        'query': {'term': {'class_source': 'gemma_unmatched'}},
+        'query': {'term': {'class_source': 'vlm_unmatched'}},
         'aggs': {
             'top_raw': {
                 'terms': {
-                    'field': 'gemma_raw_label',
+                    'field': 'vlm_raw_label',
                     'size': size,
                     # Push rare/unknowns to the bottom and avoid empty buckets.
                     'min_doc_count': 1,
@@ -86,7 +86,7 @@ async def review_raw_label_clusters(
     size: int = Query(50, ge=1, le=500),
     samples_per_cluster: int = Query(5, ge=1, le=20),
 ) -> dict[str, Any]:
-    """Top-N hierarchical clusters of ``gemma_raw_label`` for the labeler UI.
+    """Top-N hierarchical clusters of ``vlm_raw_label`` for the labeler UI.
 
     Task #91 — surfaces the output of
     an offline raw-label clustering script so the labeler can:
@@ -96,11 +96,11 @@ async def review_raw_label_clusters(
        ``ford_pickup`` → suggested registry parent ``pickup``).
     2. Surface candidate registry promotions ranked by crop volume.
     3. Let curators bulk-relabel a whole cluster at once instead of
-       clicking through individual ``gemma_unmatched`` crops.
+       clicking through individual ``vlm_unmatched`` crops.
 
     The endpoint runs purely against the configured items index — no clustering
     happens here, only aggregation. Cluster ids / names are written by
-    the offline script; if no crops have ``gemma_label_cluster_id`` yet
+    the offline script; if no crops have ``vlm_label_cluster_id`` yet
     the endpoint returns an empty list with a populated ``hint``.
 
     NOTE on route ordering: this endpoint MUST be declared before the
@@ -110,7 +110,7 @@ async def review_raw_label_clusters(
 
     Args:
         size: Number of clusters to return (default 50).
-        samples_per_cluster: How many ``gemma_raw_label`` samples to
+        samples_per_cluster: How many ``vlm_raw_label`` samples to
             include per cluster (default 5 — enough to read at a glance).
 
     Returns:
@@ -120,26 +120,26 @@ async def review_raw_label_clusters(
     await _ensure_indexes(opensearch)
     body = {
         'size': 0,
-        'query': {'exists': {'field': 'gemma_label_cluster_id'}},
+        'query': {'exists': {'field': 'vlm_label_cluster_id'}},
         'aggs': {
             'by_cluster': {
                 'terms': {
-                    'field': 'gemma_label_cluster_id',
+                    'field': 'vlm_label_cluster_id',
                     'size': size,
                     'order': {'_count': 'desc'},
                 },
                 'aggs': {
-                    'name': {'terms': {'field': 'gemma_label_cluster_name', 'size': 1}},
+                    'name': {'terms': {'field': 'vlm_label_cluster_name', 'size': 1}},
                     'samples': {
                         'terms': {
-                            'field': 'gemma_raw_label',
+                            'field': 'vlm_raw_label',
                             'size': samples_per_cluster,
                         }
                     },
-                    'unmatched': {'filter': {'term': {'class_source': 'gemma_unmatched'}}},
+                    'unmatched': {'filter': {'term': {'class_source': 'vlm_unmatched'}}},
                     # Most common already-resolved class within the cluster — used
                     # as the ``parent_class_suggestion`` hint. If the cluster is
-                    # 100% gemma_unmatched the bucket is empty and we return None.
+                    # 100% vlm_unmatched the bucket is empty and we return None.
                     'parent': {
                         # ``class_name`` is mapped ``keyword`` directly on the
                         # live index — no ``.keyword`` subfield exists (the
@@ -188,7 +188,7 @@ async def review_raw_label_clusters(
         'clusters': clusters,
         'hint': (
             'Run the offline raw-label clustering script to populate '
-            'gemma_label_cluster_id on crops if status=empty.'
+            'vlm_label_cluster_id on crops if status=empty.'
         )
         if not clusters
         else None,
@@ -201,7 +201,7 @@ async def review_queue(
         str,
         PathParam(
             description=(
-                'One of: all | mismatches | gemma_low_conf | outliers | '
+                'One of: all | mismatches | vlm_low_conf | outliers | '
                 'uncertainty | model_disagreements | regions | '
                 'primary_low_conf | coco_blind_spots'
             )
@@ -339,12 +339,9 @@ async def review_queue(
     for h in hits:
         src = h.get('_source') or {}
         crop_id = src.get('crop_id') or h.get('_id', '')
-        proposed_id = src.get('gemma_proposed_class_id') or src.get('class_id')
+        proposed_id = src.get('vlm_proposed_class_id') or src.get('class_id')
         proposed_name = (
-            src.get('gemma_proposed_class')
-            or src.get('gemma_raw_class')
-            or src.get('class_name')
-            or ''
+            src.get('vlm_proposed_class') or src.get('vlm_raw_class') or src.get('class_name') or ''
         )
         items.append(
             {
@@ -361,7 +358,7 @@ async def review_queue(
                 # Categorical Gemma confidence (high/medium/low) shown alongside
                 # the numeric v6 confidence — labeler renders "v6: 95.9 %,
                 # gemma: medium" so the rows aren't ambiguous.
-                'gemma_confidence': src.get('gemma_confidence'),
+                'vlm_confidence': src.get('vlm_confidence'),
                 'label_source': src.get('label_source', ''),
                 # Plan §1.3, A-PR2: legacy label_validated derived; expose
                 # the split fields directly so Slice C can migrate.
@@ -381,7 +378,7 @@ async def review_queue(
                 'crop_rank_in_image': src.get('crop_rank_in_image'),
                 'crop_area_norm': src.get('crop_area_norm'),
                 'blur_lap_ratio': src.get('blur_lap_ratio'),
-                'v6_raw_confidence': src.get('v6_raw_confidence'),
+                'classifier_raw_confidence': src.get('classifier_raw_confidence'),
                 'coco_proposal_name': src.get('coco_proposal_name'),
                 'updated_at': src.get('updated_at', ''),
                 'thumbnail_url': f'/curation/crops/{crop_id}/thumbnail',

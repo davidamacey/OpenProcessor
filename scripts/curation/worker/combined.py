@@ -59,10 +59,10 @@ COHORT_V6_MISSED = 'coco_yolo11_proposal'
 # Phase C: broaden the cohort to include low-confidence primary /
 # cluster-primary crops so we get class + region-verify + OCR in ONE
 # VLM call instead of TWO (one for class, one for region-verify). The
-# threshold mirrors the pipeline's ``v6_confidence_skip_gemma`` default
+# threshold mirrors the pipeline's ``classifier_confidence_skip_vlm`` default
 # (0.80) — crops at or above that confidence are trusted enough that
 # re-asking the VLM adds no signal, so the legacy two-call path runs.
-_LOW_CONF_CLASS_SOURCES: frozenset[str] = frozenset({'v6_model', 'cluster_v6_majority_agreement'})
+_LOW_CONF_CLASS_SOURCES: frozenset[str] = frozenset({'item_model', 'cluster_majority_agreement'})
 _V6_LOW_CONF_THRESHOLD = 0.80
 
 
@@ -72,7 +72,7 @@ def _is_combined_cohort(class_source: str, class_confidence: float) -> bool:
     Cohort rule (Phase C):
       * ``class_source == 'coco_yolo11_proposal'`` (the original B-PR5
         cohort — the primary classifier missed entirely) OR
-      * ``class_source`` in {'v6_model', 'cluster_v6_majority_agreement'}
+      * ``class_source`` in {'item_model', 'cluster_majority_agreement'}
         AND confidence < 0.80 (the primary classifier fired but with
         low confidence, so the class still needs VLM clarification).
 
@@ -110,7 +110,7 @@ async def _try_combined_class_region(
     """Run the primary-detector-missed combined VLM call. Returns True on success.
 
     On success populates ``task.update_doc`` with class fields, region
-    fields, and ``gemma_verify_completed_at`` so downstream pipelines
+    fields, and ``vlm_verify_completed_at`` so downstream pipelines
     know class+region were resolved in one round-trip. On parse failure
     returns False and the caller falls back to the legacy two-call path.
     """
@@ -144,7 +144,7 @@ async def _try_combined_class_region(
             auto = await _auto_confirm_or_pending(
                 sam_score=candidate_score,
                 bbox_in_crop=candidate_in_crop,
-                gemma_high_conf=high_conf,
+                vlm_high_conf=high_conf,
             )
             task.update_doc = _combined_write_doc(
                 reply=reply,

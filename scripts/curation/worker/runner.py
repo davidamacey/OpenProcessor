@@ -104,8 +104,8 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
 # combined call (the caller already has a trusted class). Same
 # threshold as the legacy cascade's combined-cohort gate
 # (combined.py: _V6_LOW_CONF_THRESHOLD).
-_V6_HIGH_CONF_CLASS_SOURCES = frozenset({'v6_model', 'cluster_v6_majority_agreement'})
-_V6_HIGH_CONF_THRESHOLD = 0.80
+_CLASSIFIER_HIGH_CONF_CLASS_SOURCES = frozenset({'item_model', 'cluster_majority_agreement'})
+_CLASSIFIER_HIGH_CONF_THRESHOLD = 0.80
 
 
 def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
@@ -130,8 +130,8 @@ def _should_classify(t: _ItemTask, *, registry_loaded: bool) -> bool:
     if t.test_holdout:
         return False
     return not (
-        t.class_source in _V6_HIGH_CONF_CLASS_SOURCES
-        and t.class_confidence >= _V6_HIGH_CONF_THRESHOLD
+        t.class_source in _CLASSIFIER_HIGH_CONF_CLASS_SOURCES
+        and t.class_confidence >= _CLASSIFIER_HIGH_CONF_THRESHOLD
     )
 
 
@@ -277,13 +277,21 @@ async def run(args: argparse.Namespace) -> int:
     # in-flight. The removed visibility stage no longer competes for
     # VLM slots, so we can spend the full VLM budget on the combined
     # call (which subsumes both old calls).
-    gemma_concurrency = int(os.environ.get('SAM_WORKER_GEMMA_CONCURRENCY', '16'))
+    vlm_concurrency = int(
+        os.environ.get('SAM_WORKER_VLM_CONCURRENCY')
+        or os.environ.get('SAM_WORKER_GEMMA_CONCURRENCY')
+        or '16'
+    )
     # Visibility pre-filter: cheap yes/no, packed VISIBLE_CHUNK per call.
     # Default 8 consumers gives 8 x 6 = 48 in-flight calls at the
     # upstream VLM, well under the combined-call budget of 16 x 6 = 96.
     # The visible filter is fast (~2s/call) so it doesn't need as many
     # consumers as the heavier combined call.
-    gemma_visible_concurrency = int(os.environ.get('SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY', '8'))
+    gemma_visible_concurrency = int(
+        os.environ.get('SAM_WORKER_VLM_VISIBLE_CONCURRENCY')
+        or os.environ.get('SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY')
+        or '8'
+    )
     # Aligned with the shared VLM's --limit-mm-per-prompt {"image":6}.
     # Per-call work scales worse than linearly past 6 on the reference
     # deployment's GPU for this prompt+image mix.
@@ -638,11 +646,11 @@ async def run(args: argparse.Namespace) -> int:
                         is_visible = verdicts.get(t.crop_id, True)
                         if is_visible:
                             metrics['gemma_visible_kept'] += 1
-                            t.detection_trace.append('gemma_visible:yes')
+                            t.detection_trace.append('vlm_visible:yes')
                             await sam_q.put(t)
                         else:
                             metrics['gemma_visible_skipped'] += 1
-                            t.detection_trace.append('gemma_visible:no')
+                            t.detection_trace.append('vlm_visible:no')
                             t.update_doc = {
                                 F.status: RegionStatus.NO_REGION_VISIBLE,
                                 F.detector_chain: list(t.detection_trace),
@@ -733,7 +741,7 @@ async def run(args: argparse.Namespace) -> int:
                             f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:hit'
                         )
                         t.detection_trace.append(
-                            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:skip_gemma_verify'
+                            f'{REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name}:skip_vlm_verify'
                         )
                         t.update_doc = _region_write_doc(
                             plate_in_source=projected,
@@ -984,7 +992,7 @@ async def run(args: argparse.Namespace) -> int:
                             auto = await _auto_confirm_or_pending(
                                 sam_score=t.candidate_score,
                                 bbox_in_crop=t.candidate_in_crop,
-                                gemma_high_conf=reply.plate_confidence == 'high',
+                                vlm_high_conf=reply.plate_confidence == 'high',
                             )
                             # Map cascade's internal source tag to the
                             # canonical detector name used in provenance.
@@ -1240,11 +1248,11 @@ async def run(args: argparse.Namespace) -> int:
             asyncio.create_task(stage_a_sam_consumer(i)) for i in range(args.concurrency)
         ]
         # Stage B pool: batched combined VLM call (COMBINED_CHUNK
-        # crops per upstream call). gemma_concurrency x COMBINED_CHUNK
+        # crops per upstream call). vlm_concurrency x COMBINED_CHUNK
         # in-flight (16 x 6 = 96 by default). Each crop gets at most
         # ONE combined VLM round-trip here (plus at most ONE yes/no
         # call up in the visibility stage = ≤ 2 per crop total).
-        stage_b_tasks = [asyncio.create_task(stage_b_combined(i)) for i in range(gemma_concurrency)]
+        stage_b_tasks = [asyncio.create_task(stage_b_combined(i)) for i in range(vlm_concurrency)]
         writer_task = asyncio.create_task(writer())
         metrics_task = asyncio.create_task(metrics_reporter())
         # Phase 4c: stand up an aiohttp /metrics endpoint inside the
@@ -1260,7 +1268,7 @@ async def run(args: argparse.Namespace) -> int:
             stage_a_lpr_consumers=args.concurrency,
             stage_a_visible_consumers=gemma_visible_concurrency,
             stage_a_sam_consumers=args.concurrency,
-            stage_b_consumers=gemma_concurrency,
+            stage_b_consumers=vlm_concurrency,
             visible_chunk=VISIBLE_CHUNK,
             combined_chunk=COMBINED_CHUNK,
             in_q_max=in_q.maxsize,
@@ -1289,7 +1297,7 @@ async def run(args: argparse.Namespace) -> int:
         await asyncio.gather(*stage_a_sam_tasks, return_exceptions=True)
         # Drain Stage B: poison pills to combined_q, wait for consumers
         # to exit; they route their results to out_q.
-        for _ in range(gemma_concurrency):
+        for _ in range(vlm_concurrency):
             await combined_q.put(None)
         await asyncio.gather(*stage_b_tasks, return_exceptions=True)
         # Now tell writer to flush + exit.

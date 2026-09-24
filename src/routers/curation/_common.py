@@ -17,7 +17,6 @@ from pydantic import BaseModel, Field
 from src.clients.curation_opensearch import (
     ClassRegistry,
     create_curation_indexes,
-    ensure_items_gemma_raw_label_fields,
     ensure_items_history_fields,
     ensure_items_label_cluster_fields,
     ensure_items_pe_v6_embedding_fields,
@@ -29,6 +28,7 @@ from src.clients.curation_opensearch import (
     ensure_items_score_fields,
     ensure_items_validation_split_fields,
     ensure_items_viz_fields,
+    ensure_items_vlm_raw_label_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
 from src.config.region_state import RegionStatus
@@ -99,9 +99,9 @@ async def _ensure_indexes(opensearch: Any) -> None:
     try:
         await create_curation_indexes(opensearch, force_recreate=False)
         try:
-            await ensure_items_gemma_raw_label_fields(opensearch)
+            await ensure_items_vlm_raw_label_fields(opensearch)
         except Exception as exc:
-            logger.warning('curation_gemma_raw_label_migration_failed', error=str(exc))
+            logger.warning('curation_vlm_raw_label_migration_failed', error=str(exc))
         try:
             await ensure_items_label_cluster_fields(opensearch)
         except Exception as exc:
@@ -187,7 +187,7 @@ class IngestImageResponse(BaseModel):
     image_path: str
     imohash: str = ''
     n_crops: int = 0
-    n_plates: int = 0
+    n_regions: int = 0
     error: str | None = None
 
 
@@ -237,7 +237,7 @@ class ItemDoc(BaseModel):
     label_validated: bool = False
     # label_source is nullable: VLM writers + the revert script set it
     # to None when overwriting a prior validation tag (e.g. clearing a
-    # stale auto_promote 'cluster_v6_majority_agreement' string).
+    # stale auto_promote 'cluster_majority_agreement' string).
     label_source: str | None = ''
     # Frozen HTTP wire-model attribute names — see
     # docs/design/curation_api_contract.md and the RegionFields scope
@@ -522,7 +522,7 @@ class HealthResponse(BaseModel):
     status: Literal['ok', 'degraded', 'down']
     triton: dict[str, Any]
     opensearch: dict[str, Any]
-    gemma: dict[str, Any]
+    vlm: dict[str, Any]
     registry: dict[str, Any]
 
 

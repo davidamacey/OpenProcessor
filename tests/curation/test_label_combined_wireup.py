@@ -11,7 +11,7 @@ Cohort detection criterion (mirrors ``combined._is_combined_cohort``):
 
 * ``task.class_source == 'coco_yolo11_proposal'`` (the primary
   classifier missed entirely), OR
-* ``task.class_source in {'v6_model', 'cluster_v6_majority_agreement'}``
+* ``task.class_source in {'item_model', 'cluster_majority_agreement'}``
   AND ``task.class_confidence < 0.80`` (the primary classifier fired
   but low-confidence — class still needs VLM clarification),
 * AND a region candidate exists (either pending_verification with an
@@ -21,12 +21,12 @@ Cohort detection criterion (mirrors ``combined._is_combined_cohort``):
 When the cohort fires, ``VlmLabeler.label_combined`` must be invoked
 exactly once and the legacy ``verify_plate`` / ``label_or_propose_batch``
 paths must NOT be called for that crop. The bulk-update doc must carry
-``gemma_verify_completed_at``, ``class_source='gemma'``, and the
+``vlm_verify_completed_at``, ``class_source='vlm'``, and the
 make/model fields when reported.
 
 Note: the reference file's ``TestPipelineSkipFilter`` class (asserting
 the reference pipeline router's unvalidated-crops query excludes
-recent ``gemma_verify_completed_at`` writes) is NOT ported here — that
+recent ``vlm_verify_completed_at`` writes) is NOT ported here — that
 module (``src/routers/curation/pipeline.py``) is out of this chunk's
 scope (Chunk 9 in the plan's target layout). Those two cases stay
 unported until the pipeline router lands.
@@ -136,12 +136,12 @@ class TestCohortRouting:
 
         doc = task.update_doc
         assert doc[F.status] == 'detected'
-        assert doc['class_source'] == 'gemma'
+        assert doc['class_source'] == 'vlm'
         assert doc['class_id'] == 2
         assert doc['class_name'] == 'audi'
-        assert doc['gemma_vehicle_make'] == 'Audi'
-        assert doc['gemma_vehicle_model'] == 'A4'
-        assert 'gemma_verify_completed_at' in doc
+        assert doc['vlm_item_make'] == 'Audi'
+        assert doc['vlm_item_model'] == 'A4'
+        assert 'vlm_verify_completed_at' in doc
 
     @pytest.mark.asyncio
     async def test_broadened_cohort_v6_low_conf_with_plate_uses_label_combined(self) -> None:
@@ -158,7 +158,7 @@ class TestCohortRouting:
         gemma = _gemma_with_combined(reply=reply)
         task = _make_task(
             crop_id='crop-low',
-            class_source='v6_model',
+            class_source='item_model',
             class_confidence=0.60,
             status='pending_verification',
             lpr_in_source=(0.20, 0.30, 0.30, 0.34),
@@ -177,8 +177,8 @@ class TestCohortRouting:
         gemma.verify_plate.assert_not_awaited()
         gemma.label_or_propose_batch.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
-        assert task.update_doc['class_source'] == 'gemma'
-        assert 'gemma_verify_completed_at' in task.update_doc
+        assert task.update_doc['class_source'] == 'vlm'
+        assert 'vlm_verify_completed_at' in task.update_doc
 
     @pytest.mark.asyncio
     async def test_high_conf_v6_skips_label_combined(self) -> None:
@@ -190,7 +190,7 @@ class TestCohortRouting:
             )
         )
         task = _make_task(
-            class_source='v6_model',
+            class_source='item_model',
             class_confidence=0.95,
             status='pending_verification',
             lpr_in_source=(0.20, 0.30, 0.30, 0.34),
@@ -208,7 +208,7 @@ class TestCohortRouting:
         gemma.label_combined.assert_not_awaited()
         gemma.verify_plate.assert_awaited()
         assert task.update_doc[F.status] == 'detected'
-        assert 'gemma_verify_completed_at' not in task.update_doc
+        assert 'vlm_verify_completed_at' not in task.update_doc
 
     @pytest.mark.asyncio
     async def test_no_region_candidate_uses_class_only_path(self) -> None:
@@ -223,7 +223,7 @@ class TestCohortRouting:
         """
         gemma = _gemma_with_combined(reply=VlmCombinedReply(img_id='x', class_id=None))
         task = _make_task(
-            class_source='v6_model',
+            class_source='item_model',
             class_confidence=0.60,
             status='pending_detection',
             lpr_in_source=None,
@@ -281,5 +281,5 @@ class TestCohortRouting:
         gemma.verify_plate.assert_not_awaited()
         assert task.update_doc[F.status] == 'detected'
         assert task.update_doc['class_id'] == 0
-        assert task.update_doc['class_source'] == 'gemma'
-        assert 'gemma_verify_completed_at' in task.update_doc
+        assert task.update_doc['class_source'] == 'vlm'
+        assert 'vlm_verify_completed_at' in task.update_doc

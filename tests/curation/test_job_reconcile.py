@@ -249,7 +249,7 @@ def test_autolabel_job_reconciles_orphaned_running_state(
     importlib.reload(job)
 
     job._STATE_DIR.mkdir(parents=True, exist_ok=True)
-    job._STATE_FILE.write_text(json.dumps({'job_id': 'j4', 'status': 'running', 'stage': 'gemma'}))
+    job._STATE_FILE.write_text(json.dumps({'job_id': 'j4', 'status': 'running', 'stage': 'vlm'}))
     job._HEARTBEAT_FILE.touch()
     old = time.time() - 120
     os.utime(job._HEARTBEAT_FILE, (old, old))

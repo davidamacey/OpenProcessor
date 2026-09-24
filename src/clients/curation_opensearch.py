@@ -208,13 +208,13 @@ def _items_body() -> dict[str, Any]:
                 # out of scope, §3.2 scope table): this is a live persisted
                 # OpenSearch key, and only the region-of-interest ("plate")
                 # fields have an indirection mechanism in Phase 2.
-                'gemma_raw_label': {'type': 'keyword'},
-                'gemma_raw_label_conf': {'type': 'float'},
+                'vlm_raw_label': {'type': 'keyword'},
+                'vlm_raw_label_conf': {'type': 'float'},
                 # VLM-extracted make/model hint. Field names kept as-is for
                 # the same reason as above (no region-of-interest concept
                 # applies to a vehicle make/model).
-                'gemma_vehicle_make': {'type': 'keyword'},
-                'gemma_vehicle_model': {'type': 'keyword'},
+                'vlm_item_make': {'type': 'keyword'},
+                'vlm_item_model': {'type': 'keyword'},
                 # Region-visibility hint (CFG-8): this WAS a domain-named,
                 # vendor-named field ('gemma_plate_visible') baked into the
                 # otherwise-generic index mapping, unlike its siblings above
@@ -222,14 +222,14 @@ def _items_body() -> dict[str, Any]:
                 # already has an indirection for it -- see
                 # RegionFields.visible (default 'region_visible').
                 F.visible: {'type': 'boolean'},
-                # Hierarchical clustering of gemma_raw_label values. A
+                # Hierarchical clustering of vlm_raw_label values. A
                 # background job writes back a cluster id (stable hash of the
                 # cluster name) and the human-readable cluster name so a
                 # review UI can group fine-grained sub-classes and suggest
                 # registry promotions.
-                'gemma_label_cluster_id': {'type': 'integer'},
-                'gemma_label_cluster_name': {'type': 'keyword'},
-                'gemma_label_cluster_distance': {'type': 'float'},
+                'vlm_label_cluster_id': {'type': 'integer'},
+                'vlm_label_cluster_name': {'type': 'keyword'},
+                'vlm_label_cluster_distance': {'type': 'float'},
                 'confidence': {'type': 'float'},
                 'cluster_id': {'type': 'integer'},
                 'cluster_distance': {'type': 'float'},
@@ -588,10 +588,10 @@ def _is_recoverable_mapping_conflict(msg: str) -> bool:
     )
 
 
-async def ensure_items_gemma_raw_label_fields(
+async def ensure_items_vlm_raw_label_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the ``gemma_raw_label`` + ``gemma_raw_label_conf`` fields onto the
+    """PUT the ``vlm_raw_label`` + ``vlm_raw_label_conf`` fields onto the
     existing items mapping.
 
     OpenSearch ``PUT <index>/_mapping`` is idempotent for additive field
@@ -606,8 +606,8 @@ async def ensure_items_gemma_raw_label_fields(
     index = config.items_index
     body = {
         'properties': {
-            'gemma_raw_label': {'type': 'keyword'},
-            'gemma_raw_label_conf': {'type': 'float'},
+            'vlm_raw_label': {'type': 'keyword'},
+            'vlm_raw_label_conf': {'type': 'float'},
         }
     }
     try:
@@ -645,7 +645,7 @@ async def ensure_items_gemma_raw_label_fields(
 async def ensure_items_label_cluster_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the ``gemma_label_cluster_*`` fields onto the existing items mapping.
+    """PUT the ``vlm_label_cluster_*`` fields onto the existing items mapping.
 
     Why a dedicated helper: ``PUT <index>/_mapping`` is idempotent for
     additive field changes, so this can run on every cold start without
@@ -660,9 +660,9 @@ async def ensure_items_label_cluster_fields(
     index = config.items_index
     body = {
         'properties': {
-            'gemma_label_cluster_id': {'type': 'integer'},
-            'gemma_label_cluster_name': {'type': 'keyword'},
-            'gemma_label_cluster_distance': {'type': 'float'},
+            'vlm_label_cluster_id': {'type': 'integer'},
+            'vlm_label_cluster_name': {'type': 'keyword'},
+            'vlm_label_cluster_distance': {'type': 'float'},
         }
     }
     try:
@@ -1636,7 +1636,6 @@ __all__ = [
     'RegistryClassEntry',
     'create_curation_indexes',
     'ensure_items_class_name_keyword',
-    'ensure_items_gemma_raw_label_fields',
     'ensure_items_history_fields',
     'ensure_items_label_cluster_fields',
     'ensure_items_pe_v6_embedding_fields',
@@ -1648,6 +1647,7 @@ __all__ = [
     'ensure_items_score_fields',
     'ensure_items_validation_split_fields',
     'ensure_items_viz_fields',
+    'ensure_items_vlm_raw_label_fields',
     'get_class_registry',
     'get_curation_index_settings',
     'get_curation_settings',

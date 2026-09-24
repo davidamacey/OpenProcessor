@@ -37,6 +37,7 @@ import numpy as np
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.class_sources import CLASSIFIER_CLASS_SOURCE, VLM_CLASS_SOURCE
 from src.services.curation.clustering.backend import (
     BackendInfo,
     detect_cluster_backend,
@@ -86,13 +87,13 @@ RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_emb
 # ids before being cancelled).
 #
 # Specifically:
-#   v6_model — v6 prediction at ≥0.75 confidence (ingest floor)
+#   item_model — v6 prediction at ≥0.75 confidence (ingest floor)
 #   gemma    — Gemma matched a registered class name
 #   human    — human-validated label
 #
-# Everything else (v6_low_conf, gemma_unmatched, gemma_new_class_pending,
+# Everything else (v6_low_conf, vlm_unmatched, vlm_new_class_pending,
 # coco_yolo11_proposal, null) is residual and goes into the cluster.
-CONFIDENT_CLASS_SOURCES = ('v6_model', 'gemma', 'human')
+CONFIDENT_CLASS_SOURCES = (CLASSIFIER_CLASS_SOURCE, VLM_CLASS_SOURCE, 'human')
 
 UMapMode = Literal['transform', 'refit']
 
@@ -152,7 +153,7 @@ async def fetch_residual_v6_embeddings(
     must: list[dict[str, Any]] = [{'exists': {'field': RESIDUAL_EMBEDDING_FIELD}}]
     # Exclude confidently-labeled crops from the residual pool. The
     # previous filter (class_validated != true) only caught the 102
-    # human-validated rows because v6_model and gemma writers don't
+    # human-validated rows because item_model and gemma writers don't
     # set class_validated; the 2026-05-23 IVF run pulled all 347k
     # crops including 219k labeled ones and started overwriting their
     # cluster_id=class_id mappings before cancel. CONFIDENT_CLASS_SOURCES

@@ -1,4 +1,4 @@
-"""Curation router sub-module. SSE endpoint lives in :mod:`pipeline_events`."""
+"""Curation auto-label router (SSE: pipeline_events; status/cancel: pipeline_control)."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.vlm import _get_vlm_labeler
+from src.services.curation.class_sources import CLASSIFIER_CLASS_SOURCE
 from src.services.curation.event_hub import publish_crop_classified
 
 
@@ -24,9 +25,9 @@ from src.services.curation.event_hub import publish_crop_classified
 # /start and /pipeline_auto_label entry points say the same thing
 # without bloating the file past the 700-LOC hook ceiling.
 _AUTO_PROMOTE_DESC = (
-    'Run the auto-promote stage (v6 + cluster-majority agreement). '
-    'Defaults False: the rule had no v6 confidence floor and was '
-    'auto-validating low-confidence v6 predictions into class clusters. '
+    'Run the auto-promote stage (classifier + cluster-majority agreement). '
+    'Defaults False: the rule had no classifier confidence floor and was '
+    'auto-validating low-confidence classifier predictions into class clusters. '
     'Opt-in only after a confidence-gated rewrite.'
 )
 
@@ -47,12 +48,12 @@ async def pipeline_auto_label_start(
     train_clusters: bool = Query(True),
     promote_min_purity: float = Query(0.85, ge=0.5, le=1.0),
     promote_min_members: int = Query(4, ge=2, le=1000),
-    gemma_batch_size: int = Query(32, ge=4, le=64),
-    gemma_concurrency: int = Query(16, ge=1, le=128),
-    max_gemma_crops: int = Query(0, ge=0, le=100000),
-    v6_confidence_skip_gemma: float = Query(0.80, ge=0.0, le=1.0),
+    vlm_batch_size: int = Query(32, ge=4, le=64),
+    vlm_concurrency: int = Query(16, ge=1, le=128),
+    max_vlm_crops: int = Query(0, ge=0, le=100000),
+    classifier_confidence_skip_vlm: float = Query(0.80, ge=0.0, le=1.0),
     clustering_method: str | None = Query(None),
-    run_gemma: bool = Query(
+    run_vlm: bool = Query(
         False,
         description=(
             'Run the VLM labeling stage. Defaults to False — the '
@@ -86,12 +87,12 @@ async def pipeline_auto_label_start(
                 'train_clusters': train_clusters,
                 'promote_min_purity': promote_min_purity,
                 'promote_min_members': promote_min_members,
-                'gemma_batch_size': gemma_batch_size,
-                'gemma_concurrency': gemma_concurrency,
-                'max_gemma_crops': max_gemma_crops,
-                'v6_confidence_skip_gemma': v6_confidence_skip_gemma,
+                'vlm_batch_size': vlm_batch_size,
+                'vlm_concurrency': vlm_concurrency,
+                'max_vlm_crops': max_vlm_crops,
+                'classifier_confidence_skip_vlm': classifier_confidence_skip_vlm,
                 'clustering_method': clustering_method,
-                'run_gemma': run_gemma,
+                'run_vlm': run_vlm,
                 'recluster_unvalidated': recluster_unvalidated,
                 'run_auto_promote': run_auto_promote,
                 'reassign_only': reassign_only,
@@ -106,9 +107,6 @@ async def pipeline_auto_label_start(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-# /pipeline/auto_label/status + /cancel live in pipeline_control.py.
-
-
 @router.post('/pipeline/auto_label')
 async def pipeline_auto_label(
     opensearch: OpenSearchDep,
@@ -118,15 +116,15 @@ async def pipeline_auto_label(
     ),
     promote_min_purity: float = Query(0.85, ge=0.5, le=1.0),
     promote_min_members: int = Query(4, ge=2, le=1000),
-    gemma_batch_size: int = Query(32, ge=4, le=64),
-    gemma_concurrency: int = Query(8, ge=1, le=128),
-    max_gemma_crops: int = Query(0, ge=0, le=100000, description='0 = all unvalidated'),
-    v6_confidence_skip_gemma: float = Query(
+    vlm_batch_size: int = Query(32, ge=4, le=64),
+    vlm_concurrency: int = Query(8, ge=1, le=128),
+    max_vlm_crops: int = Query(0, ge=0, le=100000, description='0 = all unvalidated'),
+    classifier_confidence_skip_vlm: float = Query(
         0.80,
         ge=0.0,
         le=1.0,
         description=(
-            'Skip the VLM for v6_model crops at or above this confidence. Defaults '
+            'Skip the VLM for classifier-labeled crops at or above this confidence. Defaults '
             'to 0.80 — saves the dominant VLM cost at scale without '
             'sacrificing label quality.'
         ),
@@ -139,7 +137,7 @@ async def pipeline_auto_label(
             'refine endpoint always uses AHC regardless.'
         ),
     ),
-    run_gemma: bool = Query(False, description='Run the VLM stage. See /start.'),
+    run_vlm: bool = Query(False, description='Run the VLM stage. See /start.'),
     recluster_unvalidated: bool = Query(False, description='Merge candidate clusters.'),
     reassign_only: bool = Query(False, description=_REASSIGN_ONLY_DESC),
     run_auto_promote: bool = Query(False, description=_AUTO_PROMOTE_DESC),
@@ -262,21 +260,21 @@ async def pipeline_auto_label(
 
     # ---- stage 3: VLM over remaining unvalidated ------------------------
     # Default-OFF: the detection worker's combined call writes ``class_id``
-    # + ``gemma_verify_completed_at`` as a side effect of region
+    # + ``vlm_verify_completed_at`` as a side effect of region
     # verification, so a parallel auto_label VLM stage just duplicates
     # work the worker is already doing on every drain pass. Clusters here
     # remain numeric until the worker eventually labels their members and
     # stage-1's ``force_cluster_id_equals_class_id`` folds cluster_id ->
     # class_id.
     #
-    # Opt-in: pass ``run_gemma=true`` for a one-off backfill of the
+    # Opt-in: pass ``run_vlm=true`` for a one-off backfill of the
     # no-region cohort (items where the segmenter returned no candidate,
     # so the combined call never fired and no class label was written).
-    if not run_gemma:
-        summary['stages']['gemma'] = {'skipped': True, 'predicted': 0, 'updated': 0}
-        summary['stages']['cluster_id_normalize_post_gemma'] = {'skipped': True}
+    if not run_vlm:
+        summary['stages']['vlm'] = {'skipped': True, 'predicted': 0, 'updated': 0}
+        summary['stages']['cluster_id_normalize_post_vlm'] = {'skipped': True}
         if progress is not None:
-            progress.start_stage('gemma', total=0)
+            progress.start_stage('vlm', total=0)
             progress.start_stage('finalize')
         try:
             bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
@@ -294,26 +292,26 @@ async def pipeline_auto_label(
     # clarification, i.e. ones where v6 detection did NOT give us a
     # confident class. Specifically, skip:
     #   - already-validated items
-    #   - v6_model items above the v6_confidence_skip_gemma threshold
-    #   - gemma_unmatched items — the VLM already failed once, asking
+    #   - item_model items above the classifier_confidence_skip_vlm threshold
+    #   - vlm_unmatched items — the VLM already failed once, asking
     #     again won't help
     # The VLM DOES run on:
     #   - coco_yolo11_proposal (a generic detector found an object, v6
     #     didn't recognize the class)
-    #   - v6_model with confidence < threshold (low-conf v6, needs
+    #   - item_model with confidence < threshold (low-conf v6, needs
     #     clarification)
     #   - residual AHC clusters (negative cluster_id, truly-unknown)
     # Scroll through the FULL unvalidated cohort instead of capping at a
     # single 10k page:
-    #   * max_gemma_crops == 0 -> process every unvalidated item
-    #   * max_gemma_crops > 0  -> cap total processed at that number
+    #   * max_vlm_crops == 0 -> process every unvalidated item
+    #   * max_vlm_crops > 0  -> cap total processed at that number
     # Scroll batches are 1000 docs; iteration stops when either the
     # cohort is exhausted or the per-run cap is reached.
     SCROLL_PAGE = 1000
     SCROLL_TTL = '5m'
     # Items whose class was resolved via the detection worker's combined
     # class+region+OCR call within the last 24h carry
-    # ``gemma_verify_completed_at``. Skip them here so we don't fire a
+    # ``vlm_verify_completed_at``. Skip them here so we don't fire a
     # duplicate class call. The 24h window expires the skip so genuine
     # re-runs (e.g. after a registry change) still re-classify.
     from datetime import UTC, datetime, timedelta
@@ -326,17 +324,17 @@ async def pipeline_auto_label(
                 {
                     'bool': {
                         'must': [
-                            {'term': {'class_source': 'v6_model'}},
-                            {'range': {'confidence': {'gte': v6_confidence_skip_gemma}}},
+                            {'term': {'class_source': CLASSIFIER_CLASS_SOURCE}},
+                            {'range': {'confidence': {'gte': classifier_confidence_skip_vlm}}},
                         ],
                     },
                 },
-                {'term': {'class_source': 'gemma_unmatched'}},
+                {'term': {'class_source': 'vlm_unmatched'}},
                 # Skip items the detection worker already classified via
                 # the combined call within the last 24h.
                 {
                     'range': {
-                        'gemma_verify_completed_at': {'gte': _combined_recent_cutoff},
+                        'vlm_verify_completed_at': {'gte': _combined_recent_cutoff},
                     },
                 },
             ],
@@ -351,7 +349,7 @@ async def pipeline_auto_label(
         'query': unvalidated_query,
         'sort': [{'updated_at': 'asc'}],
     }
-    cap = max_gemma_crops if max_gemma_crops > 0 else None
+    cap = max_vlm_crops if max_vlm_crops > 0 else None
     unvalidated_ids: list[str] = []
     scroll_id: str | None = None
     try:
@@ -386,7 +384,7 @@ async def pipeline_auto_label(
     summary['stages']['unvalidated_after_promote'] = len(unvalidated_ids)
 
     if not unvalidated_ids:
-        summary['stages']['gemma'] = {'predicted': 0, 'updated': 0}
+        summary['stages']['vlm'] = {'predicted': 0, 'updated': 0}
         summary['final'] = {'unvalidated': 0, 'human_required': 0}
         return summary
 
@@ -433,9 +431,9 @@ async def pipeline_auto_label(
 
     # Prototype-rescue paths are deleted: CLIP-prototype labeling
     # mis-labeled a large fraction of rows in an earlier phase. The
-    # v6+VLM agreement two-signal path (`class_source='v6_gemma_agreement'`)
+    # v6+VLM agreement two-signal path (`class_source='classifier_vlm_agreement'`)
     # is a documented follow-up. For this slice, the VLM writes
-    # `class_source='gemma'` (or `gemma_unmatched` / `gemma_new_class_pending`)
+    # `class_source='vlm'` (or `vlm_unmatched` / `vlm_new_class_pending`)
     # WITHOUT auto-validation. Validation requires either a human signal
     # or the v6+VLM two-signal path.
 
@@ -505,9 +503,9 @@ async def pipeline_auto_label(
             # reported, regardless of which class-resolution path fires.
             _vlm_extras: dict[str, Any] = {}
             if p.make:
-                _vlm_extras['gemma_vehicle_make'] = p.make
+                _vlm_extras['vlm_item_make'] = p.make
             if p.model:
-                _vlm_extras['gemma_vehicle_model'] = p.model
+                _vlm_extras['vlm_item_model'] = p.model
             if p.plate_visible is not None:
                 _vlm_extras[get_region_fields().visible] = p.plate_visible
 
@@ -519,13 +517,13 @@ async def pipeline_auto_label(
                     updates_by_id[p.img_id] = {
                         'class_id': cid,
                         'class_name': proposed_resolved,
-                        'class_source': 'gemma',
+                        'class_source': 'vlm',
                         # Clear stale label_source so a prior auto_promote
                         # validation tag can't survive the VLM overwrite.
-                        'label_source': 'gemma',
-                        'gemma_confidence': p.confidence,
-                        'gemma_raw_class': p.proposed_class,
-                        'gemma_raw_label': raw_label,
+                        'label_source': 'vlm',
+                        'vlm_confidence': p.confidence,
+                        'vlm_raw_class': p.proposed_class,
+                        'vlm_raw_label': raw_label,
                         **_vlm_extras,
                         **_vlm_class_prov,
                         'updated_at': now,
@@ -534,11 +532,11 @@ async def pipeline_auto_label(
                 # Truly new — surface for the curator queue.
                 proposals.append({'crop_id': p.img_id, 'proposed_class': p.proposed_class})
                 updates_by_id[p.img_id] = {
-                    'class_source': 'gemma_new_class_pending',
-                    'label_source': 'gemma',
-                    'gemma_proposed_class': p.proposed_class,
-                    'gemma_raw_label': raw_label,
-                    'gemma_confidence': p.confidence,
+                    'class_source': 'vlm_new_class_pending',
+                    'label_source': 'vlm',
+                    'vlm_proposed_class': p.proposed_class,
+                    'vlm_raw_label': raw_label,
+                    'vlm_confidence': p.confidence,
                     'needs_new_class': True,
                     **_vlm_extras,
                     'updated_at': now,
@@ -547,11 +545,11 @@ async def pipeline_auto_label(
             resolved = _resolve_class_name(p.class_name, confidence=p.confidence)
             if resolved is None:
                 updates_by_id[p.img_id] = {
-                    'class_source': 'gemma_unmatched',
-                    'label_source': 'gemma',
-                    'gemma_raw_class': p.class_name,
-                    'gemma_raw_label': raw_label,
-                    'gemma_confidence': p.confidence,
+                    'class_source': 'vlm_unmatched',
+                    'label_source': 'vlm',
+                    'vlm_raw_class': p.class_name,
+                    'vlm_raw_label': raw_label,
+                    'vlm_confidence': p.confidence,
                     **_vlm_extras,
                     'updated_at': now,
                 }
@@ -560,10 +558,10 @@ async def pipeline_auto_label(
             updates_by_id[p.img_id] = {
                 'class_id': cid,
                 'class_name': resolved,
-                'class_source': 'gemma',
-                'label_source': 'gemma',
-                'gemma_confidence': p.confidence,
-                'gemma_raw_label': raw_label,
+                'class_source': 'vlm',
+                'label_source': 'vlm',
+                'vlm_confidence': p.confidence,
+                'vlm_raw_label': raw_label,
                 'cluster_id': cid,
                 **_vlm_extras,
                 **_vlm_class_prov,
@@ -576,7 +574,7 @@ async def pipeline_auto_label(
             def _merge_pipeline(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
                 update = dict(updates_by_id[doc_id])
                 if 'class_id' in update:
-                    update['class_id_history'] = _record_history(current, writer='gemma_pipeline')
+                    update['class_id_history'] = _record_history(current, writer='vlm_pipeline')
                 return update
 
             try:
@@ -586,7 +584,7 @@ async def pipeline_auto_label(
                     merger=_merge_pipeline,
                     index=CURATION_ITEMS_INDEX,
                     refresh=False,
-                    writer_id='gemma_pipeline',
+                    writer_id='vlm_pipeline',
                 )
             except Exception as exc:
                 logger.warning('pipeline_bulk_failed', error=str(exc))
@@ -605,17 +603,17 @@ async def pipeline_auto_label(
         return len(preds), len(updates_by_id), proposals
 
     chunks = [
-        unvalidated_ids[i : i + gemma_batch_size]
-        for i in range(0, len(unvalidated_ids), gemma_batch_size)
+        unvalidated_ids[i : i + vlm_batch_size]
+        for i in range(0, len(unvalidated_ids), vlm_batch_size)
     ]
-    sem = _asyncio.Semaphore(gemma_concurrency)
+    sem = _asyncio.Semaphore(vlm_concurrency)
     # The VLM is the dominant cost at scale (often hours). Report
     # per-chunk progress so the labeler's progress bar moves visibly, and
     # check for operator cancel between chunks so a cancel takes effect
     # within a few seconds rather than waiting for the whole gather to
     # finish.
     if progress is not None:
-        progress.start_stage('gemma', total=len(unvalidated_ids))
+        progress.start_stage('vlm', total=len(unvalidated_ids))
 
     async def _gated(ids: list[str]) -> tuple[int, int, list[dict[str, Any]]]:
         async with sem:
@@ -651,7 +649,7 @@ async def pipeline_auto_label(
         )
 
         post_normalize = await with_elapsed_tick(progress, _force_cluster_eq_class(opensearch))
-        summary['stages']['cluster_id_normalize_post_gemma'] = post_normalize
+        summary['stages']['cluster_id_normalize_post_vlm'] = post_normalize
     except Exception as exc:
         logger.warning('pipeline_post_normalize_failed', error=str(exc))
 
@@ -669,14 +667,14 @@ async def pipeline_auto_label(
     # ``low_conf_skipped`` counts items where the VLM replied with low
     # confidence and we declined to spend cycles trying to map the answer
     # onto a registry slot — those items fall through to
-    # ``gemma_unmatched`` with the raw label preserved for downstream
+    # ``vlm_unmatched`` with the raw label preserved for downstream
     # clustering.
     logger.info(
         'pipeline_force_fit_bypass',
         attempted=_force_fit_bypass['attempted'],
         low_conf_skipped=_force_fit_bypass['low_conf_skipped'],
     )
-    summary['stages']['gemma'] = {
+    summary['stages']['vlm'] = {
         'predicted': g_predicted,
         'updated': g_updated,
         'new_class_proposals': new_class_proposals[:50],

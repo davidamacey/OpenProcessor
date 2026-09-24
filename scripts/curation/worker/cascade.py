@@ -315,8 +315,8 @@ async def _process_crop(
 
     # ---- Step 0: B-PR5 combined class+region for low-confidence-class cohort. ----
     # Cohort (Phase C broadened) = ``class_source='coco_yolo11_proposal'``
-    # (primary classifier missed) OR ``class_source in {'v6_model',
-    # 'cluster_v6_majority_agreement'}`` with confidence < 0.80, AND a
+    # (primary classifier missed) OR ``class_source in {'item_model',
+    # 'cluster_majority_agreement'}`` with confidence < 0.80, AND a
     # region candidate exists or can be cheaply produced. One VLM call
     # returns class + region verify + OCR instead of two/three round-trips.
     # Implementation lives in ``combined._run_combined_cohort_path``.
@@ -344,10 +344,10 @@ async def _process_crop(
                 auto = await _auto_confirm_or_pending(
                     sam_score=task.lpr_score,
                     bbox_in_crop=plate_in_crop,
-                    gemma_high_conf=conf == 'high',
+                    vlm_high_conf=conf == 'high',
                 )
                 task.detection_trace.append(f'{det_model}:hit')
-                task.detection_trace.append(f'{det_model}:gemma_verify_ok')
+                task.detection_trace.append(f'{det_model}:vlm_verify_ok')
                 task.update_doc = _region_write_doc(
                     plate_in_source=task.lpr_plate_in_source,
                     score=task.lpr_score,
@@ -360,7 +360,7 @@ async def _process_crop(
                 )
                 return
         else:
-            task.detection_trace.append(f'{det_model}:gemma_reject')
+            task.detection_trace.append(f'{det_model}:vlm_reject')
         # Verify rejected — fall through to the secondary segmenter.
 
     # ---- Step 2: primary detector (only if pending + non-secondary-shape). ----
@@ -385,10 +385,10 @@ async def _process_crop(
                     auto = await _auto_confirm_or_pending(
                         sam_score=cand.score,
                         bbox_in_crop=cand.bbox_norm,
-                        gemma_high_conf=conf == 'high',
+                        vlm_high_conf=conf == 'high',
                     )
                     task.detection_trace.append(f'{det_model}:hit')
-                    task.detection_trace.append(f'{det_model}:gemma_verify_ok')
+                    task.detection_trace.append(f'{det_model}:vlm_verify_ok')
                     task.update_doc = _region_write_doc(
                         plate_in_source=projected,
                         score=cand.score,
@@ -401,7 +401,7 @@ async def _process_crop(
                     )
                     return
                 task.detection_trace.append(f'{det_model}:hit')
-                task.detection_trace.append(f'{det_model}:gemma_reject')
+                task.detection_trace.append(f'{det_model}:vlm_reject')
                 # Primary detector hit but VLM rejected — fall through
                 # to the secondary segmenter.
 
@@ -431,7 +431,7 @@ async def _process_crop(
                     sam_candidate.bbox_norm, task.vehicle_bbox_norm
                 )
                 task.detection_trace.append(f'{seg_name}:hit')
-                task.detection_trace.append(f'{seg_name}:skip_gemma_verify')
+                task.detection_trace.append(f'{seg_name}:skip_vlm_verify')
                 task.update_doc = _region_write_doc(
                     plate_in_source=projected,
                     score=sam_candidate.score,
@@ -456,10 +456,10 @@ async def _process_crop(
                 auto = await _auto_confirm_or_pending(
                     sam_score=sam_candidate.score,
                     bbox_in_crop=sam_candidate.bbox_norm,
-                    gemma_high_conf=conf == 'high',
+                    vlm_high_conf=conf == 'high',
                 )
                 task.detection_trace.append(f'{seg_name}:hit')
-                task.detection_trace.append(f'{seg_name}:gemma_verify_ok')
+                task.detection_trace.append(f'{seg_name}:vlm_verify_ok')
                 task.update_doc = _region_write_doc(
                     plate_in_source=projected,
                     score=sam_candidate.score,
@@ -472,7 +472,7 @@ async def _process_crop(
                 )
                 return
             task.detection_trace.append(f'{seg_name}:hit')
-            task.detection_trace.append(f'{seg_name}:gemma_reject')
+            task.detection_trace.append(f'{seg_name}:vlm_reject')
 
     # ---- Step 4: text-hint-driven secondary-segmenter re-pass. ----
     # The OCR-detection model is no longer trusted as a region-bbox
@@ -512,10 +512,10 @@ async def _process_crop(
                     auto = await _auto_confirm_or_pending(
                         sam_score=sub_cand.score,
                         bbox_in_crop=sub_cand.bbox_norm,
-                        gemma_high_conf=conf == 'high',
+                        vlm_high_conf=conf == 'high',
                     )
                     task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                    task.detection_trace.append(f'{seg_name}:text_hint:gemma_verify_ok')
+                    task.detection_trace.append(f'{seg_name}:text_hint:vlm_verify_ok')
                     # Pass OCR text through when the VLM read empty so
                     # the region text isn't lost.
                     text_out = outcome.text or ocr_pick.text
@@ -535,7 +535,7 @@ async def _process_crop(
                     )
                     return
                 task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                task.detection_trace.append(f'{seg_name}:text_hint:gemma_reject')
+                task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
     elif ocr_regions:
         task.detection_trace.append(f'{ocr_det_model}:text_hint:no_plate_shape')
     else:

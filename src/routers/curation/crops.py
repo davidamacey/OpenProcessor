@@ -45,7 +45,7 @@ async def list_crops(
     include_excluded: bool = False,
     max_rank: int | None = Query(None, ge=1),
     min_blur_ratio: float | None = Query(None, ge=0.0),
-    v6_conf_lt: float | None = Query(None, ge=0.0, le=1.0),
+    classifier_conf_lt: float | None = Query(None, ge=0.0, le=1.0),
     order: str = Query(
         'default',
         description=(
@@ -66,8 +66,8 @@ async def list_crops(
     ``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``
     (e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops
     at or above a clarity threshold (the labeler slider); crops with no blur
-    score are NOT dropped. ``v6_conf_lt`` mines the "model wasn't sure" pool —
-    crops whose ``v6_raw_confidence`` is below the value OR that have no v6
+    score are NOT dropped. ``classifier_conf_lt`` mines the "model wasn't sure" pool —
+    crops whose ``classifier_raw_confidence`` is below the value OR that have no v6
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
@@ -111,15 +111,15 @@ async def list_crops(
                 }
             }
         )
-    if v6_conf_lt is not None:
+    if classifier_conf_lt is not None:
         # Low-confidence band OR no v6 prediction at all (COCO/VLM-only
         # blind spots) — not silently dropped by a plain range clause.
         filt.append(
             {
                 'bool': {
                     'should': [
-                        {'range': {'v6_raw_confidence': {'lt': v6_conf_lt}}},
-                        {'bool': {'must_not': {'exists': {'field': 'v6_raw_confidence'}}}},
+                        {'range': {'classifier_raw_confidence': {'lt': classifier_conf_lt}}},
+                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
                     ],
                     'minimum_should_match': 1,
                 }

@@ -71,7 +71,7 @@ STAGES: tuple[str, ...] = (
     'cluster_id_normalize',
     'cluster_residuals',
     'auto_promote',
-    'gemma',
+    'vlm',
     'finalize',
 )
 

@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 ALL_TABS = (
     'all',
     'mismatches',
-    'gemma_low_conf',
+    'vlm_low_conf',
     'outliers',
     'uncertainty',
     'model_disagreements',
@@ -30,7 +30,7 @@ ALL_TABS = (
 LEGACY_SORT_CLAUSE = {
     'all': [{'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'mismatches': [{'updated_at': {'order': 'desc'}}],
-    'gemma_low_conf': [{'updated_at': {'order': 'desc'}}],
+    'vlm_low_conf': [{'updated_at': {'order': 'desc'}}],
     'outliers': [
         {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
@@ -43,7 +43,13 @@ LEGACY_SORT_CLAUSE = {
     'regions': [{'region_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {'v6_raw_confidence': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
+        {
+            'classifier_raw_confidence': {
+                'order': 'asc',
+                'missing': '_last',
+                'unmapped_type': 'double',
+            }
+        },
     ],
     'coco_blind_spots': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
@@ -54,7 +60,7 @@ LEGACY_SORT_CLAUSE = {
 EXPECTED_DEFAULT_SORT_ID = {
     'all': 'atypicality',
     'mismatches': 'recent',
-    'gemma_low_conf': 'recent',
+    'vlm_low_conf': 'recent',
     'outliers': 'atypicality',
     'uncertainty': 'uncertainty_entropy',
     'model_disagreements': 'disagreement_entropy_asc',

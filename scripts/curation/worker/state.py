@@ -33,7 +33,11 @@ DEFAULT_SAM3 = os.environ.get('SAM3_URL', 'http://sam3:8000')
 # the parallelism across GPUs adds up. SAM3_URL is kept as the
 # single-URL fallback for backwards compatibility.
 DEFAULT_SAM3_URLS = os.environ.get('SAM3_URLS', '').strip()
-DEFAULT_GEMMA = os.environ.get('GEMMA_URL', os.environ.get('OPENWEBUI_BASE_URL', ''))
+DEFAULT_GEMMA = (
+    os.environ.get('VLM_URL')
+    or os.environ.get('GEMMA_URL')
+    or os.environ.get('OPENWEBUI_BASE_URL', '')
+)
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',

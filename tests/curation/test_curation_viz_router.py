@@ -197,7 +197,7 @@ def test_get_projection_serves_cached_points(
                             'viz_y': -0.5,
                             'cluster_id': 42,
                             'class_name': 'sedan',
-                            'class_source': 'v6_model',
+                            'class_source': 'item_model',
                         },
                     }
                 ]
@@ -218,7 +218,7 @@ def test_get_projection_serves_cached_points(
             'y': -0.5,
             'cluster_id': 42,
             'class_name': 'sedan',
-            'class_source': 'v6_model',
+            'class_source': 'item_model',
         }
     ]
 

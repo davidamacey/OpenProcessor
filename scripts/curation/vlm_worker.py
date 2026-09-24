@@ -18,7 +18,7 @@ Operations
 ----------
 - Idempotent: every successful Gemma response writes one of the class_source
   values that the worker's must_not query excludes (``gemma``,
-  ``v6_gemma_agreement``, ``gemma_unmatched``, ``gemma_new_class_pending``),
+  ``classifier_vlm_agreement``, ``vlm_unmatched``, ``vlm_new_class_pending``),
   so the crop drops out of the next poll's query.
 - Auto-exits when ``--idle-stop-after`` consecutive empty polls happen,
   so it can be chained after an ingest run without a sentinel signal.
@@ -62,9 +62,9 @@ ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
 # worker and the on-demand pipeline make the same decisions.
 # Skip Gemma classify when v6 model already labeled the crop with at
 # least this confidence. Raised 0.70 -> 0.80 to align with
-# pipeline.v6_confidence_skip_gemma and the detection worker's combined
+# pipeline.classifier_confidence_skip_vlm and the detection worker's combined
 # path's own low-confidence threshold. The 0.70-0.80 band was sending high-v6 crops
-# to Gemma and surfacing them in the gemma_low_conf review tab as
+# to Gemma and surfacing them in the vlm_low_conf review tab as
 # "v6 95.9 %, gemma medium" — noise the human review queue doesn't need.
 # See docs/design/plate_detection_strategy.md Wave 1 chained tuning.
 DEFAULT_V6_CONF_SKIP = 0.80
@@ -85,22 +85,22 @@ def _build_pending_query(v6_skip_conf: float) -> dict:
                 {
                     'bool': {
                         'must': [
-                            {'term': {'class_source': 'v6_model'}},
+                            {'term': {'class_source': 'item_model'}},
                             {'range': {'confidence': {'gte': v6_skip_conf}}},
                         ],
                     },
                 },
                 # Plan §1.5: prototype + ensemble_proto_rescue + ensemble_consensus
                 # class_source values are gone. Surviving auto-validation
-                # path is class_source='v6_gemma_agreement' (A-PR2 ensemble
+                # path is class_source='classifier_vlm_agreement' (A-PR2 ensemble
                 # writer; this query excludes already-labeled rows).
                 # Gemma already labeled successfully
-                {'term': {'class_source': 'gemma'}},
-                {'term': {'class_source': 'v6_gemma_agreement'}},
-                {'term': {'class_source': 'cluster_v6_majority_agreement'}},
+                {'term': {'class_source': 'vlm'}},
+                {'term': {'class_source': 'classifier_vlm_agreement'}},
+                {'term': {'class_source': 'cluster_majority_agreement'}},
                 # Gemma already failed once — won't help to retry
-                {'term': {'class_source': 'gemma_unmatched'}},
-                {'term': {'class_source': 'gemma_new_class_pending'}},
+                {'term': {'class_source': 'vlm_unmatched'}},
+                {'term': {'class_source': 'vlm_new_class_pending'}},
             ],
         },
     }
@@ -431,7 +431,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '--v6-conf-skip',
         type=float,
         default=DEFAULT_V6_CONF_SKIP,
-        help='Skip Gemma for v6_model crops at or above this confidence.',
+        help='Skip Gemma for item_model crops at or above this confidence.',
     )
     # GPU arbiter sentinel — design §14.5. The trainer touches this file
     # before a single-GPU run starts; the worker pauses while it exists

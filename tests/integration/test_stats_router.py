@@ -12,16 +12,16 @@ buckets.
 
 Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
 
-- ``labeled.{by_human, by_vlm, by_v6, by_yolo11_proposal, other}``
+- ``labeled.{by_human, by_vlm, by_classifier, by_proposal, other}``
   — *class-label* provenance. ``by_human`` counts crops whose
   ``class_source`` starts with ``human``; auto-validation
-  (a majority-agreement rule) lives in ``by_v6``, deliberately
+  (a majority-agreement rule) lives in ``by_classifier``, deliberately
   separate from ``by_human`` so the dashboard can distinguish
   "human applied this label" from "any validator approved it".
-- ``plates.{total_detected, by_lpr, by_sam3, by_human}`` — *region-
-  detector* provenance. ``by_lpr`` is the LPR-family detection count
-  and intentionally lives here (not under ``labeled``) because it's a
-  region detector, not a class labeler.
+- ``regions.{total_detected, by_detector, by_segmenter, by_human}`` —
+  *region-detector* provenance. ``by_detector`` is the primary region
+  detector's count and intentionally lives here (not under ``labeled``)
+  because it's a region detector, not a class labeler.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def _fake_dataset_search_response() -> dict[str, Any]:
                 'buckets': [
                     {'key': 'human', 'doc_count': 3},
                     {'key': 'human_move', 'doc_count': 1},
-                    {'key': 'v6_model', 'doc_count': 2},
+                    {'key': 'item_model', 'doc_count': 2},
                     {'key': 'coco_yolo11_proposal', 'doc_count': 2},
                     {'key': '__none__', 'doc_count': 2},
                 ],
@@ -94,17 +94,27 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     labeled = body.get('labeled')
     assert isinstance(labeled, dict)
-    for k in ('by_human', 'by_vlm', 'by_v6', 'by_yolo11_proposal', 'other'):
+    for k in ('by_human', 'by_vlm', 'by_classifier', 'by_proposal', 'other'):
         assert k in labeled, f'labeled.{k} missing'
         assert isinstance(labeled[k], int)
         assert labeled[k] >= 0
 
-    plates = body.get('plates')
-    assert isinstance(plates, dict), 'plates section missing'
-    for k in ('total_detected', 'by_lpr', 'by_sam3', 'by_human'):
-        assert k in plates, f'plates.{k} missing'
-        assert isinstance(plates[k], int)
-        assert plates[k] >= 0
+    assert 'plates' not in body
+    regions = body.get('regions')
+    assert isinstance(regions, dict), 'regions section missing'
+    for k in (
+        'total_detected',
+        'by_detector',
+        'by_segmenter',
+        'by_human',
+        'verified_by_human',
+        'verified_by_vlm',
+    ):
+        assert k in regions, f'regions.{k} missing'
+        assert isinstance(regions[k], int)
+        assert regions[k] >= 0
+    for old in ('by_lpr', 'by_sam3', 'verified_by_gemma'):
+        assert old not in regions
 
     unlabeled = body.get('unlabeled')
     assert isinstance(unlabeled, dict)
@@ -134,8 +144,8 @@ def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None
 
     ``labeled.by_human`` counts only crops where the *labeler* was a
     human (``class_source`` startswith ``human``) — auto-validation
-    (e.g. a v6 cluster-majority rule -> ``class_validated=True`` with
-    ``class_source='v6_*'``) is counted under ``by_v6``, NOT
+    (e.g. a cluster-majority rule -> ``class_validated=True`` with
+    ``class_source='cluster_majority_agreement'``) is counted under ``by_classifier``, NOT
     ``by_human``. So ``by_human`` is bounded above by ``validated`` but
     is typically much smaller.
 

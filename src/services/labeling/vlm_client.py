@@ -58,7 +58,11 @@ DEFAULT_MAX_IMAGES_PER_CALL = 8
 # env var (clamped to max_images_per_call and the upstream hard cap).
 def _env_open_images_per_call(default: int = 3) -> int:
     try:
-        v = int(os.environ.get('GEMMA_IMAGES_PER_CALL', str(default)))
+        v = int(
+            os.environ.get('VLM_IMAGES_PER_CALL')
+            or os.environ.get('GEMMA_IMAGES_PER_CALL')
+            or str(default)
+        )
     except (TypeError, ValueError):
         return default
     return max(1, v)
@@ -127,12 +131,18 @@ def build_http_client(
 
     The default pool (``max_connections=100``) is too small for a
     high-concurrency worker; callers that need more than the default
-    should size it via env (``GEMMA_HTTPX_MAX_CONNECTIONS`` /
-    ``GEMMA_HTTPX_KEEPALIVE``) or pass explicit values.
+    should size it via env (``VLM_HTTPX_MAX_CONNECTIONS`` /
+    ``VLM_HTTPX_KEEPALIVE``; the ``GEMMA_*`` names are accepted aliases) or pass explicit values.
     """
 
-    max_conn = max_connections or int(os.environ.get('GEMMA_HTTPX_MAX_CONNECTIONS', '512'))
-    keepalive = max_keepalive_connections or int(os.environ.get('GEMMA_HTTPX_KEEPALIVE', '128'))
+    max_conn = max_connections or int(
+        os.environ.get('VLM_HTTPX_MAX_CONNECTIONS')
+        or os.environ.get('GEMMA_HTTPX_MAX_CONNECTIONS')
+        or '512'
+    )
+    keepalive = max_keepalive_connections or int(
+        os.environ.get('VLM_HTTPX_KEEPALIVE') or os.environ.get('GEMMA_HTTPX_KEEPALIVE') or '128'
+    )
     limits = httpx.Limits(max_connections=max_conn, max_keepalive_connections=keepalive)
     return httpx.AsyncClient(timeout=timeout_s, limits=limits)
 
