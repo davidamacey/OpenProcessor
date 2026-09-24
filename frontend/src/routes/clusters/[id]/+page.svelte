@@ -241,7 +241,22 @@
       classSource: classSourceFilter,
       maxRank,
       minBlurRatio,
-      order: orderMode === 'default' ? null : orderMode,
+      // DQ-M3 (docs/design/data-quality-pass-2026-09-24.md): backend main
+      // 7254ec4 now serves `order=core_first` on `GET {API_PREFIX}/crops`
+      // (nearest-to-centroid first, with cluster_distance/
+      // cluster_similarity/cluster_is_core recomputed against the live
+      // centroid) — exactly what the cut line needs and previously had
+      // no way to request, which is why computeCutLine() (cutLine.ts)
+      // has to defensively hide the line whenever the loaded order isn't
+      // actually core-first-consistent. Requesting it here (whenever the
+      // operator hasn't picked their own explicit order) means that
+      // defensive check now passes in the common case instead of always
+      // falling back to hidden — computeCutLine() is left in place
+      // as-is: it still hides the line for any cluster the backend
+      // hasn't backfilled cluster_is_core for, or an order override the
+      // operator explicitly picked (outliers/diverse) genuinely isn't
+      // core-first.
+      order: orderMode === 'default' ? 'core_first' : orderMode,
       k: diverseK,
     };
   }
