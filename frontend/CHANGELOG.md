@@ -1045,6 +1045,19 @@ which the old check (`combo === 'shift+\``) never matched — fixed
     `max-h-full max-w-full` only ever shrinks an image, never upscales
     one smaller than its container. Switched to `h-full w-full` (still
     `object-contain`), which fills the panel at any viewport.
+  - **m14** — `/classes`' "Added" column parsed the date-only `added_at`
+    ("2026-04-29") through `new Date(...).toLocaleDateString()`, which
+    reads it as UTC midnight and rolls it back a day in any timezone
+    behind UTC (4/28/2026). Added `formatDateOnly()` (`$lib/formatDate.ts`),
+    which reads the Y-M-D components directly with no `Date`/timezone
+    conversion for a bare date string.
+  - **m23** — `/train`'s `<ClassSubsetPicker>` ("Classes to train: All
+    84 classes · N validated crops") rendered unconditionally even for a
+    single-class export, whose actual submission already forces
+    `include_classes: null, single_cls: true` regardless of any
+    selection there — so the summary named a registry-wide count with
+    no bearing on what would train. Replaced with a plain note when
+    `singleClassExport` is true.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —

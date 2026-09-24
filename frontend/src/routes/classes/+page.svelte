@@ -11,6 +11,7 @@
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
+  import { formatDateOnly } from '$lib/formatDate';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
@@ -636,7 +637,7 @@
                 >{cls.count ?? 0}</td
               >
               <td class="px-3 py-1.5 text-xs text-zinc-500">
-                {cls.added_at ? new Date(cls.added_at).toLocaleDateString() : '—'}
+                {formatDateOnly(cls.added_at)}
               </td>
               <td class="px-3 py-1.5 text-right">
                 {#if editingId === cls.id}
