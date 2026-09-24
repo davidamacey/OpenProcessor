@@ -380,14 +380,14 @@ async def curation_import_labels_batch(
 
 @router.get('/ingest/status')
 async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Recent ingest summary — counts grouped by hdd_source."""
+    """Recent ingest summary — counts grouped by source."""
     await _ensure_indexes(opensearch)
     body = {
         'size': 0,
         'track_total_hits': True,
         'aggs': {
             'by_source': {
-                'terms': {'field': 'hdd_source', 'size': 64},
+                'terms': {'field': 'source', 'size': 64},
             },
             # F-13: filter to the last 14 days in the query rather than
             # date-histogramming the whole index and slicing to [:14] in

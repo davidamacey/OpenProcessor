@@ -254,10 +254,10 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
         'track_total_hits': True,
         'aggs': {
             # --- legacy fields (preserved for back-compat) ----------------
-            # hdd_source/class_source/region-detector/region-verifier are
+            # source/class_source/region-detector/region-verifier are
             # all mapped keyword directly on the live index — no .keyword
             # subfield exists (only the region-status field is text+.keyword).
-            'by_source': {'terms': {'field': 'hdd_source', 'size': 32}},
+            'by_source': {'terms': {'field': 'source', 'size': 32}},
             'validated': {'filter': {'term': {'class_validated': True}}},
             'test_holdout': {'filter': {'term': {'test_holdout': True}}},
             # --- new: label provenance breakdown --------------------------

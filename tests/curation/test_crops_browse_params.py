@@ -105,6 +105,23 @@ def test_confidence_band(client: TestClient, fake_os: _RecordingOS) -> None:
     assert client.get(f'{P}/crops', params={'conf_min': 0.7, 'conf_max': 0.1}).status_code == 400
 
 
+def test_source_param_filters_on_source_field(client: TestClient, fake_os: _RecordingOS) -> None:
+    """S2: the only ingest-source query param is ``source``; it filters on
+    the stored ``source`` field. The old ``hdd_source`` param name is gone
+    (extra/unknown query params are simply ignored by FastAPI, so passing it
+    must NOT produce a filter clause)."""
+    r = client.get(f'{P}/crops', params={'source': 'disk_a'})
+    assert r.status_code == 200, r.text
+    filt = fake_os.bodies[-1]['query']['bool']['filter']
+    assert {'term': {'source': 'disk_a'}} in filt
+
+    r2 = client.get(f'{P}/crops', params={'hdd_source': 'disk_a'})
+    assert r2.status_code == 200, r2.text
+    filt2 = fake_os.bodies[-1]['query']['bool']['filter']
+    assert {'term': {'source': 'disk_a'}} not in filt2
+    assert {'term': {'hdd_source': 'disk_a'}} not in filt2
+
+
 def test_class_crops_passes_real_defaults(client: TestClient, fake_os: _RecordingOS) -> None:
     """/classes/{id}/crops calls list_crops directly; unset params must be
     plain defaults, not FastAPI FieldInfo objects leaking into the query.

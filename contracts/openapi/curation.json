@@ -5552,22 +5552,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "hdd_source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Hdd Source"
-            }
-          },
-          {
             "description": "Ingest source tag (wire `source`).",
             "in": "query",
             "name": "source",
@@ -7846,7 +7830,7 @@
     },
     "/curation/ingest/status": {
       "get": {
-        "description": "Recent ingest summary — counts grouped by hdd_source.",
+        "description": "Recent ingest summary — counts grouped by source.",
         "operationId": "ingest_status_curation_ingest_status_get",
         "responses": {
           "200": {

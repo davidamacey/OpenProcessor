@@ -168,7 +168,7 @@ def _images_body() -> dict[str, Any]:
             'properties': {
                 'image_id': {'type': 'keyword'},
                 'image_path': {'type': 'keyword'},
-                'hdd_source': {'type': 'keyword'},
+                'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},
                 'imohash': {'type': 'keyword'},
@@ -250,7 +250,7 @@ def _items_body() -> dict[str, Any]:
                 'crop_id': {'type': 'keyword'},
                 'image_id': {'type': 'keyword'},
                 'image_path': {'type': 'keyword'},
-                'hdd_source': {'type': 'keyword'},
+                'source': {'type': 'keyword'},
                 # X-Request-ID propagated from the HTTP ingest call (or
                 # '-' for non-HTTP callers). Lets operators correlate
                 # worker / labeler logs to the originating ingest

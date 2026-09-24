@@ -98,10 +98,10 @@ def test_queue_sort_ends_in_crop_id_tiebreak(monkeypatch: pytest.MonkeyPatch) ->
 def test_review_filters_class_source_and_confidence(monkeypatch: pytest.MonkeyPatch) -> None:
     base = {'class_source': 'vlm_unmatched'}
     docs = {
-        'a': {**base, 'crop_id': 'a', 'class_id': 1, 'hdd_source': 's1', 'confidence': 0.3},
-        'b': {**base, 'crop_id': 'b', 'class_id': 2, 'hdd_source': 's1', 'confidence': 0.3},
-        'c': {**base, 'crop_id': 'c', 'class_id': 1, 'hdd_source': 's2', 'confidence': 0.3},
-        'd': {**base, 'crop_id': 'd', 'class_id': 1, 'hdd_source': 's1', 'confidence': 0.9},
+        'a': {**base, 'crop_id': 'a', 'class_id': 1, 'source': 's1', 'confidence': 0.3},
+        'b': {**base, 'crop_id': 'b', 'class_id': 2, 'source': 's1', 'confidence': 0.3},
+        'c': {**base, 'crop_id': 'c', 'class_id': 1, 'source': 's2', 'confidence': 0.3},
+        'd': {**base, 'crop_id': 'd', 'class_id': 1, 'source': 's1', 'confidence': 0.9},
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
     r = client.get(

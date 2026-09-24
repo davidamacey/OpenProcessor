@@ -203,8 +203,7 @@ def serialize_item(
         'excluded_at': src.get('excluded_at'),
         # Set = hidden from every /review tab (discard / review_dismiss).
         'review_dismissed_at': src.get('review_dismissed_at'),
-        # Ingest source tag (stored under the legacy ``hdd_source`` key).
-        'source': src.get('hdd_source') or src.get('source') or '',
+        'source': src.get('source') or '',
         'test_holdout': bool(src.get('test_holdout', False)),
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),

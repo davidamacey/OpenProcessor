@@ -81,7 +81,7 @@ def test_items_has_required_fields() -> None:
         'crop_id',
         'image_id',
         'image_path',
-        'hdd_source',
+        'source',
         'bbox_norm',
         'class_id',
         'class_name',

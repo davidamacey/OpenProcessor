@@ -2,7 +2,7 @@
 
 The frontend used to fabricate these per page (``proposed_class_*``
 outside ``/review``), recompute them (cluster kind from the id, similarity
-from ``cluster_distance``) or read legacy storage names (``hdd_source``).
+from ``cluster_distance``) or read legacy storage names (``source``).
 They now come from the one item serializer, so every item endpoint
 (``/crops``, ``/crops/{id}``, ``/review``, ``/regions``, search, undo,
 discard) carries them.
@@ -100,7 +100,7 @@ def test_new_class_exclusion_probe_and_source_keys() -> None:
         excluded_at='2026-09-24T00:00:00+00:00',
         probe_pred_class='gadget',
         probe_pred_class_id=5,
-        hdd_source='disk_a',
+        source='disk_a',
     )
     assert item['needs_new_class'] is True
     assert item['needs_new_class_note'] == 'looks like a trailer'
@@ -160,8 +160,8 @@ def test_crops_needs_new_class_and_source_filters() -> None:
     fake = QueryFakeOpenSearch(
         {
             items: {
-                'f': {'crop_id': 'f', 'needs_new_class': True, 'hdd_source': 'disk_a'},
-                'n': {'crop_id': 'n', 'hdd_source': 'disk_b'},
+                'f': {'crop_id': 'f', 'needs_new_class': True, 'source': 'disk_a'},
+                'n': {'crop_id': 'n', 'source': 'disk_b'},
             }
         }
     )
