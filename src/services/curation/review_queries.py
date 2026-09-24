@@ -59,10 +59,9 @@ def build_tab_query(
     must: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = [
         {'term': {'class_validated': True}},
-        # Crops the operator explicitly dismissed via /review's Discard
-        # button stay out of every queue forever (until an /undismiss is
-        # added). The Discard handler at DELETE /curation/crops/{id}/label
-        # stamps ``review_dismissed_at``.
+        # Items dismissed from review (POST /crops/{id}/discard with
+        # dismiss_from_review, or the legacy review_dismiss) stay out of
+        # every queue until undone / POST /crops/{id}/review_undismiss.
         {'exists': {'field': 'review_dismissed_at'}},
     ]
     if not include_test:
