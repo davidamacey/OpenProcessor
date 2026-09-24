@@ -67,6 +67,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     later wave).
 
 ### Added
+- **VLM class-attempt fields** `vlm_class_attempted_at` (date) and
+  `vlm_class_empty_reason` (keyword: `no_answer` / `no_match` /
+  `invalid_index` / `unparseable`; `null` when the attempt answered) on items
+  (mapped, migrated on boot, class-guarded) and on the item wire. The `all`
+  review tab surfaces items whose last attempt was empty; the VLM worker and
+  the auto-label sweep skip them for 24 h. Every VLM class write (label
+  batch, auto-label sweep, the region worker's combined call) now records a
+  full, restorable `class_id_history` snapshot, including writes onto a
+  proposal with no class yet and `class_source`-only writes.
+- `scripts/curation/repair_empty_vlm_answers.py` (dry-run default,
+  `--apply`, OCC): restores items stamped `vlm_unmatched` for an empty VLM
+  answer to the class source they had before (VLM, ingest proposal or
+  classifier, recovered from the untouched class provenance; class history
+  as fallback) and records the empty attempt.
 - **Naming sweep, wave W0 — served detector/segmenter/VLM vocabulary**
   (`docs/design/naming_sweep_plan.md`): `GET {prefix}/regions/vocabulary`
   serves `{detectors, region_sources, chain_actors}` (each entry `{id,
@@ -153,6 +167,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restricted allowlist that excludes GPU 0 no longer rejects the default spec.
 
 ### Fixed
+- **Most VLM class answers were read as empty and recorded as `vlm_unmatched`**
+  (live: 2,927 of 3,102 `vlm_unmatched` items had `vlm_raw_class=''`). The
+  class calls sent no JSON-object `response_format`, so against a vLLM server
+  with a reasoning parser the answer landed in the reasoning channel and
+  `content` was empty or a lone `]`. Class calls now request JSON-object mode
+  (with a `{"results": [...]}` envelope) and fall back to the reasoning
+  channel; the combined reply accepts a class name / `"3=name"` / numeric
+  string instead of rejecting the whole entry. An empty class answer (empty,
+  `null`, `-1`, out-of-range, unparseable) no longer becomes `vlm_unmatched`:
+  the item's class fields are left untouched and the attempt is recorded;
+  `vlm_unmatched` is kept for a real, non-empty label (with `vlm_raw_class`).
+  A VLM call that never completed writes nothing.
 - Freshly ingested items never reached `/review/all`, the VLM worker or the
   pipeline VLM sweep (queues gated on a nonexistent `embedding` field).
 - Region/label fields fell to dynamic `text` mapping on fresh indexes, breaking
