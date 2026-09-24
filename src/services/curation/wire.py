@@ -22,6 +22,7 @@ from typing import Any
 from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.class_sources import vlm_suggestion, vlm_suggestion_dismissed
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
+from src.services.curation.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
@@ -209,6 +210,8 @@ def serialize_item(
         'updated_at': src.get('updated_at') or '',
         'thumbnail_url': f'{prefix}/crops/{crop_id}/thumbnail',
         'region_thumbnail_url': f'{prefix}/crops/{crop_id}/region_thumbnail',
+        # Every OCR line on the item crop; [] when none / not yet read.
+        'item_text_lines': item_text_lines_to_wire(src.get(ITEM_TEXT_LINES_FIELD)),
     }
     item.update(region_to_wire(src, f))
     item['region_bbox_in_parent'] = region_bbox_in_parent(src, f)

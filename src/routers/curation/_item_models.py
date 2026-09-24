@@ -12,6 +12,16 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class ItemTextLine(BaseModel):
+    """One OCR text line on the item crop (``box_norm`` in the item-crop
+    frame; ``rel_height`` = line height / crop height)."""
+
+    text: str | None = None
+    box_norm: list[float] | None = None
+    confidence: float | None = None
+    rel_height: float | None = None
+
+
 class ItemDoc(BaseModel):
     """The wire item every item-returning endpoint emits.
 
@@ -106,6 +116,9 @@ class ItemDoc(BaseModel):
     region_text_confidence: float | None = None
     region_text_source: str | None = None
     region_text_engine_version: str | None = None
+    region_text_vlm: str | None = None
+    region_text_ocr: str | None = None
+    region_text_disagreement: bool | None = None
     region_validated: bool | None = None
     region_verified: bool | None = None
     region_verified_at: str | None = None
@@ -124,6 +137,8 @@ class ItemDoc(BaseModel):
     region_source: str | None = None
     region_pairing: Any = None
     region_skip_verify: bool | None = None
+    # Every OCR line read on the item crop ([] when none / not yet read).
+    item_text_lines: list[ItemTextLine] = Field(default_factory=list)
 
 
 class CropsPageResponse(BaseModel):
@@ -140,4 +155,4 @@ class CropsPageResponse(BaseModel):
     n_pool: int | None = None
 
 
-__all__ = ['CropsPageResponse', 'ItemDoc']
+__all__ = ['CropsPageResponse', 'ItemDoc', 'ItemTextLine']

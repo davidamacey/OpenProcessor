@@ -1,0 +1,48 @@
+# PE-Core-L14-336 text encoder — semantic-search query embeddings.
+#
+# OPTIONAL. src/clients/pe_encoder.py encodes queries in-process by default
+# (ONNX Runtime, else PyTorch). It routes here only when Triton reports this
+# model ready AND no local ONNX file is configured (or OP_PE_TEXT_BACKEND=
+# triton), and falls back in-process for good if Triton stops answering.
+# The tensor names below are a contract with that client.
+#
+# Input:  text_tokens [B, T] INT64, T <= 32 — PE SimpleTokenizer ids
+#         (SOT + BPE + EOT, zero-padded; tokenized in Python by the client,
+#         which trims the padding after the batch's last EOT, hence dims -1)
+# Output: text_embeddings [B, 1024] FP32, L2-normalized
+#
+# Model file: 1/model.onnx from export/export_pe_text_encoder.py
+# (--install-triton writes both). Load it explicitly:
+#   --load-model=pe_text_encoder
+
+name: "pe_text_encoder"
+platform: "onnxruntime_onnx"
+max_batch_size: 32
+
+input [
+  {
+    name: "text_tokens"
+    data_type: TYPE_INT64
+    dims: [ -1 ]
+  }
+]
+
+output [
+  {
+    name: "text_embeddings"
+    data_type: TYPE_FP32
+    dims: [ 1024 ]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16, 32 ]
+  max_queue_delay_microseconds: 2000
+}
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]

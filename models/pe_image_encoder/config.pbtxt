@@ -1,0 +1,47 @@
+# PE-Core-L14-336 image encoder — whole-frame and per-crop embeddings.
+#
+# Consumed by src/clients/pe_encoder.py (PEEncoder.encode_images); the
+# resulting vector is stored as the curation `pe_embedding` field and backs
+# semantic search, near-duplicate detection, clustering and the embedding
+# visualization. The tensor names below are a contract with that client.
+#
+# Input:  images [B, 3, 336, 336] FP32,
+#         ImageNet mean/std normalized (see src/services/detection/pe_preprocess.py)
+# Output: image_embeddings [B, 1024] FP32, L2-normalized
+#
+# TensorRT plan built by export/build_pe_trt.sh from the ONNX
+# produced by export/export_pe_image_encoder.py.
+# Engine profile: min=1 / opt=8 / max=32 at 336x336.
+
+name: "pe_image_encoder"
+platform: "tensorrt_plan"
+max_batch_size: 32
+
+input [
+  {
+    name: "images"
+    data_type: TYPE_FP32
+    dims: [ 3, 336, 336 ]
+  }
+]
+
+output [
+  {
+    name: "image_embeddings"
+    data_type: TYPE_FP32
+    dims: [ 1024 ]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16, 32 ]
+  max_queue_delay_microseconds: 15000
+}
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]

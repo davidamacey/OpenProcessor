@@ -61,6 +61,12 @@ class RegionFields:
     text_confidence: str = 'region_text_confidence'
     text_source: str = 'region_text_source'
     text_engine_version: str = 'region_text_engine_version'
+    # Per-reader readings kept side by side (text_reader='both', or any
+    # mode where both readers ran), plus whether they disagree after
+    # normalization. ``text`` stays the chosen reading.
+    text_vlm: str = 'region_text_vlm'
+    text_ocr: str = 'region_text_ocr'
+    text_disagreement: str = 'region_text_disagreement'
 
     validated: str = 'region_validated'
     verified: str = 'region_verified'

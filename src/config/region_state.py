@@ -122,6 +122,9 @@ CONFIRM_STATUS = RegionStatus.DETECTED
 REJECT_STATUS = RegionStatus.NO_REGION_VISIBLE
 FALSE_POSITIVE_STATUS = RegionStatus.FALSE_POSITIVE
 
+# The values an operator may write by hand, derived from REGION_STATUS_INFO.
+# The pipeline also writes transient states (pending_*, detection_failed)
+# a human never sets directly.
 HUMAN_WRITABLE_STATUSES: frozenset[RegionStatus] = frozenset(
     s for s, info in REGION_STATUS_INFO.items() if info.human_writable
 )

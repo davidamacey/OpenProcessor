@@ -56,6 +56,7 @@ from src.config import (
     index_name,
 )
 from src.core.logging import get_logger
+from src.services.curation.item_text import ITEM_TEXT_MAPPING
 
 
 if TYPE_CHECKING:
@@ -234,6 +235,15 @@ _EXCLUSION_MAPPING: dict[str, Any] = {
 }
 
 
+def _region_text_reader_mapping() -> dict[str, Any]:
+    """Per-reader region text fields (VLM vs OCR reading + disagreement)."""
+    return {
+        F.text_vlm: {'type': 'keyword'},
+        F.text_ocr: {'type': 'keyword'},
+        F.text_disagreement: {'type': 'boolean'},
+    }
+
+
 def _items_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -349,6 +359,10 @@ def _items_body() -> dict[str, Any]:
                 F.text_confidence: {'type': 'float'},
                 F.text_source: {'type': 'keyword'},
                 F.text_engine_version: {'type': 'keyword'},
+                **_region_text_reader_mapping(),
+                # Every OCR line read on the item crop + normalized search
+                # tokens (src/services/curation/item_text.py).
+                **ITEM_TEXT_MAPPING,
                 F.class_id: {'type': 'integer'},
                 F.label_source: {'type': 'keyword'},
                 F.source: {'type': 'keyword'},
@@ -957,6 +971,35 @@ async def ensure_items_exclusion_fields(
     added: list[str] = []
     conflicts: list[str] = []
     for field, spec in _EXCLUSION_MAPPING.items():
+        try:
+            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
+            added.append(field)
+        except Exception as exc:
+            msg = str(exc)
+            if not _is_recoverable_mapping_conflict(msg):
+                logger.error('curation_mapping_migration_failed', index=index, error=msg)
+                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
+            conflicts.append(field)
+    logger.info(
+        'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
+    )
+    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
+
+
+async def ensure_items_text_reader_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT the region text-reader fields and the item-text fields onto the
+    items mapping.
+
+    One ``PUT _mapping`` per field (as :func:`ensure_items_exclusion_fields`)
+    so a dynamic mapping one of them already picked up on an older index
+    cannot block the others. Additive and idempotent.
+    """
+    index = config.items_index
+    added: list[str] = []
+    conflicts: list[str] = []
+    for field, spec in {**_region_text_reader_mapping(), **ITEM_TEXT_MAPPING}.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
@@ -1737,6 +1780,7 @@ __all__ = [
     'ensure_items_region_embedding',
     'ensure_items_request_id_field',
     'ensure_items_score_fields',
+    'ensure_items_text_reader_fields',
     'ensure_items_validation_split_fields',
     'ensure_items_viz_fields',
     'ensure_items_vlm_raw_label_fields',

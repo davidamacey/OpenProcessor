@@ -27,6 +27,7 @@ from src.clients.curation_opensearch import (
     ensure_items_region_embedding,
     ensure_items_request_id_field,
     ensure_items_score_fields,
+    ensure_items_text_reader_fields,
     ensure_items_validation_split_fields,
     ensure_items_viz_fields,
     ensure_items_vlm_raw_label_fields,
@@ -163,6 +164,10 @@ async def _ensure_indexes(opensearch: Any) -> None:
             await ensure_items_exclusion_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_exclusion_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_text_reader_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_text_reader_fields_migration_failed', error=str(exc))
         try:
             await ensure_items_validation_split_fields(opensearch)
         except Exception as exc:
@@ -332,9 +337,9 @@ class ItemBatchRegionRequest(BaseModel):
     frame: Literal['source', 'parent'] = 'source'
 
 
-# Region status values an operator may write — the lifecycle entries
-# marked human_writable in src/config/region_state.py. Transient pipeline
-# states ('pending_detection', …) are never set by hand.
+# Region status values an operator may write — the lifecycle entries marked
+# human_writable in src/config/region_state.py (stdlib-only, so the TS
+# contract codegen exports the same set without importing the app).
 HUMAN_REGION_STATUS_VALUES = HUMAN_WRITABLE_STATUSES
 
 

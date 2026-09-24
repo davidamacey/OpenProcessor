@@ -1,10 +1,11 @@
 """Unit tests for :mod:`src.clients.pe_encoder` (B-PR3).
 
-The PE text encoder requires a PyTorch + ``perception_models`` checkpoint
-load on first use. None of those heavy dependencies are exercised here —
-we stub :meth:`PEEncoder.warm_text_encoder` to drop a fake torch model
-into the instance, and stub the Triton pool with a ``MagicMock`` for the
-image path. The tests assert the public-API contract only:
+The PE text encoder needs PE's tokenizer plus an ONNX Runtime / PyTorch /
+Triton backend. None of those heavy dependencies are exercised here — we
+install a fake tokenizer + backend in place of what
+:meth:`PEEncoder.warm_text_encoder` would load, and stub the Triton pool
+with a ``MagicMock`` for the image path. Backend *selection* is covered in
+``test_pe_text_backends.py``. The tests assert the public-API contract only:
 
 * image encoder returns 1024-d L2-normalized rows
 * text encoder returns 1024-d L2-normalized rows
@@ -37,25 +38,36 @@ def _make_pool_returning(matrix: np.ndarray) -> MagicMock:
     return pool
 
 
-def _stub_text_model(encoder: PEEncoder, vec: np.ndarray) -> None:
-    """Pretend ``warm_text_encoder`` ran; install minimal mocks."""
-    fake_torch = MagicMock()
-    # torch.no_grad() context manager — must support __enter__/__exit__.
-    fake_torch.no_grad.return_value.__enter__ = MagicMock(return_value=None)
-    fake_torch.no_grad.return_value.__exit__ = MagicMock(return_value=False)
+class _FakeTextBackend:
+    """Returns ``vec`` for every row; records each call's token batch."""
 
-    fake_features = MagicMock()
-    fake_features.detach.return_value.cpu.return_value.numpy.return_value = vec.astype(np.float32)
+    name = 'fake'
 
-    fake_model = MagicMock()
-    fake_model.encode_text = MagicMock(return_value=fake_features)
+    def __init__(self, vec: np.ndarray) -> None:
+        self.vec = vec.astype(np.float32)
+        self.calls: list[np.ndarray] = []
 
-    fake_tokenizer = MagicMock(return_value='TOKENS')
+    def encode(self, tokens: np.ndarray) -> np.ndarray:
+        self.calls.append(tokens)
+        return np.tile(self.vec, (tokens.shape[0], 1))
 
-    encoder._torch = fake_torch
-    encoder._text_model = fake_model
-    encoder._text_tokenizer = fake_tokenizer
+
+def _fake_tokenizer(queries: list[str]) -> np.ndarray:
+    """SOT, one id per character, EOT, zero padding — PE tokenizer shaped."""
+    out = np.zeros((len(queries), 32), dtype=np.int64)
+    for row, query in enumerate(queries):
+        ids = [49406, *(100 + (ord(c) % 1000) for c in query[:30]), 49407]
+        out[row, : len(ids)] = ids
+    return out
+
+
+def _stub_text_model(encoder: PEEncoder, vec: np.ndarray) -> _FakeTextBackend:
+    """Pretend ``warm_text_encoder`` ran with a fake backend."""
+    backend = _FakeTextBackend(vec)
+    encoder._text_tokenizer = _fake_tokenizer
+    encoder._text_backend = backend
     encoder._text_ready = True
+    return backend
 
 
 # =============================================================================
@@ -126,7 +138,7 @@ def test_encode_text_returns_unit_norm():
 def test_encode_text_lru_caches_repeats():
     enc = PEEncoder()
     vec = np.ones(PE_EMBEDDING_DIM, dtype=np.float32)
-    _stub_text_model(enc, vec)
+    backend = _stub_text_model(enc, vec)
 
     enc.encode_text(['red sedan'])
     enc.encode_text(['red sedan'])
@@ -138,8 +150,54 @@ def test_encode_text_lru_caches_repeats():
     # second + third call for 'red sedan').
     assert info.misses == 2
     assert info.hits == 2
-    # Underlying torch model was only invoked once per unique query.
-    assert enc._text_model.encode_text.call_count == 2
+    # The backend was only invoked once per unique query.
+    assert len(backend.calls) == 2
+
+
+def test_encode_text_batches_cache_misses_into_one_backend_call():
+    enc = PEEncoder()
+    backend = _stub_text_model(enc, np.ones(PE_EMBEDDING_DIM, dtype=np.float32))
+
+    enc.encode_text(['red sedan'])
+    out = enc.encode_text(['red sedan', 'blue truck', 'green van', 'blue truck'])
+
+    assert out.shape == (4, PE_EMBEDDING_DIM)
+    # Second call: one hit, two new queries encoded together, duplicate
+    # 'blue truck' neither re-encoded nor counted twice.
+    assert [c.shape[0] for c in backend.calls] == [1, 2]
+    info = enc.text_cache_info()
+    assert (info.hits, info.misses, info.currsize) == (1, 3, 3)
+
+
+def test_encode_text_feeds_backends_eot_trimmed_tokens():
+    enc = PEEncoder()
+    backend = _stub_text_model(enc, np.ones(PE_EMBEDDING_DIM, dtype=np.float32))
+
+    enc.encode_text(['ab', 'abcde'])
+
+    (tokens,) = backend.calls
+    # SOT + 5 chars + EOT for the longest query; padding tail dropped.
+    assert tokens.shape == (2, 7)
+    assert tokens.dtype == np.int64
+    assert tokens[1, -1] == 49407
+
+
+def test_encode_text_cache_evicts_least_recently_used(monkeypatch):
+    import src.clients.pe_encoder as pe_module
+
+    monkeypatch.setattr(pe_module, '_TEXT_CACHE_SIZE', 2)
+    enc = PEEncoder()
+    backend = _stub_text_model(enc, np.ones(PE_EMBEDDING_DIM, dtype=np.float32))
+
+    enc.encode_text(['a'])
+    enc.encode_text(['b'])
+    enc.encode_text(['a'])  # refresh 'a'
+    enc.encode_text(['c'])  # evicts 'b'
+    enc.encode_text(['a'])  # still cached
+    enc.encode_text(['b'])  # re-encoded
+
+    assert [c.shape[0] for c in backend.calls] == [1, 1, 1, 1]
+    assert enc.text_cache_info().currsize == 2
 
 
 def test_encode_text_empty_returns_empty_matrix():
