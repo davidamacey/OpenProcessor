@@ -47,6 +47,53 @@ afterEach(() => {
 });
 
 describe('TrainForm — preflight panel renders new check ids generically', () => {
+  it('renders the export_class_split_coverage check with its served per-class detail (OpenProcessor 6c77deb)', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ options: [], default: null })),
+    );
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(TrainForm, {
+      target,
+      props: baseProps({
+        blocked: true,
+        summary: '1 check failed',
+        checks: [
+          {
+            name: 'export_class_split_coverage',
+            severity: 'block',
+            message:
+              '1 class(es) this run trains on are below the per-class minimum of 8 train / 2 val instance(s): audi (class 2): train=0, val=0.',
+            detail: {
+              classes: [
+                {
+                  class_id: 2,
+                  class_name: 'audi',
+                  train: 0,
+                  val: 0,
+                  test: 10,
+                  missing_splits: ['train', 'val'],
+                },
+              ],
+              judged_classes: 2,
+              min_train_per_class: 8,
+              min_val_per_class: 2,
+            },
+          },
+        ],
+      }),
+    } as never);
+    flushSync();
+
+    expect(target.textContent).toContain('export_class_split_coverage');
+    expect(target.textContent).toContain('audi (class 2): train=0, val=0');
+    const detailsEl = target.querySelector('details');
+    expect(detailsEl).toBeTruthy();
+    expect(detailsEl?.textContent).toContain('audi');
+    expect(detailsEl?.textContent).toContain('min_train_per_class');
+  });
+
   it('renders export_not_empty and export_generation with their served severity/message, no special-casing needed', () => {
     vi.stubGlobal(
       'fetch',

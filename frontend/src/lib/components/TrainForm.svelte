@@ -581,7 +581,22 @@
               {c.severity}
             </span>
             <span class="font-mono text-[10px] text-zinc-400">{c.name}</span>
-            <span class="grow">{c.message}</span>
+            <span class="grow">
+              {c.message}
+              {#if c.detail && Object.keys(c.detail).length > 0}
+                <details class="mt-1">
+                  <summary class="cursor-pointer text-[10px] text-zinc-500"
+                    >detail</summary
+                  >
+                  <pre
+                    class="mt-1 whitespace-pre-wrap break-all font-mono text-[10px] text-zinc-400">{JSON.stringify(
+                      c.detail,
+                      null,
+                      2,
+                    )}</pre>
+                </details>
+              {/if}
+            </span>
           </li>
         {/each}
       </ul>

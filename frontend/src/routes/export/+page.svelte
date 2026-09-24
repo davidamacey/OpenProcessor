@@ -57,7 +57,6 @@
   // Test holdout freeze
   let freezeOpen = $state<boolean>(false);
   let freezePercent = $state<number>(10);
-  let freezeSeed = $state<number>(42);
   let freezeBusy = $state<boolean>(false);
 
   async function loadAll(): Promise<void> {
@@ -239,7 +238,6 @@
 
   function openFreeze(): void {
     freezePercent = 10;
-    freezeSeed = 42;
     freezeOpen = true;
   }
 
@@ -257,14 +255,18 @@
     const ok = window.confirm(
       `Freeze ${freezePercent}% of validated crops as the test set? This is ` +
         'one-shot per dataset version (Plan §B4) — re-running requires ?force=true ' +
-        'and is recorded in the manifest.',
+        'and is recorded in the manifest. Selection is deterministic ' +
+        '(SHA1 of each crop id, per class) — no seed to pick.',
     );
     if (!ok) return;
     freezeBusy = true;
     try {
-      const res = await freezeTestHoldout({ percent: freezePercent, seed: freezeSeed });
+      const res = await freezeTestHoldout({ percent: freezePercent });
+      const selectionNote = res.selection ? ` via ${res.selection}` : '';
+      const floorNote =
+        res.min_per_class != null ? ` (min ${res.min_per_class}/class)` : '';
       toastStore.success(
-        `Frozen: ${res.n_frozen} crops across ${res.n_classes_covered} classes.`,
+        `Frozen: ${res.n_frozen} crops across ${res.n_classes_covered} classes${selectionNote}${floorNote}.`,
       );
       freezeOpen = false;
       await loadAll();
@@ -599,6 +601,83 @@
           >.
         </p>
       {/if}
+
+      <!-- Split counts + per-class table (OpenProcessor 6c77deb's
+           `GET {API_PREFIX}/export/status`, ExportStatusResponse) —
+           absent/null on a pre-6c77deb backend, so this whole block just
+           doesn't render rather than showing blanks. -->
+      {#if exportState.image_count != null || exportState.class_count != null || exportState.split_counts}
+        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+          {#if exportState.image_count != null}
+            <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
+              <span class="text-zinc-500">images</span>
+              <span class="ml-1 font-mono text-zinc-200"
+                >{exportState.image_count.toLocaleString()}</span
+              >
+              {#if exportState.group_key}
+                <span class="ml-1 text-zinc-500">(by {exportState.group_key})</span>
+              {/if}
+            </span>
+          {/if}
+          {#if exportState.class_count != null}
+            <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
+              <span class="text-zinc-500">classes</span>
+              <span class="ml-1 font-mono text-zinc-200">{exportState.class_count}</span>
+            </span>
+          {/if}
+          {#if exportState.split_counts}
+            <span
+              class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1 font-mono"
+            >
+              train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
+              · test {exportState.split_counts.test.toLocaleString()}
+            </span>
+          {/if}
+        </div>
+      {/if}
+
+      {#if exportState.class_split_counts && exportState.class_split_counts.length > 0}
+        <details class="mt-3 text-xs">
+          <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
+            Per-class split counts ({exportState.class_split_counts.length})
+          </summary>
+          <div class="mt-2 max-h-64 overflow-auto rounded border border-zinc-800">
+            <table class="w-full text-xs">
+              <thead
+                class="sticky top-0 border-b border-zinc-800 bg-zinc-950 text-left uppercase text-zinc-500"
+              >
+                <tr>
+                  <th class="px-2 py-1 font-medium">Class</th>
+                  <th class="px-2 py-1 text-right font-medium">Train</th>
+                  <th class="px-2 py-1 text-right font-medium">Val</th>
+                  <th class="px-2 py-1 text-right font-medium">Test</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each exportState.class_split_counts as c (c.class_id)}
+                  {@const missing = c.train === 0 || c.val === 0}
+                  <tr
+                    class="border-b border-zinc-900 {missing
+                      ? 'bg-red-500/10 text-red-200'
+                      : 'text-zinc-300'}"
+                  >
+                    <td class="px-2 py-1">{c.class_name}</td>
+                    <td class="px-2 py-1 text-right font-mono"
+                      >{c.train.toLocaleString()}</td
+                    >
+                    <td class="px-2 py-1 text-right font-mono"
+                      >{c.val.toLocaleString()}</td
+                    >
+                    <td class="px-2 py-1 text-right font-mono"
+                      >{c.test.toLocaleString()}</td
+                    >
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      {/if}
     {/if}
   </section>
 </div>
@@ -640,6 +719,18 @@
         {#if exportState.export_dir}
           <p class="mb-3 break-all font-mono text-xs text-zinc-300">
             {exportState.export_dir}
+          </p>
+        {/if}
+        {#if exportState.split_counts}
+          <p class="mb-3 font-mono text-xs text-zinc-300">
+            {exportState.image_count != null
+              ? `${exportState.image_count.toLocaleString()} images`
+              : ''}
+            {exportState.class_count != null
+              ? `· ${exportState.class_count} classes`
+              : ''}
+            · train {exportState.split_counts.train.toLocaleString()} · val {exportState.split_counts.val.toLocaleString()}
+            · test {exportState.split_counts.test.toLocaleString()}
           </p>
         {/if}
         <div class="flex flex-wrap gap-2">
@@ -693,8 +784,9 @@
       <div
         class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
       >
-        One-shot per dataset version. Stratified by (class × source) using a fixed seed
-        for reproducibility (Plan §B4).
+        One-shot per dataset version. Deterministic per-class selection (SHA1 of each crop
+        id) — the same cohort always freezes the same set, so there's no seed to pick
+        (Plan §B4).
       </div>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Percent of validated crops</span>
@@ -705,10 +797,6 @@
           bind:value={freezePercent}
           class="input w-full"
         />
-      </label>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-zinc-400">Seed</span>
-        <input type="number" bind:value={freezeSeed} class="input w-full" />
       </label>
       <div class="flex justify-end gap-2">
         <button type="button" class="btn" onclick={closeFreeze} disabled={freezeBusy}>
