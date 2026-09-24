@@ -105,7 +105,7 @@
   const labeledTotal = $derived.by(() => {
     const l = stats?.labeled;
     if (!l) return 0;
-    return l.by_human + l.by_gemma + l.by_v6 + l.by_yolo11_proposal + l.other;
+    return l.by_human + l.by_vlm + l.by_v6 + l.by_yolo11_proposal + l.other;
   });
 
   const labeledRows = $derived.by(() => {
@@ -124,9 +124,9 @@
         tone: 'bg-green-500',
       },
       {
-        key: 'by_gemma',
-        label: 'Gemma',
-        count: l.by_gemma,
+        key: 'by_vlm',
+        label: 'VLM',
+        count: l.by_vlm,
         tone: 'bg-blue-500',
       },
       {

@@ -154,9 +154,10 @@ Every one of these degrades gracefully to invisible/default when its
 backend flag is off or `/curation/methods` fails: `strategiesStore` falls back
 to `FALLBACK_METHODS` (`strategies.ts`) — the hardcoded stable-only list
 matching what's always been implemented — so a missing endpoint never
-breaks page load. Flags live in openprocessor's `.env.legacy.example`
-(`OP_SCORES_ENABLED`, `OP_SCORES_SHADOW`, `OP_SELECT_DIVERSE_ENABLED`,
-`OP_VIZ_PROJECTION_ENABLED`), all default off.
+breaks page load. Flags are OpenProcessor env vars
+(`OP_SCORES_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`,
+`OP_VIZ_PROJECTION_ENABLED`, `OP_SEMANTIC_SEARCH_ENABLED`), all default
+off.
 
 ## Training UI — `/train` (Phase 2 of legacy_train_pipeline)
 
@@ -425,24 +426,35 @@ npm run check  # svelte-check + tsc
 npm run build  # SvelteKit → /build (static)
 ```
 
-The production build is consumed by a `nginx:alpine` container declared in
-`openprocessor/docker-compose.legacy.yml` on port 5184 (host). Port conflicts:
-5174=example-app-backend, 5180/5181=example-app-opensearch, 5183=example-app-docs.
+The production build runs in an `nginx:alpine` container defined by this
+repo's `docker-compose.yml` (`docker compose up -d --build`), host port
+5184 (`CROPWRIGHT_PORT`). Port conflicts: 5174=example-app-backend,
+5180/5181=example-app-opensearch, 5183=example-app-docs.
 
-## Connecting to openprocessor
+## Connecting to OpenProcessor
 
-`PUBLIC_TRITON_API_URL` env var (default: empty string in production Docker).
-When empty, the nginx container proxies `/curation/*` and `/clusters/*` to
-`http://op-api:4603` — no CORS, no hardcoded IPs, works on any LAN client.
-Set `PUBLIC_TRITON_API_URL=http://<host>:4603` only when pointing at a remote
-openprocessor on a different machine. All API calls flow through `src/lib/api.ts`
-with retry + AbortController for in-flight cancellation.
+The backend is OpenProcessor's public `main` (the private legacy stack
+serving `/curation/*` is retired). Three runtime env vars, all substituted at
+container start by `docker-entrypoint.sh`, so one image fits any deployment:
+
+- `PUBLIC_API_PREFIX` (default `/curation`) — must equal the API's
+  `OP_API_PREFIX`; the API builds some URLs (region thumbnails) from its
+  own prefix, and nginx proxies only this one prefix.
+- `API_UPSTREAM` (default `http://op-api:8000`) — where nginx proxies
+  `{PUBLIC_API_PREFIX}/*`, by container name over the API's docker network
+  (`OP_DOCKER_NETWORK`, default `openprocessor_triton_net`). No CORS, works
+  from any LAN client.
+- `PUBLIC_TRITON_API_URL` (default empty = relative URLs via the proxy) —
+  set only when the browser must call an API on a different origin.
+
+All API calls flow through `src/lib/api.ts` with retry + AbortController
+for in-flight cancellation.
 
 ## Deployment
 
-openprocessor serves all images and crop thumbnails — the labeler does NOT mount
+The API serves all images and crop thumbnails — the labeler does NOT mount
 NAS volumes. This avoids volume duplication and keeps NAS path knowledge in
-one place. Image URLs look like `${PUBLIC_TRITON_API_URL}/curation/crops/{id}/thumbnail`.
+one place. Image URLs look like `{API_PREFIX}/crops/{id}/thumbnail`.
 
 ## Style
 

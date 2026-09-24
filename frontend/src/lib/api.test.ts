@@ -1188,11 +1188,8 @@ describe('startAutoLabel', () => {
 });
 
 describe('API_PREFIX', () => {
-  // The whole point of T-B1: with PUBLIC_API_PREFIX unset (as it is in
-  // dev, in CI and here), every composed URL must be byte-identical to
-  // the hardcoded `/curation` strings this refactor replaced. This assertion
-  // is deleted/flipped at T-E2, when the default becomes '/curation'.
-  it('defaults to the transitional /curation prefix when PUBLIC_API_PREFIX is unset', () => {
+  // T-E2: the default matches OpenProcessor's OP_API_PREFIX default.
+  it('defaults to /curation when PUBLIC_API_PREFIX is unset', () => {
     expect(API_PREFIX).toBe('/curation');
   });
 

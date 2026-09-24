@@ -20,7 +20,7 @@ describe('unloadButtonState', () => {
     expect(
       unloadButtonState({
         kind: 'triton',
-        is_lpr: true,
+        is_region_protected: true,
         requires_force_to_unload: false,
       }),
     ).toBe('hidden');
@@ -28,7 +28,11 @@ describe('unloadButtonState', () => {
 
   it('hides the button entirely for LPR models even if also flagged core/active (belt and suspenders)', () => {
     expect(
-      unloadButtonState({ kind: 'triton', is_lpr: true, requires_force_to_unload: true }),
+      unloadButtonState({
+        kind: 'triton',
+        is_region_protected: true,
+        requires_force_to_unload: true,
+      }),
     ).toBe('hidden');
   });
 
@@ -36,7 +40,7 @@ describe('unloadButtonState', () => {
     expect(
       unloadButtonState({
         kind: 'external',
-        is_lpr: false,
+        is_region_protected: false,
         requires_force_to_unload: false,
       }),
     ).toBe('hidden');
@@ -49,7 +53,7 @@ describe('unloadButtonState', () => {
     expect(
       unloadButtonState({
         kind: 'triton',
-        is_lpr: false,
+        is_region_protected: false,
         requires_force_to_unload: true,
       }),
     ).toBe('force-required');
@@ -59,7 +63,7 @@ describe('unloadButtonState', () => {
     expect(
       unloadButtonState({
         kind: 'triton',
-        is_lpr: false,
+        is_region_protected: false,
         requires_force_to_unload: false,
       }),
     ).toBe('normal');
@@ -69,7 +73,7 @@ describe('unloadButtonState', () => {
     expect(
       unloadButtonState({
         kind: 'triton',
-        is_lpr: undefined,
+        is_region_protected: undefined,
         requires_force_to_unload: undefined,
       }),
     ).toBe('normal');

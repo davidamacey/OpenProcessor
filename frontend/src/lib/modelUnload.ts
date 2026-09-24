@@ -8,7 +8,7 @@
  *
  * The real guard lives server-side (`DELETE /curation/models/{name}` in
  * openprocessor's `op_models.py`) — this module only decides what the button
- * *looks like* from the `is_lpr` / `requires_force_to_unload` flags the
+ * *looks like* from the `is_region_protected` / `requires_force_to_unload` flags the
  * server already computed and sent back on `/curation/models/status`. It must
  * never invent its own notion of "is this LPR / is this active" — that
  * would be a second, driftable copy of the real guard.
@@ -29,10 +29,10 @@ export type UnloadButtonState = 'hidden' | 'normal' | 'force-required';
  * - `normal`: rendered, single confirmation, `force=false`.
  */
 export function unloadButtonState(
-  model: Pick<OpModel, 'kind' | 'is_lpr' | 'requires_force_to_unload'>,
+  model: Pick<OpModel, 'kind' | 'is_region_protected' | 'requires_force_to_unload'>,
 ): UnloadButtonState {
   if (model.kind !== 'triton') return 'hidden';
-  if (model.is_lpr) return 'hidden';
+  if (model.is_region_protected) return 'hidden';
   if (model.requires_force_to_unload) return 'force-required';
   return 'normal';
 }

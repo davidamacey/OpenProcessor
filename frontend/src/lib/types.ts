@@ -506,8 +506,8 @@ export interface OpModel {
    * server-side so the UI never has to re-derive them (and can't drift
    * out of sync with the real guard).
    */
-  /** LPR pipeline model — never unloadable through the UI, no override. */
-  is_lpr?: boolean;
+  /** Region-detection pipeline model (backend `_is_region_protected_model`) — never unloadable through the UI, no override. */
+  is_region_protected?: boolean;
   /** ACTIVE_VEHICLE_MODEL or another core pipeline model — unload requires force=true. */
   requires_force_to_unload?: boolean;
   /** Present (with job_id/version) only for models promoted through this pipeline. */

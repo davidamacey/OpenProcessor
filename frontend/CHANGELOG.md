@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Retargeted at OpenProcessor `main` as the only backend (E2E contract
+  audit, `docs/design/e2e-contract-audit-2026-09-23.md`):
+  - `API_PREFIX` now defaults to `/curation` (T-E2), in `api.ts` and
+    `docker-entrypoint.sh`.
+  - nginx's API upstream is configurable at container start via
+    `API_UPSTREAM` (default `http://op-api:8000`). It was hardcoded to
+    `op-api:8000`.
+  - Added a standalone `docker-compose.yml` that joins the API's docker
+    network (`OP_DOCKER_NETWORK`), plus a `.dockerignore` so
+    `node_modules`, `.git` and `.env` files stay out of the build
+    context.
+  - Adopted main's renamed response keys:
+    - dataset stats `labeled.by_vlm` (was `by_gemma`, which made the
+      labeled total NaN)
+    - model `is_region_protected` (was `is_lpr`, which exposed Unload on
+      protected models)
+    - class sync `upserted`
+    - region clustering `n_regions`
+    - SSE `crop.region_verified`, replacing the retired
+      `crop.plate_verified` literal
+  - `getPlates` takes the slot's declared `queue.browsePath` instead of a
+    hidden route constant.
+
+### Fixed
+
+- `/clusters/[id]` no longer opens an SSE subscription on candidate
+  clusters. They have no class, and the backend filters events on exact
+  `class_id`, so that stream could never deliver anything.
+- Corrected the `startAutoLabel` doc comment claiming
+  `detection_profile`/`prompt_pack` were confirmed live. `main` silently
+  dropped them; per-run support is landing backend-side.
+
 ### Added
 
 - Annotation slots are now wired all the way through the crop pipeline

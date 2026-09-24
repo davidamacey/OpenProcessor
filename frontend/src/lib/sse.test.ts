@@ -8,10 +8,9 @@
  * number_verified`) would refresh nothing, with no error anywhere.
  *
  * `slotVerifiedEventTypes()` fixes this by deriving the list from
- * `slotRegistry.queues` at call time, plus keeping the pre-rename
- * `crop.plate_verified` literal (license_plate's slot key is
- * `license_plate`, not `plate`, so it doesn't match the derived
- * pattern on its own).
+ * `slotRegistry.queues` at call time, plus the generic
+ * `crop.region_verified` OpenProcessor emits for every region verify
+ * regardless of slot key.
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { slotVerifiedEventTypes } from './sse';
@@ -26,8 +25,8 @@ afterEach(() => {
 });
 
 describe('slotVerifiedEventTypes', () => {
-  it('includes the license_plate-bound literal by default', () => {
-    expect(slotVerifiedEventTypes()).toContain('crop.plate_verified');
+  it('includes the generic crop.region_verified by default', () => {
+    expect(slotVerifiedEventTypes()).toContain('crop.region_verified');
   });
 
   it('does NOT include a second slot event type before it is registered (the pre-fix trap)', () => {
@@ -38,7 +37,7 @@ describe('slotVerifiedEventTypes', () => {
     installDeploymentSlots([aircraftTailNumberSlot]);
     const types = slotVerifiedEventTypes();
     expect(types).toContain('crop.aircraft_tail_number_verified');
-    expect(types).toContain('crop.plate_verified');
+    expect(types).toContain('crop.region_verified');
   });
 
   it('reads slotRegistry at CALL time, not module-scope destructure', () => {

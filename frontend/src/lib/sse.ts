@@ -43,8 +43,8 @@ export interface OpCropClassifiedEvent extends OpBaseEvent {
  * A slot's "human verified this box" event. Generalized off the
  * plate-only `OpCropPlateVerifiedEvent` (which typed `plate_status`/
  * `plate_text` directly) — `type` is now any `crop.<slot.key>_verified`
- * string (or the literal `'crop.plate_verified'`, kept for back-compat
- * with the pre-rename wire name — see `slotVerifiedEventTypes()`), and
+ * string (or the generic `'crop.region_verified'` OpenProcessor emits for
+ * every region — see `slotVerifiedEventTypes()`), and
  * the slot-specific fields are carried untyped so a handler reads them
  * off the active slot's own wire field names (`capabilities.lifecycle
  * .statusField` / `capabilities.text.valueField`) rather than a
@@ -91,11 +91,11 @@ const RECONNECT_MAX_MS = 30_000;
  */
 export function slotVerifiedEventTypes(): string[] {
   const derived = slotRegistry.queues.map((s) => `crop.${s.key}_verified`);
-  // 'crop.plate_verified' is the literal wire name license_plate uses
-  // today (its slot key is 'license_plate', not 'plate', so it doesn't
-  // match the crop.<slot.key>_verified pattern above) — kept explicitly
-  // so this still works against a backend that hasn't renamed yet.
-  return Array.from(new Set(['crop.plate_verified', ...derived]));
+  // 'crop.region_verified' is the one generic event OpenProcessor emits
+  // for every region verify (event_hub.publish_region_verified), whatever
+  // the slot key — the per-slot names above cover a backend that
+  // namespaces verify events per slot.
+  return Array.from(new Set(['crop.region_verified', ...derived]));
 }
 
 function knownEventTypes(): string[] {

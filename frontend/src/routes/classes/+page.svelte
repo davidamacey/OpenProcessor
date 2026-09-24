@@ -181,11 +181,8 @@
     busy = true;
     try {
       const res = await syncClassesToOpensearch();
-      const created = res.created ?? 0;
-      const updated = res.updated ?? 0;
-      toastStore.success(
-        `Synced to OpenSearch (${created} created, ${updated} updated).`,
-      );
+      const upserted = res.upserted ?? 0;
+      toastStore.success(`Synced ${upserted} classes to OpenSearch.`);
     } catch (e) {
       toastStore.error(`Sync failed: ${(e as Error).message}`);
     } finally {

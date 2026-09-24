@@ -1,6 +1,6 @@
 /**
  * Typed API client for the OpenProcessor curation endpoints, mounted
- * under `API_PREFIX` (transitionally `/curation`; canonically `/curation`).
+ * under `API_PREFIX` (`/curation`).
  *
  * - Single base URL, defaulting to `''` (empty → relative paths, proxied
  *   by nginx in Docker production).
@@ -69,8 +69,8 @@ import type {
 // onto SSR-only paths; we go through `import.meta.env` so this module remains
 // usable in pure client contexts (and, for production, the value is baked in
 // at build time and overridable via the docker-entrypoint shim).
-// Empty default: in Docker the labeler's nginx proxies /curation/* and /clusters/{train|assign|stats}/*
-// to op-api on the same docker network. Relative URLs work from any LAN IP / VPN client.
+// Empty default: in Docker the labeler's nginx proxies {API_PREFIX}/* to the
+// backend on the same docker network. Relative URLs work from any LAN IP / VPN client.
 // For local `npm run dev` outside Docker, set PUBLIC_TRITON_API_URL=http://localhost:4603 in .env.
 const RAW_BASE = (import.meta.env?.PUBLIC_TRITON_API_URL as string | undefined) ?? '';
 
@@ -78,18 +78,11 @@ export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
 
 /**
  * Path prefix every backend endpoint hangs off, e.g. `/curation/health`.
- *
- * TRANSITIONAL DEFAULT. `/curation` is OpenProcessor's *historical* prefix.
- * Its canonical, generic prefix — the one any future consumer will be
- * written against — is `/curation`, and it already ships that as the
- * default. `/curation` survives here only so introducing this constant is
- * provably behavior-neutral: a 92-site URL-composition refactor and a
- * live prefix change are two failure modes, and fusing them makes a
- * break ambiguous between "threading bug" and "route mismatch".
- *
- * This default is DELETED in a later phase (T-E2 of
- * `docs/design/backend-integration-phase-b-plan-2026-09-20.md`), when it
- * becomes `/curation`. Do not treat `/curation` as a supported value.
+ * Defaults to OpenProcessor's `OP_API_PREFIX` default, `/curation`, and
+ * must equal it: the backend also builds some URLs itself (thumbnail
+ * URLs in `/regions` rows) from its own prefix, and nginx only proxies
+ * this one. Flipped from the transitional `/curation` at T-E2
+ * (`docs/design/backend-integration-phase-b-plan-2026-09-20.md`).
  */
 const RAW_API_PREFIX = (import.meta.env?.PUBLIC_API_PREFIX as string | undefined) ?? '';
 
@@ -638,12 +631,16 @@ export interface PlatesQuery {
   include_test?: boolean;
 }
 
+/** `browsePath` is the slot's declared browse collection
+ *  (`capabilities.queue.browsePath`), so a slot never inherits another
+ *  slot's route by accident. */
 export async function getPlates(
+  browsePath: string,
   params: PlatesQuery = {},
   signal?: AbortSignal,
 ): Promise<PlatesPage> {
   const page = await apiFetch<PlatesPage>(
-    `${API_PREFIX}${REGION_BASE}${qs(params as Record<string, unknown>)}`,
+    `${API_PREFIX}${browsePath}${qs(params as Record<string, unknown>)}`,
     {},
     signal,
   );
@@ -669,7 +666,7 @@ export interface PlateClusterJob {
   result:
     | ({
         status?: string;
-        n_plates?: number;
+        n_regions?: number;
         n_clusters?: number;
         assigned?: number;
         fp_centroids?: { status: string; n_members?: number; k?: number };
@@ -858,7 +855,7 @@ export interface DatasetStats {
   by_source: Array<{ key: string; doc_count: number }>;
   labeled: {
     by_human: number;
-    by_gemma: number;
+    by_vlm: number;
     by_v6: number;
     by_yolo11_proposal: number;
     other: number;
@@ -1935,8 +1932,8 @@ export function mergeClasses(
 
 export function syncClassesToOpensearch(
   signal?: AbortSignal,
-): Promise<{ created: number; updated: number }> {
-  return apiFetch<{ created: number; updated: number }>(
+): Promise<{ upserted: number; n_classes: number }> {
+  return apiFetch<{ upserted: number; n_classes: number }>(
     `${API_PREFIX}/classes/sync_to_opensearch`,
     { method: 'POST' },
     signal,
@@ -2319,25 +2316,24 @@ export interface AutoLabelStartParams {
    * `qs()` drops it entirely so an unscoped request stays byte-identical
    * to every request this app has ever sent.
    *
-   * **Confirmed live (2026-09-21) against a real OpenProcessor backend**
-   * — a scoped auto-label run was triggered through the actual UI
-   * against `op-live-verify`, and the composed request
-   * (`class_id`/`detection_profile`/`prompt_pack`) matched the backend's
-   * accepted contract exactly. The UI never sends it unless `/methods`
-   * advertises the assist axes — see `isScopedAssistAvailable` in
-   * `$lib/strategies`.
+   * Accepted by OpenProcessor `main`'s `auto_label/start`. The UI never
+   * sends it unless `/methods` advertises the assist axes — see
+   * `isScopedAssistAvailable` in `$lib/strategies`.
    */
   class_id?: number | null;
   /**
-   * Query-param name confirmed with the OpenProcessor session (2026-09-21
-   * live E2E pass) — matches exactly, no rename needed. Produced in
-   * exactly one place (`createAssistScope().toStartParams()` in
-   * `$lib/assistScope.svelte`), so if it ever needs to change that's one
-   * edit there plus one assertion in `assistScope.svelte.test.ts`. Never
-   * sent unless the matching axis is advertised.
+   * Per-run override of the settings-doc default, for this job only —
+   * omitted/null means the deployment default. Wire name agreed with the
+   * OpenProcessor owner 2026-09-23 (landing on `cutover/profile-arbiter`):
+   * an unknown id is a 422, and the resolved value is echoed in the job
+   * state's `args`. Before that, `main` silently dropped this param — the
+   * 2026-09-21 "live" pass only proved the request was composed, not
+   * honored. Produced in exactly one place
+   * (`createAssistScope().toStartParams()` in `$lib/assistScope.svelte`).
+   * Never sent unless the matching axis is advertised.
    */
   detection_profile?: string | null;
-  /** See `detection_profile` — same confirmed-live wire name. */
+  /** Same contract as `detection_profile`, for the VLM prompt pack. */
   prompt_pack?: string | null;
 }
 

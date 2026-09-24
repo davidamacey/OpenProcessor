@@ -62,7 +62,8 @@ const PLATES_PAGE_SIZE = 60;
 
 export function createPlateGalleryController() {
   const platePager = createPager<PlateBrowseItem>({
-    fetchPage: async (page) => await getPlates(plateQuery(page)),
+    fetchPage: async (page) =>
+      await getPlates(licensePlateSlot.capabilities.queue!.browsePath, plateQuery(page)),
     keyOf: (p) => p.crop_id,
   });
 
@@ -284,7 +285,7 @@ export function createPlateGalleryController() {
             );
           } else {
             toastStore.success(
-              `Clustered ${r.n_plates ?? 0} plates into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
+              `Clustered ${r.n_regions ?? 0} plates into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
             );
           }
           await loadPlateClusters();

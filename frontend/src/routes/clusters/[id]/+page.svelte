@@ -46,7 +46,6 @@
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
-  import { onMount } from 'svelte';
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
@@ -935,16 +934,19 @@
   // `ClusterKind` in src/lib/types.ts and the scoping note on getCluster
   // in src/lib/api.ts), so we subscribe with `class_id=clusterId`.
   // Crop.created without a class is hidden from per-class pages by
-  // event_hub's filter.
+  // event_hub's filter. Candidate clusters have no class, and event_hub
+  // filters on exact class_id equality, so a subscription there could
+  // never deliver anything — skip it rather than hold an idle stream open.
   let liveNewCount = $state<number>(0);
   let scrolledPastFirst20 = $state<boolean>(false);
   let liveSub: OpEventSubscription | null = null;
   let scrollEl = $state<HTMLDivElement | null>(null);
+  const liveClassId = $derived(clsForCluster?.id ?? null);
 
-  onMount(() => {
-    if (!Number.isFinite(clusterId)) return () => {};
+  $effect(() => {
+    if (liveClassId == null) return;
     liveSub = subscribeKbEvents({
-      class_id: clusterId,
+      class_id: liveClassId,
       onEvent: (ev) => {
         if (ev.type === 'crop.classified' || ev.type === 'crop.created') {
           liveNewCount += 1;

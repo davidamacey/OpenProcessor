@@ -214,9 +214,9 @@ describe('api.ts confines its prefix literal to normalizeApiPrefix', () => {
     expect(hits).toHaveLength(1);
   });
 
-  // is deleted/flipped at T-E2, when the default becomes '/curation'. Every
-  // other assertion in this file is prefix-name-agnostic and needs no change.
-  it('and it is normalizeApiPrefix’s fallback (the one line T-E2 flips)', () => {
+  // Flipped from '/curation' at T-E2. Every other assertion in this file is
+  // prefix-name-agnostic.
+  it('and it is normalizeApiPrefix’s /curation fallback', () => {
     expect(hits[0]![1]).toMatch(
       /^if \(!trimmed \|\| trimmed\.startsWith\('__'\)\) return '\/curation';$/,
     );

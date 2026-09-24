@@ -1,0 +1,35 @@
+# Cropwright frontend. Joins the OpenProcessor API's docker network so
+# nginx can proxy ${PUBLIC_API_PREFIX}/* to it by container name — no
+# CORS, and the browser only ever talks to this origin.
+#
+#   docker compose up -d --build
+#
+# PUBLIC_API_PREFIX must equal the API's OP_API_PREFIX: the API builds
+# some URLs itself (region thumbnails) from its own prefix.
+services:
+  cropwright:
+    build: .
+    container_name: cropwright
+    restart: unless-stopped
+    environment:
+      - PUBLIC_API_PREFIX=${PUBLIC_API_PREFIX:-/curation}
+      - API_UPSTREAM=${API_UPSTREAM:-http://op-api:8000}
+      # Leave empty to use the nginx proxy; set only to call an API on
+      # a different origin directly from the browser.
+      - PUBLIC_TRITON_API_URL=${PUBLIC_TRITON_API_URL:-}
+    ports:
+      - '${CROPWRIGHT_PORT:-5184}:80'
+    healthcheck:
+      # 127.0.0.1, not localhost: localhost resolves to ::1 here and
+      # nginx only listens on IPv4.
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - api
+
+networks:
+  api:
+    external: true
+    name: ${OP_DOCKER_NETWORK:-openprocessor_triton_net}

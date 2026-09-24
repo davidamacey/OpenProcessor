@@ -4,7 +4,7 @@
 # point it at any openprocessor URL via env var.
 #
 # Default is empty — that makes the JS issue *relative* fetches, which
-# the labeler's nginx then proxies to op-api over the docker network.
+# the labeler's nginx then proxies to API_UPSTREAM over the docker network.
 # Works regardless of which host or LAN IP the browser uses to reach
 # the labeler. The previous `http://localhost:4603` default broke any
 # browser not running on the host (LAN IPs hit their own localhost,
@@ -25,13 +25,27 @@ API_PREFIX="${PUBLIC_API_PREFIX:-/curation}"
 case "$API_PREFIX" in /*) ;; *) API_PREFIX="/$API_PREFIX" ;; esac
 API_PREFIX="${API_PREFIX%/}"
 
+# Where nginx proxies API_PREFIX/* to — the OpenProcessor API container,
+# reached by name over a shared docker network. Restricted to a plain
+# http(s)://host[:port] so it can't break out of the sed below.
+API_UPSTREAM="${API_UPSTREAM:-http://op-api:8000}"
+case "$API_UPSTREAM" in
+  http://*|https://*) ;;
+  *) echo "[entrypoint] API_UPSTREAM must be http(s)://host[:port], got: $API_UPSTREAM" >&2; exit 1 ;;
+esac
+if printf '%s' "$API_UPSTREAM" | grep -q '[^A-Za-z0-9.:/_-]'; then
+  echo "[entrypoint] API_UPSTREAM contains unsupported characters: $API_UPSTREAM" >&2
+  exit 1
+fi
+
 find /usr/share/nginx/html -type f \( -name '*.js' -o -name '*.html' \) \
     -exec sed -i "s|__RUNTIME__|${TARGET_URL}|g; s|__API_PREFIX__|${API_PREFIX}|g" {} +
 
 # nginx's proxy `location` must track the same prefix, or the SPA asks
 # for {prefix}/... and nginx answers with index.html. This runs as
 # /docker-entrypoint.d/40-runtime-config.sh, i.e. before nginx starts.
-sed -i "s|__API_PREFIX__|${API_PREFIX}|g" /etc/nginx/conf.d/default.conf
+sed -i "s|__API_PREFIX__|${API_PREFIX}|g; s|__API_UPSTREAM__|${API_UPSTREAM}|g" /etc/nginx/conf.d/default.conf
 
 echo "[entrypoint] PUBLIC_TRITON_API_URL=${TARGET_URL:-<empty - relative URLs via nginx proxy>}"
 echo "[entrypoint] PUBLIC_API_PREFIX=${API_PREFIX}"
+echo "[entrypoint] API_UPSTREAM=${API_UPSTREAM}"

@@ -410,7 +410,10 @@
     try {
       // Pull a slightly larger window than 4 so we can drop items
       // missing a plate sub-bbox without falling below the tile count.
-      const res = await getPlates({ page: 1, page_size: 12 });
+      const res = await getPlates(licensePlateSlot.capabilities.queue!.browsePath, {
+        page: 1,
+        page_size: 12,
+      });
       const withPlateBox = res.items.filter(
         (p) => Array.isArray(p.plate_bbox_norm) && p.plate_bbox_norm.length === 4,
       );

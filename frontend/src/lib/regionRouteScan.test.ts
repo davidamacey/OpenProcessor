@@ -71,7 +71,8 @@ describe('no bare /plates route-family literal survives outside REGION_BASE', ()
 
   it('every plates-family call site in api.ts composes through ${API_PREFIX}${REGION_BASE}', () => {
     const CALLS = [
-      /\$\{API_PREFIX\}\$\{REGION_BASE\}\$\{qs\(params as Record<string, unknown>\)\}`/,
+      // getPlates composes through the slot's declared browsePath instead.
+      /\$\{API_PREFIX\}\$\{browsePath\}\$\{qs\(params as Record<string, unknown>\)\}`/,
       /\$\{API_PREFIX\}\$\{REGION_BASE\}\/cluster\$\{qs\(\{/,
       /\$\{API_PREFIX\}\$\{REGION_BASE\}\/cluster\/status`/,
       /\$\{API_PREFIX\}\$\{REGION_BASE\}\/clusters\/refine\/\$\{clusterId\}`/,

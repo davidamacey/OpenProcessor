@@ -389,7 +389,7 @@
       // Both classification + any slot-verify changes are interesting on
       // the review page — the operator may be on any tab. `_verified` is
       // structural (matches every crop.<slot.key>_verified event, plus
-      // the pre-rename crop.plate_verified literal — see
+      // the generic crop.region_verified — see
       // sse.ts's slotVerifiedEventTypes()), not a single hardcoded slot.
       onEvent: (ev) => {
         if (
