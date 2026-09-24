@@ -263,6 +263,7 @@ PORTED_PATHS: tuple[str, ...] = (
     'src/services/curation/region_requeue.py',
     'scripts/curation/requeue_regions.py',
     'tests/curation/test_region_requeue.py',
+    'tests/curation/test_labels_export_roundtrip.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
