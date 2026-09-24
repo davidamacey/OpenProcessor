@@ -294,10 +294,10 @@ async def label_crop(
         raise HTTPException(status_code=400, detail=f'unknown class_id {payload.class_id}')
     entry = reg.get(payload.class_id)
     class_name = entry.class_name if entry is not None else ''
-    from src.services.curation.history import record_class_history
+    from src.services.curation.history import record_class_snapshot
 
     def _merge_label(current: dict[str, Any]) -> dict[str, Any]:
-        history = record_class_history(current, writer='human:label_crop')
+        history = record_class_snapshot(current, writer='human:label_crop', restorable=True)
         return {
             'class_id': payload.class_id,
             'class_name': class_name,
@@ -357,10 +357,10 @@ async def batch_label_crops(
     if not payload.crop_ids:
         return {'updated': 0, 'conflicts': []}
 
-    from src.services.curation.history import record_class_history
+    from src.services.curation.history import record_class_snapshot
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        history = record_class_history(current, writer='human:batch_label_crops')
+        history = record_class_snapshot(current, writer='human:batch_label_crops', restorable=True)
         return {
             'class_id': payload.class_id,
             'class_name': class_name,
@@ -433,10 +433,10 @@ async def move_crops(
     target = reg.get(int(payload.cluster_id))
     target_name = target.class_name if target is not None else ''
 
-    from src.services.curation.history import record_class_history
+    from src.services.curation.history import record_class_snapshot
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        history = record_class_history(current, writer='human:move_crops')
+        history = record_class_snapshot(current, writer='human:move_crops', restorable=True)
         return {
             'cluster_id': int(payload.cluster_id),
             'class_id': int(payload.cluster_id),
@@ -534,38 +534,52 @@ async def batch_exclude_crops(
     it's un-excluded.
 
     Non-destructive: the crop document stays in OpenSearch for audit and
-    provenance. ``reason`` defaults to ``'ignore'``; pass a tag like
+    provenance, and the pre-exclusion validation + cluster placement are
+    recorded (``excluded_prior_*``) so un-exclude can restore them.
+    ``reason`` defaults to ``'ignore'``; pass a tag like
     ``'blurry'`` to record why (e.g. a whole cluster of blurry items).
     """
     if not payload.crop_ids:
         return {'excluded': 0, 'errors': 0}
+    from src.services.curation.exclusion import exclusion_update
+
     now = _now_iso()
-    bulk: list[dict[str, Any]] = []
-    for crop_id in payload.crop_ids:
-        bulk.append({'update': {'_index': CURATION_ITEMS_INDEX, '_id': crop_id}})
-        bulk.append(
-            {
-                'doc': {
-                    'class_excluded': True,
-                    'excluded_at': now,
-                    'excluded_by': 'human',
-                    'excluded_reason': payload.reason or 'ignore',
-                    # Leave the candidate bucket so cluster counts drop
-                    # immediately even before the next recluster.
-                    'cluster_id': -2,
-                    'cluster_subid': None,
-                    # An excluded crop is not a validated class label.
-                    'class_validated': False,
-                    'updated_at': now,
-                }
-            }
-        )
+    reason = payload.reason or 'ignore'
+    n_errors = await _occ_bulk_human_write(
+        opensearch,
+        payload.crop_ids,
+        lambda _id, cur: exclusion_update(cur, reason=reason, now=now),
+        writer_id='human:batch_exclude_crops',
+    )
+    return {'excluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}
+
+
+async def _occ_bulk_human_write(
+    opensearch: Any,
+    crop_ids: list[str],
+    merger: Any,
+    *,
+    writer_id: str,
+) -> int:
+    """Read-modify-write ``crop_ids`` via OCC bulk; return the failure count.
+
+    A version conflict (a concurrent write landed between read and write)
+    counts as a failure the caller reports, never a silent success.
+    """
+    from src.clients.occ import occ_skip_on_conflict_bulk
+
     try:
-        resp = await opensearch.bulk(body=bulk, refresh=True)
+        resp = await occ_skip_on_conflict_bulk(
+            opensearch,
+            doc_ids=list(crop_ids),
+            merger=merger,
+            index=CURATION_ITEMS_INDEX,
+            refresh=True,
+            writer_id=writer_id,
+        )
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
-    n_errors = sum(1 for it in resp.get('items', []) if any('error' in v for v in it.values()))
-    return {'excluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}
+    return len(resp.get('errors') or []) + int(resp.get('skipped_due_to_conflict') or 0)
 
 
 @router.post('/crops/batch_unexclude')
@@ -575,63 +589,59 @@ async def batch_unexclude_crops(
 ) -> dict[str, Any]:
     """Reverse an exclusion (Undo path for Ignore).
 
-    Clears ``class_excluded`` + provenance and sets ``cluster_id=null``
-    so the crop drops back into the residual pool and gets a fresh
-    candidate assignment on the next recluster.
+    Clears ``class_excluded`` + provenance and restores the validation
+    recorded at exclude time. A validated crop goes straight back to its
+    class cluster (``cluster_id == class_id``); an unvalidated one drops
+    to the residual pool (``cluster_id=null``) and gets a fresh candidate
+    assignment on the next recluster. Crops that aren't excluded are left
+    untouched.
     """
     if not payload.crop_ids:
         return {'unexcluded': 0, 'errors': 0}
+    from src.services.curation.exclusion import unexclusion_update
+
     now = _now_iso()
-    bulk: list[dict[str, Any]] = []
-    for crop_id in payload.crop_ids:
-        bulk.append({'update': {'_index': CURATION_ITEMS_INDEX, '_id': crop_id}})
-        bulk.append(
-            {
-                'doc': {
-                    'class_excluded': False,
-                    'excluded_at': None,
-                    'excluded_by': None,
-                    'excluded_reason': None,
-                    'cluster_id': None,
-                    'updated_at': now,
-                }
-            }
-        )
-    try:
-        resp = await opensearch.bulk(body=bulk, refresh=True)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
-    n_errors = sum(1 for it in resp.get('items', []) if any('error' in v for v in it.values()))
+    n_errors = await _occ_bulk_human_write(
+        opensearch,
+        payload.crop_ids,
+        lambda _id, cur: unexclusion_update(cur, now=now),
+        writer_id='human:batch_unexclude_crops',
+    )
     return {'unexcluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}
 
 
 @router.delete('/crops/{crop_id}/label')
 async def unlabel_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Reset crop to model-suggested label (the labeler's Undo path).
+    """Undo the most recent human class label (the labeler's Undo path).
 
-    Only the class side is reset; the region-side validated flag is
-    untouched (the operator removed a class label, not a region
-    decision). Uses ``refresh=True`` so the next /review queue fetch
-    sees the change without a ~1 s OpenSearch refresh delay.
+    Every human label write (single label, batch label, move) records the
+    item's full pre-write class state — class, provenance, validation and
+    cluster placement — in ``class_id_history``. Undo restores exactly
+    that state. Successive undos step back through successive human
+    labels (each unlabel entry cancels one label entry). With no human
+    label on record the item is reset to unlabeled (class and provenance
+    cleared, nothing invented).
 
-    Clears all class-provenance fields together via the same
-    ``record_class_history``-driving OCC merge every other class writer
-    uses, so the undo shows up in the audit trail too (rather than
-    leaving class_source/class_detector/class_labeler at their stale
-    'human' values while class_validated flips to false).
+    Only the class side is touched; the region-side validated flag is
+    independent. ``refresh=True`` so the next /review fetch sees it.
     """
-    from src.services.curation.history import record_class_history
+    from src.services.curation.exclusion import park_restored_state_while_excluded
+    from src.services.curation.history import (
+        HUMAN_UNLABEL_WRITER,
+        find_undo_snapshot,
+        record_class_snapshot,
+        restore_class_state,
+    )
 
     def _merge_unlabel(current: dict[str, Any]) -> dict[str, Any]:
-        history = record_class_history(current, writer='human:unlabel_crop')
+        restored = restore_class_state(find_undo_snapshot(current.get('class_id_history')))
+        if current.get('class_excluded'):
+            # Still excluded: the restored validation/placement is what
+            # un-exclude should bring back, not what applies right now.
+            restored = park_restored_state_while_excluded(restored)
+        history = record_class_snapshot(current, writer=HUMAN_UNLABEL_WRITER, restorable=False)
         return {
-            'class_validated': False,
-            'label_source': '',
-            'class_source': None,
-            'class_detector': None,
-            'class_detector_version': None,
-            'class_labeler': None,
-            'class_labeled_at': None,
+            **restored,
             'class_id_history': history,
             'updated_at': _now_iso(),
         }
@@ -642,7 +652,7 @@ async def unlabel_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
             doc_id=crop_id,
             merger=_merge_unlabel,
             refresh=True,
-            writer_id='human:unlabel_crop',
+            writer_id=HUMAN_UNLABEL_WRITER,
         )
     except OCCFinalConflictError:
         raise

@@ -80,3 +80,26 @@ def test_no_query_targets_a_dynamic_keyword_subfield_of_a_region_field() -> None
         if pattern.search(line)
     ]
     assert not offenders, offenders
+
+
+def test_class_history_snapshot_fields_are_mapped() -> None:
+    from src.services.curation.history import CLASS_STATE_FIELDS
+
+    nested = _PROPS['class_id_history']['properties']
+    for field in (*CLASS_STATE_FIELDS, 'restorable', 'writer', 'at'):
+        assert field in nested, f'class_id_history.{field} has no explicit mapping'
+
+
+@pytest.mark.parametrize(
+    ('field', 'expected'),
+    [
+        ('class_excluded', 'boolean'),
+        ('excluded_by', 'keyword'),
+        ('excluded_reason', 'keyword'),
+        ('excluded_prior_class_validated', 'boolean'),
+        ('excluded_prior_cluster_id', 'integer'),
+        ('excluded_prior_cluster_subid', 'keyword'),
+    ],
+)
+def test_exclusion_fields_are_mapped(field: str, expected: str) -> None:
+    assert _PROPS.get(field, {}).get('type') == expected

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from src.clients.curation_opensearch import (
     ClassRegistry,
     create_curation_indexes,
+    ensure_items_exclusion_fields,
     ensure_items_history_fields,
     ensure_items_label_cluster_fields,
     ensure_items_pe_v6_embedding_fields,
@@ -145,6 +146,10 @@ async def _ensure_indexes(opensearch: Any) -> None:
             await ensure_items_history_fields(opensearch)
         except Exception as exc:
             logger.warning('curation_history_fields_migration_failed', error=str(exc))
+        try:
+            await ensure_items_exclusion_fields(opensearch)
+        except Exception as exc:
+            logger.warning('curation_exclusion_fields_migration_failed', error=str(exc))
         try:
             await ensure_items_validation_split_fields(opensearch)
         except Exception as exc:

@@ -189,6 +189,41 @@ def _images_body() -> dict[str, Any]:
     }
 
 
+# One entry per class write (src/services/curation/history.py). Human label
+# writes record the full pre-write class state (class_detector* through
+# cluster_subid, restorable=true) so the labeler's Undo restores it exactly.
+_CLASS_HISTORY_MAPPING: dict[str, Any] = {
+    'type': 'nested',
+    'properties': {
+        'class_id': {'type': 'integer'},
+        'class_name': {'type': 'keyword'},
+        'class_source': {'type': 'keyword'},
+        'label_source': {'type': 'keyword'},
+        'confidence': {'type': 'float'},
+        'class_detector': {'type': 'keyword'},
+        'class_detector_version': {'type': 'keyword'},
+        'class_labeler': {'type': 'keyword'},
+        'class_labeled_at': {'type': 'date'},
+        'class_validated': {'type': 'boolean'},
+        'cluster_id': {'type': 'integer'},
+        'cluster_subid': {'type': 'keyword'},
+        'restorable': {'type': 'boolean'},
+        'writer': {'type': 'keyword'},
+        'at': {'type': 'date'},
+    },
+}
+
+_EXCLUSION_MAPPING: dict[str, Any] = {
+    'class_excluded': {'type': 'boolean'},
+    'excluded_at': {'type': 'date'},
+    'excluded_by': {'type': 'keyword'},
+    'excluded_reason': {'type': 'keyword'},
+    'excluded_prior_class_validated': {'type': 'boolean'},
+    'excluded_prior_cluster_id': {'type': 'integer'},
+    'excluded_prior_cluster_subid': {'type': 'keyword'},
+}
+
+
 def _items_body() -> dict[str, Any]:
     return {
         'settings': _knn_settings(),
@@ -377,18 +412,11 @@ def _items_body() -> dict[str, Any]:
                 # operators can answer "who labeled this and when" after a
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
                 # see src/services/curation/history.py).
-                'class_id_history': {
-                    'type': 'nested',
-                    'properties': {
-                        'class_id': {'type': 'integer'},
-                        'class_name': {'type': 'keyword'},
-                        'class_source': {'type': 'keyword'},
-                        'label_source': {'type': 'keyword'},
-                        'confidence': {'type': 'float'},
-                        'writer': {'type': 'keyword'},
-                        'at': {'type': 'date'},
-                    },
-                },
+                'class_id_history': _CLASS_HISTORY_MAPPING,
+                # Label Ignore/Undo: exclusion flag + provenance, and the
+                # pre-exclusion validation/cluster placement un-exclude
+                # restores (src/services/curation/exclusion.py).
+                **_EXCLUSION_MAPPING,
             }
         },
     }
@@ -869,18 +897,7 @@ async def ensure_items_history_fields(
     index = config.items_index
     body = {
         'properties': {
-            'class_id_history': {
-                'type': 'nested',
-                'properties': {
-                    'class_id': {'type': 'integer'},
-                    'class_name': {'type': 'keyword'},
-                    'class_source': {'type': 'keyword'},
-                    'label_source': {'type': 'keyword'},
-                    'confidence': {'type': 'float'},
-                    'writer': {'type': 'keyword'},
-                    'at': {'type': 'date'},
-                },
-            },
+            'class_id_history': _CLASS_HISTORY_MAPPING,
         }
     }
     try:
@@ -889,13 +906,13 @@ async def ensure_items_history_fields(
         logger.info(
             'curation_mapping_migration',
             index=index,
-            fields=['class_id_history'],
+            fields=list(body['properties']),
             acknowledged=ack,
         )
         return {
             'acknowledged': ack,
             'index': index,
-            'fields_added': ['class_id_history'],
+            'fields_added': list(body['properties']),
         }
     except Exception as exc:
         msg = str(exc)
@@ -910,9 +927,37 @@ async def ensure_items_history_fields(
         return {
             'acknowledged': False,
             'index': index,
-            'fields_added': ['class_id_history'],
+            'fields_added': list(body['properties']),
             'error': msg,
         }
+
+
+async def ensure_items_exclusion_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT the exclusion fields (:data:`_EXCLUSION_MAPPING`) onto the items mapping.
+
+    One ``PUT _mapping`` per field: indexes created before these were
+    mapped may already carry a dynamic ``text`` mapping for the string
+    fields, and a conflict on one must not block the others.
+    """
+    index = config.items_index
+    added: list[str] = []
+    conflicts: list[str] = []
+    for field, spec in _EXCLUSION_MAPPING.items():
+        try:
+            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
+            added.append(field)
+        except Exception as exc:
+            msg = str(exc)
+            if not _is_recoverable_mapping_conflict(msg):
+                logger.error('curation_mapping_migration_failed', index=index, error=msg)
+                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
+            conflicts.append(field)
+    logger.info(
+        'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
+    )
+    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
 
 
 async def ensure_items_pe_v6_embedding_fields(
@@ -1668,6 +1713,7 @@ __all__ = [
     'RegistryClassEntry',
     'create_curation_indexes',
     'ensure_items_class_name_keyword',
+    'ensure_items_exclusion_fields',
     'ensure_items_history_fields',
     'ensure_items_label_cluster_fields',
     'ensure_items_pe_v6_embedding_fields',
