@@ -64,6 +64,14 @@ class IndexRole(str, Enum):
     LABELS_CONFIRMED = 'labels_confirmed'
     CLASSES = 'classes'
     SETTINGS = 'settings'
+    # F-27: the two UMAP state indexes (see the ``umap_state_index`` /
+    # ``umap_viz_state_index`` fields below) were previously auto-created
+    # by dynamic mapping on first ``client.index()`` call -- no explicit
+    # mapping, replicas=1 (keeps a single-node cluster yellow). They now
+    # go through the same INDEX_BODIES bootstrap as every other curation
+    # index.
+    UMAP_STATE = 'umap_state'
+    UMAP_VIZ_STATE = 'umap_viz_state'
 
 
 @dataclass(frozen=True)
@@ -267,6 +275,8 @@ _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.LABELS_CONFIRMED: 'labels_confirmed_index',
     IndexRole.CLASSES: 'classes_index',
     IndexRole.SETTINGS: 'settings_index',
+    IndexRole.UMAP_STATE: 'umap_state_index',
+    IndexRole.UMAP_VIZ_STATE: 'umap_viz_state_index',
 }
 
 

@@ -38,14 +38,28 @@ config = get_curation_config()
 # =============================================================================
 
 
-def test_index_bodies_has_all_five_roles() -> None:
+def test_index_bodies_has_all_seven_roles() -> None:
     assert set(INDEX_BODIES.keys()) == {
         IndexRole.IMAGES,
         IndexRole.ITEMS,
         IndexRole.LABELS_CONFIRMED,
         IndexRole.CLASSES,
         IndexRole.SETTINGS,
+        IndexRole.UMAP_STATE,
+        IndexRole.UMAP_VIZ_STATE,
     }
+
+
+def test_umap_state_bodies_have_zero_replicas_and_explicit_mapping() -> None:
+    for role in (IndexRole.UMAP_STATE, IndexRole.UMAP_VIZ_STATE):
+        body = INDEX_BODIES[role]
+        assert body['settings']['index']['number_of_replicas'] == 0
+        assert body['mappings']['dynamic'] is False
+
+
+def test_umap_state_reducer_blob_is_mapped_binary() -> None:
+    props = INDEX_BODIES[IndexRole.UMAP_STATE]['mappings']['properties']
+    assert props['reducer_b64']['type'] == 'binary'
 
 
 def test_images_has_knn_embedding() -> None:
@@ -187,6 +201,8 @@ async def test_get_curation_index_settings_returns_string_keyed_dict() -> None:
         'op_labels_confirmed',
         'op_classes',
         'op_curation_settings',
+        'op_umap_state',
+        'op_umap_viz_state',
     }
 
 
@@ -218,10 +234,12 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         'op_labels_confirmed': True,
         'op_classes': True,
         'op_curation_settings': True,
+        'op_umap_state': True,
+        'op_umap_viz_state': True,
     }
     # Each index was created exactly once with the right body.
     create_calls = client.indices.create.await_args_list
-    assert len(create_calls) == 5
+    assert len(create_calls) == 7
     seen = {call.kwargs['index'] for call in create_calls}
     assert seen == {
         'op_images',
@@ -229,6 +247,8 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         'op_labels_confirmed',
         'op_classes',
         'op_curation_settings',
+        'op_umap_state',
+        'op_umap_viz_state',
     }
     # Each index name got the body for its OWN role, not a mismatched one
     # (catches a role<->index swap bug) — comparing against INDEX_BODIES
@@ -269,8 +289,8 @@ async def test_create_curation_indexes_force_recreate_deletes_first() -> None:
     client = _make_mock_client(exists_returns=True)
     results = await create_curation_indexes(client, force_recreate=True)
     assert all(results.values())
-    assert client.indices.delete.await_count == 5
-    assert client.indices.create.await_count == 5
+    assert client.indices.delete.await_count == 7
+    assert client.indices.create.await_count == 7
 
 
 @pytest.mark.asyncio

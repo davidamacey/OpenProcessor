@@ -512,12 +512,58 @@ def _settings_body() -> dict[str, Any]:
     }
 
 
+def _umap_state_body() -> dict[str, Any]:
+    """The retired clustering reducer's fitted-manifold cache
+    (``clustering/embedding_reduce.py``). ``reducer_b64`` is a pickled
+    UMAP reducer, base64-encoded, up to ~60 MB (see
+    ``_OPENSEARCH_PERSIST_MAX_BYTES``) -- mapped ``binary`` (stored,
+    never analyzed/indexed) rather than left to dynamic mapping, which
+    tokenized it as ``text`` (F-27)."""
+    return {
+        'settings': _plain_settings(),
+        'mappings': {
+            'dynamic': False,
+            'properties': {
+                'state_id': {'type': 'keyword'},
+                'reducer_b64': {'type': 'binary'},
+                'n_components': {'type': 'integer'},
+                'metric': {'type': 'keyword'},
+            },
+        },
+    }
+
+
+def _umap_viz_state_body() -> dict[str, Any]:
+    """Visualization-only projection's own metadata slot
+    (``src/services/curation/embedding_viz.py``) -- deliberately
+    distinct from :func:`_umap_state_body`. Metadata only, no pickled
+    blob."""
+    return {
+        'settings': _plain_settings(),
+        'mappings': {
+            'dynamic': False,
+            'properties': {
+                'state_id': {'type': 'keyword'},
+                'projection_version': {'type': 'keyword'},
+                'scope': {'type': 'keyword'},
+                'cluster_id': {'type': 'integer'},
+                'n_points': {'type': 'integer'},
+                'fitted_at': {'type': 'date'},
+                'n_components': {'type': 'integer'},
+                'metric': {'type': 'keyword'},
+            },
+        },
+    }
+
+
 INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.IMAGES: _images_body(),
     IndexRole.ITEMS: _items_body(),
     IndexRole.LABELS_CONFIRMED: _labels_confirmed_body(),
     IndexRole.CLASSES: _classes_body(),
     IndexRole.SETTINGS: _settings_body(),
+    IndexRole.UMAP_STATE: _umap_state_body(),
+    IndexRole.UMAP_VIZ_STATE: _umap_viz_state_body(),
 }
 
 
