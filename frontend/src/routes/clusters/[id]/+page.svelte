@@ -28,6 +28,7 @@
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { createGridGroups } from '$lib/gridGroups.svelte';
   import { createPager } from '$lib/pager.svelte';
+  import { computeCutLine } from '$lib/clusters/cutLine';
   import { createSelection } from '$lib/selection.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strategies';
@@ -356,18 +357,28 @@
   // Cut-line index: the server's own `cluster_is_core` flag (computed
   // against `{API_PREFIX}/clusters`' `core_similarity_min`, echoed onto
   // `cluster.core_similarity_min` — no client 0.75 constant) decides which
-  // leading crops are "core". Crops are already sorted core-first by the
-  // API. Stops at the first non-core (false, or null when the backend
-  // hasn't computed it for that crop) rather than assuming core. Only
-  // meaningful in the single '__all__' group; suppressed while grouping
-  // by sub-cluster (subid order wins).
-  const cutLineIndex = $derived.by(() => {
-    let i = 0;
-    for (; i < filteredCrops.length; i++) {
-      if (filteredCrops[i]?.cluster_is_core !== true) break;
-    }
-    return i;
-  });
+  // leading crops are "core". Only meaningful in the single '__all__'
+  // group; suppressed while grouping by sub-cluster (subid order wins).
+  //
+  // DQ-M3 (docs/design/data-quality-pass-2026-09-24.md): this used to
+  // assume "crops are already sorted core-first by the API" — false.
+  // `cluster_is_core` is null on 1,000/1,000 class-cluster members, and
+  // the default order (`sort=updated_at:desc`) isn't core-first at all —
+  // live, a class cluster's member #1 usually isn't core (this old logic
+  // degenerately produced index 0, effectively already hidden by the
+  // `cutLineIndex > 0` template guard below), while a candidate cluster
+  // has `cluster_is_core` set on every member but in recency order, so
+  // the old "stop at first non-core" logic drew a line at a meaningless
+  // boundary with core crops resuming right after it (#10000: break at
+  // 181, core again from 182). There's no server-side core-first order to
+  // request instead (checked against the vendored OpenAPI contract) — so
+  // computeCutLine() verifies the loaded order is actually
+  // core-first-consistent (and not mostly null) before trusting any
+  // boundary, rather than drawing one on a guess. See
+  // src/lib/clusters/cutLine.ts.
+  const cutLine = $derived.by(() => computeCutLine(filteredCrops));
+  const cutLineIndex = $derived(cutLine.index);
+  const cutLineVisible = $derived(cutLine.visible);
 
   // totalPages was used by the Next/Prev buttons — gone now that infinite scroll
   // owns the pagination. Server-side pageSize stays at 60 per request, but the
@@ -1214,7 +1225,7 @@
             onfinalize={(e) => onGroupFinalize(group.key, e)}
           >
             {#each group.items as crop, i (crop.id)}
-              {#if !groupBySubcluster && i === cutLineIndex && cutLineIndex > 0 && cutLineIndex < group.items.length}
+              {#if !groupBySubcluster && cutLineVisible && i === cutLineIndex}
                 <CutLine />
               {/if}
               <div class="relative">

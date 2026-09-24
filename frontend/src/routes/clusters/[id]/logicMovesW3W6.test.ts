@@ -50,13 +50,15 @@ describe('W6: class-for-cluster lookup uses the served cluster_kind, not an id-e
 });
 
 describe('W6: the core cut line uses the served cluster_is_core, not a 0.75 constant', () => {
-  it('cutLineIndex reads crop.cluster_is_core, not similarity_to_centroid <= 0.75', () => {
-    const cutBlock = src.match(
-      /const cutLineIndex = \$derived\.by\(([\s\S]*?)\n {2}\}\);/,
-    )?.[0];
-    expect(cutBlock).toBeDefined();
-    expect(cutBlock).toMatch(/cluster_is_core/);
-    expect(cutBlock).not.toMatch(/0\.75/);
-    expect(cutBlock).not.toMatch(/similarity_to_centroid/);
+  it('cutLine is computed from filteredCrops via computeCutLine, which reads cluster_is_core', () => {
+    const idx = src.indexOf(
+      'const cutLine = $derived.by(() => computeCutLine(filteredCrops));',
+    );
+    expect(idx).toBeGreaterThan(-1);
+    expect(src).not.toMatch(/similarity_to_centroid/);
+  });
+
+  it("imports computeCutLine from the shared lib rather than reimplementing the boundary scan inline (DQ-M3's order/null guards live in one place)", () => {
+    expect(src).toMatch(/import \{ computeCutLine \} from '\$lib\/clusters\/cutLine';/);
   });
 });
