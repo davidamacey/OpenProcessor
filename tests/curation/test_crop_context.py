@@ -1,6 +1,6 @@
 """Image context for an item, and the review-dismissal list.
 
-- ``GET /crops/{id}/image``: the item's source-image metadata and every
+- ``GET /crops/{id}/context``: the item's source-image metadata and every
   item from the same image (shared wire format), for a context panel.
 - ``GET /crops?review_dismissed=true`` lists items hidden from review;
   ``POST /crops/{id}/review_undismiss`` returns one to the queues;
@@ -62,7 +62,7 @@ def _fake() -> QueryFakeOpenSearch:
 
 
 def test_crop_image_context() -> None:
-    r = _client(_fake()).get('/curation/crops/a1/image')
+    r = _client(_fake()).get('/curation/crops/a1/context')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['image'] == {
@@ -78,7 +78,7 @@ def test_crop_image_context() -> None:
 
 
 def test_crop_image_context_unknown_crop_is_404() -> None:
-    assert _client(_fake()).get('/curation/crops/nope/image').status_code == 404
+    assert _client(_fake()).get('/curation/crops/nope/context').status_code == 404
 
 
 def test_dismissed_list_and_undismiss() -> None:
