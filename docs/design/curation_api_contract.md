@@ -132,6 +132,22 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
 
+### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
+
+Queues the auto-label job (same job, same `GET /pipeline/auto_label/status`
+/ `POST /pipeline/auto_label/cancel`, `409` while one runs) scoped to one
+cluster with only the VLM stage: no re-clustering, no auto-promote, no cap.
+The server selects **every** unvalidated, non-holdout, non-excluded member
+(the global sweep's cost skips — classifier-confident, `vlm_unmatched`,
+recently combined-classified — don't apply to an explicit request) and
+chunks them itself. Optional `?prompt_pack=`. Response: the job state
+(`args.cluster_id` echoes the scope). While running, `total` is the number
+of members selected; on completion `result.stages.unvalidated_after_promote`
+is that count, `result.stages.vlm` `{predicted, updated, …}`, and
+`result.unvalidated_remaining` counts what is still unvalidated in the cluster.
+The same scope is available as `?cluster_id=` on `POST
+/pipeline/auto_label[/start]`.
+
 ### Region lifecycle — `GET /regions/statuses`
 
 The single source is `REGION_STATUS_INFO` in `src/config/region_state.py`

@@ -1,0 +1,80 @@
+"""Which items the auto-label VLM stage sends to the VLM.
+
+Two scopes:
+
+* **Global sweep** (default): every unvalidated item except those the VLM
+  need not see — classifier-labeled at or above the skip confidence,
+  ``vlm_unmatched`` (it already failed once), and items the region worker's
+  combined call classified in the last 24 h (``vlm_verify_completed_at``).
+  Optionally narrowed to one ``class_id``.
+* **Cluster scope** (``cluster_id`` set, ``POST /vlm/label_cluster/{id}``):
+  an operator explicitly asked for this cluster, so every unvalidated
+  member is labeled — only validated, test-holdout and excluded items are
+  left out.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from src.services.curation.ingest_class_sources import classifier_class_sources
+
+
+COMBINED_RECENT_WINDOW = timedelta(hours=24)
+
+
+def vlm_selection_query(
+    *,
+    class_id: int | None,
+    cluster_id: int | None,
+    classifier_confidence_skip_vlm: float,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """The ``query`` for the VLM stage's scroll."""
+    must: list[dict[str, Any]] = []
+    if class_id is not None:
+        must.append({'term': {'class_id': class_id}})
+    if cluster_id is not None:
+        must.append({'term': {'cluster_id': cluster_id}})
+        must_not: list[dict[str, Any]] = [
+            {'term': {'class_validated': True}},
+            {'term': {'test_holdout': True}},
+            {'term': {'class_excluded': True}},
+        ]
+    else:
+        recent_cutoff = ((now or datetime.now(UTC)) - COMBINED_RECENT_WINDOW).isoformat()
+        must_not = [
+            {'term': {'class_validated': True}},
+            {
+                'bool': {
+                    'must': [
+                        {'terms': {'class_source': sorted(classifier_class_sources())}},
+                        {'range': {'confidence': {'gte': classifier_confidence_skip_vlm}}},
+                    ],
+                },
+            },
+            {'term': {'class_source': 'vlm_unmatched'}},
+            # Classified by the region worker's combined call recently.
+            {'range': {'vlm_verify_completed_at': {'gte': recent_cutoff}}},
+        ]
+    query: dict[str, Any] = {'bool': {'must_not': must_not}}
+    if must:
+        query['bool']['must'] = must
+    return query
+
+
+def unvalidated_count_query(*, class_id: int | None, cluster_id: int | None) -> dict[str, Any]:
+    """Unvalidated items left in the run's scope (the dashboard's count)."""
+    must = [
+        {'term': {field: value}}
+        for field, value in (('class_id', class_id), ('cluster_id', cluster_id))
+        if value is not None
+    ]
+    bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
+    if must:
+        bool_q['must'] = must
+    return {'bool': bool_q}
+
+
+__all__ = ['COMBINED_RECENT_WINDOW', 'unvalidated_count_query', 'vlm_selection_query']
