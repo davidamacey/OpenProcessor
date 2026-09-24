@@ -67,7 +67,7 @@ by router module; every path is relative to the configured
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
-| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
+| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
@@ -105,8 +105,9 @@ disagree, and see D3 for the plan to close that gap.
 
 - `IngestImageRequest`: `path`, `source`
 - `IngestImageResponse`: `status` (`success`/`duplicate`/`failed`), `image_id`, `image_path`, `imohash`, `n_crops`, `n_plates`, `error`
-- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `labels_imported`, `crops_indexed`
-- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`
+- `BatchIngestSummaryResponse`: `successful`, `duplicates`, `failed`, `mismatches`, `missed_labels`, `unmatched_detections`, `labels_imported`, `crops_indexed`
+- `BatchIngestResponse`: `status` (`success`/`partial`/`error`), `summary`, `results`, `disagreements` (with `detect_mismatches`: one record per model-vs-label disagreement, `kind` = `class_mismatch`/`missed_label`/`unmatched_detection`; also returned by `POST /import_labels/batch`)
+- `POST /ingest/upload` (multipart): `images` (files), `image_paths` (JSON list of identifiers, optional), `source` -> `BatchIngestResponse`
 - `ImportLabelsRequest`: `image_path`, `label_txt_path`, `label_source`
 - `ImportLabelsBatchRequest`: `items`
 

@@ -25,6 +25,12 @@ from src.services.curation.holdout import (
     persist_freeze_record,
     select_test_holdout,
 )
+from src.services.curation.raw_label_clusters import (
+    CLUSTER_ID_FIELD,
+    CLUSTER_NAME_FIELD,
+    RAW_LABEL_FIELD,
+    UNMATCHED_CLASS_SOURCE,
+)
 
 
 @router.get('/review/unmatched_terms')
@@ -91,8 +97,9 @@ async def review_raw_label_clusters(
 ) -> dict[str, Any]:
     """Top-N hierarchical clusters of ``gemma_raw_label`` for the labeler UI.
 
-    Task #91 — surfaces the output of
-    an offline raw-label clustering script so the labeler can:
+    Surfaces the output of ``scripts/curation/cluster_raw_labels.py``
+    (field contract: :mod:`src.services.curation.raw_label_clusters`) so
+    the labeler can:
 
     1. Show fine-grained sub-classes the registry doesn't have yet
        (e.g. "ford f150" + "ford ranger" rolled up under
@@ -123,23 +130,23 @@ async def review_raw_label_clusters(
     await _ensure_indexes(opensearch)
     body = {
         'size': 0,
-        'query': {'exists': {'field': 'gemma_label_cluster_id'}},
+        'query': {'exists': {'field': CLUSTER_ID_FIELD}},
         'aggs': {
             'by_cluster': {
                 'terms': {
-                    'field': 'gemma_label_cluster_id',
+                    'field': CLUSTER_ID_FIELD,
                     'size': size,
                     'order': {'_count': 'desc'},
                 },
                 'aggs': {
-                    'name': {'terms': {'field': 'gemma_label_cluster_name', 'size': 1}},
+                    'name': {'terms': {'field': CLUSTER_NAME_FIELD, 'size': 1}},
                     'samples': {
                         'terms': {
-                            'field': 'gemma_raw_label',
+                            'field': RAW_LABEL_FIELD,
                             'size': samples_per_cluster,
                         }
                     },
-                    'unmatched': {'filter': {'term': {'class_source': 'gemma_unmatched'}}},
+                    'unmatched': {'filter': {'term': {'class_source': UNMATCHED_CLASS_SOURCE}}},
                     # Most common already-resolved class within the cluster — used
                     # as the ``parent_class_suggestion`` hint. If the cluster is
                     # 100% gemma_unmatched the bucket is empty and we return None.
@@ -190,8 +197,8 @@ async def review_raw_label_clusters(
         'status': status_str,
         'clusters': clusters,
         'hint': (
-            'Run the offline raw-label clustering script to populate '
-            'gemma_label_cluster_id on crops if status=empty.'
+            'Run scripts/curation/cluster_raw_labels.py to populate '
+            f'{CLUSTER_ID_FIELD} on items if status=empty.'
         )
         if not clusters
         else None,

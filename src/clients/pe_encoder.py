@@ -33,7 +33,12 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.core.logging import get_logger
-from src.services.detection.pe_preprocess import normalize_chw, resize_crop_rgb, whole_frame_chw
+from src.services.detection.pe_preprocess import (
+    normalize_chw,
+    resize_crop_rgb,
+    whole_frame_chw,
+    whole_frame_chw_from_bytes,
+)
 
 
 if TYPE_CHECKING:
@@ -168,6 +173,20 @@ class PEEncoder:
         missing whole-frame embedding as non-fatal.
         """
         chw = whole_frame_chw(path)
+        if chw is None:
+            return None
+        batch = chw[None, ...].astype(np.float32, copy=False)
+        embedding = await self.encode_images(batch)
+        return embedding[0]
+
+    async def embed_whole_frame_bytes(self, data: bytes) -> np.ndarray | None:
+        """:meth:`embed_whole_frame` for an image the server only has in memory.
+
+        Used by byte-upload ingest, where the client's path is an
+        identifier, not a file the API container can open. Same
+        preprocessing, so the vector matches the from-disk path.
+        """
+        chw = whole_frame_chw_from_bytes(data)
         if chw is None:
             return None
         batch = chw[None, ...].astype(np.float32, copy=False)

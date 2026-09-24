@@ -196,6 +196,13 @@ repos:
         # (PORTED_PATHS) — starts empty in Chunk 0; each later wave
         # appends its newly-ported paths there in the same commit.
 
+      - id: region-status-ts-drift
+        name: RegionStatus TypeScript contract is in sync
+        entry: python3 scripts/codegen/export_region_status_to_ts.py --check
+        language: system
+        pass_filenames: false
+        files: ^(src/config/region_state\.py|contracts/ts/regionStatus\.ts|scripts/codegen/export_region_status_to_ts\.py)$
+
   # Commit message linting (conventional commits)
   # Note: Disabled for now - requires separate hook installation with:
   # pre-commit install --hook-type commit-msg
