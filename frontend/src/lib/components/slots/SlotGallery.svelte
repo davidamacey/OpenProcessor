@@ -27,6 +27,8 @@
   }
 
   let { gallery }: Props = $props();
+
+  const label = $derived(gallery.slot.label);
 </script>
 
 <!-- Plates list view — backed by {API_PREFIX}/regions. Plates live as a
@@ -158,23 +160,23 @@
         >
           ← Clusters
         </button>
-        <span class="font-medium text-zinc-200">All plates</span>
+        <span class="font-medium text-zinc-200">All {label.plural}</span>
       {:else if gallery.selectedCluster == null}
         <button
           type="button"
           disabled={gallery.clusterBusy}
           class="btn-sm border border-purple-500/50 bg-purple-500/20 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
           onclick={gallery.runClustering}
-          title="Group plates by visual similarity so outliers/false-positives surface"
+          title="Group {label.plural} by visual similarity so outliers/false-positives surface"
         >
-          {gallery.clusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
+          {gallery.clusterBusy ? 'Clustering…' : `⟳ Cluster ${label.plural}`}
         </button>
         <button
           type="button"
           disabled={gallery.clusterBusy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
-          title="List plate crops that look like known false positives (needs FP centroids built)"
+          title="List {label.singular} crops that look like known false positives (needs FP centroids built)"
         >
           Suspected FPs
         </button>
@@ -197,9 +199,9 @@
           type="button"
           class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30"
           onclick={gallery.openAll}
-          title="Browse every plate, including ones not in any cluster bucket yet"
+          title="Browse every {label.singular}, including ones not in any cluster bucket yet"
         >
-          Browse all plates
+          Browse all {label.plural}
         </button>
       {:else}
         <button
@@ -216,7 +218,7 @@
             ✗ False-positive cluster
           </span>
           <span class="text-[11px] text-zinc-400"
-            >not plates — hard negatives for LPR</span
+            >not {label.plural} — hard negatives for the detector</span
           >
           <button
             type="button"
@@ -251,7 +253,7 @@
           type="button"
           class="btn-sm border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
           onclick={gallery.selectAll}
-          title="Select all loaded plates (shift-click a card for a range, ctrl/cmd-click to toggle)"
+          title="Select all loaded {label.plural} (shift-click a card for a range, ctrl/cmd-click to toggle)"
         >
           Select all
         </button>
@@ -284,7 +286,7 @@
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
           onclick={() => gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
         >
-          No plate
+          No {label.singular}
         </button>
         <button
           type="button"
@@ -333,7 +335,7 @@
               {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
                 <img
                   src={resolveApiUrl(url)}
-                  alt="plate"
+                  alt={label.singular}
                   loading="lazy"
                   class="aspect-[2/1] w-full bg-zinc-950 object-contain"
                 />
@@ -343,7 +345,7 @@
               {#if c.cluster_kind === 'false_positive'}
                 <span
                   class="rounded bg-red-500/25 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-red-200 uppercase"
-                  title="Permanent false-positive bucket — these are NOT plates"
+                  title="Permanent false-positive bucket — these are NOT {label.plural}"
                 >
                   ✗ False positives
                 </span>
@@ -363,10 +365,10 @@
       {/each}
     </ul>
   {:else if gallery.pager.loading && gallery.pager.items.length === 0}
-    <p class="text-sm text-zinc-500">Loading plates...</p>
+    <p class="text-sm text-zinc-500">Loading {label.plural}...</p>
   {:else if gallery.pager.items.length === 0}
     <p class="text-sm text-zinc-500">
-      No plates match the current filters. The re-detection drain may still be populating
+      No {label.plural} match the current filters. The re-detection drain may still be populating
       provenance — fresh rows appear here as the worker processes them.
     </p>
   {:else}

@@ -756,7 +756,7 @@
       'z',
       () => void gallery.undoLastAction(),
       'clusters',
-      'Undo last plate action',
+      `Undo last ${gallery.slot.label.singular} action`,
     );
     return off;
   });

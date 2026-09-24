@@ -495,8 +495,8 @@
             {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} Gemma-confirmed).
             The remaining
             {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (Gemma
-            pre-filter said no), were rejected after detection, or the LPR/SAM3 detectors haven't
-            reached them yet.
+            pre-filter said no), were rejected after detection, or the detectors haven't reached
+            them yet.
             {fmt(p?.total_detected ?? 0)} crops carry detector credit (<code
               class="font-mono">regions.total_detected</code
             >) — this may not cover every rejected or box-less attempt.

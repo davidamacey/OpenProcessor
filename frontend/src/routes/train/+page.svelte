@@ -1076,10 +1076,7 @@
       {#if singleClassExportMessage}
         <p class="mt-2 text-xs text-zinc-400">{singleClassExportMessage}</p>
       {:else}
-        <p class="mt-2 text-xs text-zinc-500">
-          Single-class plate dataset (positives + human FP hard-negatives + a sample of
-          plate-free backgrounds). Train it as a YOLO26 LPR detector.
-        </p>
+        <p class="mt-2 text-xs text-zinc-500">{datasetExportSpec.blurb}</p>
       {/if}
     </section>
   {/if}

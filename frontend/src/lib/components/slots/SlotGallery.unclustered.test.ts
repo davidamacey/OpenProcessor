@@ -1,10 +1,9 @@
 /**
  * M3 (docs/design/interactive-pass-2026-09-24.md): before this fix, the
- * plate gallery on /clusters only ever rendered region-cluster cards —
+ * slot gallery on /clusters only ever rendered region-cluster cards —
  * when the only bucket that existed was the permanent false-positive
- * one, every other plate (233 of 234, live) was unreachable, and the
- * counter strip leaked a literal `gallery.pager.items` template
- * fragment. Mounts the real component (see CropCard.test.ts's header
+ * one, every other region was unreachable, and the counter strip leaked
+ * a literal `gallery.pager.items` template fragment. Mounts the real component (see CropCard.test.ts's header
  * comment for the convention) rather than scanning source text, since
  * both bugs are directly observable in the rendered DOM.
  */
@@ -61,15 +60,15 @@ afterEach(() => {
   target?.remove();
 });
 
-describe('SlotGallery — plates reachable when only the FP bucket is clustered', () => {
-  it('offers a "Browse all plates" entry point alongside the FP-only cluster grid', async () => {
+describe('SlotGallery — regions reachable when only the FP bucket is clustered', () => {
+  it('offers a "Browse all <plural>" entry point alongside the FP-only cluster grid', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [fpCluster()] } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
     const btn = [...el.querySelectorAll('button')].find(
-      (b) => b.textContent?.trim() === 'Browse all plates',
+      (b) => b.textContent?.trim() === 'Browse all tags',
     );
     expect(btn).toBeDefined();
   });
@@ -82,7 +81,7 @@ describe('SlotGallery — plates reachable when only the FP bucket is clustered'
     const el = renderGallery(gallery);
 
     const btn = [...el.querySelectorAll('button')].find(
-      (b) => b.textContent?.trim() === 'Browse all plates',
+      (b) => b.textContent?.trim() === 'Browse all tags',
     )!;
     btn.click();
     flushSync();
@@ -96,8 +95,8 @@ describe('SlotGallery — plates reachable when only the FP bucket is clustered'
       | undefined;
     expect(lastCallParams?.region_cluster_id).toBeUndefined();
     // The bucket grid ("← FALSE POSITIVES" card etc.) must no longer be
-    // the only thing rendered — the header now reads "All plates".
-    expect(el.textContent).toContain('All plates');
+    // the only thing rendered — the header now reads "All tags".
+    expect(el.textContent).toContain('All tags');
   });
 
   it('never leaks the stray `gallery.pager.items` template literal into the counter strip', async () => {
@@ -107,5 +106,20 @@ describe('SlotGallery — plates reachable when only the FP bucket is clustered'
     const el = renderGallery(gallery);
 
     expect(el.textContent).not.toMatch(/gallery\.pager\.items/);
+  });
+
+  it("names the region by the gallery slot's own label, not a fixed noun", async () => {
+    vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [fpCluster()] } as never);
+    const gallery = createSlotGalleryController({
+      ...widgetTagSlot,
+      label: { singular: 'sprocket', plural: 'sprockets', title: 'Sprocket' },
+    });
+    await gallery.loadClusters();
+    const el = renderGallery(gallery);
+
+    const text = el.textContent ?? '';
+    expect(text).toContain('Cluster sprockets');
+    expect(text).toContain('Browse all sprockets');
+    expect(text).not.toMatch(/plate/i);
   });
 });

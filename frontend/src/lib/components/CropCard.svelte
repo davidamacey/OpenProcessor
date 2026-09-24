@@ -257,7 +257,7 @@
           ondetail?.(crop);
         }}
         aria-label="Show crop details"
-        title="Details (provenance + plate metadata)"
+        title="Details (provenance + metadata)"
       >
         ⓘ
       </button>

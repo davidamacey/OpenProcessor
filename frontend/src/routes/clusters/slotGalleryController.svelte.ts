@@ -218,7 +218,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
       // them, but a stale response shouldn't surface a 0-size card).
       clusters = (res.clusters ?? []).filter((c) => c.size > 0);
     } catch (e) {
-      toastStore.error(`Load plate clusters failed: ${(e as Error).message}`);
+      toastStore.error(
+        `Load ${slot.label.singular} clusters failed: ${(e as Error).message}`,
+      );
     }
   }
 
@@ -285,24 +287,24 @@ export function createSlotGalleryController(slot: SlotSpec) {
       // it off and poll for completion instead of holding one request open.
       await clusterRegions(maxRank ?? undefined);
       toastStore.info(
-        'Clustering plates… rebuilding FP centroids, pulling FPs, re-bucketing.',
+        `Clustering ${slot.label.plural}… rebuilding FP centroids, pulling FPs, re-bucketing.`,
       );
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
         const job = await getRegionClusterStatus();
         if (job.running) continue;
         if (job.error) {
-          toastStore.error(`Cluster plates failed: ${job.error}`);
+          toastStore.error(`Cluster ${slot.label.plural} failed: ${job.error}`);
         } else if (job.result) {
           const r = job.result;
           const moved = r.auto_fp?.n_moved ?? 0;
           if (r.status === 'skipped_repartition_ttl') {
             toastStore.success(
-              `Auto-moved ${moved} crop(s) to false positives. Good-plate re-partition skipped to preserve a refine from the last few minutes — re-run shortly to include it.`,
+              `Auto-moved ${moved} crop(s) to false positives. Good-${slot.label.singular} re-partition skipped to preserve a refine from the last few minutes — re-run shortly to include it.`,
             );
           } else {
             toastStore.success(
-              `Clustered ${r.n_regions ?? 0} plates into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
+              `Clustered ${r.n_regions ?? 0} ${slot.label.plural} into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
             );
           }
           await loadClusters();
@@ -310,7 +312,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
         break;
       }
     } catch (e) {
-      toastStore.error(`Cluster plates failed: ${(e as Error).message}`);
+      toastStore.error(`Cluster ${slot.label.plural} failed: ${(e as Error).message}`);
     } finally {
       clusterBusy = false;
     }
@@ -406,7 +408,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
     try {
       editCrop = await getCrop(p.crop_id);
     } catch (err) {
-      toastStore.error(`Could not load plate: ${(err as Error).message}`);
+      toastStore.error(
+        `Could not load ${slot.label.singular}: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -445,7 +449,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
           `${status.replace('_', ' ')}: ${res.updated} updated, ${parts.join(', ')}`,
         );
       } else {
-        toastStore.success(`${status.replace('_', ' ')}: ${res.updated} plate(s)`);
+        toastStore.success(
+          `${status.replace('_', ' ')}: ${res.updated} ${slot.label.singular}(s)`,
+        );
       }
     } catch (err) {
       toastStore.error(`Bulk update failed: ${(err as Error).message}`);
@@ -467,7 +473,7 @@ export function createSlotGalleryController(slot: SlotSpec) {
   function saveBox(item: Crop): void {
     if (!editCrop) return;
     const cropId = item.id;
-    toastStore.success('Plate saved');
+    toastStore.success(`${slot.label.title} saved`);
     editCrop = null;
     const slotData = item.slots?.[slot.key];
     // Patch just this card in place rather than reloading page 1 (which
