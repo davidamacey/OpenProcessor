@@ -97,8 +97,9 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'OCR_PIPELINE_MODEL': 'env_ocr_pipeline',
         'SAM_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
+        'CLASS_IDS': '2, 3,7',
     }
-    prefix = 'OP_DETECTION_'
+    prefix = 'OP_TEST_DETECTION_'
     for suffix, value in env_values.items():
         monkeypatch.setenv(f'{prefix}{suffix}', value)
 
@@ -140,11 +141,12 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.ocr_pipeline_model == 'env_ocr_pipeline'
     assert profile.sam_text_prompt == 'env prompt'
     assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
+    assert profile.class_ids == frozenset({2, 3, 7})
 
 
 def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:
-    monkeypatch.setenv('OP_DETECTION_ASPECT_MIN', '0.1')
-    profile = DetectionProfile.from_env()
+    monkeypatch.setenv('OP_TEST_DETECTION_ASPECT_MIN', '0.1')
+    profile = DetectionProfile.from_env('OP_TEST_DETECTION_')
     assert profile.aspect_min == 0.1
     # Unset vars fall back to the dataclass default.
     assert profile.name == 'region'
@@ -153,7 +155,7 @@ def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:
 
 
 def test_from_env_name_kwarg_used_when_name_env_unset() -> None:
-    profile = DetectionProfile.from_env(name='custom_default_name')
+    profile = DetectionProfile.from_env('OP_TEST_DETECTION_', name='custom_default_name')
     assert profile.name == 'custom_default_name'
 
 

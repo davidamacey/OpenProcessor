@@ -107,11 +107,16 @@ trainer. A deployment supplies:
   Swapping in a different embedding model means keeping that same Triton
   model name and tensor contract, and matching the preprocessing in
   `src/services/detection/pe_preprocess.py`.
-- **An item detector for ingest** — any Triton model whose name you set
-  as the ingest `DetectionProfile.detector_model` (via `OP_DETECTION_*`
-  env vars, read by `_get_detection_profile()` in
+- **An item detector for ingest** — an end2end Triton model set via
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus any other
+  `OP_INGEST_PRIMARY_<FIELD>`, read by `_get_detection_profile()` in
   `routers/curation/ingest.py`). It proposes the item crops in each
-  image. Ingest returns `503` until one is configured and loaded.
+  image; `OP_INGEST_PRIMARY_CLASS_IDS` narrows which of its classes
+  become items (unset = all). Ingest returns `503` until one is
+  configured and loaded. An optional raw-output secondary detector
+  (`OP_INGEST_SECONDARY_DETECTOR_MODEL` + `OP_INGEST_SECONDARY_<FIELD>`)
+  overrides the primary's class on IoU-matched boxes. The retired
+  `OP_DETECTION_*` prefix is rejected at startup with a rename message.
 - **Optionally, a region-of-interest profile** — the sub-region the
   detection worker's cascade looks for *inside* each item crop.
   **Neutral by default:** with nothing configured no region profile is
@@ -274,8 +279,8 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings).
    Ingest writes no `pe_embedding` without it, and semantic search /
    near-dup / clustering then have nothing to operate on.
-4. Configure at least a detector model in `DetectionProfile` (env or
-   constructed instance) — ingest 503s until one is set.
+4. Configure at least an ingest detector model
+   (`OP_INGEST_PRIMARY_DETECTOR_MODEL`) — ingest 503s until one is set.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
    walk with a resumable progress file.
@@ -316,7 +321,7 @@ be changed at runtime once the app has started.
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
 | Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BBOX_NORM`) — see `RegionFields` for the full attribute list |
-| Ingest item-detector profile | `OP_DETECTION_<FIELD>` (e.g. `OP_DETECTION_DETECTOR_MODEL`, `OP_DETECTION_INPUT_SIZE`, `OP_DETECTION_CONFIDENCE_FLOOR`) — tuple/frozenset fields take a comma-separated value |
+| Ingest item detectors | `OP_INGEST_PRIMARY_<FIELD>` (e.g. `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_INPUT_SIZE`, `OP_INGEST_PRIMARY_CLASS_IDS`), optional secondary `OP_INGEST_SECONDARY_<FIELD>` (e.g. `OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_NAME`) — tuple/frozenset fields take a comma-separated value. Replaces the retired `OP_DETECTION_*` |
 | Region detection profile (off by default) | `OP_REGION_PROFILE` (select by name, e.g. `license_plate`), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
 | Ingest | `OP_MAX_INGEST_CONCURRENCY` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |

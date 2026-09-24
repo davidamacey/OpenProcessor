@@ -20,10 +20,10 @@ A deployment configures its region profile purely through the environment:
   (named by ``OP_REGION_DETECTION_NAME``, else ``region``).
 
 The resolved profile is :func:`register_profile`'d as the default, so it
-is exactly what ``GET /methods`` advertises. Note this is a separate
-prefix from ``OP_DETECTION_*``, which configures the *ingest item
-detector* (``routers/curation/ingest.py``), a different model with
-different settings.
+is exactly what ``GET /methods`` advertises. The ingest item detectors
+are configured separately (``OP_INGEST_PRIMARY_*`` /
+``OP_INGEST_SECONDARY_*``, ``routers/curation/ingest.py``). A leftover
+retired ``OP_DETECTION_*`` var fails resolution loudly.
 
 Further profiles (a deployment that detects more than one region type)
 are added by startup code via :func:`register_profile`; every registered
@@ -64,8 +64,10 @@ def region_profile_from_env() -> DetectionProfile | None:
     docstring), without registering it. ``None`` when nothing is configured.
     """
     from src.config import DetectionProfile
+    from src.config.detection_profile import reject_legacy_detection_env
     from src.services.detection.reference_profiles import REFERENCE_PROFILES
 
+    reject_legacy_detection_env()
     name = os.environ.get('OP_REGION_PROFILE', '').strip()
     has_overrides = DetectionProfile.env_overrides_present(REGION_DETECTION_ENV_PREFIX)
     if not name and not has_overrides:

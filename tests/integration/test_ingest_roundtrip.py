@@ -274,7 +274,7 @@ def client(
     main_module.app.dependency_overrides[get_async_triton] = lambda: fake_triton
     main_module.app.dependency_overrides[_registry_dep] = lambda: _FakeRegistry()
 
-    monkeypatch.setenv('OP_DETECTION_DETECTOR_MODEL', 'fake_item_detector')
+    monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
     # ingest.py's service factory reaches AppResources.async_triton_pool /
     # app.state.pe_encoder directly (not via FastAPI Depends()), and the
     # lifespan startup below unconditionally (re)builds both -- so these

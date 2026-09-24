@@ -170,10 +170,12 @@ class WholeImageDetector:
 
         A detection below ``profile.confidence_floor`` stays an unlabeled
         proposal: its class fields are left unset but the proposed name
-        and raw score are kept for lineage.
+        and raw score are kept for lineage. A non-empty
+        ``profile.class_ids`` drops detections of any other class.
         """
         num_dets = int(num_dets_row[0])
         floor = self.profile.confidence_floor
+        allowed = self.profile.class_ids
 
         out: list[DetectedItem] = []
         for box, score, cls in zip(
@@ -182,6 +184,8 @@ class WholeImageDetector:
             classes_row[:num_dets],
             strict=False,
         ):
+            if allowed and int(cls) not in allowed:
+                continue
             full = undo_letterbox(
                 (
                     float(box[0]) * net_size,

@@ -24,6 +24,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from src.config import DetectionProfile, RegionStatus, get_region_fields
+from src.config.detection_profile import reject_legacy_detection_env
 from src.routers.curation._common import (
     CURATION_IMAGES_INDEX,
     CURATION_ITEMS_INDEX,
@@ -79,14 +80,31 @@ class IngestBatchRequest(BaseModel):
     )
 
 
-def _get_detection_profile() -> DetectionProfile:
-    """The primary-detector profile for the ingest pipeline.
+INGEST_PRIMARY_ENV_PREFIX = 'OP_INGEST_PRIMARY_'
+INGEST_SECONDARY_ENV_PREFIX = 'OP_INGEST_SECONDARY_'
 
-    Env-configurable via ``OP_DETECTION_*`` (see
-    ``DetectionProfile.from_env``) — a deployment brings its own
-    detector by setting ``OP_DETECTION_DETECTOR_MODEL`` at minimum.
+
+def _get_detection_profile() -> DetectionProfile:
+    """The primary item-proposal detector profile for the ingest pipeline.
+
+    ``OP_INGEST_PRIMARY_<FIELD>`` (see ``DetectionProfile.from_env``) — a
+    deployment brings its own end2end detector by setting
+    ``OP_INGEST_PRIMARY_DETECTOR_MODEL`` at minimum, and can narrow which
+    of its classes become items with ``OP_INGEST_PRIMARY_CLASS_IDS``.
     """
-    return DetectionProfile.from_env(name='item')
+    reject_legacy_detection_env()
+    return DetectionProfile.from_env(INGEST_PRIMARY_ENV_PREFIX, name='item')
+
+
+def _get_secondary_profile() -> DetectionProfile | None:
+    """The optional secondary (raw-output ensemble) detector profile.
+
+    Configured via ``OP_INGEST_SECONDARY_<FIELD>``; ``None`` (secondary
+    stage off) unless ``OP_INGEST_SECONDARY_DETECTOR_MODEL`` is set. Its
+    ``name`` prefixes the ``class_source`` it writes (``{name}_model``).
+    """
+    profile = DetectionProfile.from_env(INGEST_SECONDARY_ENV_PREFIX, name='secondary')
+    return profile if profile.detector_model else None
 
 
 async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
@@ -98,13 +116,17 @@ async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestS
             status_code=503,
             detail='PE encoder not initialized; ingest is unavailable until app startup completes',
         )
-    profile = _get_detection_profile()
+    try:
+        profile = _get_detection_profile()
+        secondary = _get_secondary_profile()
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=f'ingest misconfigured: {exc}') from exc
     if not profile.detector_model:
         raise HTTPException(
             status_code=503,
             detail=(
-                'No detector configured for ingest — set OP_DETECTION_DETECTOR_MODEL to a '
-                'Triton model name that serves item proposals for this deployment'
+                'No detector configured for ingest — set OP_INGEST_PRIMARY_DETECTOR_MODEL '
+                'to a Triton model name that serves item proposals for this deployment'
             ),
         )
     return CurationIngestService(
@@ -112,6 +134,7 @@ async def _get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestS
         triton_pool=get_async_triton_pool(),
         registry=registry,
         profile=profile,
+        secondary_profile=secondary,
         pe_encoder=pe_encoder,
     )
 

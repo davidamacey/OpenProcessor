@@ -47,7 +47,12 @@ _SCANNED_ROOTS = ('src', 'scripts', 'docker')
 # fields, DetectionProfile ~30) -- direction 1 (code -> env.template) is
 # allowlisted for these; direction 2 (env.template -> code) still checks
 # every literal env.template actually spells out.
-_PATTERN_DOCUMENTED_PREFIXES = ('OP_REGION_FIELD_', 'OP_DETECTION_', 'OP_REGION_DETECTION_')
+_PATTERN_DOCUMENTED_PREFIXES = (
+    'OP_REGION_FIELD_',
+    'OP_INGEST_PRIMARY_',
+    'OP_INGEST_SECONDARY_',
+    'OP_REGION_DETECTION_',
+)
 
 # Vars read by code but intentionally not surfaced in env.template: none
 # yet. Keep this real -- if something lands here, document why.
@@ -58,7 +63,9 @@ _CODE_SIDE_ALLOWLIST: dict[str, str] = {}
 _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_',  # pattern-prefix mentions, e.g. "Pattern: OP_REGION_FIELD_<ATTR>"
     'OP_REGION_FIELD_',
-    'OP_DETECTION_',
+    'OP_DETECTION_',  # the retired prefix, named in the migration note
+    'OP_INGEST_PRIMARY_',
+    'OP_INGEST_SECONDARY_',
     'OP_REGION_DETECTION_',
 }
 
@@ -77,8 +84,8 @@ def _from_env_derived_vars() -> set[str]:
     for f in fields(RegionFields):
         derived.add(f'OP_REGION_FIELD_{f.name.upper()}')
     for f in fields(DetectionProfile):
-        derived.add(f'OP_DETECTION_{f.name.upper()}')
-        derived.add(f'OP_REGION_DETECTION_{f.name.upper()}')
+        for prefix in ('OP_INGEST_PRIMARY_', 'OP_INGEST_SECONDARY_', 'OP_REGION_DETECTION_'):
+            derived.add(f'{prefix}{f.name.upper()}')
     # CurationConfig.from_env uses manual per-field keys (not always the
     # field name uppercased, e.g. class_registry_path -> OP_REGISTRY_PATH)
     # -- regex-scan the classmethod's own source for the literal keys it

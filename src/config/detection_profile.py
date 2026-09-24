@@ -62,17 +62,26 @@ class DetectionProfile:
     ocr_pipeline_model: str = 'ocr_pipeline'
     sam_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
+    # Item (ingest) detectors only: the model class ids whose detections
+    # become items. Empty = every class. Lets a generic proposer (e.g. an
+    # 80-class COCO model) be narrowed to the classes a deployment curates.
+    class_ids: frozenset[int] = field(default_factory=frozenset)
 
     @classmethod
     def from_env(
         cls,
-        prefix: str = 'OP_DETECTION_',
+        prefix: str,
         *,
         name: str = 'region',
         base: DetectionProfile | None = None,
     ) -> DetectionProfile:
         """Build a :class:`DetectionProfile` from ``{prefix}*`` env vars,
         mirroring :meth:`CurationConfig.from_env` / :meth:`RegionFields.from_env`.
+
+        Prefixes in use: ``OP_INGEST_PRIMARY_`` / ``OP_INGEST_SECONDARY_``
+        (ingest item detectors, ``routers/curation/ingest.py``) and
+        ``OP_REGION_DETECTION_`` (the region cascade,
+        ``services/detection/profile_registry.py``).
 
         Every field is optional; unset env vars fall back to the
         dataclass default for that field. ``name`` has no dataclass
@@ -107,8 +116,11 @@ class DetectionProfile:
                 item_type = type(current[0]) if current else str
                 overrides[f.name] = tuple(item_type(part.strip()) for part in raw.split(','))
             elif isinstance(current, frozenset):
+                # Element type from the annotation (an empty default carries
+                # none): ``frozenset[int]`` fields parse ints.
+                elem = int if 'int' in str(f.type) else str
                 overrides[f.name] = frozenset(
-                    part.strip() for part in raw.split(',') if part.strip()
+                    elem(part.strip()) for part in raw.split(',') if part.strip()
                 )
             else:
                 overrides[f.name] = raw
@@ -118,3 +130,26 @@ class DetectionProfile:
     def env_overrides_present(cls, prefix: str) -> bool:
         """``True`` if any ``{prefix}<FIELD>`` env var is set."""
         return any(f'{prefix}{f.name.upper()}' in os.environ for f in fields(cls))
+
+
+LEGACY_DETECTION_ENV_PREFIX = 'OP_DETECTION_'
+
+
+def reject_legacy_detection_env() -> None:
+    """Fail loudly if any retired ``OP_DETECTION_*`` var is still set.
+
+    ``OP_DETECTION_*`` used to configure the ingest item detector while
+    reading like the region detector's config; a deployment setting both
+    meanings at once got one silently applied to the other. It is split
+    into ``OP_INGEST_PRIMARY_*`` (ingest) and ``OP_REGION_PROFILE`` /
+    ``OP_REGION_DETECTION_*`` (region cascade). Leftover vars raise rather
+    than being silently ignored or reinterpreted.
+    """
+    stale = sorted(k for k in os.environ if k.startswith(LEGACY_DETECTION_ENV_PREFIX))
+    if stale:
+        msg = (
+            f'retired env var(s) {stale}: OP_DETECTION_* was split into '
+            'OP_INGEST_PRIMARY_* (ingest item detector) and OP_REGION_PROFILE / '
+            'OP_REGION_DETECTION_* (region detection) -- rename them'
+        )
+        raise ValueError(msg)
