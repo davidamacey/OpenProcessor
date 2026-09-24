@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `/review`'s `Enter` no longer confirms an unrelated class on a
+  `vlm_new_class_pending` item. `resolveConfirmClassId` used to fall back
+  to the crop's current class when there was no proposal, and for these
+  items the backend now reports `proposed_class_id: null` precisely
+  because that class is unrelated. `Enter` opens the class picker there
+  instead.
+
+### Fixed
+
 - `/review` now honors `?tab=` and `?crop_id=` deep links. It opens that
   tab and jumps to that crop, paging forward up to 300 items and saying so
   when the crop isn't in the queue. Switching tabs keeps `?tab=` in the

@@ -112,3 +112,25 @@ describe('resolveConfirmClassId', () => {
     expect(resolveConfirmClassId(undefined)).toBeNull();
   });
 });
+
+describe('resolveConfirmClassId — VLM new-class proposals', () => {
+  it('never falls back to the unrelated current class for vlm_new_class_pending', () => {
+    expect(
+      resolveConfirmClassId({
+        proposed_class_id: null,
+        class_id: 7,
+        class_source: 'vlm_new_class_pending',
+      }),
+    ).toBeNull();
+  });
+
+  it('still falls back to the current class for other sources', () => {
+    expect(
+      resolveConfirmClassId({
+        proposed_class_id: null,
+        class_id: 7,
+        class_source: 'vlm',
+      }),
+    ).toBe(7);
+  });
+});

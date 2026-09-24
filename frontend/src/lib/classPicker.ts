@@ -95,8 +95,19 @@ export function searchClasses(
  * "is there anything to confirm" separately.
  */
 export function resolveConfirmClassId(
-  item: { proposed_class_id: number | null; class_id: number | null } | null | undefined,
+  item:
+    | {
+        proposed_class_id: number | null;
+        class_id: number | null;
+        class_source?: string | null;
+      }
+    | null
+    | undefined,
 ): number | null {
   if (!item) return null;
+  // The VLM proposed a class that isn't in the registry yet: the item's
+  // current class is unrelated to that proposal, so there is nothing to
+  // confirm — Enter opens the picker instead.
+  if (item.class_source === 'vlm_new_class_pending') return item.proposed_class_id;
   return item.proposed_class_id ?? item.class_id ?? null;
 }
