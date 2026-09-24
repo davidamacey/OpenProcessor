@@ -34,11 +34,29 @@ class FakeLabelOpenSearch:
         self.images = dict(images or {})
         self.items = dict(items or {})
         self.bulk_calls: list[list[dict[str, Any]]] = []
+        self.search_calls = 0
+        self.image_search_calls = 0
+        self.msearch_calls: list[list[dict[str, Any]]] = []
+
+    async def msearch(self, *, body: list[dict[str, Any]]) -> dict[str, Any]:
+        self.msearch_calls.append(body)
+        responses: list[dict[str, Any]] = []
+        for line in body[1::2]:
+            path = ((line.get('query') or {}).get('term') or {}).get('image_path')
+            hits = [
+                {'_id': doc_id, '_source': {'image_id': doc.get('image_id', doc_id)}}
+                for doc_id, doc in self.images.items()
+                if doc.get('image_path') == path
+            ]
+            responses.append({'hits': {'hits': hits[:1]}})
+        return {'responses': responses}
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        self.search_calls += 1
         cfg = get_curation_config()
         query = body.get('query') or {}
         if index == cfg.images_index:
+            self.image_search_calls += 1
             path = (query.get('term') or {}).get('image_path')
             hits = [
                 {'_id': doc_id, '_source': doc}
@@ -291,6 +309,33 @@ class TestImportLabelsBatch:
         assert summary['labels_imported'] == 3
         assert summary['files_processed'] == 3
         assert summary['files_failed'] == 0
+        # F-26: the image docs are resolved via one batched _msearch
+        # instead of one `search` per file.
+        assert len(os_fake.msearch_calls) == 1
+        assert len(os_fake.msearch_calls[0]) == 6  # 3 files * (index line + query line)
+
+    @pytest.mark.asyncio
+    async def test_batch_over_100_files_chunks_msearch_calls(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        n = 105
+        images = {
+            f'img{i}': {'image_id': f'img{i}', 'image_path': f'/tmp/{i}.jpg'} for i in range(n)
+        }
+        os_fake = FakeLabelOpenSearch(images=images)
+        pairs = []
+        for i in range(n):
+            txt = tmp_path / f'{i}.txt'
+            txt.write_text('0 0.5 0.5 0.2 0.2\n')
+            pairs.append((Path(f'/tmp/{i}.jpg'), txt))
+
+        summary = await import_labels_batch(pairs, registry, os_fake)
+
+        assert summary['labels_imported'] == n
+        # F-26: chunked at 100 -> 2 _msearch calls for 105 files, not 105
+        # individual `search` calls.
+        assert len(os_fake.msearch_calls) == 2
+        assert os_fake.image_search_calls == 0
 
 
 def _detector_item(image_id: str, bbox: list[float], class_id: int | None = 0) -> dict[str, Any]:
@@ -425,3 +470,29 @@ class TestDisagreementReport:
         assert summary['missed_labels'] == 1
         assert summary['unmatched_detections'] == 1
         assert len(records) == 3
+
+
+class TestImportLabelsBatchImageDocsPassthrough:
+    @pytest.mark.asyncio
+    async def test_precomputed_image_docs_skip_msearch_entirely(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        """F-26: a caller that already knows image_id (e.g. an ingest
+        batch's own results) can pass image_docs= and skip the _msearch
+        image-lookup round-trip completely."""
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'}}
+        )
+        txt_a = tmp_path / 'a.txt'
+        txt_a.write_text('0 0.5 0.5 0.2 0.2\n')
+
+        summary = await import_labels_batch(
+            [(Path('/tmp/a.jpg'), txt_a)],
+            registry,
+            os_fake,
+            image_docs={'/tmp/a.jpg': {'image_id': 'img1', '_id': 'img1'}},
+        )
+
+        assert summary['labels_imported'] == 1
+        assert os_fake.msearch_calls == []
+        assert os_fake.image_search_calls == 0

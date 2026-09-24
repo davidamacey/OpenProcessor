@@ -417,6 +417,8 @@ async def run_probe_inference(
             'bbox_norm',
             'class_name',
         ],
+        # F-26: scroll hygiene, no relevance scoring needed here.
+        'sort': ['_doc'],
     }
     resp = await opensearch.search(
         index=cfg.items_index,
@@ -428,8 +430,13 @@ async def run_probe_inference(
     processed = 0
     try:
         while hits:
+            # F-26: one bulk() per scroll page instead of one update() per
+            # item — page_size items become 1 round-trip instead of N.
+            bulk_body: list[dict[str, Any]] = []
             for hit in hits:
                 if max_crops is not None and processed >= max_crops:
+                    if bulk_body:
+                        await opensearch.bulk(body=bulk_body, refresh=False)
                     return processed
                 src = hit.get('_source') or {}
                 crop_id = src.get('crop_id') or hit.get('_id')
@@ -465,10 +472,9 @@ async def run_probe_inference(
                 disagreement = bool(
                     src.get('class_name') and pred_cls and pred_cls != src['class_name']
                 )
-                await opensearch.update(
-                    index=cfg.items_index,
-                    id=hit['_id'],
-                    body={
+                bulk_body.append({'update': {'_index': cfg.items_index, '_id': hit['_id']}})
+                bulk_body.append(
+                    {
                         'doc': {
                             'probe_pred_class': pred_cls,
                             'probe_pred_class_id': class_ids.get(pred_cls),
@@ -479,9 +485,15 @@ async def run_probe_inference(
                             'probe_model_version': version_tag,
                             'probe_scored_at': datetime.now(UTC).isoformat(),
                         }
-                    },
+                    }
                 )
                 processed += 1
+            if bulk_body:
+                bulk_resp = await opensearch.bulk(body=bulk_body, refresh=False)
+                if isinstance(bulk_resp, dict) and bulk_resp.get('errors'):
+                    logger.warning(
+                        'probe_bulk_partial_errors', sample=bulk_resp.get('items', [])[:3]
+                    )
             resp = await opensearch.scroll(scroll_id=scroll_id, scroll='5m')
             scroll_id = resp.get('_scroll_id')
             hits = resp.get('hits', {}).get('hits', [])

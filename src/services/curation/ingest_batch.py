@@ -125,19 +125,22 @@ async def _prefill_detections(
     return prefilled_imgs, prefilled_items, prefilled_secondary
 
 
-async def _refresh_for_label_import(service: CurationIngestService) -> None:
-    """Make this batch's just-written image + item docs searchable.
+async def _refresh_items_for_label_import(service: CurationIngestService) -> None:
+    """Make this batch's just-written item docs searchable.
 
-    Ingest bulk-writes with ``refresh=False``, but the label importer finds
-    the image by a *search* on ``image_path`` and the detector items by a
-    search on ``image_id``. Without an explicit refresh those searches run
-    before OpenSearch's periodic refresh and see nothing: every label is
-    silently skipped as "image not ingested" and no disagreement is ever
-    detected.
+    F-26: the images-index refresh is no longer needed — ``_import_batch_labels``
+    now passes each result's ``image_id`` straight through to
+    ``import_labels_batch`` (this batch already knows it; no need to
+    search the images index to rediscover it). The detector items still
+    need one: the label importer's IoU match does a *search* on
+    ``image_id`` against the items index, which — bulk-written with
+    ``refresh=False`` — is invisible until refreshed. Without this, every
+    label would silently skip its IoU match ("no detector item found")
+    and no disagreement would ever be detected.
     """
     cfg = service.config
     try:
-        await service.opensearch.indices.refresh(index=f'{cfg.images_index},{cfg.items_index}')
+        await service.opensearch.indices.refresh(index=cfg.items_index)
     except Exception as exc:
         # Broad on purpose: the import below still runs; if the docs are
         # not yet visible it reports labels_imported=0, which the caller
@@ -159,14 +162,20 @@ async def _import_batch_labels(
     """Import companion YOLO ``.txt`` labels for the images that ingested OK."""
     from src.services.curation.label_import import DEFAULT_LABEL_SOURCE, import_labels_batch
 
-    pairs: list[tuple[Path, Path]] = [
-        (Path(image_path), Path(label_path))
-        for image_path, label_path, res in zip(image_paths, label_paths, results, strict=False)
-        if label_path and res.status == 'success'
-    ]
+    pairs: list[tuple[Path, Path]] = []
+    image_docs: dict[str, dict[str, Any]] = {}
+    for image_path, label_path, res in zip(image_paths, label_paths, results, strict=False):
+        if not (label_path and res.status == 'success'):
+            continue
+        pairs.append((Path(image_path), Path(label_path)))
+        # F-26: this ingest batch already knows the image_id it just wrote
+        # — hand it straight to the importer instead of making it search
+        # the images index to rediscover what this call already knows.
+        if res.image_id:
+            image_docs[image_path] = {'image_id': res.image_id, '_id': res.image_id}
     if not pairs:
         return {}
-    await _refresh_for_label_import(service)
+    await _refresh_items_for_label_import(service)
     try:
         return await import_labels_batch(
             pairs,
@@ -175,6 +184,7 @@ async def _import_batch_labels(
             label_source=label_source or DEFAULT_LABEL_SOURCE,
             detect_mismatches=detect_mismatches,
             disagreement_sink=disagreement_sink,
+            image_docs=image_docs,
         )
     except Exception as exc:
         logger.warning('ingest_batch_label_import_failed', error=str(exc), n_pairs=len(pairs))

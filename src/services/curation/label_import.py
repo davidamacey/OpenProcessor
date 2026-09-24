@@ -131,10 +131,14 @@ async def _lookup_image(
     image_path: str,
     opensearch: AsyncOpenSearch,
 ) -> dict[str, Any] | None:
-    """Fetch the images-index doc whose ``image_path`` matches."""
+    """Fetch the images-index doc whose ``image_path`` matches.
+
+    F-26: restricted to ``image_id`` — the only field any caller reads
+    (previously returned the full doc, including vectors)."""
     body = {
         'size': 1,
         'query': {'term': {'image_path': image_path}},
+        '_source': ['image_id'],
     }
     try:
         resp = await opensearch.search(index=_images_index(), body=body)
@@ -270,6 +274,7 @@ async def import_yolo_labels(
     label_source: str = DEFAULT_LABEL_SOURCE,
     detect_mismatches: bool = False,
     mismatch_sink: list[dict[str, Any]] | None = None,
+    image_doc: dict[str, Any] | None = None,
 ) -> int:
     """Import a single YOLO label ``.txt`` -> labels_confirmed + item validation.
 
@@ -292,11 +297,16 @@ async def import_yolo_labels(
         mismatch_sink: Optional list that disagreement records (each
             carrying a ``kind``) are appended to, so a caller can
             count/inspect them without re-querying.
+        image_doc: Pre-resolved images-index doc (F-26) — pass this when
+            the caller already has it (a batch import's ``_msearch``
+            page, or an ingest result) to skip the per-file lookup.
+            ``None`` (default) falls back to the single-file lookup.
 
     Returns:
         Number of label rows indexed.
     """
-    image_doc = await _lookup_image(str(image_path), opensearch)
+    if image_doc is None:
+        image_doc = await _lookup_image(str(image_path), opensearch)
     if image_doc is None:
         logger.warning('label_import_no_image_doc', path=str(image_path))
         return 0
@@ -489,6 +499,44 @@ async def import_yolo_labels(
     return len(parsed)
 
 
+_MSEARCH_CHUNK = 100
+
+
+async def _msearch_images(
+    image_paths: list[str], opensearch: AsyncOpenSearch
+) -> dict[str, dict[str, Any]]:
+    """Batched image-doc lookup (F-26): one ``_msearch`` per
+    :data:`_MSEARCH_CHUNK` paths instead of one ``search`` per file.
+
+    Returns ``{image_path: doc}`` for every path that resolved (missing
+    paths are simply absent — same "no doc" semantics as
+    :func:`_lookup_image` returning ``None``).
+    """
+    resolved: dict[str, dict[str, Any]] = {}
+    index = _images_index()
+    for start in range(0, len(image_paths), _MSEARCH_CHUNK):
+        chunk = image_paths[start : start + _MSEARCH_CHUNK]
+        body: list[dict[str, Any]] = []
+        for path in chunk:
+            body.append({'index': index})
+            body.append(
+                {'size': 1, 'query': {'term': {'image_path': path}}, '_source': ['image_id']}
+            )
+        try:
+            resp = await opensearch.msearch(body=body)
+        except Exception as exc:
+            logger.warning('label_import_msearch_failed', n=len(chunk), error=str(exc))
+            continue
+        for path, one in zip(chunk, resp.get('responses') or [], strict=True):
+            hits = ((one or {}).get('hits') or {}).get('hits') or []
+            if not hits:
+                continue
+            src = hits[0].get('_source') or {}
+            src['_id'] = hits[0]['_id']
+            resolved[path] = src
+    return resolved
+
+
 async def import_labels_batch(
     pairs: list[tuple[Path, Path]],
     registry: ClassRegistry,
@@ -496,6 +544,7 @@ async def import_labels_batch(
     label_source: str = DEFAULT_LABEL_SOURCE,
     detect_mismatches: bool = False,
     disagreement_sink: list[dict[str, Any]] | None = None,
+    image_docs: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, int]:
     """Batch-import many image+label pairs.
 
@@ -509,6 +558,11 @@ async def import_labels_batch(
             returned summary.
         disagreement_sink: Optional list the per-file disagreement
             records are appended to.
+        image_docs: Optional ``{image_path: doc}`` the caller already has
+            (F-26 — e.g. an ingest batch's own just-written results) —
+            skips the ``_msearch`` lookup for any path present here. Any
+            path NOT present is still resolved via the batched
+            ``_msearch`` fallback below.
 
     Returns:
         ``{labels_imported, files_processed, files_failed, mismatches,
@@ -523,6 +577,13 @@ async def import_labels_batch(
         'missed_labels': 0,
         'unmatched_detections': 0,
     }
+    # F-26: resolve every remaining image doc via chunked _msearch, instead
+    # of import_yolo_labels doing one `search` per file — the per-file
+    # crop-lookup + bulk write (genuinely per-image-scoped) stay as-is.
+    image_docs = dict(image_docs or {})
+    missing_paths = [str(p) for p, _ in pairs if str(p) not in image_docs]
+    if missing_paths:
+        image_docs.update(await _msearch_images(missing_paths, opensearch))
     for image_path, label_path in pairs:
         try:
             sink: list[dict[str, Any]] = []
@@ -534,6 +595,7 @@ async def import_labels_batch(
                 label_source=label_source,
                 detect_mismatches=detect_mismatches,
                 mismatch_sink=sink,
+                image_doc=image_docs.get(str(image_path)),
             )
             summary['labels_imported'] += n
             for key, value in count_disagreements(sink).items():

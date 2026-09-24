@@ -78,6 +78,13 @@ class _FakeOpenSearch:
         self.updates.append({'id': id, 'doc': body['doc']})
         self.docs[id].update(body['doc'])
 
+    async def bulk(self, *, body: list[dict[str, Any]], refresh: bool | str = False) -> dict:  # noqa: ARG002
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            crop_id = action['update']['_id']
+            self.updates.append({'id': crop_id, 'doc': doc['doc']})
+            self.docs[crop_id].update(doc['doc'])
+        return {'errors': False, 'items': [{'update': {'status': 200}}] * (len(body) // 2)}
+
     async def refresh(self, *, index: str) -> None:
         self.refreshed.append(index)
 
