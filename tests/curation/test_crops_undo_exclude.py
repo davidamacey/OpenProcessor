@@ -272,10 +272,81 @@ async def test_unexclude_returns_validated_item_to_its_class_cluster(crops, regi
     assert v['class_validated'] is True
     assert v['cluster_id'] == v['class_id'] == ids['gadget']
     assert v['cluster_subid'] == f'{ids["gadget"]}a'
-    # Unvalidated items drop to the residual pool for a fresh assignment.
+    # An unvalidated item whose candidate cluster no longer has members
+    # drops to the residual pool for a fresh assignment.
     assert u['class_validated'] is False
     assert u['cluster_id'] is None
     assert u['cluster_subid'] is None
+
+
+@pytest.mark.asyncio
+async def test_unexclude_restores_a_live_candidate_cluster(crops, registry, ids) -> None:
+    """An unvalidated item excluded from a candidate cluster that still has
+    members goes back to it instead of vanishing from every cluster grid."""
+    fake = QueryFakeOpenSearch({ITEMS: {'u': _proposal_doc('u'), 'peer': _proposal_doc('peer')}})
+    await _exclude(crops, fake, ['u'])
+    await _unexclude(crops, fake, ['u'])
+    u = fake.docs(ITEMS)['u']
+    assert u['class_excluded'] is False
+    assert u['class_validated'] is False
+    assert u['cluster_id'] == 10003
+    assert u['cluster_subid'] == '10003b'
+
+
+# =============================================================================
+# Bug C — moving into a candidate cluster is placement, not a class label
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_move_into_candidate_cluster_sets_placement_not_class(crops, registry, ids) -> None:
+    from src.routers.curation._common import CropMoveRequest
+
+    doc = _proposal_doc('m')
+    doc.update(cluster_id=None, cluster_subid=None)
+    fake = QueryFakeOpenSearch({ITEMS: {'m': doc}})
+    before = _class_state(fake.docs(ITEMS)['m'])
+
+    out = await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=10000), fake)
+    assert out['updated'] == 1
+    m = fake.docs(ITEMS)['m']
+    assert m['cluster_id'] == 10000
+    assert m.get('class_id') is None
+    assert m['class_validated'] is False
+    assert m['class_source'] == 'detector_proposal'
+
+    await label_undo.unlabel_crop('m', fake)
+    assert _class_state(fake.docs(ITEMS)['m']) == before
+
+
+@pytest.mark.asyncio
+async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) -> None:
+    """A human-validated crop moved into a candidate group is no longer that
+    class; keeping it validated would leak the old class into export."""
+    from src.routers.curation._common import CropMoveRequest
+
+    fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h')}})
+    await _label(crops, fake, registry, 'h', ids['widget'])
+    await crops.move_crops(CropMoveRequest(crop_ids=['h'], cluster_id=10003), fake)
+    h = fake.docs(ITEMS)['h']
+    assert h['cluster_id'] == 10003
+    assert h['class_id'] is None
+    assert h['class_validated'] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('target', [-2, 9999])
+async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry, target) -> None:
+    from fastapi import HTTPException
+
+    from src.routers.curation._common import CropMoveRequest
+
+    fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
+    before = dict(fake.docs(ITEMS)['m'])
+    with pytest.raises(HTTPException) as exc:
+        await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=target), fake)
+    assert exc.value.status_code == 400
+    assert fake.docs(ITEMS)['m'] == before
 
 
 @pytest.mark.asyncio

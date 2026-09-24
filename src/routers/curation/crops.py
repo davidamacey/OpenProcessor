@@ -26,8 +26,13 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.cluster_ids import cluster_kind
 from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
-from src.services.curation.human_label import human_class_provenance, human_label_update
+from src.services.curation.human_label import (
+    candidate_move_update,
+    human_class_provenance,
+    human_label_update,
+)
 from src.services.curation.item_text import item_text_query
 from src.services.curation.wire import item_source_excludes, serialize_item
 
@@ -435,27 +440,43 @@ async def move_crops(
 ) -> dict[str, Any]:
     """Move crops to a different cluster.
 
-    In the default ensemble cluster_id == class_id, so this is also a
-    relabel: the moved crops get the destination cluster's class assigned
-    (with class_source='human_move' and class_validated=True). This
-    matches the user's mental model — "move this crop to the X cluster"
-    should also mean "this is an X, validated by me".
+    * Class cluster (``cluster_id == class_id``): also a relabel — the
+      crops get that registry class (``class_source='human_move'``,
+      ``class_validated=True``): "move this to the X cluster" means "this
+      is an X".
+    * Candidate cluster: placement only. The crops join the group; a
+      human-owned class is cleared (the human just said it isn't that
+      class), a machine suggestion is kept, and nothing is validated —
+      the group has no class until one is assigned.
+    * ``400`` for an unassigned (negative) target (use exclude/discard)
+      or a class-range id that isn't in the registry. Nothing is written.
     """
+    target_id = int(payload.cluster_id)
+    kind = cluster_kind(target_id)
+    target = None
+    if kind == 'unassigned':
+        raise HTTPException(
+            status_code=400,
+            detail=f'cannot move into unassigned cluster {target_id}; use exclude or discard',
+        )
+    if kind == 'class':
+        target = get_class_registry().get(target_id)
+        if target is None:
+            raise HTTPException(status_code=400, detail=f'unknown class_id {target_id}')
     if not payload.crop_ids:
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
-    # Resolve the destination class so the crops also get relabeled.
-    reg = get_class_registry()
-    target = reg.get(int(payload.cluster_id))
-    target_name = target.class_name if target is not None else ''
-
     from src.services.curation.history import record_class_snapshot
 
+    target_name = target.class_name if target is not None else ''
+
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        if kind == 'candidate':
+            return candidate_move_update(current, cluster_id=target_id, now=_now_iso())
         history = record_class_snapshot(current, writer='human:move_crops', restorable=True)
         return {
-            'cluster_id': int(payload.cluster_id),
-            'class_id': int(payload.cluster_id),
+            'cluster_id': target_id,
+            'class_id': target_id,
             'class_name': target_name,
             'class_source': 'human_move',
             # Move-from-cluster is a class gesture.
@@ -605,20 +626,25 @@ async def batch_unexclude_crops(
 
     Clears ``class_excluded`` + provenance and restores the validation
     recorded at exclude time. A validated crop goes straight back to its
-    class cluster (``cluster_id == class_id``); an unvalidated one drops
-    to the residual pool (``cluster_id=null``) and gets a fresh candidate
-    assignment on the next recluster. Crops that aren't excluded are left
-    untouched.
+    class cluster (``cluster_id == class_id``); an unvalidated one returns
+    to the candidate cluster it was excluded from while that cluster still
+    has members, else drops to the residual pool (``cluster_id=null``) for
+    a fresh assignment on the next recluster. Crops that aren't excluded
+    are left untouched.
     """
     if not payload.crop_ids:
         return {'unexcluded': 0, 'errors': 0}
-    from src.services.curation.exclusion import unexclusion_update
+    from src.services.curation.exclusion import live_candidate_ids, unexclusion_update
 
+    try:
+        live = await live_candidate_ids(opensearch, CURATION_ITEMS_INDEX, payload.crop_ids)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     now = _now_iso()
     n_errors = await _occ_bulk_human_write(
         opensearch,
         payload.crop_ids,
-        lambda _id, cur: unexclusion_update(cur, now=now),
+        lambda _id, cur: unexclusion_update(cur, now=now, live_candidate_ids=live),
         writer_id='human:batch_unexclude_crops',
     )
     return {'unexcluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}

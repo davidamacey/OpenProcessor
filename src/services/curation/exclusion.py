@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.clients.occ import is_human_owned_class
+from src.services.curation.cluster_ids import cluster_kind
 
 
 EXCLUDED_CLUSTER_ID = -2
@@ -60,14 +61,22 @@ def exclusion_update(current: dict[str, Any], *, reason: str, now: str) -> dict[
     return update
 
 
-def unexclusion_update(current: dict[str, Any], *, now: str) -> dict[str, Any]:
+def unexclusion_update(
+    current: dict[str, Any],
+    *,
+    now: str,
+    live_candidate_ids: frozenset[int] = frozenset(),
+) -> dict[str, Any]:
     """Update doc reversing an exclusion; ``{}`` if ``current`` isn't excluded.
 
     A validated item returns to its class cluster (``cluster_id =
     class_id``), keeping its sub-cluster only if it was recorded in that
-    same cluster. Anything else drops to the residual pool
+    same cluster. An unvalidated item excluded from a candidate cluster
+    that still has members (``live_candidate_ids``, resolved by the
+    caller) returns to it. Anything else drops to the residual pool
     (``cluster_id=None``) for a fresh candidate assignment on the next
-    recluster.
+    recluster -- a candidate id with no members left may have been
+    renumbered, so it is not trusted.
 
     Items excluded before ``excluded_prior_class_validated`` was recorded
     lost their validation flag at exclude time; for those a human-sourced
@@ -96,11 +105,36 @@ def unexclusion_update(current: dict[str, Any], *, now: str) -> dict[str, Any]:
         'cluster_subid': None,
         'updated_at': now,
     }
+    prior = current.get(PRIOR_CLUSTER_ID)
     if validated:
         update['cluster_id'] = class_id
-        if current.get(PRIOR_CLUSTER_ID) == class_id:
+        if prior == class_id:
             update['cluster_subid'] = current.get(PRIOR_CLUSTER_SUBID)
+    elif cluster_kind(prior) == 'candidate' and prior in live_candidate_ids:
+        update['cluster_id'] = prior
+        update['cluster_subid'] = current.get(PRIOR_CLUSTER_SUBID)
     return update
+
+
+async def live_candidate_ids(opensearch: Any, index: str, crop_ids: list[str]) -> frozenset[int]:
+    """Candidate clusters these excluded crops came from that still have members."""
+    resp = await opensearch.mget(index=index, body={'ids': list(crop_ids)})
+    docs = [d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')]
+    live: set[int] = set()
+    for cid in prior_candidate_ids(docs):
+        n = await opensearch.count(index=index, body={'query': {'term': {'cluster_id': cid}}})
+        if int((n or {}).get('count', 0)) > 0:
+            live.add(cid)
+    return frozenset(live)
+
+
+def prior_candidate_ids(docs: list[dict[str, Any]]) -> set[int]:
+    """Candidate cluster ids the excluded ``docs`` were taken out of."""
+    return {
+        doc[PRIOR_CLUSTER_ID]
+        for doc in docs
+        if doc.get('class_excluded') and cluster_kind(doc.get(PRIOR_CLUSTER_ID)) == 'candidate'
+    }
 
 
 def park_restored_state_while_excluded(restored: dict[str, Any]) -> dict[str, Any]:
@@ -123,6 +157,8 @@ __all__ = [
     'PRIOR_CLUSTER_SUBID',
     'PRIOR_VALIDATED',
     'exclusion_update',
+    'live_candidate_ids',
     'park_restored_state_while_excluded',
+    'prior_candidate_ids',
     'unexclusion_update',
 ]

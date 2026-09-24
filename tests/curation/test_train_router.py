@@ -1374,3 +1374,27 @@ def test_stamp_failure_is_not_swallowed(
     assert stamp_failure_logs, cap
     assert stamp_failure_logs[0]['log_level'] == 'error'
     assert 'disk exploded' in stamp_failure_logs[0]['error']
+
+
+def test_preflight_warns_on_export_that_dropped_unregistered_class_ids(
+    app_client: TestClient, tmp_path: Any
+) -> None:
+    import json as _json
+
+    export_dir = tmp_path / 'export_with_ghosts'
+    export_dir.mkdir()
+    (export_dir / 'manifest.json').write_text(
+        _json.dumps({'dropped_unregistered_class_ids': {'10000': 2}})
+    )
+    r = app_client.post('/curation/train/preflight', json={'dataset_export_dir': str(export_dir)})
+    assert r.status_code == 200, r.text
+    check = next(c for c in r.json()['checks'] if c['name'] == 'unregistered_class_ids')
+    assert check['severity'] == 'warn'
+    assert check['detail'] == {'dropped_unregistered_class_ids': {'10000': 2}}
+
+    clean = tmp_path / 'clean_export'
+    clean.mkdir()
+    (clean / 'manifest.json').write_text(_json.dumps({'dropped_unregistered_class_ids': {}}))
+    r = app_client.post('/curation/train/preflight', json={'dataset_export_dir': str(clean)})
+    check = next(c for c in r.json()['checks'] if c['name'] == 'unregistered_class_ids')
+    assert check['severity'] == 'ok'

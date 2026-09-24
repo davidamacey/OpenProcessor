@@ -305,6 +305,11 @@ class GenericYoloExportService:
 
         registry_file = self.registry.load()
         id_map = _build_export_id_map(registry_file.classes)
+        dropped_unregistered: dict[str, int] = {}
+        for row in rows:
+            if row.class_id not in id_map:
+                key = str(row.class_id)
+                dropped_unregistered[key] = dropped_unregistered.get(key, 0) + 1
         rows = _remap_rows_to_export_ids(rows, id_map)
 
         # Cap AFTER dedup + remap, so the final count lands at exactly
@@ -433,6 +438,7 @@ class GenericYoloExportService:
             'sampling_mode': sampling_mode,
             'image_copy': image_copy_stats,
             'resize_mode': resize_mode,
+            'dropped_unregistered_class_ids': dropped_unregistered,
         }
         manifest_path = resolved_export_dir / ARTIFACT_FILENAMES['manifest']
         atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
