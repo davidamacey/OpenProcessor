@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `/settings`'s prompt-pack blurb understated its effect. The shared
+  default also drives the always-on background VLM labeler
+  (`/vlm/label_batch`), not only auto-label runs.
+
+### Fixed
+
 - `/bakeoff` preselects the deployment's default profile (`default` /
   `default_profile` on `/bakeoff/profiles`) and warns when the configured
   default is invalid (`default_error`). Profiles now load before

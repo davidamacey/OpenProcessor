@@ -142,13 +142,12 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
     kind: 'settable',
     label: 'VLM prompt pack',
     bucket: 'prompt_packs',
-    // Verified 2026-09-23 on OpenProcessor main 80dd097: auto_label's
-    // resolve_run_selection falls back to this default; the always-on VLM
-    // worker does not read it (it uses OP_PROMPT_PACK_PATH).
+    // Verified 2026-09-23 on OpenProcessor main 80dd097: both auto_label's
+    // resolve_run_selection and POST /vlm/label_batch (what the always-on
+    // vlm_worker calls) resolve this default.
     blurb:
-      'Used by the VLM labeling sweep of every auto-label run that does not pick its ' +
-      'own pack on the dashboard. The always-on background VLM worker keeps using its ' +
-      'startup config.',
+      'Used by the always-on background VLM labeler and by every auto-label run ' +
+      'that does not pick its own pack on the dashboard.',
     irreversibleWarning: null,
   },
 ];
