@@ -17,10 +17,14 @@ merge).
 Split assignment is a deterministic, **stratified** hash-order bucket
 rather than a stored crop->split mapping, so re-running an export with the
 same recorded seed reproduces the same split without needing to persist
-per-item split assignments anywhere. Items already carrying a frozen
-``test_holdout`` flag always land in the ``test`` split regardless of the
-hash, honoring whatever holdout freeze a deployment has already committed
-to (see ``src.services.curation.holdout``).
+per-item split assignments anywhere. The split groups on ``image_id`` —
+items cut from one source image never straddle train/val/test. Items
+already carrying a frozen ``test_holdout`` flag (and their same-image
+mates) always land in the ``test`` split, honoring whatever holdout freeze
+a deployment has already committed to (see
+``src.services.curation.holdout``); a class with a frozen holdout splits
+its other items between train and val only. The exact per-class rules are
+on :func:`~src.services.curation.export_support.stratified_split`.
 
 Dense export ids (``class_registry.json:export_id_map``) are resolved from
 the live :class:`~src.clients.curation_opensearch.ClassRegistry` at export
@@ -51,6 +55,7 @@ from src.services.curation.export_readiness import (
     items_index_generation,
 )
 from src.services.curation.export_support import (
+    DEFAULT_SPLIT_GROUP_KEY,
     _build_export_id_map,
     _code_sha,
     _copy_or_resize_one,
@@ -132,6 +137,27 @@ def _write_yolo_label(path: Path, class_id: int, bbox_norm: list[float]) -> None
     path.write_text(f'{class_id} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n')
 
 
+def _class_split_rows(
+    per_class: dict[int, SplitCounts], id_map: dict[int, int], names: list[str]
+) -> list[dict[str, Any]]:
+    """Per-class instance counts per split, one row per dense export id.
+
+    Every class in the export's vocabulary gets a row, including one with
+    no instances at all — training preflight reads these rows to block a
+    class the run would train on but that has nothing in train or val.
+    """
+    registry_id_of = {dense_id: registry_id for registry_id, dense_id in id_map.items()}
+    return [
+        {
+            'class_id': registry_id_of[dense_id],
+            'export_id': dense_id,
+            'class_name': names[dense_id],
+            **per_class[dense_id].to_dict(),
+        }
+        for dense_id in range(len(names))
+    ]
+
+
 def resolve_current_export_dir(config: CurationConfig | None = None) -> Path:
     """Resolve the current export directory via the ``current`` symlink.
 
@@ -154,8 +180,9 @@ class GenericYoloExportService:
     into ``images/<split>/``, a ``data.yaml`` class map, a
     ``class_registry.json`` snapshot + dense ``export_id_map``, a
     ``label_stats.json`` per-class count, and a ``manifest.json``
-    reproducibility envelope (dataset checksum, split counts, seed, code
-    sha, frozen-holdout sha, timestamps). Deliberately narrower than the
+    reproducibility envelope (dataset checksum, split counts overall and
+    per class, split group key, seed, code sha, frozen-holdout sha,
+    timestamps). Deliberately narrower than the
     reference exporter — see module docstring.
     """
 
@@ -185,7 +212,6 @@ class GenericYoloExportService:
                 'class_id',
                 'class_name',
                 'test_holdout',
-                'cluster_id',
             ],
         )
 
@@ -207,7 +233,6 @@ class GenericYoloExportService:
                     class_id=int(class_id),
                     class_name=str(src.get('class_name') or class_id),
                     has_test_crop=bool(src.get('test_holdout')),
-                    cluster_id=src.get('cluster_id'),
                 )
             )
         return rows
@@ -259,7 +284,7 @@ class GenericYoloExportService:
         seed: int = 42,
         max_images: int | None = None,
         dedup_threshold: float | None = None,
-        group_key: str | None = 'cluster_id',
+        group_key: str | None = DEFAULT_SPLIT_GROUP_KEY,
         resize_mode: Literal['letterbox', 'aspect'] | None = None,
         image_size: int = 640,
         copy_images: bool = True,
@@ -274,9 +299,11 @@ class GenericYoloExportService:
 
         Honors a frozen ``test_holdout`` flag for the test split; every
         other item's split comes from :func:`stratified_split` — a
-        deterministic per-class, per-``group_key`` bucket assignment
-        (:func:`hash_split` still exists as the underlying single-key
-        primitive it's built from).
+        deterministic per-class, per-``group_key`` bucket assignment.
+        ``group_key`` defaults to ``image_id`` (the leakage unit: items
+        cut from one source image share a split) and is recorded in the
+        manifest. The manifest also records ``class_split_counts``: one
+        row per class with its ``train``/``val``/``test`` instance counts.
 
         ``dedup_threshold`` (if given) collapses whole-frame near-duplicate
         bursts (cosine >= threshold on the images index's secondary
@@ -371,6 +398,7 @@ class GenericYoloExportService:
         )
 
         counts = SplitCounts()
+        per_class = {dense_id: SplitCounts() for dense_id in range(len(names))}
         item_ids: list[str] = []
         holdout_item_ids: list[str] = []
         image_jobs: list[tuple[str, str]] = []
@@ -380,6 +408,8 @@ class GenericYoloExportService:
             label_path = labels_root / split / f'{row.item_id}.txt'
             _write_yolo_label(label_path, row.export_class_id, row.bbox_norm)
             setattr(counts, split, getattr(counts, split) + 1)
+            class_counts = per_class[row.export_class_id]
+            setattr(class_counts, split, getattr(class_counts, split) + 1)
             item_ids.append(row.item_id)
             if row.has_test_crop:
                 holdout_item_ids.append(row.item_id)
@@ -449,6 +479,7 @@ class GenericYoloExportService:
             'dataset_sha': checksum,
             'image_count': len(item_ids),
             'split_counts': counts.to_dict(),
+            'class_split_counts': _class_split_rows(per_class, id_map, names),
             'class_count': len(names),
             'started_at': started_at,
             'finished_at': finished_at,

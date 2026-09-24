@@ -336,16 +336,15 @@ def test_stratified_split_keeps_group_together():
     rows = [
         _ExportRow(
             item_id=f'crop-{i}',
-            image_id=f'img-{i}',
-            image_path=f'{i}.jpg',
+            image_id='img-shared',  # all ten items were cut from one image
+            image_path='shared.jpg',
             bbox_norm=[0.0, 0.0, 1.0, 1.0],
             class_id=0,
             class_name='car',
-            cluster_id=1,  # all ten rows share one burst
         )
         for i in range(10)
     ]
-    splits = stratified_split(rows, seed=3, train_ratio=0.8, val_ratio=0.1, group_key='cluster_id')
+    splits = stratified_split(rows, seed=3, train_ratio=0.8, val_ratio=0.1)
     assert len(set(splits.values())) == 1  # every row in the shared group got the same split
 
 

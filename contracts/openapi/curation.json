@@ -1091,6 +1091,47 @@
         "title": "DatasetRef",
         "type": "object"
       },
+      "ExportClassSplitCounts": {
+        "description": "One class's instance counts per split, as recorded in the manifest.",
+        "properties": {
+          "class_id": {
+            "description": "Registry class id.",
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "export_id": {
+            "description": "Dense class id written into the label files.",
+            "title": "Export Id",
+            "type": "integer"
+          },
+          "test": {
+            "default": 0,
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "default": 0,
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "default": 0,
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "export_id",
+          "class_name"
+        ],
+        "title": "ExportClassSplitCounts",
+        "type": "object"
+      },
       "ExportSingleClassRequest": {
         "description": "Body for the narrowed single-class / class-subset dataset export.\n\nPositives come from either the items' own class-labeled boxes\n(``box_source='item'``) or their region-of-interest sub-annotation\n(``box_source='region'``). All ``detected`` positives and all human\n``false_positive`` hard negatives are kept in full; ``empty_bg_ratio``\nadds a small sample of genuinely empty frames as a fraction of\npositives so the detector still sees some no-target images.",
         "properties": {
@@ -1194,6 +1235,174 @@
           }
         },
         "title": "ExportSingleClassRequest",
+        "type": "object"
+      },
+      "ExportSplitCounts": {
+        "description": "Instance counts per split.",
+        "properties": {
+          "test": {
+            "default": 0,
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "default": 0,
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "default": 0,
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "title": "ExportSplitCounts",
+        "type": "object"
+      },
+      "ExportStatusResponse": {
+        "description": "``GET /export/status``: the last completed multi-class export.\n\n``idle`` = no export yet (every other field ``null``); ``unknown`` =\nthe ``current`` export exists but its manifest is missing or\nunreadable (only ``path``/``export_dir`` set); ``success`` = every\nfield below read from that export's ``manifest.json``.\n``class_split_counts`` is ``null`` for an export written before it was\nrecorded.",
+        "properties": {
+          "class_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Count"
+          },
+          "class_split_counts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExportClassSplitCounts"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Split Counts"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "export_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Same as ``path``.",
+            "title": "Export Dir"
+          },
+          "group_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Row attribute the split grouped on (``image_id``).",
+            "title": "Group Key"
+          },
+          "image_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Count"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Finish (else start) time, ISO 8601.",
+            "title": "Last Run"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved export directory.",
+            "title": "Path"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "split_counts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSplitCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "unknown",
+              "success"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Tag"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ExportStatusResponse",
         "type": "object"
       },
       "ExportYoloRequest": {
@@ -7843,16 +8052,14 @@
     },
     "/curation/export/status": {
       "get": {
-        "description": "Last-export status — reads ``current`` symlink + manifest if present.",
+        "description": "Last completed export — the ``current`` symlink's manifest, if any.",
         "operationId": "export_status_curation_export_status_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Status Curation Export Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportStatusResponse"
                 }
               }
             },
