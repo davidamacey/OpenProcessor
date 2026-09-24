@@ -427,6 +427,27 @@ npm run check  # svelte-check + tsc
 npm run build  # SvelteKit → /build (static)
 ```
 
+### Mutation testing
+
+`npm run test:mutation` (Stryker, `stryker.config.json`) runs mutation
+testing against 10 pure, high-value modules — `api.ts` (data mapping +
+wire params), `stores/undo.svelte.ts`, `datasetStats.ts`,
+`autoLabelRunVlm.ts`, `sourceBadge.ts`, `reviewTabs.ts`,
+`curationSettings.ts`, `strategies.ts`, `classPicker.ts`,
+`annotations/readSlot.ts` — the files `docs/design/
+test-audit-2026-09-24.md` flagged as most exposed to "the suite passes
+but doesn't actually test the behavior." It answers a different
+question than `npm test`: not "does every assertion pass" but "if I
+break this line on purpose, does some test actually notice." Takes
+about 15-20 minutes locally; not run in pre-commit or the per-push CI
+`check` job (too slow) — it runs on a schedule and `workflow_dispatch`
+via `.github/workflows/mutation.yml`. `thresholds.break` in the config
+ratchets up only when a real pass raises the score; don't lower it to
+make a red run go green. Run it locally after touching wire-mapping
+logic in `api.ts` or store logic in `stores/*.svelte.ts`, or whenever
+CI's scheduled run goes red, to see the exact surviving mutants
+(`reports/mutation/index.html`).
+
 The production build runs in an `nginx:alpine` container defined by this
 repo's `docker-compose.yml` (`docker compose up -d --build`), host port
 5184 (`CROPWRIGHT_PORT`). Port conflicts: 5174=example-app-backend,

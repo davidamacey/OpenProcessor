@@ -8,6 +8,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getCrop } from './api';
+import { makeItem } from './test/makeItem';
 
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -23,14 +24,16 @@ afterEach(() => {
 describe('mapRawCrop class_validated', () => {
   it('carries class_validated independently of the OR-combined label_validated', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        crop_id: '67fd954c',
-        image_path: '/img/1.jpg',
-        bbox_norm: [0, 0, 0.4, 0.2],
-        class_source: 'v6_model',
-        label_validated: true,
-        class_validated: false,
-      }),
+      jsonResponse(
+        makeItem({
+          crop_id: '67fd954c',
+          image_path: '/img/1.jpg',
+          bbox_norm: [0, 0, 0.4, 0.2],
+          class_source: 'v6_model',
+          label_validated: true,
+          class_validated: false,
+        }),
+      ),
     );
     vi.stubGlobal('fetch', fetchMock);
 

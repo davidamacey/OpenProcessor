@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Test-quality hardening from `docs/design/test-audit-2026-09-24.md`
+  (owner requirement: tests must exercise real behavior, not just look
+  plausible).
+  - `src/lib/test/makeItem.ts` — a shared raw-`{API_PREFIX}/crops` item
+    fixture builder covering every `RawCrop` field (`src/lib/api.ts`)
+    with a distinct, non-default value, so a dropped or mis-mapped
+    field is detectable by a plain assertion instead of a
+    self-consistent hand-copied payload. `RawCrop` is now exported,
+    alongside a `RAW_CROP_KEYS` const with a compile-time
+    exhaustiveness check against `RawCrop`'s keys.
+  - `src/lib/api.mapRawCrop.test.ts` — asserts every `mapRawCrop` field
+    mapping against the fixture, including the falsy-but-meaningful
+    cases (`0`, `false`, `null`) that a `??`/`||` mixup silently drops.
+    Closes three surviving mutations the audit found: `cluster_subid`
+    mapped to `null`, `test_holdout` mapped to `false`, and
+    `confidence`/`label_confidence` dropped.
+  - `api.classValidated.test.ts` migrated its hand-built raw payload to
+    `makeItem()`.
+  - Added `@stryker-mutator/core` + `@stryker-mutator/vitest-runner`
+    (devDependencies) and `stryker.config.json`, scoped to 10 pure
+    modules (`api.ts`, `stores/undo.svelte.ts`, `datasetStats.ts`,
+    `autoLabelRunVlm.ts`, `sourceBadge.ts`, `reviewTabs.ts`,
+    `curationSettings.ts`, `strategies.ts`, `classPicker.ts`,
+    `annotations/readSlot.ts`). New `npm run test:mutation` script.
+    Local/weekly only — see the new `.github/workflows/mutation.yml` and
+    the "Mutation testing" note in this file's Development section.
+  - Killed the highest-priority surviving mutants the first mutation
+    run found in `stores/undo.svelte.ts` (`undoLast`'s success/409/
+    generic-failure toast branches, and the empty-stack early-return
+    guard) with real assertions on `toastStore.toasts` and
+    `undoStore.stack`, not source text. Mutation score for that file
+    rose from 75.5% to 83.7%.
+
 ### Fixed
 
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md

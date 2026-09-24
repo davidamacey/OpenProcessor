@@ -12,6 +12,8 @@ dist/
 .idea/
 coverage/
 .cache/
+reports/
+.stryker-tmp/
 __pycache__/
 
 # Diagnostic image dumps from /diagnostics scripts (generated per run,

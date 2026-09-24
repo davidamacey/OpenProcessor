@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { undoStore } from './undo.svelte';
+import { toastStore } from './toast.svelte';
 import { API_PREFIX } from '$lib/api';
 import type { UndoEntry } from '$lib/types';
 
@@ -67,6 +68,11 @@ describe('undoStore', () => {
     undoStore.recordWrites(['a', 'b', 'c'], [{ crop_id: 'b' }]);
     expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['a', 'c']);
   });
+
+  it('recordWrites() with no conflicts argument pushes every crop (default is empty, not a sentinel)', () => {
+    undoStore.recordWrites(['x', 'y']);
+    expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['x', 'y']);
+  });
 });
 
 describe('undoStore.undoLast', () => {
@@ -85,6 +91,7 @@ describe('undoStore.undoLast', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
     undoStore.recordWrites(['c1']);
+    const toastsBefore = toastStore.toasts.length;
 
     const crop = await undoStore.undoLast();
 
@@ -94,6 +101,11 @@ describe('undoStore.undoLast', () => {
     expect(crop?.id).toBe('c1');
     expect(crop?.class_id).toBe(3);
     expect(undoStore.stack).toHaveLength(0);
+    // Confirms the success branch actually ran (not just that the request
+    // succeeded) — a mutant that empties that branch's block still returns
+    // the crop but never surfaces a 'success' toast.
+    expect(toastStore.toasts.length).toBe(toastsBefore + 1);
+    expect(toastStore.toasts.at(-1)?.kind).toBe('success');
   });
 
   it('409 (nothing left to undo) returns null and does not re-push', async () => {
@@ -102,8 +114,15 @@ describe('undoStore.undoLast', () => {
       vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'nothing to undo' })),
     );
     undoStore.recordWrites(['c1']);
+    const toastsBefore = toastStore.toasts.length;
+
     expect(await undoStore.undoLast()).toBeNull();
+
     expect(undoStore.stack).toHaveLength(0);
+    // The 409 branch, specifically, must run — distinguishes it from the
+    // generic-failure branch below, which re-pushes and toasts 'error'.
+    expect(toastStore.toasts.length).toBe(toastsBefore + 1);
+    expect(toastStore.toasts.at(-1)?.kind).toBe('info');
   });
 
   it('any other failure re-pushes the entry so Z stays retryable', async () => {
@@ -112,14 +131,23 @@ describe('undoStore.undoLast', () => {
       vi.fn().mockResolvedValue(jsonResponse(404, { detail: 'unknown crop' })),
     );
     undoStore.recordWrites(['c1']);
+    const toastsBefore = toastStore.toasts.length;
+
     expect(await undoStore.undoLast()).toBeNull();
+
     expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['c1']);
+    expect(toastStore.toasts.length).toBe(toastsBefore + 1);
+    expect(toastStore.toasts.at(-1)?.kind).toBe('error');
   });
 
-  it('an empty stack makes no request', async () => {
+  it('an empty stack makes no request and leaves the stack empty', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     expect(await undoStore.undoLast()).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+    // Guards the early-return itself: without it, `entry` is undefined and
+    // the catch block's re-push (`this.push(entry)`) would put an
+    // undefined entry onto the stack instead of leaving it empty.
+    expect(undoStore.stack).toHaveLength(0);
   });
 });

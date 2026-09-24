@@ -1145,7 +1145,7 @@ function xyxyToBBoxNorm(bb: number[]): import('./types').BBoxNorm {
 }
 
 /** Raw crop shape from the {API_PREFIX}/crops API. */
-type RawCrop = {
+export type RawCrop = {
   crop_id: string;
   image_id?: string;
   image_path: string;
@@ -1185,6 +1185,57 @@ type RawCrop = {
   thumbnail_url?: string;
   updated_at?: string;
 };
+
+/**
+ * Every key `RawCrop` declares, used by `src/lib/test/makeItem.ts` to build
+ * a fixture that can't silently miss a field. The `satisfies` + exhaustiveness
+ * check below makes an added/removed `RawCrop` key a compile error here
+ * instead of a silent gap in the fixture.
+ */
+export const RAW_CROP_KEYS = [
+  'crop_id',
+  'image_id',
+  'image_path',
+  'bbox_norm',
+  'class_id',
+  'class_name',
+  'class_source',
+  'confidence',
+  'cluster_id',
+  'cluster_distance',
+  'cluster_subid',
+  'label_validated',
+  'class_validated',
+  'label_source',
+  'class_detector',
+  'class_detector_version',
+  'class_labeled_at',
+  'class_labeler',
+  'test_holdout',
+  'crop_rank_in_image',
+  'crop_area_norm',
+  'blur_lap_ratio',
+  'classifier_raw_confidence',
+  'proposal_name',
+  'vlm_confidence',
+  'vlm_proposed_class_id',
+  'vlm_proposed_class_name',
+  'mistakenness_score',
+  'mistakenness_method',
+  'mistakenness_version',
+  'mistakenness_scored_at',
+  'thumbnail_url',
+  'updated_at',
+] as const satisfies readonly (keyof RawCrop)[];
+// Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
+type _RawCropKeysExhaustive =
+  Exclude<keyof RawCrop, (typeof RAW_CROP_KEYS)[number]> extends never
+    ? true
+    : [
+        'RAW_CROP_KEYS is missing',
+        Exclude<keyof RawCrop, (typeof RAW_CROP_KEYS)[number]>,
+      ];
+const _rawCropKeysExhaustive: _RawCropKeysExhaustive = true;
 
 function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
