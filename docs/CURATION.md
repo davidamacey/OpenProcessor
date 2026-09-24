@@ -138,6 +138,18 @@ trainer. A deployment supplies:
   `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`). The resolved profile is
   registered automatically, so it is exactly what `GET /methods`
   advertises. An unknown `OP_REGION_PROFILE` name fails at startup.
+  While a region profile is active, ingest (and label import, for
+  labels the detector missed) seeds every **newly created** item with
+  region status `pending_detection` — the only way an item enters the
+  worker's queue. An existing region status is never overwritten on
+  re-ingest. The per-image `n_plates` count in the ingest response is
+  the number of items seeded this way (`0` with no region profile), and
+  `GET {prefix}/ingest/sam_drain` reports them under
+  `pending_detection`. **Enabling a region profile on a deployment that
+  already has ingested items:** those items have no region status and
+  the worker will never see them; backfill them once with
+  `python3 scripts/curation/requeue_regions.py --missing-status`
+  (dry run: counts only) then `... --missing-status --apply`.
 - **A dual-head detector, if you want the backbone embedding**
   (`v6_embedding`). Residual clustering, the embedding visualization,
   item scores and the OCC conflict handler all read that field, and it
