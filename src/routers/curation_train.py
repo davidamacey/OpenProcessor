@@ -18,6 +18,7 @@ Endpoints (per design table §7):
     POST   {api_prefix}/train/cancel_campaign/{campaign_id}
     GET    {api_prefix}/train/profiles           → profile table
     GET    {api_prefix}/train/presets            → class-subset presets
+    GET    {api_prefix}/train/gpus               → TrainGpuOptionsResponse
 
 Pre-flight contract (design §15.1): ``/start`` calls ``/preflight``
 internally and refuses to write ``job.json`` if any check has severity
@@ -37,7 +38,13 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Query, status
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, Field
 
-from src.config import IndexRole, get_curation_config, get_region_fields, index_name
+from src.config import (
+    IndexRole,
+    get_curation_config,
+    get_gpu_arbiter_config,
+    get_region_fields,
+    index_name,
+)
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.routers.curation import get_class_registry
@@ -49,7 +56,11 @@ from src.services.curation.dataset_thresholds import (
     dataset_thresholds,
 )
 from src.services.training import jobs as train_jobs
-from src.services.training.gpu_arbiter import needs_multi_gpu_stop, probe_trainer_reachable
+from src.services.training.gpu_arbiter import (
+    containers_to_stop,
+    needs_service_stop,
+    probe_trainer_reachable,
+)
 from src.services.training.jobs import Profile, TrainCampaignSpec, TrainJobSpec, TrainJobStatus
 from src.services.training.profiles import (
     PROFILES_YOLO26,
@@ -195,11 +206,12 @@ async def _count_test_per_class(
 
 
 async def _count_pending_ingest(opensearch: Any) -> int:
-    """Count crops still awaiting the SAM3/Gemma plate pipeline.
+    """Count crops still awaiting region detection/verification.
 
-    A dual-GPU run stops the SAM3 + Gemma containers (gpu_arbiter), pausing
-    plate detection/verification. This lets preflight warn the operator how
-    much in-flight ingest that will stall. Legacy status names included so a
+    A training claim that stops GPU-resident ingest containers
+    (``gpu_arbiter.containers_to_stop``) pauses that detection/verification
+    until the run ends. This lets preflight warn the operator how much
+    in-flight ingest that will stall. Legacy status names included so a
     mid-migration backlog is still counted.
     """
     body = {
@@ -817,9 +829,11 @@ async def _run_preflight(
                     )
                 )
 
-    # ---- active-ingest warning (dual-GPU runs stop SAM3 + Gemma) ----------
-    if needs_multi_gpu_stop(spec.cuda_visible_devices):
+    # ---- active-ingest warning (claim stops GPU-scoped ingest containers) -
+    if needs_service_stop(spec.cuda_visible_devices):
+        stopped = containers_to_stop(spec.cuda_visible_devices)
         pending = await _count_pending_ingest(opensearch)
+        stopped_names = ', '.join(stopped)
         if pending > 0:
             checks.append(
                 PreflightCheck(
@@ -827,11 +841,11 @@ async def _run_preflight(
                     severity='warn',
                     message=(
                         f'{pending:,} crops are still pending region '
-                        'detection/verification. A dual-GPU run stops the segmenter '
-                        'and VLM containers, pausing that ingest until the run '
-                        'finishes (it auto-resumes afterward).'
+                        f'detection/verification. This run stops {stopped_names}, '
+                        'pausing that ingest until the run finishes (it auto-resumes '
+                        'afterward).'
                     ),
-                    detail={'pending_ingest': pending},
+                    detail={'pending_ingest': pending, 'stops_containers': list(stopped)},
                 )
             )
         else:
@@ -839,7 +853,8 @@ async def _run_preflight(
                 PreflightCheck(
                     name='ingest_idle',
                     severity='ok',
-                    message='No ingest backlog — safe to stop the segmenter + VLM for training',
+                    message=f'No ingest backlog — safe to stop {stopped_names} for training',
+                    detail={'stops_containers': list(stopped)},
                 )
             )
 
@@ -1097,6 +1112,95 @@ class PresetsResponse(BaseModel):
 async def list_presets() -> PresetsResponse:
     """Return server-side class-subset presets (design §12.3)."""
     return PresetsResponse(class_subset_presets=get_class_subset_presets())
+
+
+# =============================================================================
+# GET /gpus -- served training GPU picker (backend owns the decisions)
+# =============================================================================
+
+
+class TrainGpuOption(BaseModel):
+    """One selectable ``cuda_visible_devices`` value for the train form."""
+
+    value: str
+    gpu_ids: list[int]
+    label: str
+    advisory: str
+    stops_containers: list[str] = Field(default_factory=list)
+    default: bool = False
+
+
+class TrainGpuOptionsResponse(BaseModel):
+    options: list[TrainGpuOption]
+    allowed_ids: list[int]
+    unrestricted: bool
+
+
+def _train_gpu_option_label(gpu_ids: list[int], gpu_labels: dict[int, str]) -> str:
+    ids_str = ','.join(str(i) for i in gpu_ids)
+    if len(gpu_ids) == 1:
+        gid = gpu_ids[0]
+        card = gpu_labels.get(gid)
+        return f'{card} (GPU {gid})' if card else f'GPU {gid}'
+    names = {gpu_labels.get(gid) for gid in gpu_ids}
+    if len(names) == 1 and (only := next(iter(names))):
+        return f'{len(gpu_ids)}× {only} (GPUs {ids_str})'  # noqa: RUF001 - intentional display glyph
+    return f'GPUs {ids_str}'
+
+
+def _train_gpu_option_advisory(stopped: tuple[str, ...]) -> str:
+    if stopped:
+        return f'Stops {", ".join(stopped)} for the run; restarted when it ends.'
+    return 'Shares GPU(s) with running services; background workers pause for the run.'
+
+
+def _build_train_gpu_option(gpu_ids: list[int], gpu_labels: dict[int, str]) -> TrainGpuOption:
+    value = ','.join(str(i) for i in gpu_ids)
+    stopped = containers_to_stop(value)
+    return TrainGpuOption(
+        value=value,
+        gpu_ids=gpu_ids,
+        label=_train_gpu_option_label(gpu_ids, gpu_labels),
+        advisory=_train_gpu_option_advisory(stopped),
+        stops_containers=list(stopped),
+    )
+
+
+@router.get('/gpus', response_model=TrainGpuOptionsResponse)
+async def list_train_gpu_options() -> TrainGpuOptionsResponse:
+    """Serve the training GPU picker: values, labels, and stop advisories.
+
+    Backend owns these decisions (design rationale: the frontend must
+    never hardcode a deployment's GPU topology) -- see
+    ``docs/design/train_gpu_options_plan.md``. Unrestricted installs (no
+    ``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.
+    """
+    from src.services.training.jobs import default_train_gpu_value
+
+    arbiter_cfg = get_gpu_arbiter_config()
+    allowed_ids = sorted(arbiter_cfg.allowed_gpu_ids)
+    default_value = default_train_gpu_value()
+
+    if not allowed_ids:
+        option = _build_train_gpu_option(
+            [int(t) for t in default_value.split(',')], arbiter_cfg.gpu_labels
+        )
+        return TrainGpuOptionsResponse(
+            options=[option.model_copy(update={'default': True})],
+            allowed_ids=[],
+            unrestricted=True,
+        )
+
+    options = [_build_train_gpu_option([gid], arbiter_cfg.gpu_labels) for gid in allowed_ids]
+    if len(allowed_ids) > 1:
+        options.append(_build_train_gpu_option(allowed_ids, arbiter_cfg.gpu_labels))
+
+    default_idx = next(
+        (i for i, o in enumerate(options) if o.value == default_value),
+        0,
+    )
+    options[default_idx] = options[default_idx].model_copy(update={'default': True})
+    return TrainGpuOptionsResponse(options=options, allowed_ids=allowed_ids, unrestricted=False)
 
 
 # =============================================================================

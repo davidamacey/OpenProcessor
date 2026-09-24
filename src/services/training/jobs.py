@@ -121,6 +121,26 @@ def _validate_gpu_device_string(v: str) -> str:
     return ','.join(str(i) for i in sorted(ids))
 
 
+def default_train_gpu_value() -> str:
+    """The ``cuda_visible_devices`` value a new spec defaults to.
+
+    Precedence: ``GpuArbiterConfig.default_train_gpus`` (``OP_TRAIN_DEFAULT_GPUS``)
+    if set; else the smallest id in ``allowed_gpu_ids`` if an allowlist is
+    configured; else ``'0'`` (the generic, unrestricted-install default).
+    Always validated through :func:`_validate_gpu_device_string` so a
+    misconfigured default (outside the allowlist) fails loudly instead of
+    quietly serving a GPU id training will then reject.
+    """
+    cfg = get_gpu_arbiter_config()
+    if cfg.default_train_gpus:
+        value = cfg.default_train_gpus
+    elif cfg.allowed_gpu_ids:
+        value = str(min(cfg.allowed_gpu_ids))
+    else:
+        value = '0'
+    return _validate_gpu_device_string(value)
+
+
 # =============================================================================
 # Pydantic models -- wire format
 # =============================================================================
@@ -185,7 +205,7 @@ class TrainJobSpec(BaseModel):
     single_cls: bool = False
 
     # Compute ----------------------------------------------------------------
-    cuda_visible_devices: str = Field(default='0')
+    cuda_visible_devices: str = Field(default_factory=default_train_gpu_value)
 
     # Hyperparameters & augmentation ----------------------------------------
     hyperparameters: dict[str, Any] = Field(default_factory=dict)
@@ -309,7 +329,7 @@ class TrainCampaignSpec(BaseModel):
     dataset_export_dir: str
     include_classes: list[int] | None = None
     single_cls: bool = False
-    cuda_visible_devices: str = '0'
+    cuda_visible_devices: str = Field(default_factory=default_train_gpu_value)
     augmentation: AugmentationSpec | None = None
     runs: list[CampaignRunSpec]
     stop_when: dict[str, float] | None = None

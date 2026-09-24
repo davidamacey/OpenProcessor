@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `examples/bakeoff_lpr_paper/`.
 
 ### Added
+- `GET /curation/train/gpus` — served training GPU picker (values, human
+  labels, stop advisories, and the resolved default), so the frontend no
+  longer hardcodes GPU ids/labels. `OP_GPU_ARBITER_CONTAINERS` entries may
+  now carry a GPU scope (`name@2`, `name@0/2`); `OP_GPU_LABELS` and
+  `OP_TRAIN_DEFAULT_GPUS` configure the option labels and default value.
 - Curation operator tools: `run_probe.py` (probe-inference backfill),
   `reclassify_after_registry_growth.py`, `requeue_regions.py` (incl.
   `--missing-status` backfill), `seed_class_registry.py` (registry from ONNX
@@ -86,6 +91,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names and incumbent model all arrive via `job.json` or `OP_*` env.
 - **`curation-mlflow`** compose service (port 4609) for optional
   experiment tracking of those runs.
+
+### Changed
+- The GPU arbiter now decides which containers to stop by **GPU scope**, not
+  claim size: a single-GPU training claim that intersects a scoped
+  container's GPU set stops that container (it no longer takes a multi-GPU
+  claim to free a GPU that hosts a large sibling service). Unscoped
+  containers keep the original "stopped only on a multi-GPU claim" behavior.
+  `TrainJobSpec.cuda_visible_devices` / `TrainCampaignSpec.cuda_visible_devices`
+  now default to the smallest `OP_GPU_ALLOWED_IDS` entry (or
+  `OP_TRAIN_DEFAULT_GPUS` if set) instead of a hardcoded `'0'`, so a
+  restricted allowlist that excludes GPU 0 no longer rejects the default spec.
 
 ### Fixed
 - Freshly ingested items never reached `/review/all`, the VLM worker or the
