@@ -69,7 +69,12 @@ def _state_dir() -> Path:
 
 
 def _default_sentinel_path() -> Path:
-    return _state_dir() / 'training_worker' / 'pause.sentinel'
+    # S-4: the 'vlm_worker/pause.sentinel' suffix must match
+    # CurationConfig.pause_sentinel_path -- the workers that pause on
+    # this file's presence read that same property. Built from
+    # _state_dir() (not get_curation_config().pause_sentinel_path
+    # directly) so tests can keep redirecting via the _state_dir seam.
+    return _state_dir() / 'vlm_worker' / 'pause.sentinel'
 
 
 def _default_lock_path() -> Path:

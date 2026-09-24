@@ -473,6 +473,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     # so we don't fight the trainer for CPU/RAM. (For dual-GPU runs the
     # arbiter stops the whole gemma container instead, so this path
     # never runs.) See src/services/training/gpu_arbiter.py.
+    #
+    # S-4: this literal 'vlm_worker/pause.sentinel' path must stay in
+    # sync with CurationConfig.pause_sentinel_path (src/config/curation.py),
+    # which gpu_arbiter.py and scripts/curation/worker/state.py both
+    # resolve through. Duplicated here (rather than importing
+    # src.config) deliberately — this script stays a lightweight
+    # httpx-only worker with no src import (see the module docstring's
+    # ITEMS_INDEX/ITEM_EMBEDDING_FIELD precedent above).
     p.add_argument(
         '--pause-sentinel',
         default=os.environ.get(
