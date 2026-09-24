@@ -37,6 +37,19 @@ Server-side content dedup additionally makes a re-sent image a cheap
 imported with it the first time); ``--relabel-duplicates`` sends them through
 ``POST /import_labels/batch`` for images first ingested without labels.
 
+``--images-only`` ingests the images without their labels: no
+``label_txt_path``, no registry class check, no label checks. Use it when
+the dataset's labels are not item classes — e.g. whole frames labeled with
+the *region* class (``names: {0: license_plate}``) that should be checked
+against the region cascade, not imported into the item registry.
+Resume, checkpoints, ``--limit`` (still stratified by positive = non-empty
+label file), ``--seed``, ``--splits`` and ``--path-map`` behave as usual.
+
+Every run writes ``ingested/<split>.jsonl`` under ``--state-dir``: one line
+per image that landed (``image``, ``server_path``, ``image_id``,
+``status``, ``positive``). ``eval_regions_vs_gt.py --state-dir`` reads it
+as its cohort.
+
 Usage::
 
     # Preview: discovered splits, positives/backgrounds, class check
@@ -46,6 +59,10 @@ Usage::
     # Smoke cohort: 500 images from the test split, stratified positives/backgrounds
     python3 scripts/curation/import_labeled_dataset.py --dataset /data/ds/data.yaml \\
         --path-map /data/ds=/datasets/ds --splits test --limit 500 --state-dir ./state/smoke
+
+    # Region ground truth: ingest images only, then evaluate the region cascade
+    python3 scripts/curation/import_labeled_dataset.py --dataset /data/regions/data.yaml \\
+        --images-only --splits test --limit 1000 --state-dir ./state/regions
 
     # Full run (re-run the same command to resume)
     python3 scripts/curation/import_labeled_dataset.py --dataset /data/ds/data.yaml \\
@@ -58,7 +75,6 @@ import argparse
 import asyncio
 import json
 import logging
-import random
 import sys
 import time
 from dataclasses import dataclass
@@ -75,13 +91,19 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.curation.ingest_upload import map_identifier, parse_path_map
+from scripts.curation.yolo_dataset import (
+    DatasetError,
+    Sample,
+    discover,
+    label_path_for,  # noqa: F401 - public re-export (discovery moved to yolo_dataset)
+    load_samples,
+    stratified_sample,
+)
 from src.config import get_curation_config
 
 
 logger = logging.getLogger('import_labeled_dataset')
 
-IMAGE_EXTENSIONS = frozenset({'.jpg', '.jpeg', '.png', '.bmp', '.webp'})
-SPLIT_KEYS = ('train', 'val', 'valid', 'test')
 COUNT_KEYS = (
     'images',
     'positives',
@@ -101,159 +123,8 @@ COUNT_KEYS = (
 )
 
 
-class DatasetError(RuntimeError):
-    """The dataset layout could not be resolved."""
-
-
 class PreflightError(RuntimeError):
     """A check that must pass before (or early in) an import failed."""
-
-
-# =============================================================================
-# Dataset discovery
-# =============================================================================
-
-
-@dataclass(frozen=True)
-class Sample:
-    image: Path
-    label: Path
-    n_labels: int
-    label_exists: bool
-
-    @property
-    def positive(self) -> bool:
-        return self.n_labels > 0
-
-
-def label_path_for(image: Path) -> Path:
-    """YOLO convention: the last ``images`` path segment becomes ``labels``, suffix ``.txt``."""
-    parts = list(image.parts)
-    for i in range(len(parts) - 2, -1, -1):
-        if parts[i] == 'images':
-            parts[i] = 'labels'
-            return Path(*parts).with_suffix('.txt')
-    return image.with_suffix('.txt')
-
-
-def _count_label_rows(label: Path) -> tuple[int, bool]:
-    try:
-        text = label.read_text(encoding='utf-8')
-    except FileNotFoundError:
-        return 0, False
-    rows = [ln for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith('#')]
-    return len(rows), True
-
-
-def _images_under(entry: Path, base: Path) -> list[Path]:
-    if entry.is_dir():
-        return sorted(
-            p for p in entry.rglob('*') if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
-        )
-    # A YOLO split may also be a .txt list of image paths.
-    out = []
-    for line in entry.read_text(encoding='utf-8').splitlines():
-        if line.strip():
-            p = Path(line.strip())
-            out.append(p if p.is_absolute() else (base / p))
-    return sorted(out)
-
-
-def _resolve_entry(entry: str, yaml_dir: Path, root_field: str | None) -> Path:
-    """Resolve a data.yaml split entry; tolerate a stale absolute ``path:``.
-
-    A copied/moved dataset usually keeps its original ``path:`` — so the
-    YAML's own directory is tried first, then ``path:``.
-    """
-    candidates: list[Path] = []
-    if Path(entry).is_absolute():
-        candidates.append(Path(entry))
-    else:
-        candidates.append(yaml_dir / entry)
-        if root_field:
-            root = Path(root_field)
-            candidates.append((root if root.is_absolute() else yaml_dir / root) / entry)
-    for c in candidates:
-        if c.exists():
-            return c
-    tried = ', '.join(str(c) for c in candidates)
-    raise DatasetError(f'split entry {entry!r} not found (tried: {tried})')
-
-
-def _find_yaml(dataset: Path) -> Path | None:
-    if dataset.is_file():
-        return dataset
-    for name in ('data.yaml', 'data.yml', 'dataset.yaml'):
-        if (dataset / name).is_file():
-            return dataset / name
-    return None
-
-
-def _names_list(raw: Any) -> list[str] | None:
-    if raw is None:
-        return None
-    if isinstance(raw, list):
-        return [str(n) for n in raw]
-    return [str(raw[k]) for k in sorted(raw, key=int)]
-
-
-def discover(dataset: Path) -> tuple[dict[str, list[Path]], list[str] | None]:
-    """Return ``({split: [image paths]}, class names or None)``."""
-    yaml_path = _find_yaml(dataset)
-    if yaml_path is not None:
-        import yaml
-
-        data = yaml.safe_load(yaml_path.read_text(encoding='utf-8')) or {}
-        splits: dict[str, list[Path]] = {}
-        for key in SPLIT_KEYS:
-            value = data.get(key)
-            if not value:
-                continue
-            entries = value if isinstance(value, list) else [value]
-            images: list[Path] = []
-            for entry in entries:
-                resolved = _resolve_entry(str(entry), yaml_path.parent, data.get('path'))
-                images.extend(_images_under(resolved, resolved.parent))
-            splits[key] = sorted(set(images))
-        if not splits:
-            raise DatasetError(f'{yaml_path}: no train/val/test entries')
-        return splits, _names_list(data.get('names'))
-
-    splits = {}
-    if (dataset / 'images').is_dir():
-        for d in sorted((dataset / 'images').iterdir()):
-            if d.is_dir():
-                splits[d.name] = _images_under(d, d)
-    else:
-        for d in sorted(dataset.iterdir()):
-            if (d / 'images').is_dir():
-                splits[d.name] = _images_under(d / 'images', d)
-    if not splits:
-        raise DatasetError(f'{dataset}: no data.yaml, images/<split>/ or <split>/images/ found')
-    return splits, None
-
-
-def load_samples(images: list[Path]) -> list[Sample]:
-    out = []
-    for image in images:
-        label = label_path_for(image)
-        n, exists = _count_label_rows(label)
-        out.append(Sample(image=image, label=label, n_labels=n, label_exists=exists))
-    return out
-
-
-def stratified_sample(samples: list[Sample], limit: int, seed: int) -> list[Sample]:
-    """Deterministic sample keeping the positive/background proportion."""
-    if limit >= len(samples):
-        return samples
-    rng = random.Random(seed)  # nosec B311 - reproducible cohort selection, not crypto
-    pos = [s for s in samples if s.positive]
-    neg = [s for s in samples if not s.positive]
-    n_pos = round(limit * len(pos) / len(samples))
-    n_pos = min(len(pos), max(n_pos, 1 if pos else 0))
-    n_neg = min(len(neg), limit - n_pos)
-    picked = rng.sample(pos, n_pos) + rng.sample(neg, n_neg)
-    return sorted(picked, key=lambda s: str(s.image))
 
 
 # =============================================================================
@@ -273,6 +144,7 @@ class ImportConfig:
     concurrency: int = 4
     relabel_duplicates: bool = False
     verify_labels: bool = True
+    images_only: bool = False
     force: bool = False
     retries: int = 3
     retry_backoff_s: float = 2.0
@@ -292,10 +164,10 @@ class DatasetImporter:
     def __init__(self, cfg: ImportConfig, client: httpx.AsyncClient) -> None:
         self.cfg = cfg
         self.client = client
-        self.labels_verified = not cfg.verify_labels
+        self.labels_verified = not cfg.verify_labels or cfg.images_only
         self.report_path = cfg.state_dir / 'disagreements.jsonl'
-        (cfg.state_dir / 'checkpoints').mkdir(parents=True, exist_ok=True)
-        (cfg.state_dir / 'progress').mkdir(parents=True, exist_ok=True)
+        for sub in ('checkpoints', 'progress', 'ingested'):
+            (cfg.state_dir / sub).mkdir(parents=True, exist_ok=True)
 
     def server_path(self, local: Path) -> str:
         return map_identifier(local, self.cfg.path_map)
@@ -358,19 +230,17 @@ class DatasetImporter:
     async def import_batch(self, split: str, batch: list[Sample]) -> dict[str, Any] | None:
         """One ``/ingest/batch`` call. Returns this batch's counts, or None on failure."""
         by_server = {self.server_path(s.image): s for s in batch}
-        body: dict[str, Any] = {
-            'items': [
-                {
-                    'path': self.server_path(s.image),
-                    'source': f'{self.cfg.source_prefix}:{split}',
-                    'label_txt_path': self.server_path(s.label),
-                }
-                for s in batch
-            ],
-            'detect_mismatches': self.cfg.detect_mismatches,
-        }
-        if self.cfg.label_source:
-            body['label_source'] = self.cfg.label_source
+        items: list[dict[str, Any]] = [
+            {'path': self.server_path(s.image), 'source': f'{self.cfg.source_prefix}:{split}'}
+            for s in batch
+        ]
+        body: dict[str, Any] = {'items': items}
+        if not self.cfg.images_only:
+            for item, s in zip(items, batch, strict=True):
+                item['label_txt_path'] = self.server_path(s.label)
+            body['detect_mismatches'] = self.cfg.detect_mismatches
+            if self.cfg.label_source:
+                body['label_source'] = self.cfg.label_source
         result = await self._post(f'{self.cfg.api_base}/ingest/batch', body)
         if result is None:
             return None
@@ -387,9 +257,11 @@ class DatasetImporter:
             'unmatched_detections',
         ):
             counts[key] = int(summary.get(key, 0))
-        status = {r.get('image_path'): r.get('status') for r in result.get('results') or []}
+        rows = {r.get('image_path'): r for r in result.get('results') or []}
+        status = {p: r.get('status') for p, r in rows.items()}
         ingested = [s for p, s in by_server.items() if status.get(p) == 'success']
-        counts['label_rows_on_ingested'] = sum(s.n_labels for s in ingested)
+        if not self.cfg.images_only:
+            counts['label_rows_on_ingested'] = sum(s.n_labels for s in ingested)
 
         if not self.labels_verified and counts['label_rows_on_ingested'] > 0:
             if counts['labels_imported'] == 0:
@@ -434,11 +306,20 @@ class DatasetImporter:
                         row['local_image_path'] = str(sample.image)
                         row['background'] = not sample.positive
                     fh.write(json.dumps(row) + '\n')
+        landed = [(p, s) for p, s in by_server.items() if status.get(p) in ('success', 'duplicate')]
         return {
-            'paths': [
-                str(s.image)
-                for p, s in by_server.items()
-                if status.get(p) in ('success', 'duplicate')
+            'paths': [str(s.image) for _p, s in landed],
+            # The evaluator's cohort: a duplicate's items live under the
+            # *first* copy's image_id, so the id is what joins back to them.
+            'ingested': [
+                {
+                    'image': str(s.image),
+                    'server_path': p,
+                    'image_id': rows[p].get('image_id') or None,
+                    'status': status[p],
+                    'positive': s.positive,
+                }
+                for p, s in landed
             ],
             'counts': counts,
         }
@@ -460,7 +341,35 @@ class DatasetImporter:
             path.unlink()
         return done, counts
 
+    def write_ingested_list(self, split: str) -> Path:
+        """Rebuild ``ingested/<split>.jsonl`` from the progress file.
+
+        Derived from progress (not appended per batch) so a resumed or
+        checkpoint-skipped split still yields its complete cohort.
+        """
+        out = self.cfg.state_dir / 'ingested' / f'{split}.jsonl'
+        progress = self.cfg.state_dir / 'progress' / f'{split}.jsonl'
+        seen: set[str] = set()
+        lines: list[str] = []
+        if progress.exists():
+            for line in progress.read_text(encoding='utf-8').splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                entries = row.get('ingested') or [{'image': p} for p in row['paths']]
+                for entry in entries:
+                    if entry['image'] not in seen:
+                        seen.add(entry['image'])
+                        lines.append(json.dumps(entry))
+        out.write_text(''.join(f'{ln}\n' for ln in lines), encoding='utf-8')
+        return out
+
     async def run_split(self, split: str, samples: list[Sample]) -> dict[str, int]:
+        counts = await self._run_split(split, samples)
+        self.write_ingested_list(split)
+        return counts
+
+    async def _run_split(self, split: str, samples: list[Sample]) -> dict[str, int]:
         ckpt = self.cfg.state_dir / 'checkpoints' / f'{split}.json'
         if ckpt.exists() and not self.cfg.force:
             logger.info('[%s] checkpoint exists; skipping (use --force to redo)', split)
@@ -562,7 +471,7 @@ async def run(
     check_classes: bool = True,
 ) -> dict[str, Any]:
     importer = DatasetImporter(cfg, client)
-    if check_classes:
+    if check_classes and not cfg.images_only:
         if names is None:
             logger.warning('dataset declares no class names; skipping the registry check')
         else:
@@ -605,6 +514,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--seed', type=int, default=0, help='Seed for --limit sampling')
     p.add_argument('--no-detect-mismatches', action='store_true')
     p.add_argument('--relabel-duplicates', action='store_true')
+    p.add_argument(
+        '--images-only',
+        action='store_true',
+        help='Ingest the images without importing their labels (no registry check). For '
+        'datasets whose labels are a different taxonomy, e.g. region-level ground truth '
+        'checked afterwards with eval_regions_vs_gt.py',
+    )
     p.add_argument('--skip-class-check', action='store_true')
     p.add_argument(
         '--no-verify-labels',
@@ -621,6 +537,11 @@ async def _async_main(args: argparse.Namespace) -> int:
         found, names = discover(args.dataset)
     except DatasetError as exc:
         logger.error('%s', exc)
+        return 1
+    if args.images_only and args.relabel_duplicates:
+        logger.error(
+            '--relabel-duplicates imports labels; it cannot be combined with --images-only'
+        )
         return 1
     wanted = [s.strip() for s in args.splits.split(',')] if args.splits else list(found)
     missing = [s for s in wanted if s not in found]
@@ -645,6 +566,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         concurrency=max(1, args.concurrency),
         relabel_duplicates=args.relabel_duplicates,
         verify_labels=not args.no_verify_labels,
+        images_only=args.images_only,
         force=args.force,
     )
     for name, samples in splits.items():
@@ -655,7 +577,7 @@ async def _async_main(args: argparse.Namespace) -> int:
     async with httpx.AsyncClient() as client:
         try:
             if args.dry_run:
-                if names is not None and not args.skip_class_check:
+                if names is not None and not (args.skip_class_check or args.images_only):
                     await DatasetImporter(cfg, client).check_classes(names)
                     logger.info('class registry check passed for %d classes', len(names))
                 return 0
@@ -664,7 +586,9 @@ async def _async_main(args: argparse.Namespace) -> int:
             logger.error('%s', exc)
             return 3
     logger.info('summary: %s', json.dumps(summary['total']))
-    logger.info('report: %s', cfg.state_dir / 'disagreements.jsonl')
+    if not cfg.images_only:
+        logger.info('report: %s', cfg.state_dir / 'disagreements.jsonl')
+    logger.info('ingested image lists: %s', cfg.state_dir / 'ingested')
     return 0 if summary['total']['failed'] == 0 else 2
 
 
