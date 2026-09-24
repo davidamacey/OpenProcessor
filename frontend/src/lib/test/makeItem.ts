@@ -51,6 +51,13 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   mistakenness_scored_at: '2026-02-03T04:05:06Z',
   thumbnail_url: '/thumb/crop-fixture-001.jpg',
   updated_at: '2026-03-04T05:06:07Z',
+  source: 'lpr_frozen_test_sample',
+  class_excluded: true,
+  excluded_reason: 'blurry',
+  excluded_at: '2026-04-05T06:07:08Z',
+  item_text_lines: [
+    { text: 'STOP', confidence: 0.88, box_norm: [0.1, 0.1, 0.3, 0.2], rel_height: 0.1 },
+  ],
 };
 
 // Runtime cross-check that DEFAULT_ITEM's own keys match RAW_CROP_KEYS

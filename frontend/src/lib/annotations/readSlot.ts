@@ -147,6 +147,9 @@ export function readSlot(
       source: asString(pick(raw, cap.text.sourceField)),
       confidence: asNumber(pick(raw, cap.text.confidenceField)),
       engineVersion: asString(pick(raw, cap.text.engineVersionField)),
+      vlmValue: asString(pick(raw, cap.text.vlmValueField)),
+      ocrValue: asString(pick(raw, cap.text.ocrValueField)),
+      disagreement: asBoolean(pick(raw, cap.text.disagreementField)),
     };
   }
 

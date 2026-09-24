@@ -89,6 +89,28 @@ describe('readSlot / licensePlateSlot', () => {
     expect(d.lifecycle?.state?.value).toBe('no_region_visible');
     expect(d.lifecycle?.state?.role).toBe('absent');
   });
+
+  it('reads the VLM/OCR text candidates and the disagreement flag (2026-09-24 logic-moves W8)', () => {
+    const raw = {
+      region_text: 'ABC123',
+      region_text_vlm: 'ABC123',
+      region_text_ocr: 'ABC128',
+      region_text_disagreement: true,
+      region_text_engine_version: '1',
+    };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.text?.vlmValue).toBe('ABC123');
+    expect(d.text?.ocrValue).toBe('ABC128');
+    expect(d.text?.disagreement).toBe(true);
+    expect(d.text?.engineVersion).toBe('1');
+  });
+
+  it('leaves the OCR candidate fields null when the wire omits them', () => {
+    const d = readSlot({ region_text: 'ABC123' }, licensePlateSlot, parent);
+    expect(d.text?.vlmValue).toBeNull();
+    expect(d.text?.ocrValue).toBeNull();
+    expect(d.text?.disagreement).toBeNull();
+  });
 });
 
 describe('projectFromParent — inverse of the private projectToParent', () => {

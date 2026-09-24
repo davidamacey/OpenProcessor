@@ -2,13 +2,16 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import {
+    ApiError,
     bulkLabel,
     excludeCrops,
     getClusters,
+    getCrops,
     getPlates,
     getRegionThumbUrl,
     getThumbUrl,
     resolveApiUrl,
+    unexcludeCrops,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
@@ -141,6 +144,104 @@
   let searchScores = $state(new Map<string, number>());
   const searchSel = createSelection({ plainClick: 'replace' });
   let detailSearchCrop = $state<Crop | null>(null);
+
+  // ---------------- Ignored bucket (G7) ----------------
+  // Excluded crops (`class_excluded=true`, cluster_id=-2) — a mode swap
+  // over the card grid, same pattern as searchModeActive above. The
+  // default crop browse filters class_excluded out, so `include_excluded`
+  // is required to see them at all.
+  let ignoredModeActive = $state(false);
+  let ignoredItems = $state<Crop[]>([]);
+  let ignoredTotal = $state(0);
+  let ignoredLoading = $state(false);
+  const ignoredSel = createSelection({ plainClick: 'replace' });
+
+  async function loadIgnored(): Promise<void> {
+    ignoredModeActive = true;
+    ignoredLoading = true;
+    try {
+      const res = await getCrops({
+        cluster_id: -2,
+        include_excluded: true,
+        limit: 200,
+      });
+      ignoredItems = res.items;
+      ignoredTotal = res.total;
+    } catch (e) {
+      toastStore.error(`Could not load ignored crops: ${(e as Error).message}`);
+    } finally {
+      ignoredLoading = false;
+    }
+  }
+
+  function exitIgnoredMode(): void {
+    ignoredModeActive = false;
+    ignoredItems = [];
+    ignoredSel.clear();
+  }
+
+  async function restoreIgnored(): Promise<void> {
+    const ids = [...ignoredSel.ids];
+    if (ids.length === 0) {
+      toastStore.info('Select crops first to restore.');
+      return;
+    }
+    try {
+      const res = await unexcludeCrops(ids);
+      const idSet = new Set(ids);
+      ignoredItems = ignoredItems.filter((c) => !idSet.has(c.id));
+      ignoredTotal = Math.max(0, ignoredTotal - ids.length);
+      ignoredSel.clear();
+      toastStore.success(`Restored ${res.unexcluded}.`);
+    } catch (e) {
+      toastStore.error(`Restore failed: ${(e as Error).message}`);
+    }
+  }
+
+  // ---------------- Item-text search (G8) ----------------
+  // A literal OCR-text search over item_text_lines
+  // (GET {API_PREFIX}/crops?item_text=), independent of the semantic
+  // (embedding) search box above.
+  let itemTextQuery = $state('');
+  let itemTextModeActive = $state(false);
+  let itemTextItems = $state<Crop[]>([]);
+  let itemTextTotal = $state(0);
+  let itemTextLoading = $state(false);
+  let itemTextError = $state<string | null>(null);
+  const itemTextSel = createSelection({ plainClick: 'replace' });
+
+  async function runItemTextSearch(): Promise<void> {
+    const q = itemTextQuery.trim();
+    if (!q) return;
+    itemTextModeActive = true;
+    itemTextLoading = true;
+    itemTextError = null;
+    try {
+      const res = await getCrops({ item_text: q, limit: 200 });
+      itemTextItems = res.items;
+      itemTextTotal = res.total;
+    } catch (e) {
+      // 400 = "item_text must contain a letter or digit" — an inline
+      // hint, not a toast (the operator is mid-keystroke, not facing an
+      // outage).
+      if (e instanceof ApiError && e.status === 400) {
+        itemTextError = e.detail ?? 'That search needs a letter or digit.';
+        itemTextItems = [];
+        itemTextTotal = 0;
+      } else {
+        toastStore.error(`Item-text search failed: ${(e as Error).message}`);
+      }
+    } finally {
+      itemTextLoading = false;
+    }
+  }
+
+  function exitItemTextMode(): void {
+    itemTextModeActive = false;
+    itemTextItems = [];
+    itemTextError = null;
+    itemTextSel.clear();
+  }
 
   // Cluster-origin badges: build a Map from whatever's already loaded for
   // the card grid (getClusters({}) returns every cluster, up to 2000, in
@@ -594,6 +695,44 @@
       />
     {/if}
 
+    <!-- Item-text search (G8) — literal OCR text search over
+         item_text_lines, distinct from the semantic search box above. -->
+    <form
+      class="flex items-center gap-1"
+      onsubmit={(e) => {
+        e.preventDefault();
+        void runItemTextSearch();
+      }}
+    >
+      <input
+        type="text"
+        bind:value={itemTextQuery}
+        placeholder="Item text…"
+        class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+      />
+      <button type="submit" class="btn-sm border border-zinc-700 bg-zinc-900 text-xs">
+        Search text
+      </button>
+    </form>
+    {#if itemTextError}
+      <span class="text-[11px] text-amber-300">{itemTextError}</span>
+    {/if}
+
+    <!-- Ignored bucket (G7) -->
+    <button
+      type="button"
+      onclick={() => {
+        if (ignoredModeActive) exitIgnoredMode();
+        else void loadIgnored();
+      }}
+      class="btn-sm border text-xs transition-colors {ignoredModeActive
+        ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
+        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
+      title="Crops excluded from training + clustering"
+    >
+      {ignoredModeActive ? '✓ ' : ''}Ignored
+    </button>
+
     <span class="grow"></span>
 
     <!-- Color legend for the card border. The cluster grid uses border
@@ -730,6 +869,80 @@
             {/if}
           {/snippet}
         </CropResultGrid>
+      {/if}
+    {:else if ignoredModeActive}
+      <!-- Ignored bucket (G7): excluded crops, restorable via
+           batch_unexclude. Same mode-swap pattern as search above. -->
+      <div class="mb-3 flex items-center gap-2 text-xs">
+        <span class="text-zinc-300">
+          <strong class="text-zinc-100">{ignoredTotal.toLocaleString()}</strong>
+          ignored crop{ignoredTotal === 1 ? '' : 's'}
+        </span>
+        <span class="grow"></span>
+        <button
+          type="button"
+          class="btn-sm border border-green-500/50 bg-green-500/10 text-green-200 hover:bg-green-500/20"
+          onclick={() => void restoreIgnored()}
+          disabled={ignoredSel.size === 0}
+        >
+          Restore selected ({ignoredSel.size})
+        </button>
+        <button
+          type="button"
+          class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+          onclick={exitIgnoredMode}
+        >
+          ← Back to clusters
+        </button>
+      </div>
+      {#if ignoredLoading && ignoredItems.length === 0}
+        <p class="text-sm text-zinc-500">Loading...</p>
+      {:else if ignoredItems.length === 0}
+        <p class="text-sm text-zinc-500">Nothing ignored.</p>
+      {:else}
+        <CropResultGrid
+          items={ignoredItems}
+          sel={ignoredSel}
+          ondetail={(c) => (detailSearchCrop = c)}
+        >
+          {#snippet cornerBadge(crop)}
+            {#if crop.excluded_reason}
+              <span
+                class="rounded border border-amber-500/50 bg-amber-500/15 px-1 py-0.5 text-[9px] text-amber-200"
+              >
+                {crop.excluded_reason}
+              </span>
+            {/if}
+          {/snippet}
+        </CropResultGrid>
+      {/if}
+    {:else if itemTextModeActive}
+      <!-- Item-text search results (G8). -->
+      <div class="mb-3 flex items-center gap-2 text-xs">
+        <span class="text-zinc-300">
+          <strong class="text-zinc-100">{itemTextTotal.toLocaleString()}</strong>
+          result{itemTextTotal === 1 ? '' : 's'} for
+          <span class="font-medium text-blue-200">"{itemTextQuery}"</span>
+        </span>
+        <span class="grow"></span>
+        <button
+          type="button"
+          class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+          onclick={exitItemTextMode}
+        >
+          ← Back to clusters
+        </button>
+      </div>
+      {#if itemTextLoading && itemTextItems.length === 0}
+        <p class="text-sm text-zinc-500">Loading...</p>
+      {:else if itemTextItems.length === 0}
+        <p class="text-sm text-zinc-500">No crops matched that text.</p>
+      {:else}
+        <CropResultGrid
+          items={itemTextItems}
+          sel={itemTextSel}
+          ondetail={(c) => (detailSearchCrop = c)}
+        />
       {/if}
     {:else if showEmbeddingViz}
       <!-- Replaces the card grid entirely (plan §5.6 — no layout thrash

@@ -15,6 +15,7 @@
     patchSlotMeta,
   } from '$lib/api';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
+  import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
   import BboxCanvas from '$lib/components/BboxCanvas.svelte';
   import ScoreChip from '$lib/components/ScoreChip.svelte';
@@ -749,6 +750,11 @@
   let dismissedPanelOpen = $state<boolean>(false);
   let dismissedItems = $state<Crop[]>([]);
   let dismissedLoading = $state<boolean>(false);
+
+  // -- item-detail "Details" disclosure (G7/G9/G8) -----------------------
+  // Collapsed by default; CropMetaPanel only mounts (and fetches
+  // history/image) once the operator opens it.
+  let detailsOpen = $state<boolean>(false);
 
   async function toggleDismissedPanel(): Promise<void> {
     dismissedPanelOpen = !dismissedPanelOpen;
@@ -1549,7 +1555,7 @@
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>source</span>
           <span class="grow"></span>
-          <span class="font-mono">{current.hdd_source ?? ''}</span>
+          <span class="font-mono">{current.source ?? ''}</span>
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
           <img
@@ -1802,6 +1808,15 @@
                   {(slotData.text.confidence * 100).toFixed(0)}%
                 </span>
               {/if}
+              {#if slotData?.text?.disagreement}
+                <span
+                  class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                  title="vlm: {slotData.text.vlmValue ?? '∅'} · ocr: {slotData.text
+                    .ocrValue ?? '∅'}"
+                >
+                  readers disagree
+                </span>
+              {/if}
             </span>
             {#if statusWantsRejectionReason(activeSlot, editedSlotStatus, regionStatusesStore.list)}
               <span class="text-zinc-500">Rejection reason</span>
@@ -1957,6 +1972,25 @@
             hotkeys on /classes).
           </p>
         {/if}
+
+        <!-- G7/G9/G8: history + source image/siblings + item-text lines,
+             via the same CropMetaPanel used by the /clusters detail
+             modal — collapsed by default so it doesn't compete with the
+             confirm/reject flow above. -->
+        <div class="mt-3 border-t border-zinc-800 pt-2">
+          <button
+            type="button"
+            class="text-[10px] uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+            onclick={() => (detailsOpen = !detailsOpen)}
+          >
+            {detailsOpen ? '▾' : '▸'} Details
+          </button>
+          {#if detailsOpen}
+            <div class="mt-2">
+              <CropMetaPanel crop={current} />
+            </div>
+          {/if}
+        </div>
       </div>
     {/if}
   </div>
