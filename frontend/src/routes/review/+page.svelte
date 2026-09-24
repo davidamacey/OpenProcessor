@@ -45,6 +45,7 @@
     REVIEW_TABS,
     resolveEffectiveTab,
     type ReviewPresetId,
+    reviewDeepLink,
   } from '$lib/reviewTabs';
   import { isDiverseOverlayAvailable } from '$lib/strategies';
   import type {
@@ -66,6 +67,8 @@
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { replaceState } from '$app/navigation';
 
   // Unified review by default — one continuous queue of every crop that
   // needs a human, sorted most-uncertain first. Down to 5 top-level tabs
@@ -75,7 +78,14 @@
   // comment). The remaining 4 narrower tabs stay available for
   // diagnosing where uncertainty came from — each is a real, distinct
   // signal, not a rebrand of "everything."
-  let tab = $state<ReviewTab>('all');
+  // `/review?tab=<urlId>&crop_id=<id>` deep links (bookmarks, /train's
+  // cohort preview) open that tab and jump to that crop.
+  const deepLink = reviewDeepLink(page.url.searchParams);
+  let tab = $state<ReviewTab>(deepLink.tab);
+  let pendingCropId: string | null = deepLink.cropId;
+  // How far to page forward looking for a deep-linked crop before
+  // saying it isn't in this queue.
+  const DEEP_LINK_MAX_ITEMS = 300;
   // The slot backing the current tab, if any — the single derived value
   // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
   // hangs every former `tab === 'plates'` call site off, instead of a
@@ -373,6 +383,23 @@
   const loadMore = () => queue.loadMore();
 
   $effect(() => {
+    if (pendingCropId == null || queue.loading || queue.loadingMore) return;
+    if (queue.loadedPages === 0) return; // first page not in yet
+    const idx = queue.items.findIndex((i) => i.id === pendingCropId);
+    if (idx >= 0) {
+      cursor = idx;
+      pendingCropId = null;
+    } else if (queue.hasMore && queue.items.length < DEEP_LINK_MAX_ITEMS) {
+      void loadMore();
+    } else {
+      toastStore.info(
+        'That crop is not in this review queue (it may already be reviewed).',
+      );
+      pendingCropId = null;
+    }
+  });
+
+  $effect(() => {
     keyboardStore.setScope('review');
   });
 
@@ -507,6 +534,13 @@
       strategyBar.hideNearDuplicates,
       strategyBar.k,
     ]);
+    // The first run only records the starting filters: the immediate
+    // effect above already loads page 1, and fetching it a second time
+    // 250ms later reset the cursor (breaking ?crop_id= deep links).
+    if (lastFilterKey === null) {
+      lastFilterKey = key;
+      return;
+    }
     if (filterDebounce) clearTimeout(filterDebounce);
     filterDebounce = setTimeout(() => {
       filterDebounce = null;
@@ -1297,6 +1331,11 @@
             : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
           onclick={() => {
             tab = t.id;
+            pendingCropId = null;
+            const url = new URL(page.url);
+            url.searchParams.set('tab', t.urlId);
+            url.searchParams.delete('crop_id');
+            replaceState(url, {});
             // Presets only make sense on the All tab — switching to any
             // other tab (or re-landing on All from one) always starts
             // from plain All rather than silently carrying a stale chip.
@@ -1659,7 +1698,7 @@
           </dd>
 
           {#if current.proposal_name}
-            <dt class="text-zinc-500">COCO hint</dt>
+            <dt class="text-zinc-500">Proposal hint</dt>
             <dd>
               <span
                 class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"

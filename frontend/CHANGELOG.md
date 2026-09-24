@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `/review` now honors `?tab=` and `?crop_id=` deep links. It opens that
+  tab and jumps to that crop, paging forward up to 300 items and saying so
+  when the crop isn't in the queue. Switching tabs keeps `?tab=` in the
+  address bar. Before this, bookmarks such as `?tab=plates` and `/train`'s
+  cohort-preview links always landed on the first item of All:
+  `tabFromUrlId` existed but nothing called it.
+- `/review` fetched the first queue page twice on every load. The
+  debounced filter effect treated its initial state as a change 250 ms
+  after the immediate load, and the second fetch reset the cursor.
+- The review panel's proposer label reads "Proposal hint" instead of
+  "COCO hint".
+
 ### Changed
 
 - **BREAKING (B3, ships with OpenProcessor's `cutover/wire-contract`):**

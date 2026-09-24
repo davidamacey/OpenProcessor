@@ -136,6 +136,23 @@ export function tabFromUrlId(urlId: string): ReviewTab | undefined {
   return undefined;
 }
 
+/** The `?tab=` value for an internal tab — the inverse of `tabFromUrlId`. */
+export function urlIdForTab(tab: ReviewTab): string {
+  return REVIEW_TABS.find((t) => t.id === tab)?.urlId ?? 'all';
+}
+
+/** What a `/review?tab=…&crop_id=…` link asks for. An unknown or absent
+ *  `tab` opens All; `cropId` is null when absent or empty. */
+export function reviewDeepLink(params: URLSearchParams): {
+  tab: ReviewTab;
+  cropId: string | null;
+} {
+  return {
+    tab: tabFromUrlId(params.get('tab') ?? '') ?? 'all',
+    cropId: params.get('crop_id') || null,
+  };
+}
+
 /** `{API_PREFIX}/review/{endpointId}` — what `getReviewQueue` should
  *  actually call. Falls through to the raw id for anything not in
  *  `REVIEW_TABS` (e.g. a preset id, which is already a valid endpoint

@@ -10,7 +10,9 @@ import {
   REVIEW_TABS,
   resolveEffectiveTab,
   slotTabId,
+  reviewDeepLink,
   tabFromUrlId,
+  urlIdForTab,
   type ReviewPresetId,
 } from './reviewTabs';
 
@@ -208,5 +210,24 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain(`${API_PREFIX}/review/all`);
     expect(res.total).toBe(56797);
+  });
+});
+
+describe('reviewDeepLink / urlIdForTab', () => {
+  it('opens the slot tab from its bookmark urlId, with the crop to jump to', () => {
+    const d = reviewDeepLink(new URLSearchParams('tab=plates&crop_id=abc'));
+    expect(d.tab).toBe('slot:license_plate');
+    expect(d.cropId).toBe('abc');
+  });
+
+  it('falls back to All for an absent or unknown tab, and no crop', () => {
+    expect(reviewDeepLink(new URLSearchParams(''))).toEqual({ tab: 'all', cropId: null });
+    expect(reviewDeepLink(new URLSearchParams('tab=nope&crop_id=')).tab).toBe('all');
+  });
+
+  it('round-trips every tab through its urlId', () => {
+    for (const t of REVIEW_TABS) {
+      expect(tabFromUrlId(urlIdForTab(t.id))).toBe(t.id);
+    }
   });
 });
