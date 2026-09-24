@@ -155,6 +155,25 @@ preset)` is the single place that decides which queue actually gets
   `filters` is absent/unknown (older backend, or an id `GET
 {API_PREFIX}/review/tabs` doesn't know) — a control never disappears
   because the vocabulary endpoint is stale or hasn't loaded yet.
+- **Generic served-enum filter bar (OpenProcessor 840beb8 adoption).**
+  Beyond the fixed `filters`/`filter_defaults` name list above, each
+  `GET {API_PREFIX}/review/tabs` entry now also carries `filter_specs` —
+  a self-describing list of `{param, kind: 'enum', label, options:
+[{value, label}]}`. `/review` renders one `<select>` per entry in
+  `activeFilterSpecs` (`reviewTabsVocabularyStore.filterSpecsFor(activeTabEndpointId)`)
+  generically — no tab- or param-specific markup in the page, so a
+  future spec on any tab (not just Plates) just works. Picking a value
+  calls `setEnumFilter(param, value)`, which writes `enumFilterValues`
+  (sent verbatim as its own query param by `_filter()` to both
+  `GET {API_PREFIX}/review/{tab}` and its `/locate` route — the backend
+  applies its own `filter_defaults` when a param is omitted, so there's
+  no client-side default to fall back to) and persists it in the URL the
+  same way `?preset=` does. Resets (state + URL) on every tab click — a
+  spec is per-tab, so a param from the previous tab never leaks into the
+  next. The Plates tab's `region_status` (`all` / `detected` /
+  `verify_rejected`, defaulting to `all`) is the first live spec —
+  choosing "Verifier-rejected candidates only" sends
+  `region_status=verify_rejected` to `GET {API_PREFIX}/review/regions`.
 
 ## Review-queue deep links and filters (2026-09-24 logic-moves W5)
 
@@ -557,8 +576,14 @@ render via the shared chip components.
 - `region_verifier` (`'gemma-4-e4b'` / `'human'`), `region_verified_at`
 - `region_text` + `region_text_source` + `region_text_confidence` —
   the VLM reads the plate during verify in the same round-trip
-- `region_rejection_reason` — set when the server-side sanity gate
-  rejected the candidate
+- `region_rejection_reason` — set when the candidate was rejected: a
+  verifier verdict (`region_visible_elsewhere`), an automatic geometry
+  gate (`sanity_reject:<gate>`), or no verdict at all
+  (`verifier_no_verdict` — needs human review, not a rejection). Labeled
+  by `GET {API_PREFIX}/regions/vocabulary`'s `rejection_reasons`
+  (openprocessor fix #29 / OpenProcessor 840beb8) — see
+  `regionVocabularyStore.rejectionReasonLabel`/`rejectionReasonKind`
+  below.
 - `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`,
   `region_text_disagreement` (2026-09-24, logic-moves W8): `region_text`
   is the backend's _chosen_ reading; `region_text_vlm`/`region_text_ocr`
@@ -623,13 +648,16 @@ things about the region wire shape, all adopted here:
   `editedSlotBox` from the candidate's parent-frame box when the main
   box is absent, so an unchanged Confirm still goes through the existing
   boxUnchanged → status-only-PATCH path (see B2 above). The candidate
-  box renders **dashed** (`BboxCanvas`'s `dashed` prop) with a "rejected
-  candidate · confirm to accept" hint, the server's own rejection reason
-  verbatim in its tooltip — never worded as a model verdict, since
-  `verifier_no_verdict` means "needs human", not "wrong box"
-  (`region_bbox_correct === false` is the actual "model said wrong box"
-  signal, not yet rendered anywhere). `SlotCard` shows a matching amber
-  "candidate" badge; `CropMetaPanel` shows a Candidate row.
+  box renders **dashed** (`BboxCanvas`'s `dashed` prop) with a hint
+  styled/worded by the served rejection **kind** (OpenProcessor 840beb8
+  adoption, see below) — "rejected candidate · confirm to accept" (red/
+  amber) for a `model_verdict`/`automatic` reason, "candidate · needs
+  review" (neutral zinc) for `needs_human` — since `verifier_no_verdict`
+  means "needs human", not "wrong box" (`region_bbox_correct === false`,
+  surfaced as a "model: box wrong" chip on the Validation row, is the
+  actual "model said wrong box" signal). `SlotCard` shows a matching
+  kind-colored "candidate" badge; `CropMetaPanel` shows a Candidate row
+  plus the same kind-styled Rejection/"Needs review" row.
 - **`region_validated` is human-only; `region_auto_confirmed` is new.**
   `region_verified` keeps its prior, distinct meaning ("a verification
   pass ran", human or the VLM verifier) — it no longer doubles as "human
@@ -651,13 +679,34 @@ things about the region wire shape, all adopted here:
 
 `regionVocabularyStore` (`GET {API_PREFIX}/regions/vocabulary`) gained
 `textChoices`/`textRules` (the served `region_text_choice` id list and
-the active profile's region-text validity rules) and three label
-helpers — `textChoiceLabel`/`invalidReasonLabel`/`rejectionReasonLabel`
-— all a titlecase-id placeholder today (the backend doesn't serve real
-labels for these three vocabularies yet; `openprocessor` fix #29 will add
-one for rejection reasons). Centralizing the lookup here, rather than
-inlining the raw id at each call site, is what lets a served label slot
-in later without touching `/review`/`SlotCard`/`CropMetaPanel`.
+the active profile's region-text validity rules) and label helpers —
+`textChoiceLabel`/`invalidReasonLabel` are still a titlecase-id
+placeholder (the backend doesn't serve real labels for those two
+vocabularies yet). `rejectionReasonLabel`/`rejectionReasonKind` are NOT
+placeholders as of OpenProcessor 840beb8 (openprocessor fix #29): the
+endpoint's new `rejection_reasons` list (`{id, label, kind, match,
+label_template}`) is resolved exact-match-first, then longest-prefix
+(`label_template`'s `{detail}` filled from the rest of the stored
+value), falling back to the raw stored value verbatim — never
+titlecased — only when nothing in the served vocabulary matches (an
+older free-text human reason). `rejectionReasonKind` returns the served
+`model_verdict`/`automatic`/`needs_human` kind, or `null` when
+unmatched — every rejection-styled surface (`/review`'s inline panel,
+`SlotCard`, `CropMetaPanel`) keys its color/wording off this, not off
+"a rejection reason is present." Centralizing the lookup here, rather
+than inlining the raw id at each call site, is what lets a served label
+slot in later without touching `/review`/`SlotCard`/`CropMetaPanel`.
+
+A slot-tab review item's per-item `reason` (the same key the Mismatches
+preset's cohort query carries) is generic across every `GET
+{API_PREFIX}/review/{tab}` row and, for a region, always reads "verifier
+rejected this candidate (…) — needs human review" regardless of the
+actual `region_rejection_reason` kind — wrong wording for a
+`needs_human` item. `/review`'s `currentSlotRejectionReason` derived
+value (keyed off `slotOf(current, activeSlot)?.lifecycle?.rejectionReason`)
+takes priority over `current.reason` in the Reason row whenever it's
+set; the generic `reason` string still renders as before on any tab/row
+without one (core tabs, e.g. the Mismatches preset).
 
 `GET {API_PREFIX}/regions` also gained a `status=` filter (400 on an
 unknown value, `GET {API_PREFIX}/regions/statuses` for the vocabulary)
