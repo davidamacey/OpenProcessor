@@ -295,8 +295,10 @@ async def test_frozen_holdout_rows_land_in_test_split(tmp_path):
 
     result = await service.export_dataset(seed=42, copy_images=False)
 
-    label_path = Path(result.export_dir) / 'labels' / 'test' / 'crop-0.txt'
+    # Files are per source image: crop-0 sits on img-0.
+    label_path = Path(result.export_dir) / 'labels' / 'test' / 'img-0.txt'
     assert label_path.is_file()
+    assert not list((Path(result.export_dir) / 'labels').glob('*/crop-*.txt'))
 
 
 @pytest.mark.asyncio
@@ -350,25 +352,42 @@ def test_stratified_split_keeps_group_together():
 
 def test_region_bbox_round_trip():
     """normalized bbox -> YOLO cx/cy/w/h text -> back to a normalized bbox."""
-    from src.services.curation.export import _write_yolo_label
+    from src.services.curation.export_images import normalized_box, yolo_line
 
     bbox = [0.1, 0.2, 0.5, 0.6]
 
     def _yolo_to_norm(cx, cy, w, h):
         return [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2]
 
-    tmp_txt = Path('/tmp') / 'round_trip_test.txt'
-    try:
-        _write_yolo_label(tmp_txt, 3, bbox)
-        parts = tmp_txt.read_text().split()
-        cid = int(parts[0])
-        cx, cy, w, h = (float(x) for x in parts[1:])
-        recovered = _yolo_to_norm(cx, cy, w, h)
-        assert cid == 3
-        for a, b in zip(bbox, recovered, strict=True):
-            assert a == pytest.approx(b, abs=1e-5)
-    finally:
-        tmp_txt.unlink(missing_ok=True)
+    box = normalized_box(bbox)
+    assert box is not None
+    parts = yolo_line(3, box).split()
+    cid = int(parts[0])
+    cx, cy, w, h = (float(x) for x in parts[1:])
+    recovered = _yolo_to_norm(cx, cy, w, h)
+    assert cid == 3
+    for a, b in zip(bbox, recovered, strict=True):
+        assert a == pytest.approx(b, abs=1e-5)
+
+
+def test_normalized_box_clamps_to_the_frame_and_rejects_empty_boxes():
+    from src.services.curation.export_images import normalized_box
+
+    assert normalized_box([-0.1, 0.2, 0.5, 1.2]) == (0.0, 0.2, 0.5, 1.0)
+    assert normalized_box([0.5, 0.2, 0.5, 0.6]) is None  # zero width
+    assert normalized_box([0.6, 0.2, 0.5, 0.6]) is None  # inverted
+    assert normalized_box([1.1, 0.2, 1.5, 0.6]) is None  # wholly outside the frame
+    assert normalized_box([0.1, 0.2, 0.5]) is None
+    assert normalized_box(None) is None
+
+
+@pytest.mark.asyncio
+async def test_letterbox_resize_is_refused(tmp_path):
+    """Labels are normalized to the source frame; a letterbox pad would
+    shift every box against them."""
+    service = _service(tmp_path, [], ['alpha'])
+    with pytest.raises(ValueError, match='letterbox'):
+        await service.export_dataset(resize_mode='letterbox')  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -393,8 +412,14 @@ async def test_manifest_structure_and_deterministic_sha(tmp_path, monkeypatch):
         'group_key',
         'dataset_sha',
         'image_count',
+        'object_count',
         'split_counts',
+        'split_object_counts',
         'class_count',
+        'require_fully_labeled_images',
+        'unlabeled_items_on_exported_images',
+        'images_with_unlabeled_items',
+        'images_dropped_not_fully_labeled',
         'started_at',
         'finished_at',
         'code_sha',

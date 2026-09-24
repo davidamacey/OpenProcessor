@@ -91,12 +91,23 @@ def _class_sized_cluster_docs() -> list[dict[str, Any]]:
     return docs
 
 
-def _split_by_item(export_dir: Path) -> dict[str, str]:
-    out: dict[str, str] = {}
+def _split_by_item(export_dir: Path, docs: list[dict[str, Any]]) -> dict[str, str]:
+    """Item id -> split, read back from the per-image label files on disk.
+
+    Each image is in exactly one split, and holds one label line per item
+    on it."""
+    image_split: dict[str, str] = {}
+    lines_per_image: dict[str, int] = {}
     for split in ('train', 'val', 'test'):
         for f in (export_dir / 'labels' / split).glob('*.txt'):
-            out[f.stem] = split
-    return out
+            assert f.stem not in image_split, f'{f.stem} is in more than one split'
+            image_split[f.stem] = split
+            lines_per_image[f.stem] = len(f.read_text().splitlines())
+    items_per_image: dict[str, int] = defaultdict(int)
+    for d in docs:
+        items_per_image[d['image_id']] += 1
+    assert lines_per_image == dict(items_per_image)
+    return {d['crop_id']: image_split[d['image_id']] for d in docs}
 
 
 # ------------------------------------------------------------- the regression
@@ -112,7 +123,7 @@ async def test_class_sized_clusters_with_a_holdout_still_yield_train_and_val(
     assert result.split_counts.train > 0
     assert result.split_counts.val > 0
 
-    split_of = _split_by_item(Path(result.export_dir))
+    split_of = _split_by_item(Path(result.export_dir), docs)
     holdout_ids = {d['crop_id'] for d in docs if d['test_holdout']}
     holdout_images = {d['image_id'] for d in docs if d['test_holdout']}
     mates = {
@@ -147,7 +158,7 @@ async def test_manifest_records_per_class_split_counts(tmp_path: Path) -> None:
     assert [r['export_id'] for r in rows] == [0, 1, 2, 3, 4]
     assert [r['class_id'] for r in rows] == [0, 1, 2, 3, 4]
 
-    split_of = _split_by_item(Path(result.export_dir))
+    split_of = _split_by_item(Path(result.export_dir), docs)
     for row in rows:
         expected: dict[str, int] = defaultdict(int)
         for d in docs:
@@ -158,7 +169,13 @@ async def test_manifest_records_per_class_split_counts(tmp_path: Path) -> None:
             expected['val'],
             expected['test'],
         )
-    assert sum(r['train'] + r['val'] + r['test'] for r in rows) == result.image_count
+    # class_split_counts count objects; image_count counts images (the
+    # same-image mate shares its image with a holdout item).
+    assert sum(r['train'] + r['val'] + r['test'] for r in rows) == result.object_count == len(docs)
+    assert result.image_count == len({d['image_id'] for d in docs}) == len(docs) - 1
+    assert manifest['split_object_counts'] == {
+        s: sum(r[s] for r in rows) for s in ('train', 'val', 'test')
+    }
 
 
 # --------------------------------------------------------------- the splitter

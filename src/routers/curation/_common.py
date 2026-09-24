@@ -514,13 +514,19 @@ class ExportYoloRequest(BaseModel):
     # RNG seed for the stratified split. Recording it in the manifest is what
     # makes an export re-derivable.
     seed: int = 42
-    # Cap distinct source frames collected (representative sample for pipeline
-    # tests). None = full export.
+    # Cap on exported source images (a class-balanced sample; every object
+    # on a kept image stays). None = full export.
     max_images: int | None = None
     # Optional whole-frame near-dup cut (cosine on the images index's
     # secondary embedding). e.g. 0.98 collapses near-identical bursts to
-    # one frame; None disables.
+    # one image; None disables.
     dedup_threshold: float | None = None
+    # False (default): an image that also holds unreviewed objects (or
+    # objects on a class the export leaves out) is exported with its
+    # validated objects labeled; the manifest counts the rest, and training
+    # preflight warns, because a detector learns unlabeled objects as
+    # background. True: leave such images out.
+    require_fully_labeled_images: bool = False
 
 
 class ExportSingleClassRequest(BaseModel):
