@@ -25,6 +25,7 @@ from src.services.curation.ingest_class_sources import (
     unlabeled_proposal_class_sources,
 )
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
+from src.services.curation.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD
 
 
 KNOWN_TABS: tuple[str, ...] = (
@@ -146,6 +147,8 @@ def build_tab_query(
                     'should': [
                         {'term': {'class_source': 'vlm_unmatched'}},
                         {'term': {'class_source': 'vlm_new_class_pending'}},
+                        # The VLM was asked and gave no class.
+                        {'exists': {'field': VLM_CLASS_EMPTY_REASON_FIELD}},
                         {'terms': {'vlm_confidence': ['medium', 'low']}},
                         {'range': {'cluster_distance': {'gte': 0.35}}},
                         # D-1 (F-6): `exists probe_pred_entropy` matches

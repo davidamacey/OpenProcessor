@@ -4,8 +4,10 @@ Two scopes:
 
 * **Global sweep** (default): every unvalidated item except those the VLM
   need not see — classifier-labeled at or above the skip confidence,
-  ``vlm_unmatched`` (it already failed once), and items the region worker's
-  combined call classified in the last 24 h (``vlm_verify_completed_at``).
+  ``vlm_unmatched`` (it already failed once), items the region worker's
+  combined call classified in the last 24 h (``vlm_verify_completed_at``),
+  and items whose last VLM class attempt in the retry window came back
+  empty (``vlm_class_empty_reason``).
   Optionally narrowed to one ``class_id``.
 * **Cluster scope** (``cluster_id`` set, ``POST /vlm/label_cluster/{id}``):
   an operator explicitly asked for this cluster, so every unvalidated
@@ -19,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.services.curation.ingest_class_sources import classifier_class_sources
+from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
 
 
 COMBINED_RECENT_WINDOW = timedelta(hours=24)
@@ -57,6 +60,8 @@ def vlm_selection_query(
             {'term': {'class_source': 'vlm_unmatched'}},
             # Classified by the region worker's combined call recently.
             {'range': {'vlm_verify_completed_at': {'gte': recent_cutoff}}},
+            # Asked recently and the answer had no class.
+            recent_empty_answer_clause(now),
         ]
     query: dict[str, Any] = {'bool': {'must_not': must_not}}
     if filters:

@@ -14,6 +14,10 @@ from scripts.curation.worker.state import region_profile
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.vlm_class_attempt import (
+    class_attempt_fields,
+    empty_answer_reason_for_index,
+)
 from src.services.detection.cascade_detect import (
     _now_iso,
     class_provenance,
@@ -219,9 +223,12 @@ def _combined_class_update(
     Always-applicable fields (make/model/plate_visible/vlm_verify_completed_at)
     are written regardless of whether a class was resolved. ``class_id`` /
     ``class_name`` only land when the reply contains a usable index into
-    ``class_names``; otherwise the row is marked ``vlm_unmatched`` so the
-    curator queue can grow the registry — same convention
-    ``combined._try_combined_class_region`` uses.
+    ``class_names``. A reply that *named* a label outside the catalog
+    (``reply.class_raw``) marks the row ``vlm_unmatched`` with that label
+    in ``vlm_raw_class`` so the curator queue can grow the registry. A
+    reply with no class at all (``null`` / ``-1`` / out-of-range index)
+    leaves every class field untouched and only records the attempt
+    (:mod:`src.services.curation.vlm_class_attempt`).
 
     ``name_to_id`` is the registry's authoritative class_name -> class_id
     map. The reply's ``class_id`` is the *index* into ``class_names``
@@ -269,15 +276,22 @@ def _combined_class_update(
                 ),
             }
         )
-    elif names:
-        # We asked the VLM to classify and it returned -1 / null / out of range.
+        update.update(class_attempt_fields(ts))
+    elif names and reply.class_raw:
         update.update(
             {
                 'class_source': 'vlm_unmatched',
                 'label_source': 'vlm',
                 'class_validated': False,
                 'vlm_confidence': reply.class_confidence or 'low',
+                'vlm_raw_class': reply.class_raw,
+                'vlm_raw_label': reply.class_raw,
+                **class_attempt_fields(ts),
             }
+        )
+    elif names:
+        update.update(
+            class_attempt_fields(ts, empty_answer_reason_for_index(reply.class_id, len(names)))
         )
     # else: caller asked the VLM to SKIP classification — leave the
     # existing class fields untouched.

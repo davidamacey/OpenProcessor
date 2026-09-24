@@ -181,6 +181,9 @@ def serialize_item(
         'class_labeler': src.get('class_labeler'),
         # Categorical VLM confidence (high/medium/low).
         'vlm_confidence': src.get('vlm_confidence'),
+        # Last VLM class attempt, and why it gave no class (null = it did).
+        'vlm_class_attempted_at': src.get('vlm_class_attempted_at'),
+        'vlm_class_empty_reason': src.get('vlm_class_empty_reason'),
         # The VLM's unvalidated class choice (registry id + name), or a
         # proposed new class (name only). Null otherwise.
         'vlm_proposed_class_id': vlm_class_id,

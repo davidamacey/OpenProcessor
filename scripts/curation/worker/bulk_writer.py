@@ -17,7 +17,7 @@ from src.clients.occ import CLASS_WRITE_FIELDS, occ_skip_on_conflict_bulk, strip
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.class_write_guard import class_write_allowed
-from src.services.curation.history import merge_region_chain, record_class_history
+from src.services.curation.history import merge_region_chain, record_class_snapshot
 from src.services.curation.wire import region_event_payload
 
 
@@ -93,13 +93,17 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         ):
             logger.info('class_write_stale_skip', doc_id=doc_id, writer_id='region_worker')
             update = strip_class_write_fields(update)
-        # Phase 3 (b): the worker's combined-VLM path writes class_id
+        # Phase 3 (b): the worker's combined-VLM path changes the class
         # without appending class_id_history unless we do it here — the
         # reset happens in the update dict itself (verify.py's
         # ``_combined_class_update``), the history snapshot happens
-        # here where the pre-write ``current`` doc is available.
-        if 'class_id' in update:
-            update['class_id_history'] = record_class_history(current, writer='region_worker')
+        # here where the pre-write ``current`` doc is available. A full,
+        # restorable snapshot (also for a proposal with no class_id yet
+        # and a class_source-only ``vlm_unmatched`` write).
+        if 'class_source' in update:
+            update['class_id_history'] = record_class_snapshot(
+                current, writer='region_worker', restorable=True
+            )
         # Merge this pass's entries onto whatever chain is stored (a human
         # or an earlier pass may have appended) — ordered, de-duplicated,
         # normalized to ``<actor>:<event>``, capped.
