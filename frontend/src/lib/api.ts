@@ -1378,7 +1378,23 @@ export function bulkLabel(
   );
 }
 
-/** Undo: reset crop label back to its model-suggested value. */
+/**
+ * Undo the crop's most recent human class write. The backend restores
+ * its own snapshot (earlier human label, VLM suggestion, ingest proposal
+ * or unlabeled) and returns the restored item. `409` means nothing is
+ * left to undo.
+ */
+export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label/undo`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
+/** Remove a crop's label. The backend restores its prior snapshot, or
+ *  clears the label when it has none. */
 export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<void> {
   return apiFetch<void>(
     `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label`,

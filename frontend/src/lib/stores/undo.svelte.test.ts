@@ -4,18 +4,20 @@
  * The store is a module singleton, so every test clears it first.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { undoStore } from './undo.svelte';
+import { API_PREFIX } from '$lib/api';
 import type { UndoEntry } from '$lib/types';
 
 function entry(id: string): UndoEntry {
-  return {
-    crop_id: id,
-    prior_class_id: 1,
-    prior_label_source: 'model_suggestion',
-    prior_validated: false,
-    at: 0,
-  };
+  return { crop_id: id, at: 0 };
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
 }
 
 describe('undoStore', () => {
@@ -61,17 +63,63 @@ describe('undoStore', () => {
     expect(undoStore.stack).toHaveLength(1);
   });
 
-  it('snapshotOf() captures the prior label state of a crop', () => {
-    const snap = undoStore.snapshotOf({
-      id: 'crop-1',
-      class_id: 7,
-      label_source: 'gemma_suggestion',
-      label_validated: true,
-    });
-    expect(snap.crop_id).toBe('crop-1');
-    expect(snap.prior_class_id).toBe(7);
-    expect(snap.prior_label_source).toBe('gemma_suggestion');
-    expect(snap.prior_validated).toBe(true);
-    expect(typeof snap.at).toBe('number');
+  it('recordWrites() pushes one entry per crop, skipping conflicted crops', () => {
+    undoStore.recordWrites(['a', 'b', 'c'], [{ crop_id: 'b' }]);
+    expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['a', 'c']);
+  });
+});
+
+describe('undoStore.undoLast', () => {
+  beforeEach(() => {
+    undoStore.clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("POSTs the backend undo route and returns the server's restored item", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { crop_id: 'c1', class_id: 3, class_name: 'sedan' }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    undoStore.recordWrites(['c1']);
+
+    const crop = await undoStore.undoLast();
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${API_PREFIX}/crops/c1/label/undo`);
+    expect(init.method).toBe('POST');
+    expect(crop?.id).toBe('c1');
+    expect(crop?.class_id).toBe(3);
+    expect(undoStore.stack).toHaveLength(0);
+  });
+
+  it('409 (nothing left to undo) returns null and does not re-push', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(409, { detail: 'nothing to undo' })),
+    );
+    undoStore.recordWrites(['c1']);
+    expect(await undoStore.undoLast()).toBeNull();
+    expect(undoStore.stack).toHaveLength(0);
+  });
+
+  it('any other failure re-pushes the entry so Z stays retryable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(404, { detail: 'unknown crop' })),
+    );
+    undoStore.recordWrites(['c1']);
+    expect(await undoStore.undoLast()).toBeNull();
+    expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['c1']);
+  });
+
+  it('an empty stack makes no request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await undoStore.undoLast()).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

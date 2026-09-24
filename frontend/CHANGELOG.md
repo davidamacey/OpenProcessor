@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Undo (Z) on `/review`, `/clusters` and `/clusters/[id]` now calls the
+  backend's `POST /crops/{id}/label/undo` and renders the item it
+  returns.
+  - The frontend no longer chooses between re-applying an old label and
+    deleting the current one. That choice restored the wrong class after
+    a relabel of an unconfirmed crop.
+  - A `409` shows "Nothing left to undo".
+- Undo entries are recorded only after the server confirms a label
+  write, and never for conflicted crops. Before, a failed or conflicted
+  drop-to-label left entries behind, and Z on them would undo an older,
+  unrelated write.
+- Discard (`D`) on `/clusters/[id]` is no longer undoable. The backend's
+  `DELETE /crops/{id}/label` is itself an undo of the last human write,
+  so a Z entry for it would step back a second write.
+
+### Changed
+
 - Removed the remaining `legacy`/`op` names from code, scripts and docs.
   - `legacyDetectors.ts` is now `builtinDetectors.ts`
     (`builtinDetectorRegistry`). Its entries for `legacy_vehicle_v6_trt`

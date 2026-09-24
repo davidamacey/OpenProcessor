@@ -539,10 +539,9 @@ export interface UnloadModelResponse {
   warning: string | null;
 }
 
+/** One undoable human class write. What it restores is the backend's
+ *  business: Z calls `POST /crops/{id}/label/undo` and renders the result. */
 export interface UndoEntry {
   crop_id: string;
-  prior_class_id: number | null;
-  prior_label_source: LabelSource;
-  prior_validated: boolean;
   at: number;
 }

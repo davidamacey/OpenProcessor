@@ -3,13 +3,11 @@
   import { page } from '$app/state';
   import {
     bulkLabel,
-    deleteCropLabel,
     excludeCrops,
     getClusters,
     getPlates,
     getRegionThumbUrl,
     getThumbUrl,
-    putCropLabel,
     resolveApiUrl,
   } from '$lib/api';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -32,13 +30,7 @@
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
-  import type {
-    ClusterFilter,
-    RegistryClass,
-    Cluster,
-    Crop,
-    UndoEntry,
-  } from '$lib/types';
+  import type { ClusterFilter, RegistryClass, Cluster, Crop } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -209,18 +201,10 @@
     );
   }
 
-  function revertLocalSearchLabel(prev: UndoEntry, prevName: string | null): void {
-    searchResults = searchResults.map((c) =>
-      c.id === prev.crop_id
-        ? {
-            ...c,
-            class_id: prev.prior_class_id,
-            class_name: prevName,
-            label_validated: prev.prior_validated,
-            label_source: prev.prior_label_source,
-          }
-        : c,
-    );
+  /** Roll back an optimistic label the server rejected, or render the
+   *  crop an undo restored. */
+  function replaceSearchCrop(crop: Crop): void {
+    searchResults = searchResults.map((c) => (c.id === crop.id ? crop : c));
   }
 
   // Label actions in search mode: only A (select all) / Z (undo) / X
@@ -242,19 +226,12 @@
           toastStore.warn('Select or drag crops first, then press a class hotkey.');
           return;
         }
-        const pushed: UndoEntry[] = [];
-        for (const id of ids) {
-          const c = searchResults.find((x) => x.id === id);
-          if (c) {
-            const entry = undoStore.snapshotOf(c);
-            undoStore.push(entry);
-            pushed.push(entry);
-          }
-          applyLocalSearchLabel(id, cls.id, cls.name);
-        }
+        const priors = searchResults.filter((c) => ids.includes(c.id));
+        for (const id of ids) applyLocalSearchLabel(id, cls.id, cls.name);
         searchSel.clear();
         try {
           const res = await bulkLabel(ids, cls.id);
+          undoStore.recordWrites(ids, res.conflicts ?? []);
           const conflicts = res.conflicts?.length ?? 0;
           if (conflicts > 0) {
             toastStore.warn(
@@ -265,12 +242,7 @@
           }
         } catch (e) {
           toastStore.error(`Label failed: ${(e as Error).message}`);
-          for (const p of pushed) {
-            const prevCls =
-              p.prior_class_id != null ? classesStore.byId(p.prior_class_id) : null;
-            revertLocalSearchLabel(p, prevCls?.name ?? null);
-          }
-          undoStore.remove(pushed);
+          for (const prior of priors) replaceSearchCrop(prior);
         }
       },
     );
@@ -309,25 +281,8 @@
     reg(
       'z',
       async () => {
-        const entry = undoStore.pop();
-        if (!entry) {
-          toastStore.info('Nothing to undo.');
-          return;
-        }
-        const prevCls =
-          entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
-        revertLocalSearchLabel(entry, prevCls?.name ?? null);
-        try {
-          if (entry.prior_validated && entry.prior_class_id != null) {
-            await putCropLabel(entry.crop_id, entry.prior_class_id);
-          } else {
-            await deleteCropLabel(entry.crop_id);
-          }
-          toastStore.success('Reverted.');
-        } catch (e) {
-          toastStore.error(`Undo failed: ${(e as Error).message}`);
-          undoStore.push(entry);
-        }
+        const crop = await undoStore.undoLast();
+        if (crop) replaceSearchCrop(crop);
       },
       'Undo last action',
     );

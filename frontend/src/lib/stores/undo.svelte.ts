@@ -1,21 +1,17 @@
 /**
- * UndoStore — ring buffer of the last 50 label actions.
+ * UndoStore — ring buffer of the last 50 human class writes.
  *
- * Calling code is expected to push the prior state of a crop *before* the
- * mutation goes out, so undo can restore by re-issuing PUT or DELETE.
+ * Calling code records each crop a confirmed label write touched. Z pops
+ * the newest and asks the backend to undo that crop's most recent human
+ * class write; the backend owns what "undo" restores and returns the
+ * restored item for the page to render.
  */
 
-import type { LabelSource, UndoEntry } from '$lib/types';
+import { ApiError, undoCropLabel } from '$lib/api';
+import { toastStore } from '$stores/toast.svelte';
+import type { Crop, UndoEntry } from '$lib/types';
 
 const MAX = 50;
-
-/** The subset of a crop/review item an UndoEntry is built from. */
-export interface UndoSnapshotSource {
-  id: string;
-  class_id: number | null;
-  label_source: LabelSource;
-  label_validated: boolean;
-}
 
 class UndoStore {
   // $state.raw, not $state: deep reactivity would wrap every pushed entry
@@ -56,15 +52,43 @@ class UndoStore {
     this.stack = [];
   }
 
-  /** Build the pre-mutation snapshot for a crop or review item. */
-  snapshotOf(src: UndoSnapshotSource): UndoEntry {
-    return {
-      crop_id: src.id,
-      prior_class_id: src.class_id,
-      prior_label_source: src.label_source,
-      prior_validated: src.label_validated,
-      at: Date.now(),
-    };
+  /**
+   * Record the crops a human class write just landed on. Call only after
+   * the server confirmed the write, and leave out conflicted crops: an
+   * entry for a crop the write never reached would make Z undo an older,
+   * unrelated write.
+   */
+  recordWrites(cropIds: string[], conflicts: Array<{ crop_id: string }> = []): void {
+    const blocked = new Set(conflicts.map((c) => c.crop_id));
+    const at = Date.now();
+    for (const id of cropIds) if (!blocked.has(id)) this.push({ crop_id: id, at });
+  }
+
+  /**
+   * Z: undo the newest entry on the server and return the restored crop,
+   * or null when there was nothing to undo or the call failed (both are
+   * toasted here). A failed call re-pushes the entry so Z stays
+   * retryable; a 409 does not, since the server has nothing left for it.
+   */
+  async undoLast(): Promise<Crop | null> {
+    const entry = this.pop();
+    if (!entry) {
+      toastStore.info('Nothing to undo.');
+      return null;
+    }
+    try {
+      const crop = await undoCropLabel(entry.crop_id);
+      toastStore.success('Reverted.');
+      return crop;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toastStore.info('Nothing left to undo for that crop.');
+      } else {
+        toastStore.error(`Undo failed: ${(e as Error).message}`);
+        this.push(entry);
+      }
+      return null;
+    }
   }
 }
 

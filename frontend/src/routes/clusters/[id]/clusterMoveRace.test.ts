@@ -334,6 +334,6 @@ describe('wiring: /clusters/[id] +page.svelte actually uses the exclusion set', 
   it('undoLast releases the restored crop id back so it can reappear', () => {
     const fn = src.match(/async function undoLast\([\s\S]*?\n {2}\}/)?.[0];
     expect(fn).toBeDefined();
-    expect(fn).toMatch(/excludedCropIds\.delete\(entry\.crop_id\)/);
+    expect(fn).toMatch(/excludedCropIds\.delete\(crop\.id\)/);
   });
 });

@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     cancelSelect,
-    deleteCropLabel,
     reviewDismissCrop,
     getCrop,
     getReviewQueue,
@@ -682,18 +681,14 @@
   async function assign(classId: number): Promise<void> {
     if (!current) return;
     const item = current;
-    const entry = undoStore.snapshotOf(item);
-    undoStore.push(entry);
     const cls = classesStore.byId(classId);
     // Optimistic: drop from list and advance.
     const restore = _removeFromQueue(item);
     try {
       await putCropLabel(item.id, classId);
+      undoStore.recordWrites([item.id]);
       toastStore.success(`Labeled "${cls?.name ?? classId}".`);
     } catch (e) {
-      // The label never landed: drop the now-stale undo entry (pressing Z
-      // on it would clobber the crop's real label) and put the item back.
-      undoStore.remove([entry]);
       restore();
       toastStore.error(`Label failed: ${(e as Error).message}`);
     }
@@ -1178,52 +1173,24 @@
   }
 
   async function undoLast(): Promise<void> {
-    const entry = undoStore.pop();
-    if (!entry) {
-      toastStore.info('Nothing to undo.');
-      return;
-    }
-    try {
-      if (entry.prior_validated && entry.prior_class_id != null) {
-        // The crop held a human-validated label before this action. DELETE
-        // would reset it to the model suggestion instead of restoring what
-        // the operator had confirmed. putCropLabel sets validated=true
-        // server-side, matching prior_validated; the finer
-        // prior_label_source granularity is lost, which is acceptable.
-        await putCropLabel(entry.crop_id, entry.prior_class_id);
-      } else {
-        await deleteCropLabel(entry.crop_id);
-      }
-      toastStore.success('Reverted.');
-    } catch (e) {
-      toastStore.error(`Undo failed: ${(e as Error).message}`);
-      undoStore.push(entry); // keep Z retryable
-      return;
-    }
-    // The item was removed from the queue by assign/discard, so re-fetch
-    // and re-insert it at the cursor — otherwise the operator has no way
-    // to see (or re-verify) what the undo brought back.
-    handledIds.delete(entry.crop_id);
-    try {
-      const crop = await getCrop(entry.crop_id);
-      // {API_PREFIX}/crops/{id} returns a Crop; the queue-only fields have no
-      // meaningful value for a restored item, so label it as such.
-      const restored: ReviewItem = {
-        ...crop,
-        reason: 'restored by undo',
-        proposed_class_id: crop.class_id,
-        proposed_class_name: crop.class_name ?? null,
-      };
-      const at = Math.min(cursor, queue.items.length);
-      queue.items = [...queue.items.slice(0, at), restored, ...queue.items.slice(at)];
-      queue.total += 1;
-      cursor = at;
-    } catch (e) {
-      // The undo itself succeeded; only the re-display failed.
-      toastStore.info(
-        `Reverted, but could not re-fetch the crop: ${(e as Error).message}`,
-      );
-    }
+    const crop = await undoStore.undoLast();
+    if (!crop) return;
+    // The item was removed from the queue by assign/discard, so re-insert
+    // the restored item at the cursor so the operator can see (and
+    // re-verify) what the undo brought back.
+    handledIds.delete(crop.id);
+    // The queue-only fields have no meaningful value for a restored item.
+    const restored: ReviewItem = {
+      ...crop,
+      reason: 'restored by undo',
+      proposed_class_id: crop.class_id,
+      proposed_class_name: crop.class_name ?? null,
+    };
+    const without = queue.items.filter((it) => it.id !== crop.id);
+    const at = Math.min(cursor, without.length);
+    queue.total += without.length === queue.items.length ? 1 : 0;
+    queue.items = [...without.slice(0, at), restored, ...without.slice(at)];
+    cursor = at;
   }
 
   // Keyboard shortcuts. Per-class letter hotkeys (configured on /classes)

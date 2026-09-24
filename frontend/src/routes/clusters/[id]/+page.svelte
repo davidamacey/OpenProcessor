@@ -7,7 +7,6 @@
     excludeCrops,
     flagNeedsNewClass,
     getCluster,
-    getCrop,
     moveCropsToCluster,
     putCropLabel,
     refineCluster,
@@ -33,13 +32,7 @@
   import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strategies';
   import { isAssignableClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
-  import type {
-    RegistryClass,
-    Cluster,
-    Crop,
-    PaginatedResponse,
-    UndoEntry,
-  } from '$lib/types';
+  import type { RegistryClass, Cluster, Crop, PaginatedResponse } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -298,10 +291,6 @@
           toastStore.warn('Select or drag crops first, then press a class hotkey.');
           return;
         }
-        for (const id of ids) {
-          const c = cropPager.items.find((x) => x.id === id);
-          if (c) undoStore.push(undoStore.snapshotOf(c));
-        }
         // Optimistic: remove the dropped crops from the visible grid
         // BEFORE the await, so the labeling feels real-time. The dragged
         // selection is the source of truth — if the backend reports
@@ -323,6 +312,7 @@
         for (const id of ids) excludedCropIds.add(id);
         try {
           const res = await bulkLabel(ids, cls.id);
+          undoStore.recordWrites(ids, res.conflicts ?? []);
           const conflicts = res.conflicts?.length ?? 0;
           if (conflicts > 0) {
             // A concurrent worker (typically the VLM worker) beat us on
@@ -453,18 +443,9 @@
     );
   }
 
-  function revertLocalLabel(prev: UndoEntry, prevName: string | null): void {
-    cropPager.items = cropPager.items.map((c) =>
-      c.id === prev.crop_id
-        ? {
-            ...c,
-            class_id: prev.prior_class_id,
-            class_name: prevName,
-            label_validated: prev.prior_validated,
-            label_source: prev.prior_label_source,
-          }
-        : c,
-    );
+  /** Roll back an optimistic label that the server rejected. */
+  function revertLocalLabel(prior: Crop): void {
+    cropPager.items = cropPager.items.map((c) => (c.id === prior.id ? prior : c));
   }
 
   async function assignClassToSelected(classId: number): Promise<void> {
@@ -478,44 +459,29 @@
       toastStore.error('Unknown class id ' + classId);
       return;
     }
-    // No nag-confirm — undo is one keystroke (Z) and the snapshot below
-    // captures the prior state, so any mistake is instantly reversible.
-    // Keep our own references to the pushed entries: the revert path must
-    // drop exactly these, not pop N off a stack the operator may have
-    // changed (by pressing Z) while the request was in flight.
-    const pushed: UndoEntry[] = [];
-    for (const id of ids) {
-      const prior = cropPager.items.find((c) => c.id === id);
-      if (prior) {
-        const entry = undoStore.snapshotOf(prior);
-        undoStore.push(entry);
-        pushed.push(entry);
-      }
-      applyLocalLabel(id, classId, cls.name);
-    }
+    // No nag-confirm — undo is one keystroke (Z), so any mistake is
+    // instantly reversible. The prior crops are kept only to roll back
+    // the optimistic label if the write fails.
+    const priors = cropPager.items.filter((c) => ids.includes(c.id));
+    for (const id of ids) applyLocalLabel(id, classId, cls.name);
     try {
       if (ids.length === 1) {
         await putCropLabel(ids[0]!, classId);
+        undoStore.recordWrites(ids);
       } else {
-        await bulkLabel(ids, classId);
+        const res = await bulkLabel(ids, classId);
+        undoStore.recordWrites(ids, res.conflicts ?? []);
       }
       toastStore.success(`Labeled ${ids.length} crop${ids.length === 1 ? '' : 's'}.`);
       sel.ids = new Set();
     } catch (e) {
       toastStore.error(`Label failed: ${(e as Error).message}`);
-      for (const prev of pushed) {
-        const prevCls =
-          prev.prior_class_id != null ? classesStore.byId(prev.prior_class_id) : null;
-        revertLocalLabel(prev, prevCls?.name ?? null);
-      }
-      undoStore.remove(pushed);
+      for (const prior of priors) revertLocalLabel(prior);
     }
   }
 
   async function acceptVlmForCrop(crop: Crop): Promise<void> {
     if (crop.vlm_suggested_class_id == null) return;
-    const entry = undoStore.snapshotOf(crop);
-    undoStore.push(entry);
     applyLocalLabel(
       crop.id,
       crop.vlm_suggested_class_id,
@@ -523,12 +489,10 @@
     );
     try {
       await putCropLabel(crop.id, crop.vlm_suggested_class_id);
+      undoStore.recordWrites([crop.id]);
     } catch (e) {
       toastStore.error(`Accept VLM suggestion failed: ${(e as Error).message}`);
-      const prevCls =
-        entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
-      revertLocalLabel(entry, prevCls?.name ?? null);
-      undoStore.remove([entry]);
+      revertLocalLabel(crop);
     }
   }
 
@@ -549,21 +513,18 @@
       toastStore.info('No VLM suggestions on this page.');
       return;
     }
-    // Shift+Enter is already a deliberate two-finger gesture; the snapshots
-    // below feed undoStore so Z reverts instantly. No nag-confirm.
-    // Group by class id for bulk_label; fall back to per-crop PUT for the long tail.
+    // Shift+Enter is already a deliberate two-finger gesture and Z undoes
+    // it, so no nag-confirm. Group by class id for bulk_label.
     const groups = new Map<number, string[]>();
-    // Snapshot per crop id so a failing group can be reverted precisely —
+    // Prior crop per id so a failing group can be rolled back precisely —
     // a single try/catch around the whole loop left the failed group and
     // every later group locally green but never sent.
-    const snaps = new Map<string, UndoEntry>();
+    const priors = new Map<string, Crop>();
     for (const t of targets) {
       const k = t.vlm_suggested_class_id!;
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(t.id);
-      const entry = undoStore.snapshotOf(t);
-      snaps.set(t.id, entry);
-      undoStore.push(entry);
+      priors.set(t.id, t);
       applyLocalLabel(t.id, k, t.vlm_suggested_class_name ?? null);
     }
     let ok = 0;
@@ -571,7 +532,8 @@
     const failedIds: string[] = [];
     for (const [k, ids] of groups) {
       try {
-        await bulkLabel(ids, k);
+        const res = await bulkLabel(ids, k);
+        undoStore.recordWrites(ids, res.conflicts ?? []);
         ok += ids.length;
       } catch (e) {
         lastError = (e as Error).message;
@@ -582,16 +544,10 @@
       toastStore.success(`Accepted ${targets.length} suggestions.`);
       return;
     }
-    const stale: UndoEntry[] = [];
     for (const id of failedIds) {
-      const s = snaps.get(id);
-      if (!s) continue;
-      const prevCls =
-        s.prior_class_id != null ? classesStore.byId(s.prior_class_id) : null;
-      revertLocalLabel(s, prevCls?.name ?? null);
-      stale.push(s);
+      const prior = priors.get(id);
+      if (prior) revertLocalLabel(prior);
     }
-    undoStore.remove(stale);
     toastStore.error(
       `Accepted ${ok}, failed ${failedIds.length} (reverted)${lastError ? `: ${lastError}` : '.'}`,
     );
@@ -622,48 +578,16 @@
   }
 
   async function undoLast(): Promise<void> {
-    const entry = undoStore.pop();
-    if (!entry) {
-      toastStore.info('Nothing to undo.');
-      return;
-    }
-    const prevCls =
-      entry.prior_class_id != null ? classesStore.byId(entry.prior_class_id) : null;
-    revertLocalLabel(entry, prevCls?.name ?? null);
-    try {
-      if (entry.prior_validated && entry.prior_class_id != null) {
-        // The crop carried a human-validated label before the action we're
-        // undoing. DELETE would reset it to the model suggestion instead,
-        // silently diverging from what the grid shows. putCropLabel sets
-        // validated=true server-side, which matches prior_validated; the
-        // finer prior_label_source granularity is lost, which is fine.
-        await putCropLabel(entry.crop_id, entry.prior_class_id);
-      } else {
-        await deleteCropLabel(entry.crop_id);
-      }
-      toastStore.success('Reverted.');
-      // The crop is back in clusterId's class — it must be allowed to
-      // reappear even if some other in-flight fetch had it excluded.
-      excludedCropIds.delete(entry.crop_id);
-      // Crops labeled via the sidebar-drop path were removed from the
-      // grid, so revertLocalLabel above was a no-op for them. Pull the
-      // crop back so the operator can see what returned.
-      if (!cropPager.items.some((c) => c.id === entry.crop_id)) {
-        try {
-          const restored = await getCrop(entry.crop_id);
-          cropPager.items = [restored, ...cropPager.items];
-          cropPager.total += 1;
-        } catch (e) {
-          toastStore.info(
-            `Reverted, but could not re-fetch the crop: ${(e as Error).message}`,
-          );
-        }
-      }
-    } catch (e) {
-      toastStore.error(`Undo failed: ${(e as Error).message}`);
-      // Put the entry back so Z can be retried; the local revert stands
-      // (re-applying the label optimistically would be the bigger lie).
-      undoStore.push(entry);
+    const crop = await undoStore.undoLast();
+    if (!crop) return;
+    // Render whatever the backend restored. The crop may have left this
+    // cluster's grid (sidebar-drop labels remove it), so re-insert it.
+    excludedCropIds.delete(crop.id);
+    if (cropPager.items.some((c) => c.id === crop.id)) {
+      cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? crop : c));
+    } else {
+      cropPager.items = [crop, ...cropPager.items];
+      cropPager.total += 1;
     }
   }
 
@@ -1028,15 +952,8 @@
       async () => {
         const ids = [...sel.ids];
         if (ids.length === 0) return;
-        // Snapshot per id BEFORE the delete (the crop must still be in the
-        // grid to read its prior label), but only push the snapshots for
-        // ids the server actually accepted — an undo entry for a crop that
-        // was never unlabeled would clobber its real label on Z.
-        const snaps = new Map<string, UndoEntry>();
-        for (const id of ids) {
-          const c = cropPager.items.find((cc) => cc.id === id);
-          if (c) snaps.set(id, undoStore.snapshotOf(c));
-        }
+        // No undo entry: the backend's DELETE /label is itself an undo of
+        // the crop's last human write, not a recorded write Z can reverse.
         const succeeded: string[] = [];
         const failed: string[] = [];
         let lastError: string | null = null;
@@ -1049,17 +966,13 @@
             failed.push(id);
           }
         }
-        for (const id of succeeded) {
-          const s = snaps.get(id);
-          if (s) undoStore.push(s);
-        }
         const succeededSet = new Set(succeeded);
         cropPager.items = cropPager.items.filter((c) => !succeededSet.has(c.id));
         for (const id of succeeded) excludedCropIds.add(id);
         // Keep the failures visible and selected so the operator can retry.
         sel.ids = new Set(failed);
         if (succeeded.length > 0) {
-          toastStore.success(`Discarded ${succeeded.length}. Press Z to undo.`);
+          toastStore.success(`Discarded ${succeeded.length}.`);
         }
         if (failed.length > 0) {
           toastStore.error(
