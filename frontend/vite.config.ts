@@ -12,6 +12,13 @@ export default defineConfig({
   envPrefix: ['VITE_', 'PUBLIC_'],
   server: { port: 5173, host: '0.0.0.0' },
   preview: { port: 5181, host: '0.0.0.0' },
+  // Vitest otherwise resolves Svelte's server build
+  // (svelte/src/index-server.js), which throws
+  // `lifecycle_function_unavailable` for `mount`/`unmount` — component
+  // mount tests need the browser build under jsdom instead (test-audit
+  // -2026-09-24.md §2.4). Scoped to `process.env.VITEST` so `vite build`
+  // and `vite dev` still resolve the server/client builds normally.
+  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
