@@ -204,6 +204,7 @@ def _make_mock_client(exists_returns: bool = False) -> MagicMock:
     client.indices.delete = AsyncMock(return_value={'acknowledged': True})
     client.indices.refresh = AsyncMock(return_value={})
     client.index = AsyncMock(return_value={'result': 'created'})
+    client.bulk = AsyncMock(return_value={'errors': False, 'items': []})
     return client
 
 
@@ -513,9 +514,10 @@ async def test_registry_sync_to_opensearch_indexes_each_class(
     client = _make_mock_client(exists_returns=True)
     out = await tmp_registry.sync_to_opensearch(client)
     assert out == {'upserted': 2, 'n_classes': 2}
-    # 2 docs indexed, 1 refresh.
-    assert client.index.await_count == 2
+    # F-26: one bulk() call for both classes (not one index() per class),
+    # plus 1 refresh.
+    assert client.bulk.await_count == 1
     assert client.indices.refresh.await_count == 1
-    # Doc IDs were the class_ids.
-    indexed_ids = {call.kwargs['id'] for call in client.index.await_args_list}
+    bulk_body = client.bulk.await_args.kwargs['body']
+    indexed_ids = {action['index']['_id'] for action in bulk_body[0::2]}
     assert indexed_ids == {'0', '1'}

@@ -1769,11 +1769,19 @@ class ClassRegistry:
             await client.indices.create(index=index, body=INDEX_BODIES[IndexRole.CLASSES])
             logger.info('curation_index_created_on_sync', index=index)
 
+        # F-26: one bulk() instead of one index() per class.
         upserted = 0
-        for entry in reg.classes:
-            doc = entry.model_dump()
-            await client.index(index=index, id=str(entry.class_id), body=doc, refresh=False)
-            upserted += 1
+        if reg.classes:
+            bulk_body: list[dict[str, Any]] = []
+            for entry in reg.classes:
+                bulk_body.append({'index': {'_index': index, '_id': str(entry.class_id)}})
+                bulk_body.append(entry.model_dump())
+            resp = await client.bulk(body=bulk_body, refresh=False)
+            if isinstance(resp, dict) and resp.get('errors'):
+                logger.warning(
+                    'curation_registry_sync_partial_errors', sample=resp.get('items', [])[:3]
+                )
+            upserted = len(reg.classes)
         await client.indices.refresh(index=index)
         logger.info('curation_registry_sync', upserted=upserted, n_classes=len(reg.classes))
         return {'upserted': upserted, 'n_classes': len(reg.classes)}
