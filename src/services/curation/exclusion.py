@@ -124,10 +124,15 @@ async def live_candidate_ids(opensearch: Any, index: str, crop_ids: list[str]) -
     docs = [d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')]
     live: set[int] = set()
     for cid in prior_candidate_ids(docs):
-        n = await opensearch.count(index=index, body={'query': {'term': {'cluster_id': cid}}})
-        if int((n or {}).get('count', 0)) > 0:
+        if await cluster_member_count(opensearch, index, cid) > 0:
             live.add(cid)
     return frozenset(live)
+
+
+async def cluster_member_count(opensearch: Any, index: str, cluster_id: int) -> int:
+    """Items currently in ``cluster_id``."""
+    n = await opensearch.count(index=index, body={'query': {'term': {'cluster_id': cluster_id}}})
+    return int((n or {}).get('count', 0))
 
 
 def prior_candidate_ids(docs: list[dict[str, Any]]) -> set[int]:
@@ -158,6 +163,7 @@ __all__ = [
     'PRIOR_CLUSTER_ID',
     'PRIOR_CLUSTER_SUBID',
     'PRIOR_VALIDATED',
+    'cluster_member_count',
     'exclusion_update',
     'live_candidate_ids',
     'park_restored_state_while_excluded',

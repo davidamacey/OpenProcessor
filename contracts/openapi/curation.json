@@ -6078,7 +6078,7 @@
     },
     "/curation/crops/move": {
       "post": {
-        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  or a class-range id that isn't in the registry. Nothing is written.",
+        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  a class-range id that isn't in the registry, or a candidate id with\n  no current members (it doesn't exist). Nothing is written.",
         "operationId": "move_crops_curation_crops_move_post",
         "requestBody": {
           "content": {

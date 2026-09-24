@@ -348,7 +348,9 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
 
     doc = _proposal_doc('m')
     doc.update(cluster_id=None, cluster_subid=None)
-    fake = QueryFakeOpenSearch({ITEMS: {'m': doc}})
+    peer = _proposal_doc('peer')
+    peer.update(cluster_id=10000, cluster_subid=None)
+    fake = QueryFakeOpenSearch({ITEMS: {'m': doc, 'peer': peer}})
     before = _class_state(fake.docs(ITEMS)['m'])
 
     out = await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=10000), fake)
@@ -369,7 +371,7 @@ async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) ->
     class; keeping it validated would leak the old class into export."""
     from src.routers.curation._common import CropMoveRequest
 
-    fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h')}})
+    fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h'), 'peer': _proposal_doc('peer')}})
     await _label(crops, fake, registry, 'h', ids['widget'])
     await crops.move_crops(CropMoveRequest(crop_ids=['h'], cluster_id=10003), fake)
     h = fake.docs(ITEMS)['h']
@@ -390,6 +392,23 @@ async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry,
     with pytest.raises(HTTPException) as exc:
         await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=target), fake)
     assert exc.value.status_code == 400
+    assert fake.docs(ITEMS)['m'] == before
+
+
+@pytest.mark.asyncio
+async def test_move_rejects_a_candidate_target_with_no_members(crops, registry) -> None:
+    """A candidate id nobody is in (never existed, or renumbered away) is
+    not a move target; writing it would invent a phantom cluster."""
+    from fastapi import HTTPException
+
+    from src.routers.curation._common import CropMoveRequest
+
+    fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
+    before = dict(fake.docs(ITEMS)['m'])
+    with pytest.raises(HTTPException) as exc:
+        await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=99999), fake)
+    assert exc.value.status_code == 400
+    assert '99999' in str(exc.value.detail)
     assert fake.docs(ITEMS)['m'] == before
 
 
