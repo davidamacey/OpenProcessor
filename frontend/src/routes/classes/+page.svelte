@@ -1,12 +1,11 @@
 <script lang="ts">
   import {
-    addClass,
-    bulkLabel,
     getNewClassProposalsSummary,
     getThumbUrl,
     mergeClasses,
     previewClassMerge,
     renameClass,
+    resolveNewClassProposal,
     syncClassesToOpensearch,
     type NewClassProposalsSummary,
   } from '$lib/api';
@@ -14,10 +13,16 @@
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
-  import type { ClassMergeDryRun, RegistryClass } from '$lib/types';
+  import type {
+    ClassMergeDryRun,
+    RegistryClass,
+    ResolveNewClassRequest,
+    ResolveNewClassResponse,
+  } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
 
   $effect(() => {
@@ -249,17 +254,20 @@
     }
   }
 
-  // -- New-class proposals (2026-09-24 logic-moves W5) ---------------------
+  // -- New-class proposals (2026-09-24 logic-moves W5; bulk resolve added
+  //    2026-09-24 for OpenProcessor af3a580) --------------------------------
   //
   // Aggregate view of the same cohort the `/review` "New Class Proposals"
   // tab pages through one crop at a time — top VLM-proposed-but-unmatched
-  // terms with counts and a handful of sample crop ids each
-  // (GET {API_PREFIX}/review/new_class_proposals/summary). Two actions per
-  // term: create a brand-new class and bulk-assign the samples to it, or
-  // map the samples onto an existing class. Both act only on the served
-  // `sample_crop_ids` — a small preview batch, not the full cohort behind
-  // the term (the review tab is where the rest gets triaged one at a
-  // time).
+  // terms with counts and a handful of sample crop ids each (GET
+  // {API_PREFIX}/review/new_class_proposals/summary, rendered as thumbnails
+  // only). The two actions per term — "Create class & assign" / "Map to
+  // existing" — now go through `POST {API_PREFIX}/review/new_class_proposals/
+  // resolve`, which the backend resolves against **every** pending item
+  // proposing the term, not just the summary's capped `sample_crop_ids`
+  // preview. Each action dry-runs first (`?dry_run=true`) to show the
+  // operator the real served `matched` count in a confirm dialog before
+  // writing anything.
   let proposalsSummary = $state<NewClassProposalsSummary | null>(null);
   let proposalsError = $state<string | null>(null);
   let proposalsLoading = $state<boolean>(false);
@@ -293,31 +301,46 @@
     };
   }
 
-  async function createClassAndAssign(term: {
-    label: string;
-    sample_crop_ids: string[];
-  }): Promise<void> {
+  /**
+   * Record the resolve's `updated_ids` for undo (same ring buffer + `Z`
+   * behavior `bulkLabel`/`moveCropsToCluster` already use elsewhere in
+   * the app — one entry per crop, so `Z` reverts them one at a time),
+   * and toast the served counts. Never a client-computed count: `matched`
+   * only ever comes from the dry-run/real response, `updated`/
+   * `conflicts`/`skipped` only from the real resolve's response.
+   */
+  function reportResolve(res: ResolveNewClassResponse, verb: string): void {
+    if (res.updated_ids.length > 0) undoStore.recordWrites(res.updated_ids);
+    const parts = [`${res.updated} updated`];
+    if (res.conflicts.length > 0) parts.push(`${res.conflicts.length} conflict(s)`);
+    if (res.skipped.length > 0) parts.push(`${res.skipped.length} skipped`);
+    toastStore.success(`${verb} — ${parts.join(', ')}.`);
+  }
+
+  async function createClassAndAssign(term: { label: string }): Promise<void> {
     const name = (newClassNameByTerm[term.label] ?? term.label).trim();
     if (!name) {
       toastStore.error('Class name is required.');
       return;
     }
-    if (term.sample_crop_ids.length === 0) {
-      toastStore.error('No sample crops to assign.');
-      return;
-    }
     proposalBusyTerm = term.label;
     try {
-      // No client-side slug check — POST {API_PREFIX}/classes 422s on a bad
-      // name with the pattern in its detail; that message is what the
-      // toast shows.
-      const created = await addClass({ name, group: '' });
-      const res = await bulkLabel(term.sample_crop_ids, created.class_id);
-      toastStore.success(
-        `Created "${created.class_name}" and assigned ${res.updated_ids?.length ?? term.sample_crop_ids.length} sample crop(s).`,
+      // No client-side slug check — the resolve call 422s on a bad
+      // `create.class_name` with the pattern in its detail; that message
+      // is what the toast shows on failure.
+      const body: ResolveNewClassRequest = {
+        label: term.label,
+        create: { class_name: name, group: '' },
+      };
+      const preview = await resolveNewClassProposal(body, { dryRun: true });
+      const ok = window.confirm(
+        `Create class "${name}" and assign ${preview.matched} crop(s) proposing "${term.label}"?`,
       );
+      if (!ok) return;
+      const res = await resolveNewClassProposal(body);
+      reportResolve(res, `Created "${res.class_name}"`);
       dismissProposalTerm(term.label);
-      await classesStore.clearAndRefetch();
+      await Promise.all([loadProposals(), classesStore.clearAndRefetch()]);
     } catch (e) {
       toastStore.error(`Create & assign failed: ${(e as Error).message}`);
     } finally {
@@ -325,27 +348,25 @@
     }
   }
 
-  async function mapToExisting(term: {
-    label: string;
-    sample_crop_ids: string[];
-  }): Promise<void> {
+  async function mapToExisting(term: { label: string }): Promise<void> {
     const targetId = mapTargetByTerm[term.label];
     if (targetId == null) {
       toastStore.error('Pick an existing class first.');
       return;
     }
-    if (term.sample_crop_ids.length === 0) {
-      toastStore.error('No sample crops to assign.');
-      return;
-    }
     proposalBusyTerm = term.label;
     try {
-      const res = await bulkLabel(term.sample_crop_ids, targetId);
+      const body: ResolveNewClassRequest = { label: term.label, class_id: targetId };
+      const preview = await resolveNewClassProposal(body, { dryRun: true });
       const cls = classesStore.byId(targetId);
-      toastStore.success(
-        `Assigned ${res.updated_ids?.length ?? term.sample_crop_ids.length} sample crop(s) to "${cls?.name ?? targetId}".`,
+      const ok = window.confirm(
+        `Assign ${preview.matched} crop(s) proposing "${term.label}" to "${cls?.name ?? targetId}"?`,
       );
+      if (!ok) return;
+      const res = await resolveNewClassProposal(body);
+      reportResolve(res, `Assigned to "${cls?.name ?? res.class_name}"`);
       dismissProposalTerm(term.label);
+      await loadProposals();
     } catch (e) {
       toastStore.error(`Assign failed: ${(e as Error).message}`);
     } finally {
@@ -417,9 +438,11 @@
       </h2>
       <p class="mb-3 text-xs text-zinc-500">
         Crops the VLM flagged as needing a class the registry doesn't have yet. Each row
-        is a proposed term with a few sample crops — create a class and assign the
-        samples, or map them onto an existing class. The full cohort for each term is
-        triaged one at a time on <code>/review</code>'s "New Class Proposals" tab.
+        is a proposed term with a few sample thumbnails — create a class or map onto an
+        existing one to resolve <strong>every</strong> pending crop proposing that term
+        (not just the samples shown), after a confirm step showing the real count. Crops
+        can still be triaged one at a time on <code>/review</code>'s "New Class Proposals"
+        tab instead.
       </p>
       <ul class="flex flex-col gap-3">
         {#each proposalsSummary.top_terms as term (term.label)}

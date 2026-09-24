@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `/classes`'s Proposals section now bulk-resolves a VLM new-class term
+  against OpenProcessor's `POST {API_PREFIX}/review/new_class_proposals/
+resolve` (backend `main` `af3a580`): "Create class & assign" / "Map to
+  existing" resolve **every** pending item proposing the term, not just
+  the summary's capped `sample_crop_ids` sample. Each action dry-runs
+  first (`?dry_run=true`) and shows the real served `matched` count in a
+  confirm dialog before writing; a 400 (unknown class), 409 (duplicate
+  class name) or 422 (missing/conflicting `class_id`/`create`, or over
+  the backend's per-label match cap) shows the server's detail text in
+  the failure toast. `resolveNewClassProposal`/`undoLabelBatch`
+  (`api.ts`) are typed from the vendored OpenAPI contract.
+  - Replaces the old sample-only flow (`addClass` + `bulkLabel` on
+    `sample_crop_ids`), deleted from this page — `bulkLabel` itself
+    stays (still used by `/clusters` drag-and-drop assignment).
+  - A successful resolve records its `updated_ids` via
+    `undoStore.recordWrites()`, the same ring-buffer `Z`-undo
+    `bulkLabel`/`moveCropsToCluster` already use elsewhere, rather than
+    a new bulk-undo affordance — `POST {API_PREFIX}/crops/label/
+undo_batch` restores each crop to its prior `vlm_new_class_pending`
+    proposal state.
+
 ### Changed
 
 - A pre-push hook runs the full vitest suite (`vitest-pre-push` in
