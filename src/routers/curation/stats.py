@@ -303,7 +303,7 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                 }
             },
             'region_status': {
-                'terms': {'field': f'{fields.status}.keyword', 'size': 32},
+                'terms': {'field': fields.status, 'size': 32},
             },
             # Crops that actually carry a region box right now. This — not
             # total_detected (which sums detector CREDIT, including

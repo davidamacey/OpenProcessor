@@ -268,7 +268,7 @@ def _training_candidate_query(
             {
                 'bool': {
                     'must': [
-                        {'term': {f'{F.status}.keyword': RegionStatus.FALSE_POSITIVE}},
+                        {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
                         {'exists': {'field': F.bbox_norm}},
                     ],
                     'must_not': [{'term': {'test_holdout': True}}],
