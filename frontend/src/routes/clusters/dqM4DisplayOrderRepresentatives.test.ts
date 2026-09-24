@@ -40,13 +40,16 @@ describe('DQ-M4: representatives are windowed over gridItems (display order), no
     expect(body).not.toMatch(/representatives_offset:\s*repsOffset/);
   });
 
-  it('the main card-list fetch no longer requests a representatives window at all (superseded by display-order fetch)', () => {
+  it('the main card-list fetch skips representative computation via per_cluster: 0, not an invalid limit: 0', () => {
+    // Live-verified: GET /clusters?...&limit=0 422s ("Input should be
+    // greater than or equal to 1") — the offset/limit window's real
+    // minimum is 1. per_cluster's minimum is genuinely 0.
     const clusterQueryFn = src.match(
       /function clusterQuery\(page: number\): ClusterFilter \{[\s\S]*?\n {2}\}/,
     )?.[0];
     expect(clusterQueryFn).toBeDefined();
-    expect(clusterQueryFn).toMatch(/representatives_offset:\s*0,/);
-    expect(clusterQueryFn).toMatch(/representatives_limit:\s*0,/);
+    expect(clusterQueryFn).toMatch(/per_cluster:\s*0,/);
+    expect(clusterQueryFn).not.toMatch(/representatives_limit:\s*0,/);
   });
 
   it('loadFirst fetches the first display-order window before the operator ever sees the grid', () => {

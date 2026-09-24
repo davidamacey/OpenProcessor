@@ -702,6 +702,16 @@ export interface ClusterFilter {
    *  used to fill in server order regardless of what sort the operator
    *  picked. */
   cluster_id?: number | null;
+  /** DQ-M4 live-verified follow-up: the backend's `offset`/`limit`
+   *  representatives window rejects `limit=0` (422, "Input should be
+   *  greater than or equal to 1") — confirmed live against real data,
+   *  not just the vendored OpenAPI's `minimum: 1`. To genuinely skip
+   *  representative computation on the main card-list call (superseded
+   *  entirely by per-card display-order fetches, see
+   *  displayOrderRepresentatives.ts), set this to 0 instead — `0`
+   *  representative crops per card is valid (`minimum: 0`) and just as
+   *  cheap, without touching offset/limit at all. */
+  per_cluster?: number;
   min_size?: number;
   sort?: 'purity_asc' | 'purity_desc' | 'size_desc' | 'size_asc' | 'dominant_class';
   page?: number;

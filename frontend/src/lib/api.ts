@@ -1264,7 +1264,7 @@ export async function getClusters(
   // representative lookup for clusters nobody has scrolled to yet.
   const raw = await apiFetch<RawClustersResp>(
     `${API_PREFIX}/clusters${qs({
-      per_cluster: 4,
+      per_cluster: filter.per_cluster ?? 4,
       class_id: filter.class_id ?? undefined,
       // DQ-M4: lets the caller fetch one card's representatives directly
       // by id, independent of the size-desc `offset`/`limit` window —

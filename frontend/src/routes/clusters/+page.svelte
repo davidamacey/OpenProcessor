@@ -476,8 +476,15 @@
       // doesn't line up with the client-side sort (`sortClusters()`)
       // actually shown, so representatives are fetched separately, in
       // DISPLAY order, by loadMoreRepresentatives() below.
-      representatives_offset: 0,
-      representatives_limit: 0,
+      //
+      // Live-verified follow-up: `limit: 0` 422s ("Input should be
+      // greater than or equal to 1") — the backend's offset/limit window
+      // has a real minimum of 1, unlike `per_cluster`, whose minimum is
+      // genuinely 0. `per_cluster: 0` achieves the same "skip
+      // representative computation" goal without an invalid limit, so
+      // offset/limit are left unset (backend default) rather than forced
+      // to an invalid or wastefully-real window.
+      per_cluster: 0,
     };
   }
 
