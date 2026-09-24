@@ -118,9 +118,9 @@ class _FakeAutoPromoteClient:
         self.search_calls.append(body)
         if 'aggs' in body:
             return self._agg_response
-        must = body['query']['bool']['must']
+        filt = body['query']['bool']['filter']
         cluster_id = next(
-            int(m['term']['cluster_id']) for m in must if 'cluster_id' in m.get('term', {})
+            int(m['term']['cluster_id']) for m in filt if 'cluster_id' in m.get('term', {})
         )
         ids = self._crop_ids_by_cluster.get(cluster_id, [])
         return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': [{'_id': i} for i in ids]}}
@@ -207,11 +207,11 @@ async def test_auto_promote_clusters_promotes_only_high_purity() -> None:
 
     # The scroll-for-ids query targets the right cluster/class/holdout shape.
     scroll_init_call = next(c for c in client.search_calls if 'aggs' not in c)
-    must = scroll_init_call['query']['bool']['must']
+    filt = scroll_init_call['query']['bool']['filter']
     must_not = scroll_init_call['query']['bool']['must_not']
-    assert {'term': {'cluster_id': 1}} in must
-    assert {'terms': {'class_source': ['v6_model']}} in must
-    assert {'term': {'class_name': 'cruiserbike'}} in must
+    assert {'term': {'cluster_id': 1}} in filt
+    assert {'terms': {'class_source': ['v6_model']}} in filt
+    assert {'term': {'class_name': 'cruiserbike'}} in filt
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'test_holdout': True}} in must_not
 

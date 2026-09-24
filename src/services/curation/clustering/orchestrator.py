@@ -640,9 +640,9 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
     """
     from src.services.curation.clustering import embedding_reduce as _ker
 
-    must: list[dict[str, Any]] = [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}]
     if strict:
-        must.append(
+        filt.append(
             {
                 'bool': {
                     'should': [
@@ -655,7 +655,7 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
         )
     query = {
         'bool': {
-            'must': must,
+            'filter': filt,
             'must_not': [
                 {'term': {'class_validated': True}},
                 {'terms': {'class_source': list(_ker.CONFIDENT_CLASS_SOURCES)}},
@@ -784,7 +784,7 @@ def _residual_pool_filter() -> dict[str, Any]:
     from src.services.curation.clustering import embedding_reduce as _ker
 
     return {
-        'must': [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}],
+        'filter': [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}],
         'must_not': [
             {'term': {'class_validated': True}},
             {'terms': {'class_source': list(_ker.CONFIDENT_CLASS_SOURCES)}},
@@ -808,14 +808,14 @@ async def residual_gate_coverage(
     base = _residual_pool_filter()
     total_resp = await client.count(index=ITEMS_INDEX, body={'query': {'bool': base}})
     total = int(total_resp.get('count', 0))
-    field_must: list[dict[str, Any]] = list(base['must'])
+    field_filter: list[dict[str, Any]] = list(base['filter'])
     if max_rank is not None:
-        field_must.append({'exists': {'field': 'crop_rank_in_image'}})
+        field_filter.append({'exists': {'field': 'crop_rank_in_image'}})
     if min_blur_ratio is not None:
-        field_must.append({'exists': {'field': 'blur_lap_ratio'}})
+        field_filter.append({'exists': {'field': 'blur_lap_ratio'}})
     cov_resp = await client.count(
         index=ITEMS_INDEX,
-        body={'query': {'bool': {'must': field_must, 'must_not': base['must_not']}}},
+        body={'query': {'bool': {'filter': field_filter, 'must_not': base['must_not']}}},
     )
     with_fields = int(cov_resp.get('count', 0))
     coverage = (with_fields / total) if total else 1.0
@@ -850,10 +850,10 @@ async def _park_gated_residuals(
     # wasted write on every re-run of this gate.
     query = {
         'bool': {
-            'must': base['must'],
+            'filter': base['filter'],
             'must_not': [
                 *base['must_not'],
-                {'bool': {'must': gate}},
+                {'bool': {'filter': gate}},
                 {'term': {'cluster_id': PARKED_CLUSTER_ID}},
             ],
         }
@@ -1165,13 +1165,13 @@ async def assign_only_residuals(
     gate_clauses = gate_must_clauses(gate_max_rank, gate_min_blur_ratio)
 
     field = embedding_reduce.RESIDUAL_EMBEDDING_FIELD
-    must: list[dict[str, Any]] = [{'exists': {'field': field}}, *gate_clauses]
+    filt: list[dict[str, Any]] = [{'exists': {'field': field}}, *gate_clauses]
     must_not: list[dict[str, Any]] = [
         {'term': {'class_validated': True}},
         {'terms': {'class_source': list(embedding_reduce.CONFIDENT_CLASS_SOURCES)}},
         {'term': {'class_excluded': True}},
     ]
-    query = {'bool': {'must': must, 'must_not': must_not}}
+    query = {'bool': {'filter': filt, 'must_not': must_not}}
 
     total_estimate = 0
     if progress is not None:
@@ -1301,15 +1301,15 @@ async def cluster_region_residuals(
     No confident-class gate and no RESIDUAL_CLUSTER_ID_OFFSET — regions are
     a single flat namespace in ``RegionFields.cluster_id`` (0..K-1).
     """
-    must: list[dict[str, Any]] = [{'exists': {'field': F.embedding}}]
+    filt: list[dict[str, Any]] = [{'exists': {'field': F.embedding}}]
     if max_rank is not None:
-        must.append({'range': {'crop_rank_in_image': {'lte': int(max_rank)}}})
+        filt.append({'range': {'crop_rank_in_image': {'lte': int(max_rank)}}})
     # FPs live in the permanent FALSE_POSITIVE_REGION_CLUSTER_ID bucket.
     # Exclude them so KMeans never reshuffles them back into good buckets
     # and the good buckets' centroids recompute clean.
     query = {
         'bool': {
-            'must': must,
+            'filter': filt,
             'must_not': [{'term': {F.status: RegionStatus.FALSE_POSITIVE}}],
         }
     }
@@ -1680,7 +1680,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
 
     query = {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
                 {'exists': {'field': F.embedding}},
             ]
@@ -1811,7 +1811,7 @@ async def auto_assign_fp_from_centroids(
 
     query = {
         'bool': {
-            'must': [{'exists': {'field': F.embedding}}],
+            'filter': [{'exists': {'field': F.embedding}}],
             'must_not': fp_candidate_must_not(),
         }
     }

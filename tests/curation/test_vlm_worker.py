@@ -145,7 +145,7 @@ def test_build_pending_query_keeps_classifier_gate_when_sources_present(
     query = vlm_worker._build_pending_query(0.8)
     must_not = query['bool']['must_not']
     assert any(
-        'bool' in c and {'terms': {'class_source': ['classifier']}} in c['bool'].get('must', [])
+        'bool' in c and {'terms': {'class_source': ['classifier']}} in c['bool'].get('filter', [])
         for c in must_not
     )
 

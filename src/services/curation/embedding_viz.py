@@ -340,7 +340,7 @@ async def _fetch_pool(
 
         query = {
             'bool': {
-                'must': [
+                'filter': [
                     {'exists': {'field': EMBEDDING_FIELD}},
                     {'term': {'cluster_id': cluster_id}},
                 ],
@@ -657,7 +657,7 @@ async def get_cached_projection(
     try:
         missing_query = {
             'bool': {
-                'must': scope_must,
+                'filter': scope_must,
                 'must_not': [
                     *scope_must_not,
                     {'term': {'viz_projection_version': meta.get('projection_version', '')}},

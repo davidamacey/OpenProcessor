@@ -186,8 +186,8 @@ class FakeOpenSearch:
                 if d.get('image_path') == path_term
             ]
             return {'hits': {'hits': hits[:1]}}
-        # label_import's items-by-image_id lookup (bool/must term).
-        musts = (query.get('bool') or {}).get('must') or []
+        # label_import's items-by-image_id lookup (bool/filter term).
+        musts = (query.get('bool') or {}).get('filter') or []
         image_id = next(
             (m['term']['image_id'] for m in musts if (m.get('term') or {}).get('image_id')), None
         )

@@ -238,15 +238,15 @@ async def auto_promote_clusters(
         # why the pipeline defaults to skipping this stage. A
         # confidence-gated rewrite is the prerequisite to enabling
         # ``run_auto_promote=true`` in production.
-        promote_must: list[dict[str, Any]] = [
+        promote_filter: list[dict[str, Any]] = [
             {'term': {'cluster_id': cluster_id}},
             {'term': {'class_name': top_name}},
         ]
         classifier_sources = sorted(classifier_class_sources())
         if classifier_sources:
-            promote_must.append({'terms': {'class_source': classifier_sources}})
+            promote_filter.append({'terms': {'class_source': classifier_sources}})
         else:
-            # F-11: an empty terms:[] clause in `must` context matches
+            # F-11: an empty terms:[] clause in filter context matches
             # nothing, so the write below would silently promote zero
             # crops even though dry-run's total_promoted counted them.
             # Drop the gate instead when no classifier sources are
@@ -254,7 +254,7 @@ async def auto_promote_clusters(
             _warn_classifier_sources_empty_once()
         promote_query = {
             'bool': {
-                'must': promote_must,
+                'filter': promote_filter,
                 'must_not': [
                     {'term': {'class_validated': True}},
                     # P0-3: never auto-promote a frozen test_holdout

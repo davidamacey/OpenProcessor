@@ -118,7 +118,7 @@ def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = No
         must_not.append(
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'terms': {'class_source': classifier_sources}},
                         {'range': {'confidence': {'gte': v6_skip_conf}}},
                     ],
@@ -157,7 +157,7 @@ def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = No
         must_not.append({'ids': {'values': exclude_ids}})
     return {
         'bool': {
-            'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
+            'filter': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
             'must_not': must_not,
         },
     }

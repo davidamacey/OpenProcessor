@@ -61,7 +61,7 @@ async def test_promote_query_omits_empty_terms_clause_and_warns_once(
     # cluster's promote_query.
     scroll_call = client.search.await_args_list[1]
     query = scroll_call.kwargs['body']['query']
-    must = query['bool']['must']
+    must = query['bool']['filter']
     assert not any('terms' in c and c['terms'].get('class_source') == [] for c in must)
     # No classifier-source terms clause at all when the source set is empty.
     assert not any('terms' in c and 'class_source' in c.get('terms', {}) for c in must)
@@ -81,5 +81,5 @@ async def test_promote_query_keeps_classifier_gate_when_sources_present(
 
     scroll_call = client.search.await_args_list[1]
     query = scroll_call.kwargs['body']['query']
-    must = query['bool']['must']
+    must = query['bool']['filter']
     assert {'terms': {'class_source': ['classifier']}} in must
