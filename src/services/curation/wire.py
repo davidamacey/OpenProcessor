@@ -20,6 +20,7 @@ from dataclasses import fields as dataclass_fields
 from typing import Any
 
 from src.config.region_fields import RegionFields, get_region_fields
+from src.services.curation.class_sources import vlm_suggestion
 
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
@@ -86,6 +87,7 @@ def serialize_item(
     prefix = _api_prefix() if api_prefix is None else api_prefix
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
+    vlm_class_id, vlm_class_name = vlm_suggestion(src)
     item: dict[str, Any] = {
         'id': crop_id,
         'crop_id': crop_id,
@@ -110,6 +112,10 @@ def serialize_item(
         'class_labeler': src.get('class_labeler'),
         # Categorical VLM confidence (high/medium/low).
         'vlm_confidence': src.get('vlm_confidence'),
+        # The VLM's unvalidated class choice (registry id + name), or a
+        # proposed new class (name only). Null otherwise.
+        'vlm_proposed_class_id': vlm_class_id,
+        'vlm_proposed_class_name': vlm_class_name,
         'cluster_id': src.get('cluster_id'),
         'cluster_distance': src.get('cluster_distance'),
         'cluster_subid': src.get('cluster_subid'),

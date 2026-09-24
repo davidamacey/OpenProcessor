@@ -258,6 +258,11 @@ class ItemDoc(BaseModel):
     class_labeled_at: str | None = None
     class_labeler: str | None = None
     vlm_confidence: str | None = None
+    # VLM class suggestion: the registry class the VLM chose while the
+    # label is unvalidated (class_source vlm / vlm_reclassified), or, for
+    # vlm_new_class_pending, the proposed new class name with a null id.
+    vlm_proposed_class_id: int | None = None
+    vlm_proposed_class_name: str | None = None
     cluster_id: int | None = None
     cluster_distance: float | None = None
     # AHC sub-cluster id (e.g. "47a"); cleared whenever cluster_id changes.

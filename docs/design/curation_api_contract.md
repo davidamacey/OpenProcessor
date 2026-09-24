@@ -58,14 +58,15 @@ Request bodies follow the same rule: a body key that writes a
 
 ## Route surface
 
-Full route list (109 routes under `/curation` as of this wave — the
-curation deployment-settings plan added `GET,PUT /settings`), grouped
+Full route list (111 distinct paths / 115 method routes under
+`/curation` as of this wave — the latest addition is
+`GET /class_sources`), grouped
 by router module; every path is relative to the configured
 `api_prefix`:
 
 | Router module | Routes |
 |---|---|
-| `classes.py` | `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
+| `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
 | `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
@@ -150,6 +151,7 @@ rank just the first `k` k-center-greedy picks; `total` is then `k`).
 - `ClassCreateRequest`: `name`, `group`, `notes`
 - `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
 - `ClassMergeRequest`: `source_id`, `target_id`
+- `GET /class_sources` -> `{"class_sources": [{"id", "label", "role"}, ...]}` — see "`class_source` values" below
 
 ### VLM labeling/verification
 
@@ -316,13 +318,13 @@ read-modify-write round trip in application code.
 
 ## Item wire format
 
-Built by `serialize_item()` in `src/services/curation/wire.py`. 71 keys,
+Built by `serialize_item()` in `src/services/curation/wire.py`. 73 keys,
 always all present (a value is `null` when the stored doc has no value;
 `bbox_norm` defaults to `[]`, `class_name`/`class_source`/
 `label_source`/`updated_at` to `""`, `confidence` to `0.0`,
 `label_validated`/`class_validated`/`test_holdout` to `false`).
 
-Item keys (40): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
+Item keys (42): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `cluster_id`, `cluster_distance`, `cluster_subid`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`.
 
 Region keys (31, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
@@ -341,6 +343,49 @@ must match.
 | `GET /regions` | `items[]` | item |
 | `GET /regions/training_candidates` | `items[]` | item + `selection_reason` |
 | `GET /search/text` | `items[]` | item + `semantic_score` |
+
+### VLM class suggestion — `vlm_proposed_class_id` / `vlm_proposed_class_name`
+
+On every item, always present, derived from the stored doc by
+`vlm_suggestion()` (`src/services/curation/class_sources.py`):
+
+| Stored state | `vlm_proposed_class_id` | `vlm_proposed_class_name` |
+|---|---|---|
+| `class_source` is `vlm` or `vlm_reclassified`, `class_validated` false, `class_id` set | `class_id` | `class_name` |
+| `class_source` is `vlm_new_class_pending`, `class_validated` false | `null` | the proposed new class name (stored `vlm_proposed_class`; `null` if absent) |
+| anything else (incl. `vlm_unmatched`, any validated class, non-VLM sources) | `null` | `null` |
+
+When the VLM's answer resolves to a registry class it is **applied**:
+`class_id`/`class_name` are already that class, `class_validated` stays
+false. The suggestion keys just mark "this class is the VLM's, not yet
+confirmed". A `vlm_new_class_pending` item keeps whatever class it had
+before (often none); only the name is suggested. The stored
+`vlm_proposed_class` field can go stale after a later relabel — the wire
+keys are keyed off `class_source`, so a stale value never leaks.
+
+**Accepting a suggestion** (no dedicated endpoint):
+
+- Registry class (`vlm_proposed_class_id` not null): `PUT /crops/{crop_id}/label`
+  `{"class_id": <vlm_proposed_class_id>}` (bulk: `PUT /crops/batch_label`
+  `{"crop_ids": [...], "class_id": ...}`). Sets `class_validated=true`,
+  `class_source`/`label_source` = `human` (the body's `label_source`, default
+  `human`); both suggestion keys become `null`.
+- New class (`vlm_proposed_class_id` null, name set): `POST /classes`
+  `{"name": <vlm_proposed_class_name>}` -> `{"class_id": N, ...}` (`409` if
+  the name exists — then use `GET /classes` to find its id), then
+  `PUT /crops/{crop_id}/label` / `PUT /crops/batch_label` with `class_id: N`.
+  The label call does not clear the stored `needs_new_class` flag.
+
+`GET /review/{tab}`'s `proposed_class_id` / `proposed_class_name` use the
+same derivation: when `vlm_proposed_class_name` is not null they equal
+the two suggestion keys; otherwise `proposed_class_id` = `class_id` and
+`proposed_class_name` = `vlm_raw_class` (the raw unmatched VLM answer) or
+`class_name` or `""`. Changes vs before this key existed: a
+`vlm_new_class_pending` item's `proposed_class_id` is now `null` (was the
+item's unrelated current `class_id`); a VLM-applied class reports the
+resolved registry `class_name` (was the raw VLM slug `vlm_raw_class` when
+the VLM's new-class answer matched a synonym); a stale `vlm_proposed_class`
+on an item that is no longer pending no longer overrides the name.
 
 `GET /regions` filter params: `page`, `page_size`, `class_id`,
 `cluster_id`, `region_cluster_id`, `region_cluster_subid`,
@@ -378,16 +423,44 @@ export axis advertises), `profile_name`. Rows: `kind`, `profile_name`
 single-class versions under `<export_root>/<profile_name>/<version>/`, and
 `is_current` is judged against that profile's own `current` symlink.
 
-### `class_source` values
+### `class_source` values — `GET /class_sources`
 
-`human*` (human writes); ingest values derived from the configured
-ingest profile names (`src/services/curation/ingest_class_sources.py`,
-`OP_INGEST_PRIMARY_NAME` / `OP_INGEST_SECONDARY_NAME`):
-`{primary}_proposal`, `{primary}_low_conf`, `{primary}_model` (only
-when the primary assigns classes), `{secondary}_model`; and the fixed
-writer values `vlm`, `vlm_unmatched`, `vlm_new_class_pending`,
-`vlm_reclassified`, `classifier_vlm_agreement`,
-`cluster_majority_agreement`, `unlabeled_proposal`. The
+`GET {prefix}/class_sources` returns
+`{"class_sources": [{"id": str, "label": str, "role": str}, ...]}`: every
+`class_source` value this deployment can write, built by
+`class_source_catalog()` (`src/services/curation/class_sources.py`).
+Ingest values come first, derived from the configured ingest profiles
+(`OP_INGEST_PRIMARY_*` / `OP_INGEST_SECONDARY_*`, label uses the
+profile's `DETECTOR_MODEL`, falling back to its `NAME`):
+
+| `id` | `role` | Present when |
+|---|---|---|
+| `{primary}_proposal` | `proposal` | always |
+| `{primary}_low_conf` | `low_conf` | primary `ASSIGNS_CLASS=true` |
+| `{primary}_model` | `model` | primary `ASSIGNS_CLASS=true` |
+| `{secondary}_model` | `model` | `OP_INGEST_SECONDARY_DETECTOR_MODEL` set (a secondary `NAME` alone configures nothing) |
+| `unlabeled_proposal` | `proposal` | always (item-doc default before a detector stamps a source) |
+| `vlm` | `vlm` | always |
+| `vlm_unmatched` | `vlm_unmatched` | always |
+| `vlm_new_class_pending` | `vlm_new_class_pending` | always |
+| `vlm_reclassified` | `vlm_reclassified` | always |
+| `cluster_majority_agreement` | `cluster` | always |
+| `human` | `human` | always |
+| `human_move` | `human` | always (`POST /crops/move`) |
+| `class_merge` | `merge` | always (`POST /classes/merge`) |
+| `external_label` | `label_import` | always (label-import default) |
+
+`role` enum: `proposal`, `low_conf`, `model`, `vlm`, `vlm_unmatched`,
+`vlm_new_class_pending`, `vlm_reclassified`, `cluster`, `human`, `merge`,
+`label_import`. Not listed because nothing writes them any more:
+`classifier_vlm_agreement`, `vlm_human_confirmed` (still recognised by
+queries/rollups; may appear on older docs). The label endpoints and label
+import take a caller-chosen `label_source` (defaults `human` /
+`external_label`) that is stored as `class_source`, so a client that
+passes its own value can see ids outside the catalog — render unknown
+ids verbatim. `tests/curation/test_class_sources.py` scans every
+`class_source` write in `src/` and `scripts/` and fails if a written
+value is missing from the catalog. The
 `classifier_confidence_skip_vlm` skip, auto-promote, the
 `primary_low_conf` / `coco_blind_spots` review tabs and the
 `/stats/dataset` rollup all filter on these derived sets, never on one

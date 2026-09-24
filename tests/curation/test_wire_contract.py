@@ -186,6 +186,61 @@ def test_region_values_reach_the_wire(monkeypatch: pytest.MonkeyPatch) -> None:
     assert crop['classifier_raw_confidence'] == 0.4
 
 
+def test_vlm_suggestion_keys_on_every_item() -> None:
+    assert {'vlm_proposed_class_id', 'vlm_proposed_class_name'} <= ITEM_WIRE_KEYS
+    empty = wire.serialize_item({}, 'x', api_prefix='')
+    assert empty['vlm_proposed_class_id'] is None
+    assert empty['vlm_proposed_class_name'] is None
+
+
+def test_vlm_suggestion_reaches_every_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    with _client(monkeypatch, RegionFields()) as client:
+        items = _endpoint_items(client)
+    for name, item in items.items():
+        assert item['vlm_proposed_class_id'] == 3, name
+        assert item['vlm_proposed_class_name'] == 'thing', name
+    # Review's proposed_class_* agree with the suggestion when there is one.
+    assert items['review']['proposed_class_id'] == 3
+    assert items['review']['proposed_class_name'] == 'thing'
+
+
+def _review_item(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> dict[str, Any]:
+    monkeypatch.setattr(_common, '_INDEXES_BOOTSTRAPPED', True)
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
+
+    fake = _FakeItemsOS({**_stored_doc(RegionFields()), **overrides})
+    app = FastAPI()
+    app.include_router(curation_router)
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    with TestClient(app) as client:
+        r = client.get(f'{_common.config.api_prefix}/review/all')
+    assert r.status_code == 200, r.text
+    return r.json()['items'][0]
+
+
+def test_review_new_class_proposal_has_no_stale_class_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = _review_item(
+        monkeypatch, class_source='vlm_new_class_pending', vlm_proposed_class='gizmo'
+    )
+    assert (item['vlm_proposed_class_id'], item['vlm_proposed_class_name']) == (None, 'gizmo')
+    assert (item['proposed_class_id'], item['proposed_class_name']) == (None, 'gizmo')
+
+
+def test_review_falls_back_to_current_class_without_a_suggestion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = _review_item(
+        monkeypatch,
+        class_source='vlm_unmatched',
+        vlm_raw_class='mystery',
+        vlm_proposed_class='stale',
+    )
+    assert (item['vlm_proposed_class_id'], item['vlm_proposed_class_name']) == (None, None)
+    assert (item['proposed_class_id'], item['proposed_class_name']) == (3, 'mystery')
+
+
 def test_storage_override_does_not_change_wire_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     """``OP_REGION_FIELD_*`` picks where values are READ from; the wire
     keys and values are identical to a stock deployment's."""

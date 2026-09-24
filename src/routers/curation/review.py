@@ -350,10 +350,15 @@ async def review_queue(
         item = serialize_item(src, h.get('_id', ''))
         # Review-only extras on top of the shared wire item.
         item['reason'] = reason
-        item['proposed_class_id'] = src.get('vlm_proposed_class_id') or src.get('class_id')
-        item['proposed_class_name'] = (
-            src.get('vlm_proposed_class') or src.get('vlm_raw_class') or src.get('class_name') or ''
-        )
+        # The VLM suggestion when there is one (same values as
+        # vlm_proposed_class_*, so a new-class proposal carries no id),
+        # else the item's current class / raw unmatched VLM answer.
+        if item['vlm_proposed_class_name'] is not None:
+            item['proposed_class_id'] = item['vlm_proposed_class_id']
+            item['proposed_class_name'] = item['vlm_proposed_class_name']
+        else:
+            item['proposed_class_id'] = src.get('class_id')
+            item['proposed_class_name'] = src.get('vlm_raw_class') or src.get('class_name') or ''
         items.append(item)
     return {
         'total': int(total),
