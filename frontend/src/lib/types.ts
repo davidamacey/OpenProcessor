@@ -469,6 +469,8 @@ export interface CropFilter {
   min_blur_ratio?: number | null;
   /** Mine the low-confidence pool: classifier_raw_confidence < this OR no v6 box. */
   classifier_conf_lt?: number | null;
+  /** Crops permanently dismissed from every /review queue via {API_PREFIX}/crops/{id}/review_dismiss. */
+  review_dismissed?: boolean;
 }
 
 export interface ClusterFilter {
@@ -490,8 +492,10 @@ export interface BulkLabelConflict {
 
 export interface BulkLabelResult {
   // Matches the FastAPI handler at src/routers/curation/crops.py:
-  //   batch_label_crops -> { updated: int, conflicts: [...] }.
+  //   batch_label_crops -> { updated: int, updated_ids: [...], conflicts: [...] }.
+  // `move` (POST {API_PREFIX}/crops/move) returns the same shape.
   updated: number;
+  updated_ids: string[];
   conflicts: BulkLabelConflict[];
 }
 

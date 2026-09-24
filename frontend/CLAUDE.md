@@ -257,35 +257,35 @@ Global:
 
 `/clusters/[id]`:
 
-| Key           | Action                                                |
-| ------------- | ----------------------------------------------------- |
-| `Enter`       | Confirm selected to the chosen class + advance        |
-| `Shift+Enter` | Accept all VLM suggestions on the page                |
-| `G`           | Accept the VLM suggestion for selected                |
-| `N`           | Skip + advance                                        |
-| `Shift+N`     | Flag selected as needing a new class (curator review) |
-| `D`           | Discard (unlabel) selected                            |
-| `Z`           | Undo last label action                                |
-| `X`           | Ignore selected (exclude from training + clustering)  |
-| `U`           | Undo last ignore                                      |
-| `A`           | Select all on page                                    |
-| `←` / `→`     | Move the selection by one crop (not page nav)         |
-| `M`           | Move selected to another cluster…                     |
-| `Esc`         | Clear drag capture / close picker / clear selection   |
+| Key           | Action                                                                                           |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| `Enter`       | Confirm selected to the chosen class + advance                                                   |
+| `Shift+Enter` | Accept all VLM suggestions on the page                                                           |
+| `G`           | Accept the VLM suggestion for selected                                                           |
+| `N`           | Skip + advance                                                                                   |
+| `Shift+N`     | Flag selected as needing a new class (curator review)                                            |
+| `D`           | Discard selected (`POST {API_PREFIX}/crops/{id}/discard`, or `discard_batch` for a multi-select) |
+| `Z`           | Undo last label action, including a discard                                                      |
+| `X`           | Ignore selected (exclude from training + clustering)                                             |
+| `U`           | Undo last ignore                                                                                 |
+| `A`           | Select all on page                                                                               |
+| `←` / `→`     | Move the selection by one crop (not page nav)                                                    |
+| `M`           | Move selected to another cluster…                                                                |
+| `Esc`         | Clear drag capture / close picker / clear selection                                              |
 
 `/review`:
 
-| Key             | Action                                                                                                                                |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `Enter`         | Confirm proposed + advance; opens the class picker instead when there's no proposal (plates tab: confirm plate)                       |
-| `/`             | Open the fuzzy-search class picker (all non-deprecated classes, not just the top-10 quick-assign row). Not offered on the plates tab. |
-| `D`             | Discard — dismiss from every review queue, **permanent** (plates tab: reject — no plate visible)                                      |
-| `N`             | Skip                                                                                                                                  |
-| `Z`             | Undo last                                                                                                                             |
-| `←` / `→`       | Previous / next item (plates tab `←` / `B`: step back)                                                                                |
-| `F`             | Plates tab: mark false positive (box kept)                                                                                            |
-| `E`             | Plates tab: enter bbox edit mode                                                                                                      |
-| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                                                        |
+| Key             | Action                                                                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Enter`         | Confirm proposed + advance; opens the class picker instead when there's no proposal (plates tab: confirm plate)                                                                      |
+| `/`             | Open the fuzzy-search class picker (all non-deprecated classes, not just the top-10 quick-assign row). Not offered on the plates tab.                                                |
+| `D`             | Discard — dismiss from every review queue. Reversible via the "Dismissed" panel (`POST {API_PREFIX}/crops/{id}/review_undismiss`), not via Z (plates tab: reject — no plate visible) |
+| `N`             | Skip                                                                                                                                                                                 |
+| `Z`             | Undo last                                                                                                                                                                            |
+| `←` / `→`       | Previous / next item (plates tab `←` / `B`: step back)                                                                                                                               |
+| `F`             | Plates tab: mark false positive (box kept)                                                                                                                                           |
+| `E`             | Plates tab: enter bbox edit mode                                                                                                                                                     |
+| `Enter` / `Esc` | Plates tab, edit mode: save bbox / cancel edit                                                                                                                                       |
 
 ### Slot-generic review tabs (P2.8b/P2.8c, docs/genericization-plan-2026-09-13.md §9.5;
 

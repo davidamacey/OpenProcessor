@@ -21,6 +21,7 @@ import { mapCropSlots } from './annotations/cropSlots';
 import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
 import type { DatasetExportSpec } from './annotations/datasetExport';
 import type {
+  BulkLabelConflict,
   BulkLabelResult,
   ClusterFilter,
   CropFilter,
@@ -1458,14 +1459,57 @@ export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promi
   return mapRawCrop(raw);
 }
 
-/** Remove a crop's label. The backend restores its prior snapshot, or
- *  clears the label when it has none. */
-export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<void> {
-  return apiFetch<void>(
-    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label`,
-    { method: 'DELETE' },
+/** Options shared by the single and batch discard endpoints. */
+export interface DiscardOptions {
+  /** Clear the crop's class (it doesn't belong where it is). Default true. */
+  clear_class?: boolean;
+  /** Also stamp review_dismissed_at, so it never resurfaces in /review. Default false. */
+  dismiss_from_review?: boolean;
+}
+
+/**
+ * Discard a single crop. Recorded like a label write, so
+ * `POST /crops/{id}/label/undo` reverses it — callers should push an
+ * undo entry for the crop on success.
+ */
+export async function discardCrop(
+  cropId: string,
+  opts: DiscardOptions = {},
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/discard`,
+    { method: 'POST', body: JSON.stringify(opts) },
     signal,
   );
+  return mapRawCrop(raw);
+}
+
+export interface DiscardBatchResult {
+  items: Crop[];
+  discarded: number;
+  conflicts: BulkLabelConflict[];
+  not_found: string[];
+}
+
+/** Bulk variant of `discardCrop`. `items` carries only the crops actually
+ *  discarded — conflicted/not-found ids are reported separately. */
+export async function discardCropsBatch(
+  cropIds: string[],
+  opts: DiscardOptions = {},
+  signal?: AbortSignal,
+): Promise<DiscardBatchResult> {
+  const raw = await apiFetch<{
+    items: RawCrop[];
+    discarded: number;
+    conflicts: BulkLabelConflict[];
+    not_found: string[];
+  }>(
+    `${API_PREFIX}/crops/discard_batch`,
+    { method: 'POST', body: JSON.stringify({ crop_ids: cropIds, ...opts }) },
+    signal,
+  );
+  return { ...raw, items: raw.items.map(mapRawCrop) };
 }
 
 /**
@@ -1473,9 +1517,9 @@ export function deleteCropLabel(cropId: string, signal?: AbortSignal): Promise<v
  *
  * Stamps ``review_dismissed_at`` + ``review_dismissed_by='human'`` on
  * the crop. The server's review_queue handler must_not's any crop with
- * ``review_dismissed_at``, so dismissed crops never reappear (until a
- * future un-dismiss endpoint is added). The crop's class / plate state
- * is left intact — only review visibility changes.
+ * ``review_dismissed_at``, so dismissed crops never reappear until
+ * `reviewUndismissCrop` clears it. The crop's class / plate state is
+ * left intact — only review visibility changes.
  */
 export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise<void> {
   return apiFetch<void>(
@@ -1483,6 +1527,36 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
     { method: 'POST' },
     signal,
   );
+}
+
+/** Reverses `reviewDismissCrop`, returning the restored item. */
+export async function reviewUndismissCrop(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/review_undismiss`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
+/**
+ * Dismiss the VLM's proposed class on a crop ("reject VLM suggestion").
+ * The backend clears `vlm_proposed_class_*` and returns the updated
+ * item. `409` means the crop had no suggestion to dismiss.
+ */
+export async function vlmDismissCrop(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/vlm_dismiss`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
 }
 
 /**

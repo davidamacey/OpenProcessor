@@ -232,7 +232,7 @@
         searchSel.clear();
         try {
           const res = await bulkLabel(ids, cls.id);
-          undoStore.recordWrites(ids, res.conflicts ?? []);
+          undoStore.recordWrites(res.updated_ids);
           const conflicts = res.conflicts?.length ?? 0;
           if (conflicts > 0) {
             toastStore.warn(

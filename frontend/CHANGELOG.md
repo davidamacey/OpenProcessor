@@ -31,6 +31,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   store and eight helper modules. The build fails if the score drops
   below its current level.
 
+### Changed
+
+- Label writes, undo and discard now match OpenProcessor `main`
+  (`d037be8`, see `docs/design/logic-moves-adoption-plan-2026-09-24.md`
+  W1):
+  - `bulkLabel`/`moveCropsToCluster` results carry `updated_ids`;
+    `undoStore.recordWrites()` takes that served list directly instead
+    of the request ids minus locally-tracked conflicts.
+  - `/clusters/[id]`'s **D** (discard) now calls
+    `POST {API_PREFIX}/crops/{id}/discard` (or `discard_batch` for a
+    multi-select) instead of `DELETE {API_PREFIX}/crops/{id}/label`, and
+    pushes an undo entry for the server-confirmed ids — Z restores a
+    discarded crop.
+  - Rejecting a VLM suggestion on `/clusters/[id]` calls
+    `POST {API_PREFIX}/crops/{id}/vlm_dismiss` and renders the returned
+    item, instead of only clearing the suggestion locally. A 409 (no
+    suggestion) shows an info toast.
+  - `/review` gets a minimal "Dismissed" panel
+    (`GET {API_PREFIX}/crops?review_dismissed=true` +
+    `POST {API_PREFIX}/crops/{id}/review_undismiss`) so a permanent
+    dismiss (**D**) can be reversed.
+
 ### Removed
 
 - `src/lib/annotations/regionWireContract.test.ts`, replaced by the

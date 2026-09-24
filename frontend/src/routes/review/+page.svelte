@@ -2,7 +2,9 @@
   import {
     cancelSelect,
     reviewDismissCrop,
+    reviewUndismissCrop,
     getCrop,
+    getCrops,
     getReviewQueue,
     getSelectStatus,
     getSourceImageWithBbox,
@@ -49,6 +51,7 @@
   import { isDiverseOverlayAvailable } from '$lib/strategies';
   import type {
     BBoxNorm,
+    Crop,
     DiverseSelection,
     RegistryClass,
     ReviewItem,
@@ -725,12 +728,11 @@
     // must_not filter excludes any crop with that field set. The crop's
     // class / plate state is left intact — this is NOT an unlabel.
     //
-    // Deliberately does NOT push an undoStore entry. Z restores a *label*
-    // (PUT the prior class, or DELETE back to the model suggestion) and
-    // there is no un-dismiss endpoint (openprocessor crops.py says so
-    // outright), so a Z here could not undo the dismissal and would
-    // instead mutate the label: on an unvalidated crop, DELETE clobbers
-    // whatever gemma/v6 had proposed. Dismiss is one-way by design.
+    // Deliberately does NOT push an undoStore entry: Z undoes a *label*
+    // write (PUT the prior class, or restore the model suggestion), which
+    // is a different action from a dismiss. Reversing a dismiss instead
+    // goes through reviewUndismissCrop, surfaced via the "Dismissed"
+    // panel below — see openDismissedPanel/undismiss.
     const item = current;
     const restore = _removeFromQueue(item);
     try {
@@ -739,6 +741,39 @@
     } catch (e) {
       restore();
       toastStore.error(`Discard failed: ${(e as Error).message}`);
+    }
+  }
+
+  // -- dismissed-crops panel (un-dismiss) --------------------------------
+  // Minimal reachable-from-/review surface for reviewUndismissCrop: a
+  // toggleable panel listing crops discard() has dismissed, each with a
+  // Restore action. Loaded lazily (only when opened), not kept in sync
+  // with the live queue.
+  let dismissedPanelOpen = $state<boolean>(false);
+  let dismissedItems = $state<Crop[]>([]);
+  let dismissedLoading = $state<boolean>(false);
+
+  async function toggleDismissedPanel(): Promise<void> {
+    dismissedPanelOpen = !dismissedPanelOpen;
+    if (!dismissedPanelOpen) return;
+    dismissedLoading = true;
+    try {
+      const res = await getCrops({ review_dismissed: true, limit: 60, sort: 'recent' });
+      dismissedItems = res.items;
+    } catch (e) {
+      toastStore.error(`Load dismissed crops failed: ${(e as Error).message}`);
+    } finally {
+      dismissedLoading = false;
+    }
+  }
+
+  async function undismiss(crop: Crop): Promise<void> {
+    try {
+      await reviewUndismissCrop(crop.id);
+      dismissedItems = dismissedItems.filter((c) => c.id !== crop.id);
+      toastStore.success('Restored to review.');
+    } catch (e) {
+      toastStore.error(`Restore failed: ${(e as Error).message}`);
     }
   }
 
@@ -1327,6 +1362,14 @@
       total
     </span>
     <span class="shrink-0 pl-2"><ShortcutsButton /></span>
+    <button
+      type="button"
+      class="ml-2 shrink-0 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+      onclick={toggleDismissedPanel}
+      title="Crops permanently dismissed from review — restore one back into the queue"
+    >
+      Dismissed
+    </button>
     {#if liveNewCount > 0}
       <button
         type="button"
@@ -2031,6 +2074,54 @@
     </span>
   </div>
 </div>
+
+{#if dismissedPanelOpen}
+  <!-- Minimal un-dismiss surface: crops discard() has permanently
+       dismissed from every review queue, each restorable via
+       reviewUndismissCrop. Backdrop click and Esc both close. -->
+  <div
+    class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
+    onclick={() => (dismissedPanelOpen = false)}
+    onkeydown={(e) => e.key === 'Escape' && (dismissedPanelOpen = false)}
+    role="presentation"
+  >
+    <div
+      class="w-full max-w-lg overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+      onclick={(e) => e.stopPropagation()}
+      role="presentation"
+    >
+      <div class="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+        <span class="text-sm font-medium text-zinc-200">Dismissed crops</span>
+        <button
+          type="button"
+          class="text-xs text-zinc-500 hover:text-zinc-300"
+          onclick={() => (dismissedPanelOpen = false)}
+        >
+          close
+        </button>
+      </div>
+      <ul class="max-h-96 overflow-y-auto py-1 text-sm">
+        {#if dismissedLoading}
+          <li class="px-3 py-2 text-zinc-500">Loading…</li>
+        {:else if dismissedItems.length === 0}
+          <li class="px-3 py-2 text-zinc-500">No dismissed crops.</li>
+        {/if}
+        {#each dismissedItems as crop (crop.id)}
+          <li class="flex items-center justify-between gap-2 px-3 py-1.5">
+            <span class="truncate text-zinc-300">{crop.class_name ?? crop.id}</span>
+            <button
+              type="button"
+              class="shrink-0 rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-300"
+              onclick={() => undismiss(crop)}
+            >
+              Restore
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  </div>
+{/if}
 
 {#if pickerOpen}
   <!-- Class picker (P1-4) — fuzzy-search over every non-deprecated class,

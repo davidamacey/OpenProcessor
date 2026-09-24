@@ -64,14 +64,14 @@ describe('undoStore', () => {
     expect(undoStore.stack).toHaveLength(1);
   });
 
-  it('recordWrites() pushes one entry per crop, skipping conflicted crops', () => {
-    undoStore.recordWrites(['a', 'b', 'c'], [{ crop_id: 'b' }]);
-    expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['a', 'c']);
+  it('recordWrites() pushes one entry per served id, in order', () => {
+    undoStore.recordWrites(['a', 'b', 'c']);
+    expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['a', 'b', 'c']);
   });
 
-  it('recordWrites() with no conflicts argument pushes every crop (default is empty, not a sentinel)', () => {
-    undoStore.recordWrites(['x', 'y']);
-    expect(undoStore.stack.map((e) => e.crop_id)).toEqual(['x', 'y']);
+  it('recordWrites() pushes nothing for an empty served list (e.g. every id conflicted)', () => {
+    undoStore.recordWrites([]);
+    expect(undoStore.stack).toHaveLength(0);
   });
 });
 

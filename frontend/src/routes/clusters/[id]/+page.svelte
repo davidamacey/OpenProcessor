@@ -2,8 +2,10 @@
   import { page } from '$app/state';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
+    ApiError,
     bulkLabel,
-    deleteCropLabel,
+    discardCrop,
+    discardCropsBatch,
     excludeCrops,
     flagNeedsNewClass,
     getCluster,
@@ -12,6 +14,7 @@
     refineCluster,
     runVlmOnCluster,
     unexcludeCrops,
+    vlmDismissCrop,
     type ExcludeReason,
   } from '$lib/api';
   import BlurSlider from '$components/BlurSlider.svelte';
@@ -312,7 +315,7 @@
         for (const id of ids) excludedCropIds.add(id);
         try {
           const res = await bulkLabel(ids, cls.id);
-          undoStore.recordWrites(ids, res.conflicts ?? []);
+          undoStore.recordWrites(res.updated_ids);
           const conflicts = res.conflicts?.length ?? 0;
           if (conflicts > 0) {
             // A concurrent worker (typically the VLM worker) beat us on
@@ -471,7 +474,7 @@
         undoStore.recordWrites(ids);
       } else {
         const res = await bulkLabel(ids, classId);
-        undoStore.recordWrites(ids, res.conflicts ?? []);
+        undoStore.recordWrites(res.updated_ids);
       }
       toastStore.success(`Labeled ${ids.length} crop${ids.length === 1 ? '' : 's'}.`);
       sel.ids = new Set();
@@ -498,12 +501,19 @@
   }
 
   async function rejectVlmForCrop(crop: Crop): Promise<void> {
-    // Reject = clear the suggestion locally; the server clears on next batch.
-    cropPager.items = cropPager.items.map((c) =>
-      c.id === crop.id
-        ? { ...c, vlm_suggested_class_id: null, vlm_suggested_class_name: null }
-        : c,
-    );
+    // Reject = dismiss the VLM's proposed class on the server
+    // (POST {API_PREFIX}/crops/{id}/vlm_dismiss) and render the item it
+    // returns. A 409 means there was already nothing to dismiss.
+    try {
+      const item = await vlmDismissCrop(crop.id);
+      cropPager.items = cropPager.items.map((c) => (c.id === crop.id ? item : c));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        toastStore.info('No VLM suggestion to reject.');
+        return;
+      }
+      toastStore.error(`Reject VLM suggestion failed: ${(e as Error).message}`);
+    }
   }
 
   async function acceptAllVlmOnPage(): Promise<void> {
@@ -536,7 +546,7 @@
     for (const [k, ids] of groups) {
       try {
         const res = await bulkLabel(ids, k);
-        undoStore.recordWrites(ids, res.conflicts ?? []);
+        undoStore.recordWrites(res.updated_ids);
         ok += ids.length;
       } catch (e) {
         lastError = (e as Error).message;
@@ -955,31 +965,38 @@
       async () => {
         const ids = [...sel.ids];
         if (ids.length === 0) return;
-        // No undo entry: the backend's DELETE /label is itself an undo of
-        // the crop's last human write, not a recorded write Z can reverse.
-        const succeeded: string[] = [];
-        const failed: string[] = [];
+        // Discard is recorded like a label write, so it's reversible via
+        // Z (POST {API_PREFIX}/crops/{id}/label/undo) — record undo
+        // entries for exactly the ids the server actually discarded.
+        let succeededIds: string[] = [];
+        let failedCount = 0;
         let lastError: string | null = null;
-        for (const id of ids) {
-          try {
-            await deleteCropLabel(id);
-            succeeded.push(id);
-          } catch (e) {
-            lastError = (e as Error).message;
-            failed.push(id);
+        try {
+          if (ids.length === 1) {
+            await discardCrop(ids[0]!);
+            succeededIds = [ids[0]!];
+          } else {
+            const res = await discardCropsBatch(ids);
+            succeededIds = res.items.map((c) => c.id);
+            failedCount = ids.length - succeededIds.length;
           }
+        } catch (e) {
+          lastError = (e as Error).message;
+          failedCount = ids.length;
         }
-        const succeededSet = new Set(succeeded);
+        const succeededSet = new Set(succeededIds);
         cropPager.items = cropPager.items.filter((c) => !succeededSet.has(c.id));
-        for (const id of succeeded) excludedCropIds.add(id);
-        // Keep the failures visible and selected so the operator can retry.
-        sel.ids = new Set(failed);
-        if (succeeded.length > 0) {
-          toastStore.success(`Discarded ${succeeded.length}.`);
+        for (const id of succeededIds) excludedCropIds.add(id);
+        undoStore.recordWrites(succeededIds);
+        // Keep whatever didn't succeed visible and selected so the
+        // operator can retry.
+        sel.ids = new Set(ids.filter((id) => !succeededSet.has(id)));
+        if (succeededIds.length > 0) {
+          toastStore.success(`Discarded ${succeededIds.length}. Press Z to undo.`);
         }
-        if (failed.length > 0) {
+        if (failedCount > 0) {
           toastStore.error(
-            `${failed.length} discard(s) failed — still selected${lastError ? `: ${lastError}` : '.'}`,
+            `${failedCount} discard(s) failed — still selected${lastError ? `: ${lastError}` : '.'}`,
           );
         }
       },

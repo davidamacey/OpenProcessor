@@ -53,15 +53,14 @@ class UndoStore {
   }
 
   /**
-   * Record the crops a human class write just landed on. Call only after
-   * the server confirmed the write, and leave out conflicted crops: an
-   * entry for a crop the write never reached would make Z undo an older,
-   * unrelated write.
+   * Record the crops a human class write just landed on. Call with the
+   * server's own `updated_ids` (never the request ids minus conflicts
+   * computed locally) — the served list is the only authoritative record
+   * of which crops the write actually reached.
    */
-  recordWrites(cropIds: string[], conflicts: Array<{ crop_id: string }> = []): void {
-    const blocked = new Set(conflicts.map((c) => c.crop_id));
+  recordWrites(updatedIds: string[]): void {
     const at = Date.now();
-    for (const id of cropIds) if (!blocked.has(id)) this.push({ crop_id: id, at });
+    for (const id of updatedIds) this.push({ crop_id: id, at });
   }
 
   /**

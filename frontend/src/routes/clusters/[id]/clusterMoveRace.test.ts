@@ -327,7 +327,7 @@ describe('wiring: /clusters/[id] +page.svelte actually uses the exclusion set', 
 
   it('the discard (D) hotkey handler claims successfully-discarded ids', () => {
     expect(src).toMatch(
-      /cropPager\.items = cropPager\.items\.filter\(\(c\) => !succeededSet\.has\(c\.id\)\);\s*\n\s*for \(const id of succeeded\) excludedCropIds\.add\(id\)/,
+      /cropPager\.items = cropPager\.items\.filter\(\(c\) => !succeededSet\.has\(c\.id\)\);\s*\n\s*for \(const id of succeededIds\) excludedCropIds\.add\(id\)/,
     );
   });
 
