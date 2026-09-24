@@ -189,8 +189,17 @@ class FakeIngestOpenSearch:
             responses.append({'hits': {'hits': hits[:1]}})
         return {'responses': responses}
 
-    async def mget(self, *, body: dict[str, Any], index: str) -> dict[str, Any]:  # noqa: ARG002
-        ids = body['ids']
+    async def mget(
+        self,
+        *,
+        body: dict[str, Any],
+        index: str | None = None,  # noqa: ARG002
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
+        # Two shapes land here: occ_upsert_bulk's own {'ids': [...]} calls,
+        # and mget_crops' {'docs': [{'_id':..., '_index':...}, ...]} shape
+        # (occ_update_bulk, F-26 Phase 2).
+        ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
         docs = []
         for doc_id in ids:
             if doc_id in self.items:
@@ -276,7 +285,13 @@ class FakeIngestOpenSearch:
         self._seq[id] = current_seq + 1
         return {'_id': id, 'result': 'updated', '_seq_no': self._seq[id], '_primary_term': 1}
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(
+        self,
+        *,
+        index: str,  # noqa: ARG002
+        id: str,  # noqa: A002
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
         return {
             '_id': id,
             '_source': self.items.get(id, {}),

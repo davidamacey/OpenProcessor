@@ -494,7 +494,9 @@ async def occ_upsert_bulk(
         return result
 
     ids = [doc[id_field] for doc in docs]
-    mget_resp = await client.mget(body={'ids': ids}, index=index)
+    mget_resp = await client.mget(
+        body={'ids': ids}, index=index, _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES
+    )
     by_id: dict[str, dict[str, Any]] = {item['_id']: item for item in mget_resp.get('docs', [])}
 
     create_actions: list[dict[str, Any]] = []
@@ -543,41 +545,63 @@ async def occ_upsert_bulk(
     # Resolve create-conflicts by re-fetching and joining the update list.
     if create_conflict_ids:
         id_to_doc = {doc[id_field]: doc for doc in create_docs}
-        refetch = await client.mget(body={'ids': sorted(create_conflict_ids)}, index=index)
+        refetch = await client.mget(
+            body={'ids': sorted(create_conflict_ids)},
+            index=index,
+            _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+        )
         update_targets.extend(
             (id_to_doc[item['_id']], item)
             for item in refetch.get('docs', []) or []
             if item.get('found') and item['_id'] in id_to_doc
         )
 
-    # Phase 2: per-doc OCC updates (single bulk would lose per-doc
-    # if_seq_no/if_primary_term semantics — bulk update supports those
-    # in newer OS, but per-doc keeps the conflict-retry logic clean).
-    for new_doc, existing in update_targets:
-        doc_id = new_doc[id_field]
-        source = existing.get('_source') or {}
-        seq_no = int(existing.get('_seq_no', 0))
-        primary_term = int(existing.get('_primary_term', 1))
+    # Phase 2: batched OCC updates (F-26) — one occ_update_bulk call
+    # (one mget page + one bulk, retrying 409s once) instead of one
+    # client.update per doc. Local import: occ_bulk.py imports FROM this
+    # module (ITEMS_INDEX / OCC_BULK_*), so importing it back at module
+    # level here would cycle.
+    if update_targets:
+        from src.clients.occ_bulk import occ_update_bulk
 
-        merged, preserved_fields = _merge_preserving_human(
-            new_doc=new_doc,
-            existing=source,
-            human_field_guards=human_field_guards,
-        )
-        filled = _apply_fill_if_absent(merged, source, fill_if_absent)
+        new_doc_by_id = {doc[id_field]: doc for doc, _existing in update_targets}
+        # merge_fn is re-invoked per retry round with the freshest source,
+        # so this always reflects the merge that actually got written (or
+        # was last attempted) for each id.
+        merge_effects: dict[str, tuple[list[str], bool]] = {}
 
-        attempt = 0
-        max_retries = 1
-        while True:
-            try:
-                await client.update(
-                    index=index,
-                    id=doc_id,
-                    body={'doc': merged},
-                    if_seq_no=seq_no,
-                    if_primary_term=primary_term,
-                    refresh=refresh,
-                )
+        def _merge(doc_id: str, source: dict[str, Any]) -> dict[str, Any]:
+            merged, preserved_fields = _merge_preserving_human(
+                new_doc=new_doc_by_id[doc_id],
+                existing=source,
+                human_field_guards=human_field_guards,
+            )
+            filled = _apply_fill_if_absent(merged, source, fill_if_absent)
+            merge_effects[doc_id] = (preserved_fields, filled)
+            return merged
+
+        try:
+            status_map = await occ_update_bulk(
+                client,
+                index=index,
+                ids=list(new_doc_by_id),
+                merge_fn=_merge,
+                max_retries=1,
+                refresh=refresh,
+            )
+        except Exception as exc:
+            logger.warning(
+                'legacy_ingest_upsert_bulk_update_failed',
+                writer_id=writer_id,
+                n=len(new_doc_by_id),
+                error=str(exc),
+            )
+            status_map = {}
+
+        for doc_id in new_doc_by_id:
+            status = status_map.get(doc_id)
+            if status == 'updated':
+                preserved_fields, filled = merge_effects.get(doc_id, ([], False))
                 result['updated'] += 1
                 for field in preserved_fields:
                     # Per-field counter — Grafana panels can break down
@@ -587,48 +611,15 @@ async def occ_upsert_bulk(
                 result['preserved_human'] += len(preserved_fields)
                 if filled:
                     result['filled_absent'] += 1
-                break
-            except Exception as exc:
-                err_type = type(exc).__name__
-                is_conflict = 'Conflict' in err_type or '409' in str(exc)
-                if not is_conflict:
-                    logger.warning(
-                        'legacy_ingest_upsert_update_error',
-                        doc_id=doc_id,
-                        writer_id=writer_id,
-                        error=str(exc),
-                    )
-                    break
-                if attempt >= max_retries:
-                    LEGACY_INGEST_OCC_FINAL_CONFLICT.inc()
-                    result['final_conflicts'] += 1
-                    logger.info(
-                        'legacy_ingest_upsert_final_conflict',
-                        doc_id=doc_id,
-                        writer_id=writer_id,
-                    )
-                    break
-                attempt += 1
-                # Re-fetch to pick up the concurrent writer's changes,
-                # then re-apply our merge so we never clobber the labeler.
-                try:
-                    fresh = await client.get(index=index, id=doc_id)
-                except Exception as fetch_exc:
-                    logger.warning(
-                        'legacy_ingest_upsert_refetch_failed',
-                        doc_id=doc_id,
-                        error=str(fetch_exc),
-                    )
-                    break
-                source = fresh.get('_source') or {}
-                seq_no = int(fresh.get('_seq_no', 0))
-                primary_term = int(fresh.get('_primary_term', 1))
-                merged, preserved_fields = _merge_preserving_human(
-                    new_doc=new_doc,
-                    existing=source,
-                    human_field_guards=human_field_guards,
-                )
-                filled = _apply_fill_if_absent(merged, source, fill_if_absent)
+            elif status == 'conflict-exhausted':
+                # occ_update_bulk folds genuine (non-conflict) item errors
+                # into this same status — logged distinctly there via
+                # curation_occ_update_bulk_item_error.
+                LEGACY_INGEST_OCC_FINAL_CONFLICT.inc()
+                result['final_conflicts'] += 1
+                logger.info('legacy_ingest_upsert_final_conflict', doc_id=doc_id, writer_id=writer_id)
+            else:
+                logger.warning('legacy_ingest_upsert_refetch_failed', doc_id=doc_id, error=status)
 
     return result
 
