@@ -290,6 +290,19 @@ class AsyncTritonPool:
             self._stats.active_requests -= 1
             self._semaphore.release()
 
+    async def get_model_output_names(self, model_name: str, timeout: float = 10.0) -> list[str]:
+        """Output tensor names from the model's Triton metadata.
+
+        Lets callers request an optional output (e.g. a detector's
+        backbone feature map) only when the loaded model actually has it.
+        Raises on any Triton error — callers decide how to degrade.
+        """
+        if not self._initialized:
+            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
+        client = self._clients[await self._get_client_index()]
+        metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
+        return [str(out.get('name', '')) for out in metadata.get('outputs', [])]
+
     async def infer_batch(
         self,
         model_name: str,

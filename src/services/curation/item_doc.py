@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.config.curation import BACKBONE_EMBEDDING_FIELD
 from src.services.detection.cascade_detect import class_provenance
 
 
@@ -33,6 +34,7 @@ class DetectedItem:
     class_source: str = 'unlabeled_proposal'
     proposal_name: str | None = None
     pe_embedding: Any | None = None  # np.ndarray | None, kept loose to avoid a numpy import here
+    backbone_embedding: Any | None = None  # np.ndarray | None — BACKBONE_EMBEDDING_FIELD
     cluster_id: int | None = None
     cluster_distance: float | None = None
     # Model name + version of whichever detector last set this item's
@@ -135,6 +137,8 @@ def build_item_doc(
         doc['cluster_distance'] = item.cluster_distance
     if item.pe_embedding is not None:
         doc['pe_embedding'] = list(item.pe_embedding)
+    if item.backbone_embedding is not None:
+        doc[BACKBONE_EMBEDDING_FIELD] = [float(x) for x in item.backbone_embedding]
     if item.class_detector:
         doc.update(
             class_provenance(

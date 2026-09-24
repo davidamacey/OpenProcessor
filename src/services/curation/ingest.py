@@ -49,7 +49,7 @@ Sibling modules, split out of this one to keep each to one concern:
   implementation: one msearch dedup, one batched decode, **one batched
   Triton call per detector per ``batch_limit`` chunk** (not one per
   image), the results fed back into ``ingest_one`` through its
-  ``prefilled_image`` / ``prefilled_items`` / ``prefilled_secondary_raw``
+  ``prefilled_image`` / ``prefilled_items`` / ``prefilled_secondary``
   arguments, plus optional companion-YOLO-label import.
 """
 
@@ -68,7 +68,11 @@ from src.config import get_curation_config
 from src.core.logging import get_logger, get_request_id
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.event_hub import publish_crop_created
-from src.services.curation.ingest_detect import SECONDARY_IOU_MATCH, WholeImageDetector
+from src.services.curation.ingest_detect import (
+    SECONDARY_IOU_MATCH,
+    SecondaryOutput,
+    WholeImageDetector,
+)
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.item_doc import DetectedItem, build_image_doc, build_item_doc
 from src.services.curation.source_image_cache import write_crop_cache
@@ -187,6 +191,7 @@ class CurationIngestService:
             registry=registry,
             profile=profile,
             secondary_profile=secondary_profile,
+            backbone_embedding_dim=self.config.backbone_embedding_dim,
         )
 
     # ------------------------------------------------------------------
@@ -303,7 +308,7 @@ class CurationIngestService:
         *,
         prefilled_image: Image.Image | None = None,
         prefilled_items: list[DetectedItem] | None = None,
-        prefilled_secondary_raw: np.ndarray | None = None,
+        prefilled_secondary: SecondaryOutput | None = None,
     ) -> IngestResult:
         """Run the full pipeline on a single image.
 
@@ -320,8 +325,9 @@ class CurationIngestService:
                 own single-image Triton round-trip. An empty list is
                 meaningful (the detector found nothing) and is *not*
                 treated as "not prefilled".
-            prefilled_secondary_raw: Secondary-detector raw tensor from
-                :meth:`_run_secondary_detector_raw_batch`; same deal.
+            prefilled_secondary: Secondary-detector output (raw tensor
+                plus optional backbone feature map) from
+                :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -379,17 +385,33 @@ class CurationIngestService:
                 )
 
         if self.secondary_profile is not None and items:
-            try:
-                raw = prefilled_secondary_raw
-                if raw is None:
-                    raw = await self.detector.run_secondary_raw(img)
-                if raw is not None:
-                    sec_scale, sec_pad = letterbox_params(
-                        img, target=self.secondary_profile.input_size
+            secondary = prefilled_secondary
+            if secondary is None:
+                try:
+                    secondary = await self.detector.run_secondary_raw(img)
+                except Exception as exc:
+                    logger.warning(
+                        'ingest_secondary_detector_failed', path=image_path, error=str(exc)
                     )
-                    self.detector.resolve_with_secondary(items, raw, sec_scale, sec_pad)
-            except Exception as exc:
-                logger.warning('ingest_secondary_detector_failed', path=image_path, error=str(exc))
+            if secondary is not None:
+                sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
+                # Class override and embedding pooling fail independently —
+                # an NMS failure must not also drop the embeddings.
+                try:
+                    self.detector.resolve_with_secondary(items, secondary.raw, sec_scale, sec_pad)
+                except Exception as exc:
+                    logger.warning(
+                        'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
+                    )
+                if secondary.feature_map is not None:
+                    try:
+                        self.detector.attach_backbone_embeddings(
+                            items, secondary.feature_map, sec_scale, sec_pad
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            'ingest_backbone_embedding_failed', path=image_path, error=str(exc)
+                        )
 
         crops_pil = [self._crop_pil(img, item.bbox_pixel) for item in items]
         try:

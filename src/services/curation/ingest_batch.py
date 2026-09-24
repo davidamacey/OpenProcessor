@@ -42,10 +42,10 @@ from src.services.curation.ingest_models import BatchIngestResult, IngestResult,
 
 
 if TYPE_CHECKING:
-    import numpy as np
     from PIL import Image
 
     from src.services.curation.ingest import CurationIngestService
+    from src.services.curation.ingest_detect import SecondaryOutput
     from src.services.curation.item_doc import DetectedItem
 
 
@@ -60,7 +60,7 @@ async def _prefill_detections(
 ) -> tuple[
     dict[int, Image.Image],
     dict[int, list[DetectedItem]],
-    dict[int, np.ndarray],
+    dict[int, SecondaryOutput],
 ]:
     """Batch-decode ``indices`` and run the whole-image detectors batched.
 
@@ -74,7 +74,7 @@ async def _prefill_detections(
 
     prefilled_imgs: dict[int, Image.Image] = {}
     prefilled_items: dict[int, list[DetectedItem]] = {}
-    prefilled_secondary: dict[int, np.ndarray] = {}
+    prefilled_secondary: dict[int, SecondaryOutput] = {}
     if not indices:
         return prefilled_imgs, prefilled_items, prefilled_secondary
 
@@ -97,13 +97,14 @@ async def _prefill_detections(
         return prefilled_imgs, prefilled_items, prefilled_secondary
 
     detector = service.detector
-    secondary_per: list[np.ndarray | None]
+    secondary_per: list[SecondaryOutput | None]
     try:
         if detector.secondary_profile is not None:
-            items_per, secondary_per = await asyncio.gather(
+            items_per, secondary_batch = await asyncio.gather(
                 detector.run_primary_batch(valid_imgs),
                 detector.run_secondary_raw_batch(valid_imgs),
             )
+            secondary_per = [*secondary_batch]
         else:
             items_per = await detector.run_primary_batch(valid_imgs)
             secondary_per = [None] * len(valid_imgs)
@@ -115,10 +116,10 @@ async def _prefill_detections(
         )
         return prefilled_imgs, {}, {}
 
-    for idx, items, raw in zip(valid_indices, items_per, secondary_per, strict=False):
+    for idx, items, secondary in zip(valid_indices, items_per, secondary_per, strict=False):
         prefilled_items[idx] = items
-        if raw is not None:
-            prefilled_secondary[idx] = raw
+        if secondary is not None:
+            prefilled_secondary[idx] = secondary
     return prefilled_imgs, prefilled_items, prefilled_secondary
 
 
@@ -203,7 +204,7 @@ async def run_ingest_batch(
                 source=source,
                 prefilled_image=prefilled_imgs.get(i),
                 prefilled_items=prefilled_items.get(i),
-                prefilled_secondary_raw=prefilled_secondary.get(i),
+                prefilled_secondary=prefilled_secondary.get(i),
             )
 
     results = list(

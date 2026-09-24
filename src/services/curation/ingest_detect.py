@@ -20,6 +20,16 @@ Two detectors are supported:
   (:func:`~src.services.detection.ensemble_nms.apply_ensemble_nms`).
   Its hits override the primary's class assignment on IoU-matched boxes.
 
+If the secondary model also exposes a backbone feature-map output
+(``DetectionProfile.feature_output``, ``sppf_feat`` by default — the
+second head of ``export/export_detector_dual_head.py``), it is requested
+alongside ``output0`` and RoI-pooled over every item's bbox into the
+items-index backbone embedding
+(:func:`~src.services.detection.geometry.roi_pool_sppf`). Whether the
+model has that output is learned once per model from Triton metadata;
+a model without it, or a pool that can't report outputs, is called
+exactly as a single-head detector.
+
 Each detector exposes a single-image method and a **batched** one. The
 batched variants stack ``N`` letterboxed tensors and issue one Triton
 call per ``batch_limit`` chunk rather than ``N`` single-image
@@ -29,12 +39,19 @@ calls would, so a caller cannot tell which path produced a result.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from src.core.logging import get_logger
 from src.services.curation.item_doc import DetectedItem
-from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square, undo_letterbox
+from src.services.detection.geometry import (
+    iou as _iou_fn,
+    letterbox_to_square,
+    roi_pool_sppf,
+    undo_letterbox,
+)
 
 
 if TYPE_CHECKING:
@@ -51,6 +68,22 @@ if TYPE_CHECKING:
 SECONDARY_IOU_MATCH = 0.3
 
 _END2END_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
+_RAW_OUTPUT = 'output0'
+
+logger = get_logger(__name__)
+
+
+@dataclass
+class SecondaryOutput:
+    """One image's secondary-detector response.
+
+    ``raw`` is the ``(N_anchors, 5 + nc)`` detection tensor (or with a
+    leading batch dim of 1); ``feature_map`` is the ``(C, H, W)`` backbone
+    feature map, or ``None`` when the model does not expose one.
+    """
+
+    raw: np.ndarray
+    feature_map: np.ndarray | None = None
 
 
 class WholeImageDetector:
@@ -63,11 +96,18 @@ class WholeImageDetector:
         registry: ClassRegistry | Any,
         profile: DetectionProfile,
         secondary_profile: DetectionProfile | None = None,
+        backbone_embedding_dim: int = 1024,
     ) -> None:
         self.triton_pool = triton_pool
         self.registry = registry
         self.profile = profile
         self.secondary_profile = secondary_profile
+        self.backbone_embedding_dim = backbone_embedding_dim
+        # model name -> feature output name (None = model has none).
+        # Only definitive probe answers are cached; a failed probe is
+        # retried on the next call.
+        self._feature_outputs: dict[str, str | None] = {}
+        self._warned_feature_dims: set[tuple[str, int]] = set()
 
     # ------------------------------------------------------------------
     # Primary (end2end) detector
@@ -219,36 +259,81 @@ class WholeImageDetector:
     # Secondary (raw-output ensemble) detector
     # ------------------------------------------------------------------
 
-    async def run_secondary_raw(self, img: Image.Image) -> np.ndarray | None:
+    async def secondary_feature_output(self) -> str | None:
+        """Name of the secondary model's feature-map output, if it has one.
+
+        Asks Triton once per model (``get_model_output_names`` on the
+        pool) whether ``profile.feature_output`` is among the model's
+        outputs. A pool without that probe, an empty ``feature_output``,
+        or a failing probe all mean "don't request it" — the request is
+        then byte-identical to a single-head detector's.
+        """
+        profile = self.secondary_profile
+        assert profile is not None
+        wanted = profile.feature_output
+        model = profile.detector_model
+        if not wanted:
+            return None
+        if model in self._feature_outputs:
+            return self._feature_outputs[model]
+        probe = getattr(self.triton_pool, 'get_model_output_names', None)
+        if probe is None:
+            self._feature_outputs[model] = None
+            return None
+        try:
+            names = await probe(model)
+        except Exception as exc:
+            logger.warning('ingest_feature_output_probe_failed', model=model, error=str(exc))
+            return None
+        found = wanted if wanted in names else None
+        self._feature_outputs[model] = found
+        logger.info('ingest_secondary_feature_output', model=model, feature_output=found)
+        return found
+
+    def _secondary_outputs(self, feature: str | None) -> list[Any]:
+        from tritonclient.grpc import InferRequestedOutput
+
+        names = [_RAW_OUTPUT] if feature is None else [_RAW_OUTPUT, feature]
+        return [InferRequestedOutput(name) for name in names]
+
+    async def run_secondary_raw(self, img: Image.Image) -> SecondaryOutput:
         """Run the secondary (raw-output) ensemble detector on one image."""
-        from tritonclient.grpc import InferInput, InferRequestedOutput
+        from tritonclient.grpc import InferInput
 
         profile = self.secondary_profile
         assert profile is not None
+        feature = await self.secondary_feature_output()
         chw, _scale, _pad = letterbox_to_square(
             img, target=profile.input_size, fill=profile.letterbox_fill
         )
         inp = InferInput('images', list(chw.shape), 'FP32')
         inp.set_data_from_numpy(chw)
-        outs = [InferRequestedOutput('output0')]
-        result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
-        return result.as_numpy('output0')
+        result = await self.triton_pool.infer(
+            profile.detector_model, [inp], outputs=self._secondary_outputs(feature)
+        )
+        return SecondaryOutput(
+            raw=result.as_numpy(_RAW_OUTPUT),
+            feature_map=result.as_numpy(feature)[0] if feature is not None else None,
+        )
 
-    async def run_secondary_raw_batch(self, imgs: list[Image.Image]) -> list[np.ndarray | None]:
+    async def run_secondary_raw_batch(self, imgs: list[Image.Image]) -> list[SecondaryOutput]:
         """Batched variant of :meth:`run_secondary_raw`.
 
         One Triton call per ``batch_limit`` chunk instead of one per
-        image. Returns each image's raw ``(N_anchors, 5 + nc)`` slice,
+        image. Returns each image's raw ``(N_anchors, 5 + nc)`` slice
+        (plus its ``(C, H, W)`` feature map when the model has one),
         index-aligned with ``imgs``; client-side NMS still runs per image
         in :meth:`resolve_with_secondary` because each image's item list
         is enriched independently.
         """
         if not imgs:
             return []
-        from tritonclient.grpc import InferInput, InferRequestedOutput
+        from tritonclient.grpc import InferInput
 
         profile = self.secondary_profile
         assert profile is not None
+        feature = await self.secondary_feature_output()
+        outs = self._secondary_outputs(feature)
 
         chws: list[np.ndarray] = []
         for img in imgs:
@@ -258,15 +343,19 @@ class WholeImageDetector:
             chws.append(chw[0])
         full_batch = np.stack(chws, axis=0)
 
-        outs = [InferRequestedOutput('output0')]
-        rows: list[np.ndarray | None] = []
+        rows: list[SecondaryOutput] = []
         step = max(1, profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
             inp = InferInput('images', list(chunk.shape), 'FP32')
             inp.set_data_from_numpy(chunk)
             result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
-            rows.extend(result.as_numpy('output0'))
+            raws = result.as_numpy(_RAW_OUTPUT)
+            fmaps = result.as_numpy(feature) if feature is not None else None
+            rows.extend(
+                SecondaryOutput(raw=raws[i], feature_map=fmaps[i] if fmaps is not None else None)
+                for i in range(raws.shape[0])
+            )
         return rows[: len(imgs)]
 
     def resolve_with_secondary(
@@ -316,5 +405,57 @@ class WholeImageDetector:
             item.class_detector_version = profile.detector_version
             item.score = sec_score
 
+    def attach_backbone_embeddings(
+        self,
+        items: list[DetectedItem],
+        feature_map: np.ndarray,
+        scale: float,
+        pad: tuple[float, float],
+    ) -> None:
+        """RoI-pool the secondary's backbone feature map over every item.
 
-__all__ = ['SECONDARY_IOU_MATCH', 'WholeImageDetector']
+        Each item's full-image bbox is mapped into the secondary's
+        letterbox space (``scale``/``pad`` from its own letterbox) and
+        pooled to ``backbone_embedding_dim`` — the items-index mapping's
+        dimension. A map with fewer channels is zero-padded (lossless for
+        cosine similarity); one with *more* channels is refused rather
+        than truncated, since a truncated vector would silently mean
+        something else — the field is then left unset for these items.
+        """
+        profile = self.secondary_profile
+        assert profile is not None
+        dim = self.backbone_embedding_dim
+        if feature_map.ndim != 3:
+            logger.error(
+                'ingest_backbone_feature_map_bad_shape',
+                model=profile.detector_model,
+                shape=list(feature_map.shape),
+            )
+            return
+        channels = int(feature_map.shape[0])
+        if channels != dim:
+            key = (profile.detector_model, channels)
+            if key not in self._warned_feature_dims:
+                self._warned_feature_dims.add(key)
+                log = logger.error if channels > dim else logger.warning
+                log(
+                    'ingest_backbone_feature_dim_mismatch',
+                    model=profile.detector_model,
+                    feature_channels=channels,
+                    backbone_embedding_dim=dim,
+                    action='skipped' if channels > dim else 'zero_padded',
+                )
+            if channels > dim:
+                return
+        pad_w, pad_h = pad
+        for item in items:
+            x1, y1, x2, y2 = item.bbox_pixel
+            item.backbone_embedding = roi_pool_sppf(
+                feature_map,
+                (x1 * scale + pad_w, y1 * scale + pad_h, x2 * scale + pad_w, y2 * scale + pad_h),
+                input_size=profile.input_size,
+                target_dim=dim,
+            )
+
+
+__all__ = ['SECONDARY_IOU_MATCH', 'SecondaryOutput', 'WholeImageDetector']
