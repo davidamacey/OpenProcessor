@@ -140,3 +140,85 @@ def test_plate_cluster_status_and_fp_centroid_status_are_reachable(
     assert resp.status_code == 200
     resp2 = client.get('/curation/regions/fp_centroids/status')
     assert resp2.status_code == 200
+
+
+class _FakeFpSearchOS:
+    """Fake OS for the suspected-FP scoring path (F-1): one page of embedding
+    hits via ``search``/``scroll``, then ``mget`` to hydrate item fields for
+    the scored page. Records the exact ``mget`` kwargs so the test can assert
+    the fix uses ``_source_excludes=`` rather than the broken ``_source={...}``
+    form (opensearch-py stringifies a dict ``_source`` into the query param,
+    which OpenSearch then reads as an include pattern matching nothing).
+    """
+
+    def __init__(self, embedding: list[float]) -> None:
+        self._embedding = embedding
+        self.mget_calls: list[dict[str, Any]] = []
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {
+            '_scroll_id': 'scroll-1',
+            'hits': {'hits': [{'_id': 'crop-fp-1', '_source': {F.embedding: self._embedding}}]},
+        }
+
+    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:  # noqa: ARG002
+        return {'_scroll_id': None, 'hits': {'hits': []}}
+
+    async def clear_scroll(self, *, scroll_id: str) -> None:  # noqa: ARG002
+        return None
+
+    async def mget(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+        self.mget_calls.append({'index': index, 'body': body, **kw})
+        return {
+            'docs': [
+                {
+                    '_id': cid,
+                    'found': True,
+                    '_source': {'image_path': '/x.jpg', 'class_name': 'thing'},
+                }
+                for cid in body['ids']
+            ]
+        }
+
+
+def test_suspected_false_positives_mget_uses_source_excludes_kwarg(
+    app_client_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-1 regression: the mget call must pass ``_source_excludes=`` (a real
+    opensearch-py kwarg), not ``_source={'excludes': [...]}`` (silently
+    stringified into a useless include pattern -> every item comes back with
+    an empty ``_source``).
+    """
+    import numpy as np
+
+    from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
+    from src.services.detection.fp_store import FalsePositiveCentroidStore
+
+    def _fake_init(self: Any) -> None:
+        self.metadata = {'subids': ['a']}
+
+    monkeypatch.setattr(FalsePositiveCentroidStore, '__init__', _fake_init)
+    monkeypatch.setattr(FalsePositiveCentroidStore, 'load', lambda _self: True)
+    monkeypatch.setattr(
+        FalsePositiveCentroidStore,
+        'search',
+        lambda _self, embs: (np.zeros(len(embs), dtype=np.float32), np.zeros(len(embs), dtype=int)),
+    )
+
+    fake_os = _FakeFpSearchOS(embedding=[0.1] * 8)
+    client = app_client_factory(fake_os)
+
+    resp = client.get('/curation/regions/suspected_false_positives')
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body['centroids_built'] is True
+    assert body['total'] == 1
+
+    assert len(fake_os.mget_calls) == 1
+    call = fake_os.mget_calls[0]
+    assert '_source_excludes' in call
+    assert call['_source_excludes'] == _REGION_SOURCE_EXCLUDES
+    assert '_source' not in call
+
+    # And the fix actually restores non-empty item fields end-to-end.
+    assert body['items'][0]['image_path'] == '/x.jpg'

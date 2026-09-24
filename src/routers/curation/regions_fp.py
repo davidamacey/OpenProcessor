@@ -327,7 +327,7 @@ async def suspected_false_positives(
         docs = await opensearch.mget(
             index=CURATION_ITEMS_INDEX,
             body={'ids': ids},
-            _source={'excludes': _REGION_SOURCE_EXCLUDES},
+            _source_excludes=_REGION_SOURCE_EXCLUDES,
         )
         by_id = {d['_id']: (d.get('_source') or {}) for d in docs['docs'] if d.get('found')}
         for d, cid, sub in page_slice:
