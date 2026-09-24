@@ -123,6 +123,10 @@ class ItemDoc(BaseModel):
     region_text_vlm: str | None = None
     region_text_ocr: str | None = None
     region_text_disagreement: bool | None = None
+    # Why the chosen region_text won, and why the VLM's reading (kept in
+    # region_text_vlm) was rejected as not text; see GET /regions/vocabulary.
+    region_text_choice: str | None = None
+    region_text_vlm_invalid: str | None = None
     # Human validation only (a human confirmed / drew / rejected it).
     region_validated: bool | None = None
     # The worker's auto-confirm policy accepted the box: an accepted but

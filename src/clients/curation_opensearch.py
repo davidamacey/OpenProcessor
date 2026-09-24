@@ -240,6 +240,8 @@ def _region_text_reader_mapping() -> dict[str, Any]:
         F.text_vlm: {'type': 'keyword'},
         F.text_ocr: {'type': 'keyword'},
         F.text_disagreement: {'type': 'boolean'},
+        F.text_choice: {'type': 'keyword'},
+        F.text_vlm_invalid: {'type': 'keyword'},
     }
 
 

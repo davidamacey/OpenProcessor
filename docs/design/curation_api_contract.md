@@ -732,8 +732,8 @@ answered. An empty answer leaves every class field as it was (it is **not**
 carries it in `vlm_raw_class`). Such items appear in the `all` review tab and
 stay out of the VLM selectors for 24 h.
 
-Region keys (40, one per `RegionFields` attribute except `embedding`,
-`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_candidate_bbox_norm`, `region_candidate_score`, `region_candidate_detector`, `region_candidate_detector_version`, `region_candidate_source`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
+Region keys (42, one per `RegionFields` attribute except `embedding`,
+`prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_text_choice`, `region_text_vlm_invalid`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_candidate_bbox_norm`, `region_candidate_score`, `region_candidate_detector`, `region_candidate_detector_version`, `region_candidate_source`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
 
 Derived keys (computed by the serializer, never stored):
 
@@ -809,8 +809,34 @@ fills it is the region profile's `text_reader`
   reading when OCR did not run.
 - `region_text_vlm` / `region_text_ocr`: each reader's own reading
   whenever it produced one (keyword).
-- `region_text_disagreement`: `true`/`false` when both readings exist,
-  compared after the profile's normalization; `null` otherwise (boolean).
+- `region_text_disagreement`: `true`/`false` when both *valid* readings
+  exist, compared after the profile's normalization; `null` otherwise
+  (boolean).
+- `region_text_choice`: why the chosen reading won — `readers_agree`,
+  `vlm_preferred` (both valid, they differ, the mode prefers the VLM),
+  `vlm_only`, `ocr_only`, `ocr_mode` (`text_reader=ocr`), `vlm_invalid`
+  (the VLM reading was rejected, the OCR reading won), `no_valid_reading`
+  (every reading was rejected; `region_text` is `null`), `human` (typed by
+  a human).
+- `region_text_vlm_invalid`: why the VLM's reading (still kept in
+  `region_text_vlm`) is not text — `placeholder`, `no_reading`, `sequence`,
+  `charset`, `too_short`, `too_long`, `format`; `null` when it is valid.
+
+Before a reading is chosen, every reader's reading is checked by the
+region-text rules (`src/services/detection/region_text_rules.py`), served
+as `text_rules` on `GET /regions/vocabulary` (`null` without a region
+profile) with the choice values as `text_choices`. A reading is not text
+when it is a generic "no reading" word (`NOT_READABLE`, `N/A`, …); a
+placeholder — one of the active prompt pack's quoted example values, or a
+truncation of one at least 3 characters long, or a profile
+`text_placeholders` entry (`OP_REGION_DETECTION_TEXT_PLACEHOLDERS`); with
+`text_reject_sequences` (reference `license_plate` profile), one repeated
+character or one ascending / descending run (`999`, `123456`, `XYZ`); or
+outside the profile's normalization, `text_len_min`..`text_len_max`, or the
+optional `text_format` regex. A rejected VLM reading counts as no reading,
+so the OCR reader's valid reading is chosen (and `vlm_then_ocr` runs OCR).
+`scripts/curation/rederive_region_text.py` re-applies these rules to stored
+rows (dry run by default).
 
 The OCR reader keeps the region's dominant text: lines at least
 `text_min_height_ratio` × the tallest line's height, not centered in the

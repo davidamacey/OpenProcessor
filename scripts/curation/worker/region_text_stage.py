@@ -35,6 +35,9 @@ from src.core.logging import get_logger
 from src.services.curation.item_text import item_text_update
 from src.services.detection.cascade_detect import is_plausible_region_bbox
 from src.services.detection.region_text import (
+    TEXT_CHOICE_OCR_ONLY,
+    TEXT_CHOICE_VLM_INVALID,
+    TEXT_SOURCE_OCR,
     DominantTextConfig,
     DominantTextReading,
     OcrLine,
@@ -43,6 +46,7 @@ from src.services.detection.region_text import (
     read_dominant_text,
     resolve_region_text,
 )
+from src.services.detection.region_text_rules import RegionTextRules, region_text_rules
 from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 
 
@@ -124,6 +128,8 @@ _TEXT_ATTRS = (
     'text_vlm',
     'text_ocr',
     'text_disagreement',
+    'text_choice',
+    'text_vlm_invalid',
 )
 
 
@@ -138,12 +144,21 @@ async def apply_region_text(
     vlm_text: str | None,
     vlm_confidence: str | None,
     vlm_available: bool,
+    rules: RegionTextRules | None = None,
 ) -> None:
     """Replace ``doc``'s region text fields with the profile's text-reader
-    verdict for this region (see :func:`resolve_region_text`)."""
+    verdict for this region (see :func:`resolve_region_text`).
+
+    ``rules`` (default: the profile's, with the resolved prompt pack's
+    examples) decide which readings are text at all; a VLM reading they
+    reject counts as no reading, so the OCR reader runs in
+    ``vlm_then_ocr`` mode too.
+    """
+    rules = rules or region_text_rules(profile)
+    vlm_usable = vlm_text if vlm_text and rules.invalid_reason(vlm_text) is None else None
     reading = None
     if crop_jpeg is not None and ocr_needed(
-        profile.text_reader, vlm_text=vlm_text, vlm_available=vlm_available
+        profile.text_reader, vlm_text=vlm_usable, vlm_available=vlm_available
     ):
         reading = await read_region_text(ocr, crop_jpeg, region_in_crop, profile, crop_id)
     fields = resolve_region_text(
@@ -154,6 +169,7 @@ async def apply_region_text(
         ocr=reading,
         ocr_engine=ocr_engine_id(profile),
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
+        rules=rules,
     )
     F = get_region_fields()
     for attr in _TEXT_ATTRS:
@@ -163,7 +179,11 @@ async def apply_region_text(
 
 
 async def accept_without_vlm(
-    t: _ItemTask, *, ocr: PaddleOcrTextRecognizer, profile: DetectionProfile
+    t: _ItemTask,
+    *,
+    ocr: PaddleOcrTextRecognizer,
+    profile: DetectionProfile,
+    rules: RegionTextRules | None = None,
 ) -> None:
     """No VLM configured: write the task's candidate region unverified.
 
@@ -206,14 +226,39 @@ async def accept_without_vlm(
         vlm_text=None,
         vlm_confidence=None,
         vlm_available=False,
+        rules=rules,
     )
     t.update_doc = doc
+
+
+def apply_text_hint_fallback(
+    doc: dict[str, Any],
+    *,
+    text: str | None,
+    confidence: float | None,
+    profile: DetectionProfile,
+    rules: RegionTextRules,
+) -> None:
+    """Forward the item-crop OCR text that seeded a text-hint box when the
+    region itself got no text -- if that text passes ``rules``."""
+    F = get_region_fields()
+    if doc.get(F.text) or not text or rules.invalid_reason(text) is not None:
+        return
+    doc[F.text] = text
+    doc[F.text_raw] = text
+    doc[F.text_source] = TEXT_SOURCE_OCR
+    doc[F.text_engine_version] = ocr_engine_id(profile)
+    doc[F.text_confidence] = confidence
+    doc[F.text_choice] = (
+        TEXT_CHOICE_VLM_INVALID if doc.get(F.text_vlm_invalid) else TEXT_CHOICE_OCR_ONLY
+    )
 
 
 __all__ = [
     'ACCEPTED_UNVERIFIED',
     'accept_without_vlm',
     'apply_region_text',
+    'apply_text_hint_fallback',
     'candidate_detector',
     'item_text_fields',
     'read_item_lines',

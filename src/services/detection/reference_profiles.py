@@ -71,6 +71,8 @@ REFERENCE_LICENSE_PLATE_PROFILE = DetectionProfile(
     # none an exact or near match); at >= 0.6, 78 of 114 were exact or
     # within one edit-distance-ish of it (similarity >= 0.8).
     text_min_confidence=0.6,
+    # A run like "123" / "999" / "XYZ" is a stock non-answer, not a reading.
+    text_reject_sequences=True,
     # Issuer names printed on the region; dropped as whole lines (or as
     # single words inside a line) before the dominant line is chosen.
     text_stopwords=frozenset(

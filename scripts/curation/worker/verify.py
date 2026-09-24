@@ -24,6 +24,9 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
     region_provenance,
 )
+from src.services.detection.profile_registry import region_profile_or_neutral
+from src.services.detection.region_text import TEXT_CHOICE_NONE, TEXT_CHOICE_VLM_ONLY
+from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
 
@@ -175,11 +178,23 @@ def _region_write_doc(
     # An accepted box supersedes any candidate an earlier pass rejected.
     doc.update(dict.fromkeys(candidate_fields(F)))
     doc[F.rejection_reason] = None
-    if plate_text:
+    invalid = (
+        region_text_rules(region_profile_or_neutral()).invalid_reason(plate_text)
+        if plate_text
+        else None
+    )
+    if plate_text and invalid:
+        # Not text (a prompt placeholder, a "can't read it" answer, ...):
+        # keep the reading for audit, write no region text.
+        doc[F.text_vlm] = plate_text
+        doc[F.text_vlm_invalid] = invalid
+        doc[F.text_choice] = TEXT_CHOICE_NONE
+    elif plate_text:
         doc[F.text] = plate_text
         doc[F.text_raw] = plate_text
         doc[F.text_source] = plate_text_source or VLM_MODEL_ID
         doc[F.text_engine_version] = '1'
+        doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
         if plate_text_confidence:
             doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(plate_text_confidence, 0.70)
     if extra:

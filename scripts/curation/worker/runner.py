@@ -37,7 +37,8 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
 )
 from src.services.detection.profile_registry import get_active_region_profile
-from src.services.detection.region_text import TEXT_SOURCE_OCR, ocr_engine_id, validate_text_reader
+from src.services.detection.region_text import validate_text_reader
+from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
@@ -56,6 +57,7 @@ from scripts.curation.worker.cascade import (
 from scripts.curation.worker.region_text_stage import (
     accept_without_vlm,
     apply_region_text,
+    apply_text_hint_fallback,
     candidate_detector,
     item_text_fields,
     read_item_lines,
@@ -257,6 +259,10 @@ async def run(args: argparse.Namespace) -> int:
     # the item's class name.
     pack = resolve_prompt_pack()
     logger.info('vlm_prompt_pack_resolved', pack=pack.name)
+    # Which readings count as region text at all: the profile's rules plus
+    # the pack's quoted example values, which a VLM echoes when it can't
+    # read the text.
+    text_rules = region_text_rules(profile, pack)
     # No VLM URL at all (OP_VLM_URL unset) = a deployment without an image
     # LLM: no visibility filter, no verify call; detector regions are
     # accepted unverified and their text is read by OCR
@@ -577,7 +583,9 @@ async def run(args: argparse.Namespace) -> int:
                     if vlm_available:
                         await combined_q.put(t)
                     else:
-                        await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                        await accept_without_vlm(
+                            t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                        )
                         await out_q.put(t)
                     in_q.task_done()
                     continue
@@ -608,7 +616,9 @@ async def run(args: argparse.Namespace) -> int:
                         if vlm_available:
                             await combined_q.put(t)
                         else:
-                            await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                            await accept_without_vlm(
+                                t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                            )
                             await out_q.put(t)
                         in_q.task_done()
                         continue
@@ -881,6 +891,7 @@ async def run(args: argparse.Namespace) -> int:
                             vlm_text=None,
                             vlm_confidence=None,
                             vlm_available=vlm_available,
+                            rules=text_rules,
                         )
                         await out_q.put(t)
                         sam_q.task_done()
@@ -897,7 +908,9 @@ async def run(args: argparse.Namespace) -> int:
                     if vlm_available:
                         await combined_q.put(t)
                     else:
-                        await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                        await accept_without_vlm(
+                            t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                        )
                         await out_q.put(t)
                     sam_q.task_done()
                     continue
@@ -935,7 +948,9 @@ async def run(args: argparse.Namespace) -> int:
                         if vlm_available:
                             await combined_q.put(t)
                         else:
-                            await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                            await accept_without_vlm(
+                                t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                            )
                             await out_q.put(t)
                         sam_q.task_done()
                         continue
@@ -1171,18 +1186,20 @@ async def run(args: argparse.Namespace) -> int:
                                 vlm_text=reply.plate_text,
                                 vlm_confidence=reply.plate_confidence,
                                 vlm_available=True,
+                                rules=text_rules,
                             )
                             # Text-hint OCR fallback (text_reader='vlm' only
                             # -- the other modes already read the region):
                             # the VLM read nothing but the item-crop OCR hit
                             # that seeded this box did. Forward that text
                             # so the region is still searchable.
-                            if not t.update_doc.get(F.text) and t.candidate_text:
-                                t.update_doc[F.text] = t.candidate_text
-                                t.update_doc[F.text_raw] = t.candidate_text
-                                t.update_doc[F.text_source] = TEXT_SOURCE_OCR
-                                t.update_doc[F.text_engine_version] = ocr_engine_id(profile)
-                                t.update_doc[F.text_confidence] = t.candidate_text_confidence
+                            apply_text_hint_fallback(
+                                t.update_doc,
+                                text=t.candidate_text,
+                                confidence=t.candidate_text_confidence,
+                                profile=profile,
+                                rules=text_rules,
+                            )
                         elif reply.plate_visible and reply.plate_bbox_correct is None:
                             # The VLM sees a region but gave no verdict on
                             # the candidate box (null / absent). No verdict

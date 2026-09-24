@@ -67,6 +67,12 @@ class RegionFields:
     text_vlm: str = 'region_text_vlm'
     text_ocr: str = 'region_text_ocr'
     text_disagreement: str = 'region_text_disagreement'
+    # Why the chosen reading won (readers_agree / vlm_preferred / vlm_only /
+    # ocr_only / ocr_mode / vlm_invalid / no_valid_reading / human), and
+    # why the VLM's reading was rejected as not text (placeholder /
+    # no_reading / sequence / charset / too_short / too_long / format).
+    text_choice: str = 'region_text_choice'
+    text_vlm_invalid: str = 'region_text_vlm_invalid'
 
     # Human validation only: a human confirmed (or drew / rejected) the
     # region. Machine verdicts never set it.

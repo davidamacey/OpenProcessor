@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from src.config import DetectionProfile
+    from src.services.detection.region_text_rules import RegionTextRules
 
 
 # Where a region's stored text came from (``RegionFields.text_source``).
@@ -43,6 +44,26 @@ TEXT_READER_VLM_THEN_OCR = 'vlm_then_ocr'
 TEXT_READER_BOTH = 'both'
 TEXT_READER_MODES = frozenset(
     {TEXT_READER_VLM, TEXT_READER_OCR, TEXT_READER_VLM_THEN_OCR, TEXT_READER_BOTH}
+)
+
+# Why the chosen reading won (``RegionFields.text_choice``).
+TEXT_CHOICE_AGREE = 'readers_agree'
+TEXT_CHOICE_VLM_PREFERRED = 'vlm_preferred'
+TEXT_CHOICE_VLM_ONLY = 'vlm_only'
+TEXT_CHOICE_OCR_ONLY = 'ocr_only'
+TEXT_CHOICE_OCR_MODE = 'ocr_mode'
+TEXT_CHOICE_VLM_INVALID = 'vlm_invalid'
+TEXT_CHOICE_NONE = 'no_valid_reading'
+TEXT_CHOICE_HUMAN = 'human'
+TEXT_CHOICES: tuple[str, ...] = (
+    TEXT_CHOICE_AGREE,
+    TEXT_CHOICE_VLM_PREFERRED,
+    TEXT_CHOICE_VLM_ONLY,
+    TEXT_CHOICE_OCR_ONLY,
+    TEXT_CHOICE_OCR_MODE,
+    TEXT_CHOICE_VLM_INVALID,
+    TEXT_CHOICE_NONE,
+    TEXT_CHOICE_HUMAN,
 )
 
 # VLM text confidence arrives as a category; stored as a number so both
@@ -280,47 +301,97 @@ def resolve_region_text(
     ocr: DominantTextReading | None,
     ocr_engine: str,
     normalizer: TextNormalizer,
+    rules: RegionTextRules | None = None,
 ) -> dict[str, Any]:
     """Region text fields for one detected region, keyed by ``RegionFields``
     attribute name (``text``, ``text_raw``, ``text_source``, …).
 
-    Chosen reading: the VLM's when it read something (every mode but
-    ``ocr``), else the OCR reader's. ``text_vlm`` / ``text_ocr`` record
-    each reader's own reading whenever it produced one, and
-    ``text_disagreement`` compares them (normalized) when both exist.
-    ``text_raw`` is the full unfiltered OCR reading whenever OCR ran and
-    found text, else the VLM's verbatim reading. Keys with no value are
-    omitted so a write never clears a field it has nothing to say about.
+    Each reading is first checked against ``rules`` (placeholder, "no
+    reading" word, stock run, charset / length / format; see
+    :mod:`src.services.detection.region_text_rules`): a reading failing
+    them is no reading. Of the valid readings the chosen one is the VLM's
+    in every mode but ``ocr``, else the OCR reader's -- so a VLM
+    placeholder falls back to a valid OCR reading. ``text_choice`` records
+    why the chosen reading won (``TEXT_CHOICES``); ``text_vlm_invalid``
+    why the VLM's reading was rejected. ``text_vlm`` / ``text_ocr`` record
+    each reader's own reading whenever it produced one (the VLM's even
+    when rejected, for audit), and ``text_disagreement`` compares the two
+    valid readings (normalized). ``text_raw`` is the full unfiltered OCR
+    reading whenever OCR ran and found text, else the VLM's verbatim
+    reading. Keys with no value are omitted so a write never clears a
+    field it has nothing to say about.
     """
     validate_text_reader(mode)
     vlm_text = (vlm_text or '').strip() or None
     ocr_text = ocr.text if ocr is not None else None
+    vlm_invalid = rules.invalid_reason(vlm_text) if rules is not None and vlm_text else None
+    ocr_rejected = bool(
+        rules is not None and ocr_text and rules.invalid_reason(ocr_text) is not None
+    )
+    if ocr_rejected:
+        ocr_text = None
+    vlm_valid = None if vlm_invalid else vlm_text
     out: dict[str, Any] = {}
     if vlm_text:
         out['text_vlm'] = vlm_text
+    if vlm_invalid:
+        out['text_vlm_invalid'] = vlm_invalid
     if ocr_text:
         out['text_ocr'] = ocr_text
-    disagree = texts_disagree(vlm_text, ocr_text, normalizer)
+    disagree = texts_disagree(vlm_valid, ocr_text, normalizer)
     if disagree is not None:
         out['text_disagreement'] = disagree
 
-    use_ocr = (mode == TEXT_READER_OCR and ocr_text) or (not vlm_text and ocr_text)
+    use_ocr = bool(ocr_text) and (mode == TEXT_READER_OCR or not vlm_valid)
     if use_ocr and ocr is not None:
         out['text'] = ocr_text
         out['text_source'] = TEXT_SOURCE_OCR
         out['text_engine_version'] = ocr_engine
         out['text_confidence'] = ocr.confidence
-    elif vlm_text:
-        out['text'] = vlm_text
+    elif vlm_valid:
+        out['text'] = vlm_valid
         out['text_source'] = TEXT_SOURCE_VLM
         out['text_engine_version'] = vlm_engine
         if vlm_confidence:
             out['text_confidence'] = VLM_TEXT_CONFIDENCE.get(vlm_confidence, 0.70)
+    choice = _text_choice(
+        mode,
+        use_ocr=use_ocr,
+        vlm_valid=vlm_valid,
+        vlm_invalid=vlm_invalid,
+        rejected=bool(vlm_invalid) or ocr_rejected,
+        disagree=disagree,
+    )
+    if choice is not None:
+        out['text_choice'] = choice
     if ocr is not None and ocr.raw:
         out['text_raw'] = ocr.raw
     elif vlm_text:
         out['text_raw'] = vlm_text
     return out
+
+
+def _text_choice(
+    mode: str,
+    *,
+    use_ocr: bool,
+    vlm_valid: str | None,
+    vlm_invalid: str | None,
+    rejected: bool,
+    disagree: bool | None,
+) -> str | None:
+    """Why the chosen reading won; ``None`` when no reader said anything."""
+    if use_ocr:
+        if mode == TEXT_READER_OCR and vlm_valid:
+            return TEXT_CHOICE_OCR_MODE
+        return TEXT_CHOICE_VLM_INVALID if vlm_invalid else TEXT_CHOICE_OCR_ONLY
+    if vlm_valid:
+        if disagree is None:
+            return TEXT_CHOICE_VLM_ONLY
+        return TEXT_CHOICE_VLM_PREFERRED if disagree else TEXT_CHOICE_AGREE
+    # No valid reading: say so only when a reader did answer (and every
+    # answer was rejected).
+    return TEXT_CHOICE_NONE if rejected else None
 
 
 def ocr_engine_id(profile: DetectionProfile) -> str:
@@ -333,6 +404,15 @@ def ocr_engine_id(profile: DetectionProfile) -> str:
 
 
 __all__ = [
+    'TEXT_CHOICES',
+    'TEXT_CHOICE_AGREE',
+    'TEXT_CHOICE_HUMAN',
+    'TEXT_CHOICE_NONE',
+    'TEXT_CHOICE_OCR_MODE',
+    'TEXT_CHOICE_OCR_ONLY',
+    'TEXT_CHOICE_VLM_INVALID',
+    'TEXT_CHOICE_VLM_ONLY',
+    'TEXT_CHOICE_VLM_PREFERRED',
     'TEXT_READER_BOTH',
     'TEXT_READER_MODES',
     'TEXT_READER_OCR',

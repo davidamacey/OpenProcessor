@@ -40,6 +40,7 @@ from src.services.curation.region_writes import (
     validate_bbox_norm,
 )
 from src.services.curation.wire import region_wire_key
+from src.services.detection.region_text import TEXT_CHOICE_HUMAN
 
 
 def _write_error(exc: RegionWriteError) -> HTTPException:
@@ -181,6 +182,7 @@ async def patch_crop_region_meta(
         base[F.text] = payload.region_text
         base[F.text_source] = 'human'
         base[F.text_confidence] = 1.0 if payload.region_text else None
+        base[F.text_choice] = TEXT_CHOICE_HUMAN
         wire_fields.append('region_text')
     if 'region_status' in fields_set:
         base[F.label_source] = payload.region_label_source

@@ -85,6 +85,7 @@ def region_state_fields() -> tuple[str, ...]:
         F.text,
         F.text_source,
         F.text_confidence,
+        F.text_choice,
         F.cluster_id,
         F.cluster_subid,
         F.cluster_distance,

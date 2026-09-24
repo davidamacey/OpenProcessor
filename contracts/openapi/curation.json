@@ -2264,6 +2264,17 @@
             ],
             "title": "Region Text"
           },
+          "region_text_choice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Choice"
+          },
           "region_text_confidence": {
             "anyOf": [
               {
@@ -2340,6 +2351,17 @@
               }
             ],
             "title": "Region Text Vlm"
+          },
+          "region_text_vlm_invalid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Vlm Invalid"
           },
           "region_thumbnail_url": {
             "default": "",

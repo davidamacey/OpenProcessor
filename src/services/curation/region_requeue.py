@@ -166,6 +166,8 @@ def detection_fields(fields: RegionFields | None = None) -> tuple[str, ...]:
         F.text_vlm,
         F.text_ocr,
         F.text_disagreement,
+        F.text_choice,
+        F.text_vlm_invalid,
         F.embedding,
         F.cluster_id,
         F.cluster_subid,

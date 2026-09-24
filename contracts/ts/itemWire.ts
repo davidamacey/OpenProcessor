@@ -88,6 +88,8 @@ export interface ItemWire {
   region_text_vlm: string | null;
   region_text_ocr: string | null;
   region_text_disagreement: boolean | null;
+  region_text_choice: string | null;
+  region_text_vlm_invalid: string | null;
   region_validated: boolean | null;
   region_auto_confirmed: boolean | null;
   region_verified: boolean | null;
@@ -192,6 +194,8 @@ export const ITEM_WIRE_KEYS = [
   'region_text_vlm',
   'region_text_ocr',
   'region_text_disagreement',
+  'region_text_choice',
+  'region_text_vlm_invalid',
   'region_validated',
   'region_auto_confirmed',
   'region_verified',
@@ -238,6 +242,8 @@ export const REGION_WIRE_KEYS = [
   'region_text_vlm',
   'region_text_ocr',
   'region_text_disagreement',
+  'region_text_choice',
+  'region_text_vlm_invalid',
   'region_validated',
   'region_auto_confirmed',
   'region_verified',

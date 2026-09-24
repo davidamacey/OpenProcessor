@@ -85,6 +85,8 @@
     "region_text_vlm",
     "region_text_ocr",
     "region_text_disagreement",
+    "region_text_choice",
+    "region_text_vlm_invalid",
     "region_validated",
     "region_auto_confirmed",
     "region_verified",
@@ -957,6 +959,18 @@
         "default": null,
         "title": "Region Text"
       },
+      "region_text_choice": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Choice"
+      },
       "region_text_confidence": {
         "anyOf": [
           {
@@ -1040,6 +1054,18 @@
         ],
         "default": null,
         "title": "Region Text Vlm"
+      },
+      "region_text_vlm_invalid": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Vlm Invalid"
       },
       "region_thumbnail_url": {
         "default": "",
@@ -1253,6 +1279,8 @@
     "region_text_vlm",
     "region_text_ocr",
     "region_text_disagreement",
+    "region_text_choice",
+    "region_text_vlm_invalid",
     "region_validated",
     "region_auto_confirmed",
     "region_verified",
