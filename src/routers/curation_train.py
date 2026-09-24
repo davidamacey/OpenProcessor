@@ -287,14 +287,23 @@ def _training_volume_mount_sane(path: str) -> bool:
     A strong signal the real training-data volume isn't actually mounted
     into this container at ``path`` — e.g. a dev box or misconfigured
     compose file where the bind mount silently didn't take, leaving
-    ``path`` resolving to the container's own root filesystem. Any
-    ``OSError`` here is treated as "can't confirm it's sane" (False), not
-    a soft pass.
+    ``path`` resolving to the container's own root filesystem. A path that
+    doesn't exist yet (fresh volume, staging dir not created) is judged by
+    its nearest existing ancestor. Any other ``OSError`` is treated as
+    "can't confirm it's sane" (False), not a soft pass.
     """
     try:
-        return Path(path).stat().st_dev != Path('/').stat().st_dev
+        root_dev = Path('/').stat().st_dev
+        for candidate in (Path(path), *Path(path).parents):
+            if candidate == Path('/'):
+                return False
+            try:
+                return candidate.stat().st_dev != root_dev
+            except FileNotFoundError:
+                continue
     except OSError:
         return False
+    return False
 
 
 def _read_export_manifest(dataset_export_dir: str | None) -> dict[str, Any]:
