@@ -79,6 +79,15 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def is_not_found(exc: BaseException) -> bool:
+    """A single-doc read failed because the doc doesn't exist (vs. an outage)."""
+    return (
+        isinstance(exc, KeyError)
+        or getattr(exc, 'status_code', None) == 404
+        or 'NotFound' in type(exc).__name__
+    )
+
+
 def _registry_dep() -> ClassRegistry:
     return get_class_registry()
 

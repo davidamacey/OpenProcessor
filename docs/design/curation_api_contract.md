@@ -756,6 +756,16 @@ value is missing from the catalog. The
 `/stats/dataset` rollup all filter on these derived sets, never on one
 deployment's detector names.
 
+## Errors: read endpoints fail closed
+
+A backend outage is a `503`, never an empty or zero answer that reads as
+real data. `GET /ingest/sam_drain` (its `total_unfinished: 0` is the
+"worker caught up" signal), `GET /ingest/status`, `GET /classes` (live
+counts) and `GET /stats/classes` (registry join) used to answer zeros /
+empty lists on failure and now `503`. Single-item reads added in this
+wave (`GET /crops/{id}/history`, `GET /review/{tab}/locate`) answer `404` /
+`not_found` only when the item doesn't exist and `503` on an outage.
+
 ## What is explicitly NOT on the wire
 
 - **Backend OpenSearch field names** for region attributes — governed by

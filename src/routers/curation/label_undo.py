@@ -26,6 +26,7 @@ from src.routers.curation._common import (
     CropUndoBatchRequest,
     OpenSearchDep,
     _now_iso,
+    is_not_found,
     logger,
     router,
 )
@@ -346,7 +347,9 @@ async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
             index=CURATION_ITEMS_INDEX, id=crop_id, _source_includes=['class_id_history']
         )
     except Exception as exc:
-        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+        if is_not_found(exc):
+            raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     history = (resp.get('_source') or {}).get('class_id_history') or []
     entries = [
         {k: entry.get(k) for k in _HISTORY_KEYS} for entry in history if isinstance(entry, dict)

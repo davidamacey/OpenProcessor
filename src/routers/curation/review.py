@@ -13,6 +13,7 @@ from src.routers.curation._common import (
     TestHoldoutFreezeResponse,
     _ensure_indexes,
     _now_iso,
+    is_not_found,
     logger,
     router,
 )
@@ -412,10 +413,11 @@ async def review_locate(
 
     try:
         doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
-        found = bool(doc.get('found', True))
-    except Exception:
-        found = False
-    if not found:
+    except Exception as exc:
+        if is_not_found(exc):
+            return {**out, 'reason': 'not_found'}
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+    if not doc.get('found', True):
         return {**out, 'reason': 'not_found'}
     source_doc = {**(doc.get('_source') or {}), 'crop_id': crop_id}
     out['total'] = await _count(req.query)

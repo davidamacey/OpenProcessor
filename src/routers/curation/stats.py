@@ -22,7 +22,6 @@ from src.routers.curation._common import (
     OpenSearchDep,
     _now_iso,
     get_class_registry,
-    logger,
     router,
 )
 from src.services.curation.dataset_thresholds import adequacy, aug_target, dataset_thresholds
@@ -95,7 +94,7 @@ async def stats_classes(opensearch: OpenSearchDep) -> dict[str, Any]:
                 }
             )
     except Exception as exc:
-        logger.warning('stats_classes_registry_join_failed', error=str(exc))
+        raise HTTPException(status_code=503, detail=f'class registry unavailable: {exc}') from exc
 
     return {**aggs, 'classes': classes, 'thresholds': dataset_thresholds()}
 

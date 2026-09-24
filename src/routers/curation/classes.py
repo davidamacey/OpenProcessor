@@ -118,7 +118,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             cid = int(bucket['key'])
             cluster_size[cid] = int(bucket.get('doc_count', 0))
     except Exception as exc:
-        logger.debug('class_counts_skipped', error=str(exc))
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
     # A region-of-interest class (e.g. license_plate) lives as a sub-bbox on
     # every parent item that has one, NOT as a separate doc whose primary
@@ -157,7 +157,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 cluster_size[c.class_id] = region_total
                 break
     except Exception as exc:
-        logger.debug('region_class_count_skipped', error=str(exc))
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
 
     return ClassListResponse(
         classes=[
