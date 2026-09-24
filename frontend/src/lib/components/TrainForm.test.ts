@@ -1,18 +1,10 @@
 /**
- * `<TrainForm>`'s GPU picker (follow-up gap 1,
- * docs/design/audit-remediation-plan-2026-09.md Appendix D item 2,
- * 2026-09-11). This repo has no `@testing-library/svelte` and adding one
- * is out of scope for this follow-up (see `StrategyBar.test.ts`'s note),
- * so — same convention — this is a static source scan rather than a
- * mounted-component test: it asserts the wiring a reviewer would check
- * by eye, exhaustively, for both the exhaustive-options question and the
- * payload-threading question.
- *
- * The exhaustive "never offers GPU 1" claim itself is unit-tested
- * directly (not by scanning source text) in `trainGpuOptions.test.ts`,
- * against the real `GPU_OPTIONS` array — this file only has to confirm
- * `TrainForm.svelte` actually uses that shared array rather than its own
- * (possibly drifted) inline copy.
+ * `<TrainForm>`'s GPU picker renders the backend's allowed claims
+ * (`GET /train/gpus`, fetched by `getTrainGpus`) rather than a hardcoded
+ * list. The fetch and default selection are unit-tested in
+ * `api.trainGpus.test.ts`. This static source scan (no component-mount
+ * harness yet) confirms the component renders the served options and
+ * threads the selection into both payloads.
  */
 
 import { readFileSync } from 'node:fs';
@@ -24,14 +16,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.resolve(here, './TrainForm.svelte'), 'utf-8');
 
 describe('TrainForm.svelte GPU picker', () => {
-  it('imports GPU_OPTIONS from the shared, unit-tested module instead of an inline array', () => {
-    expect(src).toMatch(
-      /import\s*\{[^}]*GPU_OPTIONS[^}]*\}\s*from\s*['"]\$lib\/trainGpuOptions['"]/,
-    );
+  it('loads the served options from getTrainGpus and preselects the served default', () => {
+    expect(src).toMatch(/getTrainGpus\(/);
+    expect(src).toMatch(/cudaDevices = defaultGpuValue\(res\)/);
   });
 
-  it('does not redeclare its own inline GPU_OPTIONS constant (single source of truth)', () => {
-    expect(src).not.toMatch(/const\s+GPU_OPTIONS\s*=/);
+  it('keeps no GPU list of its own', () => {
+    expect(src).not.toMatch(/GPU_OPTIONS/);
+    expect(src).not.toMatch(/trainGpuOptions/);
   });
 
   it('never hardcodes the literal host GPU id 1 anywhere in the component', () => {
@@ -43,8 +35,8 @@ describe('TrainForm.svelte GPU picker', () => {
     expect(suspicious).toEqual([]);
   });
 
-  it('renders one radio per GPU_OPTIONS entry, bound to the shared cudaDevices state', () => {
-    expect(src).toMatch(/\{#each GPU_OPTIONS as opt/);
+  it('renders one radio per served option, bound to the shared cudaDevices state', () => {
+    expect(src).toMatch(/\{#each gpuOptions\.options as opt/);
     expect(src).toMatch(/checked=\{cudaDevices === opt\.value\}/);
     expect(src).toMatch(/onchange=\{\(\) => \(cudaDevices = opt\.value\)\}/);
   });
@@ -60,8 +52,8 @@ describe('TrainForm.svelte GPU picker', () => {
     expect(buildCampaignMatch?.[0]).toMatch(/cuda_visible_devices:\s*cudaDevices/);
   });
 
-  it('renders the shared gpuAdvisory(...) text instead of a one-off inline conditional', () => {
-    expect(src).toMatch(/gpuAdvisory\(cudaDevices\)/);
+  it("shows the selected option's served advisory", () => {
+    expect(src).toMatch(/options\.find\(\(o\) => o\.value === cudaDevices\)\?\.advisory/);
   });
 
   it('takes the generic singleClassExport prop, not the domain-specific lpr one', () => {
