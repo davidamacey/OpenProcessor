@@ -98,15 +98,125 @@ def record_class_history(
         ):
             return history
     history.append(entry)
+    # Drop-oldest, preserving any seed_backfill stub at index 0 if present
+    # so we keep the original origin marker. Skipped entirely once
+    # class_validated=true.
+    return _cap(history, current_source)
+
+
+HUMAN_LABEL_WRITERS = frozenset({'human:label_crop', 'human:batch_label_crops', 'human:move_crops'})
+"""Writers whose class write the labeler's Undo (``DELETE /crops/{id}/label``)
+reverses."""
+
+HUMAN_UNLABEL_WRITER = 'human:unlabel_crop'
+
+CLASS_STATE_FIELDS: tuple[str, ...] = (
+    'class_id',
+    'class_name',
+    'class_source',
+    'label_source',
+    'confidence',
+    'class_detector',
+    'class_detector_version',
+    'class_labeler',
+    'class_labeled_at',
+    'class_validated',
+    'cluster_id',
+    'cluster_subid',
+)
+"""The item's full class/label/provenance/cluster state. A restorable
+history entry carries every one of these so an undo can put the item back
+exactly, rather than re-deriving provenance it never recorded."""
+
+
+def _cap(history: list[dict[str, Any]], current_source: dict[str, Any]) -> list[dict[str, Any]]:
     if len(history) > MAX_HISTORY_ENTRIES and not current_source.get('class_validated'):
-        # Drop-oldest, preserving any seed_backfill stub at index 0 if
-        # present so we keep the original origin marker. Skipped
-        # entirely once class_validated=true.
         if history and history[0].get('writer') == 'seed_backfill':
-            history = [history[0], *history[-(MAX_HISTORY_ENTRIES - 1) :]]
-        else:
-            history = history[-MAX_HISTORY_ENTRIES:]
+            return [history[0], *history[-(MAX_HISTORY_ENTRIES - 1) :]]
+        return history[-MAX_HISTORY_ENTRIES:]
     return history
+
+
+def record_class_snapshot(
+    current_source: dict[str, Any],
+    *,
+    writer: str,
+    restorable: bool,
+    now: str | None = None,
+) -> list[dict[str, Any]]:
+    """Append a full :data:`CLASS_STATE_FIELDS` snapshot of the pre-write doc.
+
+    Unlike :func:`record_class_history` this always appends — even for an
+    item with no class yet (an ingest proposal) and even when class_id /
+    class_source are unchanged — because the labeler's Undo pairs label
+    writes with unlabel writes by position in the array
+    (:func:`find_undo_snapshot`); a skipped append would pair the wrong
+    entries. Absent fields are recorded as ``None``.
+
+    ``restorable=True`` marks an entry written by a human label write
+    (the state that write replaced); the unlabel writer records its own
+    snapshot with ``restorable=False`` for the audit trail.
+    """
+    history = list(current_source.get('class_id_history') or [])
+    entry: dict[str, Any] = {f: current_source.get(f) for f in CLASS_STATE_FIELDS}
+    if entry['class_id'] is not None:
+        entry['class_id'] = int(entry['class_id'])
+    entry['class_validated'] = bool(entry['class_validated'])
+    entry['restorable'] = restorable
+    entry['writer'] = writer
+    entry['at'] = now or _now_iso()
+    history.append(entry)
+    return _cap(history, current_source)
+
+
+def find_undo_snapshot(history: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    """Return the entry recording the state before the most recent
+    not-yet-undone human label write, or ``None`` when there is none.
+
+    Walks newest-first treating the history as a stack: each unlabel
+    entry cancels the next older human label entry, so repeated undos
+    step back through successive human labels instead of re-applying the
+    same one.
+    """
+    pending_undos = 0
+    for entry in reversed(history or []):
+        writer = entry.get('writer')
+        if writer == HUMAN_UNLABEL_WRITER:
+            pending_undos += 1
+        elif writer in HUMAN_LABEL_WRITERS:
+            if pending_undos == 0:
+                return entry
+            pending_undos -= 1
+    return None
+
+
+def restore_class_state(entry: dict[str, Any] | None) -> dict[str, Any]:
+    """Update-doc fields restoring the class state recorded in ``entry``.
+
+    ``None`` (no human label write on record) restores an unlabeled item:
+    class and every provenance field cleared, nothing invented.
+
+    Entries written before full snapshots existed carry only
+    class_id/class_name/class_source/label_source/confidence; the
+    remaining fields restore as ``None`` / unvalidated rather than being
+    guessed.
+
+    Cluster placement mirrors the label writers' ``cluster_id = class_id``
+    rule: a restored validated class sits in its class cluster (keeping
+    the recorded sub-cluster only if it belonged to that cluster);
+    anything else returns to the cluster it was in before the label write
+    (``None`` = residual pool).
+    """
+    snap = entry or {}
+    out: dict[str, Any] = {f: snap.get(f) for f in CLASS_STATE_FIELDS}
+    out['class_validated'] = bool(out['class_validated'])
+    if entry is None:
+        out['label_source'] = ''
+    if out['class_validated'] and out['class_id'] is not None:
+        if out['cluster_id'] != out['class_id']:
+            out['cluster_subid'] = None
+        out['cluster_id'] = out['class_id']
+    return out
 
 
 def region_chain_entry(actor: str, event: str) -> str:
@@ -156,10 +266,16 @@ def merge_region_chain(existing: list[str] | None, new_entries: list[str] | None
 
 
 __all__ = [
+    'CLASS_STATE_FIELDS',
+    'HUMAN_LABEL_WRITERS',
+    'HUMAN_UNLABEL_WRITER',
     'MAX_HISTORY_ENTRIES',
     'MAX_REGION_CHAIN_ENTRIES',
+    'find_undo_snapshot',
     'merge_region_chain',
     'normalize_region_chain_entry',
     'record_class_history',
+    'record_class_snapshot',
     'region_chain_entry',
+    'restore_class_state',
 ]

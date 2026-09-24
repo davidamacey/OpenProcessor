@@ -31,6 +31,35 @@ def _cluster_kind(cluster_id: int) -> Literal['class', 'candidate', 'unassigned'
     return 'class'
 
 
+CANDIDATE_DOMINANT_MIN_COUNT = 3
+"""A candidate cluster names a dominant class only when at least this many
+members carry it."""
+
+CANDIDATE_DOMINANT_MIN_SHARE = 0.5
+"""...and that class holds at least this share of the labelled members."""
+
+
+def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -> str | None:
+    """Dominant class name for a candidate cluster card, or ``None``.
+
+    A candidate cluster is an unnamed residual grouping; naming it after
+    the plurality class of a handful of labelled members (e.g. a 1-1-1
+    tie in a 116-member cluster) overclaims. Require a unique winner that
+    clears both floors.
+    """
+    if not cls_buckets or labelled <= 0:
+        return None
+    top = int(cls_buckets[0]['doc_count'])
+    runner_up = int(cls_buckets[1]['doc_count']) if len(cls_buckets) > 1 else 0
+    if (
+        top >= CANDIDATE_DOMINANT_MIN_COUNT
+        and top / labelled >= CANDIDATE_DOMINANT_MIN_SHARE
+        and top > runner_up
+    ):
+        return str(cls_buckets[0]['key'])
+    return None
+
+
 @router.get('/clusters')
 async def list_clusters(
     opensearch: OpenSearchDep,
@@ -63,7 +92,11 @@ async def list_clusters(
 
     * ``size`` (total members), ``validated_count`` (class_validated=true),
     * ``dominant_class_{id,name,count}`` and ``purity`` (largest-class
-      share among labelled members),
+      share among labelled members). A candidate cluster only gets a
+      ``dominant_class_name`` when a unique top class has at least
+      ``CANDIDATE_DOMINANT_MIN_COUNT`` members and
+      ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;
+      ``dominant_count``/``labelled_count``/``purity`` are always reported,
     * ``is_unlabeled`` (true when no class_name has any signal at all),
     * ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),
     * ``n_subclusters`` (distinct cluster_subid values), and
@@ -133,6 +166,9 @@ async def list_clusters(
                     'order': {'_count': 'desc'},
                 },
             },
+            # True labelled count: top_class only returns its top buckets,
+            # so summing them undercounts clusters with many classes.
+            'labelled': {'filter': {'exists': {'field': 'class_name'}}},
             'validated': {'filter': {'term': {'class_validated': True}}},
             # cluster_subid is mapped keyword directly on the live index —
             # no .keyword subfield exists.
@@ -178,12 +214,16 @@ async def list_clusters(
         size = int(bucket['doc_count'])
         cls_buckets = bucket.get('top_class', {}).get('buckets', [])
         labelled_total = sum(int(b['doc_count']) for b in cls_buckets)
+        if 'labelled' in bucket:
+            labelled_total = max(labelled_total, int(bucket['labelled'].get('doc_count') or 0))
         top_name: str | None = None
         top_count = 0
         if cls_buckets:
             top_name = cls_buckets[0]['key']
             top_count = int(cls_buckets[0]['doc_count'])
         purity = (top_count / labelled_total) if labelled_total else None
+        if ck == 'candidate':
+            top_name = _candidate_dominant_name(cls_buckets, labelled_total)
         is_unlabeled = labelled_total == 0
         validated_count = int(bucket.get('validated', {}).get('doc_count') or 0)
         n_subclusters = int(bucket.get('subclusters', {}).get('value') or 0)

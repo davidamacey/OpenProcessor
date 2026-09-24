@@ -571,6 +571,8 @@ async def pipeline_auto_label(
             # on conflict; class_id_history snapshots the prior
             # assignment when this write changes class_id.
             def _merge_pipeline(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+                if current.get('class_validated'):  # validated since the scroll
+                    return {}
                 update = dict(updates_by_id[doc_id])
                 if 'class_id' in update:
                     update['class_id_history'] = _record_history(current, writer='vlm_pipeline')

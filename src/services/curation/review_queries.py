@@ -36,6 +36,11 @@ KNOWN_TABS: tuple[str, ...] = (
 )
 
 
+def _escape_wildcard(text: str) -> str:
+    """Escape wildcard-query metacharacters so user text matches literally."""
+    return text.replace('\\', '\\\\').replace('*', '\\*').replace('?', '\\?')
+
+
 def build_tab_query(
     tab: str,
     *,
@@ -148,19 +153,29 @@ def build_tab_query(
         # SAM3-only crops (LPR missed) keep it false and remain
         # surfaced here — they are the LPR-training cohort.
         must_not.append({'term': {fields.validated: True}})
-        must_not.append({'term': {'class_validated': True}})
+        # No class_validated exclusion: region review is independent of the
+        # item's class. VLM and cluster agreement validate most classes
+        # automatically, so excluding them hid nearly every unreviewed region.
         must_not.append({'term': {fields.status: RegionStatus.NO_REGION_VISIBLE}})
         must_not.append({'term': {fields.status: RegionStatus.VERIFY_REJECTED}})
         # Human already marked the detection a false positive (box kept
         # for FP analysis / LPR hard-negative training) — terminal, must
         # not re-enter the human queue.
         must_not.append({'term': {fields.status: RegionStatus.FALSE_POSITIVE}})
-        # F5 — let the labeler search by region text on the review queue.
-        # region text is a keyword field so a case-insensitive substring
-        # search uses wildcard on the uppercase form (the worker stores
-        # text canonicalized to upper).
+        # Substring search on region text, case-insensitive: stored case
+        # depends on whichever writer set the text, so don't assume an
+        # uppercase canonical form.
         if text:
-            must.append({'wildcard': {fields.text: f'*{text.upper()}*'}})
+            must.append(
+                {
+                    'wildcard': {
+                        fields.text: {
+                            'value': f'*{_escape_wildcard(text)}*',
+                            'case_insensitive': True,
+                        }
+                    }
+                }
+            )
         # Default sort: region score desc, so the high-confidence detections
         # are reviewed first (likely accept), low-score later (more
         # corrections expected) — see review_sorts.py.

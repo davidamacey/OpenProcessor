@@ -21,6 +21,7 @@ indexes nulls (``exists`` is false for them).
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any
 
 
@@ -37,9 +38,41 @@ def _values(doc: dict[str, Any], field: str) -> list[Any]:
     return [value]
 
 
+def _wildcard_regex(value: str) -> str:
+    out, chars = [], iter(value)
+    for c in chars:
+        if c == '\\':
+            out.append(re.escape(next(chars, '')))
+        elif c == '*':
+            out.append('.*')
+        elif c == '?':
+            out.append('.')
+        else:
+            out.append(re.escape(c))
+    return ''.join(out)
+
+
+def _wildcard_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    ((field, spec),) = clause.items()
+    if not isinstance(spec, dict):
+        spec = {'value': spec}
+    flags = re.IGNORECASE if spec.get('case_insensitive') else 0
+    pattern = _wildcard_regex(spec['value'])
+    return any(re.fullmatch(pattern, str(v), flags) is not None for v in _values(doc, field))
+
+
+_LEAF_MATCHERS = {
+    'exists': lambda doc, clause: bool(_values(doc, clause['field'])),
+    'wildcard': _wildcard_matches,
+}
+
+
 def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
     if not query or 'match_all' in query:
         return True
+    leaf = next((k for k in _LEAF_MATCHERS if k in query), None)
+    if leaf is not None:
+        return _LEAF_MATCHERS[leaf](doc, query[leaf])
     if 'term' in query:
         ((field, value),) = query['term'].items()
         if isinstance(value, dict):
@@ -48,8 +81,6 @@ def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
     if 'terms' in query:
         ((field, values),) = query['terms'].items()
         return any(v in values for v in _values(doc, field))
-    if 'exists' in query:
-        return bool(_values(doc, query['exists']['field']))
     if 'range' in query:
         ((field, bounds),) = query['range'].items()
         ops = {
@@ -204,7 +235,9 @@ class QueryFakeOpenSearch:
         self._bump(index, id)
         return {'result': 'updated'}
 
-    async def mget(self, *, body: dict[str, Any], index: str | None = None) -> dict[str, Any]:
+    async def mget(
+        self, *, body: dict[str, Any], index: str | None = None, **_kw: Any
+    ) -> dict[str, Any]:
         out = []
         specs = body.get('docs') or [{'_id': i, '_index': index} for i in body.get('ids', [])]
         for spec in specs:
