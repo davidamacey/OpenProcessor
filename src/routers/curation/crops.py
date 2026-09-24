@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.clients.occ_bulk import occ_update_bulk
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     CropBatchLabelRequest,
@@ -58,13 +58,50 @@ def _human_class_provenance() -> dict[str, Any]:
 _MAX_IDS = 500
 
 
-def _batch_outcome(
-    crop_ids: list[str], results: list[tuple[bool, dict[str, Any] | None]]
+async def _occ_bulk_human_relabel(
+    opensearch: Any,
+    crop_ids: list[str],
+    merger: Any,
+    *,
+    writer_id: str,
+    max_retries: int = 5,
 ) -> dict[str, Any]:
-    """``updated_ids`` lists exactly the crops written (the ones an undo of
-    this batch should pass); ``conflicts`` the ones that were not."""
-    updated_ids = [cid for cid, (ok, _c) in zip(crop_ids, results, strict=True) if ok]
-    conflicts = [c for ok, c in results if not ok and c is not None]
+    """Batch OCC relabel (F-17): one mget page + one bulk call instead of
+    one ``occ_update_one`` round-trip per crop. ``refresh='wait_for'`` is
+    attached only to the final bulk call of each retry round (see
+    :func:`src.clients.occ_bulk.occ_update_bulk`), not per crop.
+
+    ``current_source`` on each conflict entry is looked up with one
+    follow-up ``mget`` restricted to the (normally empty) conflict set,
+    to preserve the pre-existing response shape without re-adding a
+    per-crop read.
+    """
+    status_map = await occ_update_bulk(
+        opensearch,
+        index=CURATION_ITEMS_INDEX,
+        ids=list(crop_ids),
+        merge_fn=lambda _crop_id, source: merger(source),
+        max_retries=max_retries,
+        refresh='wait_for',
+    )
+    updated_ids = [cid for cid in crop_ids if status_map.get(cid) == 'updated']
+    conflict_ids = [cid for cid in crop_ids if status_map.get(cid) != 'updated']
+
+    conflicts: list[dict[str, Any]] = []
+    if conflict_ids:
+        from src.clients.curation_opensearch import mget_crops
+
+        docs = await mget_crops(
+            opensearch,
+            conflict_ids,
+            index=CURATION_ITEMS_INDEX,
+            source_includes=['class_source'],
+        )
+        for cid in conflict_ids:
+            source = (docs.get(cid) or {}).get('_source') or {}
+            conflicts.append({'crop_id': cid, 'current_source': source.get('class_source')})
+            logger.warning(f'{writer_id}_update_failed', crop_id=cid)
+
     return {'updated': len(updated_ids), 'updated_ids': updated_ids, 'conflicts': conflicts}
 
 
@@ -387,7 +424,7 @@ async def label_crop(
             opensearch,
             doc_id=crop_id,
             merger=_merge_label,
-            refresh=True,
+            refresh='wait_for',
             writer_id='human:label_crop',
         )
     except OCCFinalConflictError:
@@ -437,39 +474,14 @@ async def batch_label_crops(
             'updated_at': _now_iso(),
         }
 
-    async def _label_one(crop_id: str) -> tuple[bool, dict[str, Any] | None]:
-        try:
-            await occ_update_one(
-                opensearch,
-                doc_id=crop_id,
-                merger=_merge,
-                # Cluster drag-drop can race a background worker often
-                # enough that a short backoff isn't enough to outlast a
-                # single worker-batch write. Five retries covers ~2 s of
-                # contention.
-                max_retries=5,
-                refresh=True,
-                writer_id='human:batch_label_crops',
-            )
-            return True, None
-        except OCCFinalConflictError:
-            try:
-                doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
-                current_source = (doc.get('_source') or {}).get('class_source')
-            except Exception:
-                current_source = None
-            return False, {'crop_id': crop_id, 'current_source': current_source}
-        except Exception as exc:
-            logger.warning('batch_label_update_failed', crop_id=crop_id, error=str(exc))
-            return False, {'crop_id': crop_id, 'current_source': None}
-
-    # Parallelize the per-crop OCC writes. A serialized 10-crop drag-drop
-    # would otherwise take one round-trip per crop; asyncio.gather makes it
-    # ~one round-trip total. OpenSearch handles dozens of concurrent updates
-    # fine on a single index; this only ever runs on human-bounded
-    # drag-drop sizes.
-    results = await asyncio.gather(*(_label_one(cid) for cid in payload.crop_ids))
-    return _batch_outcome(payload.crop_ids, results)
+    # F-17: one mget page + one bulk call (regardless of batch size) via
+    # occ_update_bulk, instead of one occ_update_one round-trip per crop.
+    return await _occ_bulk_human_relabel(
+        opensearch,
+        payload.crop_ids,
+        _merge,
+        writer_id='human:batch_label_crops',
+    )
 
 
 @router.post('/crops/move')
@@ -513,31 +525,13 @@ async def move_crops(
             'updated_at': _now_iso(),
         }
 
-    async def _move_one(crop_id: str) -> tuple[bool, dict[str, Any] | None]:
-        try:
-            await occ_update_one(
-                opensearch,
-                doc_id=crop_id,
-                merger=_merge,
-                # Match batch_label_crops — see note there.
-                max_retries=5,
-                refresh=True,
-                writer_id='human:move_crops',
-            )
-            return True, None
-        except OCCFinalConflictError:
-            try:
-                doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
-                current_source = (doc.get('_source') or {}).get('class_source')
-            except Exception:
-                current_source = None
-            return False, {'crop_id': crop_id, 'current_source': current_source}
-        except Exception as exc:
-            logger.warning('move_crops_update_failed', crop_id=crop_id, error=str(exc))
-            return False, {'crop_id': crop_id, 'current_source': None}
-
-    results = await asyncio.gather(*(_move_one(cid) for cid in payload.crop_ids))
-    return _batch_outcome(payload.crop_ids, results)
+    # F-17: batched via occ_update_bulk — see batch_label_crops above.
+    return await _occ_bulk_human_relabel(
+        opensearch,
+        payload.crop_ids,
+        _merge,
+        writer_id='human:move_crops',
+    )
 
 
 @router.post('/crops/flag_new_class')
@@ -632,7 +626,7 @@ async def _occ_bulk_human_write(
             doc_ids=list(crop_ids),
             merger=merger,
             index=CURATION_ITEMS_INDEX,
-            refresh=True,
+            refresh='wait_for',
             writer_id=writer_id,
         )
     except Exception as exc:
@@ -691,7 +685,7 @@ async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[s
             index=CURATION_ITEMS_INDEX,
             id=crop_id,
             body=body,
-            refresh=True,
+            refresh='wait_for',
         )
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc

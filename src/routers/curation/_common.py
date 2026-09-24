@@ -336,13 +336,13 @@ class CropLabelRequest(BaseModel):
 
 
 class CropBatchLabelRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     class_id: int
     label_source: HumanLabelSource = 'human'
 
 
 class CropMoveRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     cluster_id: int
 
 
@@ -356,20 +356,20 @@ class CropExcludeRequest(BaseModel):
     record why (e.g. a whole cluster of blurry cruisers).
     """
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     reason: str = 'ignore'
 
 
 class CropUnexcludeRequest(BaseModel):
     """Reverse an exclusion (the labeler's Undo path for Ignore)."""
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class CropUndoBatchRequest(BaseModel):
     """Undo the most recent human class write on each crop."""
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class CropDiscardRequest(BaseModel):
@@ -384,7 +384,7 @@ class CropDiscardRequest(BaseModel):
 
 
 class CropDiscardBatchRequest(CropDiscardRequest):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class ItemRegionRequest(BaseModel):
@@ -411,7 +411,7 @@ class ItemBatchRegionRequest(BaseModel):
 
     model_config = {'extra': 'forbid'}
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     region_bbox_norm: tuple[float, float, float, float] | None
     region_label_source: str = 'human'
     # 'parent' boxes are projected through each item's own bbox_norm.
@@ -437,7 +437,7 @@ class CropBatchStatusRequest(BaseModel):
 
     model_config = {'extra': 'forbid'}
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     region_status: str
     region_verified: bool | None = Field(
         default=None, deprecated=True, description='Ignored; derived from region_status.'
@@ -634,7 +634,7 @@ class CropFlagNewClassRequest(BaseModel):
     """Marks crops as needing a class that doesn't exist in the registry
     yet — for batch curator review (typically weekly)."""
 
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
     note: str = ''
 
 

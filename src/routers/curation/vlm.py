@@ -134,11 +134,11 @@ def _is_frozen_test_holdout(current_source: dict[str, Any]) -> bool:
 
 
 class VlmLabelBatchRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class VlmVerifyRegionsRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class VlmVerifyRegionBatchItem(BaseModel):

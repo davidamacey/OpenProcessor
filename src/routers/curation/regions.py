@@ -369,7 +369,7 @@ async def _write_one(
     """One OCC write; RegionWriteError -> 422, a missing doc -> 404."""
     try:
         await occ_update_one(
-            opensearch, doc_id=crop_id, merger=rec, refresh=True, writer_id=writer_id, **kw
+            opensearch, doc_id=crop_id, merger=rec, refresh='wait_for', writer_id=writer_id, **kw
         )
     except OCCFinalConflictError:
         raise
@@ -500,48 +500,105 @@ async def _batch_write(
     build: Any,
     writer_id: str,
 ) -> dict[str, Any]:
-    """Apply ``build`` to every crop; per-crop outcomes, post-write items.
+    """Apply ``build`` to every crop via one batched mget + bulk round-trip
+    per retry round (F-17), instead of one ``occ_update_one`` round-trip
+    per crop.
 
-    Only refreshes once at the end (the per-doc writes use refresh=False).
+    Doesn't route through :func:`src.clients.occ_bulk.occ_update_bulk` — that
+    helper's merge_fn contract only distinguishes "wrote" vs "nothing to
+    write" (a falsy return is a documented noop counted as updated), but
+    a region-batch write needs a third outcome (``invalid``, a
+    :class:`RegionWriteError` from ``build``) that must never be reported
+    as updated. ``refresh`` is attached only to the final bulk call of
+    the final retry round — no forced ``indices.refresh`` per call.
     """
+    from src.clients.curation_opensearch import mget_crops
+    from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
+
     F = get_region_fields()
     updated = 0
     conflicts: list[dict[str, Any]] = []
     invalid: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
-    for crop_id in crop_ids:
-        rec = _Recorder(build)
-        try:
-            await occ_update_one(
+
+    pending_ids = list(dict.fromkeys(crop_ids))
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        if not pending_ids:
+            break
+        next_round: list[str] = []
+        page_starts = list(range(0, len(pending_ids), OCC_BULK_PAGE_SIZE))
+        for page_idx, start in enumerate(page_starts):
+            page_ids = pending_ids[start : start + OCC_BULK_PAGE_SIZE]
+            docs = await mget_crops(
                 opensearch,
-                doc_id=crop_id,
-                merger=rec,
-                max_retries=2,
-                refresh=False,
-                writer_id=writer_id,
+                page_ids,
+                index=CURATION_ITEMS_INDEX,
+                source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+                seq_no=True,
             )
-        except RegionWriteError as exc:
-            invalid.append({'crop_id': crop_id, 'detail': str(exc)})
-            continue
-        except OCCFinalConflictError:
+
+            pending: list[tuple[str, dict[str, Any], _Recorder]] = []
+            for crop_id in page_ids:
+                doc = docs.get(crop_id)
+                if doc is None:
+                    conflicts.append({'crop_id': crop_id, 'current_source': None})
+                    continue
+                source = doc.get('_source') or {}
+                rec = _Recorder(build)
+                try:
+                    update_doc = rec(source)
+                except RegionWriteError as exc:
+                    invalid.append({'crop_id': crop_id, 'detail': str(exc)})
+                    continue
+                pending.append((crop_id, update_doc, rec))
+
+            if not pending:
+                continue
+
+            bulk_body: list[dict[str, Any]] = []
+            for crop_id, update_doc, _rec in pending:
+                doc = docs[crop_id]
+                bulk_body.append(
+                    {
+                        'update': {
+                            '_index': CURATION_ITEMS_INDEX,
+                            '_id': crop_id,
+                            'if_seq_no': doc['_seq_no'],
+                            'if_primary_term': doc['_primary_term'],
+                        }
+                    }
+                )
+                bulk_body.append({'doc': update_doc})
+
+            is_last_page = page_idx == len(page_starts) - 1
+            call_refresh: bool | str = 'wait_for' if is_last_page else False
             try:
-                doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
-                current_source = (doc.get('_source') or {}).get(F.label_source)
-            except Exception:
-                current_source = None
-            conflicts.append({'crop_id': crop_id, 'current_source': current_source})
-            continue
-        except Exception as exc:
-            logger.warning('batch_region_write_failed', crop_id=crop_id, error=str(exc))
-            conflicts.append({'crop_id': crop_id, 'current_source': None})
-            continue
-        updated += 1
-        items.append(rec.item(crop_id))
-    if updated:
-        try:
-            await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
-        except Exception as exc:
-            logger.debug('batch_region_refresh_failed', error=str(exc))
+                resp = await opensearch.bulk(body=bulk_body, refresh=call_refresh)
+            except Exception as exc:
+                logger.warning('batch_region_write_failed', writer_id=writer_id, error=str(exc))
+                for crop_id, _update_doc, _rec in pending:
+                    conflicts.append({'crop_id': crop_id, 'current_source': None})
+                continue
+
+            resp_items = resp.get('items') or []
+            for (crop_id, _update_doc, rec), item in zip(pending, resp_items, strict=True):
+                action = item.get('update') or {}
+                status = action.get('status')
+                if status in (200, 201):
+                    updated += 1
+                    items.append(rec.item(crop_id))
+                    continue
+                error = action.get('error') or {}
+                is_conflict = status == 409 or 'version_conflict' in error.get('type', '')
+                if is_conflict and attempt < max_retries:
+                    next_round.append(crop_id)
+                else:
+                    current_source = docs.get(crop_id, {}).get('_source', {}).get(F.label_source)
+                    conflicts.append({'crop_id': crop_id, 'current_source': current_source})
+
+        pending_ids = next_round
+
     return {'updated': updated, 'conflicts': conflicts, 'invalid': invalid, 'items': items}
 
 

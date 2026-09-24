@@ -94,8 +94,9 @@ async def _fetch_with_version(
     index: str,
     doc_id: str,
 ) -> tuple[dict[str, Any], int, int]:
-    """GET with seq_no/primary_term for OCC. Returns (source, seq_no, primary_term)."""
-    resp = await client.get(index=index, id=doc_id)
+    """GET w/ seq_no/primary_term for OCC; excludes embedding vectors
+    (no current merge closure reads them). Returns (source, seq_no, primary_term)."""
+    resp = await client.get(index=index, id=doc_id, _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES)
     source = resp.get('_source') or {}
     seq_no = int(resp.get('_seq_no', 0))
     primary_term = int(resp.get('_primary_term', 0))
