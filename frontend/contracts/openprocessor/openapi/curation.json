@@ -5902,7 +5902,7 @@
     },
     "/curation/crops/batch_unexclude": {
       "post": {
-        "description": "Reverse an exclusion (Undo path for Ignore).\n\nClears ``class_excluded`` + provenance and restores the validation\nrecorded at exclude time. A validated crop goes straight back to its\nclass cluster (``cluster_id == class_id``); an unvalidated one drops\nto the residual pool (``cluster_id=null``) and gets a fresh candidate\nassignment on the next recluster. Crops that aren't excluded are left\nuntouched.",
+        "description": "Reverse an exclusion (Undo path for Ignore).\n\nClears ``class_excluded`` + provenance and restores the validation\nrecorded at exclude time. A validated crop goes straight back to its\nclass cluster (``cluster_id == class_id``); an unvalidated one returns\nto the candidate cluster it was excluded from while that cluster still\nhas members, else drops to the residual pool (``cluster_id=null``) for\na fresh assignment on the next recluster. Crops that aren't excluded\nare left untouched.",
         "operationId": "batch_unexclude_crops_curation_crops_batch_unexclude_post",
         "requestBody": {
           "content": {
@@ -6078,7 +6078,7 @@
     },
     "/curation/crops/move": {
       "post": {
-        "description": "Move crops to a different cluster.\n\nIn the default ensemble cluster_id == class_id, so this is also a\nrelabel: the moved crops get the destination cluster's class assigned\n(with class_source='human_move' and class_validated=True). This\nmatches the user's mental model — \"move this crop to the X cluster\"\nshould also mean \"this is an X, validated by me\".",
+        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  or a class-range id that isn't in the registry. Nothing is written.",
         "operationId": "move_crops_curation_crops_move_post",
         "requestBody": {
           "content": {
