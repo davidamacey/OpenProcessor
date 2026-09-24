@@ -364,6 +364,43 @@ describe('undoLast', () => {
     expect(queue.items.map((i) => i.id)).toEqual(['a']);
   });
 
+  it('m2 (2026-09-24 interactive pass): restores the item’s own served reason after assign+undo, never an invented "restored by undo" string', async () => {
+    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'sedan' } as never);
+    vi.spyOn(toastStore, 'success').mockImplementation(() => 'toast-id');
+    const a = { ...item('a'), reason: 'mistakenness_score high' };
+    const b = item('b');
+    const { controller, queue } = setup([a, b]);
+
+    await controller.assign(a, 3);
+    // undoCropLabel's mock resolves a bare Crop shape with no `reason` at
+    // all — exactly what the real API returns (ReviewItem's `reason` is
+    // a queue-only field). The controller must recover 'a's original
+    // reason from its own cache, not from this response.
+    vi.mocked(undoCropLabel).mockResolvedValue({ id: 'a' } as never);
+    undoStore.recordWrites(['a']);
+
+    await controller.undoLast();
+
+    const restored = queue.items.find((i) => i.id === 'a');
+    expect(restored?.reason).toBe('mistakenness_score high');
+  });
+
+  it('m2: falls back to null (never a fabricated string) when the removed-item cache has no entry for the restored id', async () => {
+    vi.mocked(undoCropLabel).mockResolvedValue({ id: 'z' } as never);
+    vi.spyOn(toastStore, 'success').mockImplementation(() => 'toast-id');
+    const a = item('a');
+    const { controller, queue } = setup([a]);
+    // 'z' was never removed via this controller (e.g. undone from a
+    // different session/page) — no cache entry exists for it.
+    undoStore.recordWrites(['z']);
+
+    await controller.undoLast();
+
+    const restored = queue.items.find((i) => i.id === 'z');
+    expect(restored?.reason).toBeNull();
+  });
+
   it('inserts each restored item at the cursor, not always at the end', async () => {
     vi.mocked(undoCropLabel).mockResolvedValue(item('z'));
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'toast-id');

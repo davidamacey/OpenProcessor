@@ -95,10 +95,20 @@
   // Active quick-filter preset chip on the All tab (null = plain All).
   // Only ever meaningful while tab === 'all' — resolveEffectiveTab drops
   // it for every other tab, and switching tabs clears it outright.
-  let preset = $state<ReviewPresetId | null>(null);
+  // m31 (2026-09-24 interactive pass): seeded from `?preset=` so a
+  // preset chip is bookmarkable — it used to reset to plain All on
+  // every reload/share, silently dropping the filter.
+  let preset = $state<ReviewPresetId | null>(deepLink.preset);
   const effectiveTab = $derived<ReviewTab>(resolveEffectiveTab(tab, preset));
   function togglePreset(id: ReviewPresetId): void {
     preset = preset === id ? null : id;
+    const url = new URL(page.url);
+    if (preset) {
+      url.searchParams.set('preset', preset);
+    } else {
+      url.searchParams.delete('preset');
+    }
+    replaceState(url, {});
   }
   const pageSize = 30;
   let cursor = $state<number>(0); // index within accumulated items
@@ -1183,12 +1193,33 @@
   async function rejectSlot(): Promise<void> {
     if (!current || !activeSlot) return;
     const item = current;
+    // m5 (2026-09-24 interactive pass): reject used to clear the box with
+    // no chance to record why, even when the served reject status has
+    // `wants_reason:true` (e.g. `no_region_visible`) — the rejection-
+    // reason input only ever showed up after the fact, when the status
+    // dropdown had already caught up to the write. Ask up front instead,
+    // using the served vocabulary to decide whether to ask at all.
+    const rejectStatus =
+      regionStatusesStore.rejectStatus ?? activeSlot.capabilities.lifecycle?.rejectState;
+    let reason: string | null = null;
+    if (
+      rejectStatus &&
+      statusWantsRejectionReason(activeSlot, rejectStatus, regionStatusesStore.list)
+    ) {
+      const typed = window.prompt(
+        `Reason for rejecting this ${activeSlot.label.singular} (optional):`,
+      );
+      reason = typed?.trim() || null;
+    }
     const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: null };
     _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
     try {
       // null bbox = "not visible" per setSlotBox's clear contract.
       await setSlotBox(activeSlot, item.id, null);
+      if (reason) {
+        await patchSlotMeta(activeSlot, item.id, { rejectionReason: reason });
+      }
       toastStore.success(`${activeSlot.label.title} rejected. ← to go back.`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
@@ -1341,6 +1372,7 @@
             const url = new URL(page.url);
             url.searchParams.set('tab', t.urlId);
             url.searchParams.delete('crop_id');
+            url.searchParams.delete('preset');
             replaceState(url, {});
             // Presets only make sense on the All tab — switching to any
             // other tab (or re-landing on All from one) always starts
@@ -1567,7 +1599,12 @@
            radio-style — picking a second chip swaps the first, clicking the
            active one (or "clear") returns to plain All. -->
       <div class="flex shrink-0 flex-wrap items-center gap-1.5">
-        <span class="text-zinc-400">Quick filter</span>
+        <!-- m31 (2026-09-24 interactive pass): "Quick filter" implied
+             each chip narrows All — Primary · low-conf alone returns
+             374 rows, more than All's 114, because both apply different
+             ranking/eligibility rules server-side, not a subset relation.
+             "Queue:" doesn't claim either one is smaller. -->
+        <span class="text-zinc-400">Queue:</span>
         {#each REVIEW_PRESETS as p (p.id)}
           <button
             type="button"
@@ -1585,7 +1622,9 @@
           <button
             type="button"
             class="chip bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-            onclick={() => (preset = null)}
+            onclick={() => {
+              if (preset) togglePreset(preset);
+            }}
           >
             clear
           </button>
@@ -1696,12 +1735,20 @@
               class="aspect-square w-auto h-full max-h-full min-w-0 max-w-full"
             />
           {:else}
+            <!-- p9 (2026-09-24 interactive pass): `max-h-full max-w-full`
+                 only ever shrinks — a thumbnail smaller than its
+                 container (common at 1920, where this panel stretches
+                 to ~900px tall but the served thumb is a few hundred px)
+                 rendered at its tiny natural size instead of upscaling
+                 to fill the space. `h-full w-full` + object-contain
+                 fills the container either direction, still preserving
+                 aspect ratio. -->
             <img
               src={getThumbUrl(current.id, 384)}
               alt="crop"
               loading="lazy"
               decoding="async"
-              class="max-h-full max-w-full object-contain"
+              class="h-full w-full object-contain"
             />
           {/if}
         </div>
@@ -1712,7 +1759,7 @@
         <div class="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
           <dl class="grid grid-cols-2 gap-y-1 text-xs">
             <dt class="text-zinc-500">Reason</dt>
-            <dd class="text-zinc-200">{current.reason}</dd>
+            <dd class="text-zinc-200">{current.reason ?? '—'}</dd>
 
             <dt class="text-zinc-500">Current label</dt>
             <dd class="text-zinc-200">
@@ -1720,8 +1767,23 @@
               <span class="ml-1 text-zinc-500">({current.label_source})</span>
             </dd>
 
+            <!-- m1 (2026-09-24 interactive pass): a name-only proposal
+                 (proposed_class_id absent — proposed_class_name a
+                 non-registry term like "motorcycle") used to render in
+                 the same confirmable
+                 yellow style as a real proposal, though Enter opens the
+                 picker instead of confirming it — the row now says so. -->
             <dt class="text-zinc-500">Proposed</dt>
-            <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
+            {#if current.proposed_class_name && current.proposed_class_id == null}
+              <dd
+                class="text-zinc-400"
+                title="Not a registry class — Enter opens the picker"
+              >
+                {current.proposed_class_name} <span class="text-[10px]">(hint only)</span>
+              </dd>
+            {:else}
+              <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
+            {/if}
 
             {#if current.probe_pred_class}
               <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend

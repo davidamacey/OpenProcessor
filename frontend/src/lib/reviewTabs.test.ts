@@ -229,7 +229,11 @@ describe('reviewDeepLink / urlIdForTab', () => {
   });
 
   it('falls back to All for an absent or unknown tab, and no crop', () => {
-    expect(reviewDeepLink(new URLSearchParams(''))).toEqual({ tab: 'all', cropId: null });
+    expect(reviewDeepLink(new URLSearchParams(''))).toEqual({
+      tab: 'all',
+      cropId: null,
+      preset: null,
+    });
     expect(reviewDeepLink(new URLSearchParams('tab=nope&crop_id=')).tab).toBe('all');
   });
 
@@ -237,5 +241,29 @@ describe('reviewDeepLink / urlIdForTab', () => {
     for (const t of REVIEW_TABS) {
       expect(tabFromUrlId(urlIdForTab(t.id))).toBe(t.id);
     }
+  });
+
+  describe('preset (m31, 2026-09-24 interactive pass)', () => {
+    it('reads a valid preset id on the all tab', () => {
+      expect(reviewDeepLink(new URLSearchParams('preset=vlm_low_conf')).preset).toBe(
+        'vlm_low_conf',
+      );
+    });
+
+    it('rejects a garbage preset value rather than passing it through as state', () => {
+      expect(
+        reviewDeepLink(new URLSearchParams('preset=not_a_real_preset')).preset,
+      ).toBeNull();
+    });
+
+    it('ignores a preset on any tab other than all — presets are all-only', () => {
+      expect(
+        reviewDeepLink(new URLSearchParams('tab=uncertainty&preset=mismatches')).preset,
+      ).toBeNull();
+    });
+
+    it('absent preset param is null, not undefined-that-happens-to-be-falsy', () => {
+      expect(reviewDeepLink(new URLSearchParams('tab=all')).preset).toBeNull();
+    });
   });
 });

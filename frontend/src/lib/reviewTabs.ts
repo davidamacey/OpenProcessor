@@ -154,15 +154,24 @@ export function urlIdForTab(tab: ReviewTab): string {
   return REVIEW_TABS.find((t) => t.id === tab)?.urlId ?? 'all';
 }
 
-/** What a `/review?tab=…&crop_id=…` link asks for. An unknown or absent
- *  `tab` opens All; `cropId` is null when absent or empty. */
+/** What a `/review?tab=…&crop_id=…&preset=…` link asks for. An unknown or
+ *  absent `tab` opens All; `cropId` is null when absent or empty.
+ *  `preset` (m31, 2026-09-24 interactive pass) is only meaningful when
+ *  `tab` resolves to `all` — validated against `REVIEW_PRESETS` here so
+ *  a garbage/typo'd query value never becomes bogus selected state. */
 export function reviewDeepLink(params: URLSearchParams): {
   tab: ReviewTab;
   cropId: string | null;
+  preset: ReviewPresetId | null;
 } {
+  const tab = tabFromUrlId(params.get('tab') ?? '') ?? 'all';
+  const rawPreset = params.get('preset');
+  const preset =
+    tab === 'all' && rawPreset && isReviewPresetId(rawPreset) ? rawPreset : null;
   return {
-    tab: tabFromUrlId(params.get('tab') ?? '') ?? 'all',
+    tab,
     cropId: params.get('crop_id') || null,
+    preset,
   };
 }
 
@@ -210,6 +219,13 @@ export const REVIEW_PRESETS: ReviewPresetDef[] = [
     description: 'Largest-subject-in-frame crops v6 was unsure on',
   },
 ];
+
+/** Type guard for a `?preset=` query value — function declaration (not a
+ *  const) so it's usable from `reviewDeepLink` above regardless of
+ *  declaration order in this module. */
+export function isReviewPresetId(value: string): value is ReviewPresetId {
+  return REVIEW_PRESETS.some((p) => p.id === value);
+}
 
 /**
  * What `getReviewQueue` should actually be called with. Presets only ever

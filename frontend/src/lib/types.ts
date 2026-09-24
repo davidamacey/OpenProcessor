@@ -493,7 +493,11 @@ export type CoreReviewTab =
 export type ReviewTab = CoreReviewTab | SlotReviewTab;
 
 export interface ReviewItem extends Crop {
-  reason: string;
+  /** m2 (2026-09-24 interactive pass): null after an undo re-insert when
+   *  the controller's removed-item cache doesn't have the original
+   *  served reason (e.g. a page reload between removal and undo) —
+   *  never a frontend-invented string like "restored by undo". */
+  reason: string | null;
   // proposed_class_id/name live on Crop now (served on every crop-shaped
   // item, not just review rows) — not re-declared here.
   /** The freshly-promoted model's predicted class id for this crop

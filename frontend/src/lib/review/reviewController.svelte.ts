@@ -38,6 +38,14 @@ export interface ReviewQueueControllerOptions {
 export function createReviewQueueController(opts: ReviewQueueControllerOptions) {
   const { queue, handledIds, getCursor, setCursor, maybePrefetch } = opts;
 
+  // m2 (2026-09-24 interactive pass): undoLast() re-inserts a Crop (from
+  // undoStore, which only knows label fields) into a ReviewItem[] queue.
+  // ReviewItem carries a served `reason` Crop doesn't have, so this
+  // caches the original item's reason at removal time and reuses it on
+  // undo — instead of inventing a "restored by undo" string that was
+  // never served by the backend.
+  const removedItemReasons = new Map<string, string | null>();
+
   /**
    * Optimistically drop an item from the queue and advance.
    *
@@ -47,6 +55,7 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
    * still holds it unchanged, and it is never seen again this session.
    */
   function removeFromQueue(item: ReviewItem): () => void {
+    removedItemReasons.set(item.id, item.reason ?? null);
     const found = queue.items.findIndex((x) => x.id === item.id);
     const removedIdx = found >= 0 ? found : getCursor();
     const priorCursor = getCursor();
@@ -108,8 +117,9 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
       handledIds.delete(crop.id);
       const restored: ReviewItem = {
         ...crop,
-        reason: 'restored by undo',
+        reason: removedItemReasons.get(crop.id) ?? null,
       } as ReviewItem;
+      removedItemReasons.delete(crop.id);
       const without = queue.items.filter((it) => it.id !== crop.id);
       const at = Math.min(getCursor(), without.length);
       queue.total += without.length === queue.items.length ? 1 : 0;

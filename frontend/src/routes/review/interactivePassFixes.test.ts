@@ -110,3 +110,56 @@ describe('seededSlotBox is captured every time the box is (re)seeded from the se
     expect(fn).toMatch(/seededSlotBox = editedSlotBox;/);
   });
 });
+
+describe('m1 (2026-09-24 interactive pass): a name-only proposal is styled as a hint, not a confirmable proposal', () => {
+  it('the Proposed row branches on proposed_class_id == null before using the yellow confirmable style', () => {
+    expect(src).toMatch(
+      /\{#if current\.proposed_class_name && current\.proposed_class_id == null\}/,
+    );
+  });
+
+  it('the name-only branch uses a neutral color, not text-yellow-200', () => {
+    const block = src.match(
+      /\{#if current\.proposed_class_name && current\.proposed_class_id == null\}[\s\S]*?\{:else\}/,
+    )?.[0];
+    expect(block).toBeDefined();
+    expect(block).not.toMatch(/text-yellow-200/);
+    expect(block).toMatch(/hint only/);
+  });
+});
+
+describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front when the served status wants one', () => {
+  const fn = src.match(/async function rejectSlot\(\)[\s\S]*?\n {2}\}/)?.[0];
+
+  it('checks statusWantsRejectionReason against the served reject status before writing anything', () => {
+    expect(fn).toBeDefined();
+    expect(fn).toMatch(
+      /statusWantsRejectionReason\(activeSlot, rejectStatus, regionStatusesStore\.list\)/,
+    );
+  });
+
+  it('prompts before the optimistic queue removal / setSlotBox write, not after', () => {
+    expect(fn).toBeDefined();
+    const promptIdx = fn!.indexOf('window.prompt(');
+    const removeIdx = fn!.indexOf('_removeFromQueue(item)');
+    const setBoxIdx = fn!.indexOf('setSlotBox(activeSlot, item.id, null)');
+    expect(promptIdx).toBeGreaterThan(-1);
+    expect(promptIdx).toBeLessThan(removeIdx);
+    expect(promptIdx).toBeLessThan(setBoxIdx);
+  });
+
+  it('persists a given reason via patchSlotMeta after the box clears', () => {
+    expect(fn).toMatch(
+      /if \(reason\) \{\s*\n\s*await patchSlotMeta\(activeSlot, item\.id, \{ rejectionReason: reason \}\);/,
+    );
+  });
+});
+
+describe('p9 (2026-09-24 interactive pass): the /review crop thumbnail upscales to fill its panel, at any viewport', () => {
+  it('the plain-<img> crop branch uses h-full w-full, not max-h-full max-w-full (which never upscales)', () => {
+    const block = src.match(/\{:else\}\s*\n\s*<!-- p9[\s\S]*?<img[\s\S]*?\/>/)?.[0];
+    expect(block).toBeDefined();
+    expect(block).toMatch(/class="h-full w-full object-contain"/);
+    expect(block).not.toMatch(/class="max-h-full max-w-full object-contain"/);
+  });
+});

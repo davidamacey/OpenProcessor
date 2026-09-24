@@ -1017,6 +1017,34 @@ which the old check (`combo === 'shift+\``) never matched — fixed
     results sat directly on the crop image with no backdrop, unreadable
     against busy content on a tall/portrait crop. Added a top gradient
     scrim behind the chip row in `CropResultGrid.svelte`.
+  - **m2** — after Z (undo), the `/review` Details "Reason" row read the
+    frontend-invented string "restored by undo" — the backend never
+    serves that. The queue controller now caches each item's real
+    served `reason` at removal time and restores it on undo, falling
+    back to `null` (rendered "—") when no cache entry exists (e.g. the
+    undo didn't originate from this controller's own remove).
+  - **m1** — a name-only proposal (`proposed_class_name` set,
+    `proposed_class_id: null` — e.g. a non-registry term like
+    "motorcycle") rendered in the same yellow confirmable style as a
+    real proposal, though Enter opens the class picker instead of
+    confirming it. It now renders dimmed with a "(hint only)" label.
+  - **m5** — Reject (`D` on a slot tab) cleared the box immediately with
+    no chance to record why, even when the served reject status has
+    `wants_reason: true`. It now prompts for a reason first (checked
+    against the served `regionStatusesStore` vocabulary) and persists
+    it via `patchSlotMeta` alongside the box clear.
+  - **m31** — the active quick-filter preset chip on `/review`'s All tab
+    wasn't reflected in the URL, so it couldn't be bookmarked or
+    shared, and reloading always silently dropped back to plain All.
+    `reviewDeepLink()` now also parses a validated `?preset=`, and
+    `togglePreset` keeps it in sync. Relabeled the "Quick filter" row
+    "Queue:" — Primary · low-conf returns more rows (374) than plain
+    All (114), so calling it a narrowing filter was backwards.
+  - **p9** — at 1920×1080 the `/review` crop thumbnail rendered at its
+    tiny natural size (~134px) inside a ~900px-tall panel, because
+    `max-h-full max-w-full` only ever shrinks an image, never upscales
+    one smaller than its container. Switched to `h-full w-full` (still
+    `object-contain`), which fills the panel at any viewport.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —
