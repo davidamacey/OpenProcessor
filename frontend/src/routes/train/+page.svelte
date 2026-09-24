@@ -155,6 +155,13 @@
   // unchanged. Picking any past export lets us reuse the exact same data when
   // upsizing nano -> small, etc.
   let selectedExportDir = $state<string>('');
+  // /export/status describes only the latest export, so its counts apply
+  // when nothing is picked or the pick is that same directory.
+  const showsCurrentExport = $derived(
+    !selectedExportDir ||
+      selectedExportDir === vehiclesExportState?.export_dir ||
+      selectedExportDir === vehiclesExportState?.path,
+  );
   // Multi-class rows are `kind: 'yolo'`; a slot's rows are `single_class`
   // rows written under its own `profile_name`.
   const kindDatasets = $derived(
@@ -998,11 +1005,11 @@
         <p class="mt-2 text-xs text-zinc-400">
           {datasetExportSpec.blurb}
         </p>
-      {:else if !selectedExportDir && vehiclesExportState?.class_split_counts}
+      {:else if showsCurrentExport && vehiclesExportState?.class_split_counts}
         <!-- Current export's own contents (OpenProcessor 6c77deb's
-             GET {API_PREFIX}/export/status) — only valid for the `current`
-             symlink, so this branch is gated on no explicit past-version
-             pick above. m-train-card (2026-09-24): this used to show the
+             GET {API_PREFIX}/export/status) — only valid for the current
+             export, so this branch renders for the `current` symlink or an
+             explicit pick of that same directory, never a past version. m-train-card (2026-09-24): this used to show the
              classesStore-wide validated total (which counted
              test_holdout crops too), a different — and often much
              bigger — number than what this specific export actually

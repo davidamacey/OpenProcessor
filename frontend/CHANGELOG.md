@@ -1288,6 +1288,11 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- `/train`'s dataset card fell back to the global pool ("84 classes") when
+  the current export was picked explicitly in the version dropdown. It
+  now shows the export's own split counts for the `current` symlink or an
+  explicit pick of that same directory, and only falls back for a past
+  version.
 - `/export` shows the served `skipped_items` counts (validated items the
   export couldn't write: no source image id, or no usable box/class),
   adopting OpenProcessor ad9f8d3. Older exports carry none and show no chip.
