@@ -181,42 +181,57 @@ the **Model Disagreements** tab on `/review` surfaces validated crops
 where the new model and the human label diverge — high-signal candidates
 for the next training cycle.
 
-### Training cohorts (P2.12-P2.14, docs/genericization-plan-2026-09-13.md §9.2/§9.3)
+### Training cohorts (2026-09-24 logic-moves W6; originally P2.12-P2.14,
 
-The former "Plate training cohorts" panel (hardcoded to `license_plate`'s
-4 backend modes) is now a generic **Training cohorts** section, grouped
-by class. Mechanism lives in `src/lib/annotations/cohorts.ts`:
+docs/genericization-plan-2026-09-13.md §9.2/§9.3)
 
-- **`CORE_COHORTS`** — 4 class-agnostic cohorts (`validated` /
-  `needs_labeling` / `low_confidence` / `model_disagreements`) every
-  class gets for free, riding entirely on the already class-agnostic
-  `GET {API_PREFIX}/crops` and `GET {API_PREFIX}/review/model_disagreements` — zero
-  backend change.
-- **`SlotSpec.capabilities.trainingCohorts`** (optional) — a slot's own
-  hand-declared cohorts, which replace any derived id of the same name.
-  `licensePlateSlot` declares its 5 backend `{API_PREFIX}/regions/
-training_candidates` modes here — cohort ids `detector_blind_spots` /
-  `low_conf_correct` / `disagreement` / `human_corrected` /
-  `false_positives` (`false_positives` was previously typed but
-  unreachable from the UI; it's live now). The first two ids' wire
-  `?mode=` values were `lpr_blind_spots` / `lpr_low_conf_correct` before
-  OpenProcessor's 2026-09 region rename (`b3f928d`); they are now
-  `detector_blind_spots` / `low_conf_correct`, matching the ids.
-- **`derivedCohorts()`** — capability ⇒ cohort rules (subBox ⇒
-  `blind_spots`, subBox+scoreField ⇒ `low_conf`, provenance.chainField
-  ⇒ `disagreement`, lifecycle.falsePositiveState ⇒ `false_positives`).
-  Tier-2 `predicate` queries, gated behind a `predicateCohortsAvailable`
-  flag that is hardcoded `false` today (no backend support exists yet —
-  see H5 in the plan's §9.4) — so only `CORE_COHORTS` + a slot's own
-  declared cohorts ever render in this deployment.
-- `/train/+page.svelte`'s `runCohortQuery()` dispatches a cohort's
-  compiled tier-1 endpoint query to whichever existing `api.ts`
-  function already answers it (`getTrainingCandidates` /
-  `getCrops` / `getReviewQueue`) — no new endpoint, no new response
-  shape. The preview grid is `rowKind`-aware (`SlotCard` for a slot
-  cohort, `CropCard` for a class-agnostic one). Counts load lazily
-  per class group (`IntersectionObserver`) rather than firing an
-  N-classes × M-cohorts request storm on mount.
+The **Training cohorts** section on `/train`, grouped by class, now
+sources its cohort _definitions_ from the backend:
+`GET {API_PREFIX}/training_cohorts?class_id=` returns
+`{cohorts:[{id,label,description,cutoffs,endpoint,params,row_kind}]}`,
+already resolved for the requested class (`params` carries a real
+`class_id`, not a template) — 4 class-agnostic cohorts
+(`validated`/`needs_labeling`/`low_confidence`/`model_disagreements`, on
+`GET {API_PREFIX}/crops` / `GET {API_PREFIX}/review/model_disagreements`)
+plus, only when the backend has a region profile configured,
+`license_plate`'s 5 region-training-candidate modes
+(`detector_blind_spots`/`low_conf_correct`/`disagreement`/
+`human_corrected`/`false_positives`, on
+`GET {API_PREFIX}/regions/training_candidates?mode=`). A cohort's numeric
+thresholds (e.g. `low_confidence`'s `classifier_conf_lt`) are the
+server's, not a client constant.
+
+- `/train/+page.svelte`'s `loadGroupCohorts()` calls
+  `getTrainingCohorts(classId)` and maps each served cohort into the
+  page's local `CohortSpec` shape (`row_kind: 'region'` → `rowKind:
+'slot'`, rendered via `SlotCard`, click jumps to the owning slot's
+  review queue; `row_kind: 'crop'` → `rowKind: 'crop'`, rendered via
+  `CropCard`, click jumps to the All review tab). Cohort definitions load
+  lazily per class group (`IntersectionObserver`, same trigger as the
+  existing lazy counts) rather than firing an N-classes request storm on
+  mount.
+- **Tier-2 fallback:** a slot registered only via
+  `annotation-profiles.json` (`parseSlotConfig.ts`, no backend region
+  profile at all) still gets a working cohort picker — `loadGroupCohorts`
+  merges in that slot's own `capabilities.trainingCohorts.cohorts`
+  (declared cohorts only, not `CORE_COHORTS` or a tier-2 `predicate`
+  cohort) for any id the server's response didn't already send, via the
+  pre-existing `cohortsForClass()` (`src/lib/annotations/cohorts.ts`,
+  `predicateCohortsAvailable=false`). The server wins on an id collision
+  — for `license_plate` today the server already sends all 5 region
+  modes, so its hand-declared copy in `licensePlate.ts` never actually
+  fires, but is kept (not deleted) because `cohorts.ts`'s `CORE_COHORTS`/
+  `derivedCohorts`/`cohortsForClass` and this fallback path are exactly
+  what a genuinely backend-unknown tier-2 slot needs — see
+  `cohorts.test.ts`, `secondSlotIntegration.test.ts` and
+  `exampleProfile.test.ts` for that mechanism's own coverage,
+  independent of this page.
+- `runCohortQuery()` dispatches a cohort's `endpoint`/`params` (served
+  verbatim, or the tier-2 fallback's compiled equivalent) to whichever
+  existing `api.ts` function already answers that endpoint shape
+  (`getTrainingCandidates` / `getCrops` / `getReviewQueue`), keyed
+  structurally by `cohortEndpointKind()` — no new endpoint, no new
+  response shape.
 - Cohorts default to **all non-deprecated classes** rather than syncing
   to `TrainForm`'s own class-subset selection — that tighter coupling
   (lifting `selectedClasses` into the page) is not done; the cohort

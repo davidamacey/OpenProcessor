@@ -82,6 +82,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `capabilities.lifecycle.states` is kept as the fallback for when the
     endpoint is unavailable.
 
+- The cluster-scoped VLM run now matches OpenProcessor `main` (`d037be8`,
+  see `docs/design/logic-moves-adoption-plan-2026-09-24.md` W3):
+  `runVlmOnCluster` (dashboard's "Run VLM on cluster" modal and
+  `/clusters/[id]`'s "Run VLM" button) is a single
+  `POST {API_PREFIX}/vlm/label_cluster/{id}[?prompt_pack=]` instead of a
+  client-side fetch-200-crops-then-chunk-of-64 loop against
+  `{API_PREFIX}/vlm/label_batch` — the server now selects and chunks the
+  unvalidated members itself. Progress renders from a new
+  `pollAutoLabelJob()` helper polling
+  `GET {API_PREFIX}/pipeline/auto_label/status` (stage + processed/total)
+  until the job leaves `running`; both pages show the live stage inline
+  and the final toast reads `result.stages.vlm.predicted`/`.updated`.
+- Cluster cards and the cluster-detail cut line now match OpenProcessor
+  `main` (`d037be8`, see
+  `docs/design/logic-moves-adoption-plan-2026-09-24.md` W6):
+  - `Cluster` carries the served `purity_tier`/`promotable` and
+    `core_similarity_min`; `/clusters`' `borderColor`/`purityBadge` branch
+    on `purity_tier` and the card shows a `promotable` chip — the client
+    0.8/0.6 purity thresholds are deleted.
+  - `Crop.similarity_to_centroid` is mapped from the served
+    `cluster_similarity` — the client `Math.max(0, 1 - cluster_distance)`
+    estimate is deleted. A new `Crop.cluster_is_core` (served
+    `cluster_is_core`) drives `/clusters/[id]`'s core/non-core cut line;
+    the client `similarity_to_centroid <= 0.75` constant is deleted.
+  - `/clusters/[id]`'s class-for-cluster lookup (`clsForCluster`) now
+    reads the served `cluster.cluster_kind`/`cluster.dominant_class_id`
+    instead of assuming `cluster_id === class_id`.
+  - `/train`'s Training cohorts panel now sources its cohort definitions
+    from `GET {API_PREFIX}/training_cohorts?class_id=` (already resolved
+    for the class, loaded lazily per class group alongside the existing
+    lazy counts) instead of the client-only `cohortsForClass()`
+    (`CORE_COHORTS` + `license_plate`'s hardcoded 5 modes). A slot's own
+    tier-2-declared `capabilities.trainingCohorts.cohorts` (see
+    `parseSlotConfig.ts`) still fills in as a fallback for any cohort id
+    the server didn't already send, so a deployment-registered slot the
+    backend has no region profile for keeps working. `CORE_COHORTS`/
+    `derivedCohorts`/`cohortsForClass` stay in `cohorts.ts` — the tier-2
+    mechanism and its test coverage (`cohorts.test.ts`,
+    `secondSlotIntegration.test.ts`, `exampleProfile.test.ts`) still need
+    them.
+
 ### Removed
 
 - `src/lib/annotations/regionWireContract.test.ts`, replaced by the
