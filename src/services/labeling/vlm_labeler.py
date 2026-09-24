@@ -75,6 +75,7 @@ from src.services.labeling.vlm_client import (
     build_auth_headers,
     build_http_client,
     extract_message_content,
+    extract_reasoning_content,
     post_chat_with_retry,
 )
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
@@ -88,6 +89,11 @@ logger = get_logger(__name__)
 
 
 ConfidenceLevel = Literal['high', 'medium', 'low']
+ClassReplyFailure = Literal['request_failed', 'unparseable']
+
+# vLLM's ``json_object`` grammar only admits an object, so every batched
+# class prompt asks for the per-image array wrapped in ``{"results": ...}``.
+_RESULTS_ENVELOPE = 'Wrap the array in one JSON object: {"results": [ ...one entry per image... ]}.'
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +185,14 @@ class VlmClassPrediction(BaseModel):
         description='Whether the VLM sees a sub-region-of-interest on this crop; None when '
         'not reported.',
     )
+    failure: ClassReplyFailure | None = Field(
+        default=None,
+        description=(
+            "Why there is no answer for this crop: 'request_failed' (the call never "
+            "completed) or 'unparseable' (no usable entry for this crop in the reply). "
+            'None when the reply was parsed -- even if its class is empty.'
+        ),
+    )
 
 
 class VlmRegionVerdict(BaseModel):
@@ -229,6 +243,13 @@ class VlmCombinedReply(BaseModel):
     plate_confidence: ConfidenceLevel | None = None
     make: str = Field(default='', description='Free-text attribute 1 when visible, else "".')
     model: str = Field(default='', description='Free-text attribute 2 when visible, else "".')
+    class_raw: str = Field(
+        default='',
+        description=(
+            'The class the VLM named when it answered with a label instead of a '
+            "catalog index and the label isn't in the catalog; '' otherwise."
+        ),
+    )
 
 
 class CombinedParseFailure(Exception):  # noqa: N818 - documented public symbol
@@ -479,8 +500,7 @@ def _combined_reply_from_entry(
     if visible is None:
         msg = f'{fields.visible} missing or not a boolean: {entry.get(fields.visible)!r}'
         raise ValueError(msg)
-    class_id_raw = entry.get('class_id')
-    class_id: int | None = int(class_id_raw) if class_id_raw is not None else None
+    class_id, class_raw = _coerce_class_answer(entry, class_names)
     class_conf_raw = entry.get('class_confidence')
     region_conf_raw = entry.get(fields.confidence)
     make = str(entry.get('make') or '').strip()[:48]
@@ -505,7 +525,101 @@ def _combined_reply_from_entry(
         ),
         make=make,
         model=model_name,
+        class_raw=class_raw,
     )
+
+
+_INDEX_ANSWER_RE = re.compile(r'^(-?\d+)(?:\s*[=:].*)?$', re.DOTALL)
+
+
+def _coerce_class_answer(
+    entry: dict[str, Any], class_names: list[str] | None
+) -> tuple[int | None, str]:
+    """Read a combined reply's class answer as ``(index, raw_label)``.
+
+    The prompt asks for ``class_id`` as an index into the catalog, but
+    models also answer with the catalog entry itself (``"3=sedan"``), the
+    class name (``"sedan"``), or a ``class`` / ``class_name`` key. An
+    index form returns ``(index, '')``; a name found in ``class_names``
+    (case-insensitive) returns its index; any other non-empty label
+    returns ``(None, label)`` so the caller can record what the VLM
+    actually said. No answer returns ``(None, '')``.
+    """
+    value = entry.get('class_id')
+    if value is None:
+        value = entry.get('class', entry.get('class_name'))
+    if value is None or isinstance(value, bool | dict | list):
+        return None, ''
+    if isinstance(value, int | float):
+        return (int(value), '') if float(value).is_integer() else (None, '')
+    text = str(value).strip()
+    if not text or text.lower() in ('null', 'none'):
+        return None, ''
+    match = _INDEX_ANSWER_RE.match(text)
+    if match:
+        return int(match.group(1)), ''
+    folded = text.casefold()
+    for i, name in enumerate(class_names or []):
+        if name.casefold() == folded:
+            return i, ''
+    return None, text[:64]
+
+
+def _decoded_json_values(text: str) -> list[Any]:
+    """Every JSON array/object embedded in ``text``, outermost first.
+
+    Reasoning-channel text is prose with the JSON answer somewhere in it;
+    this finds each top-level ``[...]`` / ``{...}`` that decodes.
+    """
+    decoder = json.JSONDecoder()
+    out: list[Any] = []
+    pos = 0
+    while pos < len(text):
+        starts = [i for i in (text.find('[', pos), text.find('{', pos)) if i >= 0]
+        if not starts:
+            break
+        start = min(starts)
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            pos = start + 1
+            continue
+        out.append(value)
+        pos = end
+    return out
+
+
+def _class_reply_entries(raw: str) -> list[Any] | None:
+    """The per-image entry list of a batched class reply, or ``None``.
+
+    Accepts a bare array, a ``{"results"|"predictions"|"data": [...]}``
+    envelope, a single per-image object, or any of those embedded in
+    prose (the last one found wins -- a reasoning trace ends with its
+    answer).
+    """
+    try:
+        values = [json.loads(raw)]
+    except json.JSONDecodeError:
+        values = _decoded_json_values(raw)
+    for value in reversed(values):
+        if isinstance(value, dict):
+            for key in ('results', 'predictions', 'data'):
+                if isinstance(value.get(key), list):
+                    return value[key]
+            if 'class' in value or 'img' in value:
+                return [value]
+        if isinstance(value, list):
+            return value
+    return None
+
+
+def _request_failed(chunk: list[ItemCrop]) -> list[VlmClassPrediction]:
+    return [
+        VlmClassPrediction(
+            img_id=c.img_id, class_name='', confidence='low', failure='request_failed'
+        )
+        for c in chunk
+    ]
 
 
 def _align_batch_entries(parsed: list[Any], n: int) -> list[dict[str, Any] | None] | None:
@@ -712,6 +826,7 @@ class VlmLabeler:
         class_names: list[str],
     ) -> list[VlmClassPrediction]:
         user_text = self._pack.class_user_template.format(class_names_csv=', '.join(class_names))
+        user_text = f'{user_text}\n{_RESULTS_ENVELOPE}'
         user_content: list[dict[str, Any]] = [{'type': 'text', 'text': user_text}]
         for crop in chunk:
             b64 = _b64_jpeg(crop.jpeg_bytes)
@@ -730,6 +845,10 @@ class VlmLabeler:
             ],
             'temperature': 0.0,
             'max_tokens': 512,
+            # Same grammar constraint as the combined call: without it a
+            # server-side reasoning parser can route the whole answer to
+            # the reasoning channel and leave ``content`` empty.
+            'response_format': {'type': 'json_object'},
         }
 
         try:
@@ -741,73 +860,97 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            return [
-                VlmClassPrediction(img_id=c.img_id, class_name='', confidence='low') for c in chunk
-            ]
+            return _request_failed(chunk)
 
-        raw = _strip_markdown_fences(extract_message_content(response))
-        return self._parse_vehicle_response(raw, chunk, self._fields)
+        return self._parse_class_reply(response, chunk)
+
+    def _parse_class_reply(
+        self, response: dict[str, Any], chunk: list[ItemCrop]
+    ) -> list[VlmClassPrediction]:
+        """Parse a class call's reply, falling back to the reasoning channel.
+
+        Only when ``content`` yields nothing usable for any crop is the
+        reasoning text tried -- a parsed ``content`` always wins.
+        """
+        content = _strip_markdown_fences(extract_message_content(response))
+        preds = self._parse_vehicle_response(content, chunk, self._fields)
+        if any(p.failure is None for p in preds):
+            return preds
+        reasoning = extract_reasoning_content(response)
+        if not reasoning:
+            return preds
+        from_reasoning = self._parse_vehicle_response(
+            reasoning, chunk, self._fields, log_failures=False
+        )
+        if any(p.failure is None for p in from_reasoning):
+            logger.info(
+                'vlm_labeler.class_reply_from_reasoning',
+                chunk_size=len(chunk),
+                content_preview=content[:80],
+            )
+            return from_reasoning
+        return preds
 
     @staticmethod
     def _parse_vehicle_response(
         raw: str,
         chunk: list[ItemCrop],
         fields: RegionFields,
+        *,
+        log_failures: bool = True,
     ) -> list[VlmClassPrediction]:
-        """Parse the VLM's JSON-array response into one prediction per chunk crop."""
+        """Parse the VLM's JSON-array response into one prediction per chunk crop.
+
+        A crop with no usable entry comes back with ``class_name=''`` and
+        ``failure='unparseable'`` -- distinct from a parsed entry whose
+        class is empty (``failure=None``).
+        """
 
         # Even on parse failure we preserve the raw response so the
         # curator can review what the VLM actually said.
         raw_excerpt = raw[:200]
         fallback = [
             VlmClassPrediction(
-                img_id=c.img_id, class_name='', confidence='low', raw_response=raw_excerpt
+                img_id=c.img_id,
+                class_name='',
+                confidence='low',
+                raw_response=raw_excerpt,
+                failure='unparseable',
             )
             for c in chunk
         ]
 
         if not raw:
-            logger.warning('vlm_labeler.parse_empty_response', chunk_size=len(chunk))
+            if log_failures:
+                logger.warning('vlm_labeler.parse_empty_response', chunk_size=len(chunk))
             return fallback
 
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            logger.warning(
-                'vlm_labeler.parse_failed',
-                error=str(exc),
-                raw_preview=raw[:200],
-                chunk_size=len(chunk),
-            )
+        parsed = _class_reply_entries(raw)
+        if parsed is None:
+            if log_failures:
+                logger.warning(
+                    'vlm_labeler.parse_failed',
+                    raw_preview=raw[:200],
+                    chunk_size=len(chunk),
+                )
             return fallback
 
-        # Accept either a bare array or {"results":[...]}-shaped payload.
-        if isinstance(parsed, dict):
-            for key in ('results', 'predictions', 'data'):
-                if key in parsed and isinstance(parsed[key], list):
-                    parsed = parsed[key]
-                    break
-        if not isinstance(parsed, list):
-            logger.warning(
-                'vlm_labeler.parse_unexpected_shape',
-                shape=type(parsed).__name__,
-                raw_preview=raw[:200],
-            )
-            return fallback
-
-        # Map img-index → record. The VLM is told to use 1-based ``img`` ids.
+        # Map img-index → record. The VLM is told to use 1-based ``img`` ids;
+        # entries with no index at all are taken positionally when their
+        # count matches the chunk.
+        entries = [e for e in parsed if isinstance(e, dict)]
         by_index: dict[int, dict[str, Any]] = {}
-        for entry in parsed:
-            if not isinstance(entry, dict):
-                continue
-            raw_idx = entry.get('img')
+        if entries and all(e.get('img') is None for e in entries) and len(entries) == len(chunk):
+            by_index = dict(enumerate(entries, start=1))
+        for indexed in entries:
+            raw_idx = indexed.get('img')
             if raw_idx is None:
                 continue
             try:
                 idx = int(raw_idx)
             except (TypeError, ValueError):
                 continue
-            by_index[idx] = entry
+            by_index[idx] = indexed
 
         out: list[VlmClassPrediction] = []
         for i, crop in enumerate(chunk, start=1):
@@ -819,6 +962,7 @@ class VlmLabeler:
                         class_name='',
                         confidence='low',
                         raw_response=raw_excerpt,
+                        failure='unparseable',
                     )
                 )
                 continue
@@ -922,14 +1066,15 @@ class VlmLabeler:
                 'Class catalog (grouped, with brief descriptions where slugs are not '
                 'self-evident):\n'
                 f'{class_catalog}\n\n'
-                'Label each numbered crop. Respond as a JSON array:\n'
-                '[{"img": 1, "class": "<name|__new__>", "confidence": "high|medium|low", '
-                '"proposed_class": "<slug or empty>"}, ...]'
+                'Label each numbered crop. Respond as one JSON object:\n'
+                '{"results": [{"img": 1, "class": "<name|__new__>", '
+                '"confidence": "high|medium|low", "proposed_class": "<slug or empty>"}, ...]}'
             )
         else:
             user_text = self._pack.open_class_user_template.format(
                 class_names_csv=', '.join(class_names)
             )
+            user_text = f'{user_text}\n{_RESULTS_ENVELOPE}'
         if cluster_hint:
             user_text = (
                 f'Hint: these crops were grouped together by visual similarity; the '
@@ -955,6 +1100,7 @@ class VlmLabeler:
             ],
             'temperature': 0.0,
             'max_tokens': 768,
+            'response_format': {'type': 'json_object'},
         }
         try:
             response = await self._post_chat(payload)
@@ -965,11 +1111,8 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            return [
-                VlmClassPrediction(img_id=c.img_id, class_name='', confidence='low') for c in chunk
-            ]
-        raw = _strip_markdown_fences(extract_message_content(response))
-        return self._parse_vehicle_response(raw, chunk, self._fields)
+            return _request_failed(chunk)
+        return self._parse_class_reply(response, chunk)
 
     async def verify_plate(self, crop: RegionCrop) -> VlmRegionVerdict:
         """Verify whether a single sub-region crop is real."""
@@ -1494,7 +1637,13 @@ class VlmLabeler:
                     fields=fields,
                     class_names=class_names if crop.classify else None,
                 )
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    'vlm_labeler.combined_batch_entry_invalid',
+                    crop_id=crop.crop_id,
+                    error=str(exc),
+                    entry_preview=json.dumps(entry, default=str)[:300],
+                )
                 out[crop.crop_id] = None
         return out
 
