@@ -116,9 +116,9 @@ describe('createStrategyBar', () => {
 
   // P2-10: /review's diverse overlay reuses toQueryParams() for its
   // non-diverse filters, so an overlay id selected as `sort` must never
-  // leak into the `sort` query param — /curation/review/{tab} 400s on
+  // leak into the `sort` query param — {API_PREFIX}/review/{tab} 400s on
   // `sort=diverse`, since diverse selection is a wholly separate call
-  // (POST /curation/select/diverse), not a review-queue sort.
+  // (POST {API_PREFIX}/select/diverse), not a review-queue sort.
   describe('overlayIds (P2-10)', () => {
     it('omits sort entirely when the current selection is a registered overlay id', () => {
       const bar = createStrategyBar({ overlayIds: ['diverse'] });

@@ -1,7 +1,7 @@
 /**
  * TypeScript types mirroring the OpenSearch indexes defined in Wave 1d
- * (op_classes, op_vehicle_crops, op_clusters, etc.) and the openprocessor
- * `/curation/...` endpoint responses defined in Phase 2D.
+ * (the items, classes and clusters indexes) and the openprocessor
+ * `{API_PREFIX}/...` endpoint responses defined in Phase 2D.
  *
  * These shapes are forward-tolerant: we accept extra fields silently so a
  * server-side schema bump won't break the app.
@@ -22,7 +22,7 @@ export type LabelSource =
 
 export type ClassSource = 'registry' | 'derived' | 'imported';
 
-export interface OpClass {
+export interface RegistryClass {
   id: number;
   name: string;
   group: string | null;
@@ -45,29 +45,29 @@ export interface OpClass {
   deprecated?: boolean;
 }
 
-/** Payload for `POST /curation/classes`. */
-export interface OpClassCreate {
+/** Payload for `POST {API_PREFIX}/classes`. */
+export interface RegistryClassCreate {
   name: string;
   group: string;
   notes?: string;
 }
 
-/** Payload for `PUT /curation/classes/{id}`. Any subset of fields may be supplied. */
-export interface OpClassUpdate {
+/** Payload for `PUT {API_PREFIX}/classes/{id}`. Any subset of fields may be supplied. */
+export interface RegistryClassUpdate {
   name?: string;
   group?: string;
   /** Pass an empty string to clear the binding, or omit to leave unchanged. */
   hotkey_letter?: string;
 }
 
-/** Payload for `POST /curation/classes/merge`. */
-export interface OpClassMerge {
+/** Payload for `POST {API_PREFIX}/classes/merge`. */
+export interface RegistryClassMerge {
   source_id: number;
   target_id: number;
 }
 
-/** Server response from `GET /curation/export/status`. */
-export interface OpExportStatus {
+/** Server response from `GET {API_PREFIX}/export/status`. */
+export interface ExportStatus {
   /** 'idle' | 'running' | 'success' | 'failed' | 'unknown'. */
   status: string;
   last_run: string | null;
@@ -82,15 +82,15 @@ export interface OpExportStatus {
   message?: string | null;
 }
 
-/** Server response from `POST /curation/export/yolo`. */
-export interface OpExportResult {
+/** Server response from `POST {API_PREFIX}/export/yolo`. */
+export interface ExportResult {
   status: string;
   job_id?: string | null;
   message?: string | null;
 }
 
 /** Server response from `POST {API_PREFIX}/export/single_class`. */
-export interface OpSingleClassExportResult {
+export interface SingleClassExportResult {
   status: string;
   export_dir: string;
   version_tag?: string | null;
@@ -110,7 +110,7 @@ export interface OpSingleClassExportResult {
 }
 
 /** Server response from `GET {API_PREFIX}/export/single_class/status`. */
-export interface OpSingleClassExportStatus {
+export interface SingleClassExportStatus {
   status: 'idle' | 'unknown' | 'success' | string;
   profile_name: string;
   last_run: string | null;
@@ -128,8 +128,8 @@ export interface OpSingleClassExportStatus {
   split_counts?: Record<string, number> | null;
 }
 
-/** One materialized dataset version from `GET /curation/export/datasets`. */
-export interface OpDataset {
+/** One materialized dataset version from `GET {API_PREFIX}/export/datasets`. */
+export interface ExportDataset {
   /** The `/methods` export-axis id that produced it: `yolo` (multi-class)
    *  or `single_class`. */
   kind: string;
@@ -150,22 +150,22 @@ export interface OpDataset {
   is_current: boolean;
 }
 
-/** Server response from `GET /curation/export/datasets`. */
-export interface OpDatasetList {
-  datasets: OpDataset[];
+/** Server response from `GET {API_PREFIX}/export/datasets`. */
+export interface ExportDatasetList {
+  datasets: ExportDataset[];
   count: number;
 }
 
-/** Server response from `POST /curation/test_holdout/freeze`. */
-export interface OpTestHoldoutFreezeResult {
+/** Server response from `POST {API_PREFIX}/test_holdout/freeze`. */
+export interface TestHoldoutFreezeResult {
   n_frozen: number;
   n_classes_covered: number;
   test_holdout_sha: string;
   per_class_counts: Record<string, number>;
 }
 
-/** Server response from `GET /curation/test_holdout/stats`. */
-export interface OpTestHoldoutStats {
+/** Server response from `GET {API_PREFIX}/test_holdout/stats`. */
+export interface TestHoldoutStats {
   total: number;
   by_class: Array<{ key: number; doc_count: number }>;
 }
@@ -177,7 +177,7 @@ export interface BBoxNorm {
   h: number;
 }
 
-export interface OpCrop {
+export interface Crop {
   id: string;
   source_image_path: string;
   source_image_sha256?: string;
@@ -210,7 +210,7 @@ export interface OpCrop {
   /** Per-slot capability data, keyed by SlotKey, produced by mapRawCrop
    *  via mapCropSlots(). Only slots with actual evidence on the row
    *  appear (slotIsPresent). Optional because many test fixtures
-   *  construct OpCrop literals directly; read it through
+   *  construct Crop literals directly; read it through
    *  `slotOf(crop, spec)` (annotations/cropSlots.ts), never `?.[...]`
    *  by hand, so the accessor can be tightened later. */
   slots?: Record<SlotKey, SlotData>;
@@ -243,7 +243,7 @@ export interface OpCrop {
   // of openprocessor/docs/design/curation_scores.md — representativeness/
   // atypicality/uncertainty_entropy are pre-existing fields (cluster
   // distance, probe entropy) exposed as named sorts, not new score
-  // fields, so they don't need their own OpCrop fields. Everything else
+  // fields, so they don't need their own Crop fields. Everything else
   // in the plan (uniqueness, near-dup) is still shadow/pending and has
   // no field here yet — added when/if it clears validation.
   mistakenness_score?: number | null;
@@ -259,7 +259,7 @@ export interface OpCrop {
  *  backend derives this from cluster_id; the frontend NEVER recomputes it. */
 export type ClusterKind = 'class' | 'candidate' | 'unassigned' | 'false_positive';
 
-export interface OpCluster {
+export interface Cluster {
   id: number;
   /** Backend-derived: "class" | "candidate" | "unassigned". */
   cluster_kind: ClusterKind;
@@ -288,7 +288,7 @@ export interface OpCluster {
   updated_at: string | null;
 }
 
-export interface OpStats {
+export interface StatsSummary {
   total_crops: number;
   validated_crops: number;
   test_holdout_crops: number;
@@ -307,7 +307,7 @@ export interface OpStats {
 
 /** `GET {API_PREFIX}/health`. `degraded` means a non-critical
  *  dependency (e.g. the VLM) is down; labeling still works. */
-export interface OpHealth {
+export interface ApiHealth {
   status: 'ok' | 'degraded' | 'down';
   triton?: { reachable: boolean; detail?: string };
   opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
@@ -317,7 +317,7 @@ export interface OpHealth {
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation
 // (3 live rows, functionally identical to the `atypicality` sort already
-// offered via the strategy bar) — its backend /curation/review/outliers query
+// offered via the strategy bar) — its backend {API_PREFIX}/review/outliers query
 // is untouched, but nothing in the frontend calls it anymore, so the
 // literal is gone from this union too. 'mismatches' / 'vlm_low_conf' /
 // 'primary_low_conf' are no longer top-level UI tabs but still real
@@ -341,7 +341,7 @@ export type CoreReviewTab =
 
 export type ReviewTab = CoreReviewTab | SlotReviewTab;
 
-export interface ReviewItem extends OpCrop {
+export interface ReviewItem extends Crop {
   reason: string;
   proposed_class_id: number | null;
   proposed_class_name: string | null;
@@ -353,14 +353,14 @@ export interface ReviewItem extends OpCrop {
 }
 
 /**
- * A crop returned by `GET /curation/search/text` (P2-14 semantic text search).
- * Same shape as `OpCrop` plus the query-similarity score. Field named
+ * A crop returned by `GET {API_PREFIX}/search/text` (P2-14 semantic text search).
+ * Same shape as `Crop` plus the query-similarity score. Field named
  * `similarity_score` to match this repo's existing `<name>_score`
  * convention for per-crop curation scores (`mistakenness_score`), not a
  * bare `score` — kept distinct from those since it's query-relative, not
  * an absolute crop property.
  */
-export interface SearchCrop extends OpCrop {
+export interface SearchCrop extends Crop {
   similarity_score: number;
 }
 
@@ -369,14 +369,14 @@ export interface PaginatedResponse<T> {
   total: number;
   page: number;
   page_size: number;
-  /** Set by `/curation/review/{tab}` when the requested `?sort=` couldn't be
+  /** Set by `{API_PREFIX}/review/{tab}` when the requested `?sort=` couldn't be
    *  honored (e.g. the field isn't backfilled yet) and the server fell
    *  back to the default ordering. Rendered as an inline note, never a
    *  toast — this isn't an error, just a degraded request. Absent on
    *  every other endpoint and on a request that didn't ask for a sort. */
   sort_fallback_reason?: string | null;
   /** Provenance for a pool-scale overlay ordering (curation-strategy plan
-   *  Phase 4 — currently only `/curation/crops?order=diverse`): which
+   *  Phase 4 — currently only `{API_PREFIX}/crops?order=diverse`): which
    *  overlay/version produced this selection, and how large the pool it
    *  drew from was. `n_pool` lets the UI note when diverse selection is
    *  sampling a much larger cohort than what's on screen, rather than
@@ -389,9 +389,9 @@ export interface PaginatedResponse<T> {
 }
 
 /**
- * `POST /curation/select/diverse`'s scope object (P2-10, `/review`'s diverse
+ * `POST {API_PREFIX}/select/diverse`'s scope object (P2-10, `/review`'s diverse
  * overlay — docs/CLAUDE.md's curation-strategy-selector-bar section).
- * Distinct from `/clusters/[id]`'s `GET /curation/crops?order=diverse&k=N` —
+ * Distinct from `/clusters/[id]`'s `GET {API_PREFIX}/crops?order=diverse&k=N` —
  * that path is a small, synchronous, cluster-scoped selection; this one
  * scopes to a review-tab cohort (`review_tab` reuses the backend's
  * existing tab-query builder) which can be pool-scale (the `all` tab is
@@ -406,7 +406,7 @@ export interface SelectDiverseScope {
 }
 
 /**
- * Immediate (200) result of `POST /curation/select/diverse` for a small pool.
+ * Immediate (200) result of `POST {API_PREFIX}/select/diverse` for a small pool.
  * Forward-tolerant per this file's convention — an unrecognized `method`
  * string is still carried through as-is.
  */
@@ -418,7 +418,7 @@ export interface DiverseSelection {
 }
 
 /** Background-job state for a large-pool diverse selection (202 path),
- *  polled via `GET /curation/select/status`. CONFIRMED against the real backend
+ *  polled via `GET {API_PREFIX}/select/status`. CONFIRMED against the real backend
  *  (`selection/job.py`'s `_JobState`, 2026-09-12): `status` is one of
  *  `'idle' | 'running' | 'completed' | 'failed' | 'cancelled'`, and the
  *  finished selection is nested under `result` (the same
@@ -439,7 +439,7 @@ export interface CropFilter {
   cluster_id?: number | null;
   label_source?: LabelSource;
   /** Original label source (where the class came from). Matches the
-   *  /curation/crops?class_source= query param. */
+   *  {API_PREFIX}/crops?class_source= query param. */
   class_source?: string;
   label_validated?: boolean;
   hdd_source?: string;
@@ -475,7 +475,7 @@ export interface BulkLabelConflict {
 }
 
 export interface BulkLabelResult {
-  // Matches the FastAPI handler at src/routers/legacy/op_crops.py:
+  // Matches the FastAPI handler at src/routers/curation/crops.py:
   //   batch_label_crops -> { updated: int, conflicts: [...] }.
   updated: number;
   conflicts: BulkLabelConflict[];
@@ -494,16 +494,16 @@ export interface KeyboardShortcut {
   description: string;
 }
 
-export type OpModelStatus = 'ready' | 'not_ready' | 'unavailable';
-export type OpModelKind = 'triton' | 'external';
+export type ModelStatus = 'ready' | 'not_ready' | 'unavailable';
+export type ModelKind = 'triton' | 'external';
 
-export interface OpModel {
+export interface ModelInfo {
   name: string;
   friendly_name: string;
   role: string;
-  kind: OpModelKind;
+  kind: ModelKind;
   model_type: string;
-  status: OpModelStatus;
+  status: ModelStatus;
   version: string | null;
   inference_count: number | null;
   exec_count: number | null;
@@ -513,7 +513,7 @@ export interface OpModel {
   endpoint: string | null;
   /**
    * Follow-up gap 2 (docs/design/audit-remediation-plan-2026-09.md
-   * Appendix D item 3, 2026-09-11): `DELETE /curation/models/{name}` guard
+   * Appendix D item 3, 2026-09-11): `DELETE {API_PREFIX}/models/{name}` guard
    * flags, mirrored from the same checks the endpoint enforces
    * server-side so the UI never has to re-derive them (and can't drift
    * out of sync with the real guard).
@@ -527,8 +527,8 @@ export interface OpModel {
   promoted_at?: string | null;
 }
 
-export interface OpModelsStatus {
-  models: OpModel[];
+export interface ModelsStatus {
+  models: ModelInfo[];
 }
 
 export interface UnloadModelResponse {

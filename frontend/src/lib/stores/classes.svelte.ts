@@ -9,12 +9,12 @@
 
 import { getClasses } from '$lib/api';
 import { isAssignableClass } from '$lib/classVisibility';
-import type { OpClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types';
 
 const REFRESH_INTERVAL_MS = 30_000;
 
 class ClassesStore {
-  classes = $state<OpClass[]>([]);
+  classes = $state<RegistryClass[]>([]);
   loading = $state<boolean>(false);
   lastUpdated = $state<number | null>(null);
   error = $state<string | null>(null);
@@ -72,11 +72,11 @@ class ClassesStore {
     await this.refresh();
   }
 
-  byId(id: number): OpClass | undefined {
+  byId(id: number): RegistryClass | undefined {
     return this.classes.find((c) => c.id === id);
   }
 
-  byName(name: string): OpClass | undefined {
+  byName(name: string): RegistryClass | undefined {
     const n = name.toLowerCase();
     return this.classes.find((c) => c.name.toLowerCase() === n);
   }
@@ -87,7 +87,7 @@ class ClassesStore {
    * fall back to the global most-frequent classes. Page-level code can
    * override by passing in a precomputed list.
    */
-  topNForCluster(_clusterId: number, n = 10): OpClass[] {
+  topNForCluster(_clusterId: number, n = 10): RegistryClass[] {
     return this.classes
       .filter(isAssignableClass)
       .sort((a, b) => (b.validated_count ?? 0) - (a.validated_count ?? 0))

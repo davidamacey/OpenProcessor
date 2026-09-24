@@ -129,7 +129,7 @@ export const licensePlateSlot: SlotSpec = {
 
     queue: {
       // Wave 2 C14: the review-tab endpoint id 'plates' -> 'regions'
-      // (GET /curation/review/regions; the old 'plates' id now 400s
+      // (GET {API_PREFIX}/review/regions; the old 'plates' id now 400s
       // server-side). urlId stays 'plates' FOREVER — it's the bookmark
       // contract (reviewTabs.ts's tabFromUrlId), decoupled from the
       // wire route name by design; do not rename it.
@@ -154,7 +154,7 @@ export const licensePlateSlot: SlotSpec = {
     // the same GET with the same params, so the compiled URL is
     // byte-identical to what getTrainingCandidates(mode, {class_id})
     // produced — proven in cohorts.test.ts. `false_positives` is the
-    // 5th mode: implemented server-side (op_plates.py:266-283), typed
+    // 5th mode: implemented server-side (regions.py:266-283), typed
     // in the old TrainingCohortMode, and unreachable from the UI until
     // this registration (§9.1's live defect #1).
     //
@@ -284,8 +284,8 @@ export const licensePlateSlot: SlotSpec = {
   },
 
   // Wave 2 C14: the crop-scoped writes rename too —
-  // PUT/DELETE /curation/crops/{id}/plate -> /region,
-  // PATCH /curation/crops/{id}/plate_meta -> /region_meta — confirmed by the
+  // PUT/DELETE {API_PREFIX}/crops/{id}/plate -> /region,
+  // PATCH {API_PREFIX}/crops/{id}/plate_meta -> /region_meta — confirmed by the
   // backend session alongside the collection-route rename (plan §8.5
   // Q2, resolved "yes" rather than the plan's conservative default).
   endpoints: {

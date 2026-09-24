@@ -10,7 +10,7 @@ import {
   isScopedAssistAvailable,
   isSemanticSearchAvailable,
   normalizeMethodStatus,
-  parseKbMethodsResponse,
+  parseMethodsResponse,
   selectableAxisEntries,
 } from './strategies';
 import type {
@@ -124,16 +124,16 @@ describe('normalizeMethodStatus', () => {
   });
 });
 
-// The real /curation/methods wire shape (confirmed 2026-09-10 against the live
+// The real {API_PREFIX}/methods wire shape (confirmed 2026-09-10 against the live
 // backend, strategy_registry.py's get_registry()): one flat `strategies`
 // array, each entry carrying an `axis` field (`'cluster' | 'sort' |
 // 'score' | 'overlay'`), plus a top-level `flags` object this file
-// doesn't consume. parseKbMethodsResponse groups by `axis` into the four
+// doesn't consume. parseMethodsResponse groups by `axis` into the four
 // buckets every downstream consumer (isDiverseOverlayAvailable, etc.)
 // already expects — these tests exercise that grouping directly rather
 // than the four-separate-top-level-arrays shape an earlier version of
 // this file assumed before the real contract was confirmed.
-describe('parseKbMethodsResponse', () => {
+describe('parseMethodsResponse', () => {
   it('parses a well-formed full payload into typed lists, grouped by axis', () => {
     const raw = {
       strategies: [
@@ -182,9 +182,9 @@ describe('parseKbMethodsResponse', () => {
           field_coverage: 0.9,
         },
       ],
-      flags: { op_scores_enabled: false },
+      flags: { scores_enabled: false },
     };
-    const parsed = parseKbMethodsResponse(raw);
+    const parsed = parseMethodsResponse(raw);
     expect(parsed.cluster_methods).toEqual([
       { id: 'ivf', label: 'FAISS IVF-512 (production)', status: 'stable', default: true },
       {
@@ -207,7 +207,7 @@ describe('parseKbMethodsResponse', () => {
   });
 
   it('defaults requires_banner to undefined when the server omits it', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         {
           id: 'viz_projection',
@@ -221,7 +221,7 @@ describe('parseKbMethodsResponse', () => {
   });
 
   it('ignores a non-boolean requires_banner rather than throwing', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         {
           id: 'viz_projection',
@@ -237,8 +237,8 @@ describe('parseKbMethodsResponse', () => {
 
   it('never throws on a completely unusable payload (null / string / number / array)', () => {
     for (const bad of [null, undefined, 'nope', 42, [], true]) {
-      expect(() => parseKbMethodsResponse(bad)).not.toThrow();
-      const parsed = parseKbMethodsResponse(bad);
+      expect(() => parseMethodsResponse(bad)).not.toThrow();
+      const parsed = parseMethodsResponse(bad);
       expect(parsed).toEqual({
         cluster_methods: [],
         review_sorts: [],
@@ -253,7 +253,7 @@ describe('parseKbMethodsResponse', () => {
 
   it('defaults a missing/non-array/malformed strategies key to empty lists without throwing', () => {
     for (const bad of ['not-an-array', null, undefined, 42]) {
-      const parsed = parseKbMethodsResponse({ strategies: bad });
+      const parsed = parseMethodsResponse({ strategies: bad });
       expect(parsed).toEqual({
         cluster_methods: [],
         review_sorts: [],
@@ -268,7 +268,7 @@ describe('parseKbMethodsResponse', () => {
 
   it("routes axis:'export' entries into dataset_exports (real T-C2 wire shape)", () => {
     // Verbatim from strategy_registry.py's _export_strategies() @ d8cb9dc.
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         {
           id: 'yolo',
@@ -299,7 +299,7 @@ describe('parseKbMethodsResponse', () => {
     // The agreed-but-not-yet-live wire shape (this plan §1.3): one new
     // `axis` value per entry in the same flat `strategies` array, no new
     // response envelope.
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         {
           id: 'grounding_v2',
@@ -355,7 +355,7 @@ describe('parseKbMethodsResponse', () => {
   });
 
   it('drops entries missing a usable id or label, or an unrecognized axis, instead of crashing the whole parse', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         { id: 'ivf', axis: 'cluster', label: 'FAISS IVF-512', status: 'stable' },
         { axis: 'cluster', label: 'no id' },
@@ -378,7 +378,7 @@ describe('parseKbMethodsResponse', () => {
   });
 
   it('carries an unrecognized-but-well-formed id through untouched (forward-tolerant)', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         {
           id: 'some_future_method_v9',
@@ -393,7 +393,7 @@ describe('parseKbMethodsResponse', () => {
   });
 
   it('normalizes an unrecognized status on a real entry to disabled rather than throwing', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         { id: 'mistakenness', axis: 'sort', label: 'Mistakenness', status: 'beta_v2' },
       ],
@@ -403,7 +403,7 @@ describe('parseKbMethodsResponse', () => {
   });
 
   it('the same id may legitimately appear in more than one axis bucket (score vs sort)', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         {
           id: 'mistakenness',
@@ -437,7 +437,7 @@ describe('isDiverseOverlayAvailable', () => {
     expect(isDiverseOverlayAvailable([])).toBe(false);
   });
 
-  it('is false when /curation/methods does not report a diverse entry at all', () => {
+  it('is false when {API_PREFIX}/methods does not report a diverse entry at all', () => {
     const overlays: OverlayInfo[] = [
       { id: 'near_dup', label: 'Near-duplicates', status: 'stable' },
       { id: 'viz_projection', label: 'UMAP scatter', status: 'experimental' },
@@ -498,7 +498,7 @@ describe('isEmbeddingVizAvailable', () => {
     expect(isEmbeddingVizAvailable([])).toBe(false);
   });
 
-  it('is false when /curation/methods does not report a viz_projection entry at all', () => {
+  it('is false when {API_PREFIX}/methods does not report a viz_projection entry at all', () => {
     const overlays: OverlayInfo[] = [
       { id: 'diverse', label: 'Diversity', status: 'stable' },
       { id: 'near_dup', label: 'Near-duplicates', status: 'experimental' },
@@ -550,11 +550,11 @@ describe('isEmbeddingVizAvailable', () => {
  * isEmbeddingVizAvailable above.
  */
 describe('isSemanticSearchAvailable', () => {
-  it('is false when overlays is empty (pre-P2-14 backend, or KB flag off)', () => {
+  it('is false when overlays is empty (pre-P2-14 backend, or its OP_ flag off)', () => {
     expect(isSemanticSearchAvailable([])).toBe(false);
   });
 
-  it('is false when /curation/methods does not report a semantic_search entry at all', () => {
+  it('is false when {API_PREFIX}/methods does not report a semantic_search entry at all', () => {
     const overlays: OverlayInfo[] = [
       { id: 'diverse', label: 'Diversity', status: 'stable' },
       { id: 'viz_projection', label: 'UMAP scatter', status: 'experimental' },
@@ -870,9 +870,9 @@ describe('FALLBACK_METHODS', () => {
   });
 
   // FALLBACK_METHODS is the already-parsed *output* shape (four buckets),
-  // not a valid raw /curation/methods *input* (the real wire format is a flat
+  // not a valid raw {API_PREFIX}/methods *input* (the real wire format is a flat
   // `strategies` array with an `axis` field per entry — see the header
-  // comment on parseKbMethodsResponse's describe block above). It is
+  // comment on parseMethodsResponse's describe block above). It is
   // never fed back through the parser in real usage (api.ts's getMethods
   // returns it directly on a fetch failure), so there is no round-trip
   // invariant to assert here anymore.
@@ -974,12 +974,12 @@ describe('isScopedAssistAvailable', () => {
   });
 
   it("is false for today's real backend shape (METHODS_TODAY) — must degrade to fully invisible", () => {
-    const parsed = parseKbMethodsResponse(METHODS_TODAY);
+    const parsed = parseMethodsResponse(METHODS_TODAY);
     expect(isScopedAssistAvailable(parsed)).toBe(false);
   });
 
   it('is true once the backend advertises the assist axes (METHODS_WITH_ASSIST_AXES)', () => {
-    const parsed = parseKbMethodsResponse(METHODS_WITH_ASSIST_AXES);
+    const parsed = parseMethodsResponse(METHODS_WITH_ASSIST_AXES);
     expect(isScopedAssistAvailable(parsed)).toBe(true);
   });
 
@@ -1001,7 +1001,7 @@ describe('isScopedAssistAvailable', () => {
 
 describe('settable flag on /methods entries', () => {
   it('keeps a boolean settable and drops anything else', () => {
-    const parsed = parseKbMethodsResponse({
+    const parsed = parseMethodsResponse({
       strategies: [
         { id: 'ivf', axis: 'cluster', label: 'IVF', status: 'stable', settable: true },
         {

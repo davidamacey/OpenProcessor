@@ -63,7 +63,7 @@ describe('getRegionThumbUrl', () => {
 });
 
 describe('resolveApiUrl', () => {
-  it('prefixes a bare relative /curation/... path with the configured remote apiBase', async () => {
+  it('prefixes a bare relative {API_PREFIX}/... path with the configured remote apiBase', async () => {
     const { resolveApiUrl, API_PREFIX } = await loadApiWithRemoteBase();
     expect(resolveApiUrl(`${API_PREFIX}/crops/abc/region_thumbnail?size=160`)).toBe(
       `${REMOTE_BASE}${API_PREFIX}/crops/abc/region_thumbnail?size=160`,

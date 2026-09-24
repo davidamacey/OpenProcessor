@@ -1,6 +1,6 @@
 /**
  * State/logic for `<SemanticSearchBox>` (P2-14 — free-text search over
- * vehicle crops, `GET /curation/search/text`). Same "logic extracted from the
+ * vehicle crops, `GET {API_PREFIX}/search/text`). Same "logic extracted from the
  * component so it's unit-testable" pattern as `pager.svelte.ts` /
  * `strategyBar.svelte.ts` / `selection.svelte.ts`.
  *

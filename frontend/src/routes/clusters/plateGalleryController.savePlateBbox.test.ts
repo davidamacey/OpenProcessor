@@ -8,10 +8,10 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { createPlateGalleryController } from './plateGalleryController.svelte';
-import type { OpCrop } from '$lib/types';
+import type { Crop } from '$lib/types';
 import type { PlateBrowseItem } from '$lib/api';
 
-function fakeCrop(id: string): OpCrop {
+function fakeCrop(id: string): Crop {
   return {
     id,
     source_image_path: '/img.jpg',
@@ -27,7 +27,7 @@ function fakeCrop(id: string): OpCrop {
     cluster_subid: null,
     test_holdout: false,
     updated_at: '',
-  } as OpCrop;
+  } as Crop;
 }
 
 function fakePlateItem(id: string): PlateBrowseItem {

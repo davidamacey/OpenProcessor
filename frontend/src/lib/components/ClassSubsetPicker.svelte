@@ -5,11 +5,11 @@
    * Owns its UI state (search query, expanded/collapsed); the parent
    * binds `selected` (set of class_ids) and `singleCls`.
    */
-  import type { OpClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types';
   import type { ClassSubsetPreset } from '$lib/types_train';
 
   interface Props {
-    classes: OpClass[];
+    classes: RegistryClass[];
     /** Selected class_ids. `null`/empty = "all classes". */
     selected: number[] | null;
     setSelected: (ids: number[] | null) => void;

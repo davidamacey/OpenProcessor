@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Free-text semantic search over vehicle crops (P2-14 — `GET
-   * /curation/search/text`). Renders alongside `<StrategyBar>` on `/review` and
+   * {API_PREFIX}/search/text`). Renders alongside `<StrategyBar>` on `/review` and
    * `/clusters`/`/clusters/[id]`, gated by `isSemanticSearchAvailable`
    * (`$lib/strategies`) exactly like every other overlay control in this
    * repo — a caller must not mount this against a backend/flag that
@@ -23,7 +23,7 @@
   import { onMount } from 'svelte';
 
   interface Props {
-    /** Extra query params threaded to `GET /curation/search/text` — e.g.
+    /** Extra query params threaded to `GET {API_PREFIX}/search/text` — e.g.
      *  `{cluster_id}` on `/clusters/[id]`, or the effective tab + live
      *  filter object on `/review`. Omitting any scoping key (e.g. no
      *  `cluster_id`) means "search everything" — the global `/clusters`

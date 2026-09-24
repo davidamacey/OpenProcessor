@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { resolveConfirmClassId, searchClasses } from './classPicker';
-import type { OpClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types';
 
-function cls(over: Partial<OpClass> & { id: number; name: string }): OpClass {
+function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
   return {
     group: null,
     count: 0,
@@ -16,8 +16,8 @@ function cls(over: Partial<OpClass> & { id: number; name: string }): OpClass {
 // A pool shaped like the audit finding: 84 classes, only a handful with any
 // validated_count, `scion` among the zero-sample ones that can never climb
 // into topNForCluster(0, 10) on its own.
-function bigPool(): OpClass[] {
-  const out: OpClass[] = [];
+function bigPool(): RegistryClass[] {
+  const out: RegistryClass[] = [];
   for (let i = 0; i < 80; i++) {
     out.push(cls({ id: i, name: `class_${i}`, validated_count: 80 - i }));
   }
@@ -85,7 +85,7 @@ describe('searchClasses — license_plate is a normal assignable class', () => {
   // (David: plates get relabeled/added to over time, and the goal is a
   // future unified vehicle+plate model, so it should stay reachable).
   it('finds license_plate like any other class', () => {
-    const pool: OpClass[] = [
+    const pool: RegistryClass[] = [
       cls({ id: 8, name: 'bmw', validated_count: 6 }),
       cls({ id: 80, name: 'license_plate', validated_count: 72 }),
     ];

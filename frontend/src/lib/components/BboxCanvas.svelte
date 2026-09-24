@@ -9,7 +9,7 @@
    * migration.
    *
    * Ring color defaults to sky-blue (RGB 80,200,255), matching the
-   * server-rendered overlay on /curation/crops/{id}/image so the left-pane
+   * server-rendered overlay on {API_PREFIX}/crops/{id}/image so the left-pane
    * source preview and the right-pane crop canvas agree visually for
    * the license_plate slot; override via `ringColor` for a different
    * slot's color scheme.

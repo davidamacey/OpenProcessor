@@ -7,7 +7,7 @@
  * LPR training-candidate mode actually uses (§9.1's mode table).
  *
  * Tier 1 (`endpoint`) requires NO backend change — it is today's
- * `?mode=` call (or `GET /curation/crops`'s existing class-agnostic params)
+ * `?mode=` call (or `GET {API_PREFIX}/crops`'s existing class-agnostic params)
  * expressed as data. Tier 2 (`predicate`) is the H5 contract offer
  * (§9.4) and is gated at runtime, exactly like the `diverse`/
  * `viz_projection` overlays in `strategies.ts`: invisible until the
@@ -99,7 +99,7 @@ export interface TrainingCohortsCapability {
 /**
  * Not a slot capability — hangs off a class, so a class with no
  * registered slot at all still has something to train on. Rides
- * entirely on `GET /curation/crops` (already accepts `class_id`,
+ * entirely on `GET {API_PREFIX}/crops` (already accepts `class_id`,
  * `label_validated`, `classifier_conf_lt`, and has a real response model) plus
  * the review surface's `model_disagreements` cohort, already
  * class-filterable. **Zero backend change.**

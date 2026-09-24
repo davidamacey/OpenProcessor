@@ -7,11 +7,11 @@
     unloadForceConfirmMessage,
   } from '$lib/modelUnload';
   import { toastStore } from '$stores/toast.svelte';
-  import type { OpModel, OpModelStatus } from '$lib/types';
+  import type { ModelInfo, ModelStatus } from '$lib/types';
 
   const REFRESH_MS = 15_000;
 
-  let models = $state<OpModel[]>([]);
+  let models = $state<ModelInfo[]>([]);
   let loading = $state<boolean>(true);
   let error = $state<string | null>(null);
   let lastUpdated = $state<Date | null>(null);
@@ -47,13 +47,13 @@
     if (timer) clearInterval(timer);
   });
 
-  function statusPillClass(s: OpModelStatus): string {
+  function statusPillClass(s: ModelStatus): string {
     if (s === 'ready') return 'bg-green-500/20 text-green-200 border-green-500/40';
     if (s === 'not_ready') return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
     return 'bg-red-500/20 text-red-200 border-red-500/40';
   }
 
-  function statusLabel(s: OpModelStatus): string {
+  function statusLabel(s: ModelStatus): string {
     if (s === 'ready') return 'ready';
     if (s === 'not_ready') return 'not ready';
     return 'unavailable';
@@ -92,7 +92,7 @@
    * confirm here matches CLAUDE.md's "bulk ops show a confirmation
    * dialog" pattern for a destructive single-model action.
    */
-  async function handleUnload(m: OpModel): Promise<void> {
+  async function handleUnload(m: ModelInfo): Promise<void> {
     const state = unloadButtonState(m);
     if (state === 'hidden') return;
     const forced = state === 'force-required';

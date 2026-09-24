@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { OpCrop } from '$lib/types';
+  import type { Crop } from '$lib/types';
   import ProvenanceChip from './ProvenanceChip.svelte';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotIsPresent } from '$lib/annotations/types';
 
   interface Props {
-    crop: OpCrop;
+    crop: Crop;
   }
 
   let { crop }: Props = $props();

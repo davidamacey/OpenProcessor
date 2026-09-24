@@ -51,7 +51,7 @@ export interface AugmentationSpec {
   [extra: string]: unknown;
 }
 
-/** POST /curation/train/start payload. */
+/** POST {API_PREFIX}/train/start payload. */
 export interface TrainJobSpec {
   job_id?: string | null;
   campaign_id?: string | null;
@@ -84,7 +84,7 @@ export interface CampaignRunSpec {
   hyperparameters?: Record<string, unknown>;
 }
 
-/** POST /curation/train/start_campaign payload. */
+/** POST {API_PREFIX}/train/start_campaign payload. */
 export interface TrainCampaignSpec {
   campaign_id?: string | null;
   dataset_export_dir: string;
@@ -205,7 +205,7 @@ export interface PresetsResponse {
   class_subset_presets: ClassSubsetPreset[];
 }
 
-/** POST /curation/train/promote/{job_id} body. */
+/** POST {API_PREFIX}/train/promote/{job_id} body. */
 export interface PromoteRequest {
   triton_name: string;
   max_batch_size?: number;

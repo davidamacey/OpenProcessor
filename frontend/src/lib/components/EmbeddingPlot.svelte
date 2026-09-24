@@ -59,7 +59,7 @@
      *  `?class=` filter). */
     classId?: number | null;
     maxPoints?: number;
-    /** True when `/curation/methods` reports this overlay at the
+    /** True when `{API_PREFIX}/methods` reports this overlay at the
      *  banner-required purity tier (see `isEmbeddingVizBannerRequired`
      *  in `$lib/strategies.ts`) — renders a small persistent note. */
     bannerRequired?: boolean;

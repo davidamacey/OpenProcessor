@@ -32,7 +32,7 @@
   import { searchClasses } from '$lib/classPicker';
   import { isPromptPackAvailable, selectableAxisEntries } from '$lib/strategies';
   import type { AssistScope } from '$lib/assistScope.svelte';
-  import type { OpClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types';
   import { strategiesStore } from '$stores/strategies.svelte';
 
   interface Props {
@@ -40,7 +40,7 @@
     /** Full class registry. Passed in rather than read from
      *  `classesStore` here so this component stays as store-free as
      *  StrategyBar is about `classesStore` — the parent already has it. */
-    classes: OpClass[];
+    classes: RegistryClass[];
     disabled?: boolean;
   }
 

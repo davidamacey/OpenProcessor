@@ -243,7 +243,7 @@ export interface SlotEndpoints {
 export interface SlotSpec {
   key: SlotKey;
   /** Which class this slot hangs off. `className` is matched
-   *  case-insensitively against `OpClass.name`; `classId` wins when both
+   *  case-insensitively against `RegistryClass.name`; `classId` wins when both
    *  are given. At least one is required. */
   bind: { className?: string; classId?: number };
   label: {

@@ -16,7 +16,7 @@ import {
   SETTINGS_AXES,
   settableAxes,
 } from './curationSettings';
-import type { OpMethodsResponse } from './strategies';
+import type { MethodsResponse } from './strategies';
 
 describe('parseCurationSettings', () => {
   it('parses the real documented body', () => {
@@ -87,7 +87,7 @@ describe('settableAxes / advisoryAxes', () => {
     review_sorts: [entry('recent', true)],
     detection_profiles: [entry('license_plate', false)],
     prompt_packs: [entry('generic_item_v1', true)],
-  } as unknown as OpMethodsResponse;
+  } as unknown as MethodsResponse;
 
   it('follows the server flag', () => {
     expect(settableAxes(methods).map((a) => a.axis)).toEqual([
@@ -102,7 +102,7 @@ describe('settableAxes / advisoryAxes', () => {
     const old = {
       ...methods,
       prompt_packs: [entry('generic_item_v1')],
-    } as OpMethodsResponse;
+    } as MethodsResponse;
     expect(settableAxes(old).map((a) => a.axis)).not.toContain('prompt_pack');
     expect(advisoryAxes(old).map((a) => a.axis)).toContain('prompt_pack');
   });
@@ -111,14 +111,14 @@ describe('settableAxes / advisoryAxes', () => {
     const flipped = {
       ...methods,
       detection_profiles: [entry('license_plate', true)],
-    } as OpMethodsResponse;
+    } as MethodsResponse;
     expect(settableAxes(flipped).map((a) => a.axis)).toContain('detection_profile');
   });
 });
 
 describe('axisOptions', () => {
   it('drops shadow/disabled entries and appends no synthetic sentinel', () => {
-    const methods: OpMethodsResponse = {
+    const methods: MethodsResponse = {
       cluster_methods: [],
       review_sorts: [
         { id: 'recent', label: 'Recent first', status: 'stable' },
@@ -141,7 +141,7 @@ describe('axisOptions', () => {
 
 describe('effectiveDefaultId / isPinned', () => {
   const spec = axisSpec('sort')!;
-  const methods: OpMethodsResponse = {
+  const methods: MethodsResponse = {
     cluster_methods: [],
     review_sorts: [
       { id: 'recent', label: 'Recent first', status: 'stable', default: true },
@@ -169,7 +169,7 @@ describe('effectiveDefaultId / isPinned', () => {
   });
 
   it('falls back to null when neither exists', () => {
-    const bareMethods: OpMethodsResponse = { ...methods, review_sorts: [] };
+    const bareMethods: MethodsResponse = { ...methods, review_sorts: [] };
     expect(effectiveDefaultId(EMPTY_CURATION_SETTINGS, bareMethods, spec)).toBeNull();
   });
 });

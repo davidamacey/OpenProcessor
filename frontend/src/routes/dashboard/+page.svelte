@@ -31,7 +31,7 @@
   import DatasetStats from '$components/DatasetStats.svelte';
   import { exportYolo, getCrops, getStats, getThumbUrl, runVlmOnCluster } from '$lib/api';
   import { adequacyLevel } from '$lib/adequacy';
-  import type { OpCrop, OpStats } from '$lib/types';
+  import type { Crop, StatsSummary } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
@@ -40,8 +40,8 @@
 
   // ---- Class balance + recent labels (from the legacy `/` page) --------
 
-  let legacyStats = $state<OpStats | null>(null);
-  let recent = $state<OpCrop[]>([]);
+  let legacyStats = $state<StatsSummary | null>(null);
+  let recent = $state<Crop[]>([]);
   let legacyLoading = $state<boolean>(false);
 
   let vlmOpen = $state<boolean>(false);

@@ -1,6 +1,6 @@
 /**
  * StrategiesStore is Phase-0 read-only infrastructure: it fetches
- * `/curation/methods` once and exposes the result. Nothing wires it into the UI
+ * `{API_PREFIX}/methods` once and exposes the result. Nothing wires it into the UI
  * yet, and per plan §5 ("no new global keybindings, no behavior change to
  * any existing route") it must never become a UI concern itself — in
  * particular it must not register any window/document event listener,
@@ -112,7 +112,7 @@ describe('strategiesStore', () => {
     expect(strategiesStore.loaded).toBe(false);
   });
 
-  it('loads the real response from /curation/methods on success', async () => {
+  it('loads the real response from {API_PREFIX}/methods on success', async () => {
     const serverBody = {
       strategies: [
         {
@@ -149,7 +149,7 @@ describe('strategiesStore', () => {
     expect(strategiesStore.defaultClusterMethodId).toBe('ivf');
   });
 
-  it('falls back to FALLBACK_METHODS (never throws) when /curation/methods 404s', async () => {
+  it('falls back to FALLBACK_METHODS (never throws) when {API_PREFIX}/methods 404s', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -191,7 +191,7 @@ describe('strategiesStore', () => {
     expect(strategiesStore.methods).toEqual(FALLBACK_METHODS);
   });
 
-  it('loads the assist axes and flips isScopedAssistAvailable true once /curation/methods advertises them', async () => {
+  it('loads the assist axes and flips isScopedAssistAvailable true once {API_PREFIX}/methods advertises them', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse(METHODS_WITH_ASSIST_AXES)),
@@ -208,7 +208,7 @@ describe('strategiesStore', () => {
     expect(isScopedAssistAvailable(strategiesStore.methods)).toBe(true);
   });
 
-  it("keeps isScopedAssistAvailable false against today's real /curation/methods shape (no assist axes)", async () => {
+  it("keeps isScopedAssistAvailable false against today's real {API_PREFIX}/methods shape (no assist axes)", async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(METHODS_TODAY)));
 
     await strategiesStore.init();

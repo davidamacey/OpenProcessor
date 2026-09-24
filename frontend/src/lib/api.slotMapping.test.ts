@@ -6,7 +6,7 @@
  * hand-copied plate_* fields and readSlot's independently-computed
  * `slots.license_plate` — proving the adapter reproduced the hand-copy
  * before anything depended on it. C9 deleted that hand-copy entirely
- * (OpCrop no longer has plate_* fields at all — `slots` is the only
+ * (Crop no longer has plate_* fields at all — `slots` is the only
  * path), so there is nothing left to compare against. These assertions
  * now pin `slots.license_plate`'s values directly against the raw wire
  * payload instead.

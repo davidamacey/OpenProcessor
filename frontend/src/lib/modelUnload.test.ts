@@ -92,10 +92,10 @@ describe('unloadConfirmMessage', () => {
 
   it('is a plain permanence warning for a normal model', () => {
     const msg = unloadConfirmMessage({
-      name: 'op_vehicle_smoke_v1',
+      name: 'vehicle_smoke_v1',
       requires_force_to_unload: false,
     });
-    expect(msg).toMatch(/op_vehicle_smoke_v1/);
+    expect(msg).toMatch(/vehicle_smoke_v1/);
     expect(msg).toMatch(/cannot be undone/);
     expect(msg).not.toMatch(/live traffic/);
   });

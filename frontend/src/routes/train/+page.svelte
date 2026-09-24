@@ -7,7 +7,7 @@
    *   - Reference data (profiles, presets) — fetched once on mount.
    *   - Form preflight: debounced calls so the inline check panel
    *     refreshes as the user adjusts the form.
-   *   - The active run: polls `/curation/train/status` every 5s and the log
+   *   - The active run: polls `{API_PREFIX}/train/status` every 5s and the log
    *     tail every 2s while state ∈ {starting, running, exporting, queued}.
    *     Polling stops on terminal states.
    *   - Past-runs table with the standard `infiniteScroll` action.
@@ -61,7 +61,7 @@
   import { datasetExportForSlot } from '$lib/annotations/datasetExport';
   import { isDatasetExportAvailable } from '$lib/strategies';
   import { strategiesStore } from '$stores/strategies.svelte';
-  import type { OpCrop, OpDataset, ReviewItem } from '$lib/types';
+  import type { Crop, ExportDataset, ReviewItem } from '$lib/types';
   import type {
     ClassSubsetPreset,
     PreflightReport,
@@ -137,7 +137,7 @@
   let vehiclesDir = $state<string>('');
   let singleClassExportDir = $state<string>('');
   // All materialized dataset versions on disk (both kinds), newest first.
-  let datasets = $state<OpDataset[]>([]);
+  let datasets = $state<ExportDataset[]>([]);
   // Explicit operator pick. Empty => fall back to the `current` symlink for the
   // selected kind, so the default behaviour (train the latest export) is
   // unchanged. Picking any past export lets us reuse the exact same data when
@@ -197,7 +197,7 @@
   }
 
   // Human-readable label for a dataset option in the picker.
-  function datasetLabel(d: OpDataset): string {
+  function datasetLabel(d: ExportDataset): string {
     const n = d.image_count != null ? d.image_count.toLocaleString() : '?';
     const tag = d.version_tag ? ` · ${d.version_tag}` : '';
     const samp = d.sampling === 'stratified_even' ? ' · sampled' : '';
@@ -520,7 +520,7 @@
 
   // ---- Reproduce-this-run (Phase 6, design §15.4) ---------------------
   // Fetches <job_id>.manifest.json, builds a fresh TrainJobSpec from the
-  // saved spec + lineage, and POSTs /curation/train/start. Lets the user repeat
+  // saved spec + lineage, and POSTs {API_PREFIX}/train/start. Lets the user repeat
   // a known-good run without re-typing every knob.
   let reproducingId = $state<string | null>(null);
 
@@ -665,7 +665,7 @@
 
   let cohortCounts = $state<Record<string, number | null>>({});
   let selectedCohortKey = $state<string | null>(null);
-  let cohortPreview = $state<Array<PlateBrowseItem | OpCrop | ReviewItem>>([]);
+  let cohortPreview = $state<Array<PlateBrowseItem | Crop | ReviewItem>>([]);
   let cohortPreviewLoading = $state<boolean>(false);
   let cohortPreviewError = $state<string | null>(null);
 
@@ -689,7 +689,7 @@
   async function runCohortQuery(
     cohort: CohortSpec,
     pageSize: number,
-  ): Promise<{ total: number; items: Array<PlateBrowseItem | OpCrop | ReviewItem> }> {
+  ): Promise<{ total: number; items: Array<PlateBrowseItem | Crop | ReviewItem> }> {
     if (cohort.query.kind !== 'endpoint') return { total: 0, items: [] };
     const { path, params } = cohort.query;
     const classId =
@@ -802,7 +802,7 @@
   function openCohortItem(
     group: CohortGroup,
     cohort: CohortSpec,
-    item: PlateBrowseItem | OpCrop | ReviewItem,
+    item: PlateBrowseItem | Crop | ReviewItem,
   ): void {
     const cropId = 'crop_id' in item ? item.crop_id : item.id;
     if (cohort.reviewTarget === 'slotQueue') {
@@ -1151,7 +1151,7 @@
                 />
               {:else}
                 <CropCard
-                  crop={item as OpCrop}
+                  crop={item as Crop}
                   onclick={(c) => openCohortItem(activeCohort.g, activeCohort.c, c)}
                 />
               {/if}

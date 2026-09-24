@@ -4,7 +4,7 @@
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { setClassHotkey } from '$lib/classHotkey';
-  import type { OpClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -69,7 +69,7 @@
 
   // ---- mutations ---------------------------------------------------------
 
-  function startEdit(cls: OpClass): void {
+  function startEdit(cls: RegistryClass): void {
     editingId = cls.id;
     editName = cls.name;
   }
@@ -79,7 +79,7 @@
     editName = '';
   }
 
-  async function commitRename(cls: OpClass): Promise<void> {
+  async function commitRename(cls: RegistryClass): Promise<void> {
     const next = editName.trim();
     if (!isSlug(next)) {
       toastStore.error('Class name must be lowercase a-z, 0-9, _ only.');
@@ -102,7 +102,7 @@
     }
   }
 
-  async function changeGroup(cls: OpClass, newG: string): Promise<void> {
+  async function changeGroup(cls: RegistryClass, newG: string): Promise<void> {
     if ((cls.group ?? '') === newG) return;
     busy = true;
     try {
@@ -116,7 +116,7 @@
     }
   }
 
-  async function setHotkey(cls: OpClass, raw: string): Promise<void> {
+  async function setHotkey(cls: RegistryClass, raw: string): Promise<void> {
     busy = true;
     try {
       await setClassHotkey(cls, raw);

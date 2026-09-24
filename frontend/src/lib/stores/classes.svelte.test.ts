@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { classesStore } from './classes.svelte';
-import type { OpClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types';
 
-function cls(over: Partial<OpClass> & { id: number; name: string }): OpClass {
+function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
   return {
     group: null,
     count: 0,

@@ -5,7 +5,7 @@
  * ← deployment override (`static/annotation-profiles.json`, tier 2 —
  * fetched at boot by `./deploymentProfiles.ts` and merged in via the
  * root layout, see `docs/design/tier2-annotation-profile-config-plan-
- * 2026-09-20.md`) ← server (tier 3, `OpClass.annotation_slots`, still
+ * 2026-09-20.md`) ← server (tier 3, `RegistryClass.annotation_slots`, still
  * not wired — deliberately deferred until tier 2 proves the schema in
  * production, per that plan's §9 sequencing). Merging is per-slot-key
  * REPLACE, not deep-merge, so a partial override can't silently

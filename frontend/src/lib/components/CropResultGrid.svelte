@@ -23,20 +23,20 @@
   import CropCard from '$components/CropCard.svelte';
   import ScoreChip from '$components/ScoreChip.svelte';
   import type { Selection } from '$lib/selection.svelte';
-  import type { OpCrop } from '$lib/types';
+  import type { Crop } from '$lib/types';
 
   interface Props {
-    items: OpCrop[];
+    items: Crop[];
     sel: Selection;
     /** Match-score badge value (top-left), e.g. search similarity. Return
      *  null/undefined to omit the chip for that crop. */
-    scoreOf?: (crop: OpCrop) => number | null | undefined;
+    scoreOf?: (crop: Crop) => number | null | undefined;
     /** Extra overlay rendered top-right of each card (e.g. cluster-origin
      *  badge) — a snippet so the caller controls its own data lookups. */
-    cornerBadge?: import('svelte').Snippet<[OpCrop]>;
-    ondetail?: (crop: OpCrop) => void;
-    onacceptVlm?: (crop: OpCrop) => void;
-    onrejectVlm?: (crop: OpCrop) => void;
+    cornerBadge?: import('svelte').Snippet<[Crop]>;
+    ondetail?: (crop: Crop) => void;
+    onacceptVlm?: (crop: Crop) => void;
+    onrejectVlm?: (crop: Crop) => void;
     /** Fired whenever the in-flight drag's captured id set changes
      *  (drag start / drag end) — mirrors `/clusters/[id]`'s `dragIds`. */
     ondragidschange?: (ids: string[]) => void;
@@ -56,7 +56,7 @@
   // Drag-local override of the rendered list, mirroring gridGroups.svelte's
   // reconciliation: reset on every finalize so a stale dnd snapshot can
   // never paint back an item the caller already removed from `items`.
-  let dragItems = $state<OpCrop[] | null>(null);
+  let dragItems = $state<Crop[] | null>(null);
   const renderItems = $derived(dragItems ?? items);
 
   let dragIds = $state<string[]>([]);
@@ -71,7 +71,7 @@
 
   function onConsider(
     e: CustomEvent<{
-      items: OpCrop[];
+      items: Crop[];
       info: { id: string; trigger: TRIGGERS; source: SOURCES };
     }>,
   ): void {
@@ -89,7 +89,7 @@
   }
 
   function onFinalize(
-    e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>,
+    e: CustomEvent<{ items: Crop[]; info: { trigger: TRIGGERS } }>,
   ): void {
     dragItems = null;
     if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
@@ -108,7 +108,7 @@
   class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8"
   use:dndzone={{
     items: renderItems,
-    type: 'op-crop',
+    type: 'crop-card',
     flipDurationMs: 150,
     dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
     dragDisabled: false,

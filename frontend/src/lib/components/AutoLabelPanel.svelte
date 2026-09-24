@@ -2,7 +2,7 @@
   /*
    * Recluster / auto-label control panel.
    *
-   * Renders on the dashboard. Polls /curation/pipeline/auto_label/status — slowly
+   * Renders on the dashboard. Polls {API_PREFIX}/pipeline/auto_label/status — slowly
    * when idle (30s, just to detect a daemon-fired run), fast when a job is
    * active (3s). Shows stage name, progress bar, ETA, elapsed time, and the
    * final stage-by-stage summary once the run lands.

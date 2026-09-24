@@ -314,7 +314,7 @@ and gating were already slot-generic, but the panel body underneath
 still read `current.plate_*` fields and a directly-imported
 `licensePlateSlot` regardless of the active tab. It now reads every
 value through `slotOf(current, activeSlot)` (`src/lib/annotations/
-cropSlots.ts`, off `OpCrop.slots` — populated by `mapRawCrop` via
+cropSlots.ts`, off `Crop.slots` — populated by `mapRawCrop` via
 `mapCropSlots`/`readSlot`), and every label/status-vocabulary/copy
 string through `src/lib/review/slotPanel.ts`'s `humanWritableStates` /
 `statusClearsBox` / `statusWantsRejectionReason` / `panelLabels`. Writes
@@ -342,8 +342,8 @@ and restores the grid layout; the drag itself ends on pointer release.
 
 - Every label change → immediate API call. No "save" button.
 - Optimistic UI with error rollback toast on API failure.
-- Audit trail lives server-side in `op_vehicle_crops.{label_source,
-label_validated, class_source, updated_at}`.
+- Audit trail lives server-side in the items index (`{label_source,
+label_validated, class_source, updated_at}`, plus `class_id_history`).
 - Bulk ops show a confirmation dialog with affected count.
 - Test-set crops (`test_holdout=true`) are filtered out at the API level —
   the UI never receives them. Don't try to bypass.
@@ -352,10 +352,10 @@ label_validated, class_source, updated_at}`.
 
 Every plate-bearing crop now carries detector provenance — which
 model produced the bbox, plus the VLM-read plate text. These flow
-through `mapRawCrop` (`src/lib/api.ts`) onto the `OpCrop` type and
+through `mapRawCrop` (`src/lib/api.ts`) onto the `Crop` type and
 render via the shared chip components.
 
-**New fields on `OpCrop` / `ReviewItem`:**
+**New fields on `Crop` / `ReviewItem`:**
 
 - `region_detector` (`'lpr_nanov11_640'` / `'sam3'` /
   `'paddleocr_det_trt'` / `'human'`)

@@ -1,11 +1,11 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { getSourceImageWithBbox, getThumbUrl } from '$lib/api';
-  import type { OpCrop } from '$lib/types';
+  import type { Crop } from '$lib/types';
   import CropMetaPanel from './CropMetaPanel.svelte';
 
   interface Props {
-    crop: OpCrop;
+    crop: Crop;
     onclose: () => void;
   }
 

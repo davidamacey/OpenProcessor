@@ -19,7 +19,7 @@
  */
 
 import { isAssignableClass } from '$lib/classVisibility';
-import type { OpClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types';
 
 /** Rank buckets, lowest = best match. Exact match beats prefix beats
  *  substring beats subsequence ("fuzzy"); anything else doesn't match. */
@@ -53,14 +53,14 @@ function isSubsequence(name: string, query: string): boolean {
  * proves "all 84 classes, not top 10" in tests.
  */
 export function searchClasses(
-  classes: OpClass[],
+  classes: RegistryClass[],
   query: string,
   limit?: number,
-): OpClass[] {
+): RegistryClass[] {
   const pool = classes.filter(isAssignableClass);
   const q = query.trim().toLowerCase();
 
-  let ranked: OpClass[];
+  let ranked: RegistryClass[];
   if (!q) {
     ranked = [...pool].sort(
       (a, b) =>
@@ -70,7 +70,7 @@ export function searchClasses(
   } else {
     ranked = pool
       .map((cls) => ({ cls, rank: matchRank(cls.name.toLowerCase(), q) }))
-      .filter((s): s is { cls: OpClass; rank: number } => s.rank !== null)
+      .filter((s): s is { cls: RegistryClass; rank: number } => s.rank !== null)
       .sort(
         (a, b) =>
           a.rank - b.rank ||

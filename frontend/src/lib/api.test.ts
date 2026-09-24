@@ -70,7 +70,7 @@ describe('ApiError', () => {
 });
 
 /**
- * getMethods() must never throw — /curation/methods is optional capability
+ * getMethods() must never throw — {API_PREFIX}/methods is optional capability
  * discovery (plan §5.3). A 404 or any other failure resolves to the
  * hardcoded FALLBACK_METHODS instead of rejecting, so a backend that
  * hasn't shipped the endpoint yet can't break app boot.
@@ -88,7 +88,7 @@ describe('getMethods', () => {
   });
 
   it('returns the real parsed response on success', async () => {
-    // Real /curation/methods wire shape (confirmed 2026-09-10 against
+    // Real {API_PREFIX}/methods wire shape (confirmed 2026-09-10 against
     // strategy_registry.py's get_registry()): a flat `strategies` array,
     // each entry carrying an `axis` field — not four separate top-level
     // arrays.
@@ -170,7 +170,7 @@ describe('getMethods', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    // A plain-text 200 body parses to a string, which parseKbMethodsResponse
+    // A plain-text 200 body parses to a string, which parseMethodsResponse
     // treats as "not a usable object" and degrades to empty lists — not a
     // crash, and distinct from the true-failure fallback path.
     const result = await getMethods();
@@ -324,7 +324,7 @@ describe('getReviewQueue', () => {
 /**
  * searchCrops (P2-14 semantic text search) mirrors getReviewQueue's
  * response-shape handling — same qs()-forwarding, same mapRawCrop
- * normalization — but points at `GET /curation/search/text` and adds the
+ * normalization — but points at `GET {API_PREFIX}/search/text` and adds the
  * per-item similarity score instead of the review-queue's reason/
  * proposed-class fields.
  */
@@ -339,7 +339,7 @@ describe('searchCrops', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends q/page/page_size and hits GET /curation/search/text', async () => {
+  it('sends q/page/page_size and hits GET {API_PREFIX}/search/text', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
@@ -500,12 +500,12 @@ describe('searchCrops', () => {
 });
 
 /**
- * getCluster's `order` param is forwarded verbatim to `/curation/crops?order=`
+ * getCluster's `order` param is forwarded verbatim to `{API_PREFIX}/crops?order=`
  * (broadened from a fixed `'outliers'` literal so a future
- * `/curation/methods`-reported order id doesn't require touching this
+ * `{API_PREFIX}/methods`-reported order id doesn't require touching this
  * signature — see the comment on `order` in api.ts). An id the backend
  * doesn't recognize should be harmless: qs() still sends it, and callers
- * are responsible for only offering ids `/curation/methods` actually reports.
+ * are responsible for only offering ids `{API_PREFIX}/methods` actually reports.
  */
 describe('getCluster order param', () => {
   const jsonResponse = (body: unknown) =>
@@ -518,7 +518,7 @@ describe('getCluster order param', () => {
     vi.unstubAllGlobals();
   });
 
-  it('forwards an arbitrary order id to /curation/crops without special-casing it client-side', async () => {
+  it('forwards an arbitrary order id to {API_PREFIX}/crops without special-casing it client-side', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.startsWith(`${API_PREFIX}/crops`)) {
         return Promise.resolve(
@@ -561,7 +561,7 @@ describe('getCluster order param', () => {
  * `k` (curation-strategy plan Phase 4 — "how many diverse crops?", forwarded
  * alongside `order=diverse`). Same forward-verbatim contract as `order`:
  * getCluster doesn't validate the id/count pair, it just plumbs whatever the
- * caller (gated by /curation/methods, see strategies.test.ts's
+ * caller (gated by {API_PREFIX}/methods, see strategies.test.ts's
  * isDiverseOverlayAvailable coverage) decided to send.
  */
 describe('getCluster k param', () => {
@@ -585,7 +585,7 @@ describe('getCluster k param', () => {
     return fetchMock;
   }
 
-  it('forwards k to /curation/crops when set alongside order=diverse', async () => {
+  it('forwards k to {API_PREFIX}/crops when set alongside order=diverse', async () => {
     const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
 
     await getCluster(42, 1, 60, undefined, { order: 'diverse', k: 120 });
@@ -647,7 +647,7 @@ describe('getCluster k param', () => {
 /**
  * getVizProjection() — curation-strategy plan Phase 5
  * (docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Never rejects
- * (same contract as getMethods): `/curation/viz/projection` may not exist yet
+ * (same contract as getMethods): `{API_PREFIX}/viz/projection` may not exist yet
  * (the openprocessor Phase 5 branch lands independently) and the UMAP
  * purity gate may mean the capability never ships at all — a fetch
  * failure here must degrade `EmbeddingPlot` to its pending/empty state,
@@ -841,7 +841,7 @@ describe('rebuildVizProjection', () => {
     vi.unstubAllGlobals();
   });
 
-  it('POSTs to /curation/viz/projection/rebuild and returns the job snapshot', async () => {
+  it('POSTs to {API_PREFIX}/viz/projection/rebuild and returns the job snapshot', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         job_id: 'viz-rebuild-1',
@@ -883,7 +883,7 @@ describe('rebuildVizProjection', () => {
  * Regression test for the /export download-button filename mismatch:
  * getDataYamlUrl() used to request `data_v7.yaml`, which the export service
  * never writes (the real on-disk file is `data.yaml`), so the download would
- * 404 against the real `/curation/export/registry/{artifact}` backend contract.
+ * 404 against the real `{API_PREFIX}/export/registry/{artifact}` backend contract.
  * Pin all three exact URLs so this can't silently regress.
  */
 describe('registry download URL builders', () => {
@@ -905,7 +905,7 @@ describe('registry download URL builders', () => {
 });
 
 /**
- * P2-10: `/review`'s diverse overlay (`POST /curation/select/diverse`). The
+ * P2-10: `/review`'s diverse overlay (`POST {API_PREFIX}/select/diverse`). The
  * endpoint answers 200 (small pool, `crop_ids` ready now), 202 (large
  * pool — job enqueued, poll `getSelectStatus`), 400 (feature disabled),
  * or 409 (singleton job already running elsewhere) — the last two are
@@ -1086,7 +1086,7 @@ describe('getSelectStatus / cancelSelect', () => {
     expect(st.error).toBe('selection job heartbeat stale (34.6s ago)');
   });
 
-  it('cancelSelect POSTs to /curation/select/cancel', async () => {
+  it('cancelSelect POSTs to {API_PREFIX}/select/cancel', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
 

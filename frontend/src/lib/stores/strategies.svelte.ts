@@ -1,5 +1,5 @@
 /**
- * StrategiesStore — Svelte 5 runes-based cache for the `/curation/methods`
+ * StrategiesStore — Svelte 5 runes-based cache for the `{API_PREFIX}/methods`
  * capability-discovery response (curation-strategy plan, Phase 0).
  *
  * Read-only infrastructure: `init()` fetches once, the first time
@@ -19,10 +19,10 @@
  */
 
 import { getMethods } from '$lib/api';
-import { FALLBACK_METHODS, type OpMethodsResponse } from '$lib/strategies';
+import { FALLBACK_METHODS, type MethodsResponse } from '$lib/strategies';
 
 class StrategiesStore {
-  methods = $state<OpMethodsResponse>(FALLBACK_METHODS);
+  methods = $state<MethodsResponse>(FALLBACK_METHODS);
   loading = $state<boolean>(false);
   loaded = $state<boolean>(false);
   error = $state<string | null>(null);
@@ -56,7 +56,7 @@ class StrategiesStore {
       } catch (e) {
         if ((e as Error)?.name === 'AbortError') return;
         this.methods = FALLBACK_METHODS;
-        this.error = (e as Error)?.message ?? 'failed to load /curation/methods';
+        this.error = (e as Error)?.message ?? 'failed to load {API_PREFIX}/methods';
       } finally {
         this.loading = false;
         this.loaded = true;

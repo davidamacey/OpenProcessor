@@ -50,8 +50,8 @@ describe('TrainForm.svelte GPU picker', () => {
   });
 
   it('threads the selected cudaDevices value into both the single-run and campaign payloads', () => {
-    // buildSpec() -> POST /curation/train/start; buildCampaign() -> POST
-    // /curation/train/start_campaign. Both must carry whatever the user picked.
+    // buildSpec() -> POST {API_PREFIX}/train/start; buildCampaign() -> POST
+    // {API_PREFIX}/train/start_campaign. Both must carry whatever the user picked.
     const buildSpecMatch = src.match(/function buildSpec\(\)[\s\S]*?\n {2}\}/);
     const buildCampaignMatch = src.match(/function buildCampaign\(\)[\s\S]*?\n {2}\}/);
     expect(buildSpecMatch).not.toBeNull();

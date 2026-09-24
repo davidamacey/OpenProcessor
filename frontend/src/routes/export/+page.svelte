@@ -11,7 +11,7 @@
     getStats,
     getTestHoldoutStats,
   } from '$lib/api';
-  import type { OpExportStatus, OpStats, OpTestHoldoutStats } from '$lib/types';
+  import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -21,8 +21,8 @@
 
   // ---- data --------------------------------------------------------------
 
-  let stats = $state<OpStats | null>(null);
-  let holdout = $state<OpTestHoldoutStats | null>(null);
+  let stats = $state<StatsSummary | null>(null);
+  let holdout = $state<TestHoldoutStats | null>(null);
   let loading = $state<boolean>(false);
   let error = $state<string | null>(null);
 
@@ -34,7 +34,7 @@
   // Export
   let versionTag = $state<string>('');
   let exportRunning = $state<boolean>(false);
-  let exportState = $state<OpExportStatus | null>(null);
+  let exportState = $state<ExportStatus | null>(null);
   let pollHandle: ReturnType<typeof setInterval> | null = null;
   let exportModalOpen = $state<boolean>(false);
 
@@ -236,11 +236,11 @@
     doc_count: number;
   }
   let hddSources = $state<HddBucket[]>([]);
-  // Pull from the same /curation/stats/dataset response — the existing `getStats`
+  // Pull from the same {API_PREFIX}/stats/dataset response — the existing `getStats`
   // surface only exposes per_class + ingestion summary; we hit the
   // dataset-stats endpoint directly via fetch for the by_source bucket.
-  // The thin /curation/stats/dataset response carries an `by_source` HDD bucket
-  // array which `getStats` (typed to OpStats) doesn't surface. Hit it
+  // The thin {API_PREFIX}/stats/dataset response carries an `by_source` HDD bucket
+  // array which `getStats` (typed to StatsSummary) doesn't surface. Hit it
   // directly so we can render the source-distribution chip row.
   $effect(() => {
     void (async () => {

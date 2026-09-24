@@ -4,18 +4,18 @@
   import { adequacyChipClass } from '$lib/adequacy';
   import { isAssignableClass } from '$lib/classVisibility';
   import { classesStore } from '$stores/classes.svelte';
-  import type { OpClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types';
 
   interface Props {
     selectedId: number | null;
-    onselect: (cls: OpClass | null) => void;
+    onselect: (cls: RegistryClass | null) => void;
     /**
      * Optional drop handler — when crops are dragged from a grid onto a
      * class row, this fires with the destination class. Caller is
      * responsible for assigning the currently-selected crops to that class.
      * When omitted, drop targets are disabled (sidebar is filter-only).
      */
-    ondrop?: (cls: OpClass, droppedIds: string[]) => void | Promise<void>;
+    ondrop?: (cls: RegistryClass, droppedIds: string[]) => void | Promise<void>;
   }
 
   let { selectedId = null, onselect, ondrop }: Props = $props();
@@ -60,7 +60,7 @@
   // signal we have here.
   let pendingDroppedIds: string[] = $state([]);
 
-  function makeFinalize(cls: OpClass) {
+  function makeFinalize(cls: RegistryClass) {
     return (e: CustomEvent): void => {
       const { items } = e.detail as { items: Array<{ id: string }> };
       hoveredClassId = null;
@@ -82,7 +82,7 @@
     };
   }
 
-  function makeConsider(cls: OpClass) {
+  function makeConsider(cls: RegistryClass) {
     return (e: CustomEvent): void => {
       const { items } = e.detail as { items: Array<{ id: string }> };
       if (items.length > 0) {
@@ -181,7 +181,7 @@
           {@const isHover = hoveredClassId === cls.id}
           <li>
             <div
-              class="op-drop-row flex w-full items-center justify-between gap-2 transition-colors
+              class="crop-drop-row flex w-full items-center justify-between gap-2 transition-colors
                 {isHover
                 ? 'bg-blue-500/30 ring-2 ring-inset ring-blue-400'
                 : selectedId === cls.id
@@ -189,7 +189,7 @@
                   : 'hover:bg-zinc-900'}"
               use:dndzone={{
                 items: [],
-                type: 'op-crop',
+                type: 'crop-card',
                 flipDurationMs: 0,
                 morphDisabled: true,
                 // centreDraggedOnCursor placed the shadow on top of the
@@ -262,10 +262,10 @@
      drop target away from the cursor (you had to aim above the name).
      Take the shadow out of flow: overlay it on the row instead so the
      row never reflows and the whole row stays a stable hit target. */
-  .op-drop-row {
+  .crop-drop-row {
     position: relative;
   }
-  .op-drop-row :global([data-is-dnd-shadow-item-hint]) {
+  .crop-drop-row :global([data-is-dnd-shadow-item-hint]) {
     position: absolute;
     inset: 0;
     width: 100% !important;

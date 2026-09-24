@@ -13,8 +13,8 @@
 
 import {
   FALLBACK_METHODS,
-  parseKbMethodsResponse,
-  type OpMethodsResponse,
+  parseMethodsResponse,
+  type MethodsResponse,
 } from './strategies';
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
@@ -24,22 +24,22 @@ import type {
   BulkLabelResult,
   ClusterFilter,
   CropFilter,
-  OpClass,
-  OpClassCreate,
-  OpClassMerge,
-  OpClassUpdate,
-  OpCluster,
-  OpCrop,
-  OpDatasetList,
-  OpExportResult,
-  OpExportStatus,
-  OpHealth,
-  OpSingleClassExportResult,
-  OpSingleClassExportStatus,
-  OpModelsStatus,
-  OpStats,
-  OpTestHoldoutFreezeResult,
-  OpTestHoldoutStats,
+  RegistryClass,
+  RegistryClassCreate,
+  RegistryClassMerge,
+  RegistryClassUpdate,
+  Cluster,
+  Crop,
+  ExportDatasetList,
+  ExportResult,
+  ExportStatus,
+  ApiHealth,
+  SingleClassExportResult,
+  SingleClassExportStatus,
+  ModelsStatus,
+  StatsSummary,
+  TestHoldoutFreezeResult,
+  TestHoldoutStats,
   DiverseSelection,
   PaginatedResponse,
   ReviewItem,
@@ -82,7 +82,7 @@ export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
  * Defaults to OpenProcessor's `OP_API_PREFIX` default, `/curation`, and
  * must equal it: the backend also builds some URLs itself (thumbnail
  * URLs in `/regions` rows) from its own prefix, and nginx only proxies
- * this one. Flipped from the transitional `/curation` at T-E2
+ * this one. Flipped from a transitional prefix at T-E2
  * (`docs/design/backend-integration-phase-b-plan-2026-09-20.md`).
  */
 const RAW_API_PREFIX = (import.meta.env?.PUBLIC_API_PREFIX as string | undefined) ?? '';
@@ -203,7 +203,7 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * already been resolved upstream (e.g. a server-supplied
  * `representative_thumb_urls` entry rendered through a shared helper).
  *
- * The backend intentionally emits relative `/curation/...` URLs in API
+ * The backend intentionally emits relative `{API_PREFIX}/...` URLs in API
  * response bodies (e.g. `region_thumbnail_url`, `representative_thumb_urls`)
  * so the same payload works both same-origin (production nginx proxy,
  * empty `apiBase`) and cross-origin (a remote `PUBLIC_TRITON_API_URL`).
@@ -284,8 +284,8 @@ function qs(params: Record<string, unknown>): string {
 
 // -- endpoints -----------------------------------------------------------
 
-export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
-  return apiFetch<OpHealth>(`${API_PREFIX}/health`, {}, signal);
+export function getHealth(signal?: AbortSignal): Promise<ApiHealth> {
+  return apiFetch<ApiHealth>(`${API_PREFIX}/health`, {}, signal);
 }
 
 /**
@@ -294,7 +294,7 @@ export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
  * currently offers, each with a `stable | experimental | shadow |
  * disabled` status. Phase 0 plumbing only — nothing consumes this yet.
  *
- * **Never rejects.** `/curation/methods` may not exist yet (backend Phase 0
+ * **Never rejects.** `{API_PREFIX}/methods` may not exist yet (backend Phase 0
  * lands independently — see `strategies.ts`'s header), and this endpoint
  * is pure capability discovery, not something a caller should have to
  * try/catch around. `apiFetch` already applies the house retry rule (no
@@ -304,10 +304,10 @@ export function getHealth(signal?: AbortSignal): Promise<OpHealth> {
  * today — instead of throwing. A caller-initiated abort still propagates,
  * since that's a cancellation, not a backend failure.
  */
-export async function getMethods(signal?: AbortSignal): Promise<OpMethodsResponse> {
+export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse> {
   try {
     const raw = await apiFetch<unknown>(`${API_PREFIX}/methods`, {}, signal);
-    return parseKbMethodsResponse(raw);
+    return parseMethodsResponse(raw);
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     return FALLBACK_METHODS;
@@ -391,7 +391,7 @@ export async function putCurationDefaults(
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
 //
 // docs/curation-strategy-plan-2026-09.md §2.7/§5.6/§7 — `embedding_viz.py`
-// + `op_viz.py` (openprocessor). UMAP-as-a-visualization-only overlay is the
+// + `viz.py` (openprocessor). UMAP-as-a-visualization-only overlay is the
 // one method in the whole curation-strategy plan that was NOT validated
 // in Phase 2 before implementation started; its own §6 acceptance bar
 // (2-d neighborhood purity vs. the real IVF cluster_id) decides whether
@@ -427,7 +427,7 @@ export interface VizProjectionResponse {
    *  pagination here (`max_points` is a hard cap, not a page size). */
   total: number;
   /**
-   * CONFIRMED (2026-09-10) against the real `GET /curation/viz/projection`
+   * CONFIRMED (2026-09-10) against the real `GET {API_PREFIX}/viz/projection`
    * (`embedding_viz.get_cached_projection`): the server returns
    * `{status: 'not_built'}` when nothing has been fit yet, or
    * `{points, projection_version, fitted_at, stale}` otherwise — there is
@@ -479,7 +479,7 @@ function parseVizPoint(raw: unknown): VizPoint | null {
 
 /**
  * Fetch the cached 2-d projection. **Never rejects** (mirrors
- * `getMethods`'s contract) — `/curation/viz/projection` may not exist yet (the
+ * `getMethods`'s contract) — `{API_PREFIX}/viz/projection` may not exist yet (the
  * backend Phase 5 lands independently of this frontend branch) or may
  * 404/5xx for any other reason, and a fetch failure here should degrade
  * `EmbeddingPlot` to its pending/empty state rather than crash the page
@@ -639,7 +639,7 @@ export interface PlateBrowseItem {
   thumbnail_url?: string;
   region_thumbnail_url?: string;
   selection_reason?: string;
-  /** Per-slot capability data — see `OpCrop.slots` in types.ts. Added by
+  /** Per-slot capability data — see `Crop.slots` in types.ts. Added by
    *  `getPlates` via `mapCropSlots`; absent on any row that predates this
    *  mapping in a stale cache. */
   slots?: Record<SlotKey, SlotData>;
@@ -761,11 +761,11 @@ export function refinePlateCluster(
   );
 }
 
-/** Plate cluster cards (mirrors getClusters' OpCluster shape). */
+/** Plate cluster cards (mirrors getClusters' Cluster shape). */
 export function getPlateClusters(
   opts: { maxClusters?: number; perCluster?: number; maxRank?: number } = {},
   signal?: AbortSignal,
-): Promise<{ clusters: OpCluster[]; count: number }> {
+): Promise<{ clusters: Cluster[]; count: number }> {
   return apiFetch(
     `${API_PREFIX}${REGION_BASE}/clusters${qs({
       max_clusters: opts.maxClusters,
@@ -861,8 +861,8 @@ export function getTrainingCandidates(
   );
 }
 
-export function getModelsStatus(signal?: AbortSignal): Promise<OpModelsStatus> {
-  return apiFetch<OpModelsStatus>(`${API_PREFIX}/models/status`, {}, signal);
+export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
+  return apiFetch<ModelsStatus>(`${API_PREFIX}/models/status`, {}, signal);
 }
 
 /**
@@ -885,8 +885,8 @@ export function unloadModel(
 }
 
 /**
- * Pipeline-dashboard payload from `GET /curation/stats/dataset`. Contract
- * defined by `src/routers/legacy/op_stats.py` — every nested key is
+ * Pipeline-dashboard payload from `GET {API_PREFIX}/stats/dataset`. Contract
+ * defined by `src/routers/curation/stats.py` — every nested key is
  * always present, numeric counters are always integers >= 0, and
  * `clusters.last_run_at` / `clusters.method` may be null when no
  * auto_label run has ever completed.
@@ -951,11 +951,11 @@ export function getDatasetStats(signal?: AbortSignal): Promise<DatasetStats> {
   return apiFetch<DatasetStats>(`${API_PREFIX}/stats/dataset`, {}, signal);
 }
 
-export async function getStats(signal?: AbortSignal): Promise<OpStats> {
+export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   // The API returns
-  //   /curation/stats/dataset:  {total_crops, validated, test_holdout, by_source}
-  //   /curation/stats/classes:  {classes:[{class_id, class_name, count, validated_count}, ...]}
-  // The labeler dashboard expects OpStats which uses validated_crops /
+  //   {API_PREFIX}/stats/dataset:  {total_crops, validated, test_holdout, by_source}
+  //   {API_PREFIX}/stats/classes:  {classes:[{class_id, class_name, count, validated_count}, ...]}
+  // The labeler dashboard expects StatsSummary which uses validated_crops /
   // test_holdout_crops / per_class / ingestion.* — fold the two server
   // payloads into that shape so the dashboard can render directly.
   type RawDataset = {
@@ -1001,9 +1001,9 @@ export async function getStats(signal?: AbortSignal): Promise<OpStats> {
   };
 }
 
-export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
+export async function getClasses(signal?: AbortSignal): Promise<RegistryClass[]> {
   // The API returns `{classes: [{class_id, class_name, group, sample_count,
-  // validated_count, deprecated}, ...]}`. Map to the labeler's OpClass
+  // validated_count, deprecated}, ...]}`. Map to the labeler's RegistryClass
   // shape, which uses `id`/`name`/`count`.
   type RawClass = {
     class_id?: number;
@@ -1040,7 +1040,7 @@ export async function getClasses(signal?: AbortSignal): Promise<OpClass[]> {
   }));
 }
 
-/** Raw cluster card from `/curation/clusters`. The backend is the single
+/** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single
  *  source of truth for every field — the frontend must never recompute
  *  dominant_class, purity, or is_unlabeled. */
 type RawCluster = {
@@ -1072,7 +1072,7 @@ type RawClustersResp = {
   cluster_id_offset: number;
 };
 
-function _rawClusterToKb(c: RawCluster): OpCluster {
+function _rawClusterToCluster(c: RawCluster): Cluster {
   return {
     id: c.cluster_id,
     cluster_kind: c.cluster_kind,
@@ -1094,11 +1094,11 @@ function _rawClusterToKb(c: RawCluster): OpCluster {
 export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
-): Promise<PaginatedResponse<OpCluster>> {
-  // Single round-trip. The backend's /curation/clusters aggregation already
+): Promise<PaginatedResponse<Cluster>> {
+  // Single round-trip. The backend's {API_PREFIX}/clusters aggregation already
   // returns dominant class, purity, validated_count, n_subclusters,
   // cluster_kind, and is_unlabeled. The frontend ONLY shapes the result
-  // into the labeler's OpCluster type — no semantic compute here.
+  // into the labeler's Cluster type — no semantic compute here.
   const raw = await apiFetch<RawClustersResp>(
     `${API_PREFIX}/clusters${qs({
       per_cluster: 4,
@@ -1116,7 +1116,7 @@ export async function getClusters(
     {},
     signal,
   );
-  const items = (raw.items ?? []).map(_rawClusterToKb);
+  const items = (raw.items ?? []).map(_rawClusterToCluster);
   return {
     items,
     total: raw.total ?? items.length,
@@ -1136,7 +1136,7 @@ function xyxyToBBoxNorm(bb: number[]): import('./types').BBoxNorm {
   };
 }
 
-/** Raw crop shape from the /curation/crops API. */
+/** Raw crop shape from the {API_PREFIX}/crops API. */
 type RawCrop = {
   crop_id: string;
   image_id?: string;
@@ -1174,9 +1174,9 @@ type RawCrop = {
   updated_at?: string;
 };
 
-function mapRawCrop(c: RawCrop): OpCrop {
+function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
-  const out: OpCrop = {
+  const out: Crop = {
     id: c.crop_id,
     source_image_path: c.image_path,
     bbox_norm: xyxyToBBoxNorm(bb),
@@ -1230,27 +1230,27 @@ export async function getCluster(
     minBlurRatio?: number | null;
     classifierConfLt?: number | null;
     /**
-     * Forwarded verbatim to `/curation/crops?order=`. Only `'outliers'` is
-     * special-cased server-side today (op_crops.py `order` query param —
+     * Forwarded verbatim to `{API_PREFIX}/crops?order=`. Only `'outliers'` is
+     * special-cased server-side today (crops.py `order` query param —
      * see docs/curation-strategy-plan-2026-09.md §1); an id the backend
      * doesn't recognize is harmless (qs() still sends it, the server
      * just falls back to its default ordering). Typed as `string` rather
-     * than a fixed union so a new `/curation/methods`-reported order id doesn't
+     * than a fixed union so a new `{API_PREFIX}/methods`-reported order id doesn't
      * require touching this signature — callers should still gate which
-     * ids they actually offer against what `/curation/methods` reports.
+     * ids they actually offer against what `{API_PREFIX}/methods` reports.
      */
     order?: string | null;
     /**
-     * Pool-scale overlay parameter, forwarded to `/curation/crops?k=` only when
+     * Pool-scale overlay parameter, forwarded to `{API_PREFIX}/crops?k=` only when
      * set (curation-strategy plan Phase 4 — `order: 'diverse'`'s "how
      * many diverse crops" count). Meaningless for every other `order`
      * value; the caller (`/clusters/[id]`) only sets it in diverse mode.
      */
     k?: number | null;
   } = {},
-): Promise<{ cluster: OpCluster; crops: PaginatedResponse<OpCrop> }> {
+): Promise<{ cluster: Cluster; crops: PaginatedResponse<Crop> }> {
   // Two parallel calls: paginated crops + the authoritative cluster
-  // card from /curation/clusters (server-computed). The page no longer
+  // card from {API_PREFIX}/clusters (server-computed). The page no longer
   // derives any of the cluster's identity fields client-side.
   //
   // `classSource` narrows the crop grid to one source bucket
@@ -1291,7 +1291,7 @@ export async function getCluster(
       // class_id silently returned nothing for every 'candidate' cluster
       // (id >= RESIDUAL_CLUSTER_ID_OFFSET, no matching class exists),
       // which fell back to the null-identity stub below and showed no
-      // human-readable name in the header even though /curation/clusters'
+      // human-readable name in the header even though {API_PREFIX}/clusters'
       // list view has dominant_class_name for the same cluster.
       `${API_PREFIX}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
       {},
@@ -1300,8 +1300,8 @@ export async function getCluster(
   ]);
   const items = cropPage.crops.map(mapRawCrop);
   const found = clustersResp?.items?.find((c) => c.cluster_id === id) ?? null;
-  const cluster: OpCluster = found
-    ? _rawClusterToKb(found)
+  const cluster: Cluster = found
+    ? _rawClusterToCluster(found)
     : {
         // Fallback only if the cluster card lookup failed — leaves
         // identity fields null but lets the crop grid render.
@@ -1336,7 +1336,7 @@ export async function getCluster(
 export async function getCrops(
   filter: CropFilter = {},
   signal?: AbortSignal,
-): Promise<PaginatedResponse<OpCrop>> {
+): Promise<PaginatedResponse<Crop>> {
   type Raw = { total: number; page: number; page_size: number; crops: RawCrop[] };
   const raw = await apiFetch<Raw>(`${API_PREFIX}/crops${qs({ ...filter })}`, {}, signal);
   return {
@@ -1351,8 +1351,8 @@ export function putCropLabel(
   cropId: string,
   classId: number,
   signal?: AbortSignal,
-): Promise<OpCrop> {
-  return apiFetch<OpCrop>(
+): Promise<Crop> {
+  return apiFetch<Crop>(
     `${API_PREFIX}/crops/${encodeURIComponent(cropId)}/label`,
     {
       method: 'PUT',
@@ -1413,7 +1413,7 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
  * - Pass `null` to clear the plate; the backend interprets this as
  *   `region_status='no_region_visible'`.
  *
- * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/region`
+ * Mirrors `putCropLabel` in shape. Endpoint: `PUT {API_PREFIX}/crops/{id}/region`
  * (renamed from `/plate`, Wave 2 C14), defined by backend task #32 to
  * match this contract.
  *
@@ -1425,9 +1425,9 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
  * Fetch a single crop by id from the authoritative store. Used by the
  * review-page "Back" path so the operator sees what was actually
  * persisted rather than a possibly-stale local snapshot. Endpoint:
- * `GET /curation/crops/{crop_id}`.
+ * `GET {API_PREFIX}/crops/{crop_id}`.
  */
-export async function getCrop(cropId: string, signal?: AbortSignal): Promise<OpCrop> {
+export async function getCrop(cropId: string, signal?: AbortSignal): Promise<Crop> {
   const raw = await apiFetch<RawCrop>(
     `${API_PREFIX}/crops/${encodeURIComponent(cropId)}`,
     {},
@@ -1449,7 +1449,7 @@ export function setSlotBox(
   cropId: string,
   xyxy: [number, number, number, number] | null,
   signal?: AbortSignal,
-): Promise<OpCrop> {
+): Promise<Crop> {
   const path =
     (xyxy === null ? spec.endpoints.clearBox?.(cropId) : undefined) ??
     spec.endpoints.setBox?.(cropId);
@@ -1459,7 +1459,7 @@ export function setSlotBox(
       new Error(`slot "${spec.key}" has no setBox/clearBox endpoint or subBox field`),
     );
   }
-  return apiFetch<OpCrop>(
+  return apiFetch<Crop>(
     `${API_PREFIX}${path}`,
     { method: 'PUT', body: JSON.stringify({ [bboxField]: xyxy }) },
     signal,
@@ -1508,8 +1508,8 @@ export function patchSlotMeta(
 }
 
 /**
- * Bulk-set region_status over many crops. Backend: `POST /curation/regions/batch_status`
- *   (renamed from `/curation/plates/batch_status`, Wave 2 C14).
+ * Bulk-set region_status over many crops. Backend: `POST {API_PREFIX}/regions/batch_status`
+ *   (renamed from `{API_PREFIX}/plates/batch_status`, Wave 2 C14).
  * The cluster-view triage op: select outlier plates → mark all false_positive,
  * or bulk-confirm good plates (status='detected' + plateVerified=true).
  *
@@ -1619,8 +1619,8 @@ export async function getReviewQueue(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<ReviewItem>> {
-  // The /curation/review API ships bbox_norm + region_bbox_norm as
-  // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends OpCrop where
+  // The {API_PREFIX}/review API ships bbox_norm + region_bbox_norm as
+  // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends Crop where
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
   // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmSlot all see the
   // same shape regardless of the endpoint that produced the item.
@@ -1667,8 +1667,8 @@ export async function getReviewQueue(
 
 // -- pool-scale diverse selection for /review (P2-10) --------------------
 //
-// `POST /curation/select/diverse` is a DIFFERENT contract from `/clusters/[id]`'s
-// `GET /curation/crops?order=diverse&k=N`: that path is a small, synchronous,
+// `POST {API_PREFIX}/select/diverse` is a DIFFERENT contract from `/clusters/[id]`'s
+// `GET {API_PREFIX}/crops?order=diverse&k=N`: that path is a small, synchronous,
 // cluster-scoped selection; this one scopes to a review-tab cohort that
 // can be pool-scale (the `all` tab is ~320k crops), so the backend may
 // answer either 200 (small pool, `crop_ids` ready now) or 202 (large pool,
@@ -1768,7 +1768,7 @@ export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobSt
 }
 
 /** Cancel the singleton diverse-selection job, if any is running. Real
- *  backend returns `{cancelled: bool, ...job state}` (op_select.py's
+ *  backend returns `{cancelled: bool, ...job state}` (select.py's
  *  `select_cancel`), not a bare 204 — the caller only needs to know
  *  polling can stop, so the body is discarded. */
 export async function cancelSelect(signal?: AbortSignal): Promise<void> {
@@ -1777,8 +1777,8 @@ export async function cancelSelect(signal?: AbortSignal): Promise<void> {
 
 /**
  * Free-text semantic search over vehicle crops (P2-14). Backend:
- * `GET /curation/search/text`, gated behind the `semantic_search` overlay in
- * `/curation/methods` (see `isSemanticSearchAvailable` in `./strategies`) — a
+ * `GET {API_PREFIX}/search/text`, gated behind the `semantic_search` overlay in
+ * `{API_PREFIX}/methods` (see `isSemanticSearchAvailable` in `./strategies`) — a
  * caller must check that gate before rendering a UI that calls this.
  *
  * Mirrors `getReviewQueue`'s response-shape handling: the endpoint
@@ -1843,10 +1843,10 @@ export async function searchCrops(
 export function exportYolo(
   opts: { version_tag?: string } = {},
   signal?: AbortSignal,
-): Promise<OpExportResult> {
+): Promise<ExportResult> {
   const body: Record<string, unknown> = {};
   if (opts.version_tag) body.version_tag = opts.version_tag;
-  return apiFetch<OpExportResult>(
+  return apiFetch<ExportResult>(
     `${API_PREFIX}/export/yolo`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
@@ -1854,8 +1854,8 @@ export function exportYolo(
 }
 
 /** Poll current export state. */
-export function exportStatus(signal?: AbortSignal): Promise<OpExportStatus> {
-  return apiFetch<OpExportStatus>(`${API_PREFIX}/export/status`, {}, signal);
+export function exportStatus(signal?: AbortSignal): Promise<ExportStatus> {
+  return apiFetch<ExportStatus>(`${API_PREFIX}/export/status`, {}, signal);
 }
 
 /** Options an operator picks per single-class export build. */
@@ -1879,7 +1879,7 @@ export function exportSingleClass(
   spec: DatasetExportSpec,
   opts: SingleClassExportOptions = {},
   signal?: AbortSignal,
-): Promise<OpSingleClassExportResult> {
+): Promise<SingleClassExportResult> {
   const body: Record<string, unknown> = {
     profile_name: spec.profileName,
     box_source: spec.boxSource,
@@ -1889,7 +1889,7 @@ export function exportSingleClass(
   for (const [k, v] of Object.entries(opts)) {
     if (v !== undefined) body[k] = v;
   }
-  return apiFetch<OpSingleClassExportResult>(
+  return apiFetch<SingleClassExportResult>(
     `${API_PREFIX}${spec.buildPath}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
@@ -1900,8 +1900,8 @@ export function exportSingleClass(
 export function exportSingleClassStatus(
   spec: DatasetExportSpec,
   signal?: AbortSignal,
-): Promise<OpSingleClassExportStatus> {
-  return apiFetch<OpSingleClassExportStatus>(
+): Promise<SingleClassExportStatus> {
+  return apiFetch<SingleClassExportStatus>(
     `${API_PREFIX}${spec.statusPath}${qs({ profile_name: spec.profileName })}`,
     {},
     signal,
@@ -1916,8 +1916,8 @@ export function exportSingleClassStatus(
 export function listDatasets(
   filter: { kind?: string; profile_name?: string } = {},
   signal?: AbortSignal,
-): Promise<OpDatasetList> {
-  return apiFetch<OpDatasetList>(
+): Promise<ExportDatasetList> {
+  return apiFetch<ExportDatasetList>(
     `${API_PREFIX}/export/datasets${qs(filter)}`,
     {},
     signal,
@@ -1926,12 +1926,12 @@ export function listDatasets(
 
 // -- classes mutators ----------------------------------------------------
 
-export function getClass(classId: number, signal?: AbortSignal): Promise<OpClass> {
-  return apiFetch<OpClass>(`${API_PREFIX}/classes/${classId}`, {}, signal);
+export function getClass(classId: number, signal?: AbortSignal): Promise<RegistryClass> {
+  return apiFetch<RegistryClass>(`${API_PREFIX}/classes/${classId}`, {}, signal);
 }
 
 export function addClass(
-  payload: OpClassCreate,
+  payload: RegistryClassCreate,
   signal?: AbortSignal,
 ): Promise<{ class_id: number; class_name: string; group: string }> {
   return apiFetch<{ class_id: number; class_name: string; group: string }>(
@@ -1943,7 +1943,7 @@ export function addClass(
 
 export function renameClass(
   classId: number,
-  payload: OpClassUpdate,
+  payload: RegistryClassUpdate,
   signal?: AbortSignal,
 ): Promise<unknown> {
   return apiFetch<unknown>(
@@ -1954,7 +1954,7 @@ export function renameClass(
 }
 
 export function mergeClasses(
-  payload: OpClassMerge,
+  payload: RegistryClassMerge,
   signal?: AbortSignal,
 ): Promise<{
   source_id: number;
@@ -1995,7 +1995,7 @@ export function moveCropsToCluster(
   signal?: AbortSignal,
 ): Promise<BulkLabelResult> {
   // Backend returns the same {updated, conflicts: [...]} shape as
-  // /curation/crops/batch_label. Reuse the type so both call sites share the
+  // {API_PREFIX}/crops/batch_label. Reuse the type so both call sites share the
   // conflict-handling code path.
   return apiFetch<BulkLabelResult>(
     `${API_PREFIX}/crops/move`,
@@ -2069,16 +2069,16 @@ export function flagNeedsNewClass(
 export function freezeTestHoldout(
   payload: { percent: number; seed: number },
   signal?: AbortSignal,
-): Promise<OpTestHoldoutFreezeResult> {
-  return apiFetch<OpTestHoldoutFreezeResult>(
+): Promise<TestHoldoutFreezeResult> {
+  return apiFetch<TestHoldoutFreezeResult>(
     `${API_PREFIX}/test_holdout/freeze`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );
 }
 
-export function getTestHoldoutStats(signal?: AbortSignal): Promise<OpTestHoldoutStats> {
-  return apiFetch<OpTestHoldoutStats>(`${API_PREFIX}/test_holdout/stats`, {}, signal);
+export function getTestHoldoutStats(signal?: AbortSignal): Promise<TestHoldoutStats> {
+  return apiFetch<TestHoldoutStats>(`${API_PREFIX}/test_holdout/stats`, {}, signal);
 }
 
 // -- registry/manifest downloads (used as anchor `download` URLs) --------
@@ -2171,7 +2171,7 @@ export function getSourceImageFull(cropId: string): string {
 
 // -- training endpoints --------------------------------------------------
 //
-// Mirror the FastAPI `/curation/train/*` router. The labeler `/train` page is
+// Mirror the FastAPI `{API_PREFIX}/train/*` router. The labeler `/train` page is
 // the only consumer; types live in `./types_train.ts` so the existing
 // types.ts stays focused on the labeling data model.
 
@@ -2327,7 +2327,7 @@ export function getTrainManifest(
 }
 
 // -- Auto-label (recluster) job ------------------------------------------
-// Wraps POST /curation/pipeline/auto_label/{start,status,cancel}. The pipeline
+// Wraps POST {API_PREFIX}/pipeline/auto_label/{start,status,cancel}. The pipeline
 // re-runs prototype assignment → cluster_id normalize → AHC residuals → auto-
 // promote → Gemma sweep, fixing prototype drift and stale cluster_id on
 // labeled crops. Hours at HDD scale; the panel polls status while it runs.

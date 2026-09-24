@@ -34,9 +34,9 @@
   import { isAssignableClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type {
-    OpClass,
-    OpCluster,
-    OpCrop,
+    RegistryClass,
+    Cluster,
+    Crop,
     PaginatedResponse,
     UndoEntry,
   } from '$lib/types';
@@ -45,7 +45,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { undoStore } from '$stores/undo.svelte';
-  import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
+  import { subscribeCurationEvents, type CurationEventSubscription } from '$lib/sse';
 
   const clusterIdParam = $derived(page.params.id);
   const clusterId = $derived(Number(clusterIdParam));
@@ -58,7 +58,7 @@
     classesStore.classes.find((c) => c.id === clusterId) ?? null,
   );
 
-  let cluster = $state<OpCluster | null>(null);
+  let cluster = $state<Cluster | null>(null);
 
   // Provenance echoed back by a pool-scale overlay ordering (Phase 4 —
   // order=diverse). Captured here (not by cropPager, which only retains
@@ -101,7 +101,7 @@
 
   // Crop pager. cropQuery() feeds page 1 and every later page, so a filter
   // can't be applied to the first request and silently dropped on the next.
-  const cropPager = createPager<OpCrop>({
+  const cropPager = createPager<Crop>({
     fetchPage: async (page) => {
       const res = await getCluster(clusterId, page, pageSize, undefined, cropQuery());
       cluster = res.cluster;
@@ -113,7 +113,7 @@
               n_pool: res.crops.n_pool ?? null,
             }
           : null;
-      return res.crops as PaginatedResponse<OpCrop>;
+      return res.crops as PaginatedResponse<Crop>;
     },
     keyOf: (c) => c.id,
     accept: (c) => !excludedCropIds.has(c.id),
@@ -123,7 +123,7 @@
   });
 
   // Crop opened in the read-only details modal (info button on each card).
-  let detailCrop = $state<OpCrop | null>(null);
+  let detailCrop = $state<Crop | null>(null);
 
   // Selection set (crop_id) + shift-range anchor.
   const sel = createSelection({ plainClick: 'replace' });
@@ -133,7 +133,7 @@
   let subTab = $state<string | null>(null);
 
   // class_source filter (null = all). Drives the chip-group in the
-  // header and propagates to /curation/crops?class_source=... so the grid
+  // header and propagates to {API_PREFIX}/crops?class_source=... so the grid
   // shows only crops from one source bucket. Cluster card stats in
   // the header are NOT recomputed by this filter — the operator sees
   // the filter against the whole-cluster totals on purpose.
@@ -161,7 +161,7 @@
   ];
 
   // Primary-subject scope: 0 = all crops, 1 = largest only, 2 = largest + 2nd.
-  // Maps to the /curation/crops?max_rank= filter (the "biggest vehicle in frame" the
+  // Maps to the {API_PREFIX}/crops?max_rank= filter (the "biggest vehicle in frame" the
   // business sorts on). null = no rank filter.
   let subjectScope = $state<0 | 1 | 2>(0);
   const maxRank = $derived<number | null>(subjectScope === 0 ? null : subjectScope);
@@ -172,11 +172,11 @@
   // of truth). `strategyBar.sort` IS the order id here — 'default' means
   // newest-first (today's behavior), unchanged from before Phase 3.
   // 'default'/'outliers' are always offered (see the `allowedOrderIds`
-  // passed to <StrategyBar> below): `/curation/crops?order=` only special-cases
+  // passed to <StrategyBar> below): `{API_PREFIX}/crops?order=` only special-cases
   // those server-side per docs/curation-strategy-plan-2026-09.md §1, so
   // any other id would silently do nothing were it offered here — except
   // 'diverse' (Phase 4), which is *conditionally* offered, gated purely on
-  // /curation/methods reporting it (mirrors the mistakenness-filter gating
+  // {API_PREFIX}/methods reporting it (mirrors the mistakenness-filter gating
   // pattern in StrategyBar.svelte — see isDiverseOverlayAvailable).
   const strategyBar = createStrategyBar({ defaultId: 'default' });
   const orderMode = $derived(strategyBar.sort);
@@ -186,7 +186,7 @@
   const outliersFirst = $derived(orderMode === 'outliers');
 
   // 'diverse' (Phase 4, core-set / k-center-greedy pool selection) is only
-  // ever offered when /curation/methods reports it at stable/experimental status
+  // ever offered when {API_PREFIX}/methods reports it at stable/experimental status
   // — a pre-Phase-4 backend, or OP_SELECT_DIVERSE_ENABLED off, means the
   // 'diverse' id is passed through but StrategyBar's own gate (same
   // predicate) never actually surfaces it in the <select>, so this page
@@ -206,7 +206,7 @@
   // selection, DnD, and label hotkeys below keep working completely
   // unchanged — this is not a parallel rendering path. While a search is
   // active, "load more" is disabled (see hasMore guard in the pager
-  // section below): /curation/search/text pagination isn't wired to this
+  // section below): {API_PREFIX}/search/text pagination isn't wired to this
   // cluster page's infinite-scroll trigger, and re-paging into
   // getCluster would silently overwrite the search results.
   const semanticSearchAvailable = $derived(
@@ -292,76 +292,78 @@
   // teardown so other pages don't accidentally receive cluster-page
   // drop dispatches.
   $effect(() => {
-    const off = dropOnClassStore.register(async (cls: OpClass, droppedIds: string[]) => {
-      // Priority order matters. onGroupConsider captures the full drag
-      // set at drag-start time (Finder pattern — grab any selected card
-      // to drag all selected; grab an unselected card to drag just that
-      // one), and the ClassSidebar's own finalize only ever sees the
-      // single shadow item — so for a multi-drag drop droppedIds has 1 id
-      // while dragIds has N. dragIds must therefore win. The `selected`
-      // fallback serves the keyboard path: the layout's class-letter
-      // listener dispatches with an empty droppedIds and no drag context.
-      // Consume dragIds here — leaving it populated would make the NEXT
-      // hotkey press relabel the previously dragged crops.
-      const ids =
-        dragIds.length > 0
-          ? [...dragIds]
-          : droppedIds.length > 0
-            ? droppedIds
-            : [...sel.ids];
-      dragIds = [];
-      if (ids.length === 0) {
-        toastStore.warn('Select or drag crops first, then press a class hotkey.');
-        return;
-      }
-      for (const id of ids) {
-        const c = cropPager.items.find((x) => x.id === id);
-        if (c) undoStore.push(undoStore.snapshotOf(c));
-      }
-      // Optimistic: remove the dropped crops from the visible grid
-      // BEFORE the await, so the labeling feels real-time. The dragged
-      // selection is the source of truth — if the backend reports
-      // conflicts we re-sync, if it errors we restore the snapshot.
-      const snap = cropPager.items;
-      const snapTotal = cropPager.total;
-      const droppedSet = new Set(ids);
-      cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
-      cropPager.total = Math.max(0, cropPager.total - ids.length);
-      // Tear down any drag-local grid override *now*, so the grid repaints
-      // from the (already-corrected) pager instead of from whatever snapshot
-      // the in-flight drag left behind. Without this the grid's last word is
-      // whichever dnd event fires last, which is how moved crops came back.
-      grid.reset();
-      sel.ids = new Set();
-      // Claim these ids before the await resolves — see excludedCropIds
-      // above. A stale/concurrent fetch that lands between now and the
-      // await settling must not be allowed to resurrect them.
-      for (const id of ids) excludedCropIds.add(id);
-      try {
-        const res = await bulkLabel(ids, cls.id);
-        const conflicts = res.conflicts?.length ?? 0;
-        if (conflicts > 0) {
-          // A concurrent worker (typically op_gemma_worker) beat us on
-          // some crops. The backend kept those crops on their old class;
-          // re-fetch so the grid reflects truth. Only the crops that
-          // actually moved stay excluded — the conflicted ones never
-          // left cluster_id=clusterId, so they must be allowed back.
-          for (const c of res.conflicts) excludedCropIds.delete(c.crop_id);
-          toastStore.warn(
-            `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker). Reloading.`,
-          );
-          void loadFirst();
-        } else {
-          toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+    const off = dropOnClassStore.register(
+      async (cls: RegistryClass, droppedIds: string[]) => {
+        // Priority order matters. onGroupConsider captures the full drag
+        // set at drag-start time (Finder pattern — grab any selected card
+        // to drag all selected; grab an unselected card to drag just that
+        // one), and the ClassSidebar's own finalize only ever sees the
+        // single shadow item — so for a multi-drag drop droppedIds has 1 id
+        // while dragIds has N. dragIds must therefore win. The `selected`
+        // fallback serves the keyboard path: the layout's class-letter
+        // listener dispatches with an empty droppedIds and no drag context.
+        // Consume dragIds here — leaving it populated would make the NEXT
+        // hotkey press relabel the previously dragged crops.
+        const ids =
+          dragIds.length > 0
+            ? [...dragIds]
+            : droppedIds.length > 0
+              ? droppedIds
+              : [...sel.ids];
+        dragIds = [];
+        if (ids.length === 0) {
+          toastStore.warn('Select or drag crops first, then press a class hotkey.');
+          return;
         }
-      } catch (e) {
-        // Revert the optimistic mutation on hard failure.
-        for (const id of ids) excludedCropIds.delete(id);
-        cropPager.items = snap;
-        cropPager.total = snapTotal;
-        toastStore.error(`Label failed: ${(e as Error).message}`);
-      }
-    });
+        for (const id of ids) {
+          const c = cropPager.items.find((x) => x.id === id);
+          if (c) undoStore.push(undoStore.snapshotOf(c));
+        }
+        // Optimistic: remove the dropped crops from the visible grid
+        // BEFORE the await, so the labeling feels real-time. The dragged
+        // selection is the source of truth — if the backend reports
+        // conflicts we re-sync, if it errors we restore the snapshot.
+        const snap = cropPager.items;
+        const snapTotal = cropPager.total;
+        const droppedSet = new Set(ids);
+        cropPager.items = cropPager.items.filter((c) => !droppedSet.has(c.id));
+        cropPager.total = Math.max(0, cropPager.total - ids.length);
+        // Tear down any drag-local grid override *now*, so the grid repaints
+        // from the (already-corrected) pager instead of from whatever snapshot
+        // the in-flight drag left behind. Without this the grid's last word is
+        // whichever dnd event fires last, which is how moved crops came back.
+        grid.reset();
+        sel.ids = new Set();
+        // Claim these ids before the await resolves — see excludedCropIds
+        // above. A stale/concurrent fetch that lands between now and the
+        // await settling must not be allowed to resurrect them.
+        for (const id of ids) excludedCropIds.add(id);
+        try {
+          const res = await bulkLabel(ids, cls.id);
+          const conflicts = res.conflicts?.length ?? 0;
+          if (conflicts > 0) {
+            // A concurrent worker (typically the VLM worker) beat us on
+            // some crops. The backend kept those crops on their old class;
+            // re-fetch so the grid reflects truth. Only the crops that
+            // actually moved stay excluded — the conflicted ones never
+            // left cluster_id=clusterId, so they must be allowed back.
+            for (const c of res.conflicts) excludedCropIds.delete(c.crop_id);
+            toastStore.warn(
+              `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker). Reloading.`,
+            );
+            void loadFirst();
+          } else {
+            toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+          }
+        } catch (e) {
+          // Revert the optimistic mutation on hard failure.
+          for (const id of ids) excludedCropIds.delete(id);
+          cropPager.items = snap;
+          cropPager.total = snapTotal;
+          toastStore.error(`Label failed: ${(e as Error).message}`);
+        }
+      },
+    );
     return off;
   });
 
@@ -405,7 +407,7 @@
   // (pre-drop) list into, with nothing to re-derive it afterwards — which is
   // how a labelled-away crop could get painted back into the grid and stay
   // there until a hard reload. See src/lib/gridGroups.svelte.ts.
-  const grid = createGridGroups<OpCrop>({
+  const grid = createGridGroups<Crop>({
     source: () => filteredCrops,
     grouped: () => groupBySubcluster,
     keyOf: (c) => c.id,
@@ -527,7 +529,7 @@
     }
   }
 
-  async function acceptVlmForCrop(crop: OpCrop): Promise<void> {
+  async function acceptVlmForCrop(crop: Crop): Promise<void> {
     if (crop.vlm_suggested_class_id == null) return;
     const entry = undoStore.snapshotOf(crop);
     undoStore.push(entry);
@@ -547,7 +549,7 @@
     }
   }
 
-  async function rejectVlmForCrop(crop: OpCrop): Promise<void> {
+  async function rejectVlmForCrop(crop: Crop): Promise<void> {
     // Reject = clear the suggestion locally; the server clears on next batch.
     cropPager.items = cropPager.items.map((c) =>
       c.id === crop.id
@@ -881,7 +883,7 @@
   function onGroupConsider(
     key: string,
     e: CustomEvent<{
-      items: OpCrop[];
+      items: Crop[];
       info: { id: string; trigger: TRIGGERS; source: SOURCES };
     }>,
   ): void {
@@ -905,7 +907,7 @@
 
   function onGroupFinalize(
     _key: string,
-    e: CustomEvent<{ items: OpCrop[]; info: { trigger: TRIGGERS } }>,
+    e: CustomEvent<{ items: Crop[]; info: { trigger: TRIGGERS } }>,
   ): void {
     // Drop the drag-local override outright rather than adopting
     // `e.detail.items`. That payload is the dnd library's own pre-drop
@@ -946,13 +948,13 @@
   // never deliver anything — skip it rather than hold an idle stream open.
   let liveNewCount = $state<number>(0);
   let scrolledPastFirst20 = $state<boolean>(false);
-  let liveSub: OpEventSubscription | null = null;
+  let liveSub: CurationEventSubscription | null = null;
   let scrollEl = $state<HTMLDivElement | null>(null);
   const liveClassId = $derived(clsForCluster?.id ?? null);
 
   $effect(() => {
     if (liveClassId == null) return;
-    liveSub = subscribeKbEvents({
+    liveSub = subscribeCurationEvents({
       class_id: liveClassId,
       onEvent: (ev) => {
         if (ev.type === 'crop.classified' || ev.type === 'crop.created') {
@@ -1418,7 +1420,7 @@
          Filters are hidden here: the crop query doesn't forward
          min-mistakenness / hide-near-dup params (Phase 3 review-only).
          'diverse' (Phase 4) is included in allowedOrderIds unconditionally
-         — StrategyBar only actually renders it once /curation/methods reports
+         — StrategyBar only actually renders it once {API_PREFIX}/methods reports
          the overlay, so this is harmless against a backend that hasn't
          shipped it yet. -->
     <StrategyBar
@@ -1503,7 +1505,7 @@
         <!-- One dndzone per sub-cluster group. Headers sit BETWEEN zones
              (not inside any) so each zone's children map 1:1 to its
              items — keeping drag-and-drop intact. All zones share
-             type='op-crop' so a card drags out to the ClassSidebar (or
+             type='crop-card' so a card drags out to the ClassSidebar (or
              across groups) exactly as before. -->
         {#each gridGroups as group (group.key)}
           {#if groupBySubcluster}
@@ -1525,7 +1527,7 @@
               : ''}"
             use:dndzone={{
               items: group.items,
-              type: 'op-crop',
+              type: 'crop-card',
               flipDurationMs: 150,
               dropTargetStyle: { outline: '2px dashed rgb(59 130 246 / 0.6)' },
               dragDisabled: false,

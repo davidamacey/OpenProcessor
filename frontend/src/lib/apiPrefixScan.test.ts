@@ -1,7 +1,7 @@
 /**
  * CI ratchet: every backend URL in this app composes through
- * `API_PREFIX` (`src/lib/api.ts`), never through a hardcoded `/curation` or
- * `/curation` literal.
+ * `API_PREFIX` (`src/lib/api.ts`), never through a hardcoded `/curation`
+ * literal.
  *
  * This is the frontend half of H1 (coordination plan §5.3 — see
  * `docs/design/backend-integration-phase-d-static-plan-2026-09-20.md`).
@@ -44,7 +44,7 @@ const PREFIX_DECLARATION_FILE = path.join('lib', 'api.ts');
  * message that opens with the path (`'/curation/methods is down'`) WOULD
  * trip this — reword it, don't loosen the pattern.
  */
-const BARE_PREFIX_PATTERN = /(?:['"`]|\})\/(?:op|curation)(?:[/'"`]|\$)/;
+const BARE_PREFIX_PATTERN = /(?:['"`]|\})\/curation(?:[/'"`]|\$)/;
 
 /**
  * Strip comments before scanning. Without this the guard flags 12 files
@@ -108,7 +108,7 @@ describe('stripComments (the guard is only as good as this)', () => {
   });
 });
 
-describe('no bare /curation or /curation literal composes a URL outside api.ts', () => {
+describe('no bare /curation literal composes a URL outside api.ts', () => {
   it('scans the whole non-test source tree (sanity check the walk)', () => {
     expect(scanned.length).toBeGreaterThan(80);
     expect(scanned).toContain(path.join('lib', 'api.ts'));
@@ -214,7 +214,7 @@ describe('api.ts confines its prefix literal to normalizeApiPrefix', () => {
     expect(hits).toHaveLength(1);
   });
 
-  // Flipped from '/curation' at T-E2. Every other assertion in this file is
+  // Flipped from a transitional prefix at T-E2. Every other assertion in this file is
   // prefix-name-agnostic.
   it('and it is normalizeApiPrefix’s /curation fallback', () => {
     expect(hits[0]![1]).toMatch(

@@ -13,7 +13,7 @@
  * class, so callers can destructure/bind (`bind:value={bar.sort}`)
  * exactly like the pager/selection helpers.
  *
- * Deliberately dumb: this module doesn't know about `/curation/methods`,
+ * Deliberately dumb: this module doesn't know about `{API_PREFIX}/methods`,
  * `stable`/`experimental`/`shadow` status, or field coverage — that's
  * capability discovery, owned by `strategiesStore` and rendered by
  * `StrategyBar.svelte`. This module only knows "what is currently
@@ -21,7 +21,7 @@
  * without mocking the store or the network.
  *
  * `sort` doubles as `/clusters/[id]`'s `orderMode` — both routes pick
- * one id out of whatever `/curation/methods` currently reports; the query key
+ * one id out of whatever `{API_PREFIX}/methods` currently reports; the query key
  * it's serialized under differs per route (`sort` for `/review`,
  * `order` for `/clusters/[id]`), which is why `toQueryParams()` only
  * covers the `/review` shape and the cluster page reads `.sort` directly
@@ -33,7 +33,7 @@ export interface StrategyBarOptions {
    *  toQueryParams() and restored by reset(). Defaults to 'default'. */
   defaultId?: string;
   /** Sort ids that are actually pool-scale overlays (Phase 4's `'diverse'`),
-   *  not a real `/curation/review/{tab}` or `/curation/crops` sort param — that
+   *  not a real `{API_PREFIX}/review/{tab}` or `{API_PREFIX}/crops` sort param — that
    *  endpoint 400s if `sort=diverse` is ever forwarded to it (P2-10).
    *  `toQueryParams()` omits `sort` entirely whenever the current
    *  selection is one of these; the caller drives the overlay through its
@@ -60,7 +60,7 @@ export interface StrategyBar {
    *  (e.g. the page size) at the point of use, since "what's a sane
    *  default" is a per-route concept this shared module deliberately
    *  doesn't know about (same reasoning as the module-level doc comment
-   *  above re: `/curation/methods`/status). Not part of `toQueryParams()` —
+   *  above re: `{API_PREFIX}/methods`/status). Not part of `toQueryParams()` —
    *  only `/clusters/[id]` forwards it today, reading `.k` directly the
    *  same way it already reads `.sort` directly. */
   k: number | null;

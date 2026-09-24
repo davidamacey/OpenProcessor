@@ -12,9 +12,9 @@
  * don't register simply don't accept drops).
  */
 
-import type { OpClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types';
 
-type DropHandler = (cls: OpClass, droppedIds: string[]) => void | Promise<void>;
+type DropHandler = (cls: RegistryClass, droppedIds: string[]) => void | Promise<void>;
 
 class DropOnClassStore {
   /** Active drop handler. ``null`` means the sidebar's drop targets are inert. */
@@ -43,7 +43,7 @@ class DropOnClassStore {
    *   all. Only then may the handler fall back to its ``selected`` set;
    *   without that fallback the keyboard-first labeling path does nothing.
    */
-  async dispatch(cls: OpClass, droppedIds: string[]): Promise<void> {
+  async dispatch(cls: RegistryClass, droppedIds: string[]): Promise<void> {
     if (this.handler) await this.handler(cls, droppedIds);
   }
 }

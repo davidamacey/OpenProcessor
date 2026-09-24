@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
  * appeared only on the Primary·Low-Conf preset chip and the COCO Blind Spots
  * tab and silently vanished everywhere else (All, Uncertainty, Model
  * Disagreements, Plates, Gemma-mismatches chip, Gemma-low-conf chip) — even
- * though the backend (`op_review.py`) always treats `max_rank` /
+ * though the backend (`review.py`) always treats `max_rank` /
  * `min_blur_ratio` as tab-agnostic ("Both apply across tabs"). This is a
  * static source-scan (no @testing-library/svelte in this repo — see
  * clusterMoveRace.test.ts for the established precedent) proving the gate is

@@ -38,10 +38,10 @@
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { toastStore } from '$stores/toast.svelte';
-  import type { BBoxNorm, OpCrop } from '$lib/types';
+  import type { BBoxNorm, Crop } from '$lib/types';
 
   interface Props {
-    crop: OpCrop;
+    crop: Crop;
     /** Slot whose sub-box this modal edits. Defaults to whatever slot is
      *  bound to the crop's own class, matching CropCard's own default. */
     slot?: SlotSpec;

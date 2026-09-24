@@ -32,7 +32,13 @@
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SubjectScopeToggle from '$lib/components/SubjectScopeToggle.svelte';
-  import type { ClusterFilter, OpClass, OpCluster, OpCrop, UndoEntry } from '$lib/types';
+  import type {
+    ClusterFilter,
+    RegistryClass,
+    Cluster,
+    Crop,
+    UndoEntry,
+  } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -43,25 +49,25 @@
   // Cluster grid pager. One params builder (clusterQuery) feeds page 1 and
   // every later page, so a filter can't be sent on the first request and
   // silently dropped on the next.
-  const clusterPager = createPager<OpCluster>({
+  const clusterPager = createPager<Cluster>({
     fetchPage: async (page) => await getClusters(clusterQuery(page)),
     keyOf: (c) => String(c.id),
   });
 
   // Synthetic license_plate gallery card. Plates are sub-bboxes on
   // vehicle crops, not FAISS docs, so the cluster grid never produces
-  // a card for them. We surface one explicitly using /curation/regions so the
+  // a card for them. We surface one explicitly using {API_PREFIX}/regions so the
   // operator can click into the plate inventory the same way they click
-  // into any other class cluster. Card is null until the first /curation/regions
+  // into any other class cluster. Card is null until the first {API_PREFIX}/regions
   // call resolves; the cluster grid hides it during that window.
-  let lpCard = $state<OpCluster | null>(null);
+  let lpCard = $state<Cluster | null>(null);
 
   // Persist the cluster-list filter (sort + unlabeled-only) across
   // navigation so going into a cluster and back keeps the operator's
   // last view — they shouldn't have to re-click "Unlabeled only" every
   // time. sessionStorage survives back-nav + refresh within the session
   // regardless of how the user returns (back button, link, etc.).
-  const FILTER_PERSIST_KEY = 'op_clusters_filter_v1';
+  const FILTER_PERSIST_KEY = 'clusters_filter_v1';
   function loadPersistedFilter(): { sort?: string; unlabeledOnly?: boolean } | null {
     if (typeof sessionStorage === 'undefined') return null;
     try {
@@ -138,11 +144,11 @@
   );
   let searchModeActive = $state(false);
   let searchQuery = $state<string>('');
-  let searchResults = $state<OpCrop[]>([]);
+  let searchResults = $state<Crop[]>([]);
   let searchTotal = $state(0);
   let searchScores = $state(new Map<string, number>());
   const searchSel = createSelection({ plainClick: 'replace' });
-  let detailSearchCrop = $state<OpCrop | null>(null);
+  let detailSearchCrop = $state<Crop | null>(null);
 
   // Cluster-origin badges: build a Map from whatever's already loaded for
   // the card grid (getClusters({}) returns every cluster, up to 2000, in
@@ -151,9 +157,9 @@
   // result's cluster_id isn't in that map (e.g. the grid was itself
   // filtered by class), fall back to one additional unfiltered call
   // rather than showing a blank badge.
-  let clusterMetaMap = $state(new Map<number, OpCluster>());
+  let clusterMetaMap = $state(new Map<number, Cluster>());
   $effect(() => {
-    const m = new Map<number, OpCluster>();
+    const m = new Map<number, Cluster>();
     for (const c of clusterPager.items) m.set(c.id, c);
     clusterMetaMap = m;
   });
@@ -230,7 +236,7 @@
     if (showEmbeddingViz) showEmbeddingViz = false;
 
     const offDrop = dropOnClassStore.register(
-      async (cls: OpClass, droppedIds: string[]) => {
+      async (cls: RegistryClass, droppedIds: string[]) => {
         const ids = droppedIds.length > 0 ? droppedIds : [...searchSel.ids];
         if (ids.length === 0) {
           toastStore.warn('Select or drag crops first, then press a class hotkey.');
@@ -342,7 +348,7 @@
   // (never calls getVizProjection) until the operator explicitly toggles
   // it on. Mirrors isDiverseOverlayAvailable's gating pattern exactly —
   // the toggle button itself is absent (not just disabled) unless
-  // /curation/methods reports the overlay at stable/experimental.
+  // {API_PREFIX}/methods reports the overlay at stable/experimental.
   $effect(() => {
     void strategiesStore.init();
   });
@@ -383,7 +389,7 @@
 
   // Build the synthetic license_plate gallery card. Plates live as
   // sub-bboxes on vehicle crops (not FAISS docs) so the cluster grid
-  // never includes them. We query /curation/regions for the total inventory
+  // never includes them. We query {API_PREFIX}/regions for the total inventory
   // and use the first 4 plate-bearing crops as thumbnails. Card is
   // null until this resolves; the grid renders it as the first item
   // when the unfiltered view is active.
@@ -435,7 +441,7 @@
         // sub-bbox rendered to a 160px tile.
         representative_thumb_urls: reps.map((p) => getRegionThumbUrl(p.crop_id, 160)),
         updated_at: null,
-      } as OpCluster;
+      } as Cluster;
     } catch {
       lpCard = null;
     }
@@ -454,13 +460,13 @@
   // showed": candidate clusters dominated by gemma_unmatched crops DO
   // carry a dominant_class_name, so the old !dominant_class_name test
   // wrongly excluded them.
-  // Sort the loaded clusters client-side. The /curation/clusters endpoint only
+  // Sort the loaded clusters client-side. The {API_PREFIX}/clusters endpoint only
   // returns size-descending (it's a terms agg, not a sortable query), and
   // every cluster comes back in one call — so sorting here is both
   // correct and complete. Without this the sort dropdown did nothing.
-  function sortClusters(list: OpCluster[], mode: typeof sort): OpCluster[] {
+  function sortClusters(list: Cluster[], mode: typeof sort): Cluster[] {
     const out = [...list];
-    const purity = (c: OpCluster) =>
+    const purity = (c: Cluster) =>
       c.purity == null ? Number.POSITIVE_INFINITY : c.purity;
     switch (mode) {
       case 'size_desc':
@@ -489,7 +495,7 @@
     return out;
   }
 
-  const gridItems = $derived.by<OpCluster[]>(() => {
+  const gridItems = $derived.by<Cluster[]>(() => {
     const filtered = unlabeledOnly
       ? clusterPager.items.filter((c) => c.cluster_kind !== 'class')
       : clusterPager.items;
@@ -543,7 +549,7 @@
     }
   });
 
-  function borderColor(c: OpCluster): string {
+  function borderColor(c: Cluster): string {
     if (c.has_subclusters) return 'border-blue-500/60';
     const p = c.purity ?? 0;
     if (p >= 0.8) return 'border-green-500/60';
@@ -551,14 +557,14 @@
     return 'border-red-500/60';
   }
 
-  function purityBadge(c: OpCluster): { color: string; text: string } {
+  function purityBadge(c: Cluster): { color: string; text: string } {
     const p = c.purity ?? 0;
     if (p >= 0.8) return { color: 'bg-green-500/20 text-green-300', text: 'pure' };
     if (p >= 0.6) return { color: 'bg-orange-500/20 text-orange-200', text: 'mixed' };
     return { color: 'bg-red-500/20 text-red-200', text: 'noisy' };
   }
 
-  function open(c: OpCluster): void {
+  function open(c: Cluster): void {
     // Special-case: clicking a cluster whose dominant class is bound to
     // a registered slot (e.g. license_plate) should jump to that slot's
     // browse view (which surfaces every crop with the slot's sub-bbox),
@@ -680,7 +686,7 @@
     </button>
 
     <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
-         unless /curation/methods actually reports the overlay, same convention
+         unless {API_PREFIX}/methods actually reports the overlay, same convention
          as the diverse overlay in <StrategyBar>. Replaces the card grid
          when active (never overlays it) — see the {#if showEmbeddingViz}
          branch below. Hidden on the plate-browse view, which has its own
@@ -731,7 +737,7 @@
     {#if searchModeActive}
       <!-- Global dataset-wide search results — a mode swap over the card
            grid, not a new page (mirrors showEmbeddingViz's own swap
-           above). Infinite scroll is not offered: /curation/search/text isn't
+           above). Infinite scroll is not offered: {API_PREFIX}/search/text isn't
            paginated the way the cluster grid's sentinel expects. -->
       <div class="mb-3 flex items-center gap-2 text-xs">
         <span class="text-zinc-300">

@@ -2,7 +2,7 @@
   /*
    * Pipeline-stats dashboard panel.
    *
-   * Subscribes to `GET /curation/pipeline/events` via Server-Sent Events. The
+   * Subscribes to `GET {API_PREFIX}/pipeline/events` via Server-Sent Events. The
    * server pushes:
    *   * `snapshot` on connect — initial state + dataset stats
    *   * `stats` whenever the dataset rollup actually changed (stage
@@ -24,7 +24,7 @@
    */
   import { onDestroy } from 'svelte';
   import { type DatasetStats } from '$lib/api';
-  import { subscribePipelineEvents, type OpEventSubscription } from '$lib/sse';
+  import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
 
   // The slot whose `stats` capability titles this panel (today:
@@ -48,7 +48,7 @@
   let error = $state<string | null>(null);
   let lastUpdated = $state<number | null>(null);
   let connected = $state<boolean>(false);
-  let subscription: OpEventSubscription | null = null;
+  let subscription: CurationEventSubscription | null = null;
 
   // Drain-rate samples for ETA. We keep a small ring buffer of
   // (unfinished, t) samples so the displayed rate is averaged over the
@@ -59,7 +59,7 @@
   const SAMPLE_WINDOW_MS = 60_000;
 
   function applyStats(payload: Record<string, unknown>): void {
-    // The backend's /curation/stats/dataset response is DatasetStats-shaped.
+    // The backend's {API_PREFIX}/stats/dataset response is DatasetStats-shaped.
     // We trust the shape since the same FastAPI handler builds both
     // the REST payload and this SSE frame.
     stats = payload as unknown as DatasetStats;
@@ -288,7 +288,7 @@
         class:text-emerald-50={connected}
         class:bg-zinc-700={!connected}
         class:text-zinc-300={!connected}
-        title={connected ? 'Live via /curation/pipeline/events SSE' : 'Reconnecting…'}
+        title={connected ? 'Live via the pipeline/events SSE stream' : 'Reconnecting…'}
       >
         {connected ? 'live' : '…'}
       </span>
@@ -548,9 +548,9 @@
           <p class="mt-3 text-xs text-green-400">queue drained</p>
         {/if}
         <p class="mt-3 text-xs text-zinc-500">
-          Matches <code class="font-mono">/curation/ingest/sam_drain</code> total. While &gt; 0 the
-          ingest walker waits before triggering the next clustering pass. SAM3 only runs on
-          crops that pass the Gemma visible-filter — most time is spent in Gemma, not SAM3.
+          Matches the API's <code class="font-mono">ingest/sam_drain</code> total. While &gt;
+          0 the ingest walker waits before triggering the next clustering pass. SAM3 only runs
+          on crops that pass the Gemma visible-filter — most time is spent in Gemma, not SAM3.
         </p>
       </div>
     </div>

@@ -38,7 +38,7 @@ import {
 import { bboxNormToXYXY } from '$lib/bboxFrames';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
-import type { BBoxNorm, OpCluster, OpCrop } from '$lib/types';
+import type { BBoxNorm, Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 
@@ -55,7 +55,7 @@ export const { confirmState: PLATE_CONFIRM_STATE, rejectState: PLATE_REJECT_STAT
 export const PLATE_FALSE_POSITIVE_STATE =
   licensePlateSlot.capabilities.lifecycle!.falsePositiveState!;
 
-/** Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (op_clustering.py). */
+/** Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (clustering/orchestrator.py). */
 export const FP_PLATE_CLUSTER_ID = -100;
 
 const PLATES_PAGE_SIZE = 60;
@@ -71,7 +71,7 @@ export function createPlateGalleryController() {
   // Plain click TOGGLES here (accumulating), unlike the crop grid where
   // it replaces — plate triage is a bulk-marking flow.
   const plateSel = createSelection({ plainClick: 'toggle' });
-  let editPlateCrop = $state<OpCrop | null>(null);
+  let editPlateCrop = $state<Crop | null>(null);
   let plateBusy = $state<boolean>(false);
 
   // Top-N largest-crop gate for plates. The sort is built on the largest
@@ -82,7 +82,7 @@ export function createPlateGalleryController() {
   // Plate clustering (AHC-refinable buckets over plate_pe_embedding).
   // selectedPlateCluster narrows the gallery to one bucket; null shows the
   // bucket grid (or the flat gallery when no clustering has run).
-  let plateClusters = $state<OpCluster[]>([]);
+  let plateClusters = $state<Cluster[]>([]);
   let selectedPlateCluster = $state<number | null>(null);
   let plateClusterBusy = $state<boolean>(false);
 
@@ -478,7 +478,7 @@ export function createPlateGalleryController() {
     get editPlateCrop() {
       return editPlateCrop;
     },
-    set editPlateCrop(v: OpCrop | null) {
+    set editPlateCrop(v: Crop | null) {
       editPlateCrop = v;
     },
     get plateBusy() {

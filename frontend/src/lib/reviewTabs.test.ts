@@ -159,7 +159,7 @@ describe('resolveEffectiveTab', () => {
 /**
  * Prove the preset mechanism actually reaches real data, not just that a
  * button exists: resolveEffectiveTab's output is exactly what +page.svelte
- * passes to getReviewQueue, which hits `GET /curation/review/{tab}` — the same
+ * passes to getReviewQueue, which hits `GET {API_PREFIX}/review/{tab}` — the same
  * endpoint the old top-level tab used. This locks the full chip -> fetch
  * -> URL chain together so a future refactor can't silently point a chip
  * at the wrong cohort (or at `all` itself, which would make the preset a
@@ -177,7 +177,7 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
   });
 
   it.each(REVIEW_PRESETS.map((p) => p.id))(
-    'the %s chip on the All tab fetches /curation/review/%s, not /curation/review/all',
+    'the %s chip on the All tab fetches {API_PREFIX}/review/%s, not {API_PREFIX}/review/all',
     async (presetId: ReviewPresetId) => {
       const fetchMock = vi
         .fn()
@@ -196,7 +196,7 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
     },
   );
 
-  it('plain All (no preset) still fetches /curation/review/all', async () => {
+  it('plain All (no preset) still fetches {API_PREFIX}/review/all', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(

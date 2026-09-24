@@ -2,13 +2,13 @@
  * SSE helper — wraps EventSource with reconnect-with-backoff and
  * topic / class filtering (Task #92).
  *
- * The labeler /review and /clusters pages call `subscribeKbEvents()` on
+ * The labeler /review and /clusters pages call `subscribeCurationEvents()` on
  * mount and prepend incoming `crop.*` events into their lists. When the
  * connection drops (network blip, proxy timeout, page sleep) we retry
  * with a capped exponential backoff so a brief disconnect doesn't leave
  * the page stale.
  *
- * The backend endpoint is `GET /curation/events?topic=...&class_id=...` and
+ * The backend endpoint is `GET {API_PREFIX}/events?topic=...&class_id=...` and
  * emits `text/event-stream` with `event:` lines naming the event type.
  * We surface every typed event back to the caller via a single
  * `onEvent` callback so the page can switch on `event.type`.
@@ -18,20 +18,20 @@ import { apiBase, API_PREFIX } from './api';
 import { slotRegistry } from './annotations/registeredSlots';
 
 // All event payloads share these fields; specific types add more.
-export interface OpBaseEvent {
+export interface CurationBaseEvent {
   type: string;
   ts?: number;
   topic?: string;
   crop_id?: string;
 }
 
-export interface OpCropCreatedEvent extends OpBaseEvent {
+export interface CropCreatedEvent extends CurationBaseEvent {
   type: 'crop.created';
   crop_id: string;
   image_path?: string;
 }
 
-export interface OpCropClassifiedEvent extends OpBaseEvent {
+export interface CropClassifiedEvent extends CurationBaseEvent {
   type: 'crop.classified';
   crop_id: string;
   class_id?: number | null;
@@ -41,7 +41,7 @@ export interface OpCropClassifiedEvent extends OpBaseEvent {
 
 /**
  * A slot's "human verified this box" event. Generalized off the
- * plate-only `OpCropPlateVerifiedEvent` (which typed `region_status`/
+ * plate-only `CropPlateVerifiedEvent` (which typed `region_status`/
  * `region_text` directly) — `type` is now any `crop.<slot.key>_verified`
  * string (or the generic `'crop.region_verified'` OpenProcessor emits for
  * every region — see `slotVerifiedEventTypes()`), and
@@ -50,27 +50,27 @@ export interface OpCropClassifiedEvent extends OpBaseEvent {
  * .statusField` / `capabilities.text.valueField`) rather than a
  * hardcoded `region_status`/`region_text` pair.
  */
-export interface OpCropSlotVerifiedEvent extends OpBaseEvent {
+export interface CropSlotVerifiedEvent extends CurationBaseEvent {
   type: string;
   crop_id: string;
   [wireField: string]: unknown;
 }
 
-export type OpEvent =
-  | OpCropCreatedEvent
-  | OpCropClassifiedEvent
-  | OpCropSlotVerifiedEvent
-  | OpBaseEvent;
+export type CurationEvent =
+  | CropCreatedEvent
+  | CropClassifiedEvent
+  | CropSlotVerifiedEvent
+  | CurationBaseEvent;
 
-export interface OpEventSubscribeOptions {
+export interface CurationEventSubscribeOptions {
   topic?: string;
   class_id?: number;
-  onEvent: (event: OpEvent) => void;
+  onEvent: (event: CurationEvent) => void;
   onError?: (err: Event | Error) => void;
   onOpen?: () => void;
 }
 
-export interface OpEventSubscription {
+export interface CurationEventSubscription {
   /** Close the EventSource and stop reconnecting. */
   close(): void;
 }
@@ -103,14 +103,14 @@ function knownEventTypes(): string[] {
 }
 
 /**
- * Open an SSE subscription to /curation/events.
+ * Open an SSE subscription to {API_PREFIX}/events.
  *
  * Reconnects with exponential backoff on error. The caller must invoke
  * `subscription.close()` on component unmount, otherwise the
  * EventSource will keep reconnecting forever.
  */
 // ---------------------------------------------------------------------------
-// Pipeline events SSE — /curation/pipeline/events
+// Pipeline events SSE — {API_PREFIX}/pipeline/events
 // ---------------------------------------------------------------------------
 // The auto_label pipeline pushes three event types over this channel:
 //   * `snapshot` — initial frame on connect with `{ state, stats }`.
@@ -156,7 +156,7 @@ export interface PipelineSubscribeOptions {
 }
 
 /**
- * Open an SSE subscription to /curation/pipeline/events.
+ * Open an SSE subscription to {API_PREFIX}/pipeline/events.
  *
  * The browser EventSource reconnects automatically (default 3s). On
  * top of that we add capped exponential backoff because Firefox is
@@ -164,7 +164,7 @@ export interface PipelineSubscribeOptions {
  */
 export function subscribePipelineEvents(
   opts: PipelineSubscribeOptions,
-): OpEventSubscription {
+): CurationEventSubscription {
   let es: EventSource | null = null;
   let backoff = RECONNECT_INITIAL_MS;
   let closed = false;
@@ -241,7 +241,9 @@ export function subscribePipelineEvents(
   };
 }
 
-export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscription {
+export function subscribeCurationEvents(
+  opts: CurationEventSubscribeOptions,
+): CurationEventSubscription {
   let es: EventSource | null = null;
   let backoff = RECONNECT_INITIAL_MS;
   let closed = false;
@@ -249,7 +251,7 @@ export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscri
 
   const url = (() => {
     // apiBase is empty in the default Docker deployment (nginx proxies
-    // /curation/* on the same origin). `new URL('/curation/events')` throws because
+    // {API_PREFIX}/* on the same origin). `new URL('{API_PREFIX}/events')` throws because
     // it lacks a base, so we anchor to window.location.origin when
     // apiBase is relative. The resulting URL is still same-origin and
     // hits the labeler's nginx proxy.
@@ -278,7 +280,7 @@ export function subscribeKbEvents(opts: OpEventSubscribeOptions): OpEventSubscri
     for (const t of knownEventTypes()) {
       es.addEventListener(t, (ev: MessageEvent) => {
         try {
-          const payload = JSON.parse(ev.data) as OpEvent;
+          const payload = JSON.parse(ev.data) as CurationEvent;
           opts.onEvent(payload);
         } catch (err) {
           // Garbled payload — log and skip. A bad event shouldn't

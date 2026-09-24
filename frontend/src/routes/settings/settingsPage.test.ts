@@ -67,8 +67,8 @@ describe('/settings deployment-defaults page', () => {
     expect(src).toMatch(/keyboardStore\.setScope\('settings'\)/);
   });
 
-  it('contains no bare /curation or /curation literal', () => {
-    expect(src).not.toMatch(/(?:['"`]|\})\/(?:op|curation)(?:[/'"`]|\$)/);
+  it('contains no bare /curation literal', () => {
+    expect(src).not.toMatch(/(?:['"`]|\})\/curation(?:[/'"`]|\$)/);
   });
 
   it('renders a Clear control wired to curationSettingsStore.clearDefault, gated on `pinned`', () => {

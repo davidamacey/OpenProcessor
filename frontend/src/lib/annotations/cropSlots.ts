@@ -35,7 +35,7 @@ export function mapCropSlots(
 /**
  * The one documented way to get `SlotData` off an ALREADY-MAPPED crop.
  *
- * Never call `readSlot()` on a `OpCrop` — its bboxes are `BBoxNorm`
+ * Never call `readSlot()` on a `Crop` — its bboxes are `BBoxNorm`
  * ({cx,cy,w,h}), not the `XYXY` tuples `readSlot` expects, so calling it
  * on a mapped crop would silently resolve every field to null instead of
  * throwing. `mapRawCrop` is the only place with the raw payload in hand;

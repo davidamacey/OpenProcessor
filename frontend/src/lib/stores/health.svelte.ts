@@ -1,5 +1,5 @@
 /**
- * HealthStore — polls /curation/health every 15s and exposes an OK/down indicator.
+ * HealthStore — polls {API_PREFIX}/health every 15s and exposes an OK/down indicator.
  *
  * Polling auto-stops when the tab is hidden (Page Visibility API) and
  * resumes on focus. A 404/503/network failure flips `ok` to false; the next
@@ -7,12 +7,12 @@
  */
 
 import { getHealth } from '$lib/api';
-import type { OpHealth } from '$lib/types';
+import type { ApiHealth } from '$lib/types';
 
 const POLL_INTERVAL_MS = 15_000;
 
 class HealthStore {
-  health = $state<OpHealth | null>(null);
+  health = $state<ApiHealth | null>(null);
   ok = $state<boolean>(false);
   lastChecked = $state<number | null>(null);
   error = $state<string | null>(null);

@@ -9,7 +9,7 @@
  * handlers assign into the very same `$state`.
  *
  * That is the "moved crops flicker back and stay" bug (2026-09-12 live report,
- * confirmed in `op_vehicle_crops.class_id_history`: two crops were batch
+ * confirmed in the items index's `class_id_history`: two crops were batch
  * labelled 15 -> 72 at 04:57:22 and then labelled 72 -> 72 *again*, one at a
  * time, a minute later — the operator re-dragging crops the grid was still
  * showing even though the server had already moved them). The snapshot had no

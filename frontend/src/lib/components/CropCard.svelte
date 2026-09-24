@@ -1,21 +1,21 @@
 <script lang="ts">
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
-  import type { BBoxNorm, OpCrop, LabelSource } from '$lib/types';
+  import type { BBoxNorm, Crop, LabelSource } from '$lib/types';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
 
   interface Props {
-    crop: OpCrop;
+    crop: Crop;
     /** Slot whose sub-box/ring this card overlays. Defaults to whatever
      *  slot is bound to the crop's own class — every current call site
      *  relies on that default rather than passing one explicitly. */
     slot?: SlotSpec;
     selected?: boolean;
-    onclick?: (crop: OpCrop, e: MouseEvent) => void;
-    onacceptVlm?: (crop: OpCrop) => void;
-    onrejectVlm?: (crop: OpCrop) => void;
+    onclick?: (crop: Crop, e: MouseEvent) => void;
+    onacceptVlm?: (crop: Crop) => void;
+    onrejectVlm?: (crop: Crop) => void;
     /**
      * Optional callback fired after the slot editor saves a new
      * source-frame sub-box (or null for "not visible"). Lets the page
@@ -27,7 +27,7 @@
      * to a parent-owned CropDetailModal so the cluster grid can show the
      * same provenance metadata the review page does.
      */
-    ondetail?: (crop: OpCrop) => void;
+    ondetail?: (crop: Crop) => void;
   }
 
   let {
@@ -64,7 +64,7 @@
   }
 
   // Slot data for the active slot, read off the already-mapped crop —
-  // never re-derived via readSlot() (§2.4 of the plan: a OpCrop's boxes
+  // never re-derived via readSlot() (§2.4 of the plan: a Crop's boxes
   // are BBoxNorm, not the XYXY readSlot expects).
   const slotData = $derived(slotOf(crop, activeSlot));
 

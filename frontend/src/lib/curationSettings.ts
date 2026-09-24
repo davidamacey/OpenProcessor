@@ -20,7 +20,7 @@
  * empty record.
  */
 
-import type { OpMethodsResponse, MethodInfoBase } from '$lib/strategies';
+import type { MethodsResponse, MethodInfoBase } from '$lib/strategies';
 import { selectableAxisEntries } from '$lib/strategies';
 
 /** The four axes the backend's `SETTABLE_DEFAULT_AXES` accepts on PUT. */
@@ -65,8 +65,8 @@ export interface SettingsAxisSpec {
    *  two advisory axes (`'label': profile.name`), so the section heading
    *  has to supply the human words. */
   label: string;
-  /** Which `OpMethodsResponse` bucket holds this axis's entries. */
-  bucket: keyof OpMethodsResponse;
+  /** Which `MethodsResponse` bucket holds this axis's entries. */
+  bucket: keyof MethodsResponse;
   /** One sentence shown under the control. For a settable axis this must
    *  state the real blast radius; for an advisory axis it must state
    *  that nothing changes. */
@@ -134,17 +134,17 @@ export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
 /** True when the server marks any of this axis's `/methods` entries
  *  `settable`. */
 export function isAxisSettable(
-  methods: OpMethodsResponse,
+  methods: MethodsResponse,
   spec: SettingsAxisSpec,
 ): boolean {
   return (methods[spec.bucket] as MethodInfoBase[]).some((e) => e.settable === true);
 }
 
-export function settableAxes(methods: OpMethodsResponse): SettingsAxisSpec[] {
+export function settableAxes(methods: MethodsResponse): SettingsAxisSpec[] {
   return SETTINGS_AXES.filter((a) => isAxisSettable(methods, a));
 }
 
-export function advisoryAxes(methods: OpMethodsResponse): SettingsAxisSpec[] {
+export function advisoryAxes(methods: MethodsResponse): SettingsAxisSpec[] {
   return SETTINGS_AXES.filter((a) => !isAxisSettable(methods, a));
 }
 
@@ -197,7 +197,7 @@ export function parseCurationSettings(raw: unknown): CurationSettings {
  * "is not a currently-advertised id" branch. Do not add one back.
  */
 export function axisOptions(
-  methods: OpMethodsResponse,
+  methods: MethodsResponse,
   spec: SettingsAxisSpec,
 ): MethodInfoBase[] {
   return selectableAxisEntries(methods[spec.bucket] as MethodInfoBase[]);
@@ -211,7 +211,7 @@ export function axisOptions(
  */
 export function effectiveDefaultId(
   settings: CurationSettings,
-  methods: OpMethodsResponse,
+  methods: MethodsResponse,
   spec: SettingsAxisSpec,
 ): string | null {
   const stored = settings.defaults[spec.axis];

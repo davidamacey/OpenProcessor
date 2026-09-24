@@ -1,20 +1,20 @@
 /**
- * TypeScript types mirroring the openprocessor `GET /curation/methods` capability-
+ * TypeScript types mirroring the openprocessor `GET {API_PREFIX}/methods` capability-
  * discovery response (curation-strategy plan, Phase 0 —
  * docs/curation-strategy-plan-2026-09.md §3, §5.3, §7).
  *
  * CONFIRMED AGAINST THE REAL BACKEND (2026-09-10, live end-to-end check
- * after rebuilding/restarting op-api from `feat/op-curation-scores`):
+ * after rebuilding/restarting the backend from its curation-scores branch):
  * the actual wire shape is a single flat `{strategies: [...], flags: {...}}`
  * — every entry carries an `axis: 'cluster' | 'sort' | 'score' | 'overlay'`
  * field (see `strategy_registry.py`'s `StrategyAxis`), NOT four separate
  * top-level arrays as this file originally assumed from the plan doc's
- * illustrative example. `parseKbMethodsResponse` below reshapes the flat
+ * illustrative example. `parseMethodsResponse` below reshapes the flat
  * list into the seven buckets (`cluster_methods`/`review_sorts`/`overlays`/
  * `scores`/`dataset_exports`/`detection_profiles`/`prompt_packs`) client-side
  * by grouping on `axis`, so every downstream consumer
  * (`isDiverseOverlayAvailable`, `StrategyBar`, etc.) keeps working against
- * the original four-array `OpMethodsResponse` shape unchanged — only this
+ * the original four-array `MethodsResponse` shape unchanged — only this
  * parse function needed to change once the real contract was confirmed.
  *
  * The same `id` can legitimately appear in more than one axis (e.g.
@@ -92,7 +92,7 @@ export interface ReviewSortInfo extends MethodInfoBase {
    */
   field_coverage?: number | null;
   /** Pool size the `field_coverage` count above is out of (same denominator
-   *  for every entry in a given `/curation/methods` response). `null` whenever
+   *  for every entry in a given `{API_PREFIX}/methods` response). `null` whenever
    *  `field_coverage` itself is `null`. */
   field_coverage_total?: number | null;
 }
@@ -105,7 +105,7 @@ export interface OverlayInfo extends MethodInfoBase {
   field_coverage_total?: number | null;
   /**
    * CONFIRMED (2026-09-10, live against the real `embedding_viz.py` /
-   * `op_viz.py` / `strategy_registry.py` after the Phase 5 UMAP
+   * `viz.py` / `strategy_registry.py` after the Phase 5 UMAP
    * neighborhood-purity gate finished — `requires_banner`, not the
    * earlier guessed `banner_required`). Per the plan's UMAP acceptance
    * bar (>=0.30 purity ships plain, 0.15-0.30 ships behind a persistent
@@ -195,7 +195,7 @@ export interface PromptPackInfo extends MethodInfoBase {
   default?: boolean;
 }
 
-export interface OpMethodsResponse {
+export interface MethodsResponse {
   cluster_methods: ClusterMethodInfo[];
   review_sorts: ReviewSortInfo[];
   overlays: OverlayInfo[];
@@ -239,7 +239,7 @@ function optNumber(v: unknown): number | null | undefined {
  * Normalize one raw entry shared by all four registries. Returns `null`
  * (dropped by the caller) when `id`/`label` aren't usable strings — a
  * malformed entry from a future server build should just not render,
- * not take the whole `/curation/methods` parse down with it.
+ * not take the whole `{API_PREFIX}/methods` parse down with it.
  */
 function normalizeBase(raw: unknown): MethodInfoBase | null {
   if (!isRecord(raw)) return null;
@@ -278,7 +278,7 @@ function normalizeAxis<T extends MethodInfoBase>(
 }
 
 /**
- * Parse+normalize a raw `/curation/methods` payload. Never throws — any
+ * Parse+normalize a raw `{API_PREFIX}/methods` payload. Never throws — any
  * unrecognized shape (missing `strategies` key, a non-array value, garbage
  * entries, an entry whose `axis` isn't one of the axes this build knows) degrades
  * to empty lists for the affected bucket rather than propagating an
@@ -292,9 +292,9 @@ function normalizeAxis<T extends MethodInfoBase>(
  * `axis` field per entry (confirmed live 2026-09-10 — see this file's
  * header comment), not four separate top-level arrays. This function is
  * the sole place that reshapes it; everything downstream still sees the
- * original bucketed `OpMethodsResponse` shape.
+ * original bucketed `MethodsResponse` shape.
  */
-export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
+export function parseMethodsResponse(raw: unknown): MethodsResponse {
   const rec = isRecord(raw) ? raw : {};
   const strategies = Array.isArray(rec.strategies) ? rec.strategies : [];
   return {
@@ -352,9 +352,9 @@ export function parseKbMethodsResponse(raw: unknown): OpMethodsResponse {
 }
 
 /**
- * Whether `/curation/methods` currently reports the pool-scale `diverse` overlay
+ * Whether `{API_PREFIX}/methods` currently reports the pool-scale `diverse` overlay
  * (curation-strategy plan Phase 4 — core-set / k-center-greedy selection,
- * `POST /curation/select/diverse` + `GET /curation/crops?order=diverse`) as safe to
+ * `POST {API_PREFIX}/select/diverse` + `GET {API_PREFIX}/crops?order=diverse`) as safe to
  * offer in the UI.
  *
  * `diverse` lives in the `overlays` registry, not `review_sorts` — it
@@ -377,9 +377,9 @@ export function isDiverseOverlayAvailable(overlays: OverlayInfo[]): boolean {
 }
 
 /**
- * Whether `/curation/methods` currently reports the 2-d embedding-projection
+ * Whether `{API_PREFIX}/methods` currently reports the 2-d embedding-projection
  * overlay (curation-strategy plan Phase 5 — UMAP-as-visualization-only,
- * `embedding_viz.py` + `op_viz.py`, `GET /curation/viz/projection`) as safe to
+ * `embedding_viz.py` + `viz.py`, `GET {API_PREFIX}/viz/projection`) as safe to
  * offer in the UI. Mirrors `isDiverseOverlayAvailable` exactly: same
  * stable/experimental-only bar, same "absent/shadow/disabled never
  * renders" contract — this is the single gate `/clusters` uses to decide
@@ -417,8 +417,8 @@ export function isEmbeddingVizBannerRequired(overlays: OverlayInfo[]): boolean {
 }
 
 /**
- * Whether `/curation/methods` currently reports the free-text semantic-search
- * overlay (P2-14 — `GET /curation/search/text`) as safe to offer in the UI.
+ * Whether `{API_PREFIX}/methods` currently reports the free-text semantic-search
+ * overlay (P2-14 — `GET {API_PREFIX}/search/text`) as safe to offer in the UI.
  * Mirrors `isDiverseOverlayAvailable`/`isEmbeddingVizAvailable` exactly:
  * same stable/experimental-only bar, same "absent/shadow/disabled never
  * renders" contract. `semantic_search` lives in the `overlays` registry
@@ -504,7 +504,7 @@ export function isPromptPackAvailable(packs: PromptPackInfo[]): boolean {
  * config — so it is display-only, on /settings.)
  */
 export function isScopedAssistAvailable(
-  methods: Pick<OpMethodsResponse, 'prompt_packs'>,
+  methods: Pick<MethodsResponse, 'prompt_packs'>,
 ): boolean {
   return isPromptPackAvailable(methods.prompt_packs);
 }
@@ -540,7 +540,7 @@ export function hasFieldCoverage(entry: { field_coverage?: number | null }): boo
 }
 
 /**
- * Hardcoded fallback for when `/curation/methods` 404s, or the request fails
+ * Hardcoded fallback for when `{API_PREFIX}/methods` 404s, or the request fails
  * for any other reason (plan §5.3 — graceful degradation is required so
  * the two repos can deploy independently). This must mirror what's
  * actually implemented **today**, not the target end-state:
@@ -550,7 +550,7 @@ export function hasFieldCoverage(entry: { field_coverage?: number | null }): boo
  *   `cluster_methods/__init__.py`). AHC/HDBSCAN exist in the backend
  *   registry but are not operator-facing defaults, so they're
  *   deliberately left out rather than guessed at.
- * - `review_sorts`: `op_review.py` hardcodes `sort = [{updated_at:
+ * - `review_sorts`: `review.py` hardcodes `sort = [{updated_at:
  *   desc}]` per tab today; there is no named alternative sort yet
  *   (`review_sorts.py` is Phase 3). One `'default'` entry, marked
  *   default+stable — this is NOT `'representativeness'` /
@@ -559,7 +559,7 @@ export function hasFieldCoverage(entry: { field_coverage?: number | null }): boo
  * - `overlays` / `scores`: none of `crop_scores/`, `selection/`,
  *   `embedding_viz.py` exist yet (Phase 1/4/5) — both lists are empty.
  */
-export const FALLBACK_METHODS: OpMethodsResponse = {
+export const FALLBACK_METHODS: MethodsResponse = {
   cluster_methods: [
     {
       id: 'ivf',

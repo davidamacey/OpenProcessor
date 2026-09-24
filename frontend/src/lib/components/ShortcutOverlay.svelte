@@ -3,7 +3,7 @@
   import { isAssignableClass } from '$lib/classVisibility';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import type { OpClass } from '$lib/types';
+  import type { RegistryClass } from '$lib/types';
 
   const shortcuts = $derived(keyboardStore.shortcutsForCurrentScope());
 
@@ -26,7 +26,7 @@
 
   let pending = $state<Record<number, boolean>>({});
 
-  async function setHotkey(cls: OpClass, raw: string): Promise<void> {
+  async function setHotkey(cls: RegistryClass, raw: string): Promise<void> {
     pending[cls.id] = true;
     try {
       await setClassHotkey(cls, raw);

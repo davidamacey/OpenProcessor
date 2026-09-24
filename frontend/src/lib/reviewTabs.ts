@@ -27,13 +27,13 @@ export interface ReviewTabDef {
  * Low-Conf (1,000 · 92% of the ENTIRE dataset). Those three collapsed
  * into quick-filter preset chips shown on the `all` tab instead (see
  * REVIEW_PRESETS below) — same backend cohort query as before
- * (`/curation/review/{id}`, via resolveEffectiveTab), just triggered from a chip
+ * (`{API_PREFIX}/review/{id}`, via resolveEffectiveTab), just triggered from a chip
  * instead of a nav tab.
  *
  * Outliers was retired entirely: 3 live rows, half its backend query
  * already dead code by its own comment, and functionally identical to the
  * `atypicality` sort already available via the strategy bar. Its backend
- * `/curation/review/outliers` endpoint is untouched (still reachable, just no
+ * `{API_PREFIX}/review/outliers` endpoint is untouched (still reachable, just no
  * longer linked from this UI).
  *
  * Uncertainty, Model Disagreements, and COCO Blind Spots stay as
@@ -175,7 +175,7 @@ export interface ReviewPresetDef {
 /**
  * Quick-filter preset chips shown on the `all` tab (2026-09 tab
  * consolidation). Each reuses the exact backend cohort query the former
- * top-level tab called — `GET /curation/review/{id}` — completely unchanged;
+ * top-level tab called — `GET {API_PREFIX}/review/{id}` — completely unchanged;
  * only the trigger moved from a nav tab click to a chip click on top of
  * the All view. See resolveEffectiveTab for how a chip selection maps to
  * the actual queue fetched.

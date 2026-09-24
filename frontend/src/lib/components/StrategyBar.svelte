@@ -12,7 +12,7 @@
    * opts in — a one-line summary chip that expands into the actual
    * controls on click, never a fixed overlay that could cover the grid.
    *
-   * Sort options come straight from `strategiesStore` (`/curation/methods`),
+   * Sort options come straight from `strategiesStore` (`{API_PREFIX}/methods`),
    * filtered to `stable`/`experimental` only — `shadow`/`disabled` entries
    * must never be selectable (they're either mid-validation or explicitly
    * killed) — and, since audit-remediation plan Phase 6 (P1-2), further
@@ -28,7 +28,7 @@
    * whenever the matching `scores`/`overlays` entry passes the same
    * `hasFieldCoverage` gate (P1-3) — hidden only on a confirmed-zero
    * `field_coverage`, not on unknown/absent coverage, so a transient
-   * `/curation/methods` hiccup can never make a chip that already works vanish.
+   * `{API_PREFIX}/methods` hiccup can never make a chip that already works vanish.
    *
    * Phase 4 adds the pool-scale `'diverse'` overlay (core-set /
    * k-center-greedy selection) as an option `/clusters/[id]` can fold into
@@ -62,12 +62,12 @@
     bar: StrategyBar;
     /** Restrict selectable sort/overlay ids beyond the stable/experimental
      *  status filter. `/clusters/[id]`'s crop query forwards its selection
-     *  as `/curation/crops?order=`, which only special-cases `'outliers'` and
+     *  as `{API_PREFIX}/crops?order=`, which only special-cases `'outliers'` and
      *  (Phase 4) `'diverse'` today (docs/curation-strategy-plan-2026-09.md
      *  §1/§7) — so that route passes `['default', 'outliers', 'diverse']`
      *  to avoid offering an id the endpoint would silently ignore.
      *  `'diverse'` only actually appears in the rendered options when
-     *  `/curation/methods` reports it (see `sortOptions` below) — passing the id
+     *  `{API_PREFIX}/methods` reports it (see `sortOptions` below) — passing the id
      *  here is necessary but not sufficient. Omit for `/review`, where
      *  every stable/experimental `review_sorts` entry is fair game. */
     allowedIds?: string[] | null;
@@ -89,11 +89,11 @@
     diverseKDefault?: number;
     /** `k` stepper bounds. Min 4: below that "diversity" over a handful of
      *  items isn't a meaningful selection criterion — a plain click-through
-     *  is just as fast. Max 500: matches `/curation/crops`'s own `page_size`
-     *  ceiling (`Query(..., le=500)`, op_crops.py) — the same number the
+     *  is just as fast. Max 500: matches `{API_PREFIX}/crops`'s own `page_size`
+     *  ceiling (`Query(..., le=500)`, crops.py) — the same number the
      *  backend already treats as "a single request's worth," vs. the
      *  thousands-scale pool selection the plan reserves for a backend job
-     *  (`OP_SELECT_MAX_N`, `POST /curation/select/diverse`), not a page control. */
+     *  (`OP_SELECT_MAX_N`, `POST {API_PREFIX}/select/diverse`), not a page control. */
     diverseKMin?: number;
     diverseKMax?: number;
     /** Provenance for the current diverse-mode response, if the backend
@@ -167,7 +167,7 @@
         (s.status === 'stable' || s.status === 'experimental') && hasFieldCoverage(s),
     );
     // `allowedIds` still restricts to an explicit id list when given
-    // (`/clusters/[id]`'s `/curation/crops?order=` only special-cases a few
+    // (`/clusters/[id]`'s `{API_PREFIX}/crops?order=` only special-cases a few
     // ids). `offerDiverse` with no `allowedIds` (today: `/review`) needs
     // no further filtering here — `source` above already limited the
     // overlays half to exactly `'diverse'`, so every review_sorts entry
@@ -175,7 +175,7 @@
     const filtered = allowedIds
       ? stableOrExperimental.filter((s) => allowedIds!.includes(s.id))
       : stableOrExperimental;
-    // `sentinelSortId` ("no override") is never a real `/curation/methods`
+    // `sentinelSortId` ("no override") is never a real `{API_PREFIX}/methods`
     // entry. Without a matching <option> the <select> either silently
     // falls back to displaying its first real option while `bar.sort`
     // stays on the sentinel (a DOM/state mismatch), or — on
@@ -285,7 +285,7 @@
       </label>
     {:else}
       <!-- No alternate sorts reported yet (backend not deployed, or
-           /curation/methods reports a registry shape this build doesn't
+           {API_PREFIX}/methods reports a registry shape this build doesn't
            recognize — both degrade to an empty review_sorts list here
            rather than a broken/empty <select>). -->
       <span class="text-zinc-500">no alternate sorts available yet</span>
@@ -331,7 +331,7 @@
 
     <!-- Pool-scale overlay: 'diverse' (Phase 4, core-set / k-center-greedy
          selection). Only rendered once diverseSelected is true, i.e. the
-         operator picked it AND /curation/methods actually reports it — never
+         operator picked it AND {API_PREFIX}/methods actually reports it — never
          shown for a backend that hasn't shipped this yet. -->
     {#if diverseSelected}
       <label class="flex items-center gap-1">
@@ -348,7 +348,7 @@
             bar.k = Math.min(diverseKMax, Math.max(diverseKMin, Math.round(raw)));
           }}
           class="input-sm w-16"
-          title="Pool-scale diverse selection (core-set / k-center-greedy). Capped {diverseKMin}-{diverseKMax} per request — larger cohorts are a backend job (POST /curation/select/diverse), not a page-size control."
+          title="Pool-scale diverse selection (core-set / k-center-greedy). Capped {diverseKMin}-{diverseKMax} per request — larger cohorts are a backend job (POST select/diverse), not a page-size control."
         />
       </label>
       {#if diverseMeta?.method || diverseMeta?.version || diverseMeta?.n_pool != null}

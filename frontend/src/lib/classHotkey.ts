@@ -11,7 +11,7 @@ import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotRegistry } from '$lib/annotations/registry';
 import { classesStore } from '$stores/classes.svelte';
 import { toastStore } from '$stores/toast.svelte';
-import type { OpClass } from '$lib/types';
+import type { RegistryClass } from '$lib/types';
 
 /**
  * Single-char keys the labeling pages bind to actions.
@@ -73,7 +73,7 @@ export function reservedHotkeyLetters(
  * Toasts on both success and rejection; never throws. Callers own their own
  * busy/pending flag.
  */
-export async function setClassHotkey(cls: OpClass, raw: string): Promise<void> {
+export async function setClassHotkey(cls: RegistryClass, raw: string): Promise<void> {
   const next = raw.trim().toLowerCase();
   const current = (cls.hotkey_letter ?? '').toLowerCase();
   if (next === current) return;
@@ -95,7 +95,7 @@ export async function setClassHotkey(cls: OpClass, raw: string): Promise<void> {
       return;
     }
     // Reject duplicates against other classes' already-bound letters. The
-    // backend enforces this too (PUT /curation/classes/{id} returns 400), but
+    // backend enforces this too (PUT {API_PREFIX}/classes/{id} returns 400), but
     // catching it client-side gives a clearer message with no round-trip.
     const owner = classesStore.classes.find(
       (c) =>
@@ -109,7 +109,7 @@ export async function setClassHotkey(cls: OpClass, raw: string): Promise<void> {
     }
   }
   try {
-    // PUT /curation/classes/{id} treats '' as "clear binding".
+    // PUT {API_PREFIX}/classes/{id} treats '' as "clear binding".
     await renameClass(cls.id, { hotkey_letter: next });
     toastStore.success(
       next ? `${cls.name} → hotkey '${next}'` : `${cls.name} → hotkey cleared`,

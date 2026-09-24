@@ -8,7 +8,7 @@
  *
  * Not yet wired into `api.ts`'s `mapRawCrop` — this is Phase 1's
  * additive foundation (types + adapter + profile), landed independently
- * of the (larger, higher-risk) `OpCrop.slots` wiring and component
+ * of the (larger, higher-risk) `Crop.slots` wiring and component
  * migration described in the plan's Phase 2. See the plan for the full
  * migration; this module is what that migration will call.
  */

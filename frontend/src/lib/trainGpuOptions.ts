@@ -6,7 +6,7 @@
  * The form previously only offered "both A6000s" or "GPU 0 only" —
  * pinning a run to GPU 2 alone required an undocumented
  * `hyperparameters.device` override on the backend, discovered only by
- * reading `docker/trainer/op_trainer.py` directly during Phase 10's live
+ * reading `docker/trainer/` directly during Phase 10's live
  * verification. The backend (`TrainJobSpec.cuda_visible_devices`, plus
  * the trainer's host→container-local GPU index mapping and the arbiter's
  * `needs_gemma_stop`) now formally supports and correctly handles a
@@ -24,7 +24,7 @@
  */
 
 export interface GpuOption {
-  /** The exact `cuda_visible_devices` value sent on `POST /curation/train/start`. */
+  /** The exact `cuda_visible_devices` value sent on `POST {API_PREFIX}/train/start`. */
   value: string;
   label: string;
   /** True when this claim leaves one A6000 available to Gemma/SAM3. */

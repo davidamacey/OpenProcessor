@@ -6,7 +6,7 @@
  * `/bakeoff` was the only remaining backend-optional surface in the app
  * with no availability gate at all: the nav link rendered unconditionally
  * and `onMount` fired four GETs against a router
- * (`openprocessor`'s `op_bakeoff.py`) that may not be mounted on a given
+ * (`openprocessor`'s `bakeoff.py`) that may not be mounted on a given
  * Cropwright backend. This store closes that gap with a one-shot,
  * read-only probe.
  *

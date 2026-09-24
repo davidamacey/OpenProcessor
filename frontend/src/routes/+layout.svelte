@@ -142,7 +142,7 @@
       if (cls) {
         // A class bound to a slot (e.g. license_plate) isn't a cluster —
         // plates are sub-bboxes on vehicle crops (region_bbox_norm). Route
-        // to the gallery branch backed by /curation/regions so the operator sees
+        // to the gallery branch backed by {API_PREFIX}/regions so the operator sees
         // every slot-bearing crop, not just the 1-2 rows whose PRIMARY
         // class matches the slot's bound class name. Driven by
         // registeredSlots (P2.10) instead of a hardcoded license_plate

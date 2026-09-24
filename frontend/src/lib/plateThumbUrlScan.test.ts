@@ -32,8 +32,8 @@ const srcRoot = path.resolve(here, '..');
  * prefix segment in between.
  *
  * Deliberately prefix-agnostic. Before `API_PREFIX` a rogue call site
- * looked like `'/curation/crops/…'`; after it, like
- * `` `${apiBase}${API_PREFIX}/crops/…` ``. A `/curation`-literal regex catches
+ * looked like `'{API_PREFIX}/crops/…'`; after it, like
+ * `` `${apiBase}${API_PREFIX}/crops/…` ``. A prefix-literal regex catches
  * the first and silently misses the second, which is the exact way this
  * kind of guard rots.
  *

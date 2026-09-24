@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Removed the `op` (legacy) naming from the frontend.
+  - The `Kb`-prefixed types lose the prefix, or get a descriptive name
+    where a bare one would clash or read vaguely: `Crop`, `RegistryClass`
+    (+ `Create`/`Update`/`Merge`), `Cluster`, `MethodsResponse`,
+    `ApiHealth`, `StatsSummary`, `ModelInfo`, `ExportDataset`,
+    `CurationEvent*`, `subscribeCurationEvents`, and so on.
+  - Comments now reference `{API_PREFIX}/…` paths, main's module names and
+    `OP_*` env vars.
+  - The drag-and-drop item type is now `crop-card`.
+  - The saved `/clusters` filter key is now `clusters_filter_v1`, so a
+    previously saved filter resets once.
+  - The prefix scan tests' fixtures use a real `/curation/…` literal again.
+    The rename had briefly turned them into `{API_PREFIX}` strings that
+    could never match, which made three of them vacuous.
+
 ### Fixed
 
 - `/review`'s `Enter` no longer confirms an unrelated class on a

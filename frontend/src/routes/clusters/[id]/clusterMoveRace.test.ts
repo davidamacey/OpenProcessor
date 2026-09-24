@@ -109,7 +109,7 @@ describe('mechanism: exclusion set survives a stale in-flight fetch (executable,
  * Live evidence this actually happened: crops 53dd6852… and 72938398… were
  * batch-labelled cluster 15 -> 72 together at 04:57:22, and then labelled
  * 72 -> 72 *again*, individually, at 04:58:26 and 04:58:32
- * (`class_id_history` in op_vehicle_crops). The second write is only
+ * (`class_id_history` in the items index). The second write is only
  * explicable as the operator re-dragging crops the grid was still showing.
  * Instrumented drops confirm the shape: `finalize` on the origin zone
  * arrives carrying N+1 items while `cropPager.items` already holds N.
@@ -255,7 +255,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 
   it('the grid state is told what is still live so a dnd event cannot resurrect a moved crop', () => {
     const wiring = src.match(
-      /const grid = createGridGroups<OpCrop>\(\{[\s\S]*?\n {2}\}\);/,
+      /const grid = createGridGroups<Crop>\(\{[\s\S]*?\n {2}\}\);/,
     )?.[0];
     expect(wiring).toBeDefined();
     expect(wiring).toMatch(
@@ -276,7 +276,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 
   it('the sidebar-drop handler resets the grid override right after the optimistic removal', () => {
     const handler = src.match(
-      /dropOnClassStore\.register\(async[\s\S]*?\n {4}\}\);/,
+      /dropOnClassStore\.register\(\s*async[\s\S]*?\n {4}\}?\);/,
     )?.[0];
     expect(handler).toBeDefined();
     expect(handler).toMatch(
@@ -296,7 +296,7 @@ describe('wiring: /clusters/[id] +page.svelte actually uses the exclusion set', 
 
   it('the sidebar-drop (dropOnClassStore) handler claims dragged ids before awaiting bulkLabel', () => {
     const handler = src.match(
-      /dropOnClassStore\.register\(async[\s\S]*?\n {4}\}\);/,
+      /dropOnClassStore\.register\(\s*async[\s\S]*?\n {4}\}?\);/,
     )?.[0];
     expect(handler).toBeDefined();
     expect(handler).toMatch(/for \(const id of ids\) excludedCropIds\.add\(id\)/);

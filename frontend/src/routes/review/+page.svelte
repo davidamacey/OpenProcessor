@@ -51,14 +51,14 @@
   import type {
     BBoxNorm,
     DiverseSelection,
-    OpClass,
+    RegistryClass,
     ReviewItem,
     ReviewTab,
   } from '$lib/types';
   import { createPager } from '$lib/pager.svelte';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { isSemanticSearchAvailable } from '$lib/strategies';
-  import { subscribeKbEvents, type OpEventSubscription } from '$lib/sse';
+  import { subscribeCurationEvents, type CurationEventSubscription } from '$lib/sse';
   import { untrack } from 'svelte';
   import { classesStore } from '$stores/classes.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -106,7 +106,7 @@
   // keeps every request byte-identical to pre-Phase-3 behavior — the
   // regression guard the backend plan requires (§8.6). 'diverse' is
   // registered as an overlay id (P2-10) so toQueryParams() never forwards
-  // `sort=diverse` to /curation/review/{tab}, which 400s on it — diverse mode
+  // `sort=diverse` to {API_PREFIX}/review/{tab}, which 400s on it — diverse mode
   // is a wholly separate call (selectDiverse), not a sort param.
   const strategyBar = createStrategyBar({ overlayIds: ['diverse'] });
   // Set from the review-queue response whenever the requested `?sort=`
@@ -137,7 +137,7 @@
   }
 
   function termFilters(): Record<string, unknown> {
-    // Server-side, scope.filters on POST /curation/select/diverse only supports
+    // Server-side, scope.filters on POST {API_PREFIX}/select/diverse only supports
     // term/terms filters (class_id, hdd_source) — NOT conf_min/conf_max/
     // min_blur_ratio/max_rank/plate text. Those controls are disabled in
     // the UI while diverseMode is active (see the filter bar below) so
@@ -236,7 +236,7 @@
   /**
    * Diverse mode replaces the queue's item source entirely — the pager's
    * fetchPage slices `diverseSelection.crop_ids` into page_size chunks
-   * and hydrates each id via getCrop, since /curation/select/diverse only
+   * and hydrates each id via getCrop, since {API_PREFIX}/select/diverse only
    * returns ids, not full crop records. Each hydrated item is widened
    * into a ReviewItem with no per-item proposal (nothing in diverse mode
    * suggests a class) — resolveConfirmClassId/canConfirm already falls
@@ -312,7 +312,7 @@
   // below) so the existing one-at-a-time review UI, label hotkeys, and
   // undo/discard flows keep working completely unchanged. While a
   // search is active, prefetch/loadMore is disabled (see maybePrefetch
-  // above) — /curation/search/text pagination isn't wired to this page's
+  // above) — {API_PREFIX}/search/text pagination isn't wired to this page's
   // page-N `queue.loadMore`, and paging into getReviewQueue while search
   // results are showing would silently overwrite them.
   const semanticSearchAvailable = $derived(
@@ -361,7 +361,7 @@
     const textFilter = activeSlot?.capabilities.queue?.textFilter;
     if (textFilter && plateTextQuery) f[textFilter.param] = plateTextQuery;
     // max_rank / min_blur_ratio apply across every tab and preset — the
-    // backend's own op_review.py comment says so explicitly ("Both apply
+    // backend's own review.py comment says so explicitly ("Both apply
     // across tabs"). These used to be gated to only primary_low_conf /
     // coco_blind_spots, which meant the rank-scope and clarity controls
     // silently appeared/disappeared depending on which tab or quick-filter
@@ -410,9 +410,9 @@
   // refreshing while the operator is mid-keystroke would be jarring —
   // they decide when to pull in the new batch.
   let liveNewCount = $state<number>(0);
-  let liveSub: OpEventSubscription | null = null;
+  let liveSub: CurationEventSubscription | null = null;
   onMount(() => {
-    liveSub = subscribeKbEvents({
+    liveSub = subscribeCurationEvents({
       // Both classification + any slot-verify changes are interesting on
       // the review page — the operator may be on any tab. `_verified` is
       // structural (matches every crop.<slot.key>_verified event, plus
@@ -448,7 +448,7 @@
   // and leave the letters free for plate actions.
   $effect(() => {
     if (isSlotSuppressedTab(tab)) return;
-    const off = dropOnClassStore.register(async (cls: OpClass) => {
+    const off = dropOnClassStore.register(async (cls: RegistryClass) => {
       if (!current) {
         toastStore.info('No item to label.');
         return;
@@ -620,7 +620,7 @@
     pickerIndex = 0;
   }
 
-  async function pickClass(cls: OpClass): Promise<void> {
+  async function pickClass(cls: RegistryClass): Promise<void> {
     closePicker();
     await assign(cls.id);
   }
@@ -727,7 +727,7 @@
     //
     // Deliberately does NOT push an undoStore entry. Z restores a *label*
     // (PUT the prior class, or DELETE back to the model suggestion) and
-    // there is no un-dismiss endpoint (openprocessor op_crops.py says so
+    // there is no un-dismiss endpoint (openprocessor crops.py says so
     // outright), so a Z here could not undo the dismissal and would
     // instead mutate the label: on an unvalidated crop, DELETE clobbers
     // whatever gemma/v6 had proposed. Dismiss is one-way by design.
@@ -823,7 +823,7 @@
     let fresh: ReviewItem;
     try {
       const c = await getCrop(last.item.id);
-      // The /curation/crops/{id} endpoint returns a OpCrop, but the review
+      // The {API_PREFIX}/crops/{id} endpoint returns a Crop, but the review
       // queue carries extra fields (reason, proposed_*). Keep the
       // snapshot's queue-only metadata and overlay the authoritative
       // store fields (including the freshly re-mapped .slots) on top.
@@ -1206,7 +1206,7 @@
     handledIds.delete(entry.crop_id);
     try {
       const crop = await getCrop(entry.crop_id);
-      // /curation/crops/{id} returns a OpCrop; the queue-only fields have no
+      // {API_PREFIX}/crops/{id} returns a Crop; the queue-only fields have no
       // meaningful value for a restored item, so label it as such.
       const restored: ReviewItem = {
         ...crop,
@@ -1515,7 +1515,7 @@
          only primary_low_conf/coco_blind_spots, which made these controls
          appear and disappear depending on which tab or chip was active.
          Disabled (not hidden) while diverseMode is active — scope.filters
-         on POST /curation/select/diverse doesn't support max_rank/min_blur_ratio
+         on POST {API_PREFIX}/select/diverse doesn't support max_rank/min_blur_ratio
          (P2-10), so applying either here would silently do nothing. -->
     <div
       class="contents"
