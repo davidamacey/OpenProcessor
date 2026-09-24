@@ -618,23 +618,23 @@ describe('isDatasetExportAvailable', () => {
 
   it('is true when the kind is reported experimental', () => {
     const exports: DatasetExportInfo[] = [
-      { id: 'lpr', label: 'LPR plate dataset', status: 'experimental' },
+      { id: 'single_class', label: 'Single-class dataset', status: 'experimental' },
     ];
-    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(true);
+    expect(isDatasetExportAvailable(exports, 'single_class')).toBe(true);
   });
 
   it('is false when the kind is reported but shadow (mid-validation, never selectable)', () => {
     const exports: DatasetExportInfo[] = [
-      { id: 'lpr', label: 'LPR plate dataset', status: 'shadow' },
+      { id: 'single_class', label: 'Single-class dataset', status: 'shadow' },
     ];
-    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(false);
+    expect(isDatasetExportAvailable(exports, 'single_class')).toBe(false);
   });
 
   it('is false when the kind is reported but disabled', () => {
     const exports: DatasetExportInfo[] = [
-      { id: 'lpr', label: 'LPR plate dataset', status: 'disabled' },
+      { id: 'single_class', label: 'Single-class dataset', status: 'disabled' },
     ];
-    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(false);
+    expect(isDatasetExportAvailable(exports, 'single_class')).toBe(false);
   });
 
   // Absence, not a status. OpenProcessor omits `lpr` entirely from the
@@ -646,7 +646,7 @@ describe('isDatasetExportAvailable', () => {
     const exports: DatasetExportInfo[] = [
       { id: 'yolo', label: 'YOLO detection dataset export', status: 'stable' },
     ];
-    expect(isDatasetExportAvailable(exports, 'lpr')).toBe(false);
+    expect(isDatasetExportAvailable(exports, 'single_class')).toBe(false);
   });
 
   it('is false when a different kind is present', () => {
@@ -820,7 +820,7 @@ describe('sort dropdown filtering (mirrors StrategyBar.svelte sortOptions)', () 
     const sorts: ReviewSortInfo[] = [
       {
         id: 'region_score',
-        label: 'Plate detection score',
+        label: 'Region detection score',
         status: 'stable',
         requires_field: 'region_score',
         field_coverage: null,

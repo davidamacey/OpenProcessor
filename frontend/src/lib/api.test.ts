@@ -39,9 +39,9 @@ const URL = `http://localhost:4603${API_PREFIX}/crops/batch_label`;
 
 describe('ApiError', () => {
   it("appends a FastAPI 'detail' string to the message", () => {
-    const e = new ApiError(422, URL, { detail: 'plate bbox outside crop envelope' });
-    expect(e.detail).toBe('plate bbox outside crop envelope');
-    expect(e.message).toBe(`API 422 ${URL} — plate bbox outside crop envelope`);
+    const e = new ApiError(422, URL, { detail: 'region bbox outside crop envelope' });
+    expect(e.detail).toBe('region bbox outside crop envelope');
+    expect(e.message).toBe(`API 422 ${URL} — region bbox outside crop envelope`);
   });
 
   it("falls back to a 'message' property", () => {
@@ -1599,10 +1599,10 @@ describe('runVlmOnCluster', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await runVlmOnCluster(42, 'vehicle_plate_v1');
+    await runVlmOnCluster(42, 'generic_item_v1');
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
-    expect(url).toContain('prompt_pack=vehicle_plate_v1');
+    expect(url).toContain('prompt_pack=generic_item_v1');
   });
 
   it('omits prompt_pack entirely when null/undefined', async () => {

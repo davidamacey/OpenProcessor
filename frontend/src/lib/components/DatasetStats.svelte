@@ -28,11 +28,10 @@
   import { registeredSlots } from '$lib/annotations/registeredSlots';
   import { resolveStatsUpdate, summarizeStatsError } from '$lib/datasetStats';
 
-  // The slot whose `stats` capability titles this panel (today:
-  // license_plate's 'plates'/'Plate detections'/'Plate coverage', all
-  // already verbatim in licensePlate.ts). No slot with a stats
-  // capability -> no panel at all, rather than an empty "Plate
-  // detections" card for a slot-less deployment.
+  // The slot whose `stats` capability titles this panel (its stats key,
+  // panel title and coverage title). No slot with a stats capability ->
+  // no panel at all, rather than an empty detections card for a
+  // slot-less deployment.
   const statsSlot = $derived(registeredSlots.find((s) => s.stats));
 
   // Polling interval prop preserved for back-compat with existing
@@ -157,7 +156,7 @@
   // profile (detector, segmenter fallback, human), so these rows are
   // generic. Denominator = total_crops (so % is "fraction of crops where
   // a region was detected"), not labeledTotal.
-  const platesRows = $derived.by(() => {
+  const slotRows = $derived.by(() => {
     const p = statsSlot?.stats
       ? (stats as unknown as Record<string, DatasetStats['regions'] | undefined>)?.[
           statsSlot.stats.key
@@ -189,10 +188,10 @@
         count: p.by_human_drew ?? p.by_human,
         tone: 'bg-green-500',
       },
-      // Plates the operator confirmed (AI proposed the bbox, human
+      // Regions the operator confirmed (AI proposed the bbox, human
       // hit Confirm). Distinct from by_human_drew (only when the
       // operator created the bbox from scratch). validated_by_human is
-      // the union — every plate the operator touched.
+      // the union — every region the operator touched.
       {
         key: 'validated_by_human',
         label: 'Confirmed by human',
@@ -420,10 +419,10 @@
     </div>
 
     <!-- Slot detections — separate from class labels. Titled from the
-         active stats-capable slot's own spec (today: license_plate's
-         'Plate detections'/'Plate coverage'). LPR runs on every crop and
-         tries to find a plate bbox; SAM3 is the fallback for when LPR
-         misses; humans place plates via the labeler UI. The denominator
+         active stats-capable slot's own spec. A detector runs on every
+         crop and tries to find a region bbox; a segmenter is the
+         fallback when it misses; humans place regions via the labeler
+         UI. The denominator
          is total_crops, so % = "fraction of crops with a detection". No
          stats-capable slot registered -> no panel at all (see
          statsSlot above). -->
@@ -441,11 +440,11 @@
               {fmt(p?.confirmed ?? 0)} confirmed
             </span>
           </header>
-          {#if platesRows.length === 0}
+          {#if slotRows.length === 0}
             <p class="text-sm text-zinc-500">No detections yet.</p>
           {:else}
             <ul class="space-y-1.5">
-              {#each platesRows as row (row.key)}
+              {#each slotRows as row (row.key)}
                 <li class="flex items-center gap-3 text-xs">
                   <span class="w-32 shrink-0 text-zinc-300">{row.label}</span>
                   <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">
@@ -483,9 +482,8 @@
                `total_detected` as fact. The field's own contract
                (DatasetStats.regions.total_detected in api.ts) says it
                should be a superset of `boxed` — but live, it equals
-               `boxed` exactly (1,000 both), so 741 verify-rejected and
-               204 no-box crops that DID go through a detector aren't
-               reflected in it. Rather than assert something the served
+               `boxed` exactly, so verify-rejected and no-box crops that
+               DID go through a detector aren't reflected in it. Rather than assert something the served
                number doesn't actually demonstrate, state what `boxed` is
                (the honest, verified count) and flag total_detected as a
                credit tally that may not include every rejected/no-box
@@ -495,8 +493,8 @@
             {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} Gemma-confirmed).
             The remaining
             {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (Gemma
-            pre-filter said no), were rejected after detection, or the LPR/SAM3 detectors haven't
-            reached them yet.
+            pre-filter said no), were rejected after detection, or the detectors haven't reached
+            them yet.
             {fmt(p?.total_detected ?? 0)} crops carry detector credit (<code
               class="font-mono">regions.total_detected</code
             >) — this may not cover every rejected or box-less attempt.

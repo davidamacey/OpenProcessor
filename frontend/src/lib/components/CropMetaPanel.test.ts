@@ -6,10 +6,10 @@
  * Covers two frontend fixes from docs/design/data-quality-pass-2026-09-24.md:
  *
  *  - DQ-m7: the modal showed item text and class history but never the
- *    plate's status/text/candidates/chain, because it looked up slots via
+ *    region's status/text/candidates/chain, because it looked up slots via
  *    `forClass(crop.class_id, ...)` — which only ever matches a crop
- *    literally classified "license_plate", never the vehicle crops (class
- *    "sedan", "suv", ...) a plate sub-box actually lives on. Fixed to
+ *    literally classified "widget_tag", never the vehicle crops (class
+ *    "sedan", "suv", ...) a region sub-box actually lives on. Fixed to
  *    iterate every REGISTERED slot and gate on slotIsPresent(), the same
  *    presence check every other slot-generic surface in this app uses.
  *  - DQ-M8: `label_confidence` is the detector/v6 score on every row
@@ -28,7 +28,7 @@ import { describe, expect, it } from 'vitest';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.join(here, 'CropMetaPanel.svelte'), 'utf-8');
 
-describe('DQ-m7: plate/slot fields render for any crop carrying slot evidence, not just class-bound ones', () => {
+describe('DQ-m7: region/slot fields render for any crop carrying slot evidence, not just class-bound ones', () => {
   it("iterates every registered slot (slotRegistry.all), not slots bound to the crop's own class", () => {
     expect(src).toMatch(/const presentSlots = \$derived\(\s*slotRegistry\.all\.filter/);
     // The old `boundSlots` derived (backed by forClass()) is gone — a doc

@@ -86,14 +86,13 @@ export const CORE_REVIEW_TABS: ReviewTabDef[] = [
  * id is the structural `slot:${key}` template (`slotTabId`) — NOT the
  * slot's `urlId` — so a second queue-capable slot gets a real,
  * independent tab with zero `reviewTabs.ts` edits and zero risk of
- * colliding with another slot's `urlId`. The `urlId` (`'plates'` for
- * `license_plate`) is kept alive purely as the bookmark contract via
- * `tabFromUrlId()` below.
+ * colliding with another slot's `urlId`. The `urlId` is kept purely as
+ * the bookmark contract via `tabFromUrlId()` below.
  *
  * REVIEW_TABS below builds from `registeredSlots`
  * (`./annotations/registeredSlots.ts`, P2.10) — the one deployment-
  * config file listing which slots are actually live — rather than a
- * literal `[licensePlateSlot]` here, so registering a new live slot
+ * literal slot list here, so registering a new live slot
  * there is the only edit needed to also get its review tab.
  */
 export function slotTabId(key: SlotKey): SlotReviewTab {
@@ -138,9 +137,9 @@ export function isSlotTab(id: ReviewTab): id is SlotReviewTab {
 }
 
 /** Resolves a `?tab=` URL value (a `QueueCapability.urlId`, or a core
- *  tab's own id) to the internal `ReviewTab`. Existing bookmarks using
- *  `?tab=plates` keep resolving to `slot:license_plate` forever, even
- *  though that string no longer appears anywhere as an internal id. */
+ *  tab's own id) to the internal `ReviewTab`. A slot's `?tab=<urlId>`
+ *  bookmark resolves to its `slot:${key}` tab even though the urlId never
+ *  appears as an internal id. */
 export function tabFromUrlId(urlId: string): ReviewTab | undefined {
   const slotMatch = REVIEW_TABS.find((t) => t.slot != null && t.urlId === urlId);
   if (slotMatch) return slotMatch.id;
@@ -230,7 +229,7 @@ export function isReviewPresetId(value: string): value is ReviewPresetId {
 /**
  * What `getReviewQueue` should actually be called with. Presets only ever
  * apply while the operator is on the `all` tab — every other screen
- * (Uncertainty / Model Disagreements / COCO Blind Spots / Plates) ignores
+ * (Uncertainty / Model Disagreements / COCO Blind Spots / slot tabs) ignores
  * `preset` entirely, and navigating to one of those tabs clears it (see
  * the tab-click handler in `+page.svelte`) so a stale preset can never
  * leak into an unrelated tab's query.

@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { datasetExportForSlot } from './datasetExport';
-import { licensePlateSlot } from './profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { defectCodeSlot } from './profiles/defectCode';
 import type { SlotSpec } from './types';
 
 describe('datasetExportForSlot', () => {
-  it("reads the license_plate profile's declared export", () => {
-    const spec = datasetExportForSlot(licensePlateSlot);
+  it("reads a region slot's declared export", () => {
+    const spec = datasetExportForSlot(widgetTagSlot);
     expect(spec).toEqual({
       kind: 'single_class',
-      label: 'LPR plate dataset',
+      label: 'Widget tag dataset',
       buildPath: '/export/single_class',
       statusPath: '/export/single_class/status',
-      datasetKind: 'license_plate',
+      datasetKind: 'widget_tag',
       singleClass: true,
       blurb:
-        'Single-class plate dataset (positives + human FP hard-negatives + a sample of plate-free backgrounds).',
-      profileName: 'license_plate',
+        'Single-class widget-tag dataset (positives + hard negatives + backgrounds).',
+      profileName: 'widget_tag',
       boxSource: 'region',
-      regionClassName: 'license_plate',
+      regionClassName: 'widget_tag',
       classIds: [],
     });
   });
@@ -28,20 +28,20 @@ describe('datasetExportForSlot', () => {
   });
 
   it('returns undefined for a slot with extras but no datasetExport key', () => {
-    const slot: SlotSpec = { ...licensePlateSlot, extras: { somethingElse: true } };
+    const slot: SlotSpec = { ...widgetTagSlot, extras: { somethingElse: true } };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('returns undefined when extras.datasetExport is not an object', () => {
-    const slot: SlotSpec = { ...licensePlateSlot, extras: { datasetExport: 'nope' } };
+    const slot: SlotSpec = { ...widgetTagSlot, extras: { datasetExport: 'nope' } };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('returns undefined when kind is missing or empty', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     for (const kind of [undefined, '']) {
       const slot: SlotSpec = {
-        ...licensePlateSlot,
+        ...widgetTagSlot,
         extras: { datasetExport: { ...base, kind } },
       };
       expect(datasetExportForSlot(slot)).toBeUndefined();
@@ -49,16 +49,16 @@ describe('datasetExportForSlot', () => {
   });
 
   it('returns undefined when label is missing', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const { label: _label, ...rest } = base;
-    const slot: SlotSpec = { ...licensePlateSlot, extras: { datasetExport: rest } };
+    const slot: SlotSpec = { ...widgetTagSlot, extras: { datasetExport: rest } };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('returns undefined when blurb is missing', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const { blurb: _blurb, ...rest } = base;
-    const slot: SlotSpec = { ...licensePlateSlot, extras: { datasetExport: rest } };
+    const slot: SlotSpec = { ...widgetTagSlot, extras: { datasetExport: rest } };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
@@ -68,39 +68,39 @@ describe('datasetExportForSlot', () => {
   // check were silently dropped. Pinning both the missing and empty-string
   // cases keeps that from happening again now that a real consumer exists.
   it('returns undefined when blurb is an empty string', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const slot: SlotSpec = {
-      ...licensePlateSlot,
+      ...widgetTagSlot,
       extras: { datasetExport: { ...base, blurb: '' } },
     };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('returns undefined when buildPath is absolute', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const slot: SlotSpec = {
-      ...licensePlateSlot,
+      ...widgetTagSlot,
       extras: {
-        datasetExport: { ...base, buildPath: 'https://evil.example/export/lpr' },
+        datasetExport: { ...base, buildPath: 'https://evil.example/export/widgets' },
       },
     };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('returns undefined when statusPath has no leading slash', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const slot: SlotSpec = {
-      ...licensePlateSlot,
-      extras: { datasetExport: { ...base, statusPath: 'export/lpr/status' } },
+      ...widgetTagSlot,
+      extras: { datasetExport: { ...base, statusPath: 'export/widgets/status' } },
     };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('defaults singleClass to false when absent or non-boolean', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     for (const singleClass of [undefined, 'true', 1]) {
       const slot: SlotSpec = {
-        ...licensePlateSlot,
+        ...widgetTagSlot,
         extras: { datasetExport: { ...base, singleClass } },
       };
       expect(datasetExportForSlot(slot)?.singleClass).toBe(false);
@@ -108,17 +108,17 @@ describe('datasetExportForSlot', () => {
   });
 
   it('returns undefined when profileName is missing', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const { profileName: _p, ...rest } = base;
-    const slot: SlotSpec = { ...licensePlateSlot, extras: { datasetExport: rest } };
+    const slot: SlotSpec = { ...widgetTagSlot, extras: { datasetExport: rest } };
     expect(datasetExportForSlot(slot)).toBeUndefined();
   });
 
   it('returns undefined for an unknown boxSource', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
-    for (const boxSource of [undefined, 'plate', 1]) {
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
+    for (const boxSource of [undefined, 'tag', 1]) {
       const slot: SlotSpec = {
-        ...licensePlateSlot,
+        ...widgetTagSlot,
         extras: { datasetExport: { ...base, boxSource } },
       };
       expect(datasetExportForSlot(slot)).toBeUndefined();
@@ -126,10 +126,10 @@ describe('datasetExportForSlot', () => {
   });
 
   it('rejects non-integer or negative classIds', () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     for (const classIds of ['0', [1.5], [-1], [0, 'x']]) {
       const slot: SlotSpec = {
-        ...licensePlateSlot,
+        ...widgetTagSlot,
         extras: { datasetExport: { ...base, classIds } },
       };
       expect(datasetExportForSlot(slot)).toBeUndefined();
@@ -138,9 +138,9 @@ describe('datasetExportForSlot', () => {
 
   // Mirrors the backend's 422: an item-box export needs its vocabulary.
   it("rejects boxSource 'item' with no classIds, accepts it with some", () => {
-    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const base = widgetTagSlot.extras!.datasetExport as Record<string, unknown>;
     const withIds = (classIds: number[]): SlotSpec => ({
-      ...licensePlateSlot,
+      ...widgetTagSlot,
       extras: { datasetExport: { ...base, boxSource: 'item', classIds } },
     });
     expect(datasetExportForSlot(withIds([]))).toBeUndefined();

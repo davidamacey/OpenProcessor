@@ -64,7 +64,7 @@ specialized-annotation plugin (secondary bbox detection + free-text
 field + provenance chain + validity gate), rather than a one-off
 hardcoded to `license_plate`.
 
-![Review plates](screenshots/review-plates.png)
+![Review regions](screenshots/review-regions.png)
 
 ## Class management (`/classes`)
 

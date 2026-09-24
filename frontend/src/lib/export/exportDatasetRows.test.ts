@@ -123,12 +123,12 @@ describe('hasCurrentMulticlassExport (m15)', () => {
     expect(hasCurrentMulticlassExport([])).toBe(false);
   });
 
-  it('false when only a single_class dataset (e.g. license_plate) is current — the actual bug case', () => {
+  it('false when only a single_class dataset (e.g. widget_tag) is current — the actual bug case', () => {
     expect(
       hasCurrentMulticlassExport([
         dataset({
           kind: 'single_class',
-          profile_name: 'license_plate',
+          profile_name: 'widget_tag',
           is_current: true,
         }),
       ]),

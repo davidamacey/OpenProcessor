@@ -24,10 +24,15 @@ describe('getRegionVocabulary', () => {
   it('GETs {API_PREFIX}/regions/vocabulary and returns detectors/region_sources/chain_actors/text_choices/text_rules/rejection_reasons', async () => {
     const payload = {
       detectors: [
-        { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
+        {
+          id: 'tag_detector_v1',
+          label: 'Tag detector',
+          role: 'detector',
+          filterable: true,
+        },
       ],
       region_sources: [
-        { id: 'lpr_frozen_test_sample', label: 'LPR frozen test', role: 'human' },
+        { id: 'tag_holdout_sample', label: 'Tag holdout sample', role: 'human' },
       ],
       chain_actors: [{ id: 'gemma-4-e4b', label: 'Gemma', role: 'verifier' }],
       // dq-region (2026-09-24): region_text_choice values + the active
@@ -107,7 +112,7 @@ describe('getReviewTabsVocabulary', () => {
         },
         {
           id: 'regions',
-          label: 'License plates',
+          label: 'Widget tags',
           filters: ['text', 'region_status'],
           filter_defaults: { region_status: 'all' },
           filter_specs: [
@@ -164,7 +169,7 @@ describe('getReviewTabsVocabulary', () => {
           tabs: [
             {
               id: 'regions',
-              label: 'License plates',
+              label: 'Widget tags',
               filter_specs: [
                 { param: 'region_status', kind: 'enum', label: 'Status', options: [] },
                 { param: 'bad', label: 'Bad — no kind' },
@@ -179,7 +184,7 @@ describe('getReviewTabsVocabulary', () => {
     expect(res).toEqual([
       {
         id: 'regions',
-        label: 'License plates',
+        label: 'Widget tags',
         filter_specs: [
           { param: 'region_status', kind: 'enum', label: 'Status', options: [] },
         ],

@@ -72,8 +72,8 @@ export function validatePathTemplate(
 }
 
 /** Substitutes allow-listed placeholders. Values are always
- *  `encodeURIComponent`'d, matching what every hand-written profile
- *  does today (`licensePlate.ts:33`, `aircraftTailNumber.ts:38`). */
+ *  `encodeURIComponent`'d, matching what every hand-written profile's
+ *  path functions do. */
 export function renderPathTemplate(
   template: string,
   values: Record<string, string | number>,

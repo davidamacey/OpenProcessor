@@ -2,10 +2,10 @@
  * Annotation-slot type model.
  *
  * A "slot" is one secondary annotation attached to a crop — a sub-bbox,
- * a text attribute, a triage state, or any combination. `license_plate`
- * is the only slot configured today (`profiles/licensePlate.ts`); the
- * shape below is the *decomposition* of what it uses, not a
- * plate-shaped struct. See docs/genericization-plan-2026-09-13.md §2.5.
+ * a text attribute, a triage state, or any combination (e.g. a text
+ * region on an item). The shape below is a *decomposition* into
+ * independent capabilities, not one domain's struct. See
+ * docs/genericization-plan-2026-09-13.md §2.5.
  *
  * Design constraint that drives almost every decision in this file:
  * **the frontend reads whatever field names the backend already emits.**
@@ -26,7 +26,7 @@ import type { TrainingCohortsCapability } from './cohorts';
 /* ------------------------------------------------------------------ */
 
 /** Stable identifier for a slot within a deployment. Lowercase snake_case
- *  by convention; used in URLs (`?tab=slot:license_plate`), storage keys,
+ *  by convention; used in URLs (`?tab=slot:widget_tag`), storage keys,
  *  and `slots` indexing on a mapped crop, so it must never change once
  *  shipped. */
 export type SlotKey = string;
@@ -85,41 +85,41 @@ export interface SubBoxRing {
 }
 
 export interface SubBoxCapability {
-  /** Wire field holding the box as `[x1,y1,x2,y2]`. Plates: `region_bbox_norm`. */
+  /** Wire field holding the box as `[x1,y1,x2,y2]`. Regions: `region_bbox_norm`. */
   bboxField: WireField;
   /** Frame the stored box uses when `frameField` is absent or unreadable. */
   storedFrame: SlotFrame;
-  /** Optional wire field carrying the frame per-row (plates: `region_bbox_frame`).
+  /** Optional wire field carrying the frame per-row (regions: `region_bbox_frame`).
    *  When present and parseable it overrides `storedFrame` for that row. */
   frameField?: WireField;
-  /** Detector confidence 0..1. Plates: `region_score`. */
+  /** Detector confidence 0..1. Regions: `region_score`. */
   scoreField?: WireField;
-  /** Boolean "the thing is visible in this crop". Plates: `region_visible`. */
+  /** Boolean "the thing is visible in this crop". Regions: `region_visible`. */
   visibleField?: WireField;
   /** Optional wire field carrying the box already projected into the
-   *  PARENT (crop-local) frame, server-computed (plates:
+   *  PARENT (crop-local) frame, server-computed (regions:
    *  `region_bbox_in_parent`). When present, `readSlot` renders from it
    *  directly instead of projecting `bboxField` through `parentXyxy`
    *  itself — preferring the server's own projection over a client one. */
   bboxInParentField?: WireField;
   /** Wire field holding a verifier-rejected candidate box (dq-region,
    *  2026-09-24) — set when the detector proposed a box but the
-   *  verifier rejected it, so `bboxField` is empty. Plates:
+   *  verifier rejected it, so `bboxField` is empty. Regions:
    *  `region_candidate_bbox_norm`. A human confirming (or marking false
    *  positive on) this promotes the candidate into `bboxField`
    *  server-side; the frontend never computes that promotion itself. */
   candidateBboxField?: WireField;
   /** Candidate box already projected into the parent frame, server-
-   *  computed (plates: `region_candidate_bbox_in_parent`). Same
+   *  computed (regions: `region_candidate_bbox_in_parent`). Same
    *  preference-over-client-projection rule as `bboxInParentField`. */
   candidateBboxInParentField?: WireField;
-  /** Candidate box's detector score (plates: `region_candidate_score`). */
+  /** Candidate box's detector score (regions: `region_candidate_score`). */
   candidateScoreField?: WireField;
-  /** Candidate box's detector id (plates: `region_candidate_detector`). */
+  /** Candidate box's detector id (regions: `region_candidate_detector`). */
   candidateDetectorField?: WireField;
-  /** Candidate box's detector version (plates: `region_candidate_detector_version`). */
+  /** Candidate box's detector version (regions: `region_candidate_detector_version`). */
   candidateDetectorVersionField?: WireField;
-  /** Candidate box's source tag (plates: `region_candidate_source`). */
+  /** Candidate box's source tag (regions: `region_candidate_source`). */
   candidateSourceField?: WireField;
   /** Server-side crop of the sub-bbox region, used as the gallery card image. */
   thumbnail?: {
@@ -146,22 +146,22 @@ export interface TextCapability {
   confidenceField?: WireField;
   engineVersionField?: WireField;
   /** Wire field carrying the VLM's own reading, independent of `valueField`
-   *  (the backend's chosen reading). Plates: `region_text_vlm`. */
+   *  (the backend's chosen reading). Regions: `region_text_vlm`. */
   vlmValueField?: WireField;
-  /** Wire field carrying the OCR engine's own reading. Plates: `region_text_ocr`. */
+  /** Wire field carrying the OCR engine's own reading. Regions: `region_text_ocr`. */
   ocrValueField?: WireField;
   /** Wire field: boolean, true when `vlmValueField` and `ocrValueField`
-   *  disagree. Plates: `region_text_disagreement`. */
+   *  disagree. Regions: `region_text_disagreement`. */
   disagreementField?: WireField;
   /** Wire field: why the chosen reading won — `readers_agree |
    *  vlm_preferred | vlm_only | ocr_only | ocr_mode | vlm_invalid |
-   *  no_valid_reading | human` (dq-region, 2026-09-24). Plates:
+   *  no_valid_reading | human` (dq-region, 2026-09-24). Regions:
    *  `region_text_choice`. */
   choiceField?: WireField;
   /** Wire field: why the VLM's own reading was rejected as not text —
    *  `placeholder | no_reading | sequence | charset | too_short |
    *  too_long | format`, null when the VLM reading was valid or absent.
-   *  Plates: `region_text_vlm_invalid`. */
+   *  Regions: `region_text_vlm_invalid`. */
   invalidReasonField?: WireField;
   label: string;
   placeholder?: string;
@@ -212,13 +212,13 @@ export interface SlotState {
 export interface LifecycleCapability {
   statusField: WireField;
   /** Boolean "a verification pass ran" (human OR the VLM verifier).
-   *  Plates: `region_verified`. This — not a status value — is the
+   *  Regions: `region_verified`. This — not a status value — is the
    *  correct predicate for the confirmed ring (Finding C.3). Distinct
    *  from `validatedField` below (dq-region, 2026-09-24): a
    *  machine-auto-confirmed region is verified but not validated. */
   verifiedField?: WireField;
   /** Boolean "a HUMAN confirmed (or drew/rejected) this region" — never
-   *  set by a machine verdict (dq-region, 2026-09-24). Plates:
+   *  set by a machine verdict (dq-region, 2026-09-24). Regions:
    *  `region_validated`. Use this, not `verifiedField`, to badge "human
    *  reviewed" vs `autoConfirmedField`'s "machine accepted,
    *  unreviewed". */
@@ -226,13 +226,13 @@ export interface LifecycleCapability {
   /** Boolean "the worker's auto-confirm policy accepted this box
    *  without a human" (dq-region, 2026-09-24) — an accepted-but-
    *  unreviewed region that still sits in the human review queue.
-   *  Plates: `region_auto_confirmed`. */
+   *  Regions: `region_auto_confirmed`. */
   autoConfirmedField?: WireField;
   rejectionReasonField?: WireField;
   /** Boolean "the verifier judged this box correct" (840beb8 adoption)
    *  — `false` is the actual "model said wrong box" signal distinct from
    *  a rejection reason's `kind`. `null`/absent means no verdict was
-   *  given. Plates: `region_bbox_correct`. */
+   *  given. Regions: `region_bbox_correct`. */
   boxCorrectField?: WireField;
   /** Who made a human write (e.g. `region_label_source`). Sent as
    *  `'human'` on batch status writes when declared. */
@@ -395,8 +395,7 @@ export interface SlotData {
  *  least one capability block has a non-null value on the wire, not
  *  merely that the capability is *configured* (every configured
  *  capability always produces a block, with fields null when absent on
- *  the row). Replaces the hand-written `hasPlate` predicate at
- *  `CropMetaPanel.svelte:26-30`. */
+ *  the row). */
 export function slotIsPresent(d: SlotData | undefined | null): boolean {
   if (!d) return false;
   if (d.subBox && d.subBox.rawXyxy != null) return true;

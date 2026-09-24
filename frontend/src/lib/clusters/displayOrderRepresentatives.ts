@@ -20,7 +20,7 @@
  * under 60ms) for exactly the cluster ids visible in the current DISPLAY
  * order window. `idsNeedingRepresentatives` is the pure selection logic:
  * given the already-sorted display list and a window, return only the
- * ids that (a) aren't the synthetic license_plate card (no real
+ * ids that (a) aren't a synthetic slot inventory card (no real
  * `cluster_id` to query) and (b) don't already carry representatives —
  * so re-sorting after the first screenful is filled never re-fetches
  * cards it already has thumbnails for.

@@ -134,14 +134,20 @@ describe('loadDeploymentProfiles — propagation and memoization', () => {
   it('10. installing a deployment profile updates every live binding, including REVIEW_TABS', async () => {
     expect(REVIEW_TABS.map((t) => t.id)).not.toContain('slot:pallet_label');
     await loadDeploymentProfiles(fakeFetchServing(exampleDoc));
-    expect(registeredSlots.map((s) => s.key)).toEqual(['license_plate', 'pallet_label']);
+    expect(registeredSlots.map((s) => s.key)).toEqual([
+      ...builtinSlots.map((s) => s.key),
+      'pallet_label',
+    ]);
     expect(slotRegistry.byKey('pallet_label')).toBeDefined();
     expect(REVIEW_TABS.map((t) => t.id)).toContain('slot:pallet_label');
-    // 6 core tabs (2026-09-24 adds new_class_proposals) + license_plate +
-    // the newly installed pallet_label slot tab.
-    expect(REVIEW_TABS).toHaveLength(7);
+    // The 5 core tabs + one per built-in queue slot + the newly installed
+    // pallet_label slot tab.
+    const builtinQueues = builtinSlots.filter((s) => s.capabilities.queue);
+    expect(REVIEW_TABS).toHaveLength(5 + builtinQueues.length + 1);
     expect(tabFromUrlId('pallet_labels')).toBe('slot:pallet_label');
-    expect(tabFromUrlId('plates')).toBe('slot:license_plate');
+    for (const s of builtinQueues) {
+      expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);
+    }
     expect(endpointForTab('slot:pallet_label')).toBe('pallet_labels');
   });
 

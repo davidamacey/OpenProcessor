@@ -31,7 +31,7 @@ afterEach(() => {
 const PAYLOAD = {
   tabs: [
     { id: 'all', label: 'All crops', description: 'Every crop in the pool' },
-    { id: 'regions', label: 'License plates', description: 'Plate review queue' },
+    { id: 'regions', label: 'Widget tags', description: 'Region review queue' },
     { id: 'mismatches', label: 'VLM disagreements' },
   ],
 };
@@ -54,9 +54,7 @@ describe('reviewTabsVocabularyStore.init', () => {
     await reviewTabsVocabularyStore.init();
 
     expect(reviewTabsVocabularyStore.labelFor('all', 'All')).toBe('All crops');
-    expect(reviewTabsVocabularyStore.labelFor('regions', 'Plates')).toBe(
-      'License plates',
-    );
+    expect(reviewTabsVocabularyStore.labelFor('regions', 'Regions')).toBe('Widget tags');
     // Not present in the served list at all — static fallback.
     expect(
       reviewTabsVocabularyStore.labelFor('coco_blind_spots', 'COCO Blind Spots'),
@@ -114,7 +112,7 @@ const FILTERS_PAYLOAD = {
     },
     {
       id: 'regions',
-      label: 'Plates',
+      label: 'Regions',
       filters: ['class_id', 'source', 'text'],
       filter_defaults: {},
     },
@@ -165,14 +163,14 @@ describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault
 });
 
 // 840beb8 adoption: GET {API_PREFIX}/review/tabs now also serves each tab's
-// self-describing enum filter_specs (e.g. Plates' region_status) — the
+// self-describing enum filter_specs (e.g. Regions' region_status) — the
 // generic served-enum filter bar renders one <select> per entry with zero
 // param-specific code.
 const FILTER_SPECS_PAYLOAD = {
   tabs: [
     {
       id: 'regions',
-      label: 'Plates',
+      label: 'Regions',
       filters: ['text', 'region_status'],
       filter_defaults: { region_status: 'all' },
       filter_specs: [

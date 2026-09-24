@@ -2,7 +2,7 @@
   /**
    * Provenance chip for ML detector outputs.
    *
-   * Used on the /review plates panel and the /clusters plates list to
+   * Used on the /review slot panel and the /clusters slot gallery to
    * tell an operator at a glance whether a bbox came from LPR, SAM3,
    * PaddleOCR, Gemma, or a human — and whether a particular step in
    * the cascade hit, missed, was rejected by Gemma, etc.

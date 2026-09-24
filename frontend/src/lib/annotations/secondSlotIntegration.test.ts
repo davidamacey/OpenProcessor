@@ -16,7 +16,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { resolveSlotRegistry } from './registry';
-import { licensePlateSlot } from './profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { registeredSlots } from './registeredSlots';
 import { aircraftTailNumberSlot } from './profiles/aircraftTailNumber';
 import { buildReviewTabs, isSlotTab, slotTabId, tabFromUrlId } from '../reviewTabs';
 import { buildSlotKeymap, singleCharCombos } from '../review/slotKeymap';
@@ -31,7 +32,7 @@ import { cohortsForClass } from './cohorts';
 import { vi } from 'vitest';
 
 describe('P3.6: registering a second capable slot works with zero production code change', () => {
-  const secondSlotTabs = buildReviewTabs([licensePlateSlot, aircraftTailNumberSlot]);
+  const secondSlotTabs = buildReviewTabs([widgetTagSlot, aircraftTailNumberSlot]);
 
   it('REVIEW_TABS-shaped output contains a sixth tab: id slot:aircraft_tail_number, urlId tails, endpointId tail_numbers', () => {
     const tails = secondSlotTabs.find((t) => t.id === 'slot:aircraft_tail_number');
@@ -41,16 +42,17 @@ describe('P3.6: registering a second capable slot works with zero production cod
     expect(secondSlotTabs).toHaveLength(2);
   });
 
-  it('tabFromUrlId resolves "tails" to the second slot; "plates" still resolves to license_plate (bookmark contract)', () => {
+  it("tabFromUrlId keeps resolving every registered slot's bookmark urlId (bookmark contract)", () => {
     // tabFromUrlId reads the real REVIEW_TABS (registeredSlots-backed),
-    // not secondSlotTabs — it's exercised here purely for the bookmark
-    // contract half of the assertion, which must hold regardless of
+    // not secondSlotTabs — the bookmark contract must hold regardless of
     // what a hypothetical second slot registers.
-    expect(tabFromUrlId('plates')).toBe('slot:license_plate');
+    for (const s of registeredSlots.filter((x) => x.capabilities.queue)) {
+      expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);
+    }
   });
 
   it('slotTabId + isSlotTab are structural — true for both slots without any registry lookup', () => {
-    expect(isSlotTab(slotTabId('license_plate'))).toBe(true);
+    expect(isSlotTab(slotTabId('widget_tag'))).toBe(true);
     expect(isSlotTab(slotTabId('aircraft_tail_number'))).toBe(true);
     expect(isSlotTab('all')).toBe(false);
     expect(isSlotTab('mismatches')).toBe(false);
@@ -100,14 +102,14 @@ describe('P3.6: registering a second capable slot works with zero production cod
   // is now slot-generic. These are the executable proof: the same four
   // slotPanel.ts functions the panel calls produce a completely
   // different, correct result for a second slot, with zero code change.
-  it("slotPanel helpers produce the tail-number slot's own vocabulary, not license_plate's", () => {
+  it("slotPanel helpers produce the tail-number slot's own vocabulary, not another slot's", () => {
     expect(humanWritableStates(aircraftTailNumberSlot)).toEqual([
       { value: 'detected', label: 'detected' },
       { value: 'not_visible', label: 'no tail number visible' },
       { value: 'obscured', label: 'obscured / partial' },
     ]);
     expect(statusClearsBox(aircraftTailNumberSlot, 'not_visible')).toBe(true);
-    expect(statusClearsBox(aircraftTailNumberSlot, 'no_plate_visible')).toBe(false);
+    expect(statusClearsBox(aircraftTailNumberSlot, 'no_region_visible')).toBe(false);
     expect(statusWantsRejectionReason(aircraftTailNumberSlot, 'obscured')).toBe(true);
     expect(statusWantsRejectionReason(aircraftTailNumberSlot, 'detected')).toBe(false);
     expect(panelLabels(aircraftTailNumberSlot)).toEqual({

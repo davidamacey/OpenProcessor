@@ -3,16 +3,16 @@
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
   import type { BBoxNorm, Crop } from '$lib/types';
-  import { slotOf } from '$lib/annotations/cropSlots';
-  import { slotForClassName } from '$lib/annotations/registeredSlots';
+  import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
+  import { slotRegistry } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
 
   interface Props {
     crop: Crop;
-    /** Slot whose sub-box/ring this card overlays. Defaults to whatever
-     *  slot is bound to the crop's own class — every current call site
-     *  relies on that default rather than passing one explicitly. */
+    /** Slot whose sub-box/ring this card overlays and edits. Defaults to
+     *  `subBoxSlotFor` over the registered slots; with no sub-box slot the
+     *  card shows no ring and no ✎. */
     slot?: SlotSpec;
     selected?: boolean;
     onclick?: (crop: Crop, e: MouseEvent) => void;
@@ -43,13 +43,13 @@
     ondetail,
   }: Props = $props();
 
-  const activeSlot = $derived(slot ?? slotForClassName(crop.class_name));
+  const activeSlot = $derived(slot ?? subBoxSlotFor(crop, slotRegistry.all));
 
   let expanded = $state<boolean>(false);
-  let plateEditorOpen = $state<boolean>(false);
+  let editorOpen = $state<boolean>(false);
 
   // Track the natural pixel size of the rendered thumbnail so we can
-  // letterbox-compensate the plate-ring overlay. The thumbnail is
+  // letterbox-compensate the region-ring overlay. The thumbnail is
   // served as a *non-square* JPEG (PIL `crop.thumbnail((size, size))`
   // preserves aspect ratio), but we render it inside an aspect-square
   // container with `object-contain`. That means a 200x600 motorcycle
@@ -83,7 +83,7 @@
   // The sub-box, already projected into the parent-crop frame by
   // readSlot's own projection at mapping time — no second hand-rolled
   // projection here.
-  const plateInCrop = $derived<BBoxNorm | null>(
+  const boxInCrop = $derived<BBoxNorm | null>(
     noSlot ? null : (slotData?.subBox?.parent ?? null),
   );
 
@@ -96,11 +96,11 @@
     width: number;
     height: number;
   } | null>(() => {
-    if (!plateInCrop) return null;
-    const x1 = plateInCrop.cx - plateInCrop.w / 2;
-    const y1 = plateInCrop.cy - plateInCrop.h / 2;
-    const w = plateInCrop.w;
-    const h = plateInCrop.h;
+    if (!boxInCrop) return null;
+    const x1 = boxInCrop.cx - boxInCrop.w / 2;
+    const y1 = boxInCrop.cy - boxInCrop.h / 2;
+    const w = boxInCrop.w;
+    const h = boxInCrop.h;
     if (imgNaturalW <= 0 || imgNaturalH <= 0) {
       return { left: x1 * 100, top: y1 * 100, width: w * 100, height: h * 100 };
     }
@@ -129,7 +129,7 @@
   // §11.3 of the design doc, and Finding C.3
   // (docs/genericization-plan-2026-09-13.md §2.7): `verified` — not any
   // status value — is the correct predicate for the confirmed ring.
-  const plateRingColorClass = $derived(
+  const ringColorClass = $derived(
     slotVerified
       ? (activeSlot?.capabilities.subBox?.ring.confirmed ??
           'border-green-400 shadow-[0_0_0_1px_rgba(34,197,94,0.45)]')
@@ -210,7 +210,7 @@
       </span>
     {:else if ringRectPct}
       <!--
-        Plate ring overlaid on the thumbnail. The thumbnail is served as
+        Region ring overlaid on the thumbnail. The thumbnail is served as
         a non-square JPEG (aspect-preserved) and rendered with
         object-contain inside an aspect-square container. We have to
         letterbox-compensate the ring placement so it lands on the
@@ -219,7 +219,7 @@
         Pointer-events disabled so the ring never swallows card clicks.
       -->
       <div
-        class="pointer-events-none absolute rounded-[2px] border {plateRingColorClass}"
+        class="pointer-events-none absolute rounded-[2px] border {ringColorClass}"
         style:left="{ringRectPct.left}%"
         style:top="{ringRectPct.top}%"
         style:width="{ringRectPct.width}%"
@@ -233,18 +233,20 @@
       </span>
     {/if}
 
-    <button
-      type="button"
-      class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
-      onclick={(e) => {
-        e.stopPropagation();
-        plateEditorOpen = true;
-      }}
-      aria-label="Edit {activeSlot?.label.singular ?? 'box'}"
-      title="Edit {activeSlot?.label.singular ?? 'box'} (✎)"
-    >
-      ✎
-    </button>
+    {#if activeSlot}
+      <button
+        type="button"
+        class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+        onclick={(e) => {
+          e.stopPropagation();
+          editorOpen = true;
+        }}
+        aria-label="Edit {activeSlot.label.singular}"
+        title="Edit {activeSlot.label.singular} (✎)"
+      >
+        ✎
+      </button>
+    {/if}
 
     {#if ondetail}
       <button
@@ -255,7 +257,7 @@
           ondetail?.(crop);
         }}
         aria-label="Show crop details"
-        title="Details (provenance + plate metadata)"
+        title="Details (provenance + metadata)"
       >
         ⓘ
       </button>
@@ -378,13 +380,13 @@
   {/if}
 </div>
 
-{#if plateEditorOpen}
+{#if editorOpen && activeSlot}
   <SlotBboxEditor
     {crop}
     slot={activeSlot}
-    onclose={() => (plateEditorOpen = false)}
+    onclose={() => (editorOpen = false)}
     onsave={(item) => {
-      plateEditorOpen = false;
+      editorOpen = false;
       onslotsaved?.(crop.id, item);
     }}
   />

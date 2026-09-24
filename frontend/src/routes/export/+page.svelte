@@ -424,11 +424,11 @@
                  (GET {API_PREFIX}/stats/classes) — a DIFFERENT number than the
                  sidebar's / /classes' "Total" (GET {API_PREFIX}/classes'
                  sample_count, the class-cluster bucket size). The two can
-                 legitimately disagree by a lot: license_plate shows 1,000
-                 in the sidebar/classes but this column shows 0, because
-                 no crop's class_id is literally "license_plate" — plates
-                 are sub-boxes on vehicle crops, counted in the cluster
-                 bucket but not in the class-id total. -->
+                 legitimately disagree by a lot: a region-bound class can
+                 count region boxes in the sidebar/classes but show 0 in
+                 this column, because no crop's own class_id is the region
+                 class — regions are sub-boxes on other items, counted in
+                 the cluster bucket but not in the class-id total. -->
             <th
               class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
               onclick={() => setSort('total')}

@@ -1,27 +1,27 @@
 /**
  * Phase 0 characterization tests (docs/genericization-plan-2026-09-13.md
- * §5.1, table T1-T7) for the Plates tab's stateful review logic — pinned
+ * §5.1, table T1-T7) for the slot tab's stateful review logic — pinned
  * BEFORE any Phase 2 component genericization touches `review/+page.svelte`
  * or `clusters/+page.svelte`.
  *
  * This repo has no `@testing-library/svelte` harness (see
- * `plateThumbUrlScan.test.ts`'s doc comment). The plan's P0.1/P0.3 call
+ * `regionThumbUrlScan.test.ts`'s doc comment). The plan's P0.1/P0.3 call
  * for extracting the pure logic into testable modules FIRST, and that
  * has now landed for every piece that had a real extraction seam:
  * `src/lib/review/slotQueueOps.ts` + `abortRegistry.ts` (undo stack +
  * per-crop abort map), `slotKeymap.ts` (the scan/edit-mode keymap
- * table, generalized off `licensePlateSlot` by P2.8c), `slotTabGuard.ts`
+ * table, slot-generic since P2.8c), `slotTabGuard.ts`
  * (the class-drop suppression predicate
  * behind Finding C.2), and `viewBox.ts` (the frozen-viewport
  * padding/squaring/clamping math) — each with its own executable
  * unit-test suite that supersedes the corresponding assertions below as
  * the real behavior pin. `review/+page.svelte` delegates to all of
  * them. What's left genuinely inline (the `untrack()` wrapping itself —
- * a Svelte-reactivity concern, not extractable math — and today's
- * `REVIEW_TABS`/`license_plate` baseline in `clusters/+page.svelte`)
+ * a Svelte-reactivity concern, not extractable math — and the
+ * `REVIEW_TABS`/slot-routing baseline in `clusters/+page.svelte`)
  * stays pinned via the static source-scan convention this repo already
  * uses (`EmbeddingPlot.test.ts` / `StrategyBar.test.ts` /
- * `plateThumbUrlScan.test.ts`) until Phase 2's `reviewTabs.ts`
+ * `regionThumbUrlScan.test.ts`) until Phase 2's `reviewTabs.ts`
  * data-driving and the SlotGallery extraction give them one.
  */
 
@@ -29,6 +29,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { registeredSlots } from '../../lib/annotations/registeredSlots';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const reviewPageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
@@ -36,9 +37,10 @@ const clustersPageSrc = readFileSync(
   path.resolve(here, '..', 'clusters', '+page.svelte'),
   'utf-8',
 );
+const queueSlots = registeredSlots.filter((s) => s.capabilities.queue);
 
-describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () => {
-  it('registers exactly the documented scan-mode keymap on the Plates tab', () => {
+describe('T4: slot-tab keymap + reserved-letters invariant (Finding C.2)', () => {
+  it('registers exactly the documented scan-mode keymap on a slot tab', () => {
     // Enter=confirm, D=reject, F=false-positive, E=edit, arrowleft/B=back,
     // arrowright=next, N=skip (shared with every tab). Pinning presence
     // via keyboardStore.register() call sites, not exhaustive parsing — a
@@ -48,30 +50,25 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
     // UPDATE (P2.8c): the extraction is now slot-generic —
     // src/lib/review/slotKeymap.ts's buildSlotKeymap(spec, editMode, …),
     // its own slotKeymap.test.ts asserts the exact combo set/wiring per
-    // mode for both licensePlateSlot (byte-identical to the old
-    // buildPlateKeymap) and a second slot. What's pinned here now is
+    // mode for a region slot and a second slot. What's pinned here now is
     // just that the page delegates to it rather than re-inlining the
     // table.
     expect(reviewPageSrc).toMatch(/buildSlotKeymap\(activeSlot, editMode, \{/);
   });
 
-  it('class-drop registration early-returns on the plates tab (the invariant behind Finding C.2)', () => {
-    // dropOnClassStore's handler is never registered while tab==='plates',
-    // which is why f/e/b can be bound as plates actions without colliding
-    // with a class hotkey today, even though RESERVED_HOTKEY_LETTERS
-    // doesn't list them (next assertion).
-    //
-    // UPDATE: the invariant is now the extracted isSlotSuppressedTab()
-    // predicate (src/lib/review/slotTabGuard.ts, its own
-    // slotTabGuard.test.ts), not a bare `if (tab === 'plates') return;`
-    // in a 1950-line file.
+  it('class-drop registration early-returns on a slot tab (the invariant behind Finding C.2)', () => {
+    // dropOnClassStore's handler is never registered on a slot tab, which
+    // is why a slot's own letters can be bound as slot actions without
+    // colliding with a class hotkey. The invariant is the extracted
+    // isSlotSuppressedTab() predicate (src/lib/review/slotTabGuard.ts,
+    // its own slotTabGuard.test.ts).
     expect(reviewPageSrc).toMatch(/if \(isSlotSuppressedTab\(tab\)\) return;/);
   });
 
   it(
-    'reservedHotkeyLetters() includes f/e/b/d from the registered license_plate ' +
-      'slot even with no served reserved_hotkeys (W4, 2026-09-24) — the registry ' +
-      'union is what closes Finding C.2, independent of the server response',
+    "reservedHotkeyLetters() includes every registered queue slot's single-letter " +
+      'keymap combos even with no served reserved_hotkeys (W4, 2026-09-24) — the ' +
+      'registry union is what closes Finding C.2, independent of the server response',
     async () => {
       const { reservedHotkeyLetters } = await import('../../lib/classHotkey');
       const { classesStore } = await import('../../lib/stores/classes.svelte');
@@ -79,12 +76,17 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
       // GET {API_PREFIX}/classes's own `reserved_hotkeys` is the base now
       // (classesStore.reservedHotkeys). Simulate the pre-fetch/offline state
       // (empty) to prove the registry union alone still protects a class
-      // hotkey from colliding with the license_plate slot's own keymap.
+      // hotkey from colliding with a slot's own keymap.
+      const slotLetters = queueSlots.flatMap((s) =>
+        Object.values(s.capabilities.queue!.keymap)
+          .flat()
+          .filter((c): c is string => typeof c === 'string' && c.length === 1),
+      );
       const prev = classesStore.reservedHotkeys;
       classesStore.reservedHotkeys = [];
       try {
         const derived = reservedHotkeyLetters();
-        for (const letter of ['f', 'e', 'b', 'd']) {
+        for (const letter of slotLetters) {
           expect(derived.has(letter)).toBe(true);
         }
       } finally {
@@ -103,8 +105,6 @@ describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack de
   // to them the way the plan requires (keyed by crop id, not cursor;
   // $state.raw for identity-correct removal).
   it('keys the slot-tab save-abort registry by crop id, not by cursor index', () => {
-    // Generalized off `plateMetaAborts` by C6 (slot-generic crop-mapping
-    // plan, 2026-09-21) — same mechanism, slot-generic name.
     expect(reviewPageSrc).toMatch(/slotMetaAborts = new AbortRegistry\(\)/);
     expect(reviewPageSrc).toMatch(/slotMetaAborts\.start\(id\)/);
     expect(reviewPageSrc).toMatch(/slotMetaAborts\.finish\(id, ac\)/);
@@ -113,8 +113,6 @@ describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack de
   it('undo stack is $state.raw and delegates push/remove/pop to slotQueueOps', () => {
     // Deep reactivity would proxy pushed entries, so removeUndo's
     // identity-based filter could never match a pushed entry.
-    // Generalized off `plateUndoStack`/`PlateUndoEntry`/`PLATE_UNDO_MAX`
-    // by C6 (slot-generic crop-mapping plan, 2026-09-21).
     expect(reviewPageSrc).toMatch(
       /slotUndoStack = \$state\.raw<SlotUndoEntry\[\]>\(\[\]\)/,
     );
@@ -129,7 +127,7 @@ describe('T1/T2 (real extraction, P0.1/P0.3): per-crop abort map + undo-stack de
 });
 
 describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', () => {
-  it('the plate bbox-editor viewport-freeze effect wraps its seed call in untrack()', () => {
+  it('the slot bbox-editor viewport-freeze effect wraps its seed call in untrack()', () => {
     // Without untrack(), _seedViewBox() would re-fire on every drag tick
     // and overwrite the operator's in-progress resize with the server
     // snapshot — see plan §3.5 point 1.
@@ -137,30 +135,33 @@ describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', (
   });
 });
 
-describe('T7 (adapted, P2.8b): the Plates tab id is slot-derived, urlId keeps the bookmark contract', () => {
-  it('the Plates tab is slot:license_plate internally, with urlId "plates" preserved', async () => {
+describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, urlId keeps the bookmark contract', () => {
+  it('each queue slot tab is slot:<key> internally, with its own urlId preserved', async () => {
     const { REVIEW_TABS, tabFromUrlId } = await import('../../lib/reviewTabs');
     const ids = REVIEW_TABS.map((t: { id: string }) => t.id);
-    expect(ids).toContain('slot:license_plate');
-    expect(ids).not.toContain('plates');
-    const plates = REVIEW_TABS.find((t: { id: string }) => t.id === 'slot:license_plate');
-    expect(plates?.urlId).toBe('plates');
-    expect(tabFromUrlId('plates')).toBe('slot:license_plate');
+    for (const slot of queueSlots) {
+      const urlId = slot.capabilities.queue!.urlId;
+      expect(ids).toContain(`slot:${slot.key}`);
+      expect(ids).not.toContain(urlId);
+      const tab = REVIEW_TABS.find((t: { id: string }) => t.id === `slot:${slot.key}`);
+      expect(tab?.urlId).toBe(urlId);
+      expect(tabFromUrlId(urlId)).toBe(`slot:${slot.key}`);
+    }
   });
 });
 
-describe('P2.10: clusters/+page.svelte routes via registeredSlots, not a license_plate literal', () => {
-  it('no longer hardcodes the license_plate class-name string as a routing condition', () => {
+describe('P2.10: clusters/+page.svelte routes via registeredSlots, not a class-name literal', () => {
+  it("never hardcodes a registered slot's class-name string as a routing condition", () => {
     // Finding B's four routing sites (docs/genericization-plan-2026-09-13.md
-    // §1: isLicensePlateFilter, loadLicensePlateCard, the synthetic pinned
-    // card's dominant_class_name, and card-click routing) now all resolve
-    // via slotForClassName()/registeredSlots (P2.10) instead of comparing
-    // against the literal string 'license_plate'. This test intentionally
-    // flipped red the moment that migration landed -- see the prior
-    // baseline version of this test (before this commit) for the pinned
-    // "must still be >= 4" pre-migration checklist it replaces.
+    // §1: isSlotFilter, loadSlotInventoryCards, the synthetic pinned
+    // card's dominant_class_name, and card-click routing) all resolve via
+    // slotForClassName()/registeredSlots instead of comparing against a
+    // literal class name.
     expect(clustersPageSrc).toMatch(/slotForClassName\(/);
-    const occurrences = (clustersPageSrc.match(/'license_plate'/g) ?? []).length;
-    expect(occurrences).toBe(0);
+    for (const slot of registeredSlots) {
+      const className = slot.bind.className;
+      if (!className) continue;
+      expect(clustersPageSrc.split(`'${className}'`).length - 1).toBe(0);
+    }
   });
 });

@@ -26,15 +26,14 @@
 
   // DQ-m7 (docs/design/data-quality-pass-2026-09-24.md): this used to be
   // `slotRegistry.forClass(crop.class_id, ...)` — slots bound to the
-  // crop's OWN class. That's the wrong question for a sub-box slot like
-  // license_plate: a plate box lives on a VEHICLE crop (class "sedan",
-  // "suv", ...), never on a crop literally classified "license_plate", so
+  // crop's OWN class. That's the wrong question for a sub-box slot: a
+  // region (e.g. a tag) lives on an item of another class (e.g.
+  // "widget_a"), never on a crop classified as the region's own class, so
   // forClass() here was structurally guaranteed to return nothing for
-  // every real plate-bearing crop — the modal showed item text and class
-  // history but never the plate's status, chosen text, VLM/OCR
-  // candidates, disagreement flag or detector chain, on every crop
-  // (00000000 included) regardless of whether it actually had plate
-  // data. The correct question is "does this crop carry evidence for
+  // every real region-bearing crop — the modal showed item text and class
+  // history but never the region's status, chosen text, VLM/OCR
+  // candidates, disagreement flag or detector chain, regardless of
+  // whether the crop actually had region data. The correct question is "does this crop carry evidence for
   // this slot" (slotIsPresent(slotOf(crop, spec))) — the same check
   // every other slot-generic surface in this app uses (review/+page.svelte,
   // SlotCard.svelte) — evaluated over every REGISTERED slot, not just the

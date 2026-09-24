@@ -1,23 +1,21 @@
 <script lang="ts">
   /**
    * Reusable sub-bbox canvas — image + draggable/resizable ring for a
-   * child bbox living inside a parent crop (a license plate inside a
-   * vehicle crop today; any similarly-shaped sub-region tomorrow). No
-   * plate-specific logic lives here — this file is domain-agnostic by
-   * construction, which is why it was a pure rename (see
-   * docs/genericization-plan-2026-09-13.md §3.1) rather than a
-   * migration.
+   * child bbox living inside a parent crop (e.g. a text region on an
+   * item). No domain-specific logic lives here — this file is
+   * domain-agnostic by construction (see
+   * docs/genericization-plan-2026-09-13.md §3.1).
    *
    * Ring color defaults to sky-blue (RGB 80,200,255), matching the
    * server-rendered overlay on {API_PREFIX}/crops/{id}/image so the left-pane
    * source preview and the right-pane crop canvas agree visually for
-   * the license_plate slot; override via `ringColor` for a different
-   * slot's color scheme.
+   * a region slot; override via `ringColor` for a different slot's color
+   * scheme.
    *
    * Operates in **crop-local frame** ([0, 1]^4 normalized inside the
    * parent bbox). Used both by:
    *   - SlotBboxEditor (modal, with Save/Clear/Cancel chrome)
-   *   - /review?tab=plates (inline, parent owns Confirm)
+   *   - /review's slot tab (inline, parent owns Confirm)
    *
    * Parent passes `bbox` (BBoxNorm | null) and gets `bbox` back via
    * bind:bbox. No save/network logic lives here.
@@ -46,12 +44,12 @@
     class?: string;
     /** Disable interaction (during a save). */
     busy?: boolean;
-    /** Ring border color. Default matches the server-rendered plate
+    /** Ring border color. Default matches the server-rendered region
      *  overlay (sky-blue, RGB 80,200,255) — override for another slot. */
     ringColor?: string;
     /**
      * Read-only display mode. Hides resize handles, ignores pointer
-     * events, and uses a thinner ring. Used by /review?tab=plates as
+     * events, and uses a thinner ring. Used by /review's slot tab as
      * its default view so the bbox is shown but the canvas doesn't
      * sit on top of the crop with grabbable handles.
      */
@@ -59,7 +57,7 @@
     /**
      * Optional viewport rectangle in **crop-local frame** (the same
      * space `bbox` lives in). When provided, the canvas zooms in on
-     * this sub-region of the vehicle crop so a small plate fills the
+     * this sub-region of the item crop so a small region fills the
      * visible area. `bbox` continues to be stored in crop-local frame
      * — saves and downstream consumers are unaffected. Pass `null` or
      * omit to render the full crop.

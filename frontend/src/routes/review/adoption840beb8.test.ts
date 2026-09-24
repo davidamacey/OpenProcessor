@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 /**
  * OpenProcessor main 840beb8 adoption: rejection_reasons vocabulary,
  * region_bbox_correct, and the generic served-enum review filter bar
- * (`ReviewFilterSpec`, e.g. Plates' `region_status`). Static source-scan
+ * (`ReviewFilterSpec`, e.g. Regions' `region_status`). Static source-scan
  * (no @testing-library/svelte in this repo — see reviewFilterConsistency
  * .test.ts's header comment for the established precedent).
  */

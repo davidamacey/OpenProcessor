@@ -7,16 +7,18 @@ baked at build time — safe to intercept against a `vite preview` build):
 
   Pass 1 — no deployment profile (route answers 200/text-html, exactly
            nginx's/adapter-static's SPA fallback for a file that doesn't
-           exist). Only the core tabs + Plates render.
+           exist). Only the core tabs + the region tab render.
   Pass 2 — the shipped `static/annotation-profiles.example.json` served
            with `content-type: application/json`. A "Pallet labels" tab
            appears, is clickable, and drives a real
            `GET /curation/review/pallet_labels` request.
-  Pass 3 — a malformed profile. The page still renders, Plates still
+  Pass 3 — a malformed profile. The page still renders, the region tab still
            works, and a toast mentions the deployment annotation profile.
 """
 
 from __future__ import annotations
+
+from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL
 
 import json
 from pathlib import Path
@@ -26,7 +28,7 @@ EXAMPLE_PROFILE = json.loads((REPO_ROOT / "static" / "annotation-profiles.exampl
 MALFORMED_PROFILE = {"version": 1, "slots": [{"key": "bad"}]}
 
 CLASSES = [
-    {"id": 1, "name": "license_plate", "group": "vehicle", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
+    {"id": 1, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
     {"id": 2, "name": "wooden_pallet", "group": "warehouse", "hotkey_letter": "w", "count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
 ]
 
@@ -44,6 +46,9 @@ def register_curation(stub):
         return (200, EMPTY_QUEUE)
 
     stub.on("GET", r"/review/", review_handler)
+    # The catch-all above would also answer /review/tabs; keep the served
+    # region-tab label conftest.py defaults to.
+    stub.on("GET", r"/review/tabs(\?|$)", {"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]})
     return review_calls
 
 
@@ -71,7 +76,7 @@ def test_tier2_profile_absent(stub, page, app_url):
     page.goto(f"{app_url}/review")
     labels = tab_labels(page)
     assert "Pallet labels" not in labels, f"no 'Pallet labels' tab expected: {labels}"
-    assert "Plates" in labels, f"'Plates' tab should still be present: {labels}"
+    assert REGION_TAB_LABEL in labels, f"the region tab should still be present: {labels}"
     assert not [c for c in stub.console_errors if c.startswith("pageerror")]
     annotation_msgs = [c for c in stub.console_errors if "annotation-profiles" in c.lower()]
     assert not annotation_msgs, f"absent profile should be silent: {annotation_msgs}"
@@ -109,12 +114,12 @@ def test_tier2_profile_malformed(stub, page, app_url):
 
     page.goto(f"{app_url}/review")
     labels = tab_labels(page)
-    assert "Plates" in labels, f"the page should still render the core tabs + Plates: {labels}"
+    assert REGION_TAB_LABEL in labels, f"the page should still render the core tabs + the region tab: {labels}"
     assert "Pallet labels" not in labels, f"no 'Pallet labels' tab from a malformed document: {labels}"
 
-    plates_tab = page.get_by_role("button", name="Plates")
-    assert plates_tab.count() > 0, "Plates tab should still be clickable"
-    plates_tab.first.click()
+    region_tab = page.get_by_role("button", name=REGION_TAB_LABEL)
+    assert region_tab.count() > 0, "the region tab should still be clickable"
+    region_tab.first.click()
     page.wait_for_timeout(300)
 
     toast_text = page.locator("text=/annotation profile/i")

@@ -47,14 +47,14 @@ function read(rel: string): string {
  * Each override is anchored to a `marker` — a unique, nearby string
  * (the enclosing function's declaration) that must appear verbatim in
  * the scanned file — and resolves to the nearest scanned call site
- * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchPlateStatus`
+ * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchRegionStatus`
  * all happen to share the identical raw template text
  * (`` `${API_PREFIX}${path}` ``), so matching by raw text alone would
  * be ambiguous; matching by (marker, nearest-following-site) is not.
  *
  * `path`/`method`/`queryParams` are optional: an omitted field keeps
- * whatever the scanner itself resolved (e.g. `getPlates`'s query keys
- * ARE mechanically resolved via its `PlatesQuery` interface — only its
+ * whatever the scanner itself resolved (e.g. `getRegions`'s query keys
+ * ARE mechanically resolved via its `RegionsQuery` interface — only its
  * `browsePath` parameter, a runtime string, needs a path override).
  */
 const MANUAL_OVERRIDES: Array<{
@@ -67,8 +67,8 @@ const MANUAL_OVERRIDES: Array<{
   {
     file: 'lib/api.ts',
     marker: 'export function exportSingleClass(',
-    // spec.buildPath is 'license_plate' slot's declared '/export/single_class'
-    // today (profiles/licensePlate.ts extras.datasetExport.buildPath).
+    // spec.buildPath: a region slot's declared extras.datasetExport.buildPath,
+    // '/export/single_class' for the built-in profile today.
     path: '/export/single_class',
     method: 'POST',
     queryParams: [],
@@ -83,8 +83,8 @@ const MANUAL_OVERRIDES: Array<{
   {
     file: 'lib/api.ts',
     marker: 'export async function setSlotBox(',
-    // spec.endpoints.setBox/clearBox — 'license_plate' declares both as
-    // '/crops/{id}/region' today (profiles/licensePlate.ts endpoints).
+    // spec.endpoints.setBox/clearBox — a region slot declares both as
+    // '/crops/{id}/region'.
     path: '/crops/*/region',
     method: 'PUT',
     queryParams: [],
@@ -99,7 +99,7 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export async function batchPlateStatus(',
+    marker: 'export async function batchRegionStatus(',
     // spec.endpoints.batchStatus — '/regions/batch_status' today.
     path: '/regions/batch_status',
     method: 'POST',
@@ -107,18 +107,18 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export async function getPlates(',
+    marker: 'export async function getRegions(',
     // browsePath is the slot's declared capabilities.queue.browsePath —
-    // 'license_plate' declares '/regions' today. Query params ARE
-    // resolved mechanically (PlatesQuery), so only path is overridden.
+    // '/regions' for a region slot. Query params ARE
+    // resolved mechanically (RegionsQuery), so only path is overridden.
     path: '/regions',
   },
   {
     file: 'lib/components/SlotCard.svelte',
     marker: 'const thumbUrl = $derived(',
-    // thumbCap.path(id, size) — 'license_plate' declares
-    // '/crops/{id}/region_thumbnail?size={size}' today
-    // (profiles/licensePlate.ts capabilities.subBox.thumbnail.path).
+    // thumbCap.path(id, size) — a region slot declares
+    // '/crops/{id}/region_thumbnail?size={size}'
+    // (capabilities.subBox.thumbnail.path).
     path: '/crops/*/region_thumbnail',
     method: 'GET',
     queryParams: ['size'],

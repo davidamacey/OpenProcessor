@@ -1,42 +1,42 @@
 """B2 (frontend half, docs/design/interactive-pass-2026-09-24.md §6):
-confirming a plate whose box the operator never touched must go through
+confirming a region whose box the operator never touched must go through
 a status-only `PATCH {API_PREFIX}/crops/{id}/region_meta` using the
 served `confirm_status`, not `PUT {API_PREFIX}/crops/{id}/region` with
 the same box — a same-box PUT is indistinguishable, server-side, from a
 human drawing a fresh box, and overwrites the detector's own
 `region_detector`/`region_score` provenance.
 
-Enter on the Plates tab -> confirmSlot() -> (unchanged box, served
+Enter on the region tab -> confirmSlot() -> (unchanged box, served
 confirm_status) -> `PATCH {API_PREFIX}/crops/{id}/region_meta` (src/routes/
 review/+page.svelte).
 """
 
 from __future__ import annotations
 
-from fixtures.wire import make_item
+from fixtures.wire import make_item, REGION_CLASS, REGION_TAB_URL_ID
 
 CLASSES = [
-    {"id": 1, "name": "license_plate", "group": "vehicle", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
+    {"id": 1, "name": REGION_CLASS, "group": "widgets", "hotkey_letter": "l", "count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
 ]
 
 METHODS = {"strategies": [], "flags": {}}
 
 
-def plate_item() -> dict:
+def tag_item() -> dict:
     # region_bbox_in_parent / region_status / region_detector /
     # region_score all come from make_item's defaults — an untouched,
     # detector-found box with real provenance, exactly the case B2
     # covers (an operator confirming a box that's already correct).
     return make_item(
-        crop_id="plate-1",
+        crop_id="tag-1",
         image_id="img-1",
         class_id=1,
-        class_name="license_plate",
-        thumbnail_url="/curation/crops/plate-1/thumbnail",
+        class_name=REGION_CLASS,
+        thumbnail_url="/curation/crops/tag-1/thumbnail",
     )
 
 
-def test_plate_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url):
+def test_region_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url):
     region_calls: list[tuple[str, str, dict]] = []
     region_meta_calls: list[tuple[str, str, dict]] = []
 
@@ -50,13 +50,13 @@ def test_plate_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url
     )
 
     def review_handler(_request, _match):
-        return (200, {"items": [plate_item()], "total": 1, "page": 1, "page_size": 30})
+        return (200, {"items": [tag_item()], "total": 1, "page": 1, "page_size": 30})
 
     stub.on("GET", r"/review/", review_handler)
 
     def region_handler(request, match):
         region_calls.append((request.method, match.string, request.post_data_json or {}))
-        return (200, {"item": plate_item()})
+        return (200, {"item": tag_item()})
 
     # PUT {API_PREFIX}/crops/{id}/region — must NOT be called for an
     # unchanged-box confirm.
@@ -64,11 +64,11 @@ def test_plate_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url
 
     def region_meta_handler(request, match):
         region_meta_calls.append((request.method, match.string, request.post_data_json or {}))
-        return (200, {"crop_id": "plate-1", "updated_fields": ["region_status"], "item": plate_item()})
+        return (200, {"crop_id": "tag-1", "updated_fields": ["region_status"], "item": tag_item()})
 
     stub.on("PATCH", r"/crops/([^/]+)/region_meta$", region_meta_handler)
 
-    page.goto(f"{app_url}/review?tab=plates")
+    page.goto(f"{app_url}/review?tab={REGION_TAB_URL_ID}")
     counter = page.get_by_test_id("queue-counter")
     counter.first.wait_for(timeout=15000)
 
@@ -86,11 +86,11 @@ def test_plate_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url
     method, path, body = region_meta_calls[0]
     assert method == "PATCH"
     assert path.endswith("/region_meta")
-    assert "plate-1" in path, path
+    assert "tag-1" in path, path
     # confirm_status served by the stub's default GET /regions/statuses
-    # (conftest.py) is "detected" — the same value licensePlateSlot's
+    # (conftest.py) is "detected" — the same value the region slot's
     # own capabilities.lifecycle.confirmState uses.
     assert body.get("region_status") == "detected", body
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected in the plate-confirm flow: {errors[:3]}"
+    assert not errors, f"no pageerror expected in the region-confirm flow: {errors[:3]}"

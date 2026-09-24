@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX, getReviewQueue } from './api';
-import { licensePlateSlot } from './annotations/profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { registeredSlots } from './annotations/registeredSlots';
 import {
   buildReviewTabs,
   CORE_REVIEW_TABS,
@@ -16,22 +17,31 @@ import {
   type ReviewPresetId,
 } from './reviewTabs';
 
+// The registered queue slots (whatever this build registers); each gets
+// exactly one tab after the core tabs.
+const queueSlots = registeredSlots.filter((s) => s.capabilities.queue);
+
 describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
-  it('has exactly 6 top-level tabs — the 5 from the 2026-09 consolidation plus new_class_proposals', () => {
-    expect(REVIEW_TABS).toHaveLength(6);
+  it('has the 5 core tabs from the 2026-09 consolidation plus new_class_proposals, then one tab per queue slot', () => {
+    expect(CORE_REVIEW_TABS).toHaveLength(5);
+    expect(REVIEW_TABS).toHaveLength(5 + queueSlots.length);
   });
 
-  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / new_class_proposals / slot:license_plate', () => {
+  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / new_class_proposals / slot:<key>...', () => {
     expect(REVIEW_TABS.map((t) => t.id)).toEqual([
       'all',
       'uncertainty',
       'model_disagreements',
       'coco_blind_spots',
       'new_class_proposals',
-      'slot:license_plate',
+      ...queueSlots.map((s) => `slot:${s.key}`),
     ]);
-    // urlId is the bookmark contract — 'plates' stays alive there.
-    expect(REVIEW_TABS.find((t) => t.id === 'slot:license_plate')?.urlId).toBe('plates');
+    // urlId is the bookmark contract — each slot tab keeps its own.
+    for (const s of queueSlots) {
+      expect(REVIEW_TABS.find((t) => t.id === `slot:${s.key}`)?.urlId).toBe(
+        s.capabilities.queue!.urlId,
+      );
+    }
     // new_class_proposals (2026-09-24 logic-moves W5) is a real core tab —
     // its urlId/endpointId are the raw backend tab id, same as every
     // other core tab.
@@ -56,19 +66,19 @@ describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
 
 describe('buildReviewTabs (P2.8 data-driving)', () => {
   it('derives a tab from a queue-capable slot, matching its urlId/endpointId/label', () => {
-    const tabs = buildReviewTabs([licensePlateSlot]);
+    const tabs = buildReviewTabs([widgetTagSlot]);
     expect(tabs).toHaveLength(1);
-    expect(tabs[0].id).toBe('slot:license_plate');
-    expect(tabs[0].urlId).toBe('plates');
+    expect(tabs[0].id).toBe('slot:widget_tag');
+    expect(tabs[0].urlId).toBe('regions');
     expect(tabs[0].endpointId).toBe('regions');
-    expect(tabs[0].label).toBe('Plates');
-    expect(tabs[0].slot).toBe(licensePlateSlot);
+    expect(tabs[0].label).toBe('Widget tags');
+    expect(tabs[0].slot).toBe(widgetTagSlot);
   });
 
   it('skips a slot with no queue capability', () => {
     const noQueueSlot = {
-      ...licensePlateSlot,
-      capabilities: { text: licensePlateSlot.capabilities.text },
+      ...widgetTagSlot,
+      capabilities: { text: widgetTagSlot.capabilities.text },
     };
     expect(buildReviewTabs([noQueueSlot])).toEqual([]);
   });
@@ -76,14 +86,14 @@ describe('buildReviewTabs (P2.8 data-driving)', () => {
   it('REVIEW_TABS is CORE_REVIEW_TABS plus the derived slot tabs, in that order', () => {
     expect(REVIEW_TABS).toEqual([
       ...CORE_REVIEW_TABS,
-      ...buildReviewTabs([licensePlateSlot]),
+      ...buildReviewTabs(registeredSlots),
     ]);
   });
 });
 
 describe('isSlotTab', () => {
-  it('is true for the license_plate slot tab (backed by a slot queue)', () => {
-    expect(isSlotTab('slot:license_plate')).toBe(true);
+  it('is true for a slot tab (backed by a slot queue)', () => {
+    expect(isSlotTab(slotTabId(widgetTagSlot.key))).toBe(true);
   });
 
   it('is structurally true for any slot: id, even an unregistered one', () => {
@@ -104,8 +114,10 @@ describe('endpointForTab', () => {
     expect(endpointForTab('uncertainty')).toBe('uncertainty');
   });
 
-  it("resolves the license_plate slot tab to its endpointId ('regions', renamed Wave 2 C14 — the review-tab id 'plates' now 400s server-side)", () => {
-    expect(endpointForTab('slot:license_plate')).toBe('regions');
+  it("resolves each registered slot tab to its slot's endpointId", () => {
+    for (const s of queueSlots) {
+      expect(endpointForTab(slotTabId(s.key))).toBe(s.capabilities.queue!.endpointId);
+    }
   });
 
   it('falls through to the raw id for anything not in REVIEW_TABS (e.g. a preset id)', () => {
@@ -114,8 +126,10 @@ describe('endpointForTab', () => {
 });
 
 describe('tabFromUrlId (bookmark contract)', () => {
-  it('resolves "plates" to slot:license_plate', () => {
-    expect(tabFromUrlId('plates')).toBe('slot:license_plate');
+  it("resolves each registered slot's urlId to its slot: tab", () => {
+    for (const s of queueSlots) {
+      expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(slotTabId(s.key));
+    }
   });
 
   it('resolves a core tab urlId to itself', () => {
@@ -144,9 +158,7 @@ describe('REVIEW_PRESETS (All-tab quick-filter chips)', () => {
 describe('resolveEffectiveTab', () => {
   it('passes non-all tabs straight through, ignoring any stale preset', () => {
     expect(resolveEffectiveTab('uncertainty', null)).toBe('uncertainty');
-    expect(resolveEffectiveTab('slot:license_plate', 'mismatches')).toBe(
-      'slot:license_plate',
-    );
+    expect(resolveEffectiveTab('slot:widget_tag', 'mismatches')).toBe('slot:widget_tag');
     expect(resolveEffectiveTab('coco_blind_spots', 'vlm_low_conf')).toBe(
       'coco_blind_spots',
     );
@@ -223,9 +235,13 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
 
 describe('reviewDeepLink / urlIdForTab', () => {
   it('opens the slot tab from its bookmark urlId, with the crop to jump to', () => {
-    const d = reviewDeepLink(new URLSearchParams('tab=plates&crop_id=abc'));
-    expect(d.tab).toBe('slot:license_plate');
-    expect(d.cropId).toBe('abc');
+    for (const s of queueSlots) {
+      const d = reviewDeepLink(
+        new URLSearchParams(`tab=${s.capabilities.queue!.urlId}&crop_id=abc`),
+      );
+      expect(d.tab).toBe(slotTabId(s.key));
+      expect(d.cropId).toBe('abc');
+    }
   });
 
   it('falls back to All for an absent or unknown tab, and no crop', () => {

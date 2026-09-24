@@ -28,9 +28,9 @@ describe('bakeoff profile wiring', () => {
   it('scopes baseline models to the chosen profile', async () => {
     const fetchMock = vi.fn().mockResolvedValue(ok({ baselines: [], count: 0 }));
     vi.stubGlobal('fetch', fetchMock);
-    await bakeoffBaselineModels('license_plate');
+    await bakeoffBaselineModels('widget_tag');
     expect(fetchMock.mock.calls[0]![0]).toBe(
-      `${API_PREFIX}/bakeoff/baseline_models?profile=license_plate`,
+      `${API_PREFIX}/bakeoff/baseline_models?profile=widget_tag`,
     );
   });
 
@@ -50,12 +50,12 @@ describe('bakeoff profile wiring', () => {
     vi.stubGlobal('fetch', fetchMock);
     const models = [{ backend: 'ultralytics' as const, name: 'm' }];
 
-    await bakeoffRun({ datasets: [{ path: '/d' }], models, profile: 'license_plate' });
+    await bakeoffRun({ datasets: [{ path: '/d' }], models, profile: 'widget_tag' });
     await bakeoffRun({ datasets: [{ path: '/d' }], models, profile: undefined });
 
     const first = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
     const second = JSON.parse(fetchMock.mock.calls[1]![1].body as string);
-    expect(first.profile).toBe('license_plate');
+    expect(first.profile).toBe('widget_tag');
     expect('profile' in second).toBe(false);
   });
 });
