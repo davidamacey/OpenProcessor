@@ -303,6 +303,19 @@ async def _resegment_from_text_hint(
     )
 
 
+class _CascadeDoneError(Exception):
+    """Internal control-flow signal: this crop is fully handled.
+
+    Not an error. Raised by a cascade step once the crop either got a
+    write (``task.update_doc`` populated) or hit a no-verdict that must
+    leave it pending for a retry -- either way, no further stage should
+    run. ``_process_crop`` catches it once at the top level instead of
+    every stage returning early, which keeps the function's branching
+    countable by lint tooling while every stage still reads as a plain
+    early-exit.
+    """
+
+
 async def _process_crop(
     task: _ItemTask,
     *,
@@ -328,93 +341,62 @@ async def _process_crop(
         # and the next iteration will retry.
         return
 
-    is_secondary = _is_secondary_shape(task)
-    sam_candidate: RegionCandidate | None = None
-    det_model = region_profile().detector_model
-    det_version = region_profile().detector_version
-    seg_name = region_profile().segmenter_name
-    seg_version = region_profile().segmenter_version
-    ocr_det_model = region_profile().ocr_rec_model
+    try:
+        is_secondary = _is_secondary_shape(task)
+        sam_candidate: RegionCandidate | None = None
+        det_model = region_profile().detector_model
+        det_version = region_profile().detector_version
+        seg_name = region_profile().segmenter_name
+        seg_version = region_profile().segmenter_version
+        ocr_det_model = region_profile().ocr_rec_model
 
-    # ---- Step 0: B-PR5 combined class+region for low-confidence-class cohort. ----
-    # Cohort (Phase C broadened) = ``class_source='coco_yolo11_proposal'``
-    # (primary classifier missed) OR ``class_source in {'item_model',
-    # 'cluster_majority_agreement'}`` with confidence < 0.80, AND a
-    # region candidate exists or can be cheaply produced. One VLM call
-    # returns class + region verify + OCR instead of two/three round-trips.
-    # Implementation lives in ``combined._run_combined_cohort_path``.
-    if await _run_combined_cohort_path(task, lpr=lpr, sam3=sam3, gemma=gemma):
-        return
-    # Non-cohort or cohort fell back — legacy cascade resumes.
+        # ---- Step 0: B-PR5 combined class+region for low-confidence-class cohort. ----
+        # Cohort (Phase C broadened) = ``class_source='coco_yolo11_proposal'``
+        # (primary classifier missed) OR ``class_source in {'item_model',
+        # 'cluster_majority_agreement'}`` with confidence < 0.80, AND a
+        # region candidate exists or can be cheaply produced. One VLM call
+        # returns class + region verify + OCR instead of two/three round-trips.
+        # Implementation lives in ``combined._run_combined_cohort_path``.
+        if await _run_combined_cohort_path(task, lpr=lpr, sam3=sam3, gemma=gemma):
+            raise _CascadeDoneError
+        # Non-cohort or cohort fell back — legacy cascade resumes.
 
-    # ---- Step 1: pending_verify path. ----
-    if task.plate_status in _PENDING_VERIFICATION_ALIASES and task.lpr_plate_in_source is not None:
-        plate_in_crop = _source_to_crop(task.lpr_plate_in_source, task.vehicle_bbox_norm)
-        plate_jpeg = _crop_region_jpeg(task.crop_jpeg, plate_in_crop)
-        outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
-        ok, conf = outcome.ok, outcome.confidence
-        if ok:
-            # Phase A3 sanity gate. The pending_verify path's region came
-            # from an earlier primary-detector ingest; re-check before
-            # committing the verified write. On reject, record the
-            # detector + reason and fall through to the secondary
-            # segmenter anyway (the trace captures both).
-            gate_ok, gate_reason = is_plausible_region_bbox(plate_in_crop, task.vehicle_bbox_norm)
-            if not gate_ok:
-                task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
-                # Fall through to the secondary segmenter.
-            else:
-                auto = await _auto_confirm_or_pending(
-                    sam_score=task.lpr_score,
-                    bbox_in_crop=plate_in_crop,
-                    vlm_high_conf=conf == 'high',
+        # ---- Step 1: pending_verify path. ----
+        if (
+            task.plate_status in _PENDING_VERIFICATION_ALIASES
+            and task.lpr_plate_in_source is not None
+        ):
+            plate_in_crop = _source_to_crop(task.lpr_plate_in_source, task.vehicle_bbox_norm)
+            plate_jpeg = _crop_region_jpeg(task.crop_jpeg, plate_in_crop)
+            outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+            if outcome is None:
+                # No verdict at all -- leave the item pending for a retry
+                # rather than treating a transient VLM failure as a reject.
+                raise _CascadeDoneError
+            ok, conf = outcome.ok, outcome.confidence
+            if ok:
+                # Phase A3 sanity gate. The pending_verify path's region came
+                # from an earlier primary-detector ingest; re-check before
+                # committing the verified write. On reject, record the
+                # detector + reason and fall through to the secondary
+                # segmenter anyway (the trace captures both).
+                gate_ok, gate_reason = is_plausible_region_bbox(
+                    plate_in_crop, task.vehicle_bbox_norm
                 )
-                task.detection_trace.append(f'{det_model}:hit')
-                task.detection_trace.append(f'{det_model}:vlm_verify_ok')
-                task.update_doc = _region_write_doc(
-                    plate_in_source=task.lpr_plate_in_source,
-                    score=task.lpr_score,
-                    detector=det_model,
-                    detector_version=det_version,
-                    chain=task.detection_trace,
-                    auto_confirmed=bool(auto),
-                    plate_text=outcome.text,
-                    plate_text_confidence=outcome.text_confidence,
-                )
-                return
-        else:
-            task.detection_trace.append(f'{det_model}:vlm_reject')
-        # Verify rejected — fall through to the secondary segmenter.
-
-    # ---- Step 2: primary detector (only if pending + non-secondary-shape). ----
-    elif task.plate_status in _PENDING_DETECTION_ALIASES and not is_secondary:
-        lpr_results = await lpr.detect_batch([task.crop_jpeg])
-        cand = lpr_results[0] if lpr_results else None
-        if cand is None:
-            task.detection_trace.append(f'{det_model}:miss')
-        else:
-            # Phase A3 sanity gate on the fresh primary-detector candidate.
-            gate_ok, gate_reason = is_plausible_region_bbox(cand.bbox_norm, task.vehicle_bbox_norm)
-            if not gate_ok:
-                task.detection_trace.append(f'{det_model}:hit')
-                task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
-                # Fall through to the secondary segmenter.
-            else:
-                plate_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
-                outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
-                ok, conf = outcome.ok, outcome.confidence
-                if ok:
-                    projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
+                if not gate_ok:
+                    task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
+                    # Fall through to the secondary segmenter.
+                else:
                     auto = await _auto_confirm_or_pending(
-                        sam_score=cand.score,
-                        bbox_in_crop=cand.bbox_norm,
+                        sam_score=task.lpr_score,
+                        bbox_in_crop=plate_in_crop,
                         vlm_high_conf=conf == 'high',
                     )
                     task.detection_trace.append(f'{det_model}:hit')
                     task.detection_trace.append(f'{det_model}:vlm_verify_ok')
                     task.update_doc = _region_write_doc(
-                        plate_in_source=projected,
-                        score=cand.score,
+                        plate_in_source=task.lpr_plate_in_source,
+                        score=task.lpr_score,
                         detector=det_model,
                         detector_version=det_version,
                         chain=task.detection_trace,
@@ -422,146 +404,211 @@ async def _process_crop(
                         plate_text=outcome.text,
                         plate_text_confidence=outcome.text_confidence,
                     )
-                    return
-                task.detection_trace.append(f'{det_model}:hit')
+                    raise _CascadeDoneError
+            else:
                 task.detection_trace.append(f'{det_model}:vlm_reject')
-                # Primary detector hit but VLM rejected — fall through
-                # to the secondary segmenter.
+            # Verify rejected — fall through to the secondary segmenter.
 
-    # ---- Step 3: secondary segmenter (always — secondary-shape pending,
-    #              non-secondary primary-detector miss/reject, or
-    #              pending_verify reject). ----
-    sam_candidate = await sam3.segment_plate(task.crop_jpeg)
-    if sam_candidate is None:
-        task.detection_trace.append(f'{seg_name}:miss')
-    else:
-        # Phase A3 sanity gate. Reject early before the VLM roundtrip.
-        gate_ok, gate_reason = is_plausible_region_bbox(
-            sam_candidate.bbox_norm, task.vehicle_bbox_norm
-        )
-        if not gate_ok:
-            task.detection_trace.append(f'{seg_name}:hit')
-            task.detection_trace.append(f'{seg_name}:sanity_reject:{gate_reason}')
-            # Fall through to text-hint (OCR-hinted secondary-segmenter re-pass).
+        # ---- Step 2: primary detector (only if pending + non-secondary-shape). ----
+        elif task.plate_status in _PENDING_DETECTION_ALIASES and not is_secondary:
+            lpr_results = await lpr.detect_batch([task.crop_jpeg])
+            cand = lpr_results[0] if lpr_results else None
+            if cand is None:
+                task.detection_trace.append(f'{det_model}:miss')
+            else:
+                # Phase A3 sanity gate on the fresh primary-detector candidate.
+                gate_ok, gate_reason = is_plausible_region_bbox(
+                    cand.bbox_norm, task.vehicle_bbox_norm
+                )
+                if not gate_ok:
+                    task.detection_trace.append(f'{det_model}:hit')
+                    task.detection_trace.append(f'{det_model}:sanity_reject:{gate_reason}')
+                    # Fall through to the secondary segmenter.
+                else:
+                    plate_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
+                    outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+                    if outcome is None:
+                        # No verdict at all -- leave the item pending for a
+                        # retry rather than treating a transient VLM failure
+                        # as a reject.
+                        raise _CascadeDoneError
+                    ok, conf = outcome.ok, outcome.confidence
+                    if ok:
+                        projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
+                        auto = await _auto_confirm_or_pending(
+                            sam_score=cand.score,
+                            bbox_in_crop=cand.bbox_norm,
+                            vlm_high_conf=conf == 'high',
+                        )
+                        task.detection_trace.append(f'{det_model}:hit')
+                        task.detection_trace.append(f'{det_model}:vlm_verify_ok')
+                        task.update_doc = _region_write_doc(
+                            plate_in_source=projected,
+                            score=cand.score,
+                            detector=det_model,
+                            detector_version=det_version,
+                            chain=task.detection_trace,
+                            auto_confirmed=bool(auto),
+                            plate_text=outcome.text,
+                            plate_text_confidence=outcome.text_confidence,
+                        )
+                        raise _CascadeDoneError
+                    task.detection_trace.append(f'{det_model}:hit')
+                    task.detection_trace.append(f'{det_model}:vlm_reject')
+                    # Primary detector hit but VLM rejected — fall through
+                    # to the secondary segmenter.
+
+        # ---- Step 3: secondary segmenter (always — secondary-shape pending,
+        #              non-secondary primary-detector miss/reject, or
+        #              pending_verify reject). ----
+        sam_candidate = await sam3.segment_plate(task.crop_jpeg)
+        if sam_candidate is None:
+            task.detection_trace.append(f'{seg_name}:miss')
         else:
-            # Fast path: skip VLM verify when the secondary segmenter is
-            # very confident AND the bbox shape passes the region
-            # sanity check.
-            if sam_candidate.score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE and _bbox_shape_is_plausible(
-                sam_candidate.bbox_norm
-            ):
-                projected = crop_norm_to_source_norm(
-                    sam_candidate.bbox_norm, task.vehicle_bbox_norm
-                )
-                task.detection_trace.append(f'{seg_name}:hit')
-                task.detection_trace.append(f'{seg_name}:skip_vlm_verify')
-                task.update_doc = _region_write_doc(
-                    plate_in_source=projected,
-                    score=sam_candidate.score,
-                    detector=seg_name,
-                    detector_version=seg_version,
-                    chain=task.detection_trace,
-                    plate_verified=False,
-                    verifier=None,
-                    verifier_version=None,
-                    extra={get_region_fields().skip_verify: True},
-                )
-                return
-
-            plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
-            outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
-            ok, conf = outcome.ok, outcome.confidence
-            if ok:
-                projected = crop_norm_to_source_norm(
-                    sam_candidate.bbox_norm, task.vehicle_bbox_norm
-                )
-                auto = await _auto_confirm_or_pending(
-                    sam_score=sam_candidate.score,
-                    bbox_in_crop=sam_candidate.bbox_norm,
-                    vlm_high_conf=conf == 'high',
-                )
-                task.detection_trace.append(f'{seg_name}:hit')
-                task.detection_trace.append(f'{seg_name}:vlm_verify_ok')
-                task.update_doc = _region_write_doc(
-                    plate_in_source=projected,
-                    score=sam_candidate.score,
-                    detector=seg_name,
-                    detector_version=seg_version,
-                    chain=task.detection_trace,
-                    auto_confirmed=bool(auto),
-                    plate_text=outcome.text,
-                    plate_text_confidence=outcome.text_confidence,
-                )
-                return
-            task.detection_trace.append(f'{seg_name}:hit')
-            task.detection_trace.append(f'{seg_name}:vlm_reject')
-
-    # ---- Step 4: text-hint-driven secondary-segmenter re-pass. ----
-    # The OCR-detection model is no longer trusted as a region-bbox
-    # source (its text-detect regions are too loose and produced
-    # oversized boxes). When the primary detector + secondary segmenter
-    # both globally missed but the VLM already said the crop contains
-    # the region of interest, run the OCR pipeline to *locate* the
-    # text, then re-prompt the segmenter with a tight sub-crop around
-    # that text region. The segmenter produces the final geometry; the
-    # OCR region is only a hint.
-    try:
-        ocr_regions = await ocr_recognizer.detect_regions(task.crop_jpeg)
-    except Exception as exc:
-        logger.warning('text_hint_ocr_failed', crop_id=task.crop_id, error=str(exc))
-        ocr_regions = []
-    ocr_pick = ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
-    if ocr_pick is not None:
-        task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
-        sub_cand, _sub_box = await _resegment_from_text_hint(
-            task.crop_jpeg, ocr_pick.bbox_norm, sam3
-        )
-        if sub_cand is None:
-            task.detection_trace.append(f'{seg_name}:text_hint:miss')
-        else:
+            # Phase A3 sanity gate. Reject early before the VLM roundtrip.
             gate_ok, gate_reason = is_plausible_region_bbox(
-                sub_cand.bbox_norm, task.vehicle_bbox_norm
+                sam_candidate.bbox_norm, task.vehicle_bbox_norm
             )
             if not gate_ok:
-                task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                task.detection_trace.append(f'{seg_name}:text_hint:sanity_reject:{gate_reason}')
+                task.detection_trace.append(f'{seg_name}:hit')
+                task.detection_trace.append(f'{seg_name}:sanity_reject:{gate_reason}')
+                # Fall through to text-hint (OCR-hinted secondary-segmenter re-pass).
             else:
-                plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
-                outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
-                ok, conf = outcome.ok, outcome.confidence
-                if ok:
-                    projected = crop_norm_to_source_norm(sub_cand.bbox_norm, task.vehicle_bbox_norm)
-                    auto = await _auto_confirm_or_pending(
-                        sam_score=sub_cand.score,
-                        bbox_in_crop=sub_cand.bbox_norm,
-                        vlm_high_conf=conf == 'high',
+                # Fast path: skip VLM verify when the secondary segmenter is
+                # very confident AND the bbox shape passes the region
+                # sanity check.
+                if (
+                    sam_candidate.score >= _SKIP_VLM_VERIFY_SECONDARY_SCORE
+                    and _bbox_shape_is_plausible(sam_candidate.bbox_norm)
+                ):
+                    projected = crop_norm_to_source_norm(
+                        sam_candidate.bbox_norm, task.vehicle_bbox_norm
                     )
-                    task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                    task.detection_trace.append(f'{seg_name}:text_hint:vlm_verify_ok')
-                    # Pass OCR text through when the VLM read empty so
-                    # the region text isn't lost.
-                    text_out = outcome.text or ocr_pick.text
-                    text_conf_out: str | None = outcome.text_confidence
-                    if not outcome.text and ocr_pick.text:
-                        rc = ocr_pick.rec_score
-                        text_conf_out = 'high' if rc >= 0.8 else 'medium' if rc >= 0.5 else 'low'
+                    task.detection_trace.append(f'{seg_name}:hit')
+                    task.detection_trace.append(f'{seg_name}:skip_vlm_verify')
                     task.update_doc = _region_write_doc(
                         plate_in_source=projected,
-                        score=sub_cand.score,
+                        score=sam_candidate.score,
+                        detector=seg_name,
+                        detector_version=seg_version,
+                        chain=task.detection_trace,
+                        plate_verified=False,
+                        verifier=None,
+                        verifier_version=None,
+                        extra={get_region_fields().skip_verify: True},
+                    )
+                    raise _CascadeDoneError
+
+                plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
+                outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+                if outcome is None:
+                    # No verdict at all -- leave the item pending for a
+                    # retry rather than treating a transient VLM failure as
+                    # a reject.
+                    raise _CascadeDoneError
+                ok, conf = outcome.ok, outcome.confidence
+                if ok:
+                    projected = crop_norm_to_source_norm(
+                        sam_candidate.bbox_norm, task.vehicle_bbox_norm
+                    )
+                    auto = await _auto_confirm_or_pending(
+                        sam_score=sam_candidate.score,
+                        bbox_in_crop=sam_candidate.bbox_norm,
+                        vlm_high_conf=conf == 'high',
+                    )
+                    task.detection_trace.append(f'{seg_name}:hit')
+                    task.detection_trace.append(f'{seg_name}:vlm_verify_ok')
+                    task.update_doc = _region_write_doc(
+                        plate_in_source=projected,
+                        score=sam_candidate.score,
                         detector=seg_name,
                         detector_version=seg_version,
                         chain=task.detection_trace,
                         auto_confirmed=bool(auto),
-                        plate_text=text_out,
-                        plate_text_confidence=text_conf_out,
+                        plate_text=outcome.text,
+                        plate_text_confidence=outcome.text_confidence,
                     )
-                    return
-                task.detection_trace.append(f'{seg_name}:text_hint:hit')
-                task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
-    elif ocr_regions:
-        task.detection_trace.append(f'{ocr_det_model}:text_hint:no_region_shape')
-    else:
-        task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
+                    raise _CascadeDoneError
+                task.detection_trace.append(f'{seg_name}:hit')
+                task.detection_trace.append(f'{seg_name}:vlm_reject')
+
+        # ---- Step 4: text-hint-driven secondary-segmenter re-pass. ----
+        # The OCR-detection model is no longer trusted as a region-bbox
+        # source (its text-detect regions are too loose and produced
+        # oversized boxes). When the primary detector + secondary segmenter
+        # both globally missed but the VLM already said the crop contains
+        # the region of interest, run the OCR pipeline to *locate* the
+        # text, then re-prompt the segmenter with a tight sub-crop around
+        # that text region. The segmenter produces the final geometry; the
+        # OCR region is only a hint.
+        try:
+            ocr_regions = await ocr_recognizer.detect_regions(task.crop_jpeg)
+        except Exception as exc:
+            logger.warning('text_hint_ocr_failed', crop_id=task.crop_id, error=str(exc))
+            ocr_regions = []
+        ocr_pick = ocr_recognizer.pick_best_plate_region(ocr_regions) if ocr_regions else None
+        if ocr_pick is not None:
+            task.detection_trace.append(f'{ocr_det_model}:text_hint:hit')
+            sub_cand, _sub_box = await _resegment_from_text_hint(
+                task.crop_jpeg, ocr_pick.bbox_norm, sam3
+            )
+            if sub_cand is None:
+                task.detection_trace.append(f'{seg_name}:text_hint:miss')
+            else:
+                gate_ok, gate_reason = is_plausible_region_bbox(
+                    sub_cand.bbox_norm, task.vehicle_bbox_norm
+                )
+                if not gate_ok:
+                    task.detection_trace.append(f'{seg_name}:text_hint:hit')
+                    task.detection_trace.append(f'{seg_name}:text_hint:sanity_reject:{gate_reason}')
+                else:
+                    plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
+                    outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
+                    if outcome is None:
+                        # No verdict at all -- leave the item pending for a
+                        # retry rather than treating a transient VLM failure
+                        # as a reject.
+                        raise _CascadeDoneError
+                    ok, conf = outcome.ok, outcome.confidence
+                    if ok:
+                        projected = crop_norm_to_source_norm(
+                            sub_cand.bbox_norm, task.vehicle_bbox_norm
+                        )
+                        auto = await _auto_confirm_or_pending(
+                            sam_score=sub_cand.score,
+                            bbox_in_crop=sub_cand.bbox_norm,
+                            vlm_high_conf=conf == 'high',
+                        )
+                        task.detection_trace.append(f'{seg_name}:text_hint:hit')
+                        task.detection_trace.append(f'{seg_name}:text_hint:vlm_verify_ok')
+                        # Pass OCR text through when the VLM read empty so
+                        # the region text isn't lost.
+                        text_out = outcome.text or ocr_pick.text
+                        text_conf_out: str | None = outcome.text_confidence
+                        if not outcome.text and ocr_pick.text:
+                            rc = ocr_pick.rec_score
+                            text_conf_out = (
+                                'high' if rc >= 0.8 else 'medium' if rc >= 0.5 else 'low'
+                            )
+                        task.update_doc = _region_write_doc(
+                            plate_in_source=projected,
+                            score=sub_cand.score,
+                            detector=seg_name,
+                            detector_version=seg_version,
+                            chain=task.detection_trace,
+                            auto_confirmed=bool(auto),
+                            plate_text=text_out,
+                            plate_text_confidence=text_conf_out,
+                        )
+                        raise _CascadeDoneError
+                    task.detection_trace.append(f'{seg_name}:text_hint:hit')
+                    task.detection_trace.append(f'{seg_name}:text_hint:vlm_reject')
+        elif ocr_regions:
+            task.detection_trace.append(f'{ocr_det_model}:text_hint:no_region_shape')
+        else:
+            task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
+    except _CascadeDoneError:
+        return
 
     # ---- Step 5: All detectors missed. Queue for human review. ----
     _finalize_no_region(task)

@@ -507,6 +507,39 @@ def _echo_key(value: str) -> str:
     return ''.join(ch for ch in value.casefold() if ch.isalnum())
 
 
+def _unwrap_nested_combined_entry(entry: dict[str, Any], fields: RegionFields) -> dict[str, Any]:
+    """Unwrap a combined entry the VLM nested one level down under an invented key.
+
+    Live evidence: a reasoning model sometimes wraps the whole per-image
+    answer object under a made-up key instead of the flat shape the
+    prompt asks for, e.g.::
+
+        {"img": 2, "layout_analysis": {"region_visible": true, ...}}
+
+    Reading ``fields.visible`` straight off ``entry`` then finds nothing
+    and the caller's existing no-verdict handling fires even though the
+    VLM did answer -- it just filed the answer under the wrong key. Only
+    unwrap when the fix is unambiguous: ``entry`` lacks the top-level
+    answer field AND has exactly one dict-valued key (other than
+    ``img``) that itself carries that field. Zero or multiple such
+    candidates leaves ``entry`` untouched so the existing no-verdict
+    path applies rather than guessing.
+    """
+    if fields.visible in entry:
+        return entry
+    candidates = [
+        value
+        for key, value in entry.items()
+        if key != 'img' and isinstance(value, dict) and fields.visible in value
+    ]
+    if len(candidates) != 1:
+        return entry
+    unwrapped = dict(candidates[0])
+    if 'img' in entry and 'img' not in unwrapped:
+        unwrapped['img'] = entry['img']
+    return unwrapped
+
+
 def _combined_reply_from_entry(
     entry: dict[str, Any],
     *,
@@ -523,7 +556,11 @@ def _combined_reply_from_entry(
     unless it is a recognizable boolean, so only an explicit ``true``
     can accept a box and only an explicit ``false`` can reject one;
     ``None`` is no verdict.
+
+    Unwraps an unambiguous single-key nesting first (see
+    :func:`_unwrap_nested_combined_entry`) before reading any field.
     """
+    entry = _unwrap_nested_combined_entry(entry, fields)
     visible = _coerce_bool(entry.get(fields.visible))
     if visible is None:
         msg = f'{fields.visible} missing or not a boolean: {entry.get(fields.visible)!r}'
@@ -1142,8 +1179,16 @@ class VlmLabeler:
             return _request_failed(chunk)
         return self._parse_class_reply(response, chunk)
 
-    async def verify_plate(self, crop: RegionCrop) -> VlmRegionVerdict:
-        """Verify whether a single sub-region crop is real."""
+    async def verify_plate(self, crop: RegionCrop) -> VlmRegionVerdict | None:
+        """Verify whether a single sub-region crop is real.
+
+        Returns ``None`` when the VLM gave no usable answer at all --
+        an upstream HTTP failure, an empty reply, or a reply that never
+        resolves to JSON carrying an ``is_region`` key. ``None`` is not
+        evidence the region is fake; the caller must leave the crop
+        pending for a retry rather than recording a rejection the VLM
+        never gave.
+        """
 
         b64 = _b64_jpeg(crop.jpeg_bytes)
         payload = {
@@ -1178,12 +1223,7 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            return VlmRegionVerdict(
-                crop_id=crop.crop_id,
-                is_region=False,
-                confidence='low',
-                reason='upstream error',
-            )
+            return None
 
         raw = _strip_markdown_fences(extract_message_content(response))
         return self._parse_plate_response(raw, crop)
@@ -1202,10 +1242,13 @@ class VlmLabeler:
         verify throughput versus one crop per call, while staying
         inside the upstream images-per-prompt cap.
 
-        Returns one :class:`VlmRegionVerdict` per input crop, in the
-        same order. Failed chunks fall back to ``is_region=False,
-        confidence='low'`` so the caller can route the crop to human
-        review (same behaviour as the single-crop fallback).
+        Returns one :class:`VlmRegionVerdict` per crop the VLM actually
+        answered, in input order -- fewer than ``len(crops)`` when some
+        crops got no verdict (an empty/unparseable/misaligned chunk
+        reply, an individual crop missing from an otherwise-aligned
+        reply, or a whole-chunk upstream failure). A missing crop_id is
+        not a rejection; callers must retry it, the same contract
+        :py:meth:`plate_visible_batch` uses for its map.
         """
 
         if not crops:
@@ -1225,7 +1268,14 @@ class VlmLabeler:
         return results
 
     async def _verify_plate_chunk(self, chunk: list[RegionCrop]) -> list[VlmRegionVerdict]:
-        """Run one upstream verify call over up to ``max_images_per_call`` crops."""
+        """Run one upstream verify call over up to ``max_images_per_call`` crops.
+
+        Crops the VLM gave no usable answer for -- a whole-chunk upstream
+        failure, an empty/unparseable/misaligned reply, or an individual
+        crop missing from an otherwise-aligned reply -- are left out of
+        the returned list entirely; absence is never recorded as a
+        rejection (see :py:meth:`verify_plate_batch`).
+        """
 
         if not chunk:
             return []
@@ -1235,11 +1285,10 @@ class VlmLabeler:
         # length-1 list.
         if len(chunk) == 1:
             verdict = await self.verify_plate(chunk[0])
-            return [verdict]
+            return [] if verdict is None else [verdict]
 
-        user_content: list[dict[str, Any]] = [
-            {'type': 'text', 'text': self._pack.region_batch_user}
-        ]
+        user_text = f'{self._pack.region_batch_user}\n{_RESULTS_ENVELOPE}'
+        user_content: list[dict[str, Any]] = [{'type': 'text', 'text': user_text}]
         for crop in chunk:
             b64 = _b64_jpeg(crop.jpeg_bytes)
             user_content.append(
@@ -1261,6 +1310,14 @@ class VlmLabeler:
             # image count. 2048 covers a worst-case 6-image batch;
             # shorter responses still stop at the real EOS.
             'max_tokens': 2048,
+            # Same grammar constraint as the other batched calls: without
+            # it a server-side reasoning parser can route the whole
+            # answer to the reasoning channel and leave ``content``
+            # empty. The json_object grammar only admits an object,
+            # hence the results-envelope line appended to the prompt
+            # above rather than the bare array the pack's template asks
+            # for on its own.
+            'response_format': {'type': 'json_object'},
         }
 
         try:
@@ -1272,18 +1329,27 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            return [
-                VlmRegionVerdict(
-                    crop_id=c.crop_id,
-                    is_region=False,
-                    confidence='low',
-                    reason='upstream error',
-                )
-                for c in chunk
-            ]
+            # No answer at all: leave every crop in this chunk out of the
+            # result so the caller retries, rather than synthesizing a
+            # reject the VLM never gave.
+            return []
 
-        raw = _strip_markdown_fences(extract_message_content(response))
-        return self._parse_plate_batch_response(raw, chunk)
+        content = _strip_markdown_fences(extract_message_content(response))
+        verdicts = self._parse_plate_batch_response(content, chunk)
+        if verdicts:
+            return verdicts
+        reasoning = extract_reasoning_content(response)
+        if not reasoning:
+            return verdicts
+        from_reasoning = self._parse_plate_batch_response(reasoning, chunk, log_failures=False)
+        if from_reasoning:
+            logger.info(
+                'vlm_labeler.plate_batch_reply_from_reasoning',
+                chunk_size=len(chunk),
+                content_preview=content[:80],
+            )
+            return from_reasoning
+        return verdicts
 
     async def label_combined(
         self,
@@ -1681,27 +1747,34 @@ class VlmLabeler:
         return out
 
     @staticmethod
-    def _parse_plate_batch_response(raw: str, chunk: list[RegionCrop]) -> list[VlmRegionVerdict]:
-        """Parse a batched verify response into one verdict per chunk crop.
+    def _parse_plate_batch_response(
+        raw: str,
+        chunk: list[RegionCrop],
+        *,
+        log_failures: bool = True,
+    ) -> list[VlmRegionVerdict]:
+        """Parse a batched verify response into the verdicts the VLM actually gave.
+
+        No verdict at all -- an empty reply, JSON that never resolves to
+        a list, an array that can't be aligned to the chunk, or an
+        individual crop missing from an otherwise-aligned array -- means
+        that crop is left out of the returned list. A crop with no
+        answer is not evidence of a rejection; synthesizing
+        ``is_region=False`` here would record a verdict the VLM never
+        gave (mirrors :py:meth:`_parse_plate_visible_response`'s
+        empty-reply handling). ``log_failures=False`` suppresses the
+        parse-failure warnings for a second attempt against the
+        reasoning channel, matching :py:meth:`_parse_vehicle_response`.
 
         Tolerates the same VLM quirks as :py:meth:`_parse_plate_response`:
         leading reasoning prose, ``{"results":[...]}`` envelopes, and
         1-based ``img`` indices.
         """
 
-        fallback = [
-            VlmRegionVerdict(
-                crop_id=c.crop_id,
-                is_region=False,
-                confidence='low',
-                reason='parse_failure',
-            )
-            for c in chunk
-        ]
-
         if not raw:
-            logger.warning('vlm_labeler.plate_batch_parse_empty', chunk_size=len(chunk))
-            return fallback
+            if log_failures:
+                logger.warning('vlm_labeler.plate_batch_parse_empty', chunk_size=len(chunk))
+            return []
 
         # Try the bare reply first; fall back to scanning for the first
         # balanced JSON array embedded in any preamble.
@@ -1735,34 +1808,30 @@ class VlmLabeler:
             parsed = None
 
         if not isinstance(parsed, list):
-            logger.warning(
-                'vlm_labeler.plate_batch_parse_failed',
-                chunk_size=len(chunk),
-                raw_preview=raw[:200],
-            )
-            return fallback
+            if log_failures:
+                logger.warning(
+                    'vlm_labeler.plate_batch_parse_failed',
+                    chunk_size=len(chunk),
+                    raw_preview=raw[:200],
+                )
+            return []
 
         aligned = _align_batch_entries(parsed, len(chunk))
         if aligned is None:
-            logger.warning(
-                'vlm_labeler.region_batch_misaligned',
-                chunk_size=len(chunk),
-                n_entries=len(parsed),
-                raw_preview=raw[:200],
-            )
-            return fallback
+            if log_failures:
+                logger.warning(
+                    'vlm_labeler.region_batch_misaligned',
+                    chunk_size=len(chunk),
+                    n_entries=len(parsed),
+                    raw_preview=raw[:200],
+                )
+            return []
 
         out: list[VlmRegionVerdict] = []
         for crop, entry in zip(chunk, aligned, strict=True):
             if entry is None:
-                out.append(
-                    VlmRegionVerdict(
-                        crop_id=crop.crop_id,
-                        is_region=False,
-                        confidence='low',
-                        reason='missing_in_response',
-                    )
-                )
+                # No entry for this crop in an otherwise-aligned reply --
+                # no verdict, not a reject. Leave it out of the result.
                 continue
             is_region = _coerce_bool(entry.get('is_region')) is True
             confidence = _normalize_confidence(entry.get('confidence'))
@@ -1983,21 +2052,22 @@ class VlmLabeler:
         return out
 
     @staticmethod
-    def _parse_plate_response(raw: str, crop: RegionCrop) -> VlmRegionVerdict:
-        """Parse a single-region verdict, falling back to low-confidence false.
+    def _parse_plate_response(raw: str, crop: RegionCrop) -> VlmRegionVerdict | None:
+        """Parse a single-region verdict, or ``None`` for no usable answer.
 
-        A VLM sometimes ignores the ``no prose`` instruction and emits a
-        chain-of-thought before the JSON. We try the fence-stripped raw
-        first, then fall back to extracting the first balanced ``{...}``
-        anywhere in the response so reasoning prefixes don't trash the
-        verification.
+        Returns ``None`` -- not a low-confidence reject -- when ``raw``
+        is empty or never resolves to a JSON object carrying an
+        ``is_region`` key; a crop with no answer is not evidence it's a
+        rejection. A VLM sometimes ignores the ``no prose`` instruction
+        and emits a chain-of-thought before the JSON. We try the
+        fence-stripped raw first, then fall back to extracting the first
+        balanced ``{...}`` anywhere in the response so reasoning
+        prefixes don't trash the verification.
         """
 
-        fallback = VlmRegionVerdict(
-            crop_id=crop.crop_id, is_region=False, confidence='low', reason='parse_failure'
-        )
         if not raw:
-            return fallback
+            logger.warning('vlm_labeler.plate_parse_empty', crop_id=crop.crop_id)
+            return None
         candidates: list[str] = [_strip_markdown_fences(raw)]
         # Scan for the first balanced JSON object in the raw text. A
         # reasoning prefix often quotes the answer template back
@@ -2030,9 +2100,9 @@ class VlmLabeler:
                 crop_id=crop.crop_id,
                 raw_preview=raw[:200],
             )
-            return fallback
+            return None
         if not isinstance(parsed, dict):
-            return fallback
+            return None
 
         is_region = _coerce_bool(parsed.get('is_region')) is True
 

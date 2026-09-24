@@ -402,7 +402,7 @@ def test_verify_plate_parses_well_formed_json():
 
     client, _ = _fake_client(handler)
 
-    async def _go() -> VlmRegionVerdict:
+    async def _go() -> VlmRegionVerdict | None:
         async with VlmLabeler(
             base_url='http://fake/v1',
             client=client,
@@ -413,19 +413,22 @@ def test_verify_plate_parses_well_formed_json():
             )
 
     verdict = _run(_go())
+    assert verdict is not None
     assert verdict.crop_id == 'region-1'
     assert verdict.is_region is True
     assert verdict.confidence == 'high'
     assert 'label region' in verdict.reason
 
 
-def test_verify_plate_returns_parse_failure_on_garbage():
+def test_verify_plate_returns_no_verdict_on_garbage():
+    """Unparseable content is no verdict, not a manufactured reject."""
+
     def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
         return httpx.Response(200, json=_make_chat_response('definitely not json'))
 
     client, _ = _fake_client(handler)
 
-    async def _go() -> VlmRegionVerdict:
+    async def _go() -> VlmRegionVerdict | None:
         async with VlmLabeler(
             base_url='http://fake/v1',
             client=client,
@@ -435,7 +438,42 @@ def test_verify_plate_returns_parse_failure_on_garbage():
                 RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
             )
 
-    verdict = _run(_go())
-    assert verdict.is_region is False
-    assert verdict.confidence == 'low'
-    assert verdict.reason == 'parse_failure'
+    assert _run(_go()) is None
+
+
+def test_verify_plate_returns_no_verdict_on_empty_reply():
+    def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
+        return httpx.Response(200, json=_make_chat_response(''))
+
+    client, _ = _fake_client(handler)
+
+    async def _go() -> VlmRegionVerdict | None:
+        async with VlmLabeler(
+            base_url='http://fake/v1',
+            client=client,
+            requests_per_second=1000.0,
+        ) as labeler:
+            return await labeler.verify_plate(
+                RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
+            )
+
+    assert _run(_go()) is None
+
+
+def test_verify_plate_returns_no_verdict_on_upstream_error():
+    def handler(_request: httpx.Request, _call_idx: int) -> httpx.Response:
+        raise httpx.ConnectError('down', request=_request)
+
+    client, _ = _fake_client(handler)
+
+    async def _go() -> VlmRegionVerdict | None:
+        async with VlmLabeler(
+            base_url='http://fake/v1',
+            client=client,
+            requests_per_second=1000.0,
+        ) as labeler:
+            return await labeler.verify_plate(
+                RegionCrop(crop_id='region-1', jpeg_bytes=_make_jpeg())
+            )
+
+    assert _run(_go()) is None

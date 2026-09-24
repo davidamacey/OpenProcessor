@@ -51,7 +51,9 @@ class _VerifyOutcome:
     text_confidence: str | None
 
 
-async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) -> _VerifyOutcome:
+async def _verify_with_vlm(
+    vlm: VlmLabeler, crop_id: str, region_jpeg: bytes
+) -> _VerifyOutcome | None:
     """Verify and read a region in one VLM call.
 
     A ``confidence='low'`` ``is_region=True`` verdict is treated as a
@@ -60,8 +62,15 @@ async def _verify_with_vlm(vlm: VlmLabeler, crop_id: str, region_jpeg: bytes) ->
     outcome also carries ``text`` + ``text_confidence`` (None when the
     VLM couldn't read it or the verdict was rejected), which the caller
     threads into :func:`_region_write_doc`.
+
+    Returns ``None`` when the VLM gave no usable answer at all (see
+    :py:meth:`VlmLabeler.verify_plate`) so the cascade can leave the
+    crop pending for a retry instead of treating "no answer" as a
+    rejection and falling through to the next detector.
     """
     verdict = await vlm.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg))
+    if verdict is None:
+        return None
     accepted = bool(verdict.is_region) and verdict.confidence != 'low'
     return _VerifyOutcome(
         ok=accepted,

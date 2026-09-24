@@ -177,7 +177,16 @@ class VlmVerifyRegionBatchRequest(BaseModel):
 
 
 class VlmVerifyRegionBatchResult(BaseModel):
-    """One ordered result in the verify_region_batch response."""
+    """One result in the verify_region_batch response.
+
+    A ``crop_id`` from the request that got no usable VLM answer at all
+    (whole-chunk upstream failure, empty/unparseable/misaligned reply,
+    or an individual crop missing from an otherwise-aligned reply) is
+    absent from ``results`` entirely -- never emitted with a
+    synthesized ``is_region=False``. Callers must treat a missing
+    crop_id as "retry later", the same contract
+    ``/vlm/region_visible_batch`` uses for its map.
+    """
 
     crop_id: str
     is_region: bool
@@ -403,7 +412,13 @@ async def vlm_verify_regions(
     payload: VlmVerifyRegionsRequest,
     opensearch: OpenSearchDep,
 ) -> dict[str, Any]:
-    """Verify whether each crop's region-of-interest contains a real region."""
+    """Verify whether each crop's region-of-interest contains a real region.
+
+    A crop the VLM gave no usable answer for (upstream failure, empty or
+    unparseable reply) is skipped entirely -- its verify state is left
+    untouched for a later retry rather than written as ``verified=False``,
+    a verdict the VLM never actually gave.
+    """
     if not payload.crop_ids:
         return {'verified': 0}
     if len(payload.crop_ids) > 64:
@@ -448,6 +463,11 @@ async def vlm_verify_regions(
             logger.warning('curation_vlm_region_thumb_failed', crop_id=crop_id, error=str(exc))
             continue
         verdict = await labeler.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
+        if verdict is None:
+            # No usable answer at all -- leave this crop's verify state
+            # untouched for a retry rather than writing a verified=False
+            # the VLM never actually said.
+            continue
         n_verified += 1
         updates_by_id[crop_id] = {
             _F.verified: verdict.is_region,
@@ -504,6 +524,11 @@ async def vlm_verify_region_batch(
     JPEG from OpenSearch), this endpoint expects the caller to supply
     the region JPEG directly — cheap for a worker that already holds
     the cropped JPEG in memory.
+
+    A ``crop_id`` the VLM gave no verdict for is omitted from
+    ``results`` — never emitted as a synthesized ``is_region=False``
+    reject. The caller must diff the response against its request
+    ``crop_id``s and retry whatever is missing.
     """
 
     items = payload.items
@@ -547,15 +572,9 @@ async def vlm_verify_region_batch(
     for item in items:
         v = by_id.get(item.crop_id)
         if v is None:
-            results.append(
-                VlmVerifyRegionBatchResult(
-                    crop_id=item.crop_id,
-                    is_region=False,
-                    confidence='low',
-                    reason='no_response',
-                    candidate_text=candidate_text_by_id.get(item.crop_id),
-                )
-            )
+            # No verdict for this crop_id at all -- omit it so the
+            # caller retries, rather than recording a rejection the VLM
+            # never gave.
             continue
         results.append(
             VlmVerifyRegionBatchResult(
