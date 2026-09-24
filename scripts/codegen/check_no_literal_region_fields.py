@@ -259,6 +259,10 @@ PORTED_PATHS: tuple[str, ...] = (
     'scripts/curation/reclassify_after_registry_growth.py',
     'tests/curation/query_fakes.py',
     'tests/curation/test_registry_reclassify.py',
+    # Operator tooling — terminal-status region requeue.
+    'src/services/curation/region_requeue.py',
+    'scripts/curation/requeue_regions.py',
+    'tests/curation/test_region_requeue.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
