@@ -83,6 +83,10 @@ class CurationConfig:
     # unlike the other paths on this dataclass there is no on-disk
     # default to fall back to, since most deployments never need one.
     prompt_pack_path: Path | None = None
+    # Additional selectable packs (OP_PROMPT_PACK_PATHS, comma-separated),
+    # advertised on GET /methods alongside the default pack and the
+    # built-in generic pack; chosen per run / via the settings default.
+    prompt_pack_paths: tuple[Path, ...] = ()
     source_root: Path = Path('./data/images')
     export_root: Path = Path('./data/exports')
     source_path_aliases: Mapping[str, Path] = field(default_factory=dict)
@@ -146,6 +150,12 @@ class CurationConfig:
             umap_viz_state_index=_str('UMAP_VIZ_STATE_INDEX', defaults.umap_viz_state_index),
             class_registry_path=_path('REGISTRY_PATH', defaults.class_registry_path),
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
+            prompt_pack_paths=tuple(
+                Path(part.strip())
+                for part in _str('PROMPT_PACK_PATHS', '').split(',')
+                if part.strip()
+            )
+            or defaults.prompt_pack_paths,
             source_root=_path('SOURCE_ROOT', defaults.source_root),
             export_root=_path('EXPORT_ROOT', defaults.export_root),
             source_path_aliases=_parse_source_path_aliases(

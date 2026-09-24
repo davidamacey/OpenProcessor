@@ -142,3 +142,16 @@ def test_source_path_aliases_malformed_raises(monkeypatch: pytest.MonkeyPatch, r
     monkeypatch.setenv('OP_SOURCE_PATH_ALIASES', raw)
     with pytest.raises(ValueError, match='OP_SOURCE_PATH_ALIASES'):
         CurationConfig.from_env()
+
+
+def test_prompt_pack_paths_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_PROMPT_PACK_PATHS', ' /packs/a.json, ,/packs/b.json ')
+    assert CurationConfig.from_env().prompt_pack_paths == (
+        Path('/packs/a.json'),
+        Path('/packs/b.json'),
+    )
+
+
+def test_prompt_pack_paths_unset_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_PROMPT_PACK_PATHS', raising=False)
+    assert CurationConfig.from_env().prompt_pack_paths == ()

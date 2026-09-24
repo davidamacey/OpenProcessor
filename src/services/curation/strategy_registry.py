@@ -453,31 +453,29 @@ def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]
 
 
 def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Configured VLM ``PromptPack`` axis (labeling-assist plan task (c)).
+    """Selectable VLM ``PromptPack`` axis (labeling-assist plan task (c)).
 
-    Lists whatever pack :func:`~src.services.labeling.vlm_prompts.
-    resolve_prompt_pack` actually resolves for this process -- a
-    deployment-supplied pack via ``OP_PROMPT_PACK_PATH``, or the built-in
-    generic pack when unset/missing. Always exactly one entry (there is
-    only ever one active pack per process). ``default_id`` is
+    Lists every pack :func:`~src.services.labeling.vlm_prompts.
+    available_prompt_packs` can load, keyed by pack ``name``: the built-in
+    generic pack, each ``OP_PROMPT_PACK_PATHS`` pack, and the
+    ``OP_PROMPT_PACK_PATH`` pack (the process default). ``default_id`` is
     :func:`resolve_effective_default`'s answer for the ``'prompt_pack'``
-    axis; since a shared-settings override is only ever honored when it
-    names a currently-advertised id (:func:`_advertised_ids_for_axis`
-    returns exactly ``{pack.name}`` here), this entry's ``default`` is
-    always ``True`` in practice -- there is nothing else it could resolve
-    to today.
+    axis -- the settings-doc override when it names a listed pack, else
+    the ``OP_PROMPT_PACK_PATH`` pack (or the generic pack when unset). A
+    run selects among these by name (e.g. ``POST
+    /pipeline/auto_label/start?prompt_pack=``).
     """
-    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+    from src.services.labeling.vlm_prompts import available_prompt_packs
 
-    pack = resolve_prompt_pack()
     return [
         {
-            'id': pack.name,
+            'id': name,
             'axis': 'prompt_pack',
-            'label': pack.name,
+            'label': name,
             'status': 'stable',
-            'default': pack.name == default_id,
+            'default': name == default_id,
         }
+        for name in available_prompt_packs()
     ]
 
 

@@ -332,8 +332,8 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
     app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A deployment pointing ``OP_PROMPT_PACK_PATH`` at its own pack file
-    (task a) sees that pack's name on the axis instead of the generic
-    fallback."""
+    (task a) sees that pack on the axis as the default, still alongside
+    the built-in generic pack (which stays selectable)."""
     import json
 
     from src.config.curation import CurationConfig
@@ -351,7 +351,43 @@ def test_prompt_pack_axis_advertises_a_deployment_supplied_pack(
     assert r.status_code == 200
     body = r.json()
     pack_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'prompt_pack'}
-    assert set(pack_entries) == {'pallet_v1'}
+    assert set(pack_entries) == {'pallet_v1', GENERIC_ITEM_PACK.name}
+    assert pack_entries['pallet_v1']['default'] is True
+    assert pack_entries[GENERIC_ITEM_PACK.name]['default'] is False
+
+
+def test_prompt_pack_axis_advertises_every_configured_pack(
+    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``OP_PROMPT_PACK_PATHS`` adds more selectable packs: the axis lists
+    the generic pack, every extra pack, and the default pack, keyed by
+    name, with only the ``OP_PROMPT_PACK_PATH`` pack flagged default. An
+    unloadable extra is skipped, not fatal."""
+    import json
+
+    from src.config.curation import CurationConfig
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    paths = {}
+    for name in ('pallet_v1', 'food_v2', 'tools_v1'):
+        data = GENERIC_ITEM_PACK.to_dict()
+        data['name'] = name
+        paths[name] = tmp_path / f'{name}.json'
+        paths[name].write_text(json.dumps(data))
+    broken = tmp_path / 'broken.json'
+    broken.write_text('{not json')
+
+    custom_cfg = CurationConfig(
+        prompt_pack_path=paths['pallet_v1'],
+        prompt_pack_paths=(paths['food_v2'], broken, paths['tools_v1']),
+    )
+    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: custom_cfg)
+
+    r = app_client.get('/curation/methods')
+    assert r.status_code == 200
+    pack_entries = {s['id']: s for s in r.json()['strategies'] if s['axis'] == 'prompt_pack'}
+    assert set(pack_entries) == {'pallet_v1', 'food_v2', 'tools_v1', GENERIC_ITEM_PACK.name}
+    assert [k for k, e in pack_entries.items() if e['default']] == ['pallet_v1']
 
 
 def test_writes_never_include_cluster_fields(app_client: TestClient) -> None:

@@ -48,7 +48,7 @@ a genuinely new region type.
 |---|---|---|
 | `CurationConfig` | `src/config/curation.py` | OpenSearch index names (via `IndexRole` + `index_name()`), filesystem roots (class registry, exported datasets, crop cache, state dir), the API mount prefix, embedding-dimension/HNSW tuning. |
 | `RegionFields` | `src/config/region_fields.py` | Per-attribute OpenSearch field-name overrides for the region-of-interest sub-annotation (e.g. rename `region_status` to `plate_status` if your existing data already uses that name) — lets storage field names diverge from the frozen HTTP wire-contract field names with zero reindex. |
-| `DetectionProfile` | `src/config/detection_profile.py` | One detectable region-of-interest type as data: aspect-ratio/area heuristics, text-hint pattern and length range, which Triton models back detection/segmentation/OCR for it, their input sizes and confidence floors. Exactly one profile (and one VLM `PromptPack`) is active per process today — there's no per-request selection among several registered profiles yet. |
+| `DetectionProfile` | `src/config/detection_profile.py` | One detectable region-of-interest type as data: aspect-ratio/area heuristics, text-hint pattern and length range, which Triton models back detection/segmentation/OCR for it, their input sizes and confidence floors. One region profile is active per process (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`; none by default). |
 | `RegionStatus` | `src/config/region_state.py` | The canonical region-status state-machine enum (`pending_detection` → `detected`/`verify_rejected`/`no_region_box`; `pending_verification` → `detected`/`no_region_visible`; any path → `detection_failed`; plus a human-settable `false_positive` that preserves the box for hard-negative training). |
 
 ## Known gaps (read this before you rely on it)
@@ -63,9 +63,11 @@ Stated up front, honestly, rather than discovered in production:
   policy, class allowlist, or region-status assignment heuristic tuned
   to one domain — you supply that via `DetectionProfile` and your own
   detector model(s).
-- **Single active `DetectionProfile` / `PromptPack` per process.** You
-  cannot serve two region-of-interest types from one running API
-  process today.
+- **One active region `DetectionProfile` per process.** You cannot run
+  the region cascade for two region-of-interest types from one worker
+  today. Prompt packs are selectable (several can be configured via
+  `OP_PROMPT_PACK_PATHS` and chosen per auto-label run or via the
+  settings default).
 - **No authentication of any kind on the API.** See
   [`SECURITY.md`](../SECURITY.md) — do not expose this service directly
   to the internet.
@@ -310,7 +312,7 @@ be changed at runtime once the app has started.
 |---|---|
 | OpenSearch index names | `OP_IMAGES_INDEX`, `OP_ITEMS_INDEX`, `OP_LABELS_CONFIRMED_INDEX`, `OP_CLASSES_INDEX`, `OP_CLUSTERS_INDEX`, `OP_SETTINGS_INDEX`, `OP_UMAP_STATE_INDEX`, `OP_UMAP_VIZ_STATE_INDEX` |
 | Filesystem roots | `OP_REGISTRY_PATH`, `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES` (JSON object or `alias=path,...`), `OP_EXPORT_ROOT`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
-| VLM prompt pack | `OP_PROMPT_PACK_PATH` |
+| VLM prompt pack | `OP_PROMPT_PACK_PATH` (default pack), `OP_PROMPT_PACK_PATHS` (extra selectable packs, comma-separated) |
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
 | Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BBOX_NORM`) — see `RegionFields` for the full attribute list |

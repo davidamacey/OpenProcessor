@@ -257,8 +257,39 @@ GENERIC_ITEM_PACK = PromptPack(
 )
 
 
+_PACK_FILE_CACHE: dict[str, tuple[int, PromptPack]] = {}
+
+
+def _load_pack_file(path: Path) -> PromptPack | None:
+    """Load a pack file, cached on ``(path, mtime)``; ``None`` (with a
+    logged warning) when the file is missing or malformed."""
+    try:
+        mtime = path.stat().st_mtime_ns
+    except OSError:
+        logger.warning('prompt_pack_path_missing', path=str(path))
+        return None
+    cached = _PACK_FILE_CACHE.get(str(path))
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    try:
+        pack = PromptPack.from_json(path)
+    except Exception as exc:
+        logger.warning('prompt_pack_load_failed', path=str(path), error=str(exc))
+        return None
+    _PACK_FILE_CACHE[str(path)] = (mtime, pack)
+    return pack
+
+
+def _config(cfg: Any | None) -> Any:
+    if cfg is None:
+        from src.config.curation import get_curation_config
+
+        return get_curation_config()
+    return cfg
+
+
 def resolve_prompt_pack(cfg: Any | None = None) -> PromptPack:
-    """Resolve the :class:`PromptPack` this process should use.
+    """Resolve the *default* :class:`PromptPack` for this process.
 
     Mirrors the ``CurationConfig``-driven resolution
     ``get_curation_config()`` establishes for index names / paths (see
@@ -268,34 +299,55 @@ def resolve_prompt_pack(cfg: Any | None = None) -> PromptPack:
     path, a missing file, or a malformed/incomplete pack all fall back to
     :data:`GENERIC_ITEM_PACK` with a logged warning, so a bad deployment
     config degrades the labeling vocabulary rather than crashing the
-    process.
+    process. Additional selectable packs (``OP_PROMPT_PACK_PATHS``) are
+    listed by :func:`available_prompt_packs`.
 
     Args:
         cfg: A :class:`~src.config.curation.CurationConfig` instance, or
             ``None`` to use the process-wide default
             (``get_curation_config()``).
     """
-    if cfg is None:
-        from src.config.curation import get_curation_config
-
-        cfg = get_curation_config()
-
-    path = getattr(cfg, 'prompt_pack_path', None)
+    path = getattr(_config(cfg), 'prompt_pack_path', None)
     if path is None:
         return GENERIC_ITEM_PACK
-
-    from pathlib import Path as _Path
-
-    path = _Path(path)
-    if not path.exists():
-        logger.warning('prompt_pack_path_missing', path=str(path))
-        return GENERIC_ITEM_PACK
-
-    try:
-        return PromptPack.from_json(path)
-    except Exception as exc:
-        logger.warning('prompt_pack_load_failed', path=str(path), error=str(exc))
-        return GENERIC_ITEM_PACK
+    pack = _load_pack_file(Path(path))
+    return pack if pack is not None else GENERIC_ITEM_PACK
 
 
-__all__ = ['GENERIC_ITEM_PACK', 'PromptPack', 'resolve_prompt_pack']
+def available_prompt_packs(cfg: Any | None = None) -> dict[str, PromptPack]:
+    """Every selectable pack, keyed by ``name``.
+
+    Always includes the built-in :data:`GENERIC_ITEM_PACK`, plus each
+    loadable file in ``OP_PROMPT_PACK_PATHS`` and the default
+    ``OP_PROMPT_PACK_PATH`` pack. Unloadable files are skipped with a
+    logged warning (same degrade-not-crash contract as
+    :func:`resolve_prompt_pack`). On a name collision the default pack
+    wins, then the earlier ``OP_PROMPT_PACK_PATHS`` entry.
+    """
+    config = _config(cfg)
+    packs: dict[str, PromptPack] = {GENERIC_ITEM_PACK.name: GENERIC_ITEM_PACK}
+    default = resolve_prompt_pack(config)
+    for path in getattr(config, 'prompt_pack_paths', ()) or ():
+        pack = _load_pack_file(Path(path))
+        if pack is None:
+            continue
+        if pack.name in packs and pack.name != GENERIC_ITEM_PACK.name:
+            logger.warning('prompt_pack_name_collision', name=pack.name, path=str(path))
+            continue
+        packs[pack.name] = pack
+    packs[default.name] = default
+    return packs
+
+
+def get_prompt_pack(name: str, cfg: Any | None = None) -> PromptPack | None:
+    """The selectable pack called ``name``, or ``None`` if not configured."""
+    return available_prompt_packs(cfg).get(name)
+
+
+__all__ = [
+    'GENERIC_ITEM_PACK',
+    'PromptPack',
+    'available_prompt_packs',
+    'get_prompt_pack',
+    'resolve_prompt_pack',
+]

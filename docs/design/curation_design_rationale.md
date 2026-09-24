@@ -333,19 +333,17 @@ between the three dataclasses.
 **Discovery**: both are advertised on `GET {prefix}/methods`
 alongside the existing `cluster`/`score`/`sort`/`overlay`/`export` axes
 (`src/services/curation/strategy_registry.py`), in the same
-`{id, axis, label, status, default}` shape as the `export` axis. Each
-axis lists exactly one entry today (the one configured
-`DetectionProfile`, the one resolved `PromptPack`), always
-`status='stable'`, `default=True` — but the underlying mechanism is not
-capped at one:
-`src/services/detection/profile_registry.py` is a real, process-lifetime
-registry (`register_profile()` / `get_profiles()` /
-`get_default_profile_name()`) that a deployment wanting more than one
-detectable region type registers against, and the `prompt_pack` axis
-reads whatever `resolve_prompt_pack()` actually resolves, so pointing
-`OP_PROMPT_PACK_PATH` at a different file changes both the VLM's actual
-behavior and what `/methods` reports in the same step — the two can
-never drift out of sync because they share one resolution function.
+`{id, axis, label, status, default}` shape as the `export` axis. The
+`detection_profile` axis lists every profile in
+`src/services/detection/profile_registry.py` — empty by default (neutral:
+no region profile until `OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`
+configures one, or startup code calls `register_profile()`). The
+`prompt_pack` axis lists every pack `available_prompt_packs()` can load
+(the built-in generic pack, each `OP_PROMPT_PACK_PATHS` pack, and the
+`OP_PROMPT_PACK_PATH` default), keyed by pack `name`; the VLM labeler is
+cached per pack name, so a settings default or a per-run
+`?prompt_pack=` selection changes the VLM's actual behavior and what
+`/methods` reports through the same resolution functions.
 
 **Worked example — configuring a "pallet" labeling-assist setup
 end to end:**
