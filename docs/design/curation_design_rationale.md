@@ -432,6 +432,20 @@ own model. Two backends (`lpdnet`, `open-image-models`) wrap public
 plate-only models; they stay in `backends/` because they are backend
 adapters, and are only meaningful under that example profile.
 
+**Default profile and the quantize leg.** `GET {prefix}/bakeoff/profiles`
+flags the profile a job gets when it names none (`default: true` on that
+row, plus top-level `default_profile`); `kind` still says where the profile
+comes from, so an example selected via `OP_BAKEOFF_PROFILE` stays
+`kind: example`. A job's optional `quantize` block runs
+`scripts/curation/bakeoff/quantize.py` (Ultralytics FP32/FP16 ONNX export
+plus ONNX Runtime static QDQ INT8, calibrated on a dataset export's `train`
+split) and scores the variants in the same job; failures are recorded as
+`{stage, error}` entries in `status.json`'s `failed` list, and a job with
+nothing left to score ends `state: error`. The reference deployment's
+CoreML leg drove a macOS host through a private driver and is not shipped:
+`POST {prefix}/bakeoff/run` rejects `quantize.coreml` with 400, and a job
+file that asks for it anyway gets a `coreml` failed stage.
+
 **What moved out.** Scripts that existed to produce one paper's tables and
 figures are not part of the harness: the dedup-threshold sweep and the
 LaTeX-number generator live under `examples/bakeoff_lpr_paper/`; the
