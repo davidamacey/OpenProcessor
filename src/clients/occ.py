@@ -32,7 +32,12 @@ import os
 from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, Any
 
-from src.config import get_curation_config, get_region_fields
+from src.config import (
+    BACKBONE_EMBEDDING_FIELD,
+    ITEM_EMBEDDING_FIELD,
+    get_curation_config,
+    get_region_fields,
+)
 from src.core.logging import get_logger
 
 
@@ -63,7 +68,11 @@ OCC_BULK_PAGE_SIZE = int(os.environ.get('OCC_BULK_PAGE_SIZE', '500'))
 # class_*/region_*/label_source/cluster_*/history fields) — excluding
 # them from the per-page mget keeps the batched fetch small regardless
 # of page size.
-OCC_BULK_MGET_SOURCE_EXCLUDES = ['pe_embedding', 'v6_embedding', get_region_fields().embedding]
+OCC_BULK_MGET_SOURCE_EXCLUDES = [
+    ITEM_EMBEDDING_FIELD,
+    BACKBONE_EMBEDDING_FIELD,
+    get_region_fields().embedding,
+]
 
 
 class OCCFinalConflictError(Exception):

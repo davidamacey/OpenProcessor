@@ -63,7 +63,7 @@ def _make_scroll_client(ids: list[str], embeddings: np.ndarray) -> Any:
     """MagicMock AsyncOpenSearch: one page of hits, then scroll exhausted.
 
     No ``create_pit`` attr on a bare MagicMock -> AttributeError inside
-    ``fetch_residual_v6_embeddings_parallel`` -> falls back to the plain
+    ``fetch_residual_embeddings_parallel`` -> falls back to the plain
     scroll fetcher, matching ``tests/curation/test_clustering_orchestrator.py``'s
     mocking convention.
     """

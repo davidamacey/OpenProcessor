@@ -35,7 +35,7 @@ Non-negotiable design rules (plan §2.7 / §8 non-goal #4):
 Embedding fetch reuses the two existing helpers rather than a third
 scroll/PIT-fetch implementation (plan §3.5 note): ``scope='residual'``
 delegates to
-:func:`src.services.curation.clustering.embedding_reduce.fetch_residual_v6_embeddings_parallel`
+:func:`src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel`
 (same pool + ``CONFIDENT_CLASS_SOURCES``/``class_excluded`` gate
 ``item_scores.job`` uses); ``scope='cluster'`` delegates to
 :func:`src.services.curation.selection.pool_fetch.fetch_pool_embeddings`
@@ -366,11 +366,9 @@ async def _fetch_pool(
         return ids, embeddings
 
     # Remaining branch: scope is 'residual' (the only other value start_job accepts).
-    from src.services.curation.clustering.embedding_reduce import (
-        fetch_residual_v6_embeddings_parallel,
-    )
+    from src.services.curation.clustering.embedding_reduce import fetch_residual_embeddings_parallel
 
-    ids, embeddings = await fetch_residual_v6_embeddings_parallel(
+    ids, embeddings = await fetch_residual_embeddings_parallel(
         opensearch,
         extra_must=[{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}],
     )

@@ -14,12 +14,12 @@ so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
 reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
 
 **Single-fetch design (load-bearing, plan §3.3):** embeddings are fetched
-ONCE via :func:`legacy_embedding_reduce.fetch_residual_v6_embeddings_parallel`
+ONCE via :func:`legacy_embedding_reduce.fetch_residual_embeddings_parallel`
 and the same matrix is handed to every enabled scorer — the OpenSearch read
 is the dominant cost (350k crops x 1024-d f32 = 1.43 GB), not the math.
 ``test_holdout=true`` crops are excluded via an explicit ``must_not`` (belt
 and suspenders — they're also implicitly excluded because
-``fetch_residual_v6_embeddings_parallel`` already drops ``class_validated:
+``fetch_residual_embeddings_parallel`` already drops ``class_validated:
 true`` crops, and a crop can only be ``test_holdout=true`` if it was
 ``class_validated=true`` at freeze time; see ``legacy_review.freeze_test_holdout``).
 """
@@ -244,9 +244,7 @@ async def run_scoring_job(
     wholesale for deterministic job-lifecycle testing without racing a
     real background task against synchronous test-client HTTP calls.
     """
-    from src.services.curation.clustering.embedding_reduce import (
-        fetch_residual_v6_embeddings_parallel,
-    )
+    from src.services.curation.clustering.embedding_reduce import fetch_residual_embeddings_parallel
     from src.services.curation.item_scores import get_scorer
 
     state = _read_state()
@@ -256,7 +254,7 @@ async def run_scoring_job(
         return
     _touch_heartbeat()
     try:
-        ids, embeddings = await fetch_residual_v6_embeddings_parallel(
+        ids, embeddings = await fetch_residual_embeddings_parallel(
             opensearch,
             # Belt-and-suspenders test_holdout exclusion (plan §8 non-goal
             # #12) — see module docstring for why this is already implied.

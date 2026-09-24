@@ -18,10 +18,10 @@ from pydantic import BaseModel, Field
 from src.clients.curation_opensearch import (
     ClassRegistry,
     create_curation_indexes,
+    ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
     ensure_items_history_fields,
     ensure_items_label_cluster_fields,
-    ensure_items_pe_v6_embedding_fields,
     ensure_items_probe_fields,
     ensure_items_provenance_fields,
     ensure_items_quality_fields,
@@ -254,9 +254,9 @@ async def _ensure_indexes_locked(opensearch: Any) -> None:
         except Exception as exc:
             logger.warning('curation_validation_split_fields_migration_failed', error=str(exc))
         try:
-            await ensure_items_pe_v6_embedding_fields(opensearch)
+            await ensure_items_embedding_fields(opensearch)
         except Exception as exc:
-            logger.warning('curation_pe_v6_embedding_fields_migration_failed', error=str(exc))
+            logger.warning('curation_embedding_fields_migration_failed', error=str(exc))
         # Self-heal the classes index: if a clean OS wipe left it empty,
         # repopulate from the on-disk class registry so labeling works
         # out of the box. Without this, labeler PUTs fail with

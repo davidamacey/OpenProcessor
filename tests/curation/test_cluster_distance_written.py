@@ -69,7 +69,7 @@ def residuals(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> np.ndarray:
     ids = [f'crop-{i}' for i in range(len(emb))]
     monkeypatch.setattr(
         embedding_reduce,
-        'fetch_residual_v6_embeddings_parallel',
+        'fetch_residual_embeddings_parallel',
         AsyncMock(return_value=(ids, emb)),
     )
 

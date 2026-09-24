@@ -1127,7 +1127,7 @@ async def ensure_items_text_reader_fields(
     return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
 
 
-async def ensure_items_pe_v6_embedding_fields(
+async def ensure_items_embedding_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the secondary + backbone embedding fields onto an existing items
@@ -1893,10 +1893,10 @@ __all__ = [
     'RegistryClassEntry',
     'create_curation_indexes',
     'ensure_items_class_name_keyword',
+    'ensure_items_embedding_fields',
     'ensure_items_exclusion_fields',
     'ensure_items_history_fields',
     'ensure_items_label_cluster_fields',
-    'ensure_items_pe_v6_embedding_fields',
     'ensure_items_probe_fields',
     'ensure_items_provenance_fields',
     'ensure_items_quality_fields',

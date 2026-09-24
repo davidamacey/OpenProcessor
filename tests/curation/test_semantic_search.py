@@ -396,7 +396,7 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
     # endpoint, and no list renderer reads it.
     assert set(body['_source']['excludes']) == {
         'pe_embedding',
-        'v6_embedding',
+        'backbone_embedding',
         'region_embedding',
         'class_id_history',
     }

@@ -3,7 +3,7 @@
 The exporter's job is to produce a detector ONNX with **two** named
 outputs — the detection tensor plus the backbone feature map that
 :func:`src.services.detection.geometry.roi_pool_sppf` pools into the
-curation ``v6_embedding`` field. Two things are checkable without a GPU
+curation ``backbone_embedding`` field. Two things are checkable without a GPU
 and both are checked here:
 
 1. **CLI/argument validation** — every combination that cannot produce a
