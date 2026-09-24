@@ -30,9 +30,9 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.classes import create_registry_class
-from src.services.curation.class_sources import VLM_NEW_CLASS_PENDING_CLASS_SOURCE
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.human_label import human_label_update
+from src.services.curation.new_class_terms import is_open_proposal, proposal_term_query
 
 
 _RESOLVE_WRITER = 'human:resolve_new_class'
@@ -48,25 +48,9 @@ class _PendingStateChangedError(Exception):
     """The item is no longer pending this exact proposal at write time."""
 
 
-def _pending_proposal_query(label: str) -> dict[str, Any]:
-    return {
-        'bool': {
-            'must': [
-                {'term': {'class_source': VLM_NEW_CLASS_PENDING_CLASS_SOURCE}},
-                {'term': {'vlm_proposed_class': label}},
-            ],
-            'must_not': [{'term': {'class_validated': True}}],
-        }
-    }
-
-
 def _resolve_merger(*, label: str, class_id: int, class_name: str, label_source: str) -> Any:
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        if (
-            current.get('class_source') != VLM_NEW_CLASS_PENDING_CLASS_SOURCE
-            or current.get('vlm_proposed_class') != label
-            or current.get('class_validated')
-        ):
+        if not is_open_proposal(current, label):
             # Re-checked on every OCC attempt against the freshly fetched
             # doc: someone else already resolved (or otherwise changed)
             # this item's pending state between selection and this write.
@@ -127,7 +111,11 @@ async def resolve_new_class_proposal(
     opensearch: OpenSearchDep,
     dry_run: bool = Query(False, description='Report the match without writing or creating.'),
 ) -> ResolveNewClassResponse:
-    """Bulk-resolve every ``vlm_new_class_pending`` item proposing ``label``.
+    """Bulk-resolve every new-class queue item proposing ``label`` — the
+    same selection ``GET /review/new_class_proposals`` and its summary use
+    (``vlm_new_class_pending`` rows and ``needs_new_class`` flags, never a
+    validated, dismissed, excluded or test-holdout item), so ``matched``
+    equals the summary's ``count`` for the term.
 
     Unlike relabeling ``GET /review/new_class_proposals/summary``'s
     ``sample_crop_ids`` (capped at 20) one at a time, this selects and
@@ -158,7 +146,7 @@ async def resolve_new_class_proposal(
     if (payload.class_id is None) == (payload.create is None):
         raise HTTPException(status_code=422, detail='exactly one of class_id or create is required')
 
-    query = _pending_proposal_query(payload.label)
+    query = proposal_term_query(payload.label)
     try:
         count_resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
     except Exception as exc:

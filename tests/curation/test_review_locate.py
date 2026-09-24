@@ -140,7 +140,9 @@ def test_new_class_proposals_tab_and_summary(monkeypatch: pytest.MonkeyPatch) ->
     r = client.get('/curation/review/new_class_proposals/summary')
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body['total_pending'] == 3
+    # DQ-M11: the summary counts exactly the queue (the human flag too).
+    assert body['total_pending'] == 4
+    assert body['without_term'] == 1
     terms = {t['label']: t for t in body['top_terms']}
     assert terms['trailer']['count'] == 2
     assert sorted(terms['trailer']['sample_crop_ids']) == ['p1', 'p2']

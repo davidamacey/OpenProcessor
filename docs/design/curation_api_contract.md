@@ -552,13 +552,34 @@ out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
 queue depth) — use it for `/review?crop_id=` deep links instead of paging.
 
 `GET /review/new_class_proposals/summary?size=&samples=` →
-`{total_pending, top_terms: [{label, count, sample_crop_ids}]}`: the VLM's
-proposed new-class names over unvalidated `vlm_new_class_pending` items,
-most common first.
+`{total_pending, without_term, top_terms, flagged_terms, term_rules}`
+(DQ-M11). The summary, the `new_class_proposals` queue and the resolve
+below share one selection (`src/services/curation/new_class_terms.py`
+`proposal_query`), so `total_pending` equals the queue's `total`, and each
+term's `count` equals what a resolve for that `label` matches.
+`without_term` counts queue items with no proposed name (a human flag).
+Each term is `{label, count, sample_crop_ids, flag, class_id}`, most
+common first; `top_terms` holds only terms worth creating (`flag: null`),
+`flagged_terms` the rest:
+
+| `flag` | Rule | Suggested action |
+|---|---|---|
+| `existing_class` | the name (normalized: lowercase, spaces/hyphens → `_`) is an active registry class; `class_id` is set | resolve with `class_id` |
+| `generic_parent` | the whole name is in `OP_NEW_CLASS_GENERIC_TERMS`, or is a registry `group` name or one `-`-separated part of one | assign a specific class, don't create |
+| `non_object` | the name, or one `_`-separated token of it, is in `OP_NEW_CLASS_NON_OBJECT_TERMS` | discard / exclude |
+
+`term_rules` serves the active rule: `{generic_terms, non_object_terms,
+registry_groups_are_generic: true, existing_classes_flagged: true,
+generic_terms_env, non_object_terms_env}`. Both env lists are
+comma-separated and empty by default — no vocabulary is built in.
+Generic terms match whole names only (`sports_car` is not flagged by a
+generic `car`).
 
 `POST /review/new_class_proposals/resolve?dry_run=` (`ResolveNewClassRequest`
-→ `ResolveNewClassResponse`): bulk-resolves **every** unvalidated
-`vlm_new_class_pending` item proposing `label`, not just the summary's
+→ `ResolveNewClassResponse`): bulk-resolves **every** item of the
+new-class queue proposing `label` (`vlm_new_class_pending` rows and
+`needs_new_class` flags carrying that `vlm_proposed_class`; never a
+validated, review-dismissed, excluded or test-holdout item), not just the summary's
 capped `sample_crop_ids`. Exactly one of `class_id` (map to an existing
 registry class) / `create` (`{class_name, group, notes}`, registered
 through the same path as `POST /classes`) — else `422`; unknown `class_id`

@@ -1,8 +1,9 @@
 """Curation review-queue router — ``GET/POST /curation/review/*``.
 
 ``POST /review/new_class_proposals/resolve`` lives in the sibling
-``review_resolve.py`` module (LOC-ceiling split — see that file's
-docstring), registered on this same shared ``router``.
+``review_resolve.py`` module and ``GET /review/new_class_proposals/summary``
+in ``review_proposals.py`` (LOC-ceiling splits), both registered on this
+same shared ``router``.
 """
 
 from __future__ import annotations
@@ -460,54 +461,6 @@ async def review_locate(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     rank = await _count({'bool': {'filter': [req.query, before]}})
     return {**out, 'in_queue': True, 'rank': rank, 'page': rank // page_size + 1}
-
-
-@router.get('/review/new_class_proposals/summary')
-async def review_new_class_summary(
-    opensearch: OpenSearchDep,
-    size: Annotated[int, Query(ge=1, le=1000)] = 100,
-    samples: Annotated[int, Query(ge=0, le=20)] = 5,
-) -> dict[str, Any]:
-    """The VLM's proposed new-class names across ``vlm_new_class_pending``
-    items: ``{total_pending, top_terms: [{label, count, sample_crop_ids}]}``,
-    most common first — the input for deciding which classes to add."""
-    await _ensure_indexes(opensearch)
-    terms: dict[str, Any] = {
-        'terms': {'field': 'vlm_proposed_class', 'size': size, 'min_doc_count': 1}
-    }
-    if samples:
-        terms['aggs'] = {'samples': {'top_hits': {'size': samples, '_source': ['crop_id']}}}
-    body = {
-        'size': 0,
-        'query': {
-            'bool': {
-                'filter': [{'term': {'class_source': 'vlm_new_class_pending'}}],
-                'must_not': [{'term': {'class_validated': True}}],
-            }
-        },
-        'aggs': {'proposed': terms},
-        'track_total_hits': True,
-    }
-    try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    buckets = ((resp.get('aggregations') or {}).get('proposed') or {}).get('buckets') or []
-    return {
-        'total_pending': int(total),
-        'top_terms': [
-            {
-                'label': str(b.get('key', '')),
-                'count': int(b.get('doc_count', 0)),
-                'sample_crop_ids': [
-                    (h.get('_source') or {}).get('crop_id') or h.get('_id')
-                    for h in ((b.get('samples') or {}).get('hits') or {}).get('hits') or []
-                ],
-            }
-            for b in buckets
-        ],
-    }
 
 
 @router.post('/test_holdout/freeze', response_model=TestHoldoutFreezeResponse)
