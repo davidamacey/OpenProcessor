@@ -36,6 +36,7 @@ from src.services.curation.region_writes import (
     region_box_doc,
     validate_bbox_norm,
 )
+from src.services.curation.review_queries import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_source_excludes, region_wire_key, serialize_item
 from src.services.detection.profile_registry import region_profile_or_neutral
@@ -119,7 +120,7 @@ async def list_regions(
     if detector is not None:
         must.append({'term': {F.detector: detector}})
     if text:
-        must.append({'wildcard': {F.text: f'*{text.upper()}*'}})
+        must.append(region_text_clause(F.text, text))
 
     # In a bucket, either group by sub-cluster (subid asc, then outliers within
     # each subid) so refine results render as contiguous, paginated groups — or

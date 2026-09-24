@@ -43,6 +43,25 @@ def _escape_wildcard(text: str) -> str:
     return text.replace('\\', '\\\\').replace('*', '\\*').replace('?', '\\?')
 
 
+def region_text_clause(field: str, text: str) -> dict[str, Any]:
+    """Substring match on ``field`` (typically :attr:`RegionFields.text`),
+    case-insensitive and with user input escaped so wildcard metacharacters
+    in the search string match literally (F-9). Stored case depends on
+    whichever writer set the text, so this never assumes an uppercase
+    canonical form -- unlike a naive ``f'*{text.upper()}*'`` wildcard, which
+    is both case-sensitive against mixed-case stored values and vulnerable
+    to a user-supplied ``*``/``?`` being interpreted as a wildcard.
+    """
+    return {
+        'wildcard': {
+            field: {
+                'value': f'*{_escape_wildcard(text)}*',
+                'case_insensitive': True,
+            }
+        }
+    }
+
+
 def build_tab_query(
     tab: str,
     *,
@@ -170,16 +189,7 @@ def build_tab_query(
         # depends on whichever writer set the text, so don't assume an
         # uppercase canonical form.
         if text:
-            must.append(
-                {
-                    'wildcard': {
-                        fields.text: {
-                            'value': f'*{_escape_wildcard(text)}*',
-                            'case_insensitive': True,
-                        }
-                    }
-                }
-            )
+            must.append(region_text_clause(fields.text, text))
         # Default sort: region score desc, so the high-confidence detections
         # are reviewed first (likely accept), low-score later (more
         # corrections expected) — see review_sorts.py.
