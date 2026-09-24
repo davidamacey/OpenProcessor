@@ -40,23 +40,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   pre-commit (`py-compile` local hook) and CI (`check` job) — nothing
   previously compiled or linted the runbook scripts, so a syntax error
   shipped silently.
-
-### Changed
-
-- A pre-push hook runs the full vitest suite (`vitest-pre-push` in
-  `.pre-commit-config.yaml`), so a failing test can't be pushed. Install
-  it with `pre-commit install --hook-type pre-push`.
-- The `/train` GPU picker shows the backend's allowed GPUs
-  (`GET /train/gpus`) with each option's advisory, and preselects the one
-  the backend marks default. It shows a free-text field when the backend
-  has no allowlist.
-  - `trainGpuOptions.ts` and its hardcoded list are deleted. The list
-    offered GPU 0, which is now reserved for another project.
-  - The form no longer defaults to GPUs `0,2`, which the backend rejects.
-    Until the options load, the request omits the claim and the backend
-    picks from its allowlist.
-
-### Added
+- `/classes`'s Proposals section now bulk-resolves a VLM new-class term
+  against OpenProcessor's `POST {API_PREFIX}/review/new_class_proposals/
+resolve` (backend `main` `af3a580`): "Create class & assign" / "Map to
+  existing" resolve **every** pending item proposing the term, not just
+  the summary's capped `sample_crop_ids` sample. Each action dry-runs
+  first (`?dry_run=true`) and shows the real served `matched` count in a
+  confirm dialog before writing; a 400 (unknown class), 409 (duplicate
+  class name) or 422 (missing/conflicting `class_id`/`create`, or over
+  the backend's per-label match cap) shows the server's detail text in
+  the failure toast. `resolveNewClassProposal`/`undoLabelBatch`
+  (`api.ts`) are typed from the vendored OpenAPI contract.
+  - Replaces the old sample-only flow (`addClass` + `bulkLabel` on
+    `sample_crop_ids`), deleted from this page — `bulkLabel` itself
+    stays (still used by `/clusters` drag-and-drop assignment).
+  - A successful resolve records its `updated_ids` via
+    `undoStore.recordWrites()`, the same ring-buffer `Z`-undo
+    `bulkLabel`/`moveCropsToCluster` already use elsewhere, rather than
+    a new bulk-undo affordance — `POST {API_PREFIX}/crops/label/
+undo_batch` restores each crop to its prior `vlm_new_class_pending`
+    proposal state.
 
 - Tests now check the frontend against the backend's real API contract.
   - `contracts/openprocessor/` holds a copy of OpenProcessor's generated
@@ -81,7 +84,83 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   store and eight helper modules. The build fails if the score drops
   below its current level.
 
+- `/review`'s item panel shows a "Model predicts" row
+  (`probe_pred_class` + an entropy `ScoreChip`) when the backend serves
+  a probe prediction — previously computed but never rendered (G4). An
+  "Accept model's class" button now assigns `probe_pred_class_id`
+  directly (closes G4 — the backend ships the id, so no
+  name-to-id lookup is needed).
+- `/review` W5 (`docs/design/logic-moves-adoption-plan-2026-09-24.md`):
+  - `/review?crop_id=` deep links now call
+    `GET {API_PREFIX}/review/{tab}/locate` and jump straight to the
+    crop's served `page`/`rank`, instead of paging forward up to 300
+    items hoping to find it. A crop the backend reports as not in the
+    queue shows its `reason` (e.g. "filtered_out") in the toast.
+  - The client-side `proposed_class_id`/`proposed_class_name` fill-ins
+    in the diverse-selection hydration, semantic-search results and
+    undo-restore are deleted — `Crop`/`mapRawCrop` now carry the
+    server's own `proposed_class_id`/`_name` (served on every
+    crop-shaped item, not just review rows), so every one of those
+    paths already has the real value.
+  - The StrategyBar summary chip shows the server's `sort_applied`
+    (e.g. "sort: Default order → atypicality") next to whatever the
+    operator picked, so a tab-default or a sort fallback is visible,
+    not just implied.
+  - A new `new_class_proposals` review tab (not a preset — a distinct
+    triage workflow) surfaces crops the VLM flagged as needing a class
+    the registry doesn't have yet; flagged items show
+    `needs_new_class_note` inline.
+  - `/classes` gets a "Proposals" section
+    (`GET {API_PREFIX}/review/new_class_proposals/summary`) — the top
+    VLM-proposed-but-unmatched terms with sample thumbnails, each with
+    "Create class & assign" (`POST {API_PREFIX}/classes` then
+    `PUT {API_PREFIX}/crops/batch_label` on the served
+    `sample_crop_ids`) and "Map to existing" actions. Degrades to an
+    inline error banner (verified live against a real opensearch
+    aggregation 503) rather than breaking the page.
+
+- `/bakeoff` profile picker, backed by OpenProcessor's B1 `BakeoffProfile`
+  (`GET /bakeoff/profiles`). The chosen profile scopes the baseline model
+  list (`/bakeoff/baseline_models?profile=`) and is sent on
+  `POST /bakeoff/run`. "Deployment default" omits it. `BakeoffModelSpec`
+  now matches main's model spec: per-model `profile`,
+  `primary_*`/`secondary_*` coarse-stage fields replacing
+  `vehicle_weights`, and the `onnxruntime`/`coreml` backends. Trained
+  contenders are labeled "trained here" instead of a deployment-specific
+  corpus string.
+
+- Annotation slots are now wired all the way through the crop pipeline
+  instead of stopping at the adapter layer (Wave 0 + Wave 1 of
+  `docs/design/slot-generic-crop-mapping-plan-2026-09-21.md`, C1-C11).
+  `OpCrop` gains a `slots?: Record<SlotKey, SlotData>` map, populated by
+  `mapRawCrop`/`getPlates` via the existing `readSlot` adapter
+  (`src/lib/annotations/cropSlots.ts`'s `mapCropSlots`/`slotOf`).
+  `SlotState` gains an optional `aliases?: string[]` (the read-tolerance
+  half of a future wire-vocabulary rename), and `readSlot.ts` exports
+  `projectFromParent`, the inverse of its private forward projection.
+  Every consumer that used to read a hardcoded `crop.plate_*` field or
+  import `licensePlateSlot` directly — `CropMetaPanel`, `CropCard`,
+  `BboxCanvas`, `/review`'s entire inline slot panel (Finding D),
+  `sse.ts`'s verify-event dispatch, `SlotBboxEditor`, `SlotCard`, and
+  `DatasetStats`' detection panel — now reads through the active slot's
+  own capabilities, so a second registered slot renders correctly with
+  zero further code change (proved by
+  `src/lib/annotations/secondSlotIntegration.test.ts`).
+
 ### Changed
+
+- A pre-push hook runs the full vitest suite (`vitest-pre-push` in
+  `.pre-commit-config.yaml`), so a failing test can't be pushed. Install
+  it with `pre-commit install --hook-type pre-push`.
+- The `/train` GPU picker shows the backend's allowed GPUs
+  (`GET /train/gpus`) with each option's advisory, and preselects the one
+  the backend marks default. It shows a free-text field when the backend
+  has no allowlist.
+  - `trainGpuOptions.ts` and its hardcoded list are deleted. The list
+    offered GPU 0, which is now reserved for another project.
+  - The form no longer defaults to GPUs `0,2`, which the backend rejects.
+    Until the options load, the request omits the claim and the backend
+    picks from its allowlist.
 
 - Label writes, undo and discard now match OpenProcessor `main`
   (`d037be8`, see `docs/design/logic-moves-adoption-plan-2026-09-24.md`
@@ -204,84 +283,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `secondSlotIntegration.test.ts`, `exampleProfile.test.ts`) still need
     them.
 
-### Removed
-
-- `src/lib/annotations/regionWireContract.test.ts`, replaced by the
-  contract tests.
-
-### Fixed
-
-- Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
-  G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
-  (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —
-  it keeps the last-known-good stats on screen and shows the existing
-  "Stats unavailable" banner instead of throwing `Cannot read properties
-of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
-  new pure `resolveStatsUpdate()` (`src/lib/datasetStats.ts`).
-  - `getStats()` now uses `Promise.allSettled` for `/stats/dataset` and
-    `/stats/classes`, so a dataset-rollup failure no longer blanks
-    `per_class` — `/export`'s class table renders again.
-- "Validated" no longer conflates the class label with the region (G2):
-  added `class_validated` to `Crop`/`RawCrop` and `mapRawCrop`.
-  `CropCard`'s badge and VLM-accept chip, `CropMetaPanel`'s "validated"
-  pill, and the accept-all-VLM / advance-to-next-unvalidated logic on
-  `/clusters/[id]` now read `class_validated` instead of the OR-combined
-  `label_validated`, which previously showed a crop as validated purely
-  because its _region_ had been confirmed.
-- `/review`'s Class, Source and Conf filter controls are re-enabled and
-  sent to `GET {API_PREFIX}/review/{tab}` as `class_id`/`source`/
-  `conf_min`/`conf_max` — the backend now honors them (verified live:
-  `class_id` and `conf_min` both change the queue total). The old
-  `REVIEW_SERVER_FILTERS_ENABLED` flag is deleted; the "HDD source"
-  control is renamed to "Source" (`hddSource` → `sourceFilter`,
-  reading/writing `Crop.source`, which replaces the dead `hdd_source`
-  field). See `docs/design/logic-moves-adoption-plan-2026-09-24.md` W5.
-- Scoped VLM-assist runs (`AssistScopeBar`) now actually run the VLM
-  stage: `startAutoLabel()` sends `run_vlm: true` whenever a class or
-  prompt pack is scoped, matching the toast copy that already claimed
-  "VLM labeling limited to {class}" but never sent the flag (G5). Added
-  an explicit "Run VLM labeling stage" checkbox to `AutoLabelPanel`, off
-  by default to match the backend's own default.
-
-### Added
-
-- `/review`'s item panel shows a "Model predicts" row
-  (`probe_pred_class` + an entropy `ScoreChip`) when the backend serves
-  a probe prediction — previously computed but never rendered (G4). An
-  "Accept model's class" button now assigns `probe_pred_class_id`
-  directly (closes G4 — the backend ships the id, so no
-  name-to-id lookup is needed).
-- `/review` W5 (`docs/design/logic-moves-adoption-plan-2026-09-24.md`):
-  - `/review?crop_id=` deep links now call
-    `GET {API_PREFIX}/review/{tab}/locate` and jump straight to the
-    crop's served `page`/`rank`, instead of paging forward up to 300
-    items hoping to find it. A crop the backend reports as not in the
-    queue shows its `reason` (e.g. "filtered_out") in the toast.
-  - The client-side `proposed_class_id`/`proposed_class_name` fill-ins
-    in the diverse-selection hydration, semantic-search results and
-    undo-restore are deleted — `Crop`/`mapRawCrop` now carry the
-    server's own `proposed_class_id`/`_name` (served on every
-    crop-shaped item, not just review rows), so every one of those
-    paths already has the real value.
-  - The StrategyBar summary chip shows the server's `sort_applied`
-    (e.g. "sort: Default order → atypicality") next to whatever the
-    operator picked, so a tab-default or a sort fallback is visible,
-    not just implied.
-  - A new `new_class_proposals` review tab (not a preset — a distinct
-    triage workflow) surfaces crops the VLM flagged as needing a class
-    the registry doesn't have yet; flagged items show
-    `needs_new_class_note` inline.
-  - `/classes` gets a "Proposals" section
-    (`GET {API_PREFIX}/review/new_class_proposals/summary`) — the top
-    VLM-proposed-but-unmatched terms with sample thumbnails, each with
-    "Create class & assign" (`POST {API_PREFIX}/classes` then
-    `PUT {API_PREFIX}/crops/batch_label` on the served
-    `sample_crop_ids`) and "Map to existing" actions. Degrades to an
-    inline error banner (verified live against a real opensearch
-    aggregation 503) rather than breaking the page.
-
-### Changed
-
 - Undo (Z) on `/review`, `/clusters` and `/clusters/[id]` now calls the
   backend's `POST /crops/{id}/label/undo` and renders the item it
   returns.
@@ -297,8 +298,6 @@ of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
   `DELETE /crops/{id}/label` is itself an undo of the last human write,
   so a Z entry for it would step back a second write.
 
-### Changed
-
 - Removed the remaining `legacy`/`op` names from code, scripts and docs.
   - `legacyDetectors.ts` is now `builtinDetectors.ts`
     (`builtinDetectorRegistry`). Its entries for `legacy_vehicle_v6_trt`
@@ -311,18 +310,6 @@ of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
   - README, CONTRIBUTING, SECURITY, RUBRIC and CLAUDE.md describe the
     OpenProcessor deployment. README no longer covers the retired compose
     overlay or the GPU-sharing make targets.
-
-### Fixed
-
-- The stubbed Playwright scripts intercepted `/curation/**`. The app calls
-  `/curation/**`, so their stubs never matched. They now stub `/curation`.
-  `playwright_curation_settings.py` also expects the server's `settable`
-  flag and the current `/settings` copy, and it passes against the built
-  container. `playwright_smoke.py` finds a cluster through
-  `/curation/clusters`; the `/clusters/stats/op_vehicles` route it used
-  was removed.
-
-### Changed
 
 - The frontend now uses the backend's `class_source` catalog
   (`GET /class_sources`, loaded once in the layout) instead of its own
@@ -339,8 +326,6 @@ of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
   - The card shows a VLM new-class proposal
     (`vlm_proposed_class_name` with no id) read-only.
 
-### Changed
-
 - Removed the `op` (legacy) naming from the frontend.
   - The `Kb`-prefixed types lose the prefix, or get a descriptive name
     where a bare one would clash or read vaguely: `Crop`, `RegistryClass`
@@ -355,31 +340,6 @@ of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
   - The prefix scan tests' fixtures use a real `/curation/…` literal again.
     The rename had briefly turned them into `{API_PREFIX}` strings that
     could never match, which made three of them vacuous.
-
-### Fixed
-
-- `/review`'s `Enter` no longer confirms an unrelated class on a
-  `vlm_new_class_pending` item. `resolveConfirmClassId` used to fall back
-  to the crop's current class when there was no proposal, and for these
-  items the backend now reports `proposed_class_id: null` precisely
-  because that class is unrelated. `Enter` opens the class picker there
-  instead.
-
-### Fixed
-
-- `/review` now honors `?tab=` and `?crop_id=` deep links. It opens that
-  tab and jumps to that crop, paging forward up to 300 items and saying so
-  when the crop isn't in the queue. Switching tabs keeps `?tab=` in the
-  address bar. Before this, bookmarks such as `?tab=plates` and `/train`'s
-  cohort-preview links always landed on the first item of All:
-  `tabFromUrlId` existed but nothing called it.
-- `/review` fetched the first queue page twice on every load. The
-  debounced filter effect treated its initial state as a change 250 ms
-  after the immediate load, and the second fetch reset the cursor.
-- The review panel's proposer label reads "Proposal hint" instead of
-  "COCO hint".
-
-### Changed
 
 - **BREAKING (B3, ships with OpenProcessor's `cutover/wire-contract`):**
   the frontend now speaks OpenProcessor's generic wire vocabulary, with
@@ -405,55 +365,12 @@ registry}` payload.
   - UI copy says "VLM" instead of "Gemma" wherever it describes the
     pluggable VLM role.
 
-### Fixed
-
-- The accept-VLM-suggestion flow on `/clusters/[id]` (card chip, `G`,
-  `Shift+Enter`, meta-panel row) could never fire, because no field ever
-  populated the suggestion. `mapRawCrop` now maps `vlm_proposed_class_id`
-  / `vlm_proposed_class_name` and the categorical `vlm_confidence`. The
-  meta panel's VLM-confidence row, which read an unmapped field through a
-  cast, now renders too.
-
-### Changed
-
 - `/settings` decides which axes get a control from the server's
   per-entry `settable` flag on `/methods`, not from a hardcoded
   `SETTINGS_AXES.kind`. The table now carries only labels, buckets and
   blurbs, so it can't drift from what the backend honors. The store's
   client-side "advisory axis" guard is gone too: OpenProcessor rejects a
   non-settable axis with a 422, and that detail is surfaced.
-
-### Fixed
-
-- `/settings`'s prompt-pack blurb understated its effect. The shared
-  default also drives the always-on background VLM labeler
-  (`/vlm/label_batch`), not only auto-label runs.
-
-### Fixed
-
-- `/bakeoff` preselects the deployment's default profile (`default` /
-  `default_profile` on `/bakeoff/profiles`) and warns when the configured
-  default is invalid (`default_error`). Profiles now load before
-  baselines, so an unscoped baseline lookup can no longer land after the
-  scoped one and show the wrong baselines.
-- `/bakeoff` shows why a run failed. It shows the job-level `error` when
-  `state` is `error`, and every failed stage or dataset × model cell from
-  the status `failed` list. Before, a failed cell silently vanished from
-  the matrix.
-- Dropped the progress line's "auto-stops SAM3/Gemma" claim, which
-  described one deployment's GPU handling rather than main's.
-
-### Removed
-
-- The dashboard's per-run detection-profile picker, along with
-  `detection_profile` on `startAutoLabel` and the
-  `isDetectionProfileAvailable` gate. OpenProcessor confirmed that no
-  auto-label stage runs region detection: it's the detection worker's
-  startup config, so the picker was a silent no-op, and main now rejects
-  the param with a 422. The scope bar is gated on the `prompt_pack` axis
-  alone and shows a chosen pack in its collapsed summary.
-
-### Changed
 
 - Adopted OpenProcessor's per-run auto-label contract (`profile-arbiter`):
   - An unknown `prompt_pack`/`detection_profile` now produces a readable
@@ -468,18 +385,6 @@ registry}` payload.
     default. It's honored by every auto-label run that doesn't pick its
     own pack. The detection profile stays display-only, because nothing
     that runs reads it.
-
-### Fixed
-
-- The embedding plot's projection rebuild is no longer fire-and-forget. It
-  polls `GET /viz/projection/status`, shows progress, offers Cancel
-  (`POST /viz/projection/cancel`) and reloads the plot when the job
-  completes, or shows an error if it fails. It also picks up a rebuild
-  already running when the page opens. Once a projection exists there's
-  now a Rebuild button; before this, a projection could only be built
-  once and never refreshed as new crops arrived.
-
-### Changed
 
 - The single-class plate dataset export now runs on OpenProcessor's generic
   narrowed export (`POST /export/single_class`,
@@ -498,26 +403,6 @@ registry}` payload.
     (`yolo` | `single_class`) plus `profile_name`, per the contract agreed
     with the backend owner. The multi-class toggle is no longer labeled
     "vehicles".
-
-### Removed
-
-- The dashboard's "Snapshot op\_\* indexes" button. It was a placeholder that
-  only showed a "coming in v1.1" toast, and no backend route exists for
-  it. The API-health banner and tooltip no longer name `openprocessor`.
-
-### Added
-
-- `/bakeoff` profile picker, backed by OpenProcessor's B1 `BakeoffProfile`
-  (`GET /bakeoff/profiles`). The chosen profile scopes the baseline model
-  list (`/bakeoff/baseline_models?profile=`) and is sent on
-  `POST /bakeoff/run`. "Deployment default" omits it. `BakeoffModelSpec`
-  now matches main's model spec: per-model `profile`,
-  `primary_*`/`secondary_*` coarse-stage fields replacing
-  `vehicle_weights`, and the `onnxruntime`/`coreml` backends. Trained
-  contenders are labeled "trained here" instead of a deployment-specific
-  corpus string.
-
-### Changed
 
 - Retargeted at OpenProcessor `main` as the only backend (E2E contract
   audit, `docs/design/e2e-contract-audit-2026-09-23.md`):
@@ -541,37 +426,6 @@ registry}` payload.
       `crop.plate_verified` literal
   - `getPlates` takes the slot's declared `queue.browsePath` instead of a
     hidden route constant.
-
-### Fixed
-
-- `/clusters/[id]` no longer opens an SSE subscription on candidate
-  clusters. They have no class, and the backend filters events on exact
-  `class_id`, so that stream could never deliver anything.
-- Corrected the `startAutoLabel` doc comment claiming
-  `detection_profile`/`prompt_pack` were confirmed live. `main` silently
-  dropped them; per-run support is landing backend-side.
-
-### Added
-
-- Annotation slots are now wired all the way through the crop pipeline
-  instead of stopping at the adapter layer (Wave 0 + Wave 1 of
-  `docs/design/slot-generic-crop-mapping-plan-2026-09-21.md`, C1-C11).
-  `OpCrop` gains a `slots?: Record<SlotKey, SlotData>` map, populated by
-  `mapRawCrop`/`getPlates` via the existing `readSlot` adapter
-  (`src/lib/annotations/cropSlots.ts`'s `mapCropSlots`/`slotOf`).
-  `SlotState` gains an optional `aliases?: string[]` (the read-tolerance
-  half of a future wire-vocabulary rename), and `readSlot.ts` exports
-  `projectFromParent`, the inverse of its private forward projection.
-  Every consumer that used to read a hardcoded `crop.plate_*` field or
-  import `licensePlateSlot` directly — `CropMetaPanel`, `CropCard`,
-  `BboxCanvas`, `/review`'s entire inline slot panel (Finding D),
-  `sse.ts`'s verify-event dispatch, `SlotBboxEditor`, `SlotCard`, and
-  `DatasetStats`' detection panel — now reads through the active slot's
-  own capabilities, so a second registered slot renders correctly with
-  zero further code change (proved by
-  `src/lib/annotations/secondSlotIntegration.test.ts`).
-
-### Changed
 
 - **BREAKING (backend-contract):** adopted OpenProcessor's (openprocessor)
   region wire-vocabulary rename, merged to its `main` at `b3f928d`
@@ -610,37 +464,6 @@ registry}` payload.
     file superseded by `licensePlateSlot.capabilities.lifecycle.states`)
     rather than renaming its now-doubly-dead members.
 
-### Fixed
-
-- `sse.ts`'s `subscribeKbEvents` used to hardcode a fixed list of known
-  SSE event types; any type outside that list was silently never
-  dispatched. A second queue-capable slot's own verify event would have
-  refreshed nothing on `/review`, with no error anywhere. Event types
-  are now derived from `slotRegistry.queues` at call time.
-- `plateGalleryController.svelte.ts`'s `savePlateBbox` (the plate
-  gallery's bbox-editor save handler) was re-sending the box to the
-  backend a second time on every save, even though `SlotBboxEditor` had
-  already performed the write — a redundant PUT on every plate-gallery
-  bbox save. It is now a pure local-state patch.
-
-- `/bakeoff` is now gated on backend availability instead of assuming
-  `/curation/bakeoff/*` is always mounted. A new one-shot probe
-  (`src/lib/bakeoffAvailability.svelte.ts`) calls the idempotent
-  `GET {API_PREFIX}/bakeoff/runs`: a 404/501 hides the nav link and
-  swaps the page body for a calm "not available" note; any other
-  failure (network error, 5xx, abort) leaves the route visible, since a
-  transient outage must not look like an absent capability. This was the
-  last backend-optional surface in the app with no availability gate at
-  all — the nav link rendered unconditionally and the page fired four
-  GETs on every mount regardless of whether the router existed. The
-  module is explicitly provisional and documents its own replacement:
-  once the backend ships an `evaluation` axis on `GET {API_PREFIX}/methods`
-  (mirroring the existing `export` axis), this probe is deleted in favor
-  of the same capability-discovery pattern every other gate in the app
-  already uses. See `docs/design/bakeoff-train-genericization-plan-2026-09-21.md`.
-
-### Changed
-
 - `/train`'s single-class dataset-export panel now renders its
   remaining copy (heading, dataset-kind toggle label, the `current`
   symlink name, the description blurb, the "no export yet" message, the
@@ -662,144 +485,6 @@ registry}` payload.
   the invariant was already correct, just mis-attributed and
   under-qualified. One unrelated stray reference to "the legacy_sorter
   UX" is reworded to "the sorter-app UX" in the same pass.
-
-### Fixed
-
-- `src/routes/train/datasetExportGate.test.ts`'s highest-value
-  assertion referenced the dead identifier `refreshLprStatus` (renamed to
-  `refreshSingleClassExportStatus` in an earlier pass), making the test
-  unfailable — it could never have caught the "never 404 unconditionally
-  on mount" regression it exists to guard. Renamed to the live
-  identifier; verified it fails when the regression is reintroduced.
-
-- A new `/settings` page gives deployment operators one place to set the
-  shared, backend-side defaults for two curation strategies — the
-  clustering method used by every auto-label run this app starts, and the
-  review-queue sort applied to every `/review` tab that does not request
-  its own — persisted via `GET,PUT {API_PREFIX}/settings`. This is stored
-  backend-side rather than per-browser because the product has no user
-  accounts: one operator's pick is every operator's pick, on every
-  session, until changed again. The page also lists two more axes the
-  backend advertises but does not yet act on, `detection_profile` and
-  `prompt_pack`, as a read-only "Advertised but not yet wired" section —
-  no dropdown, no Save button — because no backend request path reads a
-  shared default for either one yet, and offering a control that silently
-  does nothing would be worse than not offering one. Against a backend
-  that predates this endpoint, the page degrades to an explicit "not
-  supported" note with no controls rendered, rather than erroring or
-  guessing.
-- The `/settings` page now has a **Clear** control next to **Save** for
-  every settable axis, sending `PUT {defaults: {[axis]: null}}` to
-  remove that axis's pinned override entirely — every caller falls back
-  to its own built-in default afterward. This closes the backend gap
-  (H-1) noted when the page first shipped: once a shared review-sort
-  default was pinned, there was no way to un-pin it through this API at
-  all, since a `PUT` had to name a currently-advertised id and "each tab
-  uses its own default" wasn't one. The backend added a `null`-clears
-  contract for exactly this; every save and every clear still goes
-  through the same explicit confirm dialog, since both remain
-  deployment-wide, no-undo-visible writes. Live-verified against a real
-  backend: pinned a sort default out of band, cleared it through the UI,
-  confirmed `GET /settings` reflects the clear.
-- Deployment operators can now register their own annotation slot —
-  without forking the repo or touching a single line of application
-  code — by dropping an `annotation-profiles.json` file next to the
-  built app: in `static/` before a build, or bind-mounted over
-  `/usr/share/nginx/html/annotation-profiles.json` in a running
-  container. The file is fetched once in the root layout's `load()` and
-  validated by a new hardened parser
-  (`src/lib/annotations/config/parseSlotConfig.ts`) against the schema
-  already published in `docs/annotation-slots-contract-draft.md`,
-  treating the file as untrusted operator input rather than reviewed
-  source: template paths are prefix-relative only and their placeholders
-  are drawn from a closed allow-list, regex patterns reject the `g`/`y`
-  flags and a conservative ReDoS shape, Tailwind ring classes must come
-  from a pre-declared preset or allow-list (a runtime-mounted class
-  string is invisible to Tailwind's JIT scan regardless), keymaps cannot
-  claim a hotkey the review page already owns, and any object carrying a
-  `__proto__`/`constructor`/`prototype` key is rejected outright. A
-  missing or malformed file degrades silently to this deployment's
-  built-in `license_plate` slot — a console warning plus one toast
-  surface a broken config, but the app never crashes and the currently
-  running legacy deployment's behavior is completely unchanged, since
-  it ships no live `annotation-profiles.json`. A worked example
-  (`static/annotation-profiles.example.json`, a pallet-shipping-label
-  slot) is shipped and covered by an integration test proving it renders
-  a real review tab with zero further code changes. Tier 3
-  (server-declared slots) remains deliberately unbuilt — this closes
-  steps 1 and 2 of the sequencing `docs/annotation-slots-contract-draft.md`
-  §9 already committed to.
-- The dashboard's auto-label run can be scoped to a single class — "just
-  help me with pallets right now" — instead of always sweeping the whole
-  pool. A collapsed-by-default `<AssistScopeBar>` on `/dashboard` picks
-  one class (fuzzy-searched through the same `searchClasses` ranking
-  `/review`'s class picker uses) and contributes `class_id` to
-  `POST {API_PREFIX}/pipeline/auto_label/start`; when the backend
-  advertises them, it also offers a detection-profile and a prompt-pack
-  selector, from two new `/methods` axes (`detection_profile`,
-  `prompt_pack`) parsed into `detection_profiles`/`prompt_packs` and
-  gated by `isDetectionProfileAvailable`/`isPromptPackAvailable` with the
-  same stable/experimental-only bar as every other axis. Leaving the bar
-  alone is byte-identical to the previous one-click run: `toStartParams()`
-  returns `{}` and the composed URL is unchanged. The whole bar is absent
-  — not disabled — unless `/methods` advertises at least one assist axis,
-  because `class_id` has no capability signal of its own and an unknown
-  query param is silently dropped server-side, which on an hours-long run
-  would mean an unscoped sweep while the UI claimed otherwise. Built
-  against a contract agreed with the backend session but not yet landed
-  there; verified statically, against both `/methods` fixtures, and in a
-  route-stubbed browser (`scripts/playwright_assist_scope.py`). A live
-  integration pass is still owed once the backend ships its half.
-- `docs/annotation-slots-contract-draft.md` — the P4.2 wire contract draft
-  for server-declared annotation slots (H3 opening offer; proposal only,
-  nothing implemented on either side).
-- `docs/FEATURES.md` — a full visual feature tour (screenshot + explanation
-  for every route), and a `docs/screenshots/demo.gif` slideshow now leading
-  the README instead of a static image grid.
-- `docs/README.md` — an index distinguishing current/maintained docs from
-  historical/reference ones (the 2026-09-11 audit, the curation-strategy
-  design doc, the two market-research docs).
-- `src/lib/annotations/` — additive foundation for genericizing the
-  `license_plate` vertical into a reusable "annotation slot" mechanism
-  (`docs/genericization-plan-2026-09-13.md`, Phase 1): the `SlotSpec`
-  capability model (`subBox`/`text`/`provenance`/`lifecycle`/`queue`),
-  a field-mapping adapter (`readSlot`) that reads whichever wire field
-  names a slot declares, a merge-by-replace `resolveSlotRegistry`, the
-  legacy `license_plate` profile decomposing today's ~30 `plate_*`
-  fields, and a config-driven detector label/palette registry proven
-  equivalent to `DetectorChip.svelte`'s hand-written switch/if-chain via
-  a 23-case snapshot test. Not yet wired into any route or component —
-  this is the additive Phase 1 slice; `mapRawCrop`/`DetectorChip`/
-  `PlateCard`/`/review`/`/clusters` migrations (Phase 2) are follow-up
-  work.
-- Two example slot profiles (`aircraft_tail_number`, `defect_code`,
-  under `src/lib/annotations/profiles/`) plus a falsification test
-  proving the capability model above handles a disjoint capability
-  subset (no sub-bbox at all, for `defect_code`), a different stored
-  bbox frame and shape envelope (`aircraft_tail_number`), and a
-  closed-vocabulary text field — with zero changes to `types.ts`,
-  `registry.ts`, or `readSlot.ts` beyond the model, and zero
-  special-casing of either example outside `profiles/`. Neither example
-  is bound to a real route or class; they are proof-of-concept configs
-  only.
-- `src/routes/review/plateReviewCharacterization.test.ts` — Phase 0
-  characterization tests (`docs/genericization-plan-2026-09-13.md`
-  §5.1) pinning today's Plates-tab behavior in `review/+page.svelte`
-  before any Phase 2 refactor touches it: the scan-mode keymap, the
-  class-drop tab guard invariant behind Finding C.2, the per-crop
-  (not per-cursor) save-abort map, the `$state.raw` undo-stack identity
-  semantics, the frozen-viewport `untrack()` seed read, and today's
-  closed `REVIEW_TABS`/`license_plate`-literal baseline in
-  `clusters/+page.svelte`. Source-scan style (no `@testing-library/svelte`
-  harness exists in this repo) rather than the plan's preferred
-  extract-then-test approach — see the file's doc comment for why.
-- `src/lib/review/slotQueueOps.ts` and `src/lib/review/abortRegistry.ts`
-  — the real P0.1/P0.3 extraction of the Plates-tab's undo-stack and
-  per-crop abort-map logic out of `review/+page.svelte`, with executable
-  unit tests. `review/+page.svelte` now delegates to both; behavior is
-  unchanged.
-
-### Changed
 
 - `/train/+page.svelte`'s own internal state for the single-class dataset
   export panel is renamed off vehicle/lpr-specific naming: `datasetKind`
@@ -1009,7 +694,388 @@ check`/`test`/`lint`/`build` all green.
   — the second guard being prefix-name-agnostic, so it survives the
   `/curation` flip unchanged.
 
+- A shared three-tier control-sizing scale (`.btn`/`.select`/`.input`
+  at 32px, `.btn-sm`/`.select-sm`/`.input-sm` at 26px, `.chip` at
+  20px), driven by CSS custom properties, replacing ad-hoc per-page
+  Tailwind sizing strings that had drifted into 7 different control
+  heights app-wide with no shared scale.
+- Dropdown-caret glyphs (the Ignore-reason toggle, StrategyBar's
+  collapsed-chip indicator) are now real SVG icons instead of a plain
+  unicode "▾", which rendered inconsistently thin/small across
+  browsers.
+- Semantic search result page size raised to the API's max (200,
+  up from 30-60) across all three integrations — the search box
+  fetches a single page with no load-more, so page size was the
+  effective result cap.
+
+- `/review` consolidated from 9 top-level tabs to 5 (All, Uncertainty,
+  Model Disagreements, COCO Blind Spots, Plates), with the three
+  removed tabs (Mismatches, Gemma Low-Conf, Primary · Low-Conf) moved to
+  quick-filter chips on the All tab. Outliers retired in favor of the
+  `atypicality` sort, which covers the same need correctly.
+- Rank-scope (Largest/+2nd) and clarity-slider controls on `/review` are
+  now available on every tab and preset, not just two of them.
+
+- Class adequacy, thresholds and hotkeys now come entirely from the
+  backend (`docs/design/logic-moves-adoption-plan-2026-09-24.md` W4,
+  OpenProcessor `main` @ `d037be8`):
+  - `adequacy.ts` renders whichever tier (`block`/`warn`/`ok`) the
+    server puts on each class (`GET /classes`, `GET /stats/classes`),
+    instead of recomputing it from `validated_count` against hardcoded
+    500/100 thresholds. The old `ADEQUACY_OK`/`ADEQUACY_LOW` constants
+    are gone.
+  - `/export`'s dataset table reads the server's `aug_target`/`aug_gap`
+    per class and the server's per-class `deficient` flag on
+    `GET /test_holdout/stats` (falling back to comparing against the
+    served `min_test_per_class` only when a bucket omits the flag) —
+    the client-side `clamp(validated, 500, 3000)` augmentation target
+    and the hardcoded "< 5 test crops" minimum are gone. The row-building
+    logic moved to a pure `src/lib/export/exportDatasetRows.ts` module.
+  - `classHotkey.ts`'s `reservedHotkeyLetters()` now unions
+    `classesStore.reservedHotkeys` (the server's own `reserved_hotkeys`
+    field) with any registered slot's own keymap letters, instead of a
+    hardcoded `RESERVED_HOTKEY_LETTERS` constant unioned with the same
+    slot letters. Verified live: the server's set (`/abdefgmnuxz`)
+    already matches what the old constant + union produced.
+    `setClassHotkey` now shows the server's 400/409/422 detail text
+    verbatim on a rejected bind.
+  - `/classes` and `AddClassModal` no longer validate the class-name
+    slug pattern client-side — `POST`/`PUT /classes` 422s with the
+    `^[a-z0-9_]+$` pattern in its detail, which now renders inline.
+  - `errorDetail()` (`api.ts`) now also extracts the `msg` field from a
+    FastAPI/Pydantic validation-error array (`{detail: [{msg, ...}]}`),
+    not just a plain string `detail` — this is what makes the class-name
+    422 above legible instead of falling through to "API 422 ...".
+  - `/classes` shows a warning banner listing any class whose bound
+    hotkey has since become reserved. Live on this deployment: `bmw` is
+    bound to `b`, which the backend now reserves for the `license_plate`
+    slot's keymap — the binding is kept (matches the backend), not
+    auto-cleared.
+  - The merge dialog on `/classes` calls
+    `POST /classes/merge?dry_run=true` (new `previewClassMerge()`)
+    whenever the source/target selection changes, and shows
+    `would_relabel`/`would_unvalidate`/`holdout_blocking` before the
+    real merge. Confirm is disabled when the dry run reports `blocked`.
+  - `GET /classes` now returns `{classes, thresholds, reserved_hotkeys}`;
+    `getClasses()`'s return type changed from `RegistryClass[]` to
+    `ClassesResponse`, and `classesStore` gained `thresholds` and
+    `reservedHotkeys` state alongside `classes`. The only caller
+    (`classesStore.refresh()`) was updated; no other frontend code
+    called `getClasses()` directly.
+  - `RegistryClass.added_at` and the `/classes` "Added" column were
+    already wired end to end — verified live, no change needed.
+
+### Removed
+
+- `src/lib/annotations/regionWireContract.test.ts`, replaced by the
+  contract tests.
+
+- The dashboard's per-run detection-profile picker, along with
+  `detection_profile` on `startAutoLabel` and the
+  `isDetectionProfileAvailable` gate. OpenProcessor confirmed that no
+  auto-label stage runs region detection: it's the detection worker's
+  startup config, so the picker was a silent no-op, and main now rejects
+  the param with a 422. The scope bar is gated on the `prompt_pack` axis
+  alone and shows a chosen pack in its collapsed summary.
+
+- The dashboard's "Snapshot op\_\* indexes" button. It was a placeholder that
+  only showed a "coming in v1.1" toast, and no backend route exists for
+  it. The API-health banner and tooltip no longer name `openprocessor`.
+
+- The dead `location ~ ^/clusters/(train|assign|stats)/` nginx proxy
+  block. No frontend code has called those legacy FAISS endpoints
+  through the labeler's nginx.
+- `docs/audit-2026-09-11/` (old audit screenshot set, superseded by
+  `docs/screenshots/` + `docs/FEATURES.md`) and two untracked stray
+  directories (`frontend/`, empty; `diagnostics/plate_bbox_audit/`, old
+  ad-hoc scratch output) — none were referenced from any doc.
+
+- Curation-strategy selector bar (`StrategyBar.svelte`) across `/clusters`,
+  `/clusters/[id]`, and `/review` — cluster-method picker, review-sort
+  dropdown, score chips, diverse overlay, and an embedding-plot toggle.
+- Embedding-plot lasso-select-and-act tool on `/clusters`: 2-d UMAP
+  visualization (never feeds clustering), lasso-select crops, bulk
+  assign/move directly from the plot. Selected-crop preview thumbnails
+  render side-by-side with the plot, each clickable to a full-size view.
+- Fuzzy-search class picker (`/` key) on `/review`, reaching every
+  non-deprecated class instead of only the top-10 quick-assign row.
+- Single-GPU-2 picker on `/train`'s GPU selector, and an unload action for
+  promoted Triton models on `/models`.
+- `/export` can now download the frozen export's `class_registry.json`,
+  `data.yaml`, and `manifest.json` directly.
+- Semantic text search over vehicle crops (P2-14), backed by the PE-Core
+  text/image encoder and a real OpenSearch kNN index: a search box on
+  `/clusters/[id]` (scoped to that cluster), `/review` (scoped to the
+  active tab), and `/clusters` (fully global, unscoped across the whole
+  dataset) — each result carries a similarity-score badge, and global
+  results additionally show a cluster-origin badge (`#id · dominant
+class`) so an operator can see where a crop lives before relabeling
+  it. Results feed through the existing `CropCard` grid, so labeling/
+  drag-drop/bulk-select all work unchanged on search results.
+- Diverse-selection overlay (k-center-greedy core-set) exposed on
+  `/review`, reusing the pattern already shipped on `/clusters/[id]`
+  (pool-scale job with 200/202 polling for large cohorts).
+- Back-to-all-clusters link on `/clusters/[id]`'s header.
+
 ### Fixed
+
+- Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
+  G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
+  (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —
+  it keeps the last-known-good stats on screen and shows the existing
+  "Stats unavailable" banner instead of throwing `Cannot read properties
+of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
+  new pure `resolveStatsUpdate()` (`src/lib/datasetStats.ts`).
+  - `getStats()` now uses `Promise.allSettled` for `/stats/dataset` and
+    `/stats/classes`, so a dataset-rollup failure no longer blanks
+    `per_class` — `/export`'s class table renders again.
+- "Validated" no longer conflates the class label with the region (G2):
+  added `class_validated` to `Crop`/`RawCrop` and `mapRawCrop`.
+  `CropCard`'s badge and VLM-accept chip, `CropMetaPanel`'s "validated"
+  pill, and the accept-all-VLM / advance-to-next-unvalidated logic on
+  `/clusters/[id]` now read `class_validated` instead of the OR-combined
+  `label_validated`, which previously showed a crop as validated purely
+  because its _region_ had been confirmed.
+- `/review`'s Class, Source and Conf filter controls are re-enabled and
+  sent to `GET {API_PREFIX}/review/{tab}` as `class_id`/`source`/
+  `conf_min`/`conf_max` — the backend now honors them (verified live:
+  `class_id` and `conf_min` both change the queue total). The old
+  `REVIEW_SERVER_FILTERS_ENABLED` flag is deleted; the "HDD source"
+  control is renamed to "Source" (`hddSource` → `sourceFilter`,
+  reading/writing `Crop.source`, which replaces the dead `hdd_source`
+  field). See `docs/design/logic-moves-adoption-plan-2026-09-24.md` W5.
+- Scoped VLM-assist runs (`AssistScopeBar`) now actually run the VLM
+  stage: `startAutoLabel()` sends `run_vlm: true` whenever a class or
+  prompt pack is scoped, matching the toast copy that already claimed
+  "VLM labeling limited to {class}" but never sent the flag (G5). Added
+  an explicit "Run VLM labeling stage" checkbox to `AutoLabelPanel`, off
+  by default to match the backend's own default.
+
+- The stubbed Playwright scripts intercepted `/curation/**`. The app calls
+  `/curation/**`, so their stubs never matched. They now stub `/curation`.
+  `playwright_curation_settings.py` also expects the server's `settable`
+  flag and the current `/settings` copy, and it passes against the built
+  container. `playwright_smoke.py` finds a cluster through
+  `/curation/clusters`; the `/clusters/stats/op_vehicles` route it used
+  was removed.
+
+- `/review`'s `Enter` no longer confirms an unrelated class on a
+  `vlm_new_class_pending` item. `resolveConfirmClassId` used to fall back
+  to the crop's current class when there was no proposal, and for these
+  items the backend now reports `proposed_class_id: null` precisely
+  because that class is unrelated. `Enter` opens the class picker there
+  instead.
+
+- `/review` now honors `?tab=` and `?crop_id=` deep links. It opens that
+  tab and jumps to that crop, paging forward up to 300 items and saying so
+  when the crop isn't in the queue. Switching tabs keeps `?tab=` in the
+  address bar. Before this, bookmarks such as `?tab=plates` and `/train`'s
+  cohort-preview links always landed on the first item of All:
+  `tabFromUrlId` existed but nothing called it.
+- `/review` fetched the first queue page twice on every load. The
+  debounced filter effect treated its initial state as a change 250 ms
+  after the immediate load, and the second fetch reset the cursor.
+- The review panel's proposer label reads "Proposal hint" instead of
+  "COCO hint".
+
+- The accept-VLM-suggestion flow on `/clusters/[id]` (card chip, `G`,
+  `Shift+Enter`, meta-panel row) could never fire, because no field ever
+  populated the suggestion. `mapRawCrop` now maps `vlm_proposed_class_id`
+  / `vlm_proposed_class_name` and the categorical `vlm_confidence`. The
+  meta panel's VLM-confidence row, which read an unmapped field through a
+  cast, now renders too.
+
+- `/settings`'s prompt-pack blurb understated its effect. The shared
+  default also drives the always-on background VLM labeler
+  (`/vlm/label_batch`), not only auto-label runs.
+
+- `/bakeoff` preselects the deployment's default profile (`default` /
+  `default_profile` on `/bakeoff/profiles`) and warns when the configured
+  default is invalid (`default_error`). Profiles now load before
+  baselines, so an unscoped baseline lookup can no longer land after the
+  scoped one and show the wrong baselines.
+- `/bakeoff` shows why a run failed. It shows the job-level `error` when
+  `state` is `error`, and every failed stage or dataset × model cell from
+  the status `failed` list. Before, a failed cell silently vanished from
+  the matrix.
+- Dropped the progress line's "auto-stops SAM3/Gemma" claim, which
+  described one deployment's GPU handling rather than main's.
+
+- The embedding plot's projection rebuild is no longer fire-and-forget. It
+  polls `GET /viz/projection/status`, shows progress, offers Cancel
+  (`POST /viz/projection/cancel`) and reloads the plot when the job
+  completes, or shows an error if it fails. It also picks up a rebuild
+  already running when the page opens. Once a projection exists there's
+  now a Rebuild button; before this, a projection could only be built
+  once and never refreshed as new crops arrived.
+
+- `/clusters/[id]` no longer opens an SSE subscription on candidate
+  clusters. They have no class, and the backend filters events on exact
+  `class_id`, so that stream could never deliver anything.
+- Corrected the `startAutoLabel` doc comment claiming
+  `detection_profile`/`prompt_pack` were confirmed live. `main` silently
+  dropped them; per-run support is landing backend-side.
+
+- `sse.ts`'s `subscribeKbEvents` used to hardcode a fixed list of known
+  SSE event types; any type outside that list was silently never
+  dispatched. A second queue-capable slot's own verify event would have
+  refreshed nothing on `/review`, with no error anywhere. Event types
+  are now derived from `slotRegistry.queues` at call time.
+- `plateGalleryController.svelte.ts`'s `savePlateBbox` (the plate
+  gallery's bbox-editor save handler) was re-sending the box to the
+  backend a second time on every save, even though `SlotBboxEditor` had
+  already performed the write — a redundant PUT on every plate-gallery
+  bbox save. It is now a pure local-state patch.
+
+- `/bakeoff` is now gated on backend availability instead of assuming
+  `/curation/bakeoff/*` is always mounted. A new one-shot probe
+  (`src/lib/bakeoffAvailability.svelte.ts`) calls the idempotent
+  `GET {API_PREFIX}/bakeoff/runs`: a 404/501 hides the nav link and
+  swaps the page body for a calm "not available" note; any other
+  failure (network error, 5xx, abort) leaves the route visible, since a
+  transient outage must not look like an absent capability. This was the
+  last backend-optional surface in the app with no availability gate at
+  all — the nav link rendered unconditionally and the page fired four
+  GETs on every mount regardless of whether the router existed. The
+  module is explicitly provisional and documents its own replacement:
+  once the backend ships an `evaluation` axis on `GET {API_PREFIX}/methods`
+  (mirroring the existing `export` axis), this probe is deleted in favor
+  of the same capability-discovery pattern every other gate in the app
+  already uses. See `docs/design/bakeoff-train-genericization-plan-2026-09-21.md`.
+
+- `src/routes/train/datasetExportGate.test.ts`'s highest-value
+  assertion referenced the dead identifier `refreshLprStatus` (renamed to
+  `refreshSingleClassExportStatus` in an earlier pass), making the test
+  unfailable — it could never have caught the "never 404 unconditionally
+  on mount" regression it exists to guard. Renamed to the live
+  identifier; verified it fails when the regression is reintroduced.
+
+- A new `/settings` page gives deployment operators one place to set the
+  shared, backend-side defaults for two curation strategies — the
+  clustering method used by every auto-label run this app starts, and the
+  review-queue sort applied to every `/review` tab that does not request
+  its own — persisted via `GET,PUT {API_PREFIX}/settings`. This is stored
+  backend-side rather than per-browser because the product has no user
+  accounts: one operator's pick is every operator's pick, on every
+  session, until changed again. The page also lists two more axes the
+  backend advertises but does not yet act on, `detection_profile` and
+  `prompt_pack`, as a read-only "Advertised but not yet wired" section —
+  no dropdown, no Save button — because no backend request path reads a
+  shared default for either one yet, and offering a control that silently
+  does nothing would be worse than not offering one. Against a backend
+  that predates this endpoint, the page degrades to an explicit "not
+  supported" note with no controls rendered, rather than erroring or
+  guessing.
+- The `/settings` page now has a **Clear** control next to **Save** for
+  every settable axis, sending `PUT {defaults: {[axis]: null}}` to
+  remove that axis's pinned override entirely — every caller falls back
+  to its own built-in default afterward. This closes the backend gap
+  (H-1) noted when the page first shipped: once a shared review-sort
+  default was pinned, there was no way to un-pin it through this API at
+  all, since a `PUT` had to name a currently-advertised id and "each tab
+  uses its own default" wasn't one. The backend added a `null`-clears
+  contract for exactly this; every save and every clear still goes
+  through the same explicit confirm dialog, since both remain
+  deployment-wide, no-undo-visible writes. Live-verified against a real
+  backend: pinned a sort default out of band, cleared it through the UI,
+  confirmed `GET /settings` reflects the clear.
+- Deployment operators can now register their own annotation slot —
+  without forking the repo or touching a single line of application
+  code — by dropping an `annotation-profiles.json` file next to the
+  built app: in `static/` before a build, or bind-mounted over
+  `/usr/share/nginx/html/annotation-profiles.json` in a running
+  container. The file is fetched once in the root layout's `load()` and
+  validated by a new hardened parser
+  (`src/lib/annotations/config/parseSlotConfig.ts`) against the schema
+  already published in `docs/annotation-slots-contract-draft.md`,
+  treating the file as untrusted operator input rather than reviewed
+  source: template paths are prefix-relative only and their placeholders
+  are drawn from a closed allow-list, regex patterns reject the `g`/`y`
+  flags and a conservative ReDoS shape, Tailwind ring classes must come
+  from a pre-declared preset or allow-list (a runtime-mounted class
+  string is invisible to Tailwind's JIT scan regardless), keymaps cannot
+  claim a hotkey the review page already owns, and any object carrying a
+  `__proto__`/`constructor`/`prototype` key is rejected outright. A
+  missing or malformed file degrades silently to this deployment's
+  built-in `license_plate` slot — a console warning plus one toast
+  surface a broken config, but the app never crashes and the currently
+  running legacy deployment's behavior is completely unchanged, since
+  it ships no live `annotation-profiles.json`. A worked example
+  (`static/annotation-profiles.example.json`, a pallet-shipping-label
+  slot) is shipped and covered by an integration test proving it renders
+  a real review tab with zero further code changes. Tier 3
+  (server-declared slots) remains deliberately unbuilt — this closes
+  steps 1 and 2 of the sequencing `docs/annotation-slots-contract-draft.md`
+  §9 already committed to.
+- The dashboard's auto-label run can be scoped to a single class — "just
+  help me with pallets right now" — instead of always sweeping the whole
+  pool. A collapsed-by-default `<AssistScopeBar>` on `/dashboard` picks
+  one class (fuzzy-searched through the same `searchClasses` ranking
+  `/review`'s class picker uses) and contributes `class_id` to
+  `POST {API_PREFIX}/pipeline/auto_label/start`; when the backend
+  advertises them, it also offers a detection-profile and a prompt-pack
+  selector, from two new `/methods` axes (`detection_profile`,
+  `prompt_pack`) parsed into `detection_profiles`/`prompt_packs` and
+  gated by `isDetectionProfileAvailable`/`isPromptPackAvailable` with the
+  same stable/experimental-only bar as every other axis. Leaving the bar
+  alone is byte-identical to the previous one-click run: `toStartParams()`
+  returns `{}` and the composed URL is unchanged. The whole bar is absent
+  — not disabled — unless `/methods` advertises at least one assist axis,
+  because `class_id` has no capability signal of its own and an unknown
+  query param is silently dropped server-side, which on an hours-long run
+  would mean an unscoped sweep while the UI claimed otherwise. Built
+  against a contract agreed with the backend session but not yet landed
+  there; verified statically, against both `/methods` fixtures, and in a
+  route-stubbed browser (`scripts/playwright_assist_scope.py`). A live
+  integration pass is still owed once the backend ships its half.
+- `docs/annotation-slots-contract-draft.md` — the P4.2 wire contract draft
+  for server-declared annotation slots (H3 opening offer; proposal only,
+  nothing implemented on either side).
+- `docs/FEATURES.md` — a full visual feature tour (screenshot + explanation
+  for every route), and a `docs/screenshots/demo.gif` slideshow now leading
+  the README instead of a static image grid.
+- `docs/README.md` — an index distinguishing current/maintained docs from
+  historical/reference ones (the 2026-09-11 audit, the curation-strategy
+  design doc, the two market-research docs).
+- `src/lib/annotations/` — additive foundation for genericizing the
+  `license_plate` vertical into a reusable "annotation slot" mechanism
+  (`docs/genericization-plan-2026-09-13.md`, Phase 1): the `SlotSpec`
+  capability model (`subBox`/`text`/`provenance`/`lifecycle`/`queue`),
+  a field-mapping adapter (`readSlot`) that reads whichever wire field
+  names a slot declares, a merge-by-replace `resolveSlotRegistry`, the
+  legacy `license_plate` profile decomposing today's ~30 `plate_*`
+  fields, and a config-driven detector label/palette registry proven
+  equivalent to `DetectorChip.svelte`'s hand-written switch/if-chain via
+  a 23-case snapshot test. Not yet wired into any route or component —
+  this is the additive Phase 1 slice; `mapRawCrop`/`DetectorChip`/
+  `PlateCard`/`/review`/`/clusters` migrations (Phase 2) are follow-up
+  work.
+- Two example slot profiles (`aircraft_tail_number`, `defect_code`,
+  under `src/lib/annotations/profiles/`) plus a falsification test
+  proving the capability model above handles a disjoint capability
+  subset (no sub-bbox at all, for `defect_code`), a different stored
+  bbox frame and shape envelope (`aircraft_tail_number`), and a
+  closed-vocabulary text field — with zero changes to `types.ts`,
+  `registry.ts`, or `readSlot.ts` beyond the model, and zero
+  special-casing of either example outside `profiles/`. Neither example
+  is bound to a real route or class; they are proof-of-concept configs
+  only.
+- `src/routes/review/plateReviewCharacterization.test.ts` — Phase 0
+  characterization tests (`docs/genericization-plan-2026-09-13.md`
+  §5.1) pinning today's Plates-tab behavior in `review/+page.svelte`
+  before any Phase 2 refactor touches it: the scan-mode keymap, the
+  class-drop tab guard invariant behind Finding C.2, the per-crop
+  (not per-cursor) save-abort map, the `$state.raw` undo-stack identity
+  semantics, the frozen-viewport `untrack()` seed read, and today's
+  closed `REVIEW_TABS`/`license_plate`-literal baseline in
+  `clusters/+page.svelte`. Source-scan style (no `@testing-library/svelte`
+  harness exists in this repo) rather than the plan's preferred
+  extract-then-test approach — see the file's doc comment for why.
+- `src/lib/review/slotQueueOps.ts` and `src/lib/review/abortRegistry.ts`
+  — the real P0.1/P0.3 extraction of the Plates-tab's undo-stack and
+  per-crop abort-map logic out of `review/+page.svelte`, with executable
+  unit tests. `review/+page.svelte` now delegates to both; behavior is
+  unchanged.
 
 - `/review`'s keyboard-shortcut hint strip hardcoded the reject/"no
   {label} visible" glyph to the literal `"D"` for every slot, instead of
@@ -1079,69 +1145,6 @@ plate_status === 'detected'` — `'human_confirmed'` is not a value the
   Fixed on the openprocessor side to use `OP_VEHICLE_CROPS_INDEX` like every
   other endpoint; verified live (589 clusters return correctly).
 
-### Removed
-
-- The dead `location ~ ^/clusters/(train|assign|stats)/` nginx proxy
-  block. No frontend code has called those legacy FAISS endpoints
-  through the labeler's nginx.
-- `docs/audit-2026-09-11/` (old audit screenshot set, superseded by
-  `docs/screenshots/` + `docs/FEATURES.md`) and two untracked stray
-  directories (`frontend/`, empty; `diagnostics/plate_bbox_audit/`, old
-  ad-hoc scratch output) — none were referenced from any doc.
-
-- Curation-strategy selector bar (`StrategyBar.svelte`) across `/clusters`,
-  `/clusters/[id]`, and `/review` — cluster-method picker, review-sort
-  dropdown, score chips, diverse overlay, and an embedding-plot toggle.
-- Embedding-plot lasso-select-and-act tool on `/clusters`: 2-d UMAP
-  visualization (never feeds clustering), lasso-select crops, bulk
-  assign/move directly from the plot. Selected-crop preview thumbnails
-  render side-by-side with the plot, each clickable to a full-size view.
-- Fuzzy-search class picker (`/` key) on `/review`, reaching every
-  non-deprecated class instead of only the top-10 quick-assign row.
-- Single-GPU-2 picker on `/train`'s GPU selector, and an unload action for
-  promoted Triton models on `/models`.
-- `/export` can now download the frozen export's `class_registry.json`,
-  `data.yaml`, and `manifest.json` directly.
-- Semantic text search over vehicle crops (P2-14), backed by the PE-Core
-  text/image encoder and a real OpenSearch kNN index: a search box on
-  `/clusters/[id]` (scoped to that cluster), `/review` (scoped to the
-  active tab), and `/clusters` (fully global, unscoped across the whole
-  dataset) — each result carries a similarity-score badge, and global
-  results additionally show a cluster-origin badge (`#id · dominant
-class`) so an operator can see where a crop lives before relabeling
-  it. Results feed through the existing `CropCard` grid, so labeling/
-  drag-drop/bulk-select all work unchanged on search results.
-- Diverse-selection overlay (k-center-greedy core-set) exposed on
-  `/review`, reusing the pattern already shipped on `/clusters/[id]`
-  (pool-scale job with 200/202 polling for large cohorts).
-- Back-to-all-clusters link on `/clusters/[id]`'s header.
-
-### Changed
-
-- A shared three-tier control-sizing scale (`.btn`/`.select`/`.input`
-  at 32px, `.btn-sm`/`.select-sm`/`.input-sm` at 26px, `.chip` at
-  20px), driven by CSS custom properties, replacing ad-hoc per-page
-  Tailwind sizing strings that had drifted into 7 different control
-  heights app-wide with no shared scale.
-- Dropdown-caret glyphs (the Ignore-reason toggle, StrategyBar's
-  collapsed-chip indicator) are now real SVG icons instead of a plain
-  unicode "▾", which rendered inconsistently thin/small across
-  browsers.
-- Semantic search result page size raised to the API's max (200,
-  up from 30-60) across all three integrations — the search box
-  fetches a single page with no load-more, so page size was the
-  effective result cap.
-
-- `/review` consolidated from 9 top-level tabs to 5 (All, Uncertainty,
-  Model Disagreements, COCO Blind Spots, Plates), with the three
-  removed tabs (Mismatches, Gemma Low-Conf, Primary · Low-Conf) moved to
-  quick-filter chips on the All tab. Outliers retired in favor of the
-  `atypicality` sort, which covers the same need correctly.
-- Rank-scope (Largest/+2nd) and clarity-slider controls on `/review` are
-  now available on every tab and preset, not just two of them.
-
-### Fixed
-
 - Drag-and-drop on `/clusters/[id]` no longer resurrects a crop that was
   just successfully moved — the grid is now derived live from the crop
   list instead of a manually-rebuilt snapshot that could go stale.
@@ -1187,54 +1190,3 @@ components` and introducing the three-tier scale above).
   matching class at all, so the lookup silently returned nothing. Now
   uses a real `cluster_id` filter (new backend query param) that works
   regardless of cluster kind.
-
-### Changed
-
-- Class adequacy, thresholds and hotkeys now come entirely from the
-  backend (`docs/design/logic-moves-adoption-plan-2026-09-24.md` W4,
-  OpenProcessor `main` @ `d037be8`):
-  - `adequacy.ts` renders whichever tier (`block`/`warn`/`ok`) the
-    server puts on each class (`GET /classes`, `GET /stats/classes`),
-    instead of recomputing it from `validated_count` against hardcoded
-    500/100 thresholds. The old `ADEQUACY_OK`/`ADEQUACY_LOW` constants
-    are gone.
-  - `/export`'s dataset table reads the server's `aug_target`/`aug_gap`
-    per class and the server's per-class `deficient` flag on
-    `GET /test_holdout/stats` (falling back to comparing against the
-    served `min_test_per_class` only when a bucket omits the flag) —
-    the client-side `clamp(validated, 500, 3000)` augmentation target
-    and the hardcoded "< 5 test crops" minimum are gone. The row-building
-    logic moved to a pure `src/lib/export/exportDatasetRows.ts` module.
-  - `classHotkey.ts`'s `reservedHotkeyLetters()` now unions
-    `classesStore.reservedHotkeys` (the server's own `reserved_hotkeys`
-    field) with any registered slot's own keymap letters, instead of a
-    hardcoded `RESERVED_HOTKEY_LETTERS` constant unioned with the same
-    slot letters. Verified live: the server's set (`/abdefgmnuxz`)
-    already matches what the old constant + union produced.
-    `setClassHotkey` now shows the server's 400/409/422 detail text
-    verbatim on a rejected bind.
-  - `/classes` and `AddClassModal` no longer validate the class-name
-    slug pattern client-side — `POST`/`PUT /classes` 422s with the
-    `^[a-z0-9_]+$` pattern in its detail, which now renders inline.
-  - `errorDetail()` (`api.ts`) now also extracts the `msg` field from a
-    FastAPI/Pydantic validation-error array (`{detail: [{msg, ...}]}`),
-    not just a plain string `detail` — this is what makes the class-name
-    422 above legible instead of falling through to "API 422 ...".
-  - `/classes` shows a warning banner listing any class whose bound
-    hotkey has since become reserved. Live on this deployment: `bmw` is
-    bound to `b`, which the backend now reserves for the `license_plate`
-    slot's keymap — the binding is kept (matches the backend), not
-    auto-cleared.
-  - The merge dialog on `/classes` calls
-    `POST /classes/merge?dry_run=true` (new `previewClassMerge()`)
-    whenever the source/target selection changes, and shows
-    `would_relabel`/`would_unvalidate`/`holdout_blocking` before the
-    real merge. Confirm is disabled when the dry run reports `blocked`.
-  - `GET /classes` now returns `{classes, thresholds, reserved_hotkeys}`;
-    `getClasses()`'s return type changed from `RegistryClass[]` to
-    `ClassesResponse`, and `classesStore` gained `thresholds` and
-    `reservedHotkeys` state alongside `classes`. The only caller
-    (`classesStore.refresh()`) was updated; no other frontend code
-    called `getClasses()` directly.
-  - `RegistryClass.added_at` and the `/classes` "Added" column were
-    already wired end to end — verified live, no change needed.

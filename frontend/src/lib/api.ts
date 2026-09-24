@@ -30,11 +30,14 @@ import type {
   CropFilter,
   CropHistoryResponse,
   CropImageResponse,
+  CropUndoBatchResult,
   ItemTextLine,
   RegistryClass,
   RegistryClassCreate,
   RegistryClassMerge,
   RegistryClassUpdate,
+  ResolveNewClassRequest,
+  ResolveNewClassResponse,
   Cluster,
   Crop,
   ExportDatasetList,
@@ -1661,6 +1664,39 @@ export async function undoCropLabel(cropId: string, signal?: AbortSignal): Promi
   return mapRawCrop(raw);
 }
 
+/**
+ * `POST {API_PREFIX}/crops/label/undo_batch` — batch form of
+ * `undoCropLabel`: each crop is restored independently to its own state
+ * before its most recent human class write, so undoing a `bulkLabel` or
+ * `resolveNewClassProposal` means passing the same ids that write
+ * reported in `updated_ids`. `409` when no crop in the batch had
+ * anything to undo.
+ */
+export async function undoLabelBatch(
+  cropIds: string[],
+  signal?: AbortSignal,
+): Promise<CropUndoBatchResult> {
+  type Raw = {
+    items?: RawCrop[];
+    undone?: number;
+    nothing_to_undo?: string[];
+    conflicts?: string[];
+    not_found?: string[];
+  };
+  const raw = await apiFetch<Raw>(
+    `${API_PREFIX}/crops/label/undo_batch`,
+    { method: 'POST', body: JSON.stringify({ crop_ids: cropIds }) },
+    signal,
+  );
+  return {
+    items: (raw.items ?? []).map(mapRawCrop),
+    undone: raw.undone ?? 0,
+    nothing_to_undo: raw.nothing_to_undo ?? [],
+    conflicts: raw.conflicts ?? [],
+    not_found: raw.not_found ?? [],
+  };
+}
+
 /** Options shared by the single and batch discard endpoints. */
 export interface DiscardOptions {
   /** Clear the crop's class (it doesn't belong where it is). Default true. */
@@ -2148,6 +2184,34 @@ export async function getNewClassProposalsSummary(
     total_pending: raw.total_pending ?? 0,
     top_terms: Array.isArray(raw.top_terms) ? raw.top_terms : [],
   };
+}
+
+/**
+ * `POST {API_PREFIX}/review/new_class_proposals/resolve` — bulk-resolve
+ * every pending `vlm_new_class_pending` item proposing `body.label`, not
+ * just the summary's capped `sample_crop_ids` preview. Exactly one of
+ * `body.class_id` (map to an existing registry class) / `body.create`
+ * (register a new one first) must be set — the backend 422s otherwise;
+ * an unknown `class_id` is 400, a duplicate `create.class_name` is 409
+ * (both surface as `ApiError.detail`).
+ *
+ * `dryRun: true` (`?dry_run=true`) reports `matched`/`matched_ids` and
+ * writes/creates nothing — callers use it to show "this will assign N
+ * crops" before the real resolve. Every write is a restorable
+ * `class_id_history` snapshot server-side, so `undoLabelBatch` with the
+ * response's `updated_ids` puts each item back exactly as a pending
+ * proposal.
+ */
+export function resolveNewClassProposal(
+  body: ResolveNewClassRequest,
+  opts: { dryRun?: boolean } = {},
+  signal?: AbortSignal,
+): Promise<ResolveNewClassResponse> {
+  return apiFetch<ResolveNewClassResponse>(
+    `${API_PREFIX}/review/new_class_proposals/resolve${qs({ dry_run: opts.dryRun || undefined })}`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
 }
 
 // -- pool-scale diverse selection for /review (P2-10) --------------------

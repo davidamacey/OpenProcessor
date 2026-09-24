@@ -678,6 +678,58 @@ export interface BulkLabelResult {
   conflicts: BulkLabelConflict[];
 }
 
+/** `create` payload on `POST {API_PREFIX}/review/new_class_proposals/resolve` —
+ *  register a brand-new registry class before resolving the term. Same
+ *  slug rule as `RegistryClassCreate.name` (`class_name` here, to match
+ *  the term the VLM proposed rather than an internal field name). */
+export interface ResolveNewClassCreate {
+  class_name: string;
+  group?: string;
+  notes?: string | null;
+}
+
+/** Body for `POST {API_PREFIX}/review/new_class_proposals/resolve` — bulk-
+ *  resolve every pending `vlm_new_class_pending` item proposing `label`.
+ *  Exactly one of `class_id` (map to an existing registry class) /
+ *  `create` (register a new one first) must be set — the backend 422s
+ *  otherwise. */
+export interface ResolveNewClassRequest {
+  label: string;
+  class_id?: number | null;
+  create?: ResolveNewClassCreate | null;
+  label_source?: 'human' | 'human_confirmed' | 'new_class_proposal';
+}
+
+/** `POST {API_PREFIX}/review/new_class_proposals/resolve` response.
+ *  `class_id` is null only under `?dry_run=true` when `create` was
+ *  given (nothing was created yet to have an id). `?dry_run=true` also
+ *  leaves `updated`/`updated_ids`/`conflicts`/`skipped` at their empty
+ *  defaults — only `matched`/`matched_ids` are meaningful for a dry run. */
+export interface ResolveNewClassResponse {
+  class_id: number | null;
+  class_name: string;
+  created: boolean;
+  label: string;
+  matched: number;
+  matched_ids: string[];
+  updated: number;
+  updated_ids: string[];
+  conflicts: BulkLabelConflict[];
+  skipped: string[];
+}
+
+/** `POST {API_PREFIX}/crops/label/undo_batch` response — batch form of
+ *  `undoCropLabel`. Each crop is restored independently to its own state
+ *  before its most recent human class write; `items` carries only the
+ *  crops actually restored. */
+export interface CropUndoBatchResult {
+  items: Crop[];
+  undone: number;
+  nothing_to_undo: string[];
+  conflicts: string[];
+  not_found: string[];
+}
+
 export interface ToastMessage {
   id: string;
   kind: 'info' | 'success' | 'warn' | 'error';
