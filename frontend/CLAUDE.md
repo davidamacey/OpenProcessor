@@ -587,6 +587,53 @@ npm run check  # svelte-check + tsc
 npm run build  # SvelteKit → /build (static)
 ```
 
+### Component tests + the `/review` controller
+
+`vite.config.ts` sets `resolve: process.env.VITEST ? { conditions:
+['browser'] } : undefined`, which makes vitest resolve Svelte 5's real
+browser build under jsdom (no new dependency). This means a `.test.ts`
+can mount a component directly:
+
+```ts
+import { mount, unmount, flushSync } from 'svelte';
+import MyComponent from './MyComponent.svelte';
+
+const target = document.createElement('div');
+document.body.appendChild(target);
+const instance = mount(MyComponent, { target, props: {...} });
+flushSync();
+// assert on target.textContent / target.querySelector(...)
+unmount(instance);
+```
+
+Prefer this over a source-text regex scan whenever the behavior is
+actually renderable — `CropCard.test.ts` / `DatasetStats.test.ts` /
+`SlotCard.test.ts` / `TrainForm.gpuPicker.test.ts` /
+`StrategyBar.appliedSort.test.ts` are the worked examples
+(docs/design/test-audit-2026-09-24.md recommendation 7). A source scan
+is still the right tool for something a mount can't reach — absence of
+dead code, a call site's exact wiring the test would otherwise have to
+drive a full user flow to observe — see `TrainForm.test.ts`'s remaining
+`it()`s, each with a one-line reason comment, and
+`$lib/testing/sourceScan.ts`'s `normalize`/`extractFunction`/
+`extractBalanced` helpers, which keep a scan robust to reformatting
+(no `\n {2}\}`-anchored regex that breaks on a prettier re-wrap).
+
+`/review`'s queue actions (assign/discard/skip/undo) live in
+`src/lib/review/reviewController.svelte.ts`, not inline in
+`+page.svelte` — the page still owns `queue`/`cursor`/`handledIds`
+(shared with slot-tab actions and arrow-key nav) and hands them to the
+controller by reference/accessor, following the existing
+`plateGalleryController.svelte.ts` factory-function convention. Test
+new queue-action behavior against the controller directly
+(`reviewController.test.ts`), not by mounting the whole page.
+
+Every new test in either category should be verified to fail against a
+mutated copy of the code it covers (edit a scratch copy, confirm red,
+restore byte-for-byte — never `git checkout`/`stash`/`restore`) before
+being trusted; `npm run test:mutation -- --mutate <file>` does this at
+scale for a file already in `stryker.config.json`'s `mutate` list.
+
 ### End-to-end tests (`e2e/`)
 
 `npm run test:e2e` — creates/reuses a per-project venv at `e2e/.venv/`

@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Component-mount vitest support: `vite.config.ts` sets
+  `resolve.conditions: ['browser']` under `VITEST` so Svelte 5's
+  `mount`/`unmount`/`flushSync` work under jsdom (no new dependency).
+  Real DOM-rendering tests replace source-text scans for `CropCard`,
+  `DatasetStats`, `SlotCard`, `TrainForm`'s GPU picker and
+  `StrategyBar`'s applied-sort summary — each verified to fail against a
+  mutated copy of the component it covers before being counted as
+  passing (docs/design/test-audit-2026-09-24.md recommendation 7).
+- `src/lib/review/reviewController.svelte.ts`: assign/discard/skip/undo
+  extracted out of `/review`'s `+page.svelte` into a testable controller
+  (`plateGalleryController.svelte.ts`'s existing factory-function
+  pattern). Closes three mutations the audit found surviving under the
+  old source-scan-only suite — a failed assign/discard no longer
+  restoring the item, and skip no longer advancing the cursor — with a
+  98.63% Stryker mutation score on the new controller (the one
+  remaining survivor is a documented equivalent mutant).
+- `src/lib/testing/sourceScan.ts`: whitespace-insensitive,
+  brace-balanced helpers (`normalize`, `extractFunction`,
+  `extractBalanced`) for the remaining source-scan tests that guard
+  real wiring a mount/controller test can't reach (recommendation 8).
+  `clusterMoveRace.test.ts`'s wiring scans now use these instead of
+  `\n {2}\}`-anchored regexes that broke on a harmless prettier re-wrap.
 - A stubbed-backend end-to-end suite, `e2e/` (pytest + Playwright, its own
   gitignored `e2e/.venv/`), gated in CI by a new `e2e-stubbed` job and
   runnable locally via `npm run test:e2e`
@@ -149,6 +171,19 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
 
 ### Changed
 
+- Trimmed/deleted several source-scan tests now superseded by real
+  mount or controller tests, or that never failed for an actual
+  regression (test-audit-2026-09-24.md T2/P2-2): the
+  `regionRouteScan.test.ts` `REGION_BASE === '/regions'`
+  constant-reassertion, `plateGalleryController.statusConstants
+.test.ts`'s "today's values match the pre-C4b literals" block, and
+  `TrainForm.test.ts`'s render-shape checks now covered by
+  `TrainForm.gpuPicker.test.ts`'s mount test. `stripComments` moved
+  from `apiPrefixScan.test.ts` to `$lib/testing/sourceScan.ts` as the
+  one shared implementation.
+- `stryker.config.json` gets an `ignorePatterns` excluding `e2e/` —
+  its gitignored Python venv's `lib64` symlink was crashing Stryker's
+  sandbox copy with `EISDIR`, making `npm run test:mutation` unrunnable.
 - A pre-push hook runs the full vitest suite (`vitest-pre-push` in
   `.pre-commit-config.yaml`), so a failing test can't be pushed. Install
   it with `pre-commit install --hook-type pre-push`.
