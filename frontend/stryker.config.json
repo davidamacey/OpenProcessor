@@ -25,6 +25,14 @@
     "src/lib/annotations/readSlot.ts",
     "src/lib/review/reviewController.svelte.ts"
   ],
+  "ignorePatterns": [
+    "e2e/**",
+    "node_modules/**",
+    "build/**",
+    ".svelte-kit/**",
+    "reports/**",
+    "docs/**"
+  ],
   "concurrency": 4,
   "incremental": true,
   "incrementalFile": ".stryker-tmp/incremental.json",
