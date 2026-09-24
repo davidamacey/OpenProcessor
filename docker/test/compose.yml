@@ -134,9 +134,9 @@ services:
       - OP_VIZ_JOBS_DIR=/jobs/viz
       - OP_AUTO_LABEL_STATE_DIR=/jobs/auto_label
       # OpenAI-compatible endpoint (src/services/labeling/vlm_client.py).
-      - OPENWEBUI_BASE_URL=http://fake-vlm:8000/v1
-      - OPENWEBUI_MODEL=fake-vlm
-      - OPENWEBUI_API_KEY=EMPTY
+      - OP_VLM_URL=http://fake-vlm:8000/v1
+      - OP_VLM_MODEL=fake-vlm
+      - OP_VLM_API_KEY=EMPTY
       # Three write endpoints are disabled by default; without these the
       # harness would "exercise" them and only ever see 400.
       - OP_SCORES_ENABLED=1

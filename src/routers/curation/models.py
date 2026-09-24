@@ -461,7 +461,7 @@ async def models_status() -> dict[str, Any]:
             'inference_failed': None,
             'avg_latency_ms': None,
             'last_error': vlm_error,
-            'endpoint': os.environ.get('OPENWEBUI_BASE_URL', 'http://host.docker.internal:8012/v1'),
+            'endpoint': os.environ.get('OP_VLM_URL', ''),
         }
     )
 

@@ -219,7 +219,7 @@ class TestRouting:
         """Non-secondary-shape pending → primary hit + VLM verify → done, no secondary segmenter call."""
         F = get_region_fields()
         lpr_cand = RegionCandidate(
-            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='lpr_nanov11_640'
+            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
         )
         sam3 = _sam3_mock(None)
         task = _make_task(
@@ -243,7 +243,7 @@ class TestRouting:
     async def test_pending_car_lpr_rejected_falls_through_to_sam3(self) -> None:
         F = get_region_fields()
         lpr_cand = RegionCandidate(
-            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='lpr_nanov11_640'
+            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
         )
         sam_cand = RegionCandidate(bbox_norm=(0.6, 0.6, 0.7, 0.65), score=0.79, source='sam3')
         gemma = MagicMock()
@@ -298,7 +298,7 @@ class TestRouting:
         # training-set selector.
         assert task.update_doc[F.status] == 'no_region_box'
         chain = task.update_doc.get(F.detector_chain) or []
-        assert any('lpr_nanov11_640:miss' in s for s in chain)
+        assert any('license_plate_detector:miss' in s for s in chain)
         assert any('sam3:miss' in s for s in chain)
 
     @pytest.mark.asyncio
@@ -385,7 +385,7 @@ class TestProvenance:
         """A successful primary-detector write must stamp detector + version + frame + ts."""
         F = get_region_fields()
         lpr_cand = RegionCandidate(
-            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='lpr_nanov11_640'
+            bbox_norm=(0.3, 0.4, 0.5, 0.45), score=0.82, source='license_plate_detector'
         )
         task = _make_task(
             status='pending',
@@ -399,15 +399,15 @@ class TestProvenance:
             ocr_recognizer=_ocr_recognizer_mock(),
             gemma=_gemma_mock(is_region=True),
         )
-        assert task.update_doc[F.detector] == 'lpr_nanov11_640'
+        assert task.update_doc[F.detector] == 'license_plate_detector'
         assert task.update_doc[F.detector_version] == '1'
         assert task.update_doc[F.bbox_frame] == 'source'
         assert F.detected_at in task.update_doc
         # Verifier fields should be present (VLM verified).
-        assert task.update_doc[F.verifier] == 'gemma-4-e4b'
+        assert task.update_doc[F.verifier] == 'test-vlm-model'
         # Chain captures the cascade: hit + vlm_verify_ok.
         chain = task.update_doc.get(F.detector_chain) or []
-        assert any('lpr_nanov11_640:hit' in s for s in chain)
+        assert any('license_plate_detector:hit' in s for s in chain)
         assert any('vlm_verify_ok' in s for s in chain)
 
     @pytest.mark.asyncio
@@ -431,7 +431,7 @@ class TestProvenance:
         chain = task.update_doc.get(F.detector_chain) or []
         # A primary-detector miss must be recorded so training-set
         # selection can find it.
-        assert any('lpr_nanov11_640:miss' in s for s in chain)
+        assert any('license_plate_detector:miss' in s for s in chain)
         assert any('sam3:hit' in s for s in chain)
 
     @pytest.mark.asyncio
@@ -444,7 +444,7 @@ class TestProvenance:
         # square-ish axis-aligned boxes.
         F = get_region_fields()
         big_cand = RegionCandidate(
-            bbox_norm=(0.1, 0.1, 0.9, 0.9), score=0.95, source='lpr_nanov11_640'
+            bbox_norm=(0.1, 0.1, 0.9, 0.9), score=0.95, source='license_plate_detector'
         )
         task = _make_task(
             status='pending',
@@ -460,7 +460,7 @@ class TestProvenance:
         )
         chain = task.update_doc.get(F.detector_chain) or []
         assert not any('sanity_reject' in s for s in chain)
-        assert task.update_doc[F.detector] == 'lpr_nanov11_640'
+        assert task.update_doc[F.detector] == 'license_plate_detector'
         assert F.bbox_norm in task.update_doc
 
 

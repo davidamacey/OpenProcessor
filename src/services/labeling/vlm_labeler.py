@@ -569,6 +569,11 @@ class VlmLabeler:
         pack: PromptPack = GENERIC_ITEM_PACK,
         fields: RegionFields | None = None,
     ) -> None:
+        if base_url and not model:
+            raise ValueError(
+                f'OP_VLM_MODEL is required when a VLM URL is set (base_url={base_url!r}); '
+                'there is no default model id.'
+            )
         if max_images_per_call < 1:
             raise ValueError('max_images_per_call must be >= 1')
         # Hard cap = the deployment's configured upstream limit

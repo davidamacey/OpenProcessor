@@ -185,7 +185,9 @@ services:
       # comma-separated SAM3_URLS list load-balances across several.
       - SAM3_URL=${SAM3_URL:-}
       - SAM3_URLS=${SAM3_URLS:-}
-      - VLM_URL=${VLM_URL:-${GEMMA_URL:-}}
+      - OP_VLM_URL=${OP_VLM_URL:-}
+      - OP_VLM_MODEL=${OP_VLM_MODEL:-}
+      - OP_VLM_API_KEY=${OP_VLM_API_KEY:-}
     command:
       - python
       - -m

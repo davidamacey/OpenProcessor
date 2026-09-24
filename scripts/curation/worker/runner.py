@@ -251,10 +251,10 @@ async def run(args: argparse.Namespace) -> int:
     # the item's class name.
     pack = resolve_prompt_pack()
     logger.info('vlm_prompt_pack_resolved', pack=pack.name)
-    # No VLM URL at all (VLM_URL / GEMMA_URL / OPENWEBUI_BASE_URL all
-    # unset) = a deployment without an image LLM: no visibility filter, no
-    # verify call; detector regions are accepted unverified and their
-    # text is read by OCR (region_text_stage.accept_without_vlm).
+    # No VLM URL at all (OP_VLM_URL unset) = a deployment without an image
+    # LLM: no visibility filter, no verify call; detector regions are
+    # accepted unverified and their text is read by OCR
+    # (region_text_stage.accept_without_vlm).
     vlm_available = bool((args.gemma_url or '').strip())
     validate_text_reader(profile.text_reader)
     item_text_enabled = get_curation_config().item_text_enabled and bool(profile.ocr_pipeline_model)
