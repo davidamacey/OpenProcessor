@@ -7437,7 +7437,7 @@
     },
     "/curation/export/yolo": {
       "post": {
-        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export with a deterministic split and a\nreproducibility manifest. Synchronous; the response includes the\nexport dir + counts.",
+        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export with a deterministic split and a\nreproducibility manifest. Synchronous; the response includes the\nexport dir + counts. ``422`` (``nothing to export: <reason>``) when no\nitem is exportable; nothing is written then.",
         "operationId": "export_yolo_curation_export_yolo_post",
         "requestBody": {
           "content": {

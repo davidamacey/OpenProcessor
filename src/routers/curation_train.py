@@ -55,6 +55,11 @@ from src.services.curation.dataset_thresholds import (
     WARN_MIN_CROPS_PER_CLASS,
     dataset_thresholds,
 )
+from src.services.curation.export_readiness import (
+    export_generation_check,
+    export_size_check,
+    items_index_generation,
+)
 from src.services.training import jobs as train_jobs
 from src.services.training.gpu_arbiter import (
     GpuArbiterStopFailedError,
@@ -858,8 +863,24 @@ async def _run_preflight(
                     )
                 )
 
+    # ---- export readiness (DQ-M9): not empty, built from the current index -
+    export_manifest = _read_export_manifest(spec.dataset_export_dir)
+    for name, (severity, message, detail) in (
+        ('export_not_empty', export_size_check(export_manifest)),
+        (
+            'export_generation',
+            export_generation_check(
+                export_manifest,
+                await items_index_generation(opensearch, CURATION_ITEMS_INDEX),
+            ),
+        ),
+    ):
+        checks.append(
+            PreflightCheck(name=name, severity=severity, message=message, detail=detail or None)
+        )
+
     # ---- validated items the export dropped for unregistered class ids ------
-    dropped = _read_export_manifest(spec.dataset_export_dir).get('dropped_unregistered_class_ids')
+    dropped = export_manifest.get('dropped_unregistered_class_ids')
     if isinstance(dropped, dict):
         total = sum(int(v) for v in dropped.values())
         checks.append(

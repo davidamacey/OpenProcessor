@@ -629,6 +629,29 @@ one profile, with the same `idle`/`unknown`/`success` contract as
 its own `current` symlink, so narrowed exports never clobber each other
 or the multi-class dataset.
 
+**Readiness (DQ-M9).** Both exports refuse with `422`
+(`detail: "nothing to export: <reason>"`) when nothing is exportable —
+`POST /export/yolo`: no item is `class_validated` (and not
+review-dismissed), none has a box and class, or every one is on a class
+id missing from (or deprecated in) the registry; `POST
+/export/single_class`: no item matches the profile. Nothing is written
+and `current` keeps pointing at the previous export. Every manifest
+records `items_index: {index, uuid, created_at}` — the items index it was
+read from (`null` if it could not be read).
+
+`POST /train/preflight` adds two checks (see
+`src/services/curation/export_readiness.py`):
+
+| Check | `block` when | `unknown` when |
+|---|---|---|
+| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` | no readable manifest / no count |
+| `export_generation` | the manifest's `items_index.uuid` differs from the live items index's (the index was rebuilt since the export); for an unstamped export, its `exported_at` is before the live index's creation | the live index can't be read, or the manifest has neither a stamp nor `exported_at` |
+
+The index `uuid` is the staleness signal because it changes on every
+index creation and is immune to clock skew; label edits after an export
+are deliberately not "stale" (exports are snapshots, and retraining on a
+past one is supported).
+
 ### Capability discovery — `GET /methods`
 
 `GET {prefix}/methods` (`src/routers/curation/methods.py`) is the

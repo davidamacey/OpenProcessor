@@ -162,5 +162,9 @@ async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, mon
 
 @pytest.mark.asyncio
 async def test_unvalidated_items_are_not_exported(fake, registry, tmp_path):
-    result = await _export(fake, registry, tmp_path)
-    assert result.image_count == 0
+    # DQ-M9: with no validated item there is nothing to export — refused,
+    # rather than an empty dataset flipped to `current`.
+    from src.services.curation.export_readiness import NothingToExportError
+
+    with pytest.raises(NothingToExportError):
+        await _export(fake, registry, tmp_path)

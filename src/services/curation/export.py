@@ -45,6 +45,11 @@ from typing import Any, Literal
 from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.export_readiness import (
+    MANIFEST_GENERATION_KEY,
+    NothingToExportError,
+    items_index_generation,
+)
 from src.services.curation.export_support import (
     _build_export_id_map,
     _code_sha,
@@ -263,6 +268,10 @@ class GenericYoloExportService:
         """Export every validated, non-dismissed item as a multi-class YOLO
         detection dataset.
 
+        Raises :class:`NothingToExportError` (before writing anything) when
+        no item survives the selection: none validated, none with a box and
+        class, or every one on an unregistered / deprecated class.
+
         Honors a frozen ``test_holdout`` flag for the test split; every
         other item's split comes from :func:`stratified_split` — a
         deterministic per-class, per-``group_key`` bucket assignment
@@ -288,6 +297,7 @@ class GenericYoloExportService:
         ``images/<split>/`` when ``copy_images`` is true.
         """
         started_at = datetime.now(UTC).isoformat()
+        generation = await items_index_generation(self.opensearch, self.config.items_index)
         query = {
             'bool': {
                 'filter': [{'term': {'class_validated': True}}],
@@ -299,8 +309,17 @@ class GenericYoloExportService:
         # and let a rare class vanish; the cap is a class-balanced sample
         # applied below, once dedup and the id remap have settled the pool.
         hits = await self._scroll_items(query)
+        if not hits:
+            raise NothingToExportError(
+                '0 items are class_validated (and not review-dismissed); '
+                'validate labels before exporting'
+            )
 
         rows = self._hits_to_rows(hits)
+        if not rows:
+            raise NothingToExportError(
+                f'{len(hits)} validated items, but none has both a box and a class id'
+            )
         rows, dedup_stats = await self._apply_dedup(rows, dedup_threshold)
 
         registry_file = self.registry.load()
@@ -311,6 +330,11 @@ class GenericYoloExportService:
                 key = str(row.class_id)
                 dropped_unregistered[key] = dropped_unregistered.get(key, 0) + 1
         rows = _remap_rows_to_export_ids(rows, id_map)
+        if not rows:
+            raise NothingToExportError(
+                'every validated item has a class id that is not in the class registry '
+                f'(or is deprecated): {dict(sorted(dropped_unregistered.items()))}'
+            )
 
         # Cap AFTER dedup + remap, so the final count lands at exactly
         # min(max_images, pool) instead of drifting below it.
@@ -439,6 +463,9 @@ class GenericYoloExportService:
             'image_copy': image_copy_stats,
             'resize_mode': resize_mode,
             'dropped_unregistered_class_ids': dropped_unregistered,
+            # The items index this dataset was read from (staleness check
+            # at training preflight — see export_readiness).
+            MANIFEST_GENERATION_KEY: generation,
         }
         manifest_path = resolved_export_dir / ARTIFACT_FILENAMES['manifest']
         atomic_write_text(manifest_path, json.dumps(manifest, indent=2))

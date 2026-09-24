@@ -27,6 +27,7 @@ from src.services.curation.export import (
     GenericYoloExportService,
     resolve_current_export_dir,
 )
+from src.services.curation.export_readiness import NothingToExportError
 
 
 if TYPE_CHECKING:
@@ -50,7 +51,8 @@ async def export_yolo(
     Backed by :class:`GenericYoloExportService` — a multi-class YOLO
     detection dataset export with a deterministic split and a
     reproducibility manifest. Synchronous; the response includes the
-    export dir + counts.
+    export dir + counts. ``422`` (``nothing to export: <reason>``) when no
+    item is exportable; nothing is written then.
     """
     from pathlib import Path as _Path
 
@@ -64,6 +66,12 @@ async def export_yolo(
             max_images=payload.max_images,
             dedup_threshold=payload.dedup_threshold,
         )
+    except NothingToExportError as exc:
+        # Nothing exportable is the caller's data state, not a server
+        # fault; nothing was written and `current` still points at the
+        # previous export.
+        logger.warning('export_refused_empty', reason=str(exc))
+        raise HTTPException(status_code=422, detail=f'nothing to export: {exc}') from exc
     except Exception as exc:
         logger.error('export_failed', error=str(exc))
         raise HTTPException(status_code=500, detail=f'export failed: {exc}') from exc
