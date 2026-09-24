@@ -312,7 +312,7 @@ be changed at runtime once the app has started.
 | Area | Vars |
 |---|---|
 | OpenSearch index names | `OP_IMAGES_INDEX`, `OP_ITEMS_INDEX`, `OP_LABELS_CONFIRMED_INDEX`, `OP_CLASSES_INDEX`, `OP_CLUSTERS_INDEX`, `OP_SETTINGS_INDEX`, `OP_UMAP_STATE_INDEX`, `OP_UMAP_VIZ_STATE_INDEX` |
-| Filesystem roots | `OP_REGISTRY_PATH`, `OP_SOURCE_ROOT`, `OP_EXPORT_ROOT`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
+| Filesystem roots | `OP_REGISTRY_PATH`, `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES` (JSON object or `alias=path,...`), `OP_EXPORT_ROOT`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
 | VLM prompt pack | `OP_PROMPT_PACK_PATH` |
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |

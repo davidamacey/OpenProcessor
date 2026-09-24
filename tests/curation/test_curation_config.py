@@ -6,13 +6,10 @@ See ``docs/design/curation_design_rationale.md`` §2.1.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+
+import pytest
 
 from src.config import CurationConfig, IndexRole, index_name
-
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def test_defaults_are_generic_op_names() -> None:
@@ -107,3 +104,41 @@ def test_from_env_prompt_pack_path_unset_stays_none(monkeypatch: pytest.MonkeyPa
     monkeypatch.delenv('OP_PROMPT_PACK_PATH', raising=False)
     cfg = CurationConfig.from_env()
     assert cfg.prompt_pack_path is None
+
+
+# =============================================================================
+# OP_SOURCE_PATH_ALIASES (named source roots served at /images/root/{alias})
+# =============================================================================
+
+
+def test_source_path_aliases_unset_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_SOURCE_PATH_ALIASES', raising=False)
+    assert CurationConfig.from_env().source_path_aliases == {}
+
+
+def test_source_path_aliases_from_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        'OP_SOURCE_PATH_ALIASES', '{"archive": "/data/archive", "nightly": "/data/nightly"}'
+    )
+    assert CurationConfig.from_env().source_path_aliases == {
+        'archive': Path('/data/archive'),
+        'nightly': Path('/data/nightly'),
+    }
+
+
+def test_source_path_aliases_from_pair_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_SOURCE_PATH_ALIASES', ' archive=/data/archive , nightly=/data/nightly,')
+    assert CurationConfig.from_env().source_path_aliases == {
+        'archive': Path('/data/archive'),
+        'nightly': Path('/data/nightly'),
+    }
+
+
+@pytest.mark.parametrize(
+    'raw',
+    ['{not json', '["a"]', '{"a": 1}', 'archive', '=/data', 'archive=', 'a/b=/data'],
+)
+def test_source_path_aliases_malformed_raises(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    monkeypatch.setenv('OP_SOURCE_PATH_ALIASES', raw)
+    with pytest.raises(ValueError, match='OP_SOURCE_PATH_ALIASES'):
+        CurationConfig.from_env()

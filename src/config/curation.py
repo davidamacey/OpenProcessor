@@ -16,6 +16,7 @@ logical role.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
@@ -147,7 +148,9 @@ class CurationConfig:
             prompt_pack_path=_optional_path('PROMPT_PACK_PATH', defaults.prompt_pack_path),
             source_root=_path('SOURCE_ROOT', defaults.source_root),
             export_root=_path('EXPORT_ROOT', defaults.export_root),
-            source_path_aliases=defaults.source_path_aliases,
+            source_path_aliases=_parse_source_path_aliases(
+                _str('SOURCE_PATH_ALIASES', ''), defaults.source_path_aliases
+            ),
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
             bakeoff_eval_root=_path('BAKEOFF_EVAL_ROOT', defaults.bakeoff_eval_root),
@@ -159,6 +162,50 @@ class CurationConfig:
             hnsw_ef_construction=_int('HNSW_EF_CONSTRUCTION', defaults.hnsw_ef_construction),
             hnsw_m=_int('HNSW_M', defaults.hnsw_m),
         )
+
+
+def _parse_source_path_aliases(raw: str, default: Mapping[str, Path]) -> Mapping[str, Path]:
+    """Parse ``OP_SOURCE_PATH_ALIASES`` into ``{alias: root}``.
+
+    Two accepted shapes: a JSON object (``{"archive": "/data/archive"}``)
+    or a comma-separated ``alias=path`` list
+    (``archive=/data/archive,nightly=/data/nightly``). Empty/unset keeps
+    ``default``. Anything malformed raises ``ValueError`` — a silently
+    dropped alias would 404 every image served through it.
+    """
+    raw = raw.strip()
+    if not raw:
+        return default
+    pairs: dict[str, str]
+    if raw.startswith('{'):
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            msg = f'OP_SOURCE_PATH_ALIASES is not valid JSON: {exc}'
+            raise ValueError(msg) from exc
+        if not isinstance(loaded, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in loaded.items()
+        ):
+            msg = 'OP_SOURCE_PATH_ALIASES JSON must be an object of string alias -> string path'
+            raise ValueError(msg)
+        pairs = loaded
+    else:
+        pairs = {}
+        for entry in (e.strip() for e in raw.split(',')):
+            if not entry:
+                continue
+            alias, sep, path = entry.partition('=')
+            if not sep:
+                msg = f'OP_SOURCE_PATH_ALIASES entry {entry!r} must be alias=path'
+                raise ValueError(msg)
+            pairs[alias.strip()] = path.strip()
+    aliases: dict[str, Path] = {}
+    for alias, path in pairs.items():
+        if not alias or not path or '/' in alias:
+            msg = f'OP_SOURCE_PATH_ALIASES has an invalid alias/path pair: {alias!r}={path!r}'
+            raise ValueError(msg)
+        aliases[alias] = Path(path)
+    return aliases
 
 
 _INDEX_ROLE_ATTR: dict[IndexRole, str] = {
