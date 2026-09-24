@@ -31,7 +31,7 @@ async def _get_source(opensearch: Any, index: str, doc_id: str, **kw: Any) -> di
     return resp.get('_source') or {}
 
 
-@router.get('/crops/{crop_id}/image')
+@router.get('/crops/{crop_id}/context')
 async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
     """The item's source image and every item detected in it.
 

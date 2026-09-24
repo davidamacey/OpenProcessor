@@ -63,7 +63,7 @@ Full route list (123 distinct paths / 128 method routes under
 logic-move routes: `GET /regions/statuses`, `POST /crops/{crop_id}/discard`,
 `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`,
 `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history`,
-`GET /crops/{crop_id}/image`, `GET /review/{tab}/locate`,
+`GET /crops/{crop_id}/context`, `GET /review/{tab}/locate`,
 `GET /review/new_class_proposals/summary`, `POST /vlm/label_cluster/{cluster_id}`,
 `GET /training_cohorts`), grouped
 by router module; every path is relative to the configured
@@ -74,7 +74,7 @@ by router module; every path is relative to the configured
 | `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
 | `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label`, `POST /crops/{crop_id}/discard`, `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`, `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history` |
-| `crop_context.py` | `GET /crops/{crop_id}/image` |
+| `crop_context.py` | `GET /crops/{crop_id}/context` |
 | `cohorts.py` | `GET /training_cohorts` |
 | `regions.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
@@ -308,7 +308,7 @@ Which one to call:
   restores the class. Response: the item. List hidden items with
   `GET /crops?review_dismissed=true`; every item carries
   `review_dismissed_at`.
-- `GET /crops/{crop_id}/image` → `{image: {image_id, image_path, width,
+- `GET /crops/{crop_id}/context` → `{image: {image_id, image_path, width,
   height, source, indexed_at} | null, items: [...]}`: the source frame and
   every item detected in it (wire items, `crop_rank_in_image` ascending,
   max 500).
