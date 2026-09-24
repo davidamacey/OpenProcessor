@@ -50,10 +50,12 @@ async def export_yolo(
     """Kick off a YOLO export job.
 
     Backed by :class:`GenericYoloExportService` — a multi-class YOLO
-    detection dataset export with a deterministic split and a
-    reproducibility manifest. Synchronous; the response includes the
-    export dir + counts. ``422`` (``nothing to export: <reason>``) when no
-    item is exportable; nothing is written then.
+    detection dataset export, one image + one label file per source image,
+    with a deterministic per-image split and a reproducibility manifest.
+    Synchronous; the response includes the export dir + counts
+    (``image_count`` / ``split_counts`` are images, ``object_count`` /
+    ``split_object_counts`` are label lines). ``422`` (``nothing to export:
+    <reason>``) when no image is exportable; nothing is written then.
     """
     from pathlib import Path as _Path
 
@@ -66,6 +68,7 @@ async def export_yolo(
             seed=payload.seed,
             max_images=payload.max_images,
             dedup_threshold=payload.dedup_threshold,
+            require_fully_labeled_images=payload.require_fully_labeled_images,
         )
     except NothingToExportError as exc:
         # Nothing exportable is the caller's data state, not a server
@@ -82,7 +85,14 @@ async def export_yolo(
         'version_tag': result.version_tag,
         'manifest_path': result.manifest_path,
         'dataset_sha': result.dataset_sha,
+        'image_count': result.image_count,
+        'object_count': result.object_count,
         'split_counts': result.split_counts.to_dict(),
+        'split_object_counts': result.split_object_counts.to_dict(),
+        'require_fully_labeled_images': payload.require_fully_labeled_images,
+        'unlabeled_items_on_exported_images': result.unlabeled_items_on_exported_images,
+        'images_with_unlabeled_items': result.images_with_unlabeled_items,
+        'images_dropped_not_fully_labeled': result.images_dropped_not_fully_labeled,
         'dedup': payload.dedup_threshold,
         'started_at': result.started_at or None,
         'finished_at': result.finished_at or None,
@@ -118,6 +128,7 @@ def _dataset_row(
         'export_dir': str(d),
         'version_tag': meta.get('version_tag') or '',
         'image_count': meta.get('image_count'),
+        'object_count': meta.get('object_count'),
         'split_counts': meta.get('split_counts'),
         'dataset_sha': meta.get('dataset_sha'),
         'exported_at': meta.get('exported_at') or meta.get('started_at'),
@@ -215,7 +226,7 @@ async def list_export_datasets(
 
 
 class ExportSplitCounts(BaseModel):
-    """Instance counts per split."""
+    """Counts per split (images or objects — see the field using it)."""
 
     train: int = 0
     val: int = 0
@@ -223,7 +234,7 @@ class ExportSplitCounts(BaseModel):
 
 
 class ExportClassSplitCounts(ExportSplitCounts):
-    """One class's instance counts per split, as recorded in the manifest."""
+    """One class's object (label-line) counts per split, as recorded in the manifest."""
 
     class_id: int = Field(description='Registry class id.')
     export_id: int = Field(description='Dense class id written into the label files.')
@@ -237,8 +248,13 @@ class ExportStatusResponse(BaseModel):
     the ``current`` export exists but its manifest is missing or
     unreadable (only ``path``/``export_dir`` set); ``success`` = every
     field below read from that export's ``manifest.json``.
-    ``class_split_counts`` is ``null`` for an export written before it was
-    recorded.
+    A field the manifest doesn't record (an export written before it
+    existed) is ``null``.
+
+    The export has one image file + one label file per source image:
+    ``image_count`` / ``split_counts`` count images, ``object_count`` /
+    ``split_object_counts`` count objects (label lines), and
+    ``class_split_counts`` counts objects per class per split.
     """
 
     status: Literal['idle', 'unknown', 'success']
@@ -251,14 +267,40 @@ class ExportStatusResponse(BaseModel):
     group_key: str | None = Field(
         default=None, description='Row attribute the split grouped on (``image_id``).'
     )
-    image_count: int | None = None
+    image_count: int | None = Field(default=None, description='Exported images.')
+    object_count: int | None = Field(
+        default=None, description='Exported objects (label lines) across all images.'
+    )
     class_count: int | None = None
-    split_counts: ExportSplitCounts | None = None
-    class_split_counts: list[ExportClassSplitCounts] | None = None
+    split_counts: ExportSplitCounts | None = Field(default=None, description='Images per split.')
+    split_object_counts: ExportSplitCounts | None = Field(
+        default=None, description='Objects (label lines) per split.'
+    )
+    class_split_counts: list[ExportClassSplitCounts] | None = Field(
+        default=None, description='Objects per class per split.'
+    )
+    require_fully_labeled_images: bool | None = Field(
+        default=None, description='Whether images with an unlabeled object were left out.'
+    )
+    unlabeled_items_on_exported_images: int | None = Field(
+        default=None,
+        description=(
+            'Objects on exported images the export did not label (unreviewed, or on a class '
+            'it leaves out); learned as background. Excluded / dismissed items never count.'
+        ),
+    )
+    images_with_unlabeled_items: int | None = Field(
+        default=None, description='Exported images holding at least one unlabeled object.'
+    )
+    images_dropped_not_fully_labeled: int | None = Field(
+        default=None,
+        description='Images left out by require_fully_labeled_images (0 when it was off).',
+    )
 
 
 def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusResponse:
     split_counts = meta.get('split_counts')
+    split_objects = meta.get('split_object_counts')
     class_rows = meta.get('class_split_counts')
     return ExportStatusResponse(
         status='success',
@@ -270,8 +312,16 @@ def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusRes
         seed=meta.get('seed'),
         group_key=meta.get('group_key'),
         image_count=meta.get('image_count'),
+        object_count=meta.get('object_count'),
         class_count=meta.get('class_count'),
         split_counts=ExportSplitCounts(**split_counts) if isinstance(split_counts, dict) else None,
+        split_object_counts=(
+            ExportSplitCounts(**split_objects) if isinstance(split_objects, dict) else None
+        ),
+        require_fully_labeled_images=meta.get('require_fully_labeled_images'),
+        unlabeled_items_on_exported_images=meta.get('unlabeled_items_on_exported_images'),
+        images_with_unlabeled_items=meta.get('images_with_unlabeled_items'),
+        images_dropped_not_fully_labeled=meta.get('images_dropped_not_fully_labeled'),
         class_split_counts=(
             [ExportClassSplitCounts(**row) for row in class_rows]
             if isinstance(class_rows, list)

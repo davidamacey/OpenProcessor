@@ -236,6 +236,45 @@ def export_class_split_check(
     )
 
 
+def export_unlabeled_objects_check(manifest: dict[str, Any]) -> CheckResult:
+    """``(severity, message, detail)`` for the ``export_unlabeled_objects`` row.
+
+    Warns when exported images also hold objects the export did not label
+    (unreviewed, or on a class with no dense id) — the detector learns
+    those as background. Never blocks: exporting partially labeled frames
+    is the default policy, and ``require_fully_labeled_images`` is the
+    opt-out. ``unknown`` for an export that predates these counts.
+    """
+    unlabeled = manifest.get('unlabeled_items_on_exported_images')
+    images_with = manifest.get('images_with_unlabeled_items')
+    detail = {
+        'image_count': manifest.get('image_count'),
+        'unlabeled_items_on_exported_images': unlabeled,
+        'images_with_unlabeled_items': images_with,
+        'require_fully_labeled_images': manifest.get('require_fully_labeled_images'),
+        'images_dropped_not_fully_labeled': manifest.get('images_dropped_not_fully_labeled'),
+    }
+    if not isinstance(unlabeled, int) or not isinstance(images_with, int):
+        return (
+            'unknown',
+            'export manifest records no unlabeled-object counts (exported before per-image '
+            'labels); re-export to check for partially labeled images',
+            detail,
+        )
+    if unlabeled == 0:
+        return 'ok', 'every object on every exported image is labeled', detail
+    total = detail['image_count']
+    of_total = f'/{total:,}' if isinstance(total, int) else ''
+    return (
+        'warn',
+        f'{images_with:,}{of_total} exported image(s) hold {unlabeled:,} unlabeled object(s) '
+        '(unreviewed, or on a class this export leaves out). Training learns an unlabeled '
+        'object in a training image as background. Review them, or re-export with '
+        'require_fully_labeled_images=true to leave those images out.',
+        detail,
+    )
+
+
 __all__ = [
     'MANIFEST_GENERATION_KEY',
     'CheckResult',
@@ -245,5 +284,6 @@ __all__ = [
     'export_generation_check',
     'export_size_check',
     'export_splits_check',
+    'export_unlabeled_objects_check',
     'items_index_generation',
 ]

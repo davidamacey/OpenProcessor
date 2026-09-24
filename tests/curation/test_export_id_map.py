@@ -115,7 +115,8 @@ async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
     service = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 
-    label_files = list(Path(result.export_dir).glob('labels/*/crop-truck.txt'))
+    # One label file per source image, named by image_id.
+    label_files = list(Path(result.export_dir).glob('labels/*/img-1.txt'))
     assert len(label_files) == 1
     written_id = int(label_files[0].read_text().split()[0])
     assert written_id == 0  # dense id, not registry id 1

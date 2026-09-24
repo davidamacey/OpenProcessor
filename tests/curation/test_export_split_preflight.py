@@ -223,3 +223,51 @@ def test_preflight_single_class_export_skips_per_class_coverage(
     ).json()
     assert _check(body, 'export_splits_nonempty')['severity'] == 'block'
     assert _check(body, 'export_class_split_coverage')['severity'] == 'ok'
+
+
+def test_preflight_warns_about_unlabeled_objects_on_exported_images(
+    train_client: TestClient, tmp_path: Path
+) -> None:
+    export_dir = _export(
+        tmp_path,
+        image_count=34,
+        object_count=40,
+        split_counts={'train': 27, 'val': 3, 'test': 4},
+        class_split_counts=BALANCED,
+        require_fully_labeled_images=False,
+        unlabeled_items_on_exported_images=7,
+        images_with_unlabeled_items=5,
+        images_dropped_not_fully_labeled=0,
+    )
+    body = train_client.post(
+        '/curation/train/preflight', json={'dataset_export_dir': export_dir, 'profile': 'medium'}
+    ).json()
+    check = _check(body, 'export_unlabeled_objects')
+    assert check['severity'] == 'warn'
+    assert 'background' in check['message']
+    assert '5/34' in check['message']
+    assert '7' in check['message']
+    assert check['detail']['unlabeled_items_on_exported_images'] == 7
+    assert check['detail']['images_with_unlabeled_items'] == 5
+
+
+def test_preflight_single_class_export_skips_unlabeled_object_check(
+    train_client: TestClient, tmp_path: Path
+) -> None:
+    d = tmp_path / 'single'
+    d.mkdir()
+    (d / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_kind': 'single_class',
+                'class_name': 'region',
+                'positive_images': 20,
+                'image_count': 23,
+                'split_counts': {'train': 20, 'val': 1, 'test': 2},
+            }
+        )
+    )
+    body = train_client.post(
+        '/curation/train/preflight', json={'dataset_export_dir': str(d), 'profile': 'medium'}
+    ).json()
+    assert _check(body, 'export_unlabeled_objects')['severity'] == 'ok'
