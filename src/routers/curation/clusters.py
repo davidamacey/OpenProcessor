@@ -52,6 +52,29 @@ def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -
     return None
 
 
+PURITY_BASIS = 'nearest_centroid'
+"""What a card's ``purity`` measures (served per card): see ``_FITS``."""
+
+
+def _script(source: str) -> dict[str, Any]:
+    return {'script': {'script': {'lang': 'painless', 'source': source}}}
+
+
+# Measured by the geometry pass against the item's *current* cluster
+# (an item that moved since carries a reference to its old cluster).
+_MEASURED: dict[str, Any] = {
+    'bool': {
+        'filter': [
+            {'exists': {'field': 'cluster_nearest_id'}},
+            {'exists': {'field': 'cluster_distance_cluster_id'}},
+            _script("doc['cluster_distance_cluster_id'].value == doc['cluster_id'].value"),
+        ]
+    }
+}
+# ...and its nearest cluster centroid is its own cluster's.
+_FITS: dict[str, Any] = _script("doc['cluster_nearest_id'].value == doc['cluster_id'].value")
+
+
 _REPS_SORT: list[dict[str, Any]] = [
     {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
     {'crop_id': 'asc'},
@@ -166,12 +189,20 @@ async def list_clusters(
     Single OpenSearch aggregation that returns, for every cluster_id:
 
     * ``size`` (total members), ``validated_count`` (class_validated=true),
-    * ``dominant_class_{id,name,count}`` and ``purity`` (largest-class
-      share among labelled members). A candidate cluster only gets a
+    * ``dominant_class_{id,name,count}`` and ``label_purity``
+      (largest-class share among labelled members) with
+      ``labelled_share``. A candidate cluster only gets a
       ``dominant_class_name`` when a unique top class has at least
       ``CANDIDATE_DOMINANT_MIN_COUNT`` members and
       ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;
-      ``dominant_count``/``labelled_count``/``purity`` are always reported,
+      ``dominant_count``/``labelled_count``/``label_purity`` are always
+      reported,
+    * ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``
+      (DQ-M2): the share of the ``purity_n`` members the cluster-geometry
+      pass measured for this cluster whose nearest cluster centroid is
+      this cluster's own — independent of the labels that placed them, so
+      a class cluster is no longer 1.0 by construction; ``null`` when no
+      member has been measured,
     * ``is_unlabeled`` (true when no class_name has any signal at all),
     * ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),
     * ``n_subclusters`` (distinct cluster_subid values), and
@@ -259,6 +290,10 @@ async def list_clusters(
             # cluster_subid is mapped keyword directly on the live index —
             # no .keyword subfield exists.
             'subclusters': {'cardinality': {'field': 'cluster_subid'}},
+            # DQ-M2 purity: members measured against their current cluster
+            # by the geometry pass, and those whose nearest centroid is it.
+            'geometry_measured': {'filter': _MEASURED},
+            'geometry_fits': {'filter': {'bool': {'filter': [_MEASURED, _FITS]}}},
             'latest_update': {'max': {'field': 'updated_at'}},
         },
     }
@@ -286,7 +321,10 @@ async def list_clusters(
         if cls_buckets:
             top_name = cls_buckets[0]['key']
             top_count = int(cls_buckets[0]['doc_count'])
-        purity = (top_count / labelled_total) if labelled_total else None
+        label_purity = (top_count / labelled_total) if labelled_total else None
+        purity_n = int(bucket.get('geometry_measured', {}).get('doc_count') or 0)
+        fits = int(bucket.get('geometry_fits', {}).get('doc_count') or 0)
+        purity = (fits / purity_n) if purity_n else None
         if ck == 'candidate':
             top_name = _candidate_dominant_name(cls_buckets, labelled_total)
         is_unlabeled = labelled_total == 0
@@ -306,17 +344,25 @@ async def list_clusters(
                 'dominant_class_id': dominant_class_id,
                 'dominant_class_name': top_name,
                 'dominant_count': top_count,
+                # DQ-M2: share of the purity_n measured members whose
+                # nearest cluster centroid is this cluster's own.
                 'purity': purity,
-                # Same thresholds as the auto-promote gate.
+                'purity_n': purity_n,
+                'purity_basis': PURITY_BASIS,
                 'purity_tier': purity_tier(purity),
+                # Top class's share of the labelled members (the
+                # auto-promote gate's input), and how many members carry
+                # a label at all.
+                'label_purity': label_purity,
+                'labelled_share': (labelled_total / size) if size else None,
                 # CM-1: only candidate clusters are ever auto-promote
                 # targets. Class clusters have cluster_id == class_id by
-                # construction, so their purity is always 1.0 and they'd
-                # otherwise show 'promotable' for a self-referential
+                # construction, so their label purity is always 1.0 and
+                # they'd otherwise show 'promotable' for a self-referential
                 # reason that has nothing to do with the auto-promote
                 # gate's actual eligibility check.
                 'promotable': ck == 'candidate'
-                and is_promotable(members=size, labelled=labelled_total, purity=purity),
+                and is_promotable(members=size, labelled=labelled_total, purity=label_purity),
                 'is_unlabeled': is_unlabeled,
                 'n_subclusters': n_subclusters,
                 'updated_at': bucket.get('latest_update', {}).get('value_as_string'),

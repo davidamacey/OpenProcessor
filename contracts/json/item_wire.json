@@ -43,6 +43,7 @@
     "cluster_distance",
     "cluster_similarity",
     "cluster_is_core",
+    "cluster_nearest_id",
     "cluster_subid",
     "class_excluded",
     "excluded_reason",
@@ -361,6 +362,18 @@
         ],
         "default": null,
         "title": "Cluster Kind"
+      },
+      "cluster_nearest_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Nearest Id"
       },
       "cluster_similarity": {
         "anyOf": [

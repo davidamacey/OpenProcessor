@@ -220,6 +220,13 @@ def serialize_item(
         'cluster_distance': distance,
         'cluster_similarity': similarity,
         'cluster_is_core': None if similarity is None else similarity >= CORE_SIMILARITY_MIN,
+        # Cluster whose centroid is nearest this item (== cluster_id when
+        # it sits best where it is); null unless measured for its cluster.
+        'cluster_nearest_id': (
+            src.get('cluster_nearest_id')
+            if src.get('cluster_distance_cluster_id') == src.get('cluster_id')
+            else None
+        ),
         'cluster_subid': src.get('cluster_subid'),
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),

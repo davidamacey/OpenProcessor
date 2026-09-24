@@ -388,7 +388,9 @@ concurrent-write conflict counts as an error).
 ### Cluster cards (`GET /clusters`)
 
 `labelled_count` is the number of members with any `class_name`;
-`dominant_count` / `purity` describe the top class among them. For a
+`dominant_count` / `label_purity` describe the top class among them
+(`label_purity` = `dominant_count / labelled_count`), and
+`labelled_share` = `labelled_count / size`. For a
 candidate cluster (`cluster_id >= cluster_id_offset`)
 `dominant_class_name` is set only for a unique top class with at least
 3 members and at least half of the labelled members
@@ -397,14 +399,28 @@ candidate cluster (`cluster_id >= cluster_id_offset`)
 always `null` for candidates. Class clusters report their top class as
 before.
 
-Each card also carries `purity_tier` (`pure` / `mixed` / `noisy`, `null`
-with no labelled member) and `promotable` (the auto-promote gate: at least
-`promote_min_members` members, at least `promote_min_labelled_share` of
-them labelled, purity at least `pure_min`). The response serves the cut
+**`purity` (DQ-M2, changed meaning).** Label purity is 1.0 on every
+class cluster by construction (`cluster_id == class_id`), so it used to
+call visibly mixed class clusters "pure", and on candidates it covered only
+the few labelled members. A card's `purity` is now a geometric signal
+independent of the labels: the share of the cluster's members whose
+nearest cluster centroid (among every cluster's member-mean centroid over
+the item embedding) is their own cluster's. It is computed by the
+cluster-geometry pass that follows every auto-label clustering stage
+(`cluster_nearest_id` per item) and counts only members measured for
+their current cluster. `purity_n` is how many members it was computed
+over, `purity_basis` is `"nearest_centroid"`; `purity`, `purity_tier` are
+`null` while `purity_n` is `0` (no pass since the members arrived).
+
+Each card also carries `purity_tier` (`pure` / `mixed` / `noisy` from
+`purity`) and `promotable` (the auto-promote gate — unchanged, on the
+labels: at least `promote_min_members` members, at least
+`promote_min_labelled_share` of them labelled, `label_purity` at least
+`pure_min`; never true for a class cluster). The response serves the cut
 points: `purity_thresholds: {pure_min: 0.85, mixed_min: 0.6,
 promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
-`src/services/curation/cluster_purity.py`; `pure_min` *is* the gate, so a
-"pure" card is always one the gate would promote on purity) and
+`src/services/curation/cluster_purity.py`; the same `pure_min` / `mixed_min`
+cut both `purity` into tiers and `label_purity` at the gate) and
 `core_similarity_min: 0.75` (the cut line for the items' `cluster_is_core`).
 `POST /clusters/auto_promote` counts every labelled member in the purity
 denominator (it used to count only the top-5 classes, overstating purity
@@ -771,14 +787,14 @@ read-modify-write round trip in application code.
 
 ## Item wire format
 
-Built by `serialize_item()` in `src/services/curation/wire.py`. 93 keys,
+Built by `serialize_item()` in `src/services/curation/wire.py`. 94 keys,
 always all present (a value is `null` when the stored doc has no value;
 `bbox_norm` defaults to `[]`, `class_name`/`class_source`/
 `label_source`/`updated_at`/`source`/`proposed_class_name` to `""`,
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (58): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
+Item keys (59): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
 
 Region keys (34, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
@@ -819,7 +835,10 @@ Derived keys (computed by the serializer, never stored):
   `cluster_id` (the item moved since), `cluster_distance`,
   `cluster_similarity` and `cluster_is_core` are served `null` rather than
   describing a cluster the item has left. `null` also for noise and for
-  items not yet measured.
+  items not yet measured. `cluster_nearest_id` — the cluster whose
+  centroid is nearest the item (equal to `cluster_id` when the item sits
+  best where it is; the per-item input to a card's `purity`), from the same
+  pass and gated the same way.
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the

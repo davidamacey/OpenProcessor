@@ -46,6 +46,7 @@ export interface ItemWire {
   cluster_distance: number | null;
   cluster_similarity: number | null;
   cluster_is_core: boolean | null;
+  cluster_nearest_id: number | null;
   cluster_subid: string | null;
   class_excluded: boolean;
   excluded_reason: string | null;
@@ -143,6 +144,7 @@ export const ITEM_WIRE_KEYS = [
   'cluster_distance',
   'cluster_similarity',
   'cluster_is_core',
+  'cluster_nearest_id',
   'cluster_subid',
   'class_excluded',
   'excluded_reason',

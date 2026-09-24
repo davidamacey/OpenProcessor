@@ -1722,6 +1722,17 @@
             ],
             "title": "Cluster Kind"
           },
+          "cluster_nearest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Nearest Id"
+          },
           "cluster_similarity": {
             "anyOf": [
               {
@@ -5003,7 +5014,7 @@
     },
     "/curation/clusters": {
       "get": {
-        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``purity`` (largest-class\n  share among labelled members). A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``purity`` are always reported,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
+        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  (DQ-M2): the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
         "operationId": "list_clusters_curation_clusters_get",
         "parameters": [
           {

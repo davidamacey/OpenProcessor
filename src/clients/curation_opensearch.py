@@ -216,6 +216,8 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
 # distance that went stale when the item moved to another cluster.
 CLUSTER_GEOMETRY_MAPPING: dict[str, Any] = {
     'cluster_distance_cluster_id': {'type': 'integer'},
+    # Cluster whose centroid is nearest the item (cluster purity, DQ-M2).
+    'cluster_nearest_id': {'type': 'integer'},
 }
 
 _EXCLUSION_MAPPING: dict[str, Any] = {

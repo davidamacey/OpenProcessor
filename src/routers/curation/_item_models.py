@@ -78,6 +78,8 @@ class ItemDoc(BaseModel):
     # core when at or above GET /clusters core_similarity_min.
     cluster_similarity: float | None = None
     cluster_is_core: bool | None = None
+    # Cluster whose centroid is nearest this item (cluster-geometry pass).
+    cluster_nearest_id: int | None = None
     # AHC sub-cluster id (e.g. "47a"); cleared whenever cluster_id changes.
     cluster_subid: str | None = None
     class_excluded: bool = False

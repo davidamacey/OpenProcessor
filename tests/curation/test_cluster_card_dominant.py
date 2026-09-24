@@ -78,7 +78,8 @@ async def test_labelled_count_includes_classes_beyond_top_buckets() -> None:
     cards = await _cards(_bucket(CANDIDATE + 2, 40, classes))
     card = cards[CANDIDATE + 2]
     assert card['labelled_count'] == 8
-    assert card['purity'] == pytest.approx(0.5)
+    # The top class's share of the labels is label_purity (DQ-M2).
+    assert card['label_purity'] == pytest.approx(0.5)
 
 
 @pytest.mark.asyncio
