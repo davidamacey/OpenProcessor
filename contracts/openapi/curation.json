@@ -886,6 +886,23 @@
         "title": "CropMoveRequest",
         "type": "object"
       },
+      "CropRegionUndoBatchRequest": {
+        "description": "Undo the most recent human region write on each crop.",
+        "properties": {
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "crop_ids"
+        ],
+        "title": "CropRegionUndoBatchRequest",
+        "type": "object"
+      },
       "CropUndoBatchRequest": {
         "description": "Undo the most recent human class write on each crop.",
         "properties": {
@@ -6120,6 +6137,50 @@
         ]
       }
     },
+    "/curation/crops/region/undo_batch": {
+      "post": {
+        "description": "Batch form of ``POST /crops/{crop_id}/region/undo`` — undo a bulk\nregion write by passing the same ``crop_ids``. Each crop is restored\nindependently. Returns ``items`` (restored wire items), ``undone``, and\nper-crop ``nothing_to_undo`` / ``conflicts`` / ``not_found`` id lists.\n``409`` when no crop had anything to undo.",
+        "operationId": "undo_crop_regions_curation_crops_region_undo_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropRegionUndoBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Crop Regions Curation Crops Region Undo Batch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Crop Regions",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/crops/{crop_id}": {
       "get": {
         "description": "Return the authoritative item document by id.\n\nUsed by the labeler's review-queue \"Back\" path so the operator sees\nwhat was actually persisted (not a stale local snapshot). Same wire\nitem as ``GET /crops`` and ``GET /review/{tab}`` — never the raw\nOpenSearch ``_source``, whose region keys follow ``RegionFields``\nstorage names.",
@@ -6567,6 +6628,51 @@
         ]
       }
     },
+    "/curation/crops/{crop_id}/region/undo": {
+      "post": {
+        "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",
+        "operationId": "undo_crop_region_curation_crops__crop_id__region_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Crop Region Curation Crops  Crop Id  Region Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Crop Region",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/crops/{crop_id}/region_meta": {
       "patch": {
         "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).",
@@ -6824,7 +6930,7 @@
     },
     "/curation/crops/{crop_id}/vlm_dismiss": {
       "post": {
-        "description": "Reject the VLM's class suggestion on this item.\n\nRecords ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /\n``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,\n``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer\napply it. The class itself is untouched (label or discard it as a\nseparate write). Returns the post-write item; ``409`` when the item has\nno VLM suggestion.",
+        "description": "Reject the VLM's class suggestion on this item.\n\nRecords ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /\n``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,\n``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer\napply it. The class itself is untouched (label or discard it as a\nseparate write). ``POST /crops/{crop_id}/vlm_dismiss/undo`` reverses it.\nReturns the post-write item; ``409`` when the item has no VLM\nsuggestion.",
         "operationId": "dismiss_vlm_suggestion_curation_crops__crop_id__vlm_dismiss_post",
         "parameters": [
           {
@@ -6862,6 +6968,51 @@
           }
         },
         "summary": "Dismiss Vlm Suggestion",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/vlm_dismiss/undo": {
+      "post": {
+        "description": "Undo the most recent ``POST /crops/{crop_id}/vlm_dismiss``: the\n``vlm_dismissed_*`` fields go back to what they were before it, so the\ndismissed VLM suggestion is live again (``vlm_proposed_class_*`` /\n``proposed_class_*`` apply it). Returns the restored item; ``409`` when\nthere is no dismissal left to undo.",
+        "operationId": "undo_vlm_dismiss_curation_crops__crop_id__vlm_dismiss_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Vlm Dismiss Curation Crops  Crop Id  Vlm Dismiss Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Vlm Dismiss",
         "tags": [
           "Curation"
         ]

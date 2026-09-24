@@ -75,6 +75,7 @@ by router module; every path is relative to the configured
 | `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
 | `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label`, `POST /crops/{crop_id}/discard`, `POST /crops/discard_batch`, `POST /crops/{crop_id}/vlm_dismiss`, `POST /crops/{crop_id}/review_undismiss`, `GET /crops/{crop_id}/history` |
 | `crop_context.py` | `GET /crops/{crop_id}/context` |
+| `edit_undo.py` | `POST /crops/{crop_id}/region/undo`, `POST /crops/region/undo_batch`, `POST /crops/{crop_id}/vlm_dismiss/undo` |
 | `cohorts.py` | `GET /training_cohorts` |
 | `regions.py` / `regions_fp.py` | `GET /regions`, `GET /regions/statuses`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
@@ -233,10 +234,41 @@ Every human region writer (`PUT /crops/{id}/region`, `PUT
   from the request (`detected` → `true`, every other human status → `false`);
 - `detected` on a crop with no box is refused (`422` single / `invalid[]` batch);
 - human writes set `region_validated=true`; `false_positive` parks the region
-  in the FP cluster, any other status releases it.
+  in the FP cluster, any other status releases it;
+- a write that re-asserts the stored status re-derives nothing:
+  `region_verified` and the region-cluster placement stay as stored
+  (confirming still sets `region_verified=true`);
+- every write snapshots the pre-write region state for undo (see "Undo of
+  region writes" below).
 
 Each returns the post-write item, so a client adopts it rather than
 re-deriving the result.
+
+### Undo of region writes and VLM dismissals
+
+Every human region writer snapshots the item's pre-write region state
+(`region_bbox_norm`, `region_bbox_frame`, `region_status`, `region_score`,
+`region_verified*`, `region_verifier*`, `region_validated`,
+`region_label_source`, `region_detector*`, `region_detected_at`,
+`region_rejection_reason`, `region_text*`, `region_cluster_*`) into the
+item's `edit_history` (stored, not indexed, not on the wire; see
+`src/services/curation/edit_history.py` for why it is a kind-tagged list
+separate from `class_id_history`).
+
+- `POST /crops/{crop_id}/region/undo` — restore the region to its state
+  before the most recent not-yet-undone human region write (confirm,
+  reject, false positive, box edit, status or text change). Repeated calls
+  step back. Class fields are untouched. Response: the restored item.
+  `404` unknown crop; `409` nothing left to undo.
+- `POST /crops/region/undo_batch` (`CropRegionUndoBatchRequest`:
+  `crop_ids`) — the same per crop; undo a `batch_status` / `batch_region`
+  by passing the same `crop_ids`. Response: `items`, `undone`,
+  `nothing_to_undo`, `conflicts`, `not_found`. `409` when no crop had
+  anything to undo.
+- `POST /crops/{crop_id}/vlm_dismiss/undo` — put the `vlm_dismissed_*`
+  fields back to their state before the latest `vlm_dismiss`, so the
+  dismissed suggestion is live again. Response: the restored item. `409`
+  no dismissal to undo.
 
 ### Undo of human class writes
 

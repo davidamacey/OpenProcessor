@@ -28,6 +28,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.region_writes import (
     RegionWriteError,
     human_status_fields,
@@ -338,16 +339,24 @@ def _validate_status(region_status: str | None) -> None:
 
 class _Recorder:
     """OCC merger wrapper that remembers the doc it last merged onto, so the
-    handler can return the post-write item without a second read."""
+    handler can return the post-write item without a second read.
 
-    def __init__(self, build: Any) -> None:
+    Every write it builds also snapshots the pre-write region state into
+    the item's edit history, which ``POST /crops/{id}/region/undo``
+    restores."""
+
+    def __init__(self, build: Any, writer: str) -> None:
         self._build = build
+        self._writer = writer
         self.current: dict[str, Any] = {}
         self.update: dict[str, Any] = {}
 
     def __call__(self, current: dict[str, Any]) -> dict[str, Any]:
         self.current = current
-        self.update = self._build(current)
+        self.update = {
+            **self._build(current),
+            EDIT_HISTORY_FIELD: record_edit(current, kind=EditKind.REGION, writer=self._writer),
+        }
         return self.update
 
     def item(self, crop_id: str) -> dict[str, Any]:
@@ -416,7 +425,7 @@ async def set_crop_region(
     wire item.
     """
     F = get_region_fields()
-    rec = _Recorder(_box_builder(payload))
+    rec = _Recorder(_box_builder(payload), 'human:set_crop_region')
     await _write_one(opensearch, crop_id, rec, 'human:set_crop_region')
     return {
         'crop_id': crop_id,
@@ -480,7 +489,7 @@ async def patch_crop_region_meta(
             doc.update(human_status_fields(str(payload.region_status), current))
         return doc
 
-    rec = _Recorder(_build)
+    rec = _Recorder(_build, 'human:patch_region_meta')
     await _write_one(opensearch, crop_id, rec, 'human:patch_region_meta')
     return {'crop_id': crop_id, 'updated_fields': sorted(wire_fields), 'item': rec.item(crop_id)}
 
@@ -501,7 +510,7 @@ async def _batch_write(
     invalid: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
     for crop_id in crop_ids:
-        rec = _Recorder(build)
+        rec = _Recorder(build, writer_id)
         try:
             await occ_update_one(
                 opensearch,
