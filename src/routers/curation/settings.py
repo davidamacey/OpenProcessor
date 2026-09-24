@@ -57,14 +57,24 @@ async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -
     2. ``id`` must be a currently-advertised id for that axis -- unless
        ``value`` is ``None``, which always validates: clearing an axis's
        override never needs an id, that's the whole point of clearing it.
+    3. An id with a ``requires_field`` must have nonzero coverage of it
+       (unknown coverage passes): a default ordering by a field no item
+       has orders nothing. Request-time fallback
+       (``review_sorts.build_sort``) still covers a pin whose coverage
+       later drops to 0, or one stored before this check.
     """
     from src.services.curation.strategy_defaults import SETTABLE_DEFAULT_AXES
-    from src.services.curation.strategy_registry import get_registry
+    from src.services.curation.strategy_registry import get_registry, invalidate_field_coverage
 
+    # A PUT is rare; judge coverage on live counts, not a TTL-cached one
+    # taken before a backfill finished.
+    invalidate_field_coverage()
     registry = await get_registry(opensearch)
     ids_by_axis: dict[str, set[str]] = {}
+    entries: dict[tuple[str, str], dict[str, Any]] = {}
     for entry in registry['strategies']:
         ids_by_axis.setdefault(entry['axis'], set()).add(entry['id'])
+        entries[(entry['axis'], entry['id'])] = entry
 
     errors: list[str] = []
     for axis, value in defaults.items():
@@ -81,6 +91,14 @@ async def _validate_defaults(defaults: dict[str, str | None], opensearch: Any) -
             errors.append(
                 f'{value!r} is not a currently-advertised id for axis {axis!r}; '
                 f'valid ids: {sorted(valid_ids)}'
+            )
+            continue
+        entry = entries[(axis, value)]
+        if entry.get('requires_field') and entry.get('field_coverage') == 0:
+            errors.append(
+                f'{value!r} orders by {entry["requires_field"]!r}, which no item has yet '
+                f'(0 of {entry.get("field_coverage_total")}); a deployment default '
+                'must order by a field items carry'
             )
 
     if errors:

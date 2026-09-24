@@ -352,8 +352,9 @@ async def review_queue(
         'page_size': page_size,
         'items': items,
         'sort_applied': req.sort_applied,
-        # Reserved; always None today.
-        'sort_fallback_reason': None,
+        # Set when the default sort's field has 0% coverage and
+        # sort_applied is its fallback.
+        'sort_fallback_reason': req.sort_fallback_reason,
     }
 
 
@@ -379,7 +380,7 @@ async def review_locate(
     for the same filters and sort.
 
     ``{crop_id, in_queue, rank, page, page_size, total, reason,
-    sort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of
+    sort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of
     ``page_size`` holding it. Out of the queue: ``rank``/``page`` null and
     ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
     items sorting before it, so any depth costs the same.
@@ -407,6 +408,7 @@ async def review_locate(
         'total': None,
         'reason': None,
         'sort_applied': req.sort_applied,
+        'sort_fallback_reason': req.sort_fallback_reason,
     }
 
     async def _count(query: dict[str, Any]) -> int:

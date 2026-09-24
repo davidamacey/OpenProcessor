@@ -42,6 +42,7 @@ class ReviewRequest:
     sort: list[dict[str, Any]]
     sort_applied: str
     reason: str
+    sort_fallback_reason: str | None = None
 
 
 def _null_safe_floor(field: str, floor: float) -> dict[str, Any]:
@@ -90,7 +91,7 @@ async def build_review_request(
     band = confidence_band(filters.conf_min, filters.conf_max)
     if band is not None:
         must.append(band)
-    clause, applied, _fallback = await review_sorts.build_sort(
+    clause, applied, fallback = await review_sorts.build_sort(
         sort_id, tab=tab, opensearch=opensearch
     )
     return ReviewRequest(
@@ -98,6 +99,7 @@ async def build_review_request(
         sort=[*clause, TIEBREAK],
         sort_applied=applied,
         reason=reason,
+        sort_fallback_reason=fallback,
     )
 
 

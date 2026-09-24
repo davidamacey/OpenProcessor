@@ -424,17 +424,25 @@ Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
 **`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
 `400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
 `items` (item + `reason`), `sort_applied` (the sort id that actually ran),
-`sort_fallback_reason` (always `null`).
+`sort_fallback_reason` (`null`, or a human-readable string when the
+resolved default was replaced — see below).
 
-Sort: an explicit `sort` wins; omitted (or `default`) → the **tab's own
-default** (a deployment `sort` default from `PUT /settings` never overrides
-it — it only applies to a tab without one, e.g. `new_class_proposals`, else
-`recent`). Every queue ends in a `crop_id` ascending tiebreak so pages are
+Sort: an explicit `sort` wins (honored even if its field has no coverage);
+omitted (or `default`) → the **tab's own default** (a deployment `sort`
+default from `PUT /settings` never overrides it — it only applies to a tab
+without one, e.g. `new_class_proposals`, else `recent`). If that resolved
+default orders by a field **no item in the index has** (0% coverage), the
+queue falls back to the tab's next covered sort (`all`: `mistakenness`;
+`uncertainty`: `mistakenness`, then `atypicality`; every tab ends at
+`recent`), `sort_applied` names the sort that ran and
+`sort_fallback_reason` says which default was skipped and why. Unknown
+coverage (count failed) never triggers a fallback. `PUT /settings` refuses
+(`422`) a `sort` default whose field has 0% coverage. Every queue ends in a `crop_id` ascending tiebreak so pages are
 stable and positions are exact.
 
 `GET /review/{tab}/locate?crop_id=…` (same filters + `sort`, plus
 `page_size`) → `{crop_id, in_queue, rank, page, page_size, total, reason,
-sort_applied}`: `rank` is 0-based, `page` the 1-based page holding it;
+sort_applied, sort_fallback_reason}`: `rank` is 0-based, `page` the 1-based page holding it;
 out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
 `filtered_out`. It counts the items sorting before the crop (one count, any
 queue depth) — use it for `/review?crop_id=` deep links instead of paging.

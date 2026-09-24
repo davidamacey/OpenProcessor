@@ -9745,7 +9745,7 @@
     },
     "/curation/review/{tab}/locate": {
       "get": {
-        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
+        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
         "operationId": "review_locate_curation_review__tab__locate_get",
         "parameters": [
           {
