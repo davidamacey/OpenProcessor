@@ -308,7 +308,9 @@ export interface Crop {
   /** Ingest source tag (`GET {API_PREFIX}/review/{tab}?source=` /
    *  `GET {API_PREFIX}/crops?source=`). Replaces the old `hdd_source` field the
    *  backend never actually populated (2026-09-24 logic-moves cutover) —
-   *  `source` is the live wire key. */
+   *  `source` is the live wire key. `?hdd_source=` itself was removed from
+   *  `GET {API_PREFIX}/crops` by the OpenProcessor 1327181 naming sweep (F9); every
+   *  query-param site uses `?source=` now too (see `CropFilter.source` below). */
   source?: string | null;
   /** The backend's confirmable suggestion for this crop — what
    *  Enter/Confirm assigns. Served on every crop-shaped item, not just
@@ -573,7 +575,7 @@ export interface PaginatedResponse<T> {
  * scopes to a review-tab cohort (`review_tab` reuses the backend's
  * existing tab-query builder) which can be pool-scale (the `all` tab is
  * ~320k crops), hence the job/poll contract below. `filters` only
- * supports term/terms filters server-side (`class_id`, `hdd_source`) —
+ * supports term/terms filters server-side (`class_id`, `source`) —
  * NOT `conf_min`/`conf_max`/`min_blur_ratio`/`max_rank`/plate `text`.
  */
 export interface SelectDiverseScope {
@@ -619,7 +621,9 @@ export interface CropFilter {
    *  {API_PREFIX}/crops?class_source= query param. */
   class_source?: string;
   label_validated?: boolean;
-  hdd_source?: string;
+  /** `GET {API_PREFIX}/crops?source=` — renamed off the removed `?hdd_source=` param
+   *  by the OpenProcessor 1327181 naming sweep (F9). */
+  source?: string;
   conf_min?: number;
   conf_max?: number;
   sort?: string;

@@ -39,15 +39,15 @@ describe('vendored item-wire snapshot sanity', () => {
  * KNOWN_STALE: keys the frontend reads that the backend does not (yet,
  * or any longer) emit on this wire. Today this is empty — every
  * `RawCrop` key the audit found (2026-09-24) is a live item-wire key.
- * Two previously-flagged stale fields (`hdd_source`, `Class.added_at`)
- * are NOT `RawCrop` fields at all: `hdd_source` only ever appears as a
- * `CropFilter` *query* parameter (a value the frontend sends, checked by
- * `endpointCatalog.test.ts` against the OpenAPI params instead) and as a
- * dead field on the `Crop` type that `mapRawCrop` never populates;
- * `added_at` is a `GET {API_PREFIX}/classes` response field (`RawClass`,
- * a different endpoint's wire shape, not covered by `item_wire.json`).
- * If a genuinely stale `RawCrop` field turns up later, list it here with
- * a one-line reason instead of silently excluding it.
+ * One previously-flagged stale field, `Class.added_at`, is NOT a
+ * `RawCrop` field at all — it's a `GET {API_PREFIX}/classes` response field
+ * (`RawClass`, a different endpoint's wire shape, not covered by
+ * `item_wire.json`). `hdd_source` (formerly flagged the same way, as a
+ * dead `CropFilter` query param) was removed outright by the
+ * OpenProcessor 1327181 naming sweep (F9) — `CropFilter.source` /
+ * `?source=` replaced it everywhere, so there's nothing left to list
+ * here. If a genuinely stale `RawCrop` field turns up later, list it
+ * here with a one-line reason instead of silently excluding it.
  */
 const KNOWN_STALE: readonly string[] = [
   // Dropped from item_wire.json by openprocessor's OpenSearch perf/

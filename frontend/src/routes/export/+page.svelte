@@ -641,8 +641,8 @@
       <div
         class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
       >
-        One-shot per dataset version. Stratified by (class × hdd_source) using a fixed
-        seed for reproducibility (Plan §B4).
+        One-shot per dataset version. Stratified by (class × source) using a fixed seed
+        for reproducibility (Plan §B4).
       </div>
       <label class="mb-3 block text-sm">
         <span class="mb-1 block text-zinc-400">Percent of validated crops</span>
