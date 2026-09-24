@@ -132,6 +132,30 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
 
+### Per-class dataset thresholds
+
+One definition (`src/services/curation/dataset_thresholds.py`), enforced by
+the training preflight and served wherever a client shows class counts:
+
+```json
+"thresholds": {"block_below": 20, "warn_below": 500, "min_test_per_class": 5,
+               "aug_target_min": 500, "aug_target_max": 3000}
+```
+
+- `adequacy` (`ok` / `warn` / `block`) of a class's validated count:
+  `< block_below` → `block` (preflight refuses), `< warn_below` → `warn`,
+  else `ok`. The frontend's old `100` "critical" line has no backend
+  meaning and is gone.
+- `aug_target` = validated count clamped to `[aug_target_min,
+  aug_target_max]`; `aug_gap` = `aug_target - validated_count`.
+
+| Endpoint | Adds |
+|---|---|
+| `POST /train/preflight` | `thresholds` |
+| `GET /stats/classes` | `thresholds`; per row `adequacy`, `aug_target`, `aug_gap` |
+| `GET /classes` | `thresholds`; per class `adequacy` |
+| `GET /test_holdout/stats` | `min_test_per_class`; per `by_class` bucket `deficient` (`doc_count < min_test_per_class`) |
+
 ### VLM-label one cluster — `POST /vlm/label_cluster/{cluster_id}`
 
 Queues the auto-label job (same job, same `GET /pipeline/auto_label/status`
@@ -298,8 +322,8 @@ rank just the first `k` k-center-greedy picks; `total` is then `k`).
 
 ### Classes
 
-- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`
-- `ClassListResponse`: `classes`
+- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`, `adequacy`
+- `ClassListResponse`: `classes`, `thresholds`
 - `ClassCreateRequest`: `name`, `group`, `notes`
 - `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
 - `ClassMergeRequest`: `source_id`, `target_id`

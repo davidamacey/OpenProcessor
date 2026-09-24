@@ -391,10 +391,13 @@ class ClassEntry(BaseModel):
     # Validated server-side: must be one ASCII char, unique across active
     # classes, not collide with reserved shortcuts.
     hotkey_letter: str | None = None
+    # ok / warn / block from validated_count (dataset_thresholds.py).
+    adequacy: Literal['ok', 'warn', 'block'] = 'block'
 
 
 class ClassListResponse(BaseModel):
     classes: list[ClassEntry]
+    thresholds: dict[str, int] = Field(default_factory=dict)
 
 
 class ClassCreateRequest(BaseModel):

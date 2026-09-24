@@ -25,6 +25,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation.crops import list_crops
 from src.services.curation.class_sources import class_source_catalog
+from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
 # Single-char keys the labeler UI's global keydown listener binds to
@@ -144,9 +145,11 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 cluster_size=cluster_size.get(c.class_id, 0),
                 deprecated=c.deprecated,
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
+                adequacy=adequacy(validated.get(c.class_id, c.validated_count)),
             )
             for c in reg.classes
-        ]
+        ],
+        thresholds=dataset_thresholds(),
     )
 
 

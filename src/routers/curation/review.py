@@ -17,6 +17,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation import review_queries, review_sorts
+from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
     build_cohort_query,
     compute_holdout_sha,
@@ -480,9 +481,15 @@ async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
+    buckets = (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', [])
     return {
         'total': int(total),
-        'by_class': (resp.get('aggregations') or {}).get('by_class', {}).get('buckets', []),
+        # deficient: below the per-class test minimum preflight warns on.
+        'by_class': [
+            {**b, 'deficient': int(b.get('doc_count', 0)) < MIN_TEST_CROPS_PER_CLASS}
+            for b in buckets
+        ],
+        'min_test_per_class': MIN_TEST_CROPS_PER_CLASS,
     }
 
 
