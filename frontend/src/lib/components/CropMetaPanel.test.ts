@@ -86,12 +86,17 @@ describe('dq-queues cutover (2026-09-24): class_confidence / vlm_raw_class / vlm
 });
 
 describe('dq-region (2026-09-24): validated/auto-confirmed split, candidate box, text choice', () => {
-  it('renders a Validation row distinguishing human-validated from auto-confirmed, gated on either being non-null', () => {
+  it('renders a Validation row distinguishing human-validated from auto-confirmed, gated on either (or boxCorrect) being non-null', () => {
     expect(src).toMatch(
-      /\{#if data\?\.lifecycle\?\.validated != null \|\| data\?\.lifecycle\?\.autoConfirmed != null\}/,
+      /\{#if data\?\.lifecycle\?\.validated != null \|\| data\?\.lifecycle\?\.autoConfirmed != null \|\| data\?\.lifecycle\?\.boxCorrect != null\}/,
     );
     expect(src).toMatch(/human validated/);
     expect(src).toMatch(/auto-confirmed \(unreviewed\)/);
+  });
+
+  it('840beb8 adoption: folds region_bbox_correct===false into the Validation row as a "model: box wrong" chip', () => {
+    expect(src).toMatch(/\{#if data\.lifecycle\.boxCorrect === false\}/);
+    expect(src).toMatch(/model: box wrong/);
   });
 
   it('shows the candidate score (suffixed) when there is no main subBox score', () => {
@@ -117,5 +122,15 @@ describe('dq-region (2026-09-24): validated/auto-confirmed split, candidate box,
     expect(src).toMatch(
       /regionVocabularyStore\.rejectionReasonLabel\(data\.lifecycle\.rejectionReason\)/,
     );
+  });
+
+  it('840beb8 adoption: styles the rejection row by the served kind — never worded as a rejection for needs_human', () => {
+    expect(src).toMatch(
+      /regionVocabularyStore\.rejectionReasonKind\(\s*data\.lifecycle\.rejectionReason,?\s*\)/,
+    );
+    expect(src).toMatch(
+      /rejectionKind === 'needs_human' \? 'Needs review' : 'Rejection'/,
+    );
+    expect(src).toMatch(/rejectionKind === 'model_verdict'/);
   });
 });
