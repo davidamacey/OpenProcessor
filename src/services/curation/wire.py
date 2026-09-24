@@ -186,6 +186,8 @@ def serialize_item(
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),
         'excluded_at': src.get('excluded_at'),
+        # Set = hidden from every /review tab (discard / review_dismiss).
+        'review_dismissed_at': src.get('review_dismissed_at'),
         # Ingest source tag (stored under the legacy ``hdd_source`` key).
         'source': src.get('hdd_source') or src.get('source') or '',
         'test_holdout': bool(src.get('test_holdout', False)),

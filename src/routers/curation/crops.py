@@ -86,6 +86,9 @@ async def list_crops(
     hdd_source: str | None = None,
     source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
     needs_new_class: bool | None = None,
+    review_dismissed: Annotated[
+        bool | None, Query(description='true = only items hidden from review.')
+    ] = None,
     ids: Annotated[
         str | None,
         Query(
@@ -168,6 +171,9 @@ async def list_crops(
         must.append({'term': {'class_validated': label_validated}})
     if source or hdd_source:
         must.append({'term': {'hdd_source': source or hdd_source}})
+    if review_dismissed is not None:
+        dismissed: dict[str, Any] = {'exists': {'field': 'review_dismissed_at'}}
+        must.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
     if needs_new_class is not None:
         clause: dict[str, Any] = {'term': {'needs_new_class': True}}
         must.append(clause if needs_new_class else {'bool': {'must_not': clause}})

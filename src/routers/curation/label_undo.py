@@ -355,3 +355,33 @@ async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
         {k: entry.get(k) for k in _HISTORY_KEYS} for entry in history if isinstance(entry, dict)
     ]
     return {'crop_id': crop_id, 'entries': entries}
+
+
+@router.post('/crops/{crop_id}/review_undismiss')
+async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """Return an item hidden from review to the queues (clears
+    ``review_dismissed_at`` / ``review_dismissed_by``). For a dismissal made
+    by ``POST /crops/{id}/discard``, ``label/undo`` does the same and also
+    restores the class. Returns the post-write item."""
+    try:
+        await occ_update_one(
+            opensearch,
+            doc_id=crop_id,
+            merger=lambda _c: {
+                'review_dismissed_at': None,
+                'review_dismissed_by': None,
+                'updated_at': _now_iso(),
+            },
+            refresh=True,
+            writer_id='human:review_undismiss',
+        )
+    except OCCFinalConflictError:
+        raise
+    except Exception as exc:
+        if is_not_found(exc):
+            raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+    items = await _items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]

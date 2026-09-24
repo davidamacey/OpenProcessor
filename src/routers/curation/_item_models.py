@@ -68,6 +68,7 @@ class ItemDoc(BaseModel):
     class_excluded: bool = False
     excluded_reason: str | None = None
     excluded_at: str | None = None
+    review_dismissed_at: str | None = None
     # Ingest source tag.
     source: str = ''
     test_holdout: bool = False

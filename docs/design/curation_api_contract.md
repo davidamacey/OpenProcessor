@@ -284,6 +284,17 @@ Which one to call:
   `human:label_crop`, `human:discard_crop`, `vlm_pipeline`) + `at`;
   unrecorded keys are `null`.
 
+- `POST /crops/{crop_id}/review_undismiss` — clear
+  `review_dismissed_at`/`review_dismissed_by` (back into the review
+  queues); for a `discard`-made dismissal `label/undo` does this *and*
+  restores the class. Response: the item. List hidden items with
+  `GET /crops?review_dismissed=true`; every item carries
+  `review_dismissed_at`.
+- `GET /crops/{crop_id}/image` → `{image: {image_id, image_path, width,
+  height, source, indexed_at} | null, items: [...]}`: the source frame and
+  every item detected in it (wire items, `crop_rank_in_image` ascending,
+  max 500).
+
 Cluster placement on restore: a restored validated class sits in its
 class cluster (`cluster_id == class_id`, keeping the recorded
 `cluster_subid` only if it belonged to that cluster); anything else goes
@@ -342,7 +353,7 @@ on many-class clusters).
 else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
 `cluster_id`, `label_source`, `class_source`, `label_validated`,
 `hdd_source` / `source` (same filter; `source` is the wire name),
-`needs_new_class` (bool), `ids` (comma-separated, max 500: returns exactly
+`needs_new_class` (bool), `review_dismissed` (bool), `ids` (comma-separated, max 500: returns exactly
 those items in that order, missing ids dropped, every other filter ignored —
 use it to hydrate a `POST /select/diverse` page in one call),
 `include_test`, `include_excluded`, `max_rank`,

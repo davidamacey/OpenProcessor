@@ -20,6 +20,7 @@ import src.routers.curation.bakeoff
 import src.routers.curation.classes
 import src.routers.curation.clusters
 import src.routers.curation.cohorts
+import src.routers.curation.crop_context
 import src.routers.curation.crops
 import src.routers.curation.events
 import src.routers.curation.export
