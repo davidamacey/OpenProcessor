@@ -74,6 +74,7 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'CONFIDENCE_FLOOR': '0.55',
         'BATCH_LIMIT': '32',
         'LETTERBOX_FILL': '10,20,30',
+        'FEATURE_OUTPUT': 'env_feature',
         'ASPECT_MIN': '0.9',
         'ASPECT_MAX': '3.3',
         'TEXT_HINT_ASPECT_MIN': '1.1',
@@ -117,6 +118,7 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.confidence_floor == 0.55
     assert profile.batch_limit == 32
     assert profile.letterbox_fill == (10, 20, 30)
+    assert profile.feature_output == 'env_feature'
     assert profile.aspect_min == 0.9
     assert profile.aspect_max == 3.3
     assert profile.text_hint_aspect_min == 1.1

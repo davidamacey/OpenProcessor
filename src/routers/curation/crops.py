@@ -28,6 +28,16 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE, class_provenance
+
+
+def _human_class_provenance() -> dict[str, Any]:
+    """Class provenance for every human class write in this module."""
+    return class_provenance(
+        detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
+        detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+        labeler='human',
+    )
 
 
 @router.get('/crops', response_model=CropsPageResponse)
@@ -296,10 +306,6 @@ async def label_crop(
     entry = reg.get(payload.class_id)
     class_name = entry.class_name if entry is not None else ''
     from src.services.curation.history import record_class_history
-    from src.services.detection.cascade_detect import (
-        REFERENCE_LICENSE_PLATE_PROFILE,
-        class_provenance,
-    )
 
     def _merge_label(current: dict[str, Any]) -> dict[str, Any]:
         history = record_class_history(current, writer='human:label_crop')
@@ -321,11 +327,7 @@ async def label_crop(
             # A class change moves the crop to a new bucket; the prior
             # AHC sub-cluster grouping no longer applies.
             'cluster_subid': None,
-            **class_provenance(
-                detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-                detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
-                labeler='human',
-            ),
+            **_human_class_provenance(),
             'updated_at': _now_iso(),
         }
 
@@ -380,6 +382,7 @@ async def batch_label_crops(
             'cluster_id': payload.class_id,
             # See label_crop above — subid is cluster-local.
             'cluster_subid': None,
+            **_human_class_provenance(),
             'updated_at': _now_iso(),
         }
 
@@ -457,6 +460,7 @@ async def move_crops(
             # See label_crop above — subid only applies inside the crop's
             # original cluster; clear on move.
             'cluster_subid': None,
+            **_human_class_provenance(),
             'updated_at': _now_iso(),
         }
 

@@ -331,6 +331,49 @@ def test_unlabel_crop_clears_stale_human_provenance(
     assert doc['class_labeler'] is None
 
 
+@pytest.mark.parametrize(
+    ('method', 'url', 'body'),
+    [
+        ('put', '/curation/crops/batch_label', {'crop_ids': ['crop-xyz'], 'class_id': 3}),
+        ('post', '/curation/crops/move', {'crop_ids': ['crop-xyz'], 'cluster_id': 3}),
+    ],
+)
+def test_human_class_writers_replace_detector_provenance(
+    app_client: Any, fake_opensearch: AsyncMock, method: str, url: str, body: dict[str, Any]
+) -> None:
+    """Ingest stamps the detector's class provenance on every item, so a
+    human relabel (batch label / move) must overwrite it — otherwise a
+    human-validated crop keeps claiming the detector produced its class."""
+    fake_opensearch.get = AsyncMock(
+        return_value={
+            '_source': {
+                'class_id': 1,
+                'class_source': 'item_model',
+                'class_detector': 'some_detector',
+                'class_detector_version': '1',
+                'class_labeler': 'ingest',
+                'test_holdout': False,
+            },
+            '_seq_no': 5,
+            '_primary_term': 1,
+        }
+    )
+    fake_opensearch.update = AsyncMock(return_value={'result': 'updated'})
+    reg = MagicMock()
+    reg.validate_id.return_value = True
+    reg.get.return_value = MagicMock(class_name='gadget')
+
+    with patch('src.routers.curation.crops.get_class_registry', return_value=reg):
+        r = getattr(app_client, method)(url, json=body)
+    assert r.status_code == 200, r.text
+
+    [call] = fake_opensearch.update.call_args_list
+    doc = call.kwargs['body']['doc']
+    assert doc['class_detector'] == 'human'
+    assert doc['class_labeler'] == 'human'
+    assert doc['class_labeled_at']
+
+
 # =============================================================================
 # /curation/health
 # =============================================================================

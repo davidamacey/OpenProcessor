@@ -140,10 +140,18 @@ trainer. A deployment supplies:
   Optional: by default residual clustering reduces `pe_embedding`
   instead (`OP_RESIDUAL_EMBEDDING_FIELD`), so a deployment that never
   populates `v6_embedding` still clusters — it just has one fewer
-  embedding space to compare against. **Ingest does not yet write the
-  field**: `WholeImageDetector` requests only `output0` from the
-  secondary detector, so wiring `sppf_feat` into the ingest write path
-  is still required to fill it.
+  embedding space to compare against. Ingest fills the field from the
+  **secondary** detector (the `secondary_profile` passed to
+  `CurationIngestService`): when Triton's model metadata lists
+  `DetectionProfile.feature_output` (default `sppf_feat`) it is
+  requested alongside `output0` and pooled over every item's bbox. A
+  secondary model without that output is called exactly as before and
+  the field is simply not written. A feature map with fewer channels
+  than `backbone_embedding_dim` is zero-padded (e.g. a 768-channel map
+  into the 1024-d default); one with *more* channels is skipped with a
+  logged error rather than truncated. Note `OP_BACKBONE_EMBEDDING_DIM`
+  sets the mapping only when the items index is created — changing it
+  later does not resize an existing index's field.
 - **An OCR/recognition model, if your region type has readable text**
   (`DetectionProfile.ocr_rec_model`) — optional, only used by the
   text-hint heuristics.
