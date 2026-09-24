@@ -38,6 +38,7 @@ from src.services.detection.cascade_detect import (
 )
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
+from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
 
 logger = get_logger('curation_worker')
@@ -226,7 +227,19 @@ async def run(args: argparse.Namespace) -> int:
         )
         sam3_url = ''
     sam3 = _wkr.Sam3Client(sam3_url, text_prompt=profile.sam_text_prompt)
-    gemma = _wkr.VlmLabeler(base_url=args.gemma_url) if args.gemma_url else _wkr.VlmLabeler()
+    # The deployment's prompt pack (OP_PROMPT_PACK_PATH) tells the VLM what
+    # the region IS and that ``region_text`` is its transcribed text. The
+    # built-in generic pack describes an unspecified "labeled sub-region",
+    # so on any other domain the VLM verified whatever box it was shown and
+    # filled region_text with a description of it ("a red taillight") or
+    # the item's class name.
+    pack = resolve_prompt_pack()
+    logger.info('vlm_prompt_pack_resolved', pack=pack.name)
+    gemma = (
+        _wkr.VlmLabeler(base_url=args.gemma_url, pack=pack)
+        if args.gemma_url
+        else _wkr.VlmLabeler(pack=pack)
+    )
     # B-PR5: populate class_names so ``label_combined`` callers (the
     # primary-detector-missed cohort gate in cascade._process_crop) can
     # classify in the same VLM round-trip as region verify + OCR.

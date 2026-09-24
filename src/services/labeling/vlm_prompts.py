@@ -163,7 +163,9 @@ GENERIC_ITEM_PACK = PromptPack(
         'You are labeling an item crop. Return STRICT JSON with these keys: '
         'class_id (int|null), class_confidence (high|medium|low|null), '
         'region_visible (bool), region_bbox_correct (bool|null), '
-        'region_text (string|null), region_confidence (high|medium|low|null). '
+        'region_text (string|null: the characters printed on the region, copied '
+        'verbatim; null when none are legible; never a description of the region or '
+        'the item class), region_confidence (high|medium|low|null). '
         'No prose, no markdown.'
     ),
     combined_user_template=(
@@ -184,7 +186,9 @@ GENERIC_ITEM_PACK = PromptPack(
         'Each per-image object has keys: img (1-based index), '
         'class_id (int|null), class_confidence (high|medium|low|null), '
         'region_visible (bool), region_bbox_correct (bool|null), '
-        'region_text (string|null), region_confidence (high|medium|low|null). '
+        'region_text (string|null: the characters printed on the region, copied '
+        'verbatim; null when none are legible; never a description of the region or '
+        'the item class), region_confidence (high|medium|low|null). '
         'Output ONLY the JSON object — no prose, no markdown, no reasoning. '
         'Skip the chain-of-thought.'
     ),
