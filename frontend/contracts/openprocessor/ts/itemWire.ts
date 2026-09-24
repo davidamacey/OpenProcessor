@@ -25,6 +25,8 @@ export interface ItemWire {
   class_name: string | null;
   class_source: string | null;
   confidence: number;
+  class_confidence: number | null;
+  class_confidence_source: string | null;
   label_source: string | null;
   label_validated: boolean;
   class_validated: boolean;
@@ -35,6 +37,7 @@ export interface ItemWire {
   vlm_confidence: string | null;
   vlm_class_attempted_at: string | null;
   vlm_class_empty_reason: string | null;
+  vlm_raw_class: string | null;
   vlm_proposed_class_id: number | null;
   vlm_proposed_class_name: string | null;
   proposed_class_id: number | null;
@@ -46,6 +49,7 @@ export interface ItemWire {
   cluster_distance: number | null;
   cluster_similarity: number | null;
   cluster_is_core: boolean | null;
+  cluster_nearest_id: number | null;
   cluster_subid: string | null;
   class_excluded: boolean;
   excluded_reason: string | null;
@@ -122,6 +126,8 @@ export const ITEM_WIRE_KEYS = [
   'class_name',
   'class_source',
   'confidence',
+  'class_confidence',
+  'class_confidence_source',
   'label_source',
   'label_validated',
   'class_validated',
@@ -132,6 +138,7 @@ export const ITEM_WIRE_KEYS = [
   'vlm_confidence',
   'vlm_class_attempted_at',
   'vlm_class_empty_reason',
+  'vlm_raw_class',
   'vlm_proposed_class_id',
   'vlm_proposed_class_name',
   'proposed_class_id',
@@ -143,6 +150,7 @@ export const ITEM_WIRE_KEYS = [
   'cluster_distance',
   'cluster_similarity',
   'cluster_is_core',
+  'cluster_nearest_id',
   'cluster_subid',
   'class_excluded',
   'excluded_reason',

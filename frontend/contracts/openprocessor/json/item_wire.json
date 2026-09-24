@@ -22,6 +22,8 @@
     "class_name",
     "class_source",
     "confidence",
+    "class_confidence",
+    "class_confidence_source",
     "label_source",
     "label_validated",
     "class_validated",
@@ -32,6 +34,7 @@
     "vlm_confidence",
     "vlm_class_attempted_at",
     "vlm_class_empty_reason",
+    "vlm_raw_class",
     "vlm_proposed_class_id",
     "vlm_proposed_class_name",
     "proposed_class_id",
@@ -43,6 +46,7 @@
     "cluster_distance",
     "cluster_similarity",
     "cluster_is_core",
+    "cluster_nearest_id",
     "cluster_subid",
     "class_excluded",
     "excluded_reason",
@@ -186,6 +190,34 @@
         ],
         "default": null,
         "title": "Blur Lap Ratio"
+      },
+      "class_confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Confidence"
+      },
+      "class_confidence_source": {
+        "anyOf": [
+          {
+            "enum": [
+              "vlm",
+              "model"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Confidence Source"
       },
       "class_detector": {
         "anyOf": [
@@ -333,6 +365,18 @@
         ],
         "default": null,
         "title": "Cluster Kind"
+      },
+      "cluster_nearest_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Nearest Id"
       },
       "cluster_similarity": {
         "anyOf": [
@@ -1129,6 +1173,18 @@
         ],
         "default": null,
         "title": "Vlm Proposed Class Name"
+      },
+      "vlm_raw_class": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Raw Class"
       }
     },
     "required": [

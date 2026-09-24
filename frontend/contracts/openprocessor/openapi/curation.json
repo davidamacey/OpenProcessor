@@ -1558,6 +1558,32 @@
             ],
             "title": "Blur Lap Ratio"
           },
+          "class_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence"
+          },
+          "class_confidence_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vlm",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Confidence Source"
+          },
           "class_detector": {
             "anyOf": [
               {
@@ -1695,6 +1721,17 @@
               }
             ],
             "title": "Cluster Kind"
+          },
+          "cluster_nearest_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Nearest Id"
           },
           "cluster_similarity": {
             "anyOf": [
@@ -2430,6 +2467,17 @@
               }
             ],
             "title": "Vlm Proposed Class Name"
+          },
+          "vlm_raw_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Raw Class"
           }
         },
         "required": [
@@ -4999,7 +5047,7 @@
     },
     "/curation/clusters": {
       "get": {
-        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``purity`` (largest-class\n  share among labelled members). A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``purity`` are always reported,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
+        "description": "Authoritative per-cluster card payload for the labeler.\n\nSingle OpenSearch aggregation that returns, for every cluster_id:\n\n* ``size`` (total members), ``validated_count`` (class_validated=true),\n* ``dominant_class_{id,name,count}`` and ``label_purity``\n  (largest-class share among labelled members) with\n  ``labelled_share``. A candidate cluster only gets a\n  ``dominant_class_name`` when a unique top class has at least\n  ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n  ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones;\n  ``dominant_count``/``labelled_count``/``label_purity`` are always\n  reported,\n* ``purity`` / ``purity_n`` / ``purity_basis`` / ``purity_tier``\n  (DQ-M2): the share of the ``purity_n`` members the cluster-geometry\n  pass measured for this cluster whose nearest cluster centroid is\n  this cluster's own — independent of the labels that placed them, so\n  a class cluster is no longer 1.0 by construction; ``null`` when no\n  member has been measured,\n* ``is_unlabeled`` (true when no class_name has any signal at all),\n* ``cluster_kind`` (``class`` | ``candidate`` | ``unassigned``),\n* ``n_subclusters`` (distinct cluster_subid values), and\n* ``representatives`` (top ``per_cluster`` crops sorted by\n  cluster_distance asc).\n\nThis endpoint exists so the frontend can stop computing dominant\nclass / purity from a 4-crop sample (it was getting wrong answers\non candidate clusters where all reps were null-class). The\naggregation is cheap because ``cluster_id`` is a low-cardinality\ninteger field; ``class_name``/``class_source``/``cluster_subid`` are\nall mapped ``keyword`` directly on the live index (no ``.keyword``\nsubfield).",
         "operationId": "list_clusters_curation_clusters_get",
         "parameters": [
           {
@@ -5771,13 +5819,13 @@
             }
           },
           {
-            "description": "'outliers' ranks a cluster's members farthest-from-centroid first. 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' nearest-first, with each item's cluster_distance / cluster_similarity / cluster_is_core recomputed against the same live centroid (both need cluster_id). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
             "in": "query",
             "name": "order",
             "required": false,
             "schema": {
               "default": "default",
-              "description": "'outliers' ranks a cluster's members farthest-from-centroid first. 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' nearest-first, with each item's cluster_distance / cluster_similarity / cluster_is_core recomputed against the same live centroid (both need cluster_id). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
               "title": "Order",
               "type": "string"
             }
@@ -7433,7 +7481,7 @@
     },
     "/curation/export/yolo": {
       "post": {
-        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export with a deterministic split and a\nreproducibility manifest. Synchronous; the response includes the\nexport dir + counts.",
+        "description": "Kick off a YOLO export job.\n\nBacked by :class:`GenericYoloExportService` — a multi-class YOLO\ndetection dataset export with a deterministic split and a\nreproducibility manifest. Synchronous; the response includes the\nexport dir + counts. ``422`` (``nothing to export: <reason>``) when no\nitem is exportable; nothing is written then.",
         "operationId": "export_yolo_curation_export_yolo_post",
         "requestBody": {
           "content": {
@@ -9526,7 +9574,7 @@
     },
     "/curation/review/new_class_proposals/resolve": {
       "post": {
-        "description": "Bulk-resolve every ``vlm_new_class_pending`` item proposing ``label``.\n\nUnlike relabeling ``GET /review/new_class_proposals/summary``'s\n``sample_crop_ids`` (capped at 20) one at a time, this selects and\nwrites **every** matching, still-pending item for the term in one\ncall — the backend owns the \"resolve this term\" decision, not the\nclient re-issuing ``PUT /crops/batch_label`` per page of samples.\n\nExactly one of ``class_id`` (map to an existing registry class) /\n``create`` (register a new one first, through the same path as\n``POST /classes``) must be set — ``422`` otherwise. An unknown\n``class_id`` is ``400``; a duplicate ``create.class_name`` is ``409``\nand writes nothing. ``create`` happens before any item write — if\nnothing matches, the class is still created (the operator asked for\nit) and ``matched`` reports ``0``.\n\nEach matching item is written independently via ``occ_update_one``\n(bounded concurrency), re-checking at write time that it is still\npending this exact proposal; an item whose state changed in the\nmeantime is reported in ``skipped``, not written. Every write records\na restorable ``class_id_history`` snapshot, so\n``POST /crops/label/undo_batch`` on ``updated_ids`` puts the item\nback exactly as a pending proposal.\n\n``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or\ncreates nothing (``class_id`` is ``null`` when ``create`` was given).",
+        "description": "Bulk-resolve every new-class queue item proposing ``label`` — the\nsame selection ``GET /review/new_class_proposals`` and its summary use\n(``vlm_new_class_pending`` rows and ``needs_new_class`` flags, never a\nvalidated, dismissed, excluded or test-holdout item), so ``matched``\nequals the summary's ``count`` for the term.\n\nUnlike relabeling ``GET /review/new_class_proposals/summary``'s\n``sample_crop_ids`` (capped at 20) one at a time, this selects and\nwrites **every** matching, still-pending item for the term in one\ncall — the backend owns the \"resolve this term\" decision, not the\nclient re-issuing ``PUT /crops/batch_label`` per page of samples.\n\nExactly one of ``class_id`` (map to an existing registry class) /\n``create`` (register a new one first, through the same path as\n``POST /classes``) must be set — ``422`` otherwise. An unknown\n``class_id`` is ``400``; a duplicate ``create.class_name`` is ``409``\nand writes nothing. ``create`` happens before any item write — if\nnothing matches, the class is still created (the operator asked for\nit) and ``matched`` reports ``0``.\n\nEach matching item is written independently via ``occ_update_one``\n(bounded concurrency), re-checking at write time that it is still\npending this exact proposal; an item whose state changed in the\nmeantime is reported in ``skipped``, not written. Every write records\na restorable ``class_id_history`` snapshot, so\n``POST /crops/label/undo_batch`` on ``updated_ids`` puts the item\nback exactly as a pending proposal.\n\n``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or\ncreates nothing (``class_id`` is ``null`` when ``create`` was given).",
         "operationId": "resolve_new_class_proposal_curation_review_new_class_proposals_resolve_post",
         "parameters": [
           {
@@ -9582,7 +9630,7 @@
     },
     "/curation/review/new_class_proposals/summary": {
       "get": {
-        "description": "The VLM's proposed new-class names across ``vlm_new_class_pending``\nitems: ``{total_pending, top_terms: [{label, count, sample_crop_ids}]}``,\nmost common first — the input for deciding which classes to add.",
+        "description": "The proposed new-class names across the ``new_class_proposals`` queue.\n\n``{total_pending, without_term, top_terms, flagged_terms, term_rules}``:\n``total_pending`` equals ``GET /review/new_class_proposals``'s ``total``\n(same selection); ``without_term`` counts queue items with no proposed\nname (e.g. a human flag). Each term is ``{label, count,\nsample_crop_ids, flag, class_id}``, most common first; ``count`` equals\nwhat a resolve for that label matches. ``top_terms`` holds terms worth\ncreating (``flag`` null); ``flagged_terms`` holds the rest, ``flag``\none of ``existing_class`` (``class_id`` set: map to it),\n``generic_parent`` or ``non_object``. ``term_rules`` serves the rule.",
         "operationId": "review_new_class_summary_curation_review_new_class_proposals_summary_get",
         "parameters": [
           {
@@ -9702,7 +9750,7 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) — the frontend renders this instead of hardcoding\ntab labels. Must be registered before ``GET /review/{tab}`` so it\nisn't shadowed as ``tab='tabs'``.",
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\nand ``filter_defaults`` (values it applies when one is omitted) — the\nfrontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
@@ -9711,9 +9759,7 @@
                 "schema": {
                   "additionalProperties": {
                     "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
+                      "additionalProperties": true,
                       "type": "object"
                     },
                     "type": "array"
@@ -9848,7 +9894,7 @@
             }
           },
           {
-            "description": "Keep crop_rank_in_image <= this.",
+            "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
             "in": "query",
             "name": "max_rank",
             "required": false,
@@ -9862,7 +9908,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Keep crop_rank_in_image <= this.",
+              "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
               "title": "Max Rank"
             }
           },
@@ -10109,7 +10155,7 @@
             }
           },
           {
-            "description": "Keep crop_rank_in_image <= this.",
+            "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
             "in": "query",
             "name": "max_rank",
             "required": false,
@@ -10123,7 +10169,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Keep crop_rank_in_image <= this.",
+              "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
               "title": "Max Rank"
             }
           },
