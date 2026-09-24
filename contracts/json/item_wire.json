@@ -89,7 +89,10 @@
     "region_text_vlm",
     "region_text_ocr",
     "region_text_disagreement",
+    "region_text_choice",
+    "region_text_vlm_invalid",
     "region_validated",
+    "region_auto_confirmed",
     "region_verified",
     "region_verified_at",
     "region_verifier",
@@ -99,6 +102,12 @@
     "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
+    "region_candidate_bbox_norm",
+    "region_candidate_score",
+    "region_candidate_detector",
+    "region_candidate_detector_version",
+    "region_candidate_source",
+    "region_candidate_bbox_in_parent",
     "region_cluster_id",
     "region_cluster_subid",
     "region_cluster_distance",
@@ -647,6 +656,18 @@
         "title": "Proposed Class Name",
         "type": "string"
       },
+      "region_auto_confirmed": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Auto Confirmed"
+      },
       "region_bbox_correct": {
         "anyOf": [
           {
@@ -700,6 +721,84 @@
         ],
         "default": null,
         "title": "Region Bbox Norm"
+      },
+      "region_candidate_bbox_in_parent": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Bbox In Parent"
+      },
+      "region_candidate_bbox_norm": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Bbox Norm"
+      },
+      "region_candidate_detector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Detector"
+      },
+      "region_candidate_detector_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Detector Version"
+      },
+      "region_candidate_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Score"
+      },
+      "region_candidate_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Candidate Source"
       },
       "region_class_id": {
         "anyOf": [
@@ -904,6 +1003,18 @@
         "default": null,
         "title": "Region Text"
       },
+      "region_text_choice": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Choice"
+      },
       "region_text_confidence": {
         "anyOf": [
           {
@@ -987,6 +1098,18 @@
         ],
         "default": null,
         "title": "Region Text Vlm"
+      },
+      "region_text_vlm_invalid": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Vlm Invalid"
       },
       "region_thumbnail_url": {
         "default": "",
@@ -1212,7 +1335,10 @@
     "region_text_vlm",
     "region_text_ocr",
     "region_text_disagreement",
+    "region_text_choice",
+    "region_text_vlm_invalid",
     "region_validated",
+    "region_auto_confirmed",
     "region_verified",
     "region_verified_at",
     "region_verifier",
@@ -1222,6 +1348,11 @@
     "region_detector_version",
     "region_detector_chain",
     "region_detected_at",
+    "region_candidate_bbox_norm",
+    "region_candidate_score",
+    "region_candidate_detector",
+    "region_candidate_detector_version",
+    "region_candidate_source",
     "region_cluster_id",
     "region_cluster_subid",
     "region_cluster_distance",

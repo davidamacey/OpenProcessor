@@ -67,8 +67,20 @@ class RegionFields:
     text_vlm: str = 'region_text_vlm'
     text_ocr: str = 'region_text_ocr'
     text_disagreement: str = 'region_text_disagreement'
+    # Why the chosen reading won (readers_agree / vlm_preferred / vlm_only /
+    # ocr_only / ocr_mode / vlm_invalid / no_valid_reading / human), and
+    # why the VLM's reading was rejected as not text (placeholder /
+    # no_reading / sequence / charset / too_short / too_long / format).
+    text_choice: str = 'region_text_choice'
+    text_vlm_invalid: str = 'region_text_vlm_invalid'
 
+    # Human validation only: a human confirmed (or drew / rejected) the
+    # region. Machine verdicts never set it.
     validated: str = 'region_validated'
+    # The worker's auto-confirm policy accepted the box (detector and
+    # verifier agreed strongly enough to accept it without a human). An
+    # accepted-but-unreviewed region: it stays in the human review queue.
+    auto_confirmed: str = 'region_auto_confirmed'
     verified: str = 'region_verified'
     verified_at: str = 'region_verified_at'
     verifier: str = 'region_verifier'
@@ -79,6 +91,17 @@ class RegionFields:
     detector_version: str = 'region_detector_version'
     detector_chain: str = 'region_detector_chain'
     detected_at: str = 'region_detected_at'
+
+    # A detector box the verifier REJECTED (status ``verify_rejected``),
+    # kept for human review and reversal. Deliberately NOT ``bbox_norm``:
+    # a box there is an accepted region to every reader (browse, export,
+    # clustering). A human confirm promotes the candidate into
+    # ``bbox_norm``; the verifier's reason is ``rejection_reason``.
+    candidate_bbox_norm: str = 'region_candidate_bbox_norm'
+    candidate_score: str = 'region_candidate_score'
+    candidate_detector: str = 'region_candidate_detector'
+    candidate_detector_version: str = 'region_candidate_detector_version'
+    candidate_source: str = 'region_candidate_source'
 
     embedding: str = 'region_embedding'
     cluster_id: str = 'region_cluster_id'

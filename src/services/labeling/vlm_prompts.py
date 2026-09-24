@@ -24,6 +24,7 @@ construction.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
@@ -230,8 +231,10 @@ GENERIC_ITEM_PACK = PromptPack(
         'For each numbered crop decide: is this a real printed label region, or something '
         'else? If it is, also read the text on it. Respond as a JSON array:\n'
         '[{"img": 1, "is_region": true, "confidence": "high|medium|low", '
-        '"reason": "<=15 words", "text": "ABC 1234" or null, '
-        '"text_confidence": "high|medium|low" or null}, ...]'
+        '"reason": "<=15 words", "text": "<the characters printed on the label>" or null, '
+        '"text_confidence": "high|medium|low" or null}, ...]\n'
+        'Copy the text exactly as printed; use null when no text is legible. Never '
+        'guess or fill in an example value.'
     ),
     region_visible_system=(
         'You decide whether each numbered item crop contains a visible labeled sub-region '
@@ -259,6 +262,40 @@ GENERIC_ITEM_PACK = PromptPack(
         'poly_bag': 'envelope',
     },
 )
+
+
+# A quoted value in a prompt: "..." or '...'. Double-quoted strings are
+# consumed first so an apostrophe inside one never opens a single-quoted
+# match.
+_QUOTED = re.compile(r'"([^"\n]{0,64})"|\'([^\'\n]{0,64})\'')
+# Not an example value: a schema placeholder or an enumeration.
+_NOT_AN_EXAMPLE = re.compile(r'[<>|{}]')
+_JSON_KEY_FOLLOWS = re.compile(r'\s*:')
+
+
+def prompt_text_examples(pack: PromptPack) -> frozenset[str]:
+    """Every literal example value quoted in ``pack``'s prompts.
+
+    A model shown an example value (``"text": "ABC 1234"``) tends to echo
+    it -- or a truncation of it -- when it can't read the real text. The
+    region-text rules
+    (:class:`~src.services.detection.region_text_rules.RegionTextRules`)
+    treat a reading that matches one of these as a placeholder, not text,
+    whatever pack is deployed. JSON keys (a quoted string followed by a
+    colon), schema placeholders and enumerations are not examples.
+    """
+    out: set[str] = set()
+    for value in asdict(pack).values():
+        if not isinstance(value, str):
+            continue
+        for match in _QUOTED.finditer(value):
+            quoted = (match.group(1) or match.group(2) or '').strip()
+            if not quoted or _NOT_AN_EXAMPLE.search(quoted):
+                continue
+            if _JSON_KEY_FOLLOWS.match(value, match.end()):
+                continue
+            out.add(quoted)
+    return frozenset(out)
 
 
 _PACK_FILE_CACHE: dict[str, tuple[int, PromptPack]] = {}
@@ -353,5 +390,6 @@ __all__ = [
     'PromptPack',
     'available_prompt_packs',
     'get_prompt_pack',
+    'prompt_text_examples',
     'resolve_prompt_pack',
 ]

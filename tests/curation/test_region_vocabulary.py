@@ -36,7 +36,16 @@ def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient)
     resp = client.get('/curation/regions/vocabulary')
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert set(body) == {'detectors', 'region_sources', 'chain_actors'}
+    assert set(body) == {
+        'detectors',
+        'region_sources',
+        'chain_actors',
+        'text_rules',
+        'text_choices',
+    }
+    # No region profile: no region text, so no rules.
+    assert body['text_rules'] is None
+    assert 'vlm_invalid' in body['text_choices']
     detector_ids = {d['id'] for d in body['detectors']}
     assert 'human' in detector_ids
     human_entry = next(d for d in body['detectors'] if d['id'] == 'human')
@@ -126,3 +135,14 @@ def test_review_tabs_route_not_shadowed_by_the_tab_path_param(client: TestClient
     resp = client.get('/curation/review/tabs')
     assert resp.status_code == 200
     assert 'tabs' in resp.json()
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_regions_vocabulary_serves_the_region_text_rules(client: TestClient) -> None:
+    rules = client.get('/curation/regions/vocabulary').json()['text_rules']
+    assert rules['charset'] == '[A-Z0-9]'
+    assert (rules['len_min'], rules['len_max']) == (2, 10)
+    assert rules['reject_sequences'] is True
+    assert 'NOTREADABLE' in rules['no_reading_words']
+    assert 'placeholder' in rules['invalid_reasons']
+    assert isinstance(rules['placeholders'], list)

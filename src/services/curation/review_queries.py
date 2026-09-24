@@ -265,23 +265,16 @@ def build_tab_query(
         # Default sort: 'uncertainty_entropy' — see review_sorts.py.
         reason = 'high probe entropy — active-learning candidate'
     elif tab == 'regions':
-        # Region-detection review queue. Surfaces crops where the detector /
-        # segmenter / VLM chain produced a bounding box that was NOT
-        # auto-confirmed — i.e. the segmenter score, VLM confidence, or bbox
-        # shape didn't all clear the worker's auto-confirm thresholds. The
-        # user opens each in the region editor,
-        # tweaks the bbox if needed, and clicks Confirm; that flips
-        # label_validated=true. High-confidence triple-agreement crops are
-        # already ``label_validated=true`` and skip this queue entirely.
+        # Region-detection review queue: every accepted region box a human
+        # has not validated yet, including the worker's auto-confirmed ones
+        # (``region_auto_confirmed`` is machine agreement, not validation).
+        # The reviewer opens each in the region editor, adjusts the box if
+        # needed, and confirms, which sets the human-only validated flag.
         must.append({'exists': {'field': fields.bbox_norm}})
         must_not = [{'term': {'class_excluded': True}}]
         if not include_test:
             must_not.append({'term': {'test_holdout': True}})
-        # Already auto-confirmed by the SAM worker — no human needed.
-        # region-validated is set when LPR + Gemma (or SAM3 + Gemma) agree;
-        # those two-AI-agreement crops should not enter the human queue.
-        # SAM3-only crops (LPR missed) keep it false and remain
-        # surfaced here — they are the LPR-training cohort.
+        # Human-validated regions are done.
         must_not.append({'term': {fields.validated: True}})
         # No class_validated exclusion: region review is independent of the
         # item's class. VLM and cluster agreement validate most classes

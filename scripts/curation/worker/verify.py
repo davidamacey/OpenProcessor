@@ -24,6 +24,9 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
     region_provenance,
 )
+from src.services.detection.profile_registry import region_profile_or_neutral
+from src.services.detection.region_text import TEXT_CHOICE_NONE, TEXT_CHOICE_VLM_ONLY
+from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_client import DEFAULT_MODEL as VLM_MODEL_ID
 from src.services.labeling.vlm_labeler import RegionCrop, VlmCombinedReply, VlmLabeler
 
@@ -137,7 +140,7 @@ def _region_write_doc(
     chain: list[str],
     plate_status: str = RegionStatus.DETECTED,
     plate_verified: bool = True,
-    plate_validated: bool = False,
+    auto_confirmed: bool = False,
     verifier: str | None = VLM_MODEL_ID,
     verifier_version: str | None = '1',
     plate_text: str | None = None,
@@ -148,7 +151,9 @@ def _region_write_doc(
     """Compose the ``update_doc`` for a successful region-detection write.
 
     Centralizes the region-write shape so every cascade branch produces
-    a consistent set of fields (incl. provenance + chain).
+    a consistent set of fields (incl. provenance + chain). The worker
+    never validates a region -- ``RegionFields.validated`` is human-only;
+    its auto-confirm policy's verdict is ``RegionFields.auto_confirmed``.
     """
     F = get_region_fields()
     doc: dict[str, Any] = {
@@ -156,7 +161,8 @@ def _region_write_doc(
         F.score: score,
         F.status: plate_status,
         F.verified: plate_verified,
-        F.validated: plate_validated,
+        F.validated: False,
+        F.auto_confirmed: auto_confirmed,
     }
     doc.update(
         region_provenance(
@@ -169,15 +175,90 @@ def _region_write_doc(
     )
     if chain:
         doc[F.detector_chain] = list(chain)
-    if plate_text:
+    # An accepted box supersedes any candidate an earlier pass rejected.
+    doc.update(dict.fromkeys(candidate_fields(F)))
+    doc[F.rejection_reason] = None
+    invalid = (
+        region_text_rules(region_profile_or_neutral()).invalid_reason(plate_text)
+        if plate_text
+        else None
+    )
+    if plate_text and invalid:
+        # Not text (a prompt placeholder, a "can't read it" answer, ...):
+        # keep the reading for audit, write no region text.
+        doc[F.text_vlm] = plate_text
+        doc[F.text_vlm_invalid] = invalid
+        doc[F.text_choice] = TEXT_CHOICE_NONE
+    elif plate_text:
         doc[F.text] = plate_text
         doc[F.text_raw] = plate_text
         doc[F.text_source] = plate_text_source or VLM_MODEL_ID
         doc[F.text_engine_version] = '1'
+        doc[F.text_choice] = TEXT_CHOICE_VLM_ONLY
         if plate_text_confidence:
             doc[F.text_confidence] = _VLM_TEXT_CONFIDENCE_MAP.get(plate_text_confidence, 0.70)
     if extra:
         doc.update(extra)
+    return doc
+
+
+def candidate_fields(F: Any) -> tuple[str, ...]:
+    """Storage names of the rejected-candidate fields."""
+    return (
+        F.candidate_bbox_norm,
+        F.candidate_score,
+        F.candidate_detector,
+        F.candidate_detector_version,
+        F.candidate_source,
+    )
+
+
+# ``RegionFields.rejection_reason`` values for a verifier reject. The
+# sanity-gate one carries the gate's reason after the prefix.
+REJECT_REASON_VERIFIER = 'region_visible_elsewhere'
+REJECT_REASON_SANITY_PREFIX = 'sanity_reject:'
+
+
+def candidate_reject_doc(
+    *,
+    candidate_in_source: tuple[float, float, float, float] | None,
+    candidate_score: float,
+    detector: str,
+    detector_version: str,
+    candidate_source: str,
+    reason: str,
+    chain: list[str],
+    bbox_correct: bool | None = None,
+) -> dict[str, Any]:
+    """Region side of a ``verify_rejected`` write.
+
+    The rejected box is kept in the ``candidate_*`` fields -- never in
+    ``bbox_norm``, which every reader treats as an accepted region -- with
+    its detector and score, plus the rejection reason and the verifier's
+    box verdict, so a human can review the rejection and reverse it
+    (confirming promotes the candidate). Any accepted box a
+    pending-verification item carried is cleared: the verifier rejected it.
+    """
+    F = get_region_fields()
+    doc: dict[str, Any] = {
+        F.status: RegionStatus.VERIFY_REJECTED,
+        F.rejection_reason: reason,
+        F.bbox_norm: None,
+        F.score: None,
+        F.detector_chain: list(chain),
+    }
+    if bbox_correct is not None:
+        doc[F.bbox_correct] = bbox_correct
+    if candidate_in_source is not None:
+        doc.update(
+            {
+                F.candidate_bbox_norm: list(candidate_in_source),
+                F.candidate_score: candidate_score,
+                F.candidate_detector: detector,
+                F.candidate_detector_version: detector_version,
+                F.candidate_source: candidate_source,
+            }
+        )
     return doc
 
 
@@ -316,7 +397,7 @@ def _combined_write_doc(
     detector_version: str,
     chain: list[str],
     class_names: list[str] | None,
-    plate_validated: bool = False,
+    auto_confirmed: bool = False,
     name_to_id: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Compose the happy-path ``detected`` write doc for a combined reply.
@@ -334,7 +415,7 @@ def _combined_write_doc(
         detector=detector,
         detector_version=detector_version,
         chain=chain,
-        plate_validated=plate_validated,
+        auto_confirmed=auto_confirmed,
         plate_text=reply.plate_text,
         plate_text_confidence=reply.plate_confidence,
     )
@@ -348,7 +429,11 @@ async def _auto_confirm_or_pending(
     bbox_in_crop: tuple[float, float, float, float],
     vlm_high_conf: bool,
 ) -> bool:
-    """Decide whether the worker can auto-confirm without human review.
+    """Decide whether the worker's auto-confirm policy accepts the box.
+
+    The verdict is recorded as ``RegionFields.auto_confirmed`` -- never as
+    human validation -- so an auto-confirmed region is accepted
+    (``detected``) yet still reviewable in the human region queue.
 
     Auto-confirm fires when the bbox shape is plausible AND either:
     * The VLM reports ``high`` confidence (strongest signal — when the
@@ -358,8 +443,8 @@ async def _auto_confirm_or_pending(
       (high-confidence detector + at least medium-confidence VLM is
       still a 2-of-2 vote).
 
-    Anything else routes to the review tab where the operator confirms
-    or tweaks the bbox.
+    Anything else is accepted unconfirmed; either way the operator can
+    confirm or tweak the bbox from the review tab.
     """
     # Two-signal validation — detector bbox + VLM 'high' verify is
     # sufficient regardless of in-crop bbox area (the VLM already saw

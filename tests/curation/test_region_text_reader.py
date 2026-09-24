@@ -193,6 +193,7 @@ class TestReaderModes:
             'text_engine_version': 'vlm-model',
             'text_confidence': 0.92,
             'text_raw': 'ZZZ',
+            'text_choice': 'vlm_only',
         }
 
     def test_nothing_read_writes_nothing(self) -> None:

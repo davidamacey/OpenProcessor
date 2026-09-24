@@ -1983,6 +1983,17 @@
             "title": "Proposed Class Name",
             "type": "string"
           },
+          "region_auto_confirmed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Auto Confirmed"
+          },
           "region_bbox_correct": {
             "anyOf": [
               {
@@ -2032,6 +2043,78 @@
               }
             ],
             "title": "Region Bbox Norm"
+          },
+          "region_candidate_bbox_in_parent": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Bbox In Parent"
+          },
+          "region_candidate_bbox_norm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Bbox Norm"
+          },
+          "region_candidate_detector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Detector"
+          },
+          "region_candidate_detector_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Detector Version"
+          },
+          "region_candidate_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Score"
+          },
+          "region_candidate_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Candidate Source"
           },
           "region_class_id": {
             "anyOf": [
@@ -2218,6 +2301,17 @@
             ],
             "title": "Region Text"
           },
+          "region_text_choice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Choice"
+          },
           "region_text_confidence": {
             "anyOf": [
               {
@@ -2294,6 +2388,17 @@
               }
             ],
             "title": "Region Text Vlm"
+          },
+          "region_text_vlm_invalid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text Vlm Invalid"
           },
           "region_thumbnail_url": {
             "default": "",
@@ -8774,7 +8879,7 @@
     },
     "/curation/regions": {
       "get": {
-        "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling.",
+        "description": "Browse crops that have a region bbox, filtered by provenance/score/text.\n\nUsed by the labeler's /clusters page when the region-of-interest\nclass is the selected class filter, and by any region-centric\nreview tooling. ``status`` selects one lifecycle status instead of\n\"has a box\" (a rejected or absent region has none).",
         "operationId": "list_regions_curation_regions_get",
         "parameters": [
           {
@@ -8985,6 +9090,24 @@
               ],
               "description": "Substring search on region_text.",
               "title": "Text"
+            }
+          },
+          {
+            "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items with this region_status (see GET /regions/statuses). Without it only items carrying a region box are listed; with it every item in that status is, e.g. status=verify_rejected lists the verifier-rejected items (their candidate box is region_candidate_bbox_norm).",
+              "title": "Status"
             }
           },
           {
@@ -11915,7 +12038,7 @@
     },
     "/curation/vlm/region_visible_batch": {
       "post": {
-        "description": "Pre-filter item crops by asking the VLM whether a sub-region is visible.\n\nWhy this endpoint exists\n------------------------\nA full region-of-interest detector is often the throughput\nbottleneck. A non-trivial fraction of item crops contain no visible\nsub-region at all. Routing those crops through the detector +\nverify pipeline is pure waste. A yes/no VLM call packed several\ncrops at a time costs roughly an order of magnitude less per crop\nthan a verify call.\n\nThe endpoint returns ``{crop_id: bool}``: ``True`` means the crop\nshould continue to the detector; ``False`` means the caller should\nwrite a terminal \"not visible\" status directly and skip the\ndetector entirely. On any RPC / parse failure the verdict defaults\nto ``True`` (fail-open) so we never silently drop a crop that might\nhave a real sub-region.",
+        "description": "Pre-filter item crops by asking the VLM whether a sub-region is visible.\n\nWhy this endpoint exists\n------------------------\nA full region-of-interest detector is often the throughput\nbottleneck. A non-trivial fraction of item crops contain no visible\nsub-region at all. Routing those crops through the detector +\nverify pipeline is pure waste. A yes/no VLM call packed several\ncrops at a time costs roughly an order of magnitude less per crop\nthan a verify call.\n\nThe endpoint returns ``{crop_id: bool}``: ``True`` means the crop\nshould continue to the detector; ``False`` means the caller should\nwrite a terminal \"not visible\" status directly and skip the\ndetector entirely. On an RPC failure or a garbled entry the verdict\ndefaults to ``True`` (fail-open) so we never silently drop a crop that\nmight have a real sub-region. A crop missing from the map got no\nverdict (the VLM answered its chunk with nothing): retry it.",
         "operationId": "vlm_region_visible_batch_curation_vlm_region_visible_batch_post",
         "requestBody": {
           "content": {

@@ -102,6 +102,10 @@ async def _drive(
         'src.clients.curation_opensearch.ClassRegistry',
         MagicMock(side_effect=RuntimeError('no registry in test')),
     )
+    # Stage A resolves the class group through the process-wide registry
+    # singleton; without this the test depends on another test having
+    # loaded it first.
+    monkeypatch.setattr('scripts.curation.worker.state._class_group', lambda _name: None)
 
     args = worker.parse_args(
         [

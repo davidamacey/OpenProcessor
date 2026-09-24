@@ -377,7 +377,7 @@ async def _process_crop(
                     detector=det_model,
                     detector_version=det_version,
                     chain=task.detection_trace,
-                    plate_validated=auto or False,
+                    auto_confirmed=bool(auto),
                     plate_text=outcome.text,
                     plate_text_confidence=outcome.text_confidence,
                 )
@@ -418,7 +418,7 @@ async def _process_crop(
                         detector=det_model,
                         detector_version=det_version,
                         chain=task.detection_trace,
-                        plate_validated=auto or False,
+                        auto_confirmed=bool(auto),
                         plate_text=outcome.text,
                         plate_text_confidence=outcome.text_confidence,
                     )
@@ -462,7 +462,6 @@ async def _process_crop(
                     detector_version=seg_version,
                     chain=task.detection_trace,
                     plate_verified=False,
-                    plate_validated=False,
                     verifier=None,
                     verifier_version=None,
                     extra={get_region_fields().skip_verify: True},
@@ -489,7 +488,7 @@ async def _process_crop(
                     detector=seg_name,
                     detector_version=seg_version,
                     chain=task.detection_trace,
-                    plate_validated=auto or False,
+                    auto_confirmed=bool(auto),
                     plate_text=outcome.text,
                     plate_text_confidence=outcome.text_confidence,
                 )
@@ -552,7 +551,7 @@ async def _process_crop(
                         detector=seg_name,
                         detector_version=seg_version,
                         chain=task.detection_trace,
-                        plate_validated=auto or False,
+                        auto_confirmed=bool(auto),
                         plate_text=text_out,
                         plate_text_confidence=text_conf_out,
                     )

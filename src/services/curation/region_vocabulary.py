@@ -107,9 +107,24 @@ def _region_sources() -> list[dict[str, Any]]:
     return out
 
 
+def _text_rules() -> dict[str, Any] | None:
+    """The active profile's region-text validity rules (with the resolved
+    prompt pack's example values as placeholders), or ``None`` without a
+    region profile."""
+    from src.services.detection.region_text_rules import region_text_rules
+
+    profile = get_active_region_profile()
+    return None if profile is None else region_text_rules(profile).catalog()
+
+
 def region_vocabulary_catalog() -> dict[str, Any]:
-    """``{detectors, region_sources, chain_actors}`` for the active
-    deployment config. Never hardcodes a private model id."""
+    """``{detectors, region_sources, chain_actors, text_rules,
+    text_choices}`` for the active deployment config. Never hardcodes a
+    private model id. ``text_rules`` says which readings count as region
+    text (``null`` without a region profile); ``text_choices`` lists the
+    ``region_text_choice`` values."""
+    from src.services.detection.region_text import TEXT_CHOICES
+
     vlm_model = os.environ.get('OP_VLM_MODEL', '')
     detectors = _detectors(vlm_model)
     region_sources = _region_sources()
@@ -122,6 +137,8 @@ def region_vocabulary_catalog() -> dict[str, Any]:
         'detectors': detectors,
         'region_sources': region_sources,
         'chain_actors': chain_actors,
+        'text_rules': _text_rules(),
+        'text_choices': list(TEXT_CHOICES),
     }
 
 

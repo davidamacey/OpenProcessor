@@ -134,7 +134,15 @@ class ItemDoc(BaseModel):
     region_text_vlm: str | None = None
     region_text_ocr: str | None = None
     region_text_disagreement: bool | None = None
+    # Why the chosen region_text won, and why the VLM's reading (kept in
+    # region_text_vlm) was rejected as not text; see GET /regions/vocabulary.
+    region_text_choice: str | None = None
+    region_text_vlm_invalid: str | None = None
+    # Human validation only (a human confirmed / drew / rejected it).
     region_validated: bool | None = None
+    # The worker's auto-confirm policy accepted the box: an accepted but
+    # not human-reviewed region (it stays in the region review queue).
+    region_auto_confirmed: bool | None = None
     region_verified: bool | None = None
     region_verified_at: str | None = None
     region_verifier: str | None = None
@@ -144,6 +152,17 @@ class ItemDoc(BaseModel):
     region_detector_version: str | None = None
     region_detector_chain: list[str] | None = None
     region_detected_at: str | None = None
+    # A detector box the verifier rejected (region_status verify_rejected),
+    # kept for review: never an accepted region. A human confirm (PATCH
+    # region_meta region_status=detected, or PUT region with this box)
+    # promotes it to region_bbox_norm with this provenance.
+    region_candidate_bbox_norm: list[float] | None = None
+    region_candidate_score: float | None = None
+    region_candidate_detector: str | None = None
+    region_candidate_detector_version: str | None = None
+    region_candidate_source: str | None = None
+    # Derived: the candidate box in the item-crop frame (xyxy, [0, 1]).
+    region_candidate_bbox_in_parent: list[float] | None = None
     region_cluster_id: int | None = None
     region_cluster_subid: str | None = None
     region_cluster_distance: float | None = None

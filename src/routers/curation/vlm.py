@@ -588,9 +588,10 @@ async def vlm_region_visible_batch(
     The endpoint returns ``{crop_id: bool}``: ``True`` means the crop
     should continue to the detector; ``False`` means the caller should
     write a terminal "not visible" status directly and skip the
-    detector entirely. On any RPC / parse failure the verdict defaults
-    to ``True`` (fail-open) so we never silently drop a crop that might
-    have a real sub-region.
+    detector entirely. On an RPC failure or a garbled entry the verdict
+    defaults to ``True`` (fail-open) so we never silently drop a crop that
+    might have a real sub-region. A crop missing from the map got no
+    verdict (the VLM answered its chunk with nothing): retry it.
     """
 
     items = payload.items

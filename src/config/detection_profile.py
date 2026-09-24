@@ -96,6 +96,18 @@ class DetectionProfile:
     text_stopwords: frozenset[str] = field(default_factory=frozenset)
     # Minimum recognition score of the weakest kept line.
     text_min_confidence: float = 0.0
+    # Reading validity (src/services/detection/region_text_rules.py),
+    # applied to every reader's reading before one is chosen. A reading
+    # failing a rule is no reading at all. ``text_format``: optional regex
+    # the normalized reading must fully match ('' = any).
+    # ``text_placeholders``: readings that are never real text (e.g. a
+    # prompt's example value; the active prompt pack's quoted examples are
+    # added automatically). ``text_reject_sequences``: reject a reading
+    # that is one repeated character or one ascending / descending run
+    # ("999", "123456", "XYZ") -- stock "I can't read it" answers.
+    text_format: str = ''
+    text_placeholders: frozenset[str] = field(default_factory=frozenset)
+    text_reject_sequences: bool = False
     sam_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
     # Item (ingest) detectors only: the model class ids whose detections

@@ -111,6 +111,8 @@ async def _try_combined_class_region(
     fields, and ``vlm_verify_completed_at`` so downstream pipelines
     know class+region were resolved in one round-trip. On parse failure
     returns False and the caller falls back to the legacy two-call path.
+    A reply with no verdict on the box also returns True, with an empty
+    ``update_doc``: nothing is written and the item stays pending.
     """
     class_names = getattr(gemma, 'class_names', None) or []
     name_to_id = getattr(gemma, 'name_to_id', None) or {}
@@ -133,6 +135,14 @@ async def _try_combined_class_region(
         reply, list(class_names), name_to_id=name_to_id
     )
 
+    if reply.plate_visible and reply.plate_bbox_correct is None:
+        # A visible region but no verdict on the box (null / absent): not a
+        # reject. Resolve the crop with no write so it stays pending and the
+        # next pass retries it.
+        task.detection_trace.append(f'{detector_chain_tag}:combined_no_verdict')
+        task.update_doc = {}
+        return True
+
     if reply.plate_bbox_correct and reply.plate_visible:
         gate_ok, gate_reason = is_plausible_region_bbox(candidate_in_crop, task.vehicle_bbox_norm)
         if gate_ok:
@@ -152,7 +162,7 @@ async def _try_combined_class_region(
                 detector_version=detector_version,
                 chain=task.detection_trace,
                 class_names=list(class_names),
-                plate_validated=auto or False,
+                auto_confirmed=bool(auto),
                 name_to_id=name_to_id,
             )
             return True

@@ -37,7 +37,8 @@ from src.services.detection.cascade_detect import (
     is_plausible_region_bbox,
 )
 from src.services.detection.profile_registry import get_active_region_profile
-from src.services.detection.region_text import TEXT_SOURCE_OCR, ocr_engine_id, validate_text_reader
+from src.services.detection.region_text import validate_text_reader
+from src.services.detection.region_text_rules import region_text_rules
 from src.services.labeling.vlm_labeler import CombinedCrop, RegionCrop
 from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
@@ -56,6 +57,7 @@ from scripts.curation.worker.cascade import (
 from scripts.curation.worker.region_text_stage import (
     accept_without_vlm,
     apply_region_text,
+    apply_text_hint_fallback,
     candidate_detector,
     item_text_fields,
     read_item_lines,
@@ -73,11 +75,14 @@ from scripts.curation.worker.state import (
 )
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
+    REJECT_REASON_SANITY_PREFIX,
+    REJECT_REASON_VERIFIER,
     _auto_confirm_or_pending,
     _bbox_shape_is_plausible,
     _combined_class_update,
     _combined_write_doc,
     _region_write_doc,
+    candidate_reject_doc,
 )
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
@@ -254,6 +259,10 @@ async def run(args: argparse.Namespace) -> int:
     # the item's class name.
     pack = resolve_prompt_pack()
     logger.info('vlm_prompt_pack_resolved', pack=pack.name)
+    # Which readings count as region text at all: the profile's rules plus
+    # the pack's quoted example values, which a VLM echoes when it can't
+    # read the text.
+    text_rules = region_text_rules(profile, pack)
     # No VLM URL at all (OP_VLM_URL unset) = a deployment without an image
     # LLM: no visibility filter, no verify call; detector regions are
     # accepted unverified and their text is read by OCR
@@ -402,6 +411,9 @@ async def run(args: argparse.Namespace) -> int:
         # to the secondary-segmenter stage. Together with skipped, lets
         # us compute the filter's skip rate at a glance.
         'gemma_visible_kept': 0,
+        # visible_no_verdict: crops the visibility VLM call answered with
+        # nothing (empty reply). Left pending for a retry.
+        'visible_no_verdict': 0,
         # combined_bbox_wrong: the VLM said the region IS visible but
         # the proposed bbox was wrong. We write verify_rejected and do
         # NOT re-loop the segmenter (avoids re-introducing a 2nd VLM
@@ -413,6 +425,10 @@ async def run(args: argparse.Namespace) -> int:
         # the next producer poll re-fetches it (no terminal status
         # stamped).
         'combined_parse_failure': 0,
+        # combined_no_bbox_verdict: the VLM said a region is visible but
+        # answered null / nothing on the candidate box. Left pending (no
+        # write) for a retry, never counted as a reject.
+        'combined_no_bbox_verdict': 0,
         # combined_no_plate_visible: the VLM confirmed no region is
         # visible at all. Terminal write.
         'combined_no_plate_visible': 0,
@@ -570,7 +586,9 @@ async def run(args: argparse.Namespace) -> int:
                     if vlm_available:
                         await combined_q.put(t)
                     else:
-                        await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                        await accept_without_vlm(
+                            t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                        )
                         await out_q.put(t)
                     in_q.task_done()
                     continue
@@ -601,7 +619,9 @@ async def run(args: argparse.Namespace) -> int:
                         if vlm_available:
                             await combined_q.put(t)
                         else:
-                            await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                            await accept_without_vlm(
+                                t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                            )
                             await out_q.put(t)
                         in_q.task_done()
                         continue
@@ -696,11 +716,12 @@ async def run(args: argparse.Namespace) -> int:
         this stage. Crops that come back ``True`` (or that the parser
         fails open on) advance to ``sam_q``.
 
-        Fail-OPEN semantics: any RPC error, any per-entry parse
-        failure, and any empty response is treated as ``visible=True``
-        so we never silently bin a real region when the VLM is flaky.
-        The cost is one extra segmenter round-trip on those crops —
-        the existing pipeline is the safety net.
+        Fail-OPEN semantics: any RPC error and any per-entry parse
+        failure is treated as ``visible=True`` so we never silently bin
+        a real region when the VLM is flaky. The cost is one extra
+        segmenter round-trip on those crops — the existing pipeline is
+        the safety net. An empty response is no verdict: those crops are
+        left pending and retried (never stamped "no region visible").
         """
 
         while True:
@@ -753,9 +774,16 @@ async def run(args: argparse.Namespace) -> int:
                             t.update_doc = unreadable_crop_update(t)
                             await out_q.put(t)
                             continue
-                        # Default True (fail-open) when the crop is
-                        # missing from the verdicts dict for any reason.
-                        is_visible = verdicts.get(t.crop_id, True)
+                        is_visible = verdicts.get(t.crop_id)
+                        if is_visible is None:
+                            # No verdict (the VLM answered the chunk with
+                            # nothing): not a "no region visible". Leave the
+                            # item pending -- drop it from in_flight so the
+                            # next producer poll retries it.
+                            metrics['visible_no_verdict'] += 1
+                            async with in_flight_lock:
+                                in_flight.discard(t.crop_id)
+                            continue
                         if is_visible:
                             metrics['gemma_visible_kept'] += 1
                             t.detection_trace.append('vlm_visible:yes')
@@ -860,7 +888,6 @@ async def run(args: argparse.Namespace) -> int:
                             detector_version=region_profile().segmenter_version,
                             chain=t.detection_trace,
                             plate_verified=False,
-                            plate_validated=False,
                             verifier=None,
                             verifier_version=None,
                             extra={F.skip_verify: True},
@@ -875,6 +902,7 @@ async def run(args: argparse.Namespace) -> int:
                             vlm_text=None,
                             vlm_confidence=None,
                             vlm_available=vlm_available,
+                            rules=text_rules,
                         )
                         await out_q.put(t)
                         sam_q.task_done()
@@ -891,7 +919,9 @@ async def run(args: argparse.Namespace) -> int:
                     if vlm_available:
                         await combined_q.put(t)
                     else:
-                        await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                        await accept_without_vlm(
+                            t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                        )
                         await out_q.put(t)
                     sam_q.task_done()
                     continue
@@ -929,7 +959,9 @@ async def run(args: argparse.Namespace) -> int:
                         if vlm_available:
                             await combined_q.put(t)
                         else:
-                            await accept_without_vlm(t, ocr=ocr_recognizer, profile=profile)
+                            await accept_without_vlm(
+                                t, ocr=ocr_recognizer, profile=profile, rules=text_rules
+                            )
                             await out_q.put(t)
                         sam_q.task_done()
                         continue
@@ -975,6 +1007,8 @@ async def run(args: argparse.Namespace) -> int:
           - plate_bbox_correct=True, plate_visible=True (+ bbox passes
             sanity gate) -> write 'detected' with full region + class
             fields via :func:`_combined_write_doc`.
+          - plate_visible=True, plate_bbox_correct=None (null / absent)
+            -> no verdict: no write, the item stays pending for a retry.
           - plate_visible=True but plate_bbox_correct=False (or sanity
             gate fails) -> write 'verify_rejected' + class fields. Do
             NOT re-loop the secondary segmenter (would re-introduce 2
@@ -1118,8 +1152,15 @@ async def run(args: argparse.Namespace) -> int:
                             if not gate_ok:
                                 t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
                                 t.update_doc = {
-                                    F.status: RegionStatus.VERIFY_REJECTED,
-                                    F.detector_chain: list(t.detection_trace),
+                                    **candidate_reject_doc(
+                                        candidate_in_source=t.candidate_in_source,
+                                        candidate_score=t.candidate_score,
+                                        detector=_det[0],
+                                        detector_version=_det[1],
+                                        candidate_source=t.candidate_source,
+                                        reason=f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}',
+                                        chain=t.detection_trace,
+                                    ),
                                     **_combined_class_update(
                                         reply, effective_class_names, name_to_id=name_to_id
                                     ),
@@ -1140,7 +1181,7 @@ async def run(args: argparse.Namespace) -> int:
                                 detector_version=_det[1],
                                 chain=t.detection_trace,
                                 class_names=effective_class_names,
-                                plate_validated=auto or False,
+                                auto_confirmed=bool(auto),
                                 name_to_id=name_to_id,
                             )
                             # Preserve the candidate_source marker for
@@ -1156,32 +1197,56 @@ async def run(args: argparse.Namespace) -> int:
                                 vlm_text=reply.plate_text,
                                 vlm_confidence=reply.plate_confidence,
                                 vlm_available=True,
+                                rules=text_rules,
                             )
                             # Text-hint OCR fallback (text_reader='vlm' only
                             # -- the other modes already read the region):
                             # the VLM read nothing but the item-crop OCR hit
                             # that seeded this box did. Forward that text
                             # so the region is still searchable.
-                            if not t.update_doc.get(F.text) and t.candidate_text:
-                                t.update_doc[F.text] = t.candidate_text
-                                t.update_doc[F.text_raw] = t.candidate_text
-                                t.update_doc[F.text_source] = TEXT_SOURCE_OCR
-                                t.update_doc[F.text_engine_version] = ocr_engine_id(profile)
-                                t.update_doc[F.text_confidence] = t.candidate_text_confidence
+                            apply_text_hint_fallback(
+                                t.update_doc,
+                                text=t.candidate_text,
+                                confidence=t.candidate_text_confidence,
+                                profile=profile,
+                                rules=text_rules,
+                            )
+                        elif reply.plate_visible and reply.plate_bbox_correct is None:
+                            # The VLM sees a region but gave no verdict on
+                            # the candidate box (null / absent). No verdict
+                            # is not a reject: leave the item pending --
+                            # drop it from in_flight so the next producer
+                            # poll retries it, same as a parse failure.
+                            metrics['combined_no_bbox_verdict'] += 1
+                            logger.info(
+                                'stage_b_combined_no_bbox_verdict',
+                                crop_id=t.crop_id,
+                                request_id=t.request_id,
+                            )
+                            async with in_flight_lock:
+                                in_flight.discard(t.crop_id)
+                            continue
                         elif reply.plate_visible:
-                            # plate_bbox_correct is False/None but the
-                            # VLM says a region IS visible. Write
-                            # verify_rejected + class fields and do NOT
-                            # re-loop the secondary segmenter (would
-                            # re-introduce 2 VLM calls per crop). Human
-                            # review picks these up.
+                            # plate_bbox_correct is False but the VLM says
+                            # a region IS visible. Write verify_rejected +
+                            # class fields and do NOT re-loop the
+                            # secondary segmenter (would re-introduce 2 VLM
+                            # calls per crop).
                             metrics['combined_bbox_wrong'] += 1
                             t.detection_trace.append(
-                                f'{actor}:combined_verify_reject:region_visible_elsewhere'
+                                f'{actor}:combined_verify_reject:{REJECT_REASON_VERIFIER}'
                             )
                             t.update_doc = {
-                                F.status: RegionStatus.VERIFY_REJECTED,
-                                F.detector_chain: list(t.detection_trace),
+                                **candidate_reject_doc(
+                                    candidate_in_source=t.candidate_in_source,
+                                    candidate_score=t.candidate_score,
+                                    detector=_det[0],
+                                    detector_version=_det[1],
+                                    candidate_source=t.candidate_source,
+                                    reason=REJECT_REASON_VERIFIER,
+                                    chain=t.detection_trace,
+                                    bbox_correct=False,
+                                ),
                                 **_combined_class_update(
                                     reply, effective_class_names, name_to_id=name_to_id
                                 ),
@@ -1330,9 +1395,11 @@ async def run(args: argparse.Namespace) -> int:
                 gemma_visible_kept=metrics['gemma_visible_kept'],
                 gemma_visible_skipped=metrics['gemma_visible_skipped'],
                 gemma_visible_skip_rate=round(vis_skip_rate, 3),
+                visible_no_verdict=metrics['visible_no_verdict'],
                 combined_bbox_wrong=metrics['combined_bbox_wrong'],
                 combined_no_plate_visible=metrics['combined_no_plate_visible'],
                 combined_parse_failure=metrics['combined_parse_failure'],
+                combined_no_bbox_verdict=metrics['combined_no_bbox_verdict'],
             )
             last_processed = metrics['total_processed']
             last_t = now
