@@ -3,20 +3,20 @@
  * used to hardcode `lpr_nanov11_640`/`sam3`/`paddleocr_det_trt`/`human`
  * options. Its options are now the served vocabulary's filterable
  * detectors (`GET {API_PREFIX}/regions/vocabulary`, `regionVocabularyStore`).
- * Mounts the real component (see SlotGallery.unclusteredPlates.test.ts's
+ * Mounts the real component (see SlotGallery.unclustered.test.ts's
  * header comment for the convention).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotGallery from './SlotGallery.svelte';
-import { createPlateGalleryController } from '../../../routes/clusters/plateGalleryController.svelte';
+import { createSlotGalleryController } from '../../../routes/clusters/slotGalleryController.svelte';
 import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
 vi.mock('$lib/api', async () => {
   const actual = await vi.importActual<typeof import('$lib/api')>('$lib/api');
-  return { ...actual, getPlateClusters: vi.fn(), getPlates: vi.fn() };
+  return { ...actual, getRegionClusters: vi.fn(), getRegions: vi.fn() };
 });
-import { getPlateClusters } from '$lib/api';
+import { getRegionClusters } from '$lib/api';
 
 let target: HTMLDivElement;
 let instance: unknown;
@@ -28,7 +28,7 @@ function resetStore(): void {
   regionVocabularyStore.loaded = false;
 }
 
-function renderGallery(gallery: ReturnType<typeof createPlateGalleryController>) {
+function renderGallery(gallery: ReturnType<typeof createSlotGalleryController>) {
   target = document.createElement('div');
   document.body.appendChild(target);
   instance = mount(SlotGallery, { target, props: { gallery } } as never);
@@ -56,9 +56,9 @@ describe('SlotGallery detector filter — served vocabulary (m9)', () => {
       // Not filterable — must not appear as an option.
       { id: 'human', label: 'Human', role: 'human', filterable: false },
     ];
-    vi.mocked(getPlateClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createPlateGalleryController();
-    await gallery.loadPlateClusters();
+    vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
+    const gallery = createSlotGalleryController();
+    await gallery.loadClusters();
     const el = renderGallery(gallery);
 
     const select = el.querySelector('select') as HTMLSelectElement;
@@ -73,9 +73,9 @@ describe('SlotGallery detector filter — served vocabulary (m9)', () => {
 
   it('renders only the "any" option when the vocabulary has no filterable detectors', async () => {
     regionVocabularyStore.detectors = [];
-    vi.mocked(getPlateClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createPlateGalleryController();
-    await gallery.loadPlateClusters();
+    vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
+    const gallery = createSlotGalleryController();
+    await gallery.loadClusters();
     const el = renderGallery(gallery);
 
     const select = el.querySelector('select') as HTMLSelectElement;

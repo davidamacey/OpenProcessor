@@ -8,7 +8,7 @@
     excludeCrops,
     getClusters,
     getCrops,
-    getPlates,
+    getRegions,
     getRegionThumbUrl,
     getThumbUrl,
     resolveApiUrl,
@@ -19,7 +19,7 @@
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { createPager } from '$lib/pager.svelte';
   import { idsNeedingRepresentatives } from '$lib/clusters/displayOrderRepresentatives';
-  import { createPlateGalleryController } from './plateGalleryController.svelte';
+  import { createSlotGalleryController } from './slotGalleryController.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import {
     isEmbeddingVizAvailable,
@@ -67,7 +67,7 @@
   // operator can click into the plate inventory the same way they click
   // into any other class cluster. Card is null until the first {API_PREFIX}/regions
   // call resolves; the cluster grid hides it during that window.
-  let lpCard = $state<Cluster | null>(null);
+  let slotInventoryCard = $state<Cluster | null>(null);
 
   // Persist the cluster-list filter (sort + unlabeled-only) across
   // navigation so going into a cluster and back keeps the operator's
@@ -114,11 +114,11 @@
 
   // --- Plate browse (replaces the "License plates aren't clustered" placeholder
   //     when the operator selects the license_plate class filter).
-  // State/logic extracted to plateGalleryController.svelte.ts (P2.6,
+  // State/logic extracted to slotGalleryController.svelte.ts (P2.6,
   // docs/genericization-plan-2026-09-13.md §3.4/§5a) -- SlotGallery.svelte
   // owns rendering, this route owns the class-filter routing decision and
   // the URL/filter-driven reload effects below.
-  const plateGallery = createPlateGalleryController();
+  const slotGallery = createSlotGalleryController();
 
   const classFilter = $derived.by(() => {
     const v = page.url.searchParams.get('class');
@@ -144,7 +144,7 @@
   // and route the user to the slot's browse gallery instead, which is
   // the actual home for that slot's labeling. Driven by registeredSlots
   // (P2.10) instead of a hardcoded license_plate string literal.
-  const isLicensePlateFilter = $derived.by<boolean>(() => {
+  const isSlotFilter = $derived.by<boolean>(() => {
     if (classFilter == null) return false;
     const cls = classesStore.classes.find((c) => c.id === classFilter);
     return slotForClassName(cls?.name) != null;
@@ -341,7 +341,7 @@
   $effect(() => {
     if (!searchModeActive) return;
     // Force the embedding plot off — same guard pattern the plate-browse
-    // view already uses (isLicensePlateFilter effect above): the plot
+    // view already uses (isSlotFilter effect above): the plot
     // colors by cluster_id over the card grid's own crops, which search
     // mode replaces entirely.
     if (showEmbeddingViz) showEmbeddingViz = false;
@@ -448,13 +448,13 @@
       ?.field_coverage_total ?? null,
   );
   let showEmbeddingViz = $state<boolean>(false);
-  // The synthetic plate-browse view (isLicensePlateFilter) has its own
+  // The synthetic plate-browse view (isSlotFilter) has its own
   // grid + bulk-triage toolbar; the embedding plot projects vehicle
   // crops with a real cluster_id, which plates (sub-bboxes, not their
   // own cluster docs) never have. Force the toggle off rather than
   // leaving a stale plot mounted over a view it doesn't apply to.
   $effect(() => {
-    if (isLicensePlateFilter && showEmbeddingViz) showEmbeddingViz = false;
+    if (isSlotFilter && showEmbeddingViz) showEmbeddingViz = false;
   });
 
   // One params builder for both pages of the cluster grid. loadMore used
@@ -503,7 +503,7 @@
   // Deliberately keyed to `licensePlateSlot` specifically, NOT "the
   // first slot-bound class" (P2.11, docs/genericization-plan-2026-09-13.md
   // §9.1 finding): every line below calls the plate-specific
-  // getPlates()/getRegionThumbUrl() endpoints, so silently aliasing to
+  // getRegions()/getRegionThumbUrl() endpoints, so silently aliasing to
   // whichever slot-bound class happened to be first would build a
   // plate card labeled with a DIFFERENT slot's class the moment a
   // second capable slot is registered. A generic per-slot synthetic
@@ -511,26 +511,26 @@
   // not re-planned here) — until that lands, a slot with no
   // plate-shaped browse endpoint correctly gets no pinned card at all,
   // rather than an incorrect one.
-  async function loadLicensePlateCard(): Promise<void> {
+  async function loadSlotInventoryCards(): Promise<void> {
     const lp = classesStore.classes.find(
       (c) => c.name.toLowerCase() === licensePlateSlot.bind.className?.toLowerCase(),
     );
     if (!lp) {
-      lpCard = null;
+      slotInventoryCard = null;
       return;
     }
     try {
       // Pull a slightly larger window than 4 so we can drop items
       // missing a plate sub-bbox without falling below the tile count.
-      const res = await getPlates(licensePlateSlot.capabilities.queue!.browsePath, {
+      const res = await getRegions(licensePlateSlot.capabilities.queue!.browsePath, {
         page: 1,
         page_size: 12,
       });
-      const withPlateBox = res.items.filter(
+      const withBox = res.items.filter(
         (p) => Array.isArray(p.region_bbox_norm) && p.region_bbox_norm.length === 4,
       );
-      const reps = withPlateBox.slice(0, 4);
-      lpCard = {
+      const reps = withBox.slice(0, 4);
+      slotInventoryCard = {
         id: lp.id,
         // Not a real cluster: cluster_kind/purity_tier/promotable/etc.
         // have no server-served value for a slot-inventory entry, so
@@ -561,11 +561,11 @@
         isSlotCard: true,
       };
     } catch {
-      lpCard = null;
+      slotInventoryCard = null;
     }
   }
 
-  // M4: `loadLicensePlateCard` used to run exactly once, right after the
+  // M4: `loadSlotInventoryCards` used to run exactly once, right after the
   // first `loadFirst()` — if the root layout's own `classesStore.acquire()`
   // fetch hadn't resolved yet at that moment, `classesStore.classes` was
   // still empty, the license_plate class lookup failed, and the card never
@@ -574,12 +574,12 @@
   // load) makes the card deterministic instead of a load-order race.
   $effect(() => {
     if (
-      lpCard == null &&
+      slotInventoryCard == null &&
       classesStore.classes.length > 0 &&
       clusterPager.error == null &&
-      !isLicensePlateFilter
+      !isSlotFilter
     ) {
-      void loadLicensePlateCard();
+      void loadSlotInventoryCards();
     }
   });
 
@@ -640,14 +640,14 @@
     // the plate inventory), unaffected by sort, only on the unfiltered
     // labelled view. M4: this used to drop the real class-kind cluster
     // sharing license_plate's id (cluster_id === class_id for class-kind
-    // clusters) on the theory that lpCard replaces it — but that cluster
+    // clusters) on the theory that slotInventoryCard replaces it — but that cluster
     // (e.g. #80, size 1) is a real, independently-reachable cluster with
     // its own crops, and hiding it made it permanently unreachable from
     // this grid. The two now render side by side; the #each key below is
     // keyed off `isSlotCard` so the synthetic entry never collides with
     // the real cluster's id.
-    if (classFilter == null && lpCard != null && !unlabeledOnly) {
-      return [lpCard, ...sorted];
+    if (classFilter == null && slotInventoryCard != null && !unlabeledOnly) {
+      return [slotInventoryCard, ...sorted];
     }
     return sorted;
   });
@@ -713,7 +713,7 @@
     dispOffset = 0;
     await clusterPager.loadFirst();
     if (clusterPager.error == null) {
-      await loadLicensePlateCard();
+      await loadSlotInventoryCards();
       // DQ-M4: fetch the first screenful's representatives in DISPLAY
       // order right away — this is the fix for cards rendering blank on
       // first paint. loadMoreRepresentatives() below (sentinel-triggered)
@@ -738,12 +738,12 @@
   // M6: Z on the plate gallery reverses the most recent region write
   // (bulk status change or a single bbox edit) — same key, same
   // undoStore, as the card-grid view's label-undo Z above; see
-  // plateGalleryController's undoLastPlateAction doc comment.
+  // slotGalleryController's undoLastAction doc comment.
   $effect(() => {
-    if (!isLicensePlateFilter) return;
+    if (!isSlotFilter) return;
     const off = keyboardStore.register(
       'z',
-      () => void plateGallery.undoLastPlateAction(),
+      () => void slotGallery.undoLastAction(),
       'clusters',
       'Undo last plate action',
     );
@@ -768,7 +768,7 @@
     void classFilter;
     void maxRank;
     void minBlurRatio;
-    if (!isLicensePlateFilter) untrack(() => void loadFirst());
+    if (!isSlotFilter) untrack(() => void loadFirst());
   });
 
   // DQ-M4: sort/unlabeledOnly reshuffle DISPLAY order (gridItems) without
@@ -787,24 +787,23 @@
     void sort;
     void unlabeledOnly;
     dispOffset = 0;
-    if (!isLicensePlateFilter) untrack(() => void loadMoreRepresentatives());
+    if (!isSlotFilter) untrack(() => void loadMoreRepresentatives());
   });
 
   // Re-load plates whenever a filter, the top-N rank gate, or the selected
   // plate cluster changes. When no cluster is selected, also refresh the
   // cluster-card grid so it reflects the current rank gate.
   $effect(() => {
-    void plateGallery.plateDetectorFilter;
-    void plateGallery.plateVerifiedOnly;
-    void plateGallery.plateMinScore;
-    void plateGallery.plateTextQuery;
-    void plateGallery.plateStatusFilter;
-    void plateGallery.plateMaxRank;
-    void plateGallery.selectedPlateCluster;
-    if (isLicensePlateFilter) {
-      void plateGallery.loadPlatesFirst();
-      if (plateGallery.selectedPlateCluster == null)
-        void plateGallery.loadPlateClusters();
+    void slotGallery.detectorFilter;
+    void slotGallery.verifiedOnly;
+    void slotGallery.minScore;
+    void slotGallery.textQuery;
+    void slotGallery.statusFilter;
+    void slotGallery.maxRank;
+    void slotGallery.selectedCluster;
+    if (isSlotFilter) {
+      void slotGallery.loadFirst();
+      if (slotGallery.selectedCluster == null) void slotGallery.loadClusters();
     }
   });
 
@@ -884,7 +883,7 @@
          cluster_id/tab scope in `filter` — unscoped-across-the-whole-dataset
          is the entire point of this control, unlike the cluster_id-scoped
          SemanticSearchBox on /clusters/[id]. -->
-    {#if semanticSearchAvailable && !isLicensePlateFilter}
+    {#if semanticSearchAvailable && !isSlotFilter}
       <SemanticSearchBox
         pageSize={200}
         filter={classFilter != null ? { class_id: classFilter } : {}}
@@ -999,7 +998,7 @@
          when active (never overlays it) — see the {#if showEmbeddingViz}
          branch below. Hidden on the plate-browse view, which has its own
          grid + toolbar and no per-crop cluster_id to color by. -->
-    {#if embeddingVizAvailable && !isLicensePlateFilter}
+    {#if embeddingVizAvailable && !isSlotFilter}
       <button
         type="button"
         onclick={() => (showEmbeddingViz = !showEmbeddingViz)}
@@ -1172,10 +1171,10 @@
         bannerRequired={embeddingVizBannerRequired}
         coveragePoolTotal={embeddingVizCoverageTotal}
       />
-    {:else if isLicensePlateFilter}
+    {:else if isSlotFilter}
       <!-- Plates list view -- extracted to SlotGallery.svelte (P2.6),
-           backed by plateGalleryController.svelte.ts. -->
-      <SlotGallery gallery={plateGallery} />
+           backed by slotGalleryController.svelte.ts. -->
+      <SlotGallery gallery={slotGallery} />
     {:else if clusterPager.loading && gridItems.length === 0}
       <p class="text-sm text-zinc-500">Loading...</p>
     {:else if clusterPager.error}
@@ -1311,24 +1310,24 @@
        DQ-p2 (docs/design/data-quality-pass-2026-09-24.md): this always
        read off clusterPager (the cluster-grid pager) — "102 / 102 all
        loaded" under a 60 / 1,000 plate grid, because the plate-gallery
-       view (isLicensePlateFilter) renders plateGallery.platePager.items,
+       view (isSlotFilter) renders slotGallery.pager.items,
        a completely different pager, but this footer never switched to
        match. -->
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    {#if isLicensePlateFilter}
+    {#if isSlotFilter}
       <span class="font-mono text-xs text-zinc-500">
-        {plateGallery.platePager.items.length} / {plateGallery.platePager.total}
+        {slotGallery.pager.items.length} / {slotGallery.pager.total}
       </span>
       <span class="font-mono text-xs text-zinc-400">
-        {#if plateGallery.platePager.loadingMore}loading more…{:else if plateGallery.platePager.hasMore}scroll
+        {#if slotGallery.pager.loadingMore}loading more…{:else if slotGallery.pager.hasMore}scroll
           for more{:else}all loaded{/if}
       </span>
     {:else}
       <span class="font-mono text-xs text-zinc-500">
         {gridItems.length} / {clusterPager.total +
-          (classFilter == null && lpCard != null ? 1 : 0)}
+          (classFilter == null && slotInventoryCard != null ? 1 : 0)}
       </span>
       <span class="font-mono text-xs text-zinc-400">
         {#if clusterPager.loadingMore}loading more…{:else if clusterPager.hasMore}scroll

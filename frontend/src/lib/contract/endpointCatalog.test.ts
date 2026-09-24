@@ -47,14 +47,14 @@ function read(rel: string): string {
  * Each override is anchored to a `marker` — a unique, nearby string
  * (the enclosing function's declaration) that must appear verbatim in
  * the scanned file — and resolves to the nearest scanned call site
- * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchPlateStatus`
+ * *after* that marker. `setSlotBox`/`patchSlotMeta`/`batchRegionStatus`
  * all happen to share the identical raw template text
  * (`` `${API_PREFIX}${path}` ``), so matching by raw text alone would
  * be ambiguous; matching by (marker, nearest-following-site) is not.
  *
  * `path`/`method`/`queryParams` are optional: an omitted field keeps
- * whatever the scanner itself resolved (e.g. `getPlates`'s query keys
- * ARE mechanically resolved via its `PlatesQuery` interface — only its
+ * whatever the scanner itself resolved (e.g. `getRegions`'s query keys
+ * ARE mechanically resolved via its `RegionsQuery` interface — only its
  * `browsePath` parameter, a runtime string, needs a path override).
  */
 const MANUAL_OVERRIDES: Array<{
@@ -99,7 +99,7 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export async function batchPlateStatus(',
+    marker: 'export async function batchRegionStatus(',
     // spec.endpoints.batchStatus — '/regions/batch_status' today.
     path: '/regions/batch_status',
     method: 'POST',
@@ -107,10 +107,10 @@ const MANUAL_OVERRIDES: Array<{
   },
   {
     file: 'lib/api.ts',
-    marker: 'export async function getPlates(',
+    marker: 'export async function getRegions(',
     // browsePath is the slot's declared capabilities.queue.browsePath —
     // 'license_plate' declares '/regions' today. Query params ARE
-    // resolved mechanically (PlatesQuery), so only path is overridden.
+    // resolved mechanically (RegionsQuery), so only path is overridden.
     path: '/regions',
   },
   {

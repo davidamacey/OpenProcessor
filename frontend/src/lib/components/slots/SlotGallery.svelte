@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
    * Plates list view for /clusters, backed by {API_PREFIX}/regions — extracted
-   * verbatim from clusters/+page.svelte's `{:else if isLicensePlateFilter}`
+   * verbatim from clusters/+page.svelte's `{:else if isSlotFilter}`
    * template branch (P2.6, docs/genericization-plan-2026-09-13.md
    * §3.4/§5a). All state/logic lives in the injected `gallery` controller
-   * (`plateGalleryController.svelte.ts`); this component is rendering
+   * (`slotGalleryController.svelte.ts`); this component is rendering
    * only, unchanged from what the route used to inline.
    *
    * Deliberately NOT parameterized (P2.6 is a verbatim move; P2.7
@@ -20,14 +20,14 @@
     PLATE_CONFIRM_STATE,
     PLATE_REJECT_STATE,
     PLATE_FALSE_POSITIVE_STATE,
-    type PlateGalleryController,
-  } from '../../../routes/clusters/plateGalleryController.svelte';
+    type SlotGalleryController,
+  } from '../../../routes/clusters/slotGalleryController.svelte';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
   interface Props {
-    gallery: PlateGalleryController;
+    gallery: SlotGalleryController;
   }
 
   let { gallery }: Props = $props();
@@ -56,7 +56,7 @@
              (`GET {API_PREFIX}/regions/vocabulary`, W0 finding m9) — the exact
              values that can appear in stored region_detector for this
              deployment, rather than a hardcoded model-id list. -->
-        <select bind:value={gallery.plateDetectorFilter} class="select-sm">
+        <select bind:value={gallery.detectorFilter} class="select-sm">
           <option value="">any</option>
           {#each regionVocabularyStore.filterableDetectors as d (d.id)}
             <option value={d.id}>{d.label}</option>
@@ -66,7 +66,7 @@
       <label class="flex items-center gap-1.5">
         <input
           type="checkbox"
-          bind:checked={gallery.plateVerifiedOnly}
+          bind:checked={gallery.verifiedOnly}
           class="accent-blue-500"
         />
         <span class="text-zinc-400">Verified only</span>
@@ -79,7 +79,7 @@
              list, so a status this deployment doesn't have never
              appears. Includes verify_rejected (candidate-only rows,
              kept for reversal) alongside detected/no_region_visible/etc. -->
-        <select bind:value={gallery.plateStatusFilter} class="select-sm">
+        <select bind:value={gallery.statusFilter} class="select-sm">
           <option value="">any</option>
           {#each regionStatusesStore.list as s (s.value)}
             <option value={s.value}>{s.label}</option>
@@ -93,7 +93,7 @@
           min="0"
           max="1"
           step="0.05"
-          bind:value={gallery.plateMinScore}
+          bind:value={gallery.minScore}
           class="input-sm w-16"
         />
       </label>
@@ -101,7 +101,7 @@
         <span class="text-zinc-400">Text</span>
         <input
           type="text"
-          bind:value={gallery.plateTextQuery}
+          bind:value={gallery.textQuery}
           placeholder="e.g. S14"
           class="input-sm w-28"
         />
@@ -113,10 +113,10 @@
         {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
           <button
             type="button"
-            class="chip rounded-none border-0 {gallery.plateMaxRank === o.v
+            class="chip rounded-none border-0 {gallery.maxRank === o.v
               ? 'bg-blue-600 text-white'
               : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
-            onclick={() => (gallery.plateMaxRank = o.v as number | null)}
+            onclick={() => (gallery.maxRank = o.v as number | null)}
           >
             {o.l}
           </button>
@@ -127,7 +127,7 @@
         <button
           type="button"
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-          onclick={gallery.backToPlateClusters}
+          onclick={gallery.backToClusters}
         >
           ← Clusters
         </button>
@@ -145,34 +145,34 @@
         </label>
         <button
           type="button"
-          disabled={gallery.plateClusterBusy}
+          disabled={gallery.clusterBusy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
         >
-          {gallery.plateClusterBusy ? 'Loading…' : 'Reload'}
+          {gallery.clusterBusy ? 'Loading…' : 'Reload'}
         </button>
-      {:else if gallery.viewingAllPlates}
+      {:else if gallery.viewingAll}
         <button
           type="button"
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-          onclick={gallery.backToPlateClusters}
+          onclick={gallery.backToClusters}
         >
           ← Clusters
         </button>
         <span class="font-medium text-zinc-200">All plates</span>
-      {:else if gallery.selectedPlateCluster == null}
+      {:else if gallery.selectedCluster == null}
         <button
           type="button"
-          disabled={gallery.plateClusterBusy}
+          disabled={gallery.clusterBusy}
           class="btn-sm border border-purple-500/50 bg-purple-500/20 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
-          onclick={gallery.runClusterPlates}
+          onclick={gallery.runClustering}
           title="Group plates by visual similarity so outliers/false-positives surface"
         >
-          {gallery.plateClusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
+          {gallery.clusterBusy ? 'Clustering…' : '⟳ Cluster plates'}
         </button>
         <button
           type="button"
-          disabled={gallery.plateClusterBusy}
+          disabled={gallery.clusterBusy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
           title="List plate crops that look like known false positives (needs FP centroids built)"
@@ -181,12 +181,12 @@
         </button>
         <button
           type="button"
-          disabled={gallery.plateClusterBusy}
+          disabled={gallery.clusterBusy}
           class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
           onclick={gallery.runBuildFpCentroids}
           title="Sub-type the false-positive bucket and (re)build its centroids"
         >
-          {gallery.plateClusterBusy ? 'Building…' : 'Build FP centroids'}
+          {gallery.clusterBusy ? 'Building…' : 'Build FP centroids'}
         </button>
         <!-- M3: plate clusters only cover plates that have gone through
              "Cluster plates" — before that (or for plates the run left
@@ -197,7 +197,7 @@
         <button
           type="button"
           class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30"
-          onclick={gallery.openAllPlates}
+          onclick={gallery.openAll}
           title="Browse every plate, including ones not in any cluster bucket yet"
         >
           Browse all plates
@@ -206,11 +206,11 @@
         <button
           type="button"
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-          onclick={gallery.backToPlateClusters}
+          onclick={gallery.backToClusters}
         >
           ← Clusters
         </button>
-        {#if gallery.selectedPlateCluster === FP_PLATE_CLUSTER_ID}
+        {#if gallery.selectedCluster === FP_PLATE_CLUSTER_ID}
           <span
             class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
           >
@@ -221,89 +221,84 @@
           >
           <button
             type="button"
-            disabled={gallery.plateClusterBusy}
+            disabled={gallery.clusterBusy}
             class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
             onclick={gallery.runBuildFpCentroids}
             title="Refine the FP bucket into sub-types and rebuild its centroids"
           >
-            {gallery.plateClusterBusy ? 'Refining…' : 'Refine FP (build centroids)'}
+            {gallery.clusterBusy ? 'Refining…' : 'Refine FP (build centroids)'}
           </button>
         {:else}
           <span class="font-mono text-[11px] text-zinc-300"
-            >bucket #{gallery.selectedPlateCluster}</span
+            >bucket #{gallery.selectedCluster}</span
           >
           <button
             type="button"
-            disabled={gallery.plateClusterBusy}
+            disabled={gallery.clusterBusy}
             class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-            onclick={gallery.runRefinePlateCluster}
+            onclick={gallery.runRefineCluster}
             title="AHC-refine this bucket into sub-clusters to isolate outliers"
           >
-            {gallery.plateClusterBusy ? 'Refining…' : 'Refine AHC'}
+            {gallery.clusterBusy ? 'Refining…' : 'Refine AHC'}
           </button>
-          {#if gallery.plateRefineMsg}
-            <span class="text-[11px] text-zinc-400">{gallery.plateRefineMsg}</span>
+          {#if gallery.refineMsg}
+            <span class="text-[11px] text-zinc-400">{gallery.refineMsg}</span>
           {/if}
         {/if}
       {/if}
       <span class="grow"></span>
-      {#if gallery.platePager.items.length > 0}
+      {#if gallery.pager.items.length > 0}
         <button
           type="button"
           class="btn-sm border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-          onclick={gallery.selectAllPlates}
+          onclick={gallery.selectAll}
           title="Select all loaded plates (shift-click a card for a range, ctrl/cmd-click to toggle)"
         >
           Select all
         </button>
       {/if}
       <span class="font-mono text-[11px] text-zinc-500">
-        {gallery.platePager.items.length.toLocaleString()} / {gallery.platePager.total.toLocaleString()}
+        {gallery.pager.items.length.toLocaleString()} / {gallery.pager.total.toLocaleString()}
       </span>
     </div>
 
     <!-- Bulk-action toolbar — appears when plates are selected. Triage
        outliers without leaving the gallery (no /review round-trip). -->
-    {#if gallery.plateSel.size > 0}
+    {#if gallery.sel.size > 0}
       <div
         class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
       >
-        <span class="font-medium text-blue-200">{gallery.plateSel.size} selected</span>
+        <span class="font-medium text-blue-200">{gallery.sel.size} selected</span>
         <span class="grow"></span>
         <button
           type="button"
-          disabled={gallery.plateBusy}
+          disabled={gallery.busy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyPlateStatus(
-              [...gallery.plateSel.ids],
-              PLATE_FALSE_POSITIVE_STATE(),
-            )}
+            gallery.applyStatus([...gallery.sel.ids], PLATE_FALSE_POSITIVE_STATE())}
         >
           ✗ Mark false positive
         </button>
         <button
           type="button"
-          disabled={gallery.plateBusy}
+          disabled={gallery.busy}
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-          onclick={() =>
-            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_REJECT_STATE())}
+          onclick={() => gallery.applyStatus([...gallery.sel.ids], PLATE_REJECT_STATE())}
         >
           No plate
         </button>
         <button
           type="button"
-          disabled={gallery.plateBusy}
+          disabled={gallery.busy}
           class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
-          onclick={() =>
-            gallery.applyPlateStatus([...gallery.plateSel.ids], PLATE_CONFIRM_STATE())}
+          onclick={() => gallery.applyStatus([...gallery.sel.ids], PLATE_CONFIRM_STATE())}
         >
           ✓ Verify
         </button>
         <button
           type="button"
           class="btn-sm border border-zinc-700 text-zinc-400 hover:bg-zinc-800"
-          onclick={() => gallery.plateSel.clear()}
+          onclick={() => gallery.sel.clear()}
         >
           Clear
         </button>
@@ -312,9 +307,9 @@
   </div>
   <!-- /sticky header -->
 
-  {#if gallery.platePager.error}
-    <p class="text-sm text-red-300">API unavailable: {gallery.platePager.error}</p>
-  {:else if !gallery.suspectedFpView && !gallery.viewingAllPlates && gallery.selectedPlateCluster == null && gallery.plateClusters.length > 0}
+  {#if gallery.pager.error}
+    <p class="text-sm text-red-300">API unavailable: {gallery.pager.error}</p>
+  {:else if !gallery.suspectedFpView && !gallery.viewingAll && gallery.selectedCluster == null && gallery.clusters.length > 0}
     <!-- Plate cluster cards. Click one to open its plates (with the
          bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
          get a blue border so refined buckets are easy to spot. The
@@ -322,7 +317,7 @@
     <ul
       class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
     >
-      {#each gallery.plateClusters as c (c.id)}
+      {#each gallery.clusters as c (c.id)}
         <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
           <button
             type="button"
@@ -332,7 +327,7 @@
               : c.has_subclusters
                 ? 'border-blue-500/60'
                 : 'border-zinc-700'}"
-            onclick={() => gallery.openPlateCluster(c.id)}
+            onclick={() => gallery.openCluster(c.id)}
           >
             <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
               {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
@@ -367,9 +362,9 @@
         </li>
       {/each}
     </ul>
-  {:else if gallery.platePager.loading && gallery.platePager.items.length === 0}
+  {:else if gallery.pager.loading && gallery.pager.items.length === 0}
     <p class="text-sm text-zinc-500">Loading plates...</p>
-  {:else if gallery.platePager.items.length === 0}
+  {:else if gallery.pager.items.length === 0}
     <p class="text-sm text-zinc-500">
       No plates match the current filters. The re-detection drain may still be populating
       provenance — fresh rows appear here as the worker processes them.
@@ -378,34 +373,34 @@
     <!-- Sub-cluster tabs: appear once a bucket has been AHC-refined.
          "All" shows the grouped view (separators per sub-cluster);
          clicking a chip filters to that one sub-cluster. -->
-    {#if gallery.selectedPlateCluster != null && gallery.plateSubclusterIds.length > 0}
+    {#if gallery.selectedCluster != null && gallery.subclusterIds.length > 0}
       <div class="mb-3 flex flex-wrap items-center gap-1.5">
         <span class="text-[11px] text-zinc-500">sub-clusters:</span>
         <button
           type="button"
-          class="chip {gallery.plateSubTab === null
+          class="chip {gallery.subTab === null
             ? 'bg-blue-500/30 text-blue-100'
             : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-          onclick={() => gallery.selectPlateSubTab(null)}
+          onclick={() => gallery.selectSubTab(null)}
         >
           all
         </button>
-        {#each gallery.plateSubclusterIds as sid (sid)}
+        {#each gallery.subclusterIds as sid (sid)}
           <button
             type="button"
-            class="chip font-mono {gallery.plateSubTab === sid
+            class="chip font-mono {gallery.subTab === sid
               ? 'bg-blue-500/30 text-blue-100'
               : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-            onclick={() => gallery.selectPlateSubTab(sid)}
+            onclick={() => gallery.selectSubTab(sid)}
           >
             {sid}
-            <span class="text-zinc-500">{gallery.plateSubCounts.get(sid) ?? ''}</span>
+            <span class="text-zinc-500">{gallery.subCounts.get(sid) ?? ''}</span>
           </button>
         {/each}
       </div>
     {/if}
 
-    {#each gallery.plateGroups as g (g.key)}
+    {#each gallery.groups as g (g.key)}
       {#if g.label}
         <div class="mt-3 mb-1.5 flex items-center gap-2">
           <span class="font-mono text-[11px] text-zinc-300">{g.label}</span>
@@ -419,11 +414,11 @@
         {#each g.items as p (p.crop_id)}
           <SlotCard
             crop={p}
-            selected={gallery.plateSel.has(p.crop_id)}
-            onclick={gallery.togglePlateSelect}
-            onedit={gallery.openPlateEditor}
+            selected={gallery.sel.has(p.crop_id)}
+            onclick={gallery.toggleSelect}
+            onedit={gallery.openEditor}
             onmarkfp={(c) =>
-              gallery.applyPlateStatus([c.crop_id], PLATE_FALSE_POSITIVE_STATE())}
+              gallery.applyStatus([c.crop_id], PLATE_FALSE_POSITIVE_STATE())}
           />
         {/each}
       </div>
@@ -434,26 +429,24 @@
          intersecting and loads every page at once. -->
     <div
       use:infiniteScroll={{
-        onload: gallery.loadPlatesMore,
+        onload: gallery.loadMore,
         disabled:
-          gallery.platePager.loading ||
-          gallery.platePager.loadingMore ||
-          !gallery.platePager.hasMore,
+          gallery.pager.loading || gallery.pager.loadingMore || !gallery.pager.hasMore,
       }}
       class="mt-4 h-1"
       aria-hidden="true"
     ></div>
-    {#if gallery.platePager.loadingMore}
+    {#if gallery.pager.loadingMore}
       <p class="py-2 text-center text-xs text-zinc-500">Loading more…</p>
     {/if}
   {/if}
 </div>
 
-{#if gallery.editPlateCrop}
+{#if gallery.editCrop}
   <SlotBboxEditor
-    crop={gallery.editPlateCrop}
+    crop={gallery.editCrop}
     slot={licensePlateSlot}
-    onsave={gallery.savePlateBbox}
-    onclose={() => (gallery.editPlateCrop = null)}
+    onsave={gallery.saveBox}
+    onclose={() => (gallery.editCrop = null)}
   />
 {/if}

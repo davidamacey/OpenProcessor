@@ -1,7 +1,7 @@
 /**
  * Bridges the annotation-slot adapter (`readSlot.ts`) into `api.ts`'s
  * crop mapping. Pure — no `api.ts` import, so it can be unit tested in
- * isolation and reused by any raw-row mapper (`mapRawCrop`, `getPlates`).
+ * isolation and reused by any raw-row mapper (`mapRawCrop`, `getRegions`).
  *
  * See docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §4.3.
  */

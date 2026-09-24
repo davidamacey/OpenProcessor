@@ -1,6 +1,6 @@
 /**
  * Static-source-scan regression guard for the cross-origin plate-thumbnail
- * bug (see `plateThumbUrl.test.ts` for the executable helper coverage).
+ * bug (see `regionThumbUrl.test.ts` for the executable helper coverage).
  * The actual bug wasn't the missing helper — it was call sites building
  * `{API_PREFIX}/crops/{id}/region_thumbnail` as a raw string instead of routing
  * through it. This repo has no `@testing-library/svelte` harness, so a

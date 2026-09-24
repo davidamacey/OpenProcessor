@@ -7,7 +7,7 @@
  * (region_text / region_status / region_rejection_reason).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { setSlotBox, patchSlotMeta, batchPlateStatus, API_PREFIX } from './api';
+import { setSlotBox, patchSlotMeta, batchRegionStatus, API_PREFIX } from './api';
 import { licensePlateSlot } from './annotations/profiles/licensePlate';
 
 function okResponse(body: unknown = {}) {
@@ -149,7 +149,7 @@ describe('setSlotBox', () => {
   });
 });
 
-describe('batchPlateStatus', () => {
+describe('batchRegionStatus', () => {
   it("writes the slot's own lifecycle wire fields (B3 region_* body)", async () => {
     const fetchMock = vi
       .fn()
@@ -158,8 +158,8 @@ describe('batchPlateStatus', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await batchPlateStatus(licensePlateSlot, ['a', 'b'], 'detected', {
-      plateVerified: true,
+    await batchRegionStatus(licensePlateSlot, ['a', 'b'], 'detected', {
+      verified: true,
     });
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -172,7 +172,7 @@ describe('batchPlateStatus', () => {
     });
   });
 
-  it('p5 (2026-09-24 interactive pass): omits region_verified entirely when the caller never passed plateVerified, instead of sending an ignored null', async () => {
+  it('p5 (2026-09-24 interactive pass): omits region_verified entirely when the caller never passed verified, instead of sending an ignored null', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -181,8 +181,8 @@ describe('batchPlateStatus', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     // The plate gallery's bulk reject/false-positive calls never pass
-    // `plateVerified` at all (SlotGallery.svelte / plateGalleryController).
-    await batchPlateStatus(licensePlateSlot, ['a'], 'no_region_visible');
+    // `verified` at all (SlotGallery.svelte / slotGalleryController).
+    await batchRegionStatus(licensePlateSlot, ['a'], 'no_region_visible');
 
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse(init.body);

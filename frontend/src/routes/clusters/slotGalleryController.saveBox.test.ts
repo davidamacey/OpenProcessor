@@ -1,6 +1,6 @@
 /**
  * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
- * `savePlateBbox` used to re-PUT the box via `setCropPlate` even though
+ * `saveBox` used to re-PUT the box via `setCropPlate` even though
  * `SlotBboxEditor` had already saved it via `setSlotBox` — a redundant
  * double-write on every plate-gallery bbox save. It is now a pure local
  * patch off the server's own returned item: no network call, no `fetch`
@@ -10,11 +10,11 @@
  * verbatim.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createPlateGalleryController } from './plateGalleryController.svelte';
+import { createSlotGalleryController } from './slotGalleryController.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 import type { Crop } from '$lib/types';
 import type { SlotData } from '$lib/annotations/types';
-import type { PlateBrowseItem } from '$lib/api';
+import type { RegionBrowseItem } from '$lib/api';
 
 function fakeCropWithSlot(id: string, slot: SlotData): Crop {
   return {
@@ -36,7 +36,7 @@ function fakeCropWithSlot(id: string, slot: SlotData): Crop {
   } as Crop;
 }
 
-function fakePlateItem(id: string): PlateBrowseItem {
+function fakeRegionItem(id: string): RegionBrowseItem {
   return {
     crop_id: id,
     id,
@@ -64,20 +64,20 @@ function fakePlateItem(id: string): PlateBrowseItem {
     class_name: 'license_plate',
     cluster_id: null,
     updated_at: '',
-  } as PlateBrowseItem;
+  } as RegionBrowseItem;
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('savePlateBbox — no redundant write', () => {
+describe('saveBox — no redundant write', () => {
   it('patches the local pager item from the returned item and never calls fetch', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const gallery = createPlateGalleryController();
-    gallery.editPlateCrop = fakeCropWithSlot('c1', {
+    const gallery = createSlotGalleryController();
+    gallery.editCrop = fakeCropWithSlot('c1', {
       key: licensePlateSlot.key,
       subBox: {
         rawXyxy: [0.4, 0.45, 0.6, 0.55],
@@ -97,13 +97,13 @@ describe('savePlateBbox — no redundant write', () => {
         boxCorrect: null,
       },
     });
-    gallery.platePager.items = [fakePlateItem('c1')];
+    gallery.pager.items = [fakeRegionItem('c1')];
 
-    gallery.savePlateBbox(gallery.editPlateCrop);
+    gallery.saveBox(gallery.editCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(gallery.editPlateCrop).toBeNull();
-    const patched = gallery.platePager.items.find((p) => p.crop_id === 'c1');
+    expect(gallery.editCrop).toBeNull();
+    const patched = gallery.pager.items.find((p) => p.crop_id === 'c1');
     expect(patched?.region_status).toBe('detected');
     expect(patched?.region_verified).toBe(true);
     expect(patched?.region_bbox_norm).toEqual([0.4, 0.45, 0.6, 0.55]);
@@ -113,8 +113,8 @@ describe('savePlateBbox — no redundant write', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const gallery = createPlateGalleryController();
-    gallery.editPlateCrop = fakeCropWithSlot('c2', {
+    const gallery = createSlotGalleryController();
+    gallery.editCrop = fakeCropWithSlot('c2', {
       key: licensePlateSlot.key,
       subBox: {
         rawXyxy: null,
@@ -134,12 +134,12 @@ describe('savePlateBbox — no redundant write', () => {
         boxCorrect: null,
       },
     });
-    gallery.platePager.items = [fakePlateItem('c2')];
+    gallery.pager.items = [fakeRegionItem('c2')];
 
-    gallery.savePlateBbox(gallery.editPlateCrop);
+    gallery.saveBox(gallery.editCrop);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    const patched = gallery.platePager.items.find((p) => p.crop_id === 'c2');
+    const patched = gallery.pager.items.find((p) => p.crop_id === 'c2');
     expect(patched?.region_status).toBe('no_region_visible');
     expect(patched?.region_bbox_norm).toBeNull();
   });

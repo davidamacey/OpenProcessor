@@ -15,8 +15,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 
 describe('M4: the synthetic license_plate card invents nothing and never hides a real cluster', () => {
-  it('loadLicensePlateCard builds a fully-typed Cluster (no `as Cluster` cast hiding missing fields)', () => {
-    const fn = src.match(/async function loadLicensePlateCard\(\)[\s\S]*?\n {2}\}/)?.[0];
+  it('loadSlotInventoryCards builds a fully-typed Cluster (no `as Cluster` cast hiding missing fields)', () => {
+    const fn = src.match(
+      /async function loadSlotInventoryCards\(\)[\s\S]*?\n {2}\}/,
+    )?.[0];
     expect(fn).toBeDefined();
     expect(fn).not.toMatch(/as Cluster/);
     expect(fn).toMatch(/isSlotCard: true/);
@@ -24,7 +26,9 @@ describe('M4: the synthetic license_plate card invents nothing and never hides a
   });
 
   it('re-runs whenever classesStore.classes changes, not just once after the first loadFirst (the ~1-in-8 race)', () => {
-    expect(src).toMatch(/lpCard == null &&\s*\n\s*classesStore\.classes\.length > 0/);
+    expect(src).toMatch(
+      /slotInventoryCard == null &&\s*\n\s*classesStore\.classes\.length > 0/,
+    );
   });
 
   it('never drops the real cluster sharing the slot class’s id from the grid', () => {
@@ -33,9 +37,9 @@ describe('M4: the synthetic license_plate card invents nothing and never hides a
     )?.[0];
     expect(gridItemsFn).toBeDefined();
     // The old bug filtered the real cluster out via
-    // `sorted.filter((c) => c.id !== lpCard!.id)`.
-    expect(gridItemsFn).not.toMatch(/filter\(\(c\) => c\.id !== lpCard/);
-    expect(gridItemsFn).toMatch(/return \[lpCard, \.\.\.sorted\];/);
+    // `sorted.filter((c) => c.id !== slotInventoryCard!.id)`.
+    expect(gridItemsFn).not.toMatch(/filter\(\(c\) => c\.id !== slotInventoryCard/);
+    expect(gridItemsFn).toMatch(/return \[slotInventoryCard, \.\.\.sorted\];/);
   });
 
   it('keys the #each off isSlotCard so the synthetic card can never collide with a real cluster’s key', () => {

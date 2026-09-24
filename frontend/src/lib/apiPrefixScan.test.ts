@@ -16,7 +16,7 @@
  * which string someone reaches for. Keep both — neither subsumes the
  * other.
  *
- * Sibling guard: `plateThumbUrlScan.test.ts` pins the region-thumbnail
+ * Sibling guard: `regionThumbUrlScan.test.ts` pins the region-thumbnail
  * path *segment*. Different concern, different exclusions.
  */
 

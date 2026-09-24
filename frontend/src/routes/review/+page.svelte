@@ -406,7 +406,7 @@
   // Plate-text search — only meaningful on tab=plates; ignored elsewhere
   // server-side. Surface in the filter strip when the operator is on
   // the plates tab.
-  let plateTextQuery = $state<string>('');
+  let slotTextQuery = $state<string>('');
 
   // Generic served-enum filter bar (840beb8 adoption) — one entry per
   // `ReviewFilterSpec.param` the active tab declares (e.g. `region_status`
@@ -474,7 +474,7 @@
     if (confMin > 0) f.conf_min = confMin;
     if (confMax < 1) f.conf_max = confMax;
     const textFilter = activeSlot?.capabilities.queue?.textFilter;
-    if (textFilter && plateTextQuery) f[textFilter.param] = plateTextQuery;
+    if (textFilter && slotTextQuery) f[textFilter.param] = slotTextQuery;
     // max_rank / min_blur_ratio apply across every tab and preset — the
     // backend's own review.py comment says so explicitly ("Both apply
     // across tabs"). These used to be gated to only primary_low_conf /
@@ -684,7 +684,7 @@
   let lastFilterKey: string | null = null;
   $effect(() => {
     void sourceFilter;
-    void plateTextQuery;
+    void slotTextQuery;
     void confMin;
     void confMax;
     // Strategy-bar sort/filter changes join the debounced path, not the
@@ -701,7 +701,7 @@
     void activeEnumParams;
     const key = JSON.stringify([
       sourceFilter,
-      plateTextQuery,
+      slotTextQuery,
       confMin,
       confMax,
       strategyBar.sort,
@@ -1770,7 +1770,7 @@
         >
         <input
           type="text"
-          bind:value={plateTextQuery}
+          bind:value={slotTextQuery}
           disabled={diverseMode}
           placeholder={activeSlot.capabilities.queue.textFilter.placeholder}
           class="input-sm w-28"

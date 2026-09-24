@@ -33,7 +33,7 @@ VOCABULARY = {
 }
 
 
-def test_plate_gallery_detector_filter_lists_served_filterable_detectors(stub, page, app_url):
+def test_region_gallery_detector_filter_lists_served_filterable_detectors(stub, page, app_url):
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on("GET", r"/regions/vocabulary(\?|$)", VOCABULARY)
     stub.on("GET", r"/regions/clusters(\?|$)", {"clusters": [], "count": 0})

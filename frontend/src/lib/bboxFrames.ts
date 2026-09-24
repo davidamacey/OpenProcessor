@@ -65,14 +65,14 @@ function fromXYXY(b: XYXY): BBoxNorm {
  * width or height) — in that case the divisor would explode.
  */
 export function sourceToCropFrame(
-  plateBbox: BBoxNorm,
+  subBox: BBoxNorm,
   parentBbox: BBoxNorm,
 ): BBoxNorm | null {
   const v = toXYXY(parentBbox);
   const vw = v.x2 - v.x1;
   const vh = v.y2 - v.y1;
   if (vw <= EPS || vh <= EPS) return null;
-  const p = toXYXY(plateBbox);
+  const p = toXYXY(subBox);
   return fromXYXY({
     x1: (p.x1 - v.x1) / vw,
     y1: (p.y1 - v.y1) / vh,
@@ -87,13 +87,13 @@ export function sourceToCropFrame(
  * multiplying, not dividing); the result is clamped to [0, 1].
  */
 export function cropToSourceFrame(
-  plateBboxInCrop: BBoxNorm,
+  subBoxInCrop: BBoxNorm,
   parentBbox: BBoxNorm,
 ): BBoxNorm {
   const v = toXYXY(parentBbox);
   const vw = v.x2 - v.x1;
   const vh = v.y2 - v.y1;
-  const p = toXYXY(plateBboxInCrop);
+  const p = toXYXY(subBoxInCrop);
   return fromXYXY({
     x1: v.x1 + p.x1 * vw,
     y1: v.y1 + p.y1 * vh,

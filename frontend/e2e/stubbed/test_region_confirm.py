@@ -36,7 +36,7 @@ def plate_item() -> dict:
     )
 
 
-def test_plate_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url):
+def test_region_confirm_unchanged_box_sends_patch_region_meta(stub, page, app_url):
     region_calls: list[tuple[str, str, dict]] = []
     region_meta_calls: list[tuple[str, str, dict]] = []
 

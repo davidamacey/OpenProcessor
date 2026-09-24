@@ -1,6 +1,6 @@
 /**
  * C4b (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.3):
- * plateGalleryController.svelte.ts and SlotGallery.svelte used to
+ * slotGalleryController.svelte.ts and SlotGallery.svelte used to
  * hardcode 'false_positive' | 'no_plate_visible' | 'detected' as raw
  * lifecycle-state literals — a state literal that silently means
  * nothing for another slot, and (per the plan) the highest-risk class
@@ -20,7 +20,7 @@ import {
   PLATE_CONFIRM_STATE,
   PLATE_REJECT_STATE,
   PLATE_FALSE_POSITIVE_STATE,
-} from './plateGalleryController.svelte';
+} from './slotGalleryController.svelte';
 import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
@@ -30,7 +30,7 @@ afterEach(() => {
   regionStatusesStore.falsePositiveStatus = null;
 });
 
-describe('plateGalleryController status constants', () => {
+describe('slotGalleryController status constants', () => {
   it('fall back to licensePlateSlot when the served vocabulary has not loaded', () => {
     const lifecycle = licensePlateSlot.capabilities.lifecycle!;
     expect(PLATE_CONFIRM_STATE()).toBe(lifecycle.confirmState);

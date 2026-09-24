@@ -8,7 +8,7 @@
  * item, a failed `discard()` no longer restoring the item, and `skip()` no
  * longer advancing the cursor (see the audit's §2.2 table).
  *
- * Follows the existing `plateGalleryController.svelte.ts` factory-function
+ * Follows the existing `slotGalleryController.svelte.ts` factory-function
  * convention (state via closures, not a class) but stays deliberately thin:
  * the page still owns `queue` / `cursor` / `handledIds` (shared with
  * slot-tab actions — confirmSlot/rejectSlot/markFalsePositive — and with

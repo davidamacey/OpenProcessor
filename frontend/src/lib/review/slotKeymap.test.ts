@@ -4,7 +4,7 @@ import { licensePlateSlot } from '../annotations/profiles/licensePlate';
 import { aircraftTailNumberSlot } from '../annotations/profiles/aircraftTailNumber';
 import type { SlotSpec } from '../annotations/types';
 
-const plateHandlers = {
+const slotHandlers = {
   confirm: vi.fn(),
   reject: vi.fn(),
   markFalsePositive: vi.fn(),
@@ -16,7 +16,7 @@ const plateHandlers = {
 
 describe('buildSlotKeymap — licensePlateSlot (no-regression proof for the old buildPlateKeymap)', () => {
   it('scan mode registers exactly enter/d/f/e/arrowleft/b/arrowright', () => {
-    const entries = buildSlotKeymap(licensePlateSlot, false, plateHandlers);
+    const entries = buildSlotKeymap(licensePlateSlot, false, slotHandlers);
     expect(entries.map((e) => e.combo)).toEqual([
       'enter',
       'd',
@@ -29,32 +29,30 @@ describe('buildSlotKeymap — licensePlateSlot (no-regression proof for the old 
   });
 
   it('scan mode wires each combo to the matching handler', () => {
-    const entries = buildSlotKeymap(licensePlateSlot, false, plateHandlers);
-    expect(entries.find((e) => e.combo === 'enter')?.fn).toBe(plateHandlers.confirm);
-    expect(entries.find((e) => e.combo === 'd')?.fn).toBe(plateHandlers.reject);
-    expect(entries.find((e) => e.combo === 'f')?.fn).toBe(
-      plateHandlers.markFalsePositive,
-    );
-    expect(entries.find((e) => e.combo === 'e')?.fn).toBe(plateHandlers.toggleEdit);
-    expect(entries.find((e) => e.combo === 'arrowleft')?.fn).toBe(plateHandlers.back);
-    expect(entries.find((e) => e.combo === 'b')?.fn).toBe(plateHandlers.back);
-    expect(entries.find((e) => e.combo === 'arrowright')?.fn).toBe(plateHandlers.advance);
+    const entries = buildSlotKeymap(licensePlateSlot, false, slotHandlers);
+    expect(entries.find((e) => e.combo === 'enter')?.fn).toBe(slotHandlers.confirm);
+    expect(entries.find((e) => e.combo === 'd')?.fn).toBe(slotHandlers.reject);
+    expect(entries.find((e) => e.combo === 'f')?.fn).toBe(slotHandlers.markFalsePositive);
+    expect(entries.find((e) => e.combo === 'e')?.fn).toBe(slotHandlers.toggleEdit);
+    expect(entries.find((e) => e.combo === 'arrowleft')?.fn).toBe(slotHandlers.back);
+    expect(entries.find((e) => e.combo === 'b')?.fn).toBe(slotHandlers.back);
+    expect(entries.find((e) => e.combo === 'arrowright')?.fn).toBe(slotHandlers.advance);
   });
 
   it('edit mode registers only enter/escape', () => {
-    const entries = buildSlotKeymap(licensePlateSlot, true, plateHandlers);
+    const entries = buildSlotKeymap(licensePlateSlot, true, slotHandlers);
     expect(entries.map((e) => e.combo)).toEqual(['enter', 'escape']);
-    expect(entries.find((e) => e.combo === 'enter')?.fn).toBe(plateHandlers.saveAndExit);
-    expect(entries.find((e) => e.combo === 'escape')?.fn).toBe(plateHandlers.toggleEdit);
+    expect(entries.find((e) => e.combo === 'enter')?.fn).toBe(slotHandlers.saveAndExit);
+    expect(entries.find((e) => e.combo === 'escape')?.fn).toBe(slotHandlers.toggleEdit);
   });
 
   it('singleCharCombos keeps single letters, drops multi-char combos', () => {
-    const entries = buildSlotKeymap(licensePlateSlot, false, plateHandlers);
+    const entries = buildSlotKeymap(licensePlateSlot, false, slotHandlers);
     expect(singleCharCombos(entries).sort()).toEqual(['b', 'd', 'e', 'f']);
   });
 
   it('edit mode has no single-char combos (enter/escape are both multi-char)', () => {
-    const entries = buildSlotKeymap(licensePlateSlot, true, plateHandlers);
+    const entries = buildSlotKeymap(licensePlateSlot, true, slotHandlers);
     expect(singleCharCombos(entries)).toEqual([]);
   });
 });

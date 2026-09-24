@@ -71,7 +71,7 @@
     return activeSlot ? (slotOf(crop, activeSlot)?.subBox?.parent ?? null) : null;
   }
 
-  let plateLocal = $state<BBoxNorm | null>(seedBox());
+  let boxLocal = $state<BBoxNorm | null>(seedBox());
   let busy = $state<boolean>(false);
   let errorText = $state<string | null>(null);
 
@@ -132,18 +132,18 @@
   // Footer footer-text shows the box in the slot's own stored frame, for
   // sanity — via the same projectFromParent used at save time.
   const sourceFrameSummary = $derived.by<string>(() => {
-    if (plateLocal == null) return `no ${activeSlot?.label.singular ?? 'box'}`;
+    if (boxLocal == null) return `no ${activeSlot?.label.singular ?? 'box'}`;
     if (!crop.bbox_norm) return '(missing parent vehicle box)';
     if (!activeSlot) return '';
     const parentXyxy = bboxNormToXYXY(crop.bbox_norm);
     const frame = activeSlot.capabilities.subBox?.storedFrame ?? 'source';
-    const [x1, y1, x2, y2] = projectFromParent(plateLocal, parentXyxy, frame);
+    const [x1, y1, x2, y2] = projectFromParent(boxLocal, parentXyxy, frame);
     return `${frame} [x1=${x1.toFixed(4)}, y1=${y1.toFixed(4)}, x2=${x2.toFixed(4)}, y2=${y2.toFixed(4)}]`;
   });
 
   const cropFrameSummary = $derived.by<string>(() => {
-    if (plateLocal == null) return '';
-    const [x1, y1, x2, y2] = bboxNormToXYXY(plateLocal);
+    if (boxLocal == null) return '';
+    const [x1, y1, x2, y2] = bboxNormToXYXY(boxLocal);
     return `crop [x1=${x1.toFixed(4)}, y1=${y1.toFixed(4)}, x2=${x2.toFixed(4)}, y2=${y2.toFixed(4)}]`;
   });
 
@@ -197,9 +197,9 @@
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = clientToNorm(e);
-    if (plateLocal == null) {
+    if (boxLocal == null) {
       // Start painting a new box from this point.
-      plateLocal = { cx: p.x, cy: p.y, w: 0, h: 0 };
+      boxLocal = { cx: p.x, cy: p.y, w: 0, h: 0 };
       drag = { mode: 'create', startX: p.x, startY: p.y, initialBox: null };
     } else {
       // Click-on-body to drag-move.
@@ -207,18 +207,18 @@
         mode: 'move',
         startX: p.x,
         startY: p.y,
-        initialBox: { ...plateLocal },
+        initialBox: { ...boxLocal },
       };
     }
   }
 
   function onPointerDownHandle(e: PointerEvent, mode: DragMode): void {
-    if (busy || plateLocal == null) return;
+    if (busy || boxLocal == null) return;
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = clientToNorm(e);
-    drag = { mode, startX: p.x, startY: p.y, initialBox: { ...plateLocal } };
+    drag = { mode, startX: p.x, startY: p.y, initialBox: { ...boxLocal } };
   }
 
   function onPointerMove(e: PointerEvent): void {
@@ -231,7 +231,7 @@
       const y1 = Math.min(drag.startY, p.y);
       const x2 = Math.max(drag.startX, p.x);
       const y2 = Math.max(drag.startY, p.y);
-      plateLocal = normalizeBox({
+      boxLocal = normalizeBox({
         cx: (x1 + x2) / 2,
         cy: (y1 + y2) / 2,
         w: x2 - x1,
@@ -242,7 +242,7 @@
     if (!drag.initialBox) return;
     const ib = drag.initialBox;
     if (drag.mode === 'move') {
-      plateLocal = normalizeBox({
+      boxLocal = normalizeBox({
         cx: ib.cx + dx,
         cy: ib.cy + dy,
         w: ib.w,
@@ -265,7 +265,7 @@
     const nx2 = Math.max(x1, x2);
     const ny1 = Math.min(y1, y2);
     const ny2 = Math.max(y1, y2);
-    plateLocal = normalizeBox({
+    boxLocal = normalizeBox({
       cx: (nx1 + nx2) / 2,
       cy: (ny1 + ny2) / 2,
       w: nx2 - nx1,
@@ -275,10 +275,10 @@
 
   function onPointerUp(): void {
     if (!drag) return;
-    // If the user clicked-without-drag on an empty canvas, plateLocal
+    // If the user clicked-without-drag on an empty canvas, boxLocal
     // ends up as zero-size — drop it so we don't "save" an invisible box.
-    if (plateLocal && (plateLocal.w < 1e-6 || plateLocal.h < 1e-6)) {
-      plateLocal = null;
+    if (boxLocal && (boxLocal.w < 1e-6 || boxLocal.h < 1e-6)) {
+      boxLocal = null;
     }
     drag = null;
   }
@@ -286,29 +286,29 @@
   // -- keyboard ---------------------------------------------------------
 
   function nudgeBox(dx: number, dy: number): void {
-    if (!plateLocal) return;
-    plateLocal = normalizeBox({
-      cx: plateLocal.cx + dx,
-      cy: plateLocal.cy + dy,
-      w: plateLocal.w,
-      h: plateLocal.h,
+    if (!boxLocal) return;
+    boxLocal = normalizeBox({
+      cx: boxLocal.cx + dx,
+      cy: boxLocal.cy + dy,
+      w: boxLocal.w,
+      h: boxLocal.h,
     });
   }
 
   function nudgeRightEdge(dx: number): void {
-    if (!plateLocal) return;
-    let x1 = plateLocal.cx - plateLocal.w / 2;
-    let x2 = clamp01(plateLocal.cx + plateLocal.w / 2 + dx);
+    if (!boxLocal) return;
+    let x1 = boxLocal.cx - boxLocal.w / 2;
+    let x2 = clamp01(boxLocal.cx + boxLocal.w / 2 + dx);
     if (x2 < x1) {
       const t = x1;
       x1 = x2;
       x2 = t;
     }
-    plateLocal = normalizeBox({
+    boxLocal = normalizeBox({
       cx: (x1 + x2) / 2,
-      cy: plateLocal.cy,
+      cy: boxLocal.cy,
       w: x2 - x1,
-      h: plateLocal.h,
+      h: boxLocal.h,
     });
   }
 
@@ -325,7 +325,7 @@
         return;
       case 'Backspace':
         e.preventDefault();
-        plateLocal = null;
+        boxLocal = null;
         return;
       case 'ArrowUp':
         e.preventDefault();
@@ -363,7 +363,7 @@
     busy = true;
     try {
       // Clear: PUT null -> backend writes the slot's rejectState.
-      if (plateLocal == null) {
+      if (boxLocal == null) {
         const item = await setSlotBox(activeSlot, crop.id, null);
         toastStore.success(`${activeSlot.label.title} cleared.`);
         onsave?.(item);
@@ -371,7 +371,7 @@
       }
       // Send the box exactly as drawn, in the crop's local (parent)
       // frame — the server projects it into its own stored frame.
-      const { cx, cy, w, h } = plateLocal;
+      const { cx, cy, w, h } = boxLocal;
       const tuple: [number, number, number, number] = [
         cx - w / 2,
         cy - h / 2,
@@ -391,14 +391,14 @@
 
   // Derived overlay rectangle in % of the canvas.
   const ringStyle = $derived.by<string>(() => {
-    if (!plateLocal) return 'display:none';
+    if (!boxLocal) return 'display:none';
     // Place the ring inside the letterboxed image rect (inverse of the
     // map clientToNorm applies on input) so it lines up with the crop.
     const { offX, offY, w: dW, h: dH } = baseDisp;
-    const x1 = (offX + (plateLocal.cx - plateLocal.w / 2) * dW) * 100;
-    const y1 = (offY + (plateLocal.cy - plateLocal.h / 2) * dH) * 100;
-    const w = plateLocal.w * dW * 100;
-    const h = plateLocal.h * dH * 100;
+    const x1 = (offX + (boxLocal.cx - boxLocal.w / 2) * dW) * 100;
+    const y1 = (offY + (boxLocal.cy - boxLocal.h / 2) * dH) * 100;
+    const w = boxLocal.w * dW * 100;
+    const h = boxLocal.h * dH * 100;
     return `left:${x1}%;top:${y1}%;width:${w}%;height:${h}%`;
   });
 </script>
@@ -448,7 +448,7 @@
         class="pointer-events-none h-full w-full object-contain"
       />
 
-      {#if plateLocal}
+      {#if boxLocal}
         <!-- Sub-box ring + drag handles -->
         <div
           class="absolute border-2 border-yellow-400 bg-yellow-400/10"
@@ -540,8 +540,8 @@
       <button
         type="button"
         class="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800"
-        onclick={() => (plateLocal = null)}
-        disabled={busy || plateLocal == null}
+        onclick={() => (boxLocal = null)}
+        disabled={busy || boxLocal == null}
       >
         Clear
       </button>

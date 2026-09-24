@@ -136,7 +136,7 @@ describe('createPager', () => {
 
     // "Refine AHC" reloads page 1 with fresh data while loadMore() is still
     // pending -- this must fully win, exactly like production's
-    // runRefinePlateCluster() -> loadPlatesFirst() after the refine POST.
+    // runRefineCluster() -> loadFirst() after the refine POST.
     await pager.loadFirst();
     expect(pager.items.map((r) => r.id)).toEqual(['new1', 'new2']);
     expect(pager.total).toBe(2);

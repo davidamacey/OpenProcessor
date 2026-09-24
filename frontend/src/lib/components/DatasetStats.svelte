@@ -157,7 +157,7 @@
   // profile (detector, segmenter fallback, human), so these rows are
   // generic. Denominator = total_crops (so % is "fraction of crops where
   // a region was detected"), not labeledTotal.
-  const platesRows = $derived.by(() => {
+  const slotRows = $derived.by(() => {
     const p = statsSlot?.stats
       ? (stats as unknown as Record<string, DatasetStats['regions'] | undefined>)?.[
           statsSlot.stats.key
@@ -441,11 +441,11 @@
               {fmt(p?.confirmed ?? 0)} confirmed
             </span>
           </header>
-          {#if platesRows.length === 0}
+          {#if slotRows.length === 0}
             <p class="text-sm text-zinc-500">No detections yet.</p>
           {:else}
             <ul class="space-y-1.5">
-              {#each platesRows as row (row.key)}
+              {#each slotRows as row (row.key)}
                 <li class="flex items-center gap-3 text-xs">
                   <span class="w-32 shrink-0 text-zinc-300">{row.label}</span>
                   <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">

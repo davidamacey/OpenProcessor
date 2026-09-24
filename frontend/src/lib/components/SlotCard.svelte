@@ -3,19 +3,19 @@
    * Compact card for one slot detection. Renamed from PlateCard.svelte
    * (P2.4) and parameterized (P2.7,
    * docs/genericization-plan-2026-09-13.md §3.1/§5a) to read through the
-   * `readSlot` adapter instead of `PlateBrowseItem`'s hardcoded `plate_*`
-   * fields directly. `PlateBrowseItem`'s flat `plate_*` properties
+   * `readSlot` adapter instead of `RegionBrowseItem`'s hardcoded `plate_*`
+   * fields directly. `RegionBrowseItem`'s flat `plate_*` properties
    * already match `licensePlateSlot`'s wire-field names exactly, so
    * this is a safe, local parameterization: swap the `slot` prop and
    * the card renders a completely different capability set (see
    * `docs/genericization-plan-2026-09-13.md`'s §5.4 example slots) with
    * zero further code change.
    *
-   * `getPlates` (`api.ts`) now maps every row's `slots` server-side
+   * `getRegions` (`api.ts`) now maps every row's `slots` server-side
    * (C2, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §4) —
    * this card prefers that pre-computed `crop.slots[slot.key]` and only
    * falls back to calling `readSlot()` itself when the raw row never
-   * went through `getPlates` (e.g. a locally-constructed fixture).
+   * went through `getRegions` (e.g. a locally-constructed fixture).
    *
    * Used on the /clusters page when class=license_plate, and on the
    * /train page's training-cohort sanity preview.
@@ -32,7 +32,7 @@
     API_PREFIX,
     getRegionThumbUrl,
     resolveApiUrl,
-    type PlateBrowseItem,
+    type RegionBrowseItem,
   } from '$lib/api';
   import { readSlot } from '$lib/annotations/readSlot';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
@@ -40,17 +40,17 @@
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
   interface Props {
-    crop: PlateBrowseItem;
+    crop: RegionBrowseItem;
     /** Which slot's capabilities to render this card with. Defaults to
      *  the built-in license_plate profile — the only configured
      *  instance today — but any `SlotSpec` whose wire field names
      *  match this crop's properties works unchanged. */
     slot?: SlotSpec;
-    onclick?: (crop: PlateBrowseItem, e: MouseEvent) => void;
+    onclick?: (crop: RegionBrowseItem, e: MouseEvent) => void;
     /** Edit affordance (✎): parent opens the sub-bbox editor for this slot. */
-    onedit?: (crop: PlateBrowseItem) => void;
+    onedit?: (crop: RegionBrowseItem) => void;
     /** Quick false-positive (✗): parent marks this slot false_positive. */
-    onmarkfp?: (crop: PlateBrowseItem) => void;
+    onmarkfp?: (crop: RegionBrowseItem) => void;
     /** Selection state for multi-select bulk actions. */
     selected?: boolean;
     /** Compact mode hides the chain strip for dense grids. */
@@ -67,7 +67,7 @@
     compact = false,
   }: Props = $props();
 
-  // Prefer the pre-computed slots map (getPlates already ran
+  // Prefer the pre-computed slots map (getRegions already ran
   // mapCropSlots server-side); fall back to calling readSlot() directly
   // for a raw row that never went through that path.
   const data = $derived(

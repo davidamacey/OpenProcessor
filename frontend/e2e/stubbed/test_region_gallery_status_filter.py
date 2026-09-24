@@ -3,7 +3,7 @@ filter (SlotGallery.svelte), backed by GET {API_PREFIX}/regions?status=
 (400 server-side on an unknown value). Options are the served
 GET {API_PREFIX}/regions/statuses vocabulary, not a hardcoded list —
 mirrors the Detector filter's served-vocabulary pattern
-(test_plate_gallery_detector_filter.py). Picking a status must forward
+(test_region_gallery_detector_filter.py). Picking a status must forward
 it as ?status= on the next GET {API_PREFIX}/regions call — proves the
 real browser-rendered <select> actually drives the query, not just
 that it renders.
@@ -51,7 +51,7 @@ STATUSES = {
 }
 
 
-def test_plate_status_filter_lists_served_statuses_and_forwards_the_query_param(
+def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param(
     stub, page, app_url
 ):
     region_list_calls: list[str] = []

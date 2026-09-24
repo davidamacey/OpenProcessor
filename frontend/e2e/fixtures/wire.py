@@ -150,7 +150,7 @@ _EXPLICIT: dict[str, Any] = {
     # readSlot/licensePlateSlot (SlotData.text.choice/invalidReason,
     # SlotData.subBox.candidate, SlotData.lifecycle.validated/
     # autoConfirmed) and /review's candidate-box confirm flow. See
-    # test_plate_verify_rejected_confirm.py / test_plate_status_filter.py.
+    # test_region_verify_rejected_confirm.py / test_region_gallery_status_filter.py.
     "region_text_choice": "vlm_preferred",  # one of region_text.TEXT_CHOICES
     "region_text_vlm_invalid": None,
     "region_auto_confirmed": True,

@@ -4,7 +4,7 @@ lives in region_candidate_bbox_norm/_score/_detector/... until a human
 accepts it. /review's slot panel must seed its edit box from the
 candidate (_seedSlotFromCurrent) so an unchanged Confirm still goes
 through the existing boxUnchanged -> status-only PATCH region_meta
-path (same B2 provenance-preserving contract test_plate_confirm.py
+path (same B2 provenance-preserving contract test_region_confirm.py
 covers for a normal detected box) rather than warning "no bbox to
 confirm" and doing nothing.
 
@@ -120,7 +120,7 @@ def test_confirming_a_verify_rejected_item_promotes_the_candidate_via_status_pat
     page.get_by_text("rejected candidate", exact=False).first.wait_for(timeout=10000)
 
     # Give the canvas a beat to seed editedSlotBox from the candidate box
-    # before confirming (same pattern as test_plate_confirm.py).
+    # before confirming (same pattern as test_region_confirm.py).
     page.wait_for_timeout(500)
 
     page.keyboard.press("Enter")

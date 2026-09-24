@@ -19,11 +19,11 @@ describe('bboxFrames', () => {
     // Vehicle occupies the lower-right quadrant of the source image.
     const vehicle: BBoxNorm = { cx: 0.6, cy: 0.7, w: 0.4, h: 0.3 };
     // Plate sits inside that vehicle in source-frame coords.
-    const plateSrc: BBoxNorm = { cx: 0.62, cy: 0.78, w: 0.06, h: 0.02 };
-    const plateInCrop = sourceToCropFrame(plateSrc, vehicle);
-    expect(plateInCrop).not.toBeNull();
-    const back = cropToSourceFrame(plateInCrop!, vehicle);
-    expectBoxApprox(back, plateSrc);
+    const regionSrc: BBoxNorm = { cx: 0.62, cy: 0.78, w: 0.06, h: 0.02 };
+    const boxInCrop = sourceToCropFrame(regionSrc, vehicle);
+    expect(boxInCrop).not.toBeNull();
+    const back = cropToSourceFrame(boxInCrop!, vehicle);
+    expectBoxApprox(back, regionSrc);
   });
 
   it('off-center vehicle: plate in crop frame uses parent box origin', () => {
@@ -31,16 +31,16 @@ describe('bboxFrames', () => {
     const vehicle: BBoxNorm = { cx: 0.4, cy: 0.6, w: 0.4, h: 0.4 };
     // Plate in source frame: covers the bottom-center of the vehicle.
     // x1=0.36, y1=0.74, x2=0.44, y2=0.78 → cx=0.40, cy=0.76, w=0.08, h=0.04.
-    const plateSrc: BBoxNorm = { cx: 0.4, cy: 0.76, w: 0.08, h: 0.04 };
-    const plateInCrop = sourceToCropFrame(plateSrc, vehicle);
-    expect(plateInCrop).not.toBeNull();
+    const regionSrc: BBoxNorm = { cx: 0.4, cy: 0.76, w: 0.08, h: 0.04 };
+    const boxInCrop = sourceToCropFrame(regionSrc, vehicle);
+    expect(boxInCrop).not.toBeNull();
     // In crop frame:
     //   x1' = (0.36 - 0.2) / 0.4 = 0.40
     //   y1' = (0.74 - 0.4) / 0.4 = 0.85
     //   x2' = (0.44 - 0.2) / 0.4 = 0.60
     //   y2' = (0.78 - 0.4) / 0.4 = 0.95
     // → cx=0.50, cy=0.90, w=0.20, h=0.10
-    expectBoxApprox(plateInCrop!, { cx: 0.5, cy: 0.9, w: 0.2, h: 0.1 });
+    expectBoxApprox(boxInCrop!, { cx: 0.5, cy: 0.9, w: 0.2, h: 0.1 });
   });
 
   it('degenerate vehicle (zero width) returns null', () => {
@@ -75,8 +75,8 @@ describe('bboxFrames', () => {
     // Tiny vehicle near the right edge; "plate" in crop frame extends
     // beyond the right side, so the source-frame result must clamp.
     const vehicle: BBoxNorm = { cx: 0.95, cy: 0.5, w: 0.1, h: 0.1 };
-    const plateInCrop: BBoxNorm = { cx: 0.9, cy: 0.5, w: 0.6, h: 0.2 };
-    const out = cropToSourceFrame(plateInCrop, vehicle);
+    const boxInCrop: BBoxNorm = { cx: 0.9, cy: 0.5, w: 0.6, h: 0.2 };
+    const out = cropToSourceFrame(boxInCrop, vehicle);
     // Vehicle corners (source frame): x1=0.90, y1=0.45, x2=1.00, y2=0.55.
     // Plate-in-crop corners: x1=0.6, y1=0.4, x2=1.2, y2=0.6.
     // Source-frame raw corners:

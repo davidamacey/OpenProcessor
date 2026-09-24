@@ -32,7 +32,7 @@ def plate_item() -> dict:
     )
 
 
-def test_plate_reject_then_z_calls_region_undo(stub, page, app_url):
+def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
     region_calls: list[dict] = []
     undo_calls: list[str] = []
 
@@ -100,7 +100,7 @@ def test_plate_reject_then_z_calls_region_undo(stub, page, app_url):
     assert not errors, f"no pageerror expected in the plate-reject-then-undo flow: {errors[:3]}"
 
 
-def test_plate_reject_z_before_any_write_does_not_call_region_undo(stub, page, app_url):
+def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, app_url):
     """Sanity check on the shared undoStore: Z with nothing recorded (no
     slot write yet this session) must not fire a region/undo request —
     the store's own 'Nothing to undo' early return, unchanged by this

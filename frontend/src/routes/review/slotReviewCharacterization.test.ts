@@ -5,7 +5,7 @@
  * or `clusters/+page.svelte`.
  *
  * This repo has no `@testing-library/svelte` harness (see
- * `plateThumbUrlScan.test.ts`'s doc comment). The plan's P0.1/P0.3 call
+ * `regionThumbUrlScan.test.ts`'s doc comment). The plan's P0.1/P0.3 call
  * for extracting the pure logic into testable modules FIRST, and that
  * has now landed for every piece that had a real extraction seam:
  * `src/lib/review/slotQueueOps.ts` + `abortRegistry.ts` (undo stack +
@@ -21,7 +21,7 @@
  * `REVIEW_TABS`/`license_plate` baseline in `clusters/+page.svelte`)
  * stays pinned via the static source-scan convention this repo already
  * uses (`EmbeddingPlot.test.ts` / `StrategyBar.test.ts` /
- * `plateThumbUrlScan.test.ts`) until Phase 2's `reviewTabs.ts`
+ * `regionThumbUrlScan.test.ts`) until Phase 2's `reviewTabs.ts`
  * data-driving and the SlotGallery extraction give them one.
  */
 
@@ -152,7 +152,7 @@ describe('T7 (adapted, P2.8b): the Plates tab id is slot-derived, urlId keeps th
 describe('P2.10: clusters/+page.svelte routes via registeredSlots, not a license_plate literal', () => {
   it('no longer hardcodes the license_plate class-name string as a routing condition', () => {
     // Finding B's four routing sites (docs/genericization-plan-2026-09-13.md
-    // §1: isLicensePlateFilter, loadLicensePlateCard, the synthetic pinned
+    // §1: isSlotFilter, loadSlotInventoryCards, the synthetic pinned
     // card's dominant_class_name, and card-click routing) now all resolve
     // via slotForClassName()/registeredSlots (P2.10) instead of comparing
     // against the literal string 'license_plate'. This test intentionally

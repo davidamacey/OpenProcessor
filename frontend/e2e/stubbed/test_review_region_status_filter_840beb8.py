@@ -5,7 +5,7 @@ candidates only). `/review`'s filter bar renders one generic `<select>`
 per served spec (no tab/param-specific markup), and picking a value
 forwards it as `?region_status=` on `GET {API_PREFIX}/review/regions` —
 proves the real browser-rendered control actually drives the query, not
-just that it renders (mirrors test_plate_status_filter.py's pattern for
+just that it renders (mirrors test_region_gallery_status_filter.py's pattern for
 the /clusters plate gallery's equivalent control).
 
 Also covers the companion wording rule (backend live-check, 2026-09-24):

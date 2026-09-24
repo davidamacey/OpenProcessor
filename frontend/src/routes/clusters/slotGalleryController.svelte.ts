@@ -21,18 +21,18 @@
  */
 
 import {
-  batchPlateStatus,
-  buildPlateFpCentroids,
-  clusterPlates,
+  batchRegionStatus,
+  buildRegionFpCentroids,
+  clusterRegions,
   getCrop,
-  getPlateClusters,
-  getPlateClusterStatus,
-  getPlateFpCentroidStatus,
-  getPlates,
+  getRegionClusters,
+  getRegionClusterStatus,
+  getRegionFpCentroidStatus,
+  getRegions,
   getRegionThumbUrl,
   getSuspectedFalsePositives,
-  refinePlateCluster,
-  type PlateBrowseItem,
+  refineRegionCluster,
+  type RegionBrowseItem,
   type SuspectedFpItem,
 } from '$lib/api';
 import { createPager } from '$lib/pager.svelte';
@@ -73,42 +73,45 @@ export function PLATE_FALSE_POSITIVE_STATE(): string {
 /** Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (clustering/orchestrator.py). */
 export const FP_PLATE_CLUSTER_ID = -100;
 
-const PLATES_PAGE_SIZE = 60;
+const GALLERY_PAGE_SIZE = 60;
 
-export function createPlateGalleryController() {
-  const platePager = createPager<PlateBrowseItem>({
+export function createSlotGalleryController() {
+  const pager = createPager<RegionBrowseItem>({
     fetchPage: async (page) =>
-      await getPlates(licensePlateSlot.capabilities.queue!.browsePath, plateQuery(page)),
+      await getRegions(
+        licensePlateSlot.capabilities.queue!.browsePath,
+        browseQuery(page),
+      ),
     keyOf: (p) => p.crop_id,
   });
 
   // Plate triage: multi-select for bulk actions + the inline bbox editor.
   // Plain click TOGGLES here (accumulating), unlike the crop grid where
   // it replaces — plate triage is a bulk-marking flow.
-  const plateSel = createSelection({ plainClick: 'toggle' });
-  let editPlateCrop = $state<Crop | null>(null);
-  let plateBusy = $state<boolean>(false);
+  const sel = createSelection({ plainClick: 'toggle' });
+  let editCrop = $state<Crop | null>(null);
+  let busy = $state<boolean>(false);
 
   // Top-N largest-crop gate for plates. The sort is built on the largest
   // 1-3 crops, so this is the key filter for finding the plates that matter.
   // null = all ranks.
-  let plateMaxRank = $state<number | null>(null);
+  let maxRank = $state<number | null>(null);
 
   // Plate clustering (AHC-refinable buckets over plate_pe_embedding).
-  // selectedPlateCluster narrows the gallery to one bucket; null shows the
+  // selectedCluster narrows the gallery to one bucket; null shows the
   // bucket grid (or the flat gallery when no clustering has run).
-  let plateClusters = $state<Cluster[]>([]);
-  let selectedPlateCluster = $state<number | null>(null);
-  let plateClusterBusy = $state<boolean>(false);
+  let clusters = $state<Cluster[]>([]);
+  let selectedCluster = $state<number | null>(null);
+  let clusterBusy = $state<boolean>(false);
 
   // Sub-cluster delineation inside an open plate bucket — mirrors the vehicle
   // cluster detail. null = "all" (the server returns plates ordered by subid so
   // AHC groups are contiguous; we render a labeled separator before each).
   // Selecting a chip filters the gallery to that one sub-cluster.
-  let plateSubTab = $state<string | null>(null);
+  let subTab = $state<string | null>(null);
   // Last refine outcome, shown inline next to the button so the result is not
   // just a transient toast (the run is fast and easy to miss).
-  let plateRefineMsg = $state<string | null>(null);
+  let refineMsg = $state<string | null>(null);
 
   // Suspected-FP review: crops the FP centroids flag as likely false
   // positives. Loads into the same `plates` array so the beloved
@@ -123,38 +126,38 @@ export function createPlateGalleryController() {
   // cluster is the permanent false-positive bucket (the common case
   // before "Cluster plates" has been run over the good plates), every
   // other plate was unreachable from this view: no "unclustered" entry
-  // and no fallback flat grid. `viewingAllPlates` opens the same flat
-  // gallery `selectedPlateCluster !== null` already renders, but with no
+  // and no fallback flat grid. `viewingAll` opens the same flat
+  // gallery `selectedCluster !== null` already renders, but with no
   // `region_cluster_id` filter, so every plate — clustered or not — is
-  // browsable. Kept independent of `selectedPlateCluster` (rather than
-  // reusing it with a sentinel id) so `plateQuery` never needs to
+  // browsable. Kept independent of `selectedCluster` (rather than
+  // reusing it with a sentinel id) so `browseQuery` never needs to
   // distinguish "filter to real cluster 0" from "no filter".
-  let viewingAllPlates = $state<boolean>(false);
+  let viewingAll = $state<boolean>(false);
 
   // Filter sidebar state — only active on the plates view.
-  let plateDetectorFilter = $state<string>('');
-  let plateVerifiedOnly = $state<boolean>(false);
-  let plateMinScore = $state<number>(0);
-  let plateTextQuery = $state<string>('');
+  let detectorFilter = $state<string>('');
+  let verifiedOnly = $state<boolean>(false);
+  let minScore = $state<number>(0);
+  let textQuery = $state<string>('');
   // dq-region (2026-09-24): backed by GET {API_PREFIX}/regions?status=, options
   // are the served region-status vocabulary (regionStatusesStore), not a
   // hardcoded list — includes verify_rejected (candidate-only rows), the
   // auto-confirmed-but-unreviewed 'detected' rows, etc.
-  let plateStatusFilter = $state<string>('');
+  let statusFilter = $state<string>('');
 
   // Distinct sub-cluster ids present in the loaded plates, sorted lexically so
   // "9a","9aa","9ab"… land in human-expected order.
-  const plateSubclusterIds = $derived.by(() => {
+  const subclusterIds = $derived.by(() => {
     const set = new Set<string>();
-    for (const p of platePager.items)
+    for (const p of pager.items)
       if (p.region_cluster_subid) set.add(p.region_cluster_subid);
     return [...set].sort();
   });
 
   // Per-subid counts for the separator-header labels ('__none__' = unrefined).
-  const plateSubCounts = $derived.by(() => {
+  const subCounts = $derived.by(() => {
     const m = new Map<string, number>();
-    for (const p of platePager.items) {
+    for (const p of pager.items) {
       const k = p.region_cluster_subid ?? '__none__';
       m.set(k, (m.get(k) ?? 0) + 1);
     }
@@ -163,8 +166,8 @@ export function createPlateGalleryController() {
 
   // Group only when a bucket is open, on the "all" tab, and refine has produced
   // sub-clusters. Otherwise render one flat group (no separators).
-  const groupPlatesBySubid = $derived(
-    selectedPlateCluster != null && plateSubTab == null && plateSubclusterIds.length > 0,
+  const groupBySubid = $derived(
+    selectedCluster != null && subTab == null && subclusterIds.length > 0,
   );
 
   // Partition loaded plates into one group PER sub-cluster id. Built with a
@@ -174,12 +177,11 @@ export function createPlateGalleryController() {
   // (subid-sorted) data arrives. A contiguity walk would emit the same subid
   // as multiple groups there, producing duplicate {#each} keys and a Svelte
   // each_key_duplicate crash that froze the detail view from opening.
-  const plateGroups = $derived.by(
-    (): { key: string; label: string; items: PlateBrowseItem[] }[] => {
-      if (!groupPlatesBySubid)
-        return [{ key: '__all__', label: '', items: platePager.items }];
-      const byKey = new Map<string, PlateBrowseItem[]>();
-      for (const p of platePager.items) {
+  const groups = $derived.by(
+    (): { key: string; label: string; items: RegionBrowseItem[] }[] => {
+      if (!groupBySubid) return [{ key: '__all__', label: '', items: pager.items }];
+      const byKey = new Map<string, RegionBrowseItem[]>();
+      for (const p of pager.items) {
         const sub = p.region_cluster_subid ?? '__none__';
         let bucket = byKey.get(sub);
         if (!bucket) {
@@ -202,55 +204,54 @@ export function createPlateGalleryController() {
     },
   );
 
-  function plateQuery(page: number): import('$lib/api').PlatesQuery {
+  function browseQuery(page: number): import('$lib/api').RegionsQuery {
     return {
       page,
-      page_size: PLATES_PAGE_SIZE,
-      detector: plateDetectorFilter || undefined,
-      verified: plateVerifiedOnly || undefined,
-      min_score: plateMinScore > 0 ? plateMinScore : undefined,
-      text: plateTextQuery || undefined,
-      status: plateStatusFilter || undefined,
-      max_rank: plateMaxRank ?? undefined,
-      region_cluster_id: selectedPlateCluster ?? undefined,
+      page_size: GALLERY_PAGE_SIZE,
+      detector: detectorFilter || undefined,
+      verified: verifiedOnly || undefined,
+      min_score: minScore > 0 ? minScore : undefined,
+      text: textQuery || undefined,
+      status: statusFilter || undefined,
+      max_rank: maxRank ?? undefined,
+      region_cluster_id: selectedCluster ?? undefined,
       // When a single sub-cluster tab is active, filter to it; otherwise (the
       // "all" tab) ask the server to order by sub-cluster so AHC groups come
       // back contiguous across pages and we can render them with separators.
-      region_cluster_subid: plateSubTab ?? undefined,
-      sort_by_subid:
-        selectedPlateCluster != null && plateSubTab == null ? true : undefined,
+      region_cluster_subid: subTab ?? undefined,
+      sort_by_subid: selectedCluster != null && subTab == null ? true : undefined,
     };
   }
 
-  const loadPlatesFirst = () => platePager.loadFirst();
-  const loadPlatesMore = () => platePager.loadMore();
+  const loadFirst = () => pager.loadFirst();
+  const loadMore = () => pager.loadMore();
 
-  async function loadPlateClusters(): Promise<void> {
+  async function loadClusters(): Promise<void> {
     try {
-      const res = await getPlateClusters({
+      const res = await getRegionClusters({
         maxClusters: 500,
-        maxRank: plateMaxRank ?? undefined,
+        maxRank: maxRank ?? undefined,
       });
       // Defensive: never render empty buckets (the backend already omits
       // them, but a stale response shouldn't surface a 0-size card).
-      plateClusters = (res.clusters ?? []).filter((c) => c.size > 0);
+      clusters = (res.clusters ?? []).filter((c) => c.size > 0);
     } catch (e) {
       toastStore.error(`Load plate clusters failed: ${(e as Error).message}`);
     }
   }
 
   async function loadSuspectedFp(): Promise<void> {
-    if (plateClusterBusy) return;
-    plateClusterBusy = true;
+    if (clusterBusy) return;
+    clusterBusy = true;
     try {
       const res = await getSuspectedFalsePositives({
         threshold: suspectedFpThreshold,
         pageSize: 200,
       });
-      selectedPlateCluster = null;
-      plateSel.clear();
-      platePager.items = res.items as SuspectedFpItem[];
-      platePager.total = res.items.length;
+      selectedCluster = null;
+      sel.clear();
+      pager.items = res.items as SuspectedFpItem[];
+      pager.total = res.items.length;
       suspectedFpView = true;
       if (!res.centroids_built) {
         toastStore.info(res.message ?? 'No FP centroids yet — build them first.');
@@ -262,19 +263,19 @@ export function createPlateGalleryController() {
     } catch (e) {
       toastStore.error(`Load suspected FPs failed: ${(e as Error).message}`);
     } finally {
-      plateClusterBusy = false;
+      clusterBusy = false;
     }
   }
 
   async function runBuildFpCentroids(): Promise<void> {
-    if (plateClusterBusy) return;
-    plateClusterBusy = true;
+    if (clusterBusy) return;
+    clusterBusy = true;
     try {
-      await buildPlateFpCentroids();
+      await buildRegionFpCentroids();
       toastStore.info('Building FP centroids… sub-typing the false-positive bucket.');
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
-        const job = await getPlateFpCentroidStatus();
+        const job = await getRegionFpCentroidStatus();
         if (job.running) continue;
         if (job.error) {
           toastStore.error(`Build FP centroids failed: ${job.error}`);
@@ -282,31 +283,31 @@ export function createPlateGalleryController() {
           toastStore.success(
             `FP centroids built: ${job.result.n_members} members → ${job.result.k} sub-types.`,
           );
-          await loadPlateClusters();
+          await loadClusters();
         }
         break;
       }
     } catch (e) {
       toastStore.error(`Build FP centroids failed: ${(e as Error).message}`);
     } finally {
-      plateClusterBusy = false;
+      clusterBusy = false;
     }
   }
 
-  async function runClusterPlates(): Promise<void> {
-    if (plateClusterBusy) return;
-    plateClusterBusy = true;
+  async function runClustering(): Promise<void> {
+    if (clusterBusy) return;
+    clusterBusy = true;
     try {
       // One-click pipeline (rebuild FP centroids → auto-pull tight FPs →
       // re-partition good plates) is a multi-minute background job, so we kick
       // it off and poll for completion instead of holding one request open.
-      await clusterPlates(plateMaxRank ?? undefined);
+      await clusterRegions(maxRank ?? undefined);
       toastStore.info(
         'Clustering plates… rebuilding FP centroids, pulling FPs, re-bucketing.',
       );
       while (true) {
         await new Promise((r) => setTimeout(r, 3000));
-        const job = await getPlateClusterStatus();
+        const job = await getRegionClusterStatus();
         if (job.running) continue;
         if (job.error) {
           toastStore.error(`Cluster plates failed: ${job.error}`);
@@ -322,123 +323,123 @@ export function createPlateGalleryController() {
               `Clustered ${r.n_regions ?? 0} plates into ${r.n_clusters ?? 0} buckets; auto-moved ${moved} to false positives.`,
             );
           }
-          await loadPlateClusters();
+          await loadClusters();
         }
         break;
       }
     } catch (e) {
       toastStore.error(`Cluster plates failed: ${(e as Error).message}`);
     } finally {
-      plateClusterBusy = false;
+      clusterBusy = false;
     }
   }
 
-  async function runRefinePlateCluster(): Promise<void> {
-    if (selectedPlateCluster == null || plateClusterBusy) return;
-    plateClusterBusy = true;
-    plateRefineMsg = `Refining bucket #${selectedPlateCluster}…`;
+  async function runRefineCluster(): Promise<void> {
+    if (selectedCluster == null || clusterBusy) return;
+    clusterBusy = true;
+    refineMsg = `Refining bucket #${selectedCluster}…`;
     try {
-      const res = await refinePlateCluster(selectedPlateCluster);
+      const res = await refineRegionCluster(selectedCluster);
       const n = res.n_subclusters ?? 0;
       if (n > 0) {
-        plateRefineMsg = `Split into ${n} sub-clusters — grouped below.`;
+        refineMsg = `Split into ${n} sub-clusters — grouped below.`;
         toastStore.success(`Refine produced ${n} sub-clusters.`);
       } else {
         // Backend skipped it (too small / too large). Surface why.
         const reason = (res as { reason?: string }).reason ?? 'no sub-clusters found';
-        plateRefineMsg = `Not refined: ${reason}.`;
+        refineMsg = `Not refined: ${reason}.`;
         toastStore.info(`Bucket not refined: ${reason}.`);
       }
       // Drop back to the "all" tab so the freshly grouped view shows, then
       // reload (server returns plates ordered by sub-cluster).
-      plateSubTab = null;
-      await loadPlatesFirst();
+      subTab = null;
+      await loadFirst();
     } catch (e) {
-      plateRefineMsg = `Refine failed: ${(e as Error).message}`;
+      refineMsg = `Refine failed: ${(e as Error).message}`;
       toastStore.error(`Refine failed: ${(e as Error).message}`);
     } finally {
-      plateClusterBusy = false;
+      clusterBusy = false;
     }
   }
 
-  function openPlateCluster(id: number): void {
+  function openCluster(id: number): void {
     suspectedFpView = false;
-    viewingAllPlates = false;
-    plateSubTab = null;
-    plateRefineMsg = null;
+    viewingAll = false;
+    subTab = null;
+    refineMsg = null;
     // Clear the previous gallery synchronously so the render between selecting
     // the bucket and its data arriving doesn't group a stale mixed-bucket list.
-    platePager.items = [];
-    selectedPlateCluster = id;
+    pager.items = [];
+    selectedCluster = id;
   }
 
   /** M3: browse every plate with no `region_cluster_id` filter — the
    *  entry point for plates that aren't in any AHC bucket yet (or when
    *  the only bucket that exists is the false-positive one). */
-  function openAllPlates(): void {
+  function openAll(): void {
     suspectedFpView = false;
-    plateSubTab = null;
-    plateRefineMsg = null;
-    platePager.items = [];
-    selectedPlateCluster = null;
-    viewingAllPlates = true;
-    void loadPlatesFirst();
+    subTab = null;
+    refineMsg = null;
+    pager.items = [];
+    selectedCluster = null;
+    viewingAll = true;
+    void loadFirst();
   }
 
-  function selectPlateSubTab(sub: string | null): void {
-    if (plateSubTab === sub) return;
-    plateSubTab = sub;
-    void loadPlatesFirst();
+  function selectSubTab(sub: string | null): void {
+    if (subTab === sub) return;
+    subTab = sub;
+    void loadFirst();
   }
 
-  function backToPlateClusters(): void {
-    selectedPlateCluster = null;
-    viewingAllPlates = false;
-    plateSubTab = null;
-    plateRefineMsg = null;
-    plateSel.clear();
+  function backToClusters(): void {
+    selectedCluster = null;
+    viewingAll = false;
+    subTab = null;
+    refineMsg = null;
+    sel.clear();
     if (suspectedFpView) {
       // Leaving the suspected-FP view: reload the real plate gallery the
       // filter effect would otherwise have populated.
       suspectedFpView = false;
-      void loadPlatesFirst();
+      void loadFirst();
     }
   }
 
   // Range selects span the currently displayed order, so hand the helper
   // the loaded plate ids on each click.
-  function togglePlateSelect(p: PlateBrowseItem, e?: MouseEvent): void {
-    plateSel.click(
+  function toggleSelect(p: RegionBrowseItem, e?: MouseEvent): void {
+    sel.click(
       p.crop_id,
       e,
-      platePager.items.map((x) => x.crop_id),
+      pager.items.map((x) => x.crop_id),
     );
   }
 
-  function selectAllPlates(): void {
-    plateSel.selectAll(platePager.items.map((p) => p.crop_id));
+  function selectAll(): void {
+    sel.selectAll(pager.items.map((p) => p.crop_id));
   }
 
-  async function openPlateEditor(p: PlateBrowseItem): Promise<void> {
+  async function openEditor(p: RegionBrowseItem): Promise<void> {
     try {
-      editPlateCrop = await getCrop(p.crop_id);
+      editCrop = await getCrop(p.crop_id);
     } catch (err) {
       toastStore.error(`Could not load plate: ${(err as Error).message}`);
     }
   }
 
-  async function applyPlateStatus(cropIds: string[], status: string): Promise<void> {
-    if (cropIds.length === 0 || plateBusy) return;
-    plateBusy = true;
-    plateSel.clear();
+  async function applyStatus(cropIds: string[], status: string): Promise<void> {
+    if (cropIds.length === 0 || busy) return;
+    busy = true;
+    sel.clear();
     try {
       // Callers only ever pass one of the profile's own state values
       // (PLATE_CONFIRM_STATE / PLATE_REJECT_STATE / PLATE_FALSE_POSITIVE_STATE);
-      // the cast just satisfies batchPlateStatus's still-literal wire
+      // the cast just satisfies batchRegionStatus's still-literal wire
       // type (that union is api.ts's Wave 2 concern, not this file's).
       // `region_verified` is not sent — the server derives it from
       // `region_status` and ignores the field when present.
-      const res = await batchPlateStatus(
+      const res = await batchRegionStatus(
         licensePlateSlot,
         cropIds,
         status as 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
@@ -447,7 +448,7 @@ export function createPlateGalleryController() {
       // actually updated; conflicted/invalid ids are left untouched here
       // and reported in the toast below.
       const byId = new Map(res.items.map((p) => [p.crop_id, p]));
-      platePager.items = platePager.items.map((p) => byId.get(p.crop_id) ?? p);
+      pager.items = pager.items.map((p) => byId.get(p.crop_id) ?? p);
       // M6: Z reverses this bulk status write server-side — the server's
       // own `items` list (not the request's `cropIds`) is what actually
       // got written, same "server's ids, not the request's" rule as
@@ -471,7 +472,7 @@ export function createPlateGalleryController() {
     } catch (err) {
       toastStore.error(`Bulk update failed: ${(err as Error).message}`);
     } finally {
-      plateBusy = false;
+      busy = false;
     }
   }
 
@@ -485,16 +486,16 @@ export function createPlateGalleryController() {
    * confirmed-vs-rejected status client-side — it renders what the
    * server wrote.
    */
-  function savePlateBbox(item: Crop): void {
-    if (!editPlateCrop) return;
+  function saveBox(item: Crop): void {
+    if (!editCrop) return;
     const cropId = item.id;
     toastStore.success('Plate saved');
-    editPlateCrop = null;
+    editCrop = null;
     const slotData = item.slots?.[licensePlateSlot.key];
     // Patch just this card in place rather than reloading page 1 (which
     // would wipe the list and reset scroll). The plate thumbnail is a
     // server-rendered URL, so bust its cache to pull the re-cropped box.
-    platePager.items = platePager.items.map((p) =>
+    pager.items = pager.items.map((p) =>
       p.crop_id === cropId
         ? {
             ...p,
@@ -522,7 +523,7 @@ export function createPlateGalleryController() {
   function mergeUndoneItems(crops: Crop[]): void {
     if (crops.length === 0) return;
     const byId = new Map(crops.map((c) => [c.id, c]));
-    platePager.items = platePager.items.map((p) => {
+    pager.items = pager.items.map((p) => {
       const restored = byId.get(p.crop_id);
       if (!restored) return p;
       const slotData = restored.slots?.[licensePlateSlot.key];
@@ -537,53 +538,53 @@ export function createPlateGalleryController() {
     });
   }
 
-  async function undoLastPlateAction(): Promise<void> {
+  async function undoLastAction(): Promise<void> {
     const crops = await undoStore.undoLast();
     mergeUndoneItems(crops);
   }
 
   return {
-    get platePager() {
-      return platePager;
+    get pager() {
+      return pager;
     },
-    get plateSel() {
-      return plateSel;
+    get sel() {
+      return sel;
     },
-    get editPlateCrop() {
-      return editPlateCrop;
+    get editCrop() {
+      return editCrop;
     },
-    set editPlateCrop(v: Crop | null) {
-      editPlateCrop = v;
+    set editCrop(v: Crop | null) {
+      editCrop = v;
     },
-    get plateBusy() {
-      return plateBusy;
+    get busy() {
+      return busy;
     },
-    get plateMaxRank() {
-      return plateMaxRank;
+    get maxRank() {
+      return maxRank;
     },
-    set plateMaxRank(v: number | null) {
-      plateMaxRank = v;
+    set maxRank(v: number | null) {
+      maxRank = v;
     },
-    get plateClusters() {
-      return plateClusters;
+    get clusters() {
+      return clusters;
     },
-    get selectedPlateCluster() {
-      return selectedPlateCluster;
+    get selectedCluster() {
+      return selectedCluster;
     },
-    get plateClusterBusy() {
-      return plateClusterBusy;
+    get clusterBusy() {
+      return clusterBusy;
     },
-    get plateSubTab() {
-      return plateSubTab;
+    get subTab() {
+      return subTab;
     },
-    get plateRefineMsg() {
-      return plateRefineMsg;
+    get refineMsg() {
+      return refineMsg;
     },
     get suspectedFpView() {
       return suspectedFpView;
     },
-    get viewingAllPlates() {
-      return viewingAllPlates;
+    get viewingAll() {
+      return viewingAll;
     },
     get suspectedFpThreshold() {
       return suspectedFpThreshold;
@@ -591,63 +592,63 @@ export function createPlateGalleryController() {
     set suspectedFpThreshold(v: number) {
       suspectedFpThreshold = v;
     },
-    get plateDetectorFilter() {
-      return plateDetectorFilter;
+    get detectorFilter() {
+      return detectorFilter;
     },
-    set plateDetectorFilter(v: string) {
-      plateDetectorFilter = v;
+    set detectorFilter(v: string) {
+      detectorFilter = v;
     },
-    get plateVerifiedOnly() {
-      return plateVerifiedOnly;
+    get verifiedOnly() {
+      return verifiedOnly;
     },
-    set plateVerifiedOnly(v: boolean) {
-      plateVerifiedOnly = v;
+    set verifiedOnly(v: boolean) {
+      verifiedOnly = v;
     },
-    get plateMinScore() {
-      return plateMinScore;
+    get minScore() {
+      return minScore;
     },
-    set plateMinScore(v: number) {
-      plateMinScore = v;
+    set minScore(v: number) {
+      minScore = v;
     },
-    get plateTextQuery() {
-      return plateTextQuery;
+    get textQuery() {
+      return textQuery;
     },
-    set plateTextQuery(v: string) {
-      plateTextQuery = v;
+    set textQuery(v: string) {
+      textQuery = v;
     },
-    get plateStatusFilter() {
-      return plateStatusFilter;
+    get statusFilter() {
+      return statusFilter;
     },
-    set plateStatusFilter(v: string) {
-      plateStatusFilter = v;
+    set statusFilter(v: string) {
+      statusFilter = v;
     },
-    get plateSubclusterIds() {
-      return plateSubclusterIds;
+    get subclusterIds() {
+      return subclusterIds;
     },
-    get plateSubCounts() {
-      return plateSubCounts;
+    get subCounts() {
+      return subCounts;
     },
-    get plateGroups() {
-      return plateGroups;
+    get groups() {
+      return groups;
     },
-    loadPlatesFirst,
-    loadPlatesMore,
-    loadPlateClusters,
+    loadFirst,
+    loadMore,
+    loadClusters,
     loadSuspectedFp,
     runBuildFpCentroids,
-    runClusterPlates,
-    runRefinePlateCluster,
-    openPlateCluster,
-    openAllPlates,
-    selectPlateSubTab,
-    backToPlateClusters,
-    togglePlateSelect,
-    selectAllPlates,
-    openPlateEditor,
-    applyPlateStatus,
-    savePlateBbox,
-    undoLastPlateAction,
+    runClustering,
+    runRefineCluster,
+    openCluster,
+    openAll,
+    selectSubTab,
+    backToClusters,
+    toggleSelect,
+    selectAll,
+    openEditor,
+    applyStatus,
+    saveBox,
+    undoLastAction,
   };
 }
 
-export type PlateGalleryController = ReturnType<typeof createPlateGalleryController>;
+export type SlotGalleryController = ReturnType<typeof createSlotGalleryController>;

@@ -38,7 +38,7 @@
     trainPreflight,
     trainStart,
     trainStartCampaign,
-    type PlateBrowseItem,
+    type RegionBrowseItem,
     type ServedTrainingCohort,
     type TrainingCohortMode,
   } from '$lib/api';
@@ -728,7 +728,7 @@
 
   let cohortCounts = $state<Record<string, number | null>>({});
   let selectedCohortKey = $state<string | null>(null);
-  let cohortPreview = $state<Array<PlateBrowseItem | Crop | ReviewItem>>([]);
+  let cohortPreview = $state<Array<RegionBrowseItem | Crop | ReviewItem>>([]);
   let cohortPreviewLoading = $state<boolean>(false);
   let cohortPreviewError = $state<string | null>(null);
 
@@ -752,7 +752,7 @@
   async function runCohortQuery(
     cohort: CohortSpec,
     pageSize: number,
-  ): Promise<{ total: number; items: Array<PlateBrowseItem | Crop | ReviewItem> }> {
+  ): Promise<{ total: number; items: Array<RegionBrowseItem | Crop | ReviewItem> }> {
     if (cohort.query.kind !== 'endpoint') return { total: 0, items: [] };
     const { path, params } = cohort.query;
     const classId =
@@ -869,7 +869,7 @@
   function openCohortItem(
     group: CohortGroup,
     cohort: CohortSpec,
-    item: PlateBrowseItem | Crop | ReviewItem,
+    item: RegionBrowseItem | Crop | ReviewItem,
   ): void {
     const cropId = 'crop_id' in item ? item.crop_id : item.id;
     if (cohort.reviewTarget === 'slotQueue') {
@@ -1221,7 +1221,7 @@
                   {#each cohortPreview as item ('crop_id' in item ? item.crop_id : item.id)}
                     {#if activeCohort.rowKind === 'slot'}
                       <SlotCard
-                        crop={item as PlateBrowseItem}
+                        crop={item as RegionBrowseItem}
                         onclick={(p) => openCohortItem(group, activeCohort, p)}
                         compact
                       />

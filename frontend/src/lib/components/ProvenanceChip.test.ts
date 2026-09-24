@@ -5,7 +5,7 @@
  * `regionVocabularyStore` (served by `GET {API_PREFIX}/regions/vocabulary`), the
  * color from that entry's `role` via `paletteForRole`. This mounts the
  * real component and asserts on rendered text + class list, the same
- * convention as SlotGallery.unclusteredPlates.test.ts.
+ * convention as SlotGallery.unclustered.test.ts.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';

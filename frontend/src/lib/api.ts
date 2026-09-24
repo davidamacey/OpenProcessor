@@ -606,7 +606,7 @@ export interface VizProjectionJob {
  * fit (plan §2.7/§3: "coordinates cached/batch-computed... never fit on
  * a request path"). Unlike `getVizProjection`, this is an explicit
  * user-initiated action (the operator clicked "Rebuild"), so — matching
- * the `buildPlateFpCentroids`/`clusterPlates` precedent — it lets the
+ * the `buildRegionFpCentroids`/`clusterRegions` precedent — it lets the
  * error propagate for the caller to catch + toast rather than swallowing
  * it into a fallback value.
  */
@@ -653,7 +653,7 @@ export function cancelVizProjection(
  */
 const REGION_BASE = '/regions';
 
-export interface PlateBrowseItem {
+export interface RegionBrowseItem {
   crop_id: string;
   id: string;
   image_path: string;
@@ -691,21 +691,21 @@ export interface PlateBrowseItem {
   region_thumbnail_url?: string;
   selection_reason?: string;
   /** Per-slot capability data — see `Crop.slots` in types.ts. Added by
-   *  `getPlates` via `mapCropSlots`; absent on any row that predates this
+   *  `getRegions` via `mapCropSlots`; absent on any row that predates this
    *  mapping in a stale cache. */
   slots?: Record<SlotKey, SlotData>;
 }
 
-export interface PlatesPage {
+export interface RegionsPage {
   total: number;
   page: number;
   page_size: number;
-  items: PlateBrowseItem[];
+  items: RegionBrowseItem[];
   mode?: string;
   selection_reason?: string;
 }
 
-export interface PlatesQuery {
+export interface RegionsQuery {
   page?: number;
   page_size?: number;
   class_id?: number;
@@ -733,12 +733,12 @@ export interface PlatesQuery {
 /** `browsePath` is the slot's declared browse collection
  *  (`capabilities.queue.browsePath`), so a slot never inherits another
  *  slot's route by accident. */
-export async function getPlates(
+export async function getRegions(
   browsePath: string,
-  params: PlatesQuery = {},
+  params: RegionsQuery = {},
   signal?: AbortSignal,
-): Promise<PlatesPage> {
-  const page = await apiFetch<PlatesPage>(
+): Promise<RegionsPage> {
+  const page = await apiFetch<RegionsPage>(
     `${API_PREFIX}${browsePath}${qs(params as Record<string, unknown>)}`,
     {},
     signal,
@@ -758,7 +758,7 @@ export async function getPlates(
 /** Plate-clustering background-job snapshot. The one-click pipeline result also
  *  carries the FP-rebuild + auto-assign sub-steps, and may report a re-partition
  *  that was skipped to protect a fresh manual refine (TTL). */
-export interface PlateClusterJob {
+export interface RegionClusterJob {
   running: boolean;
   started_at: string | null;
   finished_at: string | null;
@@ -777,12 +777,12 @@ export interface PlateClusterJob {
 
 /** Launch the one-click plate-clustering pipeline (background job — 50k+ plates
  *  take minutes): rebuild FP sub-centroids → auto-pull tight FP matches → re-partition
- *  the good plates. Returns immediately; poll getPlateClusterStatus for completion. */
-export function clusterPlates(
+ *  the good plates. Returns immediately; poll getRegionClusterStatus for completion. */
+export function clusterRegions(
   maxRank?: number,
   opts: { forceRepartition?: boolean; autoFpThreshold?: number } = {},
   signal?: AbortSignal,
-): Promise<PlateClusterJob> {
+): Promise<RegionClusterJob> {
   return apiFetch(
     `${API_PREFIX}${REGION_BASE}/cluster${qs({
       max_rank: maxRank,
@@ -795,12 +795,12 @@ export function clusterPlates(
 }
 
 /** Poll the background plate-clustering job. */
-export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateClusterJob> {
+export function getRegionClusterStatus(signal?: AbortSignal): Promise<RegionClusterJob> {
   return apiFetch(`${API_PREFIX}${REGION_BASE}/cluster/status`, {}, signal);
 }
 
 /** Per-bucket AHC refine over plate_pe_embedding; writes region_cluster_subid. */
-export function refinePlateCluster(
+export function refineRegionCluster(
   clusterId: number,
   signal?: AbortSignal,
 ): Promise<{
@@ -817,7 +817,7 @@ export function refinePlateCluster(
 }
 
 /** Plate cluster cards (mirrors getClusters' Cluster shape). */
-export function getPlateClusters(
+export function getRegionClusters(
   opts: { maxClusters?: number; perCluster?: number; maxRank?: number } = {},
   signal?: AbortSignal,
 ): Promise<{ clusters: Cluster[]; count: number }> {
@@ -833,7 +833,7 @@ export function getPlateClusters(
 }
 
 /** Background FP-centroid build-job snapshot + persisted centroid metadata. */
-export interface PlateFpCentroidJob {
+export interface RegionFpCentroidJob {
   running: boolean;
   started_at: string | null;
   finished_at: string | null;
@@ -847,7 +847,9 @@ export interface PlateFpCentroidJob {
 }
 
 /** (Re)build the FP centroid store — sub-types the FP bucket (background job). */
-export function buildPlateFpCentroids(signal?: AbortSignal): Promise<PlateFpCentroidJob> {
+export function buildRegionFpCentroids(
+  signal?: AbortSignal,
+): Promise<RegionFpCentroidJob> {
   return apiFetch(
     `${API_PREFIX}${REGION_BASE}/fp_centroids/build`,
     { method: 'POST' },
@@ -856,13 +858,13 @@ export function buildPlateFpCentroids(signal?: AbortSignal): Promise<PlateFpCent
 }
 
 /** Poll the FP-centroid build job + read persisted centroid metadata. */
-export function getPlateFpCentroidStatus(
+export function getRegionFpCentroidStatus(
   signal?: AbortSignal,
-): Promise<PlateFpCentroidJob> {
+): Promise<RegionFpCentroidJob> {
   return apiFetch(`${API_PREFIX}${REGION_BASE}/fp_centroids/status`, {}, signal);
 }
 
-export interface SuspectedFpItem extends PlateBrowseItem {
+export interface SuspectedFpItem extends RegionBrowseItem {
   suspected_fp_distance: number;
   nearest_fp_subid: string | null;
 }
@@ -908,8 +910,8 @@ export function getTrainingCandidates(
   mode: TrainingCohortMode,
   params: { page?: number; page_size?: number; class_id?: number } = {},
   signal?: AbortSignal,
-): Promise<PlatesPage> {
-  return apiFetch<PlatesPage>(
+): Promise<RegionsPage> {
+  return apiFetch<RegionsPage>(
     `${API_PREFIX}${REGION_BASE}/training_candidates${qs({ mode, ...params })}`,
     {},
     signal,
@@ -2328,7 +2330,7 @@ export async function patchSlotMeta(
  * Bulk-set region_status over many crops. Backend: `POST {API_PREFIX}/regions/batch_status`
  *   (renamed from `{API_PREFIX}/plates/batch_status`, Wave 2 C14).
  * The cluster-view triage op: select outlier plates → mark all false_positive,
- * or bulk-confirm good plates (status='detected' + plateVerified=true).
+ * or bulk-confirm good plates (status='detected' + verified=true).
  *
  * Reads its path from `spec.endpoints.batchStatus` (Wave 2 C13,
  * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.2 trap 2)
@@ -2342,17 +2344,17 @@ export interface BatchStatusInvalidEntry {
   detail: string;
 }
 
-export async function batchPlateStatus(
+export async function batchRegionStatus(
   spec: SlotSpec,
   cropIds: string[],
-  plateStatus: 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
-  opts: { plateVerified?: boolean; labelSource?: string } = {},
+  status: 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
+  opts: { verified?: boolean; labelSource?: string } = {},
   signal?: AbortSignal,
 ): Promise<{
   updated: number;
   conflicts: { crop_id: string; current_source: string | null }[];
   invalid: BatchStatusInvalidEntry[];
-  items: PlateBrowseItem[];
+  items: RegionBrowseItem[];
 }> {
   const path = spec.endpoints.batchStatus?.() ?? `${REGION_BASE}/batch_status`;
   const lc = spec.capabilities.lifecycle;
@@ -2361,15 +2363,15 @@ export async function batchPlateStatus(
   }
   const body: Record<string, unknown> = {
     crop_ids: cropIds,
-    [lc.statusField]: plateStatus,
+    [lc.statusField]: status,
   };
   // p5 (2026-09-24 interactive pass): used to always send
-  // `[verifiedField]: opts.plateVerified ?? null`, so a bulk call that
-  // never passed `plateVerified` (e.g. reject/mark-false-positive) sent
+  // `[verifiedField]: opts.verified ?? null`, so a bulk call that
+  // never passed `verified` (e.g. reject/mark-false-positive) sent
   // an explicit `null` the server ignores. Omit the key entirely unless
   // the caller actually asked to set it.
-  if (lc.verifiedField && opts.plateVerified !== undefined) {
-    body[lc.verifiedField] = opts.plateVerified;
+  if (lc.verifiedField && opts.verified !== undefined) {
+    body[lc.verifiedField] = opts.verified;
   }
   if (lc.labelSourceField) body[lc.labelSourceField] = opts.labelSource ?? 'human';
   return apiFetch(
