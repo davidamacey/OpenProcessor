@@ -300,7 +300,14 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    with its `.txt` in one call, checks the dataset's class names against
    the registry first, and writes a disagreement report (where the
    detector missed a label, fired on a background image, or chose a
-   different class). Seed the registry from the detector itself with
+   different class). If the dataset's labels are *region* ground truth
+   rather than item classes (whole frames labeled with, e.g., a single
+   `license_plate` class plus background frames), add `--images-only`
+   so the labels never touch the item registry, let the region cascade
+   run, then score it with `scripts/curation/eval_regions_vs_gt.py
+   --dataset <data.yaml> --state-dir <same state dir> --wait-pending 1800`
+   (recall/precision/F1/mean IoU, background false-positive gate, and a
+   worst-first list of misses). Seed the registry from the detector itself with
    `scripts/curation/seed_class_registry.py --model <detector.onnx>` so
    class ids cannot drift from the model's class order.
 6. Optionally bring up the async workers (`--profile curation`) so
