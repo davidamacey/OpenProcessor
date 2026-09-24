@@ -17,6 +17,7 @@
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { createPager } from '$lib/pager.svelte';
+  import { idsNeedingRepresentatives } from '$lib/clusters/displayOrderRepresentatives';
   import { createPlateGalleryController } from './plateGalleryController.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import {
@@ -467,61 +468,22 @@
       max_rank: maxRank,
       min_blur_ratio: minBlurRatio,
       // D-4: the card list itself always comes back in full in one call
-      // (the endpoint ignores page/page_size for that) — only
-      // representatives are windowed, and only the first screenful is
-      // worth asking for up front. loadMoreRepresentatives() backfills
-      // later windows as the operator scrolls.
+      // (the endpoint ignores page/page_size for that). DQ-M4
+      // (docs/design/data-quality-pass-2026-09-24.md): representatives are
+      // no longer requested here at all — the endpoint's `offset`/`limit`
+      // window only ever covers its own size-desc server order, which
+      // doesn't line up with the client-side sort (`sortClusters()`)
+      // actually shown, so representatives are fetched separately, in
+      // DISPLAY order, by loadMoreRepresentatives() below.
       representatives_offset: 0,
-      representatives_limit: pageSize,
+      representatives_limit: 0,
     };
   }
 
-  // D-4 (docs/design/curation_query_performance_audit.md): representatives
-  // window already backfilled past the initial clusterQuery() call above.
-  // Reset alongside clusterPager on every loadFirst() (a fresh filter
-  // means a fresh size-desc card order, so the old window no longer lines
-  // up with anything).
-  let repsOffset = $state(pageSize);
-  let repsLoading = $state(false);
-  const repsHasMore = $derived(repsOffset < clusterPager.total);
-
-  async function loadMoreRepresentatives(): Promise<void> {
-    if (repsLoading || clusterPager.loading || !repsHasMore) return;
-    repsLoading = true;
-    try {
-      const res = await getClusters({
-        ...clusterQuery(1),
-        representatives_offset: repsOffset,
-        representatives_limit: pageSize,
-      });
-      // Merge representatives into the already-loaded cards by id — the
-      // card list itself doesn't grow (it was all returned by the first
-      // call), only which cards carry thumbnails does. Mutating in place
-      // (not replacing clusterPager.items) keeps every other bit of
-      // component state (selection, drag, scroll position) untouched.
-      const byId = new Map(res.items.map((c) => [c.id, c]));
-      for (const item of clusterPager.items) {
-        const upd = byId.get(item.id);
-        if (upd && upd.representative_crop_ids.length > 0) {
-          item.representative_crop_ids = upd.representative_crop_ids;
-        }
-      }
-      repsOffset = res.representatives_offset + res.representatives_limit;
-    } catch (e) {
-      toastStore.warn(`Could not load more cluster thumbnails: ${(e as Error).message}`);
-      // Advance anyway so a persistently-failing window doesn't retry-loop
-      // forever on every scroll tick.
-      repsOffset += pageSize;
-    } finally {
-      repsLoading = false;
-    }
-  }
-
-  async function loadFirst(): Promise<void> {
-    repsOffset = pageSize;
-    await clusterPager.loadFirst();
-    if (clusterPager.error == null) await loadLicensePlateCard();
-  }
+  // DQ-M4's loadFirst()/loadMoreRepresentatives() are declared below
+  // gridItems (further down this file) since they read it — kept as a
+  // forward function reference here would need `gridItems` in the
+  // temporal dead zone otherwise (`const`, not hoisted like `function`).
 
   // Build the synthetic license_plate gallery card. Plates live as
   // sub-bboxes on vehicle crops (not FAISS docs) so the cluster grid
@@ -681,6 +643,77 @@
     }
     return sorted;
   });
+
+  // DQ-M4 (docs/design/data-quality-pass-2026-09-24.md): representatives
+  // fetched per-card, in the operator's actual DISPLAY order (gridItems,
+  // just above), not the backend's fixed size-desc order. The `/clusters`
+  // endpoint has no batch-by-id representatives param (checked against
+  // contracts/openprocessor/openapi/curation.json) — only a single
+  // `cluster_id` filter — so each missing card in the window is fetched
+  // individually via that filter, in parallel. See
+  // src/lib/clusters/displayOrderRepresentatives.ts for the full
+  // rationale and the pure id-selection logic.
+  //
+  // `dispOffset` tracks how far into `gridItems` a fetch attempt has been
+  // made; reset to 0 whenever the display order can change (loadFirst, or
+  // the sort/filter effect below) so a resort re-covers its new first
+  // window instead of only ever advancing forward.
+  let dispOffset = $state(0);
+  let repsLoading = $state(false);
+  const repsHasMore = $derived(dispOffset < gridItems.length);
+
+  async function loadMoreRepresentatives(): Promise<void> {
+    if (repsLoading || !repsHasMore) return;
+    repsLoading = true;
+    const windowStart = dispOffset;
+    try {
+      const ids = idsNeedingRepresentatives(gridItems, windowStart, pageSize);
+      if (ids.length > 0) {
+        const results = await Promise.allSettled(
+          ids.map((id) => getClusters({ cluster_id: id, representatives_limit: 1 })),
+        );
+        const byId = new Map<number, Cluster>();
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const c = r.value.items[0];
+            if (c) byId.set(c.id, c);
+          }
+        }
+        // Merge into the already-loaded cards by id. Mutating in place
+        // (not replacing clusterPager.items) keeps every other bit of
+        // component state (selection, drag, scroll position) untouched.
+        for (const item of clusterPager.items) {
+          const upd = byId.get(item.id);
+          if (upd && upd.representative_crop_ids.length > 0) {
+            item.representative_crop_ids = upd.representative_crop_ids;
+          }
+        }
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          toastStore.warn(
+            `Could not load ${failed} cluster thumbnail${failed === 1 ? '' : 's'}.`,
+          );
+        }
+      }
+    } finally {
+      dispOffset = windowStart + pageSize;
+      repsLoading = false;
+    }
+  }
+
+  async function loadFirst(): Promise<void> {
+    dispOffset = 0;
+    await clusterPager.loadFirst();
+    if (clusterPager.error == null) {
+      await loadLicensePlateCard();
+      // DQ-M4: fetch the first screenful's representatives in DISPLAY
+      // order right away — this is the fix for cards rendering blank on
+      // first paint. loadMoreRepresentatives() below (sentinel-triggered)
+      // continues the same windowing as the operator scrolls.
+      await loadMoreRepresentatives();
+    }
+  }
+
   const unlabeledCount = $derived(
     clusterPager.items.filter((c) => c.cluster_kind !== 'class').length,
   );
@@ -718,6 +751,21 @@
     void maxRank;
     void minBlurRatio;
     if (!isLicensePlateFilter) void loadFirst();
+  });
+
+  // DQ-M4: sort/unlabeledOnly reshuffle DISPLAY order (gridItems) without
+  // a refetch of the card list itself (see the comment above — the
+  // endpoint isn't sortable, sortClusters() is purely client-side). That
+  // reshuffle can put a card that was never in an earlier display window
+  // first, so the representatives window has to restart from 0 and
+  // re-cover the new first screenful — cheap, since
+  // idsNeedingRepresentatives() skips every card that already has
+  // representatives from a prior window.
+  $effect(() => {
+    void sort;
+    void unlabeledOnly;
+    dispOffset = 0;
+    if (!isLicensePlateFilter) void loadMoreRepresentatives();
   });
 
   // Re-load plates whenever a filter, the top-N rank gate, or the selected
@@ -1220,18 +1268,34 @@
     {/if}
   </div>
 
-  <!-- Status bar (no scroll sentinel here — see above) -->
+  <!-- Status bar (no scroll sentinel here — see above).
+       DQ-p2 (docs/design/data-quality-pass-2026-09-24.md): this always
+       read off clusterPager (the cluster-grid pager) — "102 / 102 all
+       loaded" under a 60 / 1,000 plate grid, because the plate-gallery
+       view (isLicensePlateFilter) renders plateGallery.platePager.items,
+       a completely different pager, but this footer never switched to
+       match. -->
   <div
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
-    <span class="font-mono text-xs text-zinc-500">
-      {gridItems.length} / {clusterPager.total +
-        (classFilter == null && lpCard != null ? 1 : 0)}
-    </span>
-    <span class="font-mono text-xs text-zinc-400">
-      {#if clusterPager.loadingMore}loading more…{:else if clusterPager.hasMore}scroll for
-        more{:else}all loaded{/if}
-    </span>
+    {#if isLicensePlateFilter}
+      <span class="font-mono text-xs text-zinc-500">
+        {plateGallery.platePager.items.length} / {plateGallery.platePager.total}
+      </span>
+      <span class="font-mono text-xs text-zinc-400">
+        {#if plateGallery.platePager.loadingMore}loading more…{:else if plateGallery.platePager.hasMore}scroll
+          for more{:else}all loaded{/if}
+      </span>
+    {:else}
+      <span class="font-mono text-xs text-zinc-500">
+        {gridItems.length} / {clusterPager.total +
+          (classFilter == null && lpCard != null ? 1 : 0)}
+      </span>
+      <span class="font-mono text-xs text-zinc-400">
+        {#if clusterPager.loadingMore}loading more…{:else if clusterPager.hasMore}scroll
+          for more{:else}all loaded{/if}
+      </span>
+    {/if}
   </div>
 </div>
 

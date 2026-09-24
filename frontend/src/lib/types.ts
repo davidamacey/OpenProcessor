@@ -693,6 +693,15 @@ export interface CropContextResponse {
 
 export interface ClusterFilter {
   class_id?: number | null;
+  /** DQ-M4 (docs/design/data-quality-pass-2026-09-24.md): restrict to
+   *  exactly one cluster, so its representatives can be fetched
+   *  individually in the frontend's own (client-sorted) display order —
+   *  the server has no `cluster_ids`/batch-by-id param, only a
+   *  size-desc-ordered `offset`/`limit` window (see
+   *  representatives_offset/_limit below), which is why representatives
+   *  used to fill in server order regardless of what sort the operator
+   *  picked. */
+  cluster_id?: number | null;
   min_size?: number;
   sort?: 'purity_asc' | 'purity_desc' | 'size_desc' | 'size_asc' | 'dominant_class';
   page?: number;

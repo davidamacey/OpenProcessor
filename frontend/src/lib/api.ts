@@ -1266,6 +1266,10 @@ export async function getClusters(
     `${API_PREFIX}/clusters${qs({
       per_cluster: 4,
       class_id: filter.class_id ?? undefined,
+      // DQ-M4: lets the caller fetch one card's representatives directly
+      // by id, independent of the size-desc `offset`/`limit` window —
+      // see ClusterFilter.cluster_id's doc comment.
+      cluster_id: filter.cluster_id ?? undefined,
       // Pull enough buckets that the 512 IVF candidate clusters (+ class
       // clusters) all come back in one call — the endpoint returns them
       // ordered by size, not paginated, so a low cap would silently drop
