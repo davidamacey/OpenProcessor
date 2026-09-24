@@ -1034,3 +1034,54 @@ components` and introducing the three-tier scale above).
   matching class at all, so the lookup silently returned nothing. Now
   uses a real `cluster_id` filter (new backend query param) that works
   regardless of cluster kind.
+
+### Changed
+
+- Class adequacy, thresholds and hotkeys now come entirely from the
+  backend (`docs/design/logic-moves-adoption-plan-2026-09-24.md` W4,
+  OpenProcessor `main` @ `d037be8`):
+  - `adequacy.ts` renders whichever tier (`block`/`warn`/`ok`) the
+    server puts on each class (`GET /classes`, `GET /stats/classes`),
+    instead of recomputing it from `validated_count` against hardcoded
+    500/100 thresholds. The old `ADEQUACY_OK`/`ADEQUACY_LOW` constants
+    are gone.
+  - `/export`'s dataset table reads the server's `aug_target`/`aug_gap`
+    per class and the server's per-class `deficient` flag on
+    `GET /test_holdout/stats` (falling back to comparing against the
+    served `min_test_per_class` only when a bucket omits the flag) —
+    the client-side `clamp(validated, 500, 3000)` augmentation target
+    and the hardcoded "< 5 test crops" minimum are gone. The row-building
+    logic moved to a pure `src/lib/export/exportDatasetRows.ts` module.
+  - `classHotkey.ts`'s `reservedHotkeyLetters()` now unions
+    `classesStore.reservedHotkeys` (the server's own `reserved_hotkeys`
+    field) with any registered slot's own keymap letters, instead of a
+    hardcoded `RESERVED_HOTKEY_LETTERS` constant unioned with the same
+    slot letters. Verified live: the server's set (`/abdefgmnuxz`)
+    already matches what the old constant + union produced.
+    `setClassHotkey` now shows the server's 400/409/422 detail text
+    verbatim on a rejected bind.
+  - `/classes` and `AddClassModal` no longer validate the class-name
+    slug pattern client-side — `POST`/`PUT /classes` 422s with the
+    `^[a-z0-9_]+$` pattern in its detail, which now renders inline.
+  - `errorDetail()` (`api.ts`) now also extracts the `msg` field from a
+    FastAPI/Pydantic validation-error array (`{detail: [{msg, ...}]}`),
+    not just a plain string `detail` — this is what makes the class-name
+    422 above legible instead of falling through to "API 422 ...".
+  - `/classes` shows a warning banner listing any class whose bound
+    hotkey has since become reserved. Live on this deployment: `bmw` is
+    bound to `b`, which the backend now reserves for the `license_plate`
+    slot's keymap — the binding is kept (matches the backend), not
+    auto-cleared.
+  - The merge dialog on `/classes` calls
+    `POST /classes/merge?dry_run=true` (new `previewClassMerge()`)
+    whenever the source/target selection changes, and shows
+    `would_relabel`/`would_unvalidate`/`holdout_blocking` before the
+    real merge. Confirm is disabled when the dry run reports `blocked`.
+  - `GET /classes` now returns `{classes, thresholds, reserved_hotkeys}`;
+    `getClasses()`'s return type changed from `RegistryClass[]` to
+    `ClassesResponse`, and `classesStore` gained `thresholds` and
+    `reservedHotkeys` state alongside `classes`. The only caller
+    (`classesStore.refresh()`) was updated; no other frontend code
+    called `getClasses()` directly.
+  - `RegistryClass.added_at` and the `/classes` "Added" column were
+    already wired end to end — verified live, no change needed.

@@ -43,6 +43,30 @@ export interface RegistryClass {
   color?: string | null;
   /** True when the class has been merged into another and should be hidden by default. */
   deprecated?: boolean;
+  /** Server-computed adequacy tier from `GET {API_PREFIX}/classes`
+   *  (`block` | `warn` | `ok`, against the served `thresholds`). Never
+   *  recomputed client-side from `validated_count`. */
+  adequacy?: string;
+}
+
+/** `thresholds` served on `GET {API_PREFIX}/classes`, `GET {API_PREFIX}/stats/classes`
+ *  and `{API_PREFIX}/train/preflight` — the single source of truth for the
+ *  adequacy tiers, augmentation target range and test-holdout minimum. */
+export interface ClassThresholds {
+  block_below: number;
+  warn_below: number;
+  min_test_per_class: number;
+  aug_target_min: number;
+  aug_target_max: number;
+}
+
+/** `GET {API_PREFIX}/classes` response envelope. */
+export interface ClassesResponse {
+  classes: RegistryClass[];
+  thresholds: ClassThresholds;
+  /** Every single-character combo reserved for a labeling action —
+   *  core keys plus every registered queue-capable slot's keymap. */
+  reserved_hotkeys: string[];
 }
 
 /** Payload for `POST {API_PREFIX}/classes`. */
@@ -64,6 +88,18 @@ export interface RegistryClassUpdate {
 export interface RegistryClassMerge {
   source_id: number;
   target_id: number;
+}
+
+/** `POST {API_PREFIX}/classes/merge?dry_run=true` response — reports
+ *  counts and writes nothing. A real merge 409s when `holdout_blocking > 0`. */
+export interface ClassMergeDryRun {
+  dry_run: true;
+  source_id: number;
+  target_id: number;
+  would_relabel: number;
+  would_unvalidate: number;
+  holdout_blocking: number;
+  blocked: boolean;
 }
 
 /** Server response from `GET {API_PREFIX}/export/status`. */
@@ -167,7 +203,11 @@ export interface TestHoldoutFreezeResult {
 /** Server response from `GET {API_PREFIX}/test_holdout/stats`. */
 export interface TestHoldoutStats {
   total: number;
-  by_class: Array<{ key: number; doc_count: number }>;
+  by_class: Array<{ key: number; doc_count: number; deficient?: boolean }>;
+  /** The same class-adequacy threshold served on `/classes`/`/stats/classes`
+   *  — the frontend's "below 5 test crops" copy reads this, never a
+   *  hardcoded 5. */
+  min_test_per_class?: number;
 }
 
 export interface BBoxNorm {
@@ -316,7 +356,17 @@ export interface StatsSummary {
     class_name: string;
     count: number;
     validated_count: number;
+    /** Server-computed adequacy tier (`block`/`warn`/`ok`) — see
+     *  `RegistryClass.adequacy`. */
+    adequacy?: string;
+    /** Server-computed YOLO augmentation target for this class. */
+    aug_target?: number;
+    /** `aug_target - validated_count`, served directly. */
+    aug_gap?: number;
   }>;
+  /** Served alongside `per_class` on `/stats/classes` — same shape as
+   *  `ClassesResponse.thresholds`. */
+  thresholds?: ClassThresholds;
 }
 
 /** `GET {API_PREFIX}/health`. `degraded` means a non-critical

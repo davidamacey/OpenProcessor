@@ -5,7 +5,7 @@
  * verbatim copies of this validation.
  */
 
-import { renameClass } from '$lib/api';
+import { ApiError, renameClass } from '$lib/api';
 import { isPickerHiddenClass } from '$lib/classVisibility';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotRegistry } from '$lib/annotations/registry';
@@ -14,49 +14,28 @@ import { toastStore } from '$stores/toast.svelte';
 import type { RegistryClass } from '$lib/types';
 
 /**
- * Single-char keys the labeling pages bind to actions.
+ * Single-char keys reserved for a labeling action — never bindable to a
+ * class. Two window keydown listeners run for every keypress — the
+ * keyboardStore dispatcher and the layout's class-letter listener — and
+ * preventDefault in one does not stop the other, so a class bound to a
+ * reserved letter would fire both actions on the same keypress.
  *
- * Two window keydown listeners run for every keypress — the keyboardStore
- * dispatcher and the layout's class-letter listener — and preventDefault in
- * one does not stop the other. So a class bound to 'd' would discard the
- * selection AND label it in the same keypress. (b / e / f are also bound on
- * the review plates tab, but class letters are inert there: the review page
- * registers no drop handler on that tab.)
- *
- * '/' is reserved too (Phase 7, audit remediation plan P1-4): it opens the
- * `/review` fuzzy-search class picker via keyboardStore. Same collision
- * shape as the letters above — a class bound to '/' would both open the
- * picker and assign itself on the same keypress.
- */
-export const RESERVED_HOTKEY_LETTERS = new Set([
-  'g',
-  'n',
-  'd',
-  'z',
-  'x',
-  'u',
-  'a',
-  'm',
-  '/',
-]);
-
-/**
- * `RESERVED_HOTKEY_LETTERS` above ∪ every single-character combo any
- * queue-capable slot's `QueueCapability.keymap` declares — closes Finding
- * C.2 structurally (docs/genericization-plan-2026-09-13.md §9.5/P2.8c):
- * a class can no longer be bound to a letter a slot's review-tab keymap
- * owns, without anyone having to remember to extend a hand-maintained
- * list when a new slot ships. For `license_plate` today this adds
- * `d`/`f`/`e`/`b` on top of the base set (`d` was already reserved).
- * Class letters are already inert while a slot tab is active
- * (`isSlotSuppressedTab`) so this is defense in depth, not a fix for a
- * live collision — but it is what makes a *second* capable slot safe
- * without a human re-auditing every letter it uses.
+ * `classesStore.reservedHotkeys` is `GET {API_PREFIX}/classes`'s own
+ * `reserved_hotkeys` field — the base action keys (`g n d z x u a m /`)
+ * union every *server-known* slot's keymap letters. It is never
+ * recomputed client-side; this function only adds one thing on top: any
+ * registered slot's keymap letters the server doesn't know about yet — a
+ * tier-2 deployment profile registered purely client-side (no backend
+ * checkout) has no way to tell the backend about its own keymap. That
+ * union is redundant against the built-in `license_plate` slot today
+ * (the server's `/abdefgmnuxz` already includes its `d`/`f`/`e`/`b`) but
+ * is what keeps a *second*, backend-unaware slot safe without a human
+ * re-auditing every class hotkey.
  */
 export function reservedHotkeyLetters(
   registry: SlotRegistry = slotRegistry,
 ): Set<string> {
-  const out = new Set(RESERVED_HOTKEY_LETTERS);
+  const out = new Set(classesStore.reservedHotkeys);
   for (const spec of registry.queues) {
     for (const combos of Object.values(spec.capabilities.queue?.keymap ?? {})) {
       for (const combo of combos ?? []) {
@@ -95,7 +74,7 @@ export async function setClassHotkey(cls: RegistryClass, raw: string): Promise<v
       return;
     }
     // Reject duplicates against other classes' already-bound letters. The
-    // backend enforces this too (PUT {API_PREFIX}/classes/{id} returns 400), but
+    // backend enforces this too (PUT {API_PREFIX}/classes/{id} returns 409), but
     // catching it client-side gives a clearer message with no round-trip.
     const owner = classesStore.classes.find(
       (c) =>
@@ -116,6 +95,11 @@ export async function setClassHotkey(cls: RegistryClass, raw: string): Promise<v
     );
     await classesStore.clearAndRefetch();
   } catch (e) {
-    toastStore.error(`Hotkey set failed: ${(e as Error).message}`);
+    // Show the server's 400/409/422 detail verbatim when it sent one — the
+    // client-side checks above cover the common cases, but a race (another
+    // operator bound the same letter a moment ago) or a rule the client
+    // doesn't know about yet still needs the server's own words.
+    const detail = e instanceof ApiError ? (e.detail ?? e.message) : (e as Error).message;
+    toastStore.error(`Hotkey set failed: ${detail}`);
   }
 }

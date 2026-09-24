@@ -12,6 +12,7 @@
     getTestHoldoutStats,
   } from '$lib/api';
   import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
+  import { buildExportRows, type ExportRow } from '$lib/export/exportDatasetRows';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -74,42 +75,8 @@
 
   // ---- dataset rows ------------------------------------------------------
 
-  // YOLO export targets per class. Plan Section L13: aug_target =
-  // clamp(validated, 500, 3000).
-  function augTarget(validated: number): number {
-    return Math.min(3000, Math.max(500, validated));
-  }
-
-  interface Row {
-    class_id: number;
-    class_name: string;
-    total: number;
-    validated: number;
-    aug_target: number;
-    gap: number;
-    test_count: number;
-  }
-
-  const rows = $derived.by((): Row[] => {
-    const stat = stats;
-    if (!stat?.per_class) return [];
-    const testMap = new Map<number, number>();
-    for (const b of holdout?.by_class ?? []) {
-      testMap.set(b.key, b.doc_count);
-    }
-    const list: Row[] = stat.per_class.map((c) => {
-      const validated = c.validated_count ?? 0;
-      const target = augTarget(validated);
-      return {
-        class_id: c.class_id,
-        class_name: c.class_name,
-        total: c.count ?? 0,
-        validated,
-        aug_target: target,
-        gap: target - validated,
-        test_count: testMap.get(c.class_id) ?? 0,
-      };
-    });
+  const rows = $derived.by((): ExportRow[] => {
+    const list = buildExportRows(stats?.per_class, holdout);
     list.sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       const av = a[sortKey];
@@ -135,9 +102,10 @@
     return 'bg-red-500/20 text-red-200 border-red-500/40';
   }
 
-  function testBadge(count: number): string {
-    if (count >= 5) return 'bg-zinc-800 text-zinc-300 border-zinc-700';
-    return 'bg-red-500/20 text-red-200 border-red-500/40';
+  function testBadge(deficient: boolean): string {
+    return deficient
+      ? 'bg-red-500/20 text-red-200 border-red-500/40'
+      : 'bg-zinc-800 text-zinc-300 border-zinc-700';
   }
 
   // ---- export ------------------------------------------------------------
@@ -199,7 +167,10 @@
 
   const totalTestCrops = $derived(holdout?.total ?? 0);
   const testFrozen = $derived(totalTestCrops > 0);
-  const testDeficient = $derived(rows.filter((r) => r.test_count < 5).length);
+  // Server-flagged deficient classes (`{API_PREFIX}/test_holdout/stats`'s
+  // per-bucket `deficient`, falling back to the served `min_test_per_class`
+  // when a bucket omits the flag) — never a hardcoded "< 5".
+  const deficientClassCount = $derived(rows.filter((r) => r.testDeficient).length);
 
   function openFreeze(): void {
     freezePercent = 10;
@@ -274,7 +245,8 @@
     <header class="mb-2 flex flex-wrap items-center gap-3">
       <h2 class="text-sm font-semibold text-zinc-300">Test holdout</h2>
       <span class="text-xs text-zinc-500">
-        red badge if &lt;5 test crops in any class
+        red badge on a class the server flags deficient (below {holdout?.min_test_per_class ??
+          '…'} test crops)
       </span>
       <span class="grow"></span>
       {#if !testFrozen}
@@ -295,11 +267,12 @@
           {totalTestCrops.toLocaleString()} test crops across
           {(holdout?.by_class?.length ?? 0).toString()} classes.
         </span>
-        {#if testDeficient > 0}
+        {#if deficientClassCount > 0}
           <span
             class="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-red-200"
           >
-            {testDeficient} class{testDeficient === 1 ? '' : 'es'} below 5 test crops
+            {deficientClassCount} class{deficientClassCount === 1 ? '' : 'es'} below {holdout?.min_test_per_class ??
+              '…'} test crops
           </span>
         {/if}
       </div>
@@ -383,19 +356,23 @@
                 {row.aug_target.toLocaleString()}
               </td>
               <td class="px-3 py-1.5 text-right">
-                <span
-                  class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
-                    row.gap,
-                  )}"
-                  title={row.gap <= 0 ? 'on target' : `${row.gap} more crops needed`}
-                >
-                  {row.gap > 0 ? '+' : ''}{row.gap.toLocaleString()}
-                </span>
+                {#if row.gap == null}
+                  <span class="font-mono text-xs text-zinc-500">—</span>
+                {:else}
+                  <span
+                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+                      row.gap,
+                    )}"
+                    title={row.gap <= 0 ? 'on target' : `${row.gap} more crops needed`}
+                  >
+                    {row.gap > 0 ? '+' : ''}{row.gap.toLocaleString()}
+                  </span>
+                {/if}
               </td>
               <td class="px-3 py-1.5 text-right">
                 <span
                   class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
-                    row.test_count,
+                    row.testDeficient,
                   )}"
                 >
                   {row.test_count}

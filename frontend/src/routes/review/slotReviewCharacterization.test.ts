@@ -69,22 +69,26 @@ describe('T4: Plates-tab keymap + reserved-letters invariant (Finding C.2)', () 
   });
 
   it(
-    'RESERVED_HOTKEY_LETTERS (the base constant) still does NOT include f/e/b — ' +
-      'reservedHotkeyLetters() is the derived superset that closes Finding C.2 (P2.8c)',
+    'reservedHotkeyLetters() includes f/e/b/d from the registered license_plate ' +
+      'slot even with no served reserved_hotkeys (W4, 2026-09-24) — the registry ' +
+      'union is what closes Finding C.2, independent of the server response',
     async () => {
-      const { RESERVED_HOTKEY_LETTERS, reservedHotkeyLetters } =
-        await import('../../lib/classHotkey');
-      for (const letter of ['f', 'e', 'b']) {
-        expect(RESERVED_HOTKEY_LETTERS.has(letter)).toBe(false);
-      }
-      // The base constant deliberately stays narrow — action keys that
-      // are never bound to a keyboardStore combo don't belong in it.
-      // reservedHotkeyLetters(), reading every registered queue-capable
-      // slot's QueueCapability.keymap, is what actually prevents a new
-      // class hotkey from colliding with a slot's letters.
-      const derived = reservedHotkeyLetters();
-      for (const letter of ['f', 'e', 'b', 'd']) {
-        expect(derived.has(letter)).toBe(true);
+      const { reservedHotkeyLetters } = await import('../../lib/classHotkey');
+      const { classesStore } = await import('../../lib/stores/classes.svelte');
+      // RESERVED_HOTKEY_LETTERS (the hand-maintained base constant) is gone —
+      // GET {API_PREFIX}/classes's own `reserved_hotkeys` is the base now
+      // (classesStore.reservedHotkeys). Simulate the pre-fetch/offline state
+      // (empty) to prove the registry union alone still protects a class
+      // hotkey from colliding with the license_plate slot's own keymap.
+      const prev = classesStore.reservedHotkeys;
+      classesStore.reservedHotkeys = [];
+      try {
+        const derived = reservedHotkeyLetters();
+        for (const letter of ['f', 'e', 'b', 'd']) {
+          expect(derived.has(letter)).toBe(true);
+        }
+      } finally {
+        classesStore.reservedHotkeys = prev;
       }
     },
   );

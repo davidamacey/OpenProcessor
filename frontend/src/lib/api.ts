@@ -23,6 +23,9 @@ import type { DatasetExportSpec } from './annotations/datasetExport';
 import type {
   BulkLabelConflict,
   BulkLabelResult,
+  ClassesResponse,
+  ClassMergeDryRun,
+  ClassThresholds,
   ClusterFilter,
   CropFilter,
   RegistryClass,
@@ -125,9 +128,25 @@ function errorDetail(body: unknown): string | null {
   } else if (body && typeof body === 'object') {
     const rec = body as Record<string, unknown>;
     raw = rec.detail ?? rec.message ?? null;
+    // Pydantic/FastAPI validation errors (`{detail: [{loc, msg, ...}, ...]}`,
+    // e.g. the 422 for a class name that doesn't match `^[a-z0-9_]+$`) —
+    // join every entry's `msg` so the server's validation text reaches the
+    // toast instead of falling through to a generic "API 422" message.
+    if (Array.isArray(raw)) {
+      const msgs = raw
+        .map((entry) =>
+          entry &&
+          typeof entry === 'object' &&
+          typeof (entry as { msg?: unknown }).msg === 'string'
+            ? (entry as { msg: string }).msg
+            : null,
+        )
+        .filter((m): m is string => !!m);
+      raw = msgs.length ? msgs.join('; ') : null;
+    }
     // Structured FastAPI details (`{detail: {error, ...}}`) carry their
     // human-readable text under `error`.
-    if (raw && typeof raw === 'object') {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
       raw = (raw as Record<string, unknown>).error ?? null;
     }
   }
@@ -972,7 +991,11 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       count?: number;
       sample_count?: number;
       validated_count?: number;
+      adequacy?: string;
+      aug_target?: number;
+      aug_gap?: number;
     }>;
+    thresholds?: ClassThresholds;
   };
   // allSettled, not Promise.all: /stats/dataset can 503 (G1 — the live
   // op_items region_status mapping isn't aggregatable) while
@@ -1006,14 +1029,21 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       class_name: c.class_name,
       count: c.count ?? c.sample_count ?? 0,
       validated_count: c.validated_count ?? 0,
+      adequacy: c.adequacy,
+      aug_target: c.aug_target,
+      aug_gap: c.aug_gap,
     })),
+    thresholds: cls.thresholds,
   };
 }
 
-export async function getClasses(signal?: AbortSignal): Promise<RegistryClass[]> {
+export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse> {
   // The API returns `{classes: [{class_id, class_name, group, sample_count,
-  // validated_count, deprecated}, ...]}`. Map to the labeler's RegistryClass
-  // shape, which uses `id`/`name`/`count`.
+  // validated_count, deprecated, adequacy, added_at}, ...], thresholds,
+  // reserved_hotkeys}`. Map `classes` to the labeler's RegistryClass shape,
+  // which uses `id`/`name`/`count`; `thresholds` and `reserved_hotkeys` pass
+  // through verbatim — they're the server's own adequacy/hotkey rules, never
+  // recomputed client-side.
   type RawClass = {
     class_id?: number;
     id?: number;
@@ -1028,14 +1058,15 @@ export async function getClasses(signal?: AbortSignal): Promise<RegistryClass[]>
     deprecated?: boolean;
     added_at?: string;
     hotkey_letter?: string | null;
+    adequacy?: string;
   };
-  const res = await apiFetch<{ classes: RawClass[] } | RawClass[]>(
-    `${API_PREFIX}/classes`,
-    {},
-    signal,
-  );
-  const raw = Array.isArray(res) ? res : (res.classes ?? []);
-  return raw.map((c) => ({
+  const res = await apiFetch<{
+    classes: RawClass[];
+    thresholds?: ClassThresholds;
+    reserved_hotkeys?: string[];
+  }>(`${API_PREFIX}/classes`, {}, signal);
+  const raw = res.classes ?? [];
+  const classes = raw.map((c) => ({
     id: c.class_id ?? c.id ?? -1,
     name: c.class_name ?? c.name ?? '',
     group: c.group ?? null,
@@ -1046,7 +1077,21 @@ export async function getClasses(signal?: AbortSignal): Promise<RegistryClass[]>
     color: c.color ?? null,
     deprecated: !!c.deprecated,
     hotkey_letter: c.hotkey_letter ?? null,
+    adequacy: c.adequacy,
   }));
+  // Old-shape (bare array) or pre-cutover backend responses omit these —
+  // an empty threshold/reserved set just means the adequacy chip and the
+  // hotkey guard render as "unknown" until a real response arrives, never
+  // a crash or a client-invented number.
+  const thresholds: ClassThresholds = res.thresholds ?? {
+    block_below: 0,
+    warn_below: 0,
+    min_test_per_class: 0,
+    aug_target_min: 0,
+    aug_target_max: 0,
+  };
+  const reserved_hotkeys = res.reserved_hotkeys ?? [];
+  return { classes, thresholds, reserved_hotkeys };
 }
 
 /** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single
@@ -2175,6 +2220,23 @@ export function mergeClasses(
     target_name: string;
   }>(
     `${API_PREFIX}/classes/merge`,
+    { method: 'POST', body: JSON.stringify(payload) },
+    signal,
+  );
+}
+
+/**
+ * `POST {API_PREFIX}/classes/merge?dry_run=true` — reports what a real merge
+ * would do (`would_relabel`, `would_unvalidate`, `holdout_blocking`,
+ * `blocked`) and writes nothing. The merge dialog calls this before every
+ * real merge so the operator sees the blast radius first.
+ */
+export function previewClassMerge(
+  payload: RegistryClassMerge,
+  signal?: AbortSignal,
+): Promise<ClassMergeDryRun> {
+  return apiFetch<ClassMergeDryRun>(
+    `${API_PREFIX}/classes/merge${qs({ dry_run: true })}`,
     { method: 'POST', body: JSON.stringify(payload) },
     signal,
   );

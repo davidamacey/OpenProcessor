@@ -9,12 +9,28 @@
 
 import { getClasses } from '$lib/api';
 import { isAssignableClass } from '$lib/classVisibility';
-import type { RegistryClass } from '$lib/types';
+import type { ClassThresholds, RegistryClass } from '$lib/types';
 
 const REFRESH_INTERVAL_MS = 30_000;
 
+const EMPTY_THRESHOLDS: ClassThresholds = {
+  block_below: 0,
+  warn_below: 0,
+  min_test_per_class: 0,
+  aug_target_min: 0,
+  aug_target_max: 0,
+};
+
 class ClassesStore {
   classes = $state<RegistryClass[]>([]);
+  /** Server-computed adequacy/aug-target/test-minimum thresholds from
+   *  `GET {API_PREFIX}/classes` — see `RegistryClass.adequacy`. Zeros until
+   *  the first successful fetch. */
+  thresholds = $state<ClassThresholds>(EMPTY_THRESHOLDS);
+  /** Every single-character hotkey combo the server reserves for a
+   *  labeling action — `classHotkey.ts` unions this with any registered
+   *  slot's own keymap. Empty until the first successful fetch. */
+  reservedHotkeys = $state<string[]>([]);
   loading = $state<boolean>(false);
   lastUpdated = $state<number | null>(null);
   error = $state<string | null>(null);
@@ -50,7 +66,9 @@ class ClassesStore {
     this.loading = true;
     try {
       const data = await getClasses(ctrl.signal);
-      this.classes = Array.isArray(data) ? data : [];
+      this.classes = data.classes;
+      this.thresholds = data.thresholds;
+      this.reservedHotkeys = data.reserved_hotkeys;
       this.lastUpdated = Date.now();
       this.error = null;
     } catch (e) {
