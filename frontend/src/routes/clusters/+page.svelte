@@ -110,7 +110,18 @@
 
   const classFilter = $derived.by(() => {
     const v = page.url.searchParams.get('class');
-    return v == null ? null : Number.isFinite(+v) ? +v : null;
+    if (v == null) return null;
+    if (Number.isFinite(+v)) return +v;
+    // m22: a name-form deep link (`?class=license_plate`) used to be
+    // silently ignored — only a numeric class id worked, so
+    // `/clusters?class=license_plate` rendered the unfiltered grid
+    // instead of routing to the plate gallery. Resolve the name against
+    // the loaded registry, same lookup `open()` already does in the
+    // opposite direction (cluster -> class name -> id -> slot route).
+    const byName = classesStore.classes.find(
+      (c) => c.name.toLowerCase() === v.toLowerCase(),
+    );
+    return byName?.id ?? null;
   });
 
   // This backend stores plates as a *sub-bbox* on each vehicle
@@ -483,12 +494,23 @@
       const reps = withPlateBox.slice(0, 4);
       lpCard = {
         id: lp.id,
+        // Not a real cluster: cluster_kind/purity_tier/promotable/etc.
+        // have no server-served value for a slot-inventory entry, so
+        // they're left at honest defaults rather than invented. See
+        // `isSlotCard` on the type and its use in purityBadge/borderColor
+        // below, which skip the purity badge entirely for this card.
+        cluster_kind: 'unassigned',
+        validated_count: 0,
         size: res.total,
-        // Purity badge is meaningless for a non-cluster — leave null.
         purity: null,
+        purity_tier: null,
+        promotable: false,
+        core_similarity_min: null,
+        is_unlabeled: false,
         dominant_class_id: lp.id,
         dominant_class_name: lp.name,
         dominant_pct: null,
+        n_subclusters: 0,
         sub_clusters: 0,
         has_subclusters: false,
         representative_crop_ids: reps.map((p) => p.crop_id),
@@ -498,11 +520,30 @@
         // sub-bbox rendered to a 160px tile.
         representative_thumb_urls: reps.map((p) => getRegionThumbUrl(p.crop_id, 160)),
         updated_at: null,
-      } as Cluster;
+        isSlotCard: true,
+      };
     } catch {
       lpCard = null;
     }
   }
+
+  // M4: `loadLicensePlateCard` used to run exactly once, right after the
+  // first `loadFirst()` — if the root layout's own `classesStore.acquire()`
+  // fetch hadn't resolved yet at that moment, `classesStore.classes` was
+  // still empty, the license_plate class lookup failed, and the card never
+  // retried (observed live: ~1 render in 8). Re-running whenever the
+  // classes list changes (classesStore's own 30s poll, or a slower first
+  // load) makes the card deterministic instead of a load-order race.
+  $effect(() => {
+    if (
+      lpCard == null &&
+      classesStore.classes.length > 0 &&
+      clusterPager.error == null &&
+      !isLicensePlateFilter
+    ) {
+      void loadLicensePlateCard();
+    }
+  });
 
   // Items rendered in the unfiltered cluster grid: synthetic LP card
   // prepended (when present) so the operator always has a visible
@@ -559,12 +600,16 @@
     const sorted = sortClusters(filtered, sort);
     // Keep the synthetic license_plate card pinned first (entry point to
     // the plate inventory), unaffected by sort, only on the unfiltered
-    // labelled view. The real class-kind cluster for license_plate shares
-    // its `id` with `lpCard` (cluster_id === class_id for class-kind
-    // clusters) — drop it so the keyed #each below never sees a duplicate
-    // key; lpCard is its replacement entry point, not an addition to it.
+    // labelled view. M4: this used to drop the real class-kind cluster
+    // sharing license_plate's id (cluster_id === class_id for class-kind
+    // clusters) on the theory that lpCard replaces it — but that cluster
+    // (e.g. #80, size 1) is a real, independently-reachable cluster with
+    // its own crops, and hiding it made it permanently unreachable from
+    // this grid. The two now render side by side; the #each key below is
+    // keyed off `isSlotCard` so the synthetic entry never collides with
+    // the real cluster's id.
     if (classFilter == null && lpCard != null && !unlabeledOnly) {
-      return [lpCard, ...sorted.filter((c) => c.id !== lpCard!.id)];
+      return [lpCard, ...sorted];
     }
     return sorted;
   });
@@ -611,13 +656,20 @@
   // is a separate, unrelated signal (AHC sub-clustering ran) and still
   // wins the border color outright.
   function borderColor(c: Cluster): string {
+    // M4: a distinct, neutral border for the non-cluster inventory card —
+    // the red "noisy" border would otherwise falsely imply a bad cluster.
+    if (c.isSlotCard) return 'border-purple-500/60';
     if (c.has_subclusters) return 'border-blue-500/60';
     if (c.purity_tier === 'pure') return 'border-green-500/60';
     if (c.purity_tier === 'mixed') return 'border-orange-500/60';
     return 'border-red-500/60';
   }
 
-  function purityBadge(c: Cluster): { color: string; text: string } {
+  function purityBadge(c: Cluster): { color: string; text: string } | null {
+    // M4: the synthetic license_plate inventory card is not a cluster —
+    // it has no purity, so it gets no purity badge at all rather than
+    // falling through to an invented "noisy 0%".
+    if (c.isSlotCard) return null;
     if (c.purity_tier === 'pure')
       return { color: 'bg-green-500/20 text-green-300', text: 'pure' };
     if (c.purity_tier === 'mixed')
@@ -939,6 +991,11 @@
       </div>
       {#if itemTextLoading && itemTextItems.length === 0}
         <p class="text-sm text-zinc-500">Loading...</p>
+      {:else if itemTextError}
+        <!-- m18: the 400 detail is already shown next to the input above
+             (line ~762) — showing the empty-state copy here too read as
+             two contradictory messages ("here's why it failed" AND
+             "0 results… no crops matched"). Show only the error. -->
       {:else if itemTextItems.length === 0}
         <p class="text-sm text-zinc-500">No crops matched that text.</p>
       {:else}
@@ -968,7 +1025,7 @@
       </p>
     {:else}
       <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {#each gridItems as c (c.id)}
+        {#each gridItems as c (c.isSlotCard ? `slot-${c.id}` : c.id)}
           {@const pb = purityBadge(c)}
           <li style="content-visibility:auto;contain-intrinsic-size:auto 280px">
             <button
@@ -995,11 +1052,24 @@
               </div>
               <div class="p-3">
                 <div class="mb-1 flex items-center gap-2">
-                  <span class="text-sm font-semibold">#{c.id}</span>
-                  <span class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}">
-                    {pb.text}
-                    {((c.purity ?? 0) * 100).toFixed(0)}
-                  </span>
+                  {#if c.isSlotCard}
+                    <span class="text-sm font-semibold">{c.dominant_class_name}</span>
+                    <span
+                      class="rounded px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-200"
+                    >
+                      inventory
+                    </span>
+                  {:else}
+                    <span class="text-sm font-semibold">#{c.id}</span>
+                    {#if pb}
+                      <span
+                        class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
+                      >
+                        {pb.text}
+                        {((c.purity ?? 0) * 100).toFixed(0)}
+                      </span>
+                    {/if}
+                  {/if}
                   {#if c.promotable}
                     <span
                       class="rounded border border-emerald-500/40 bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-200"
@@ -1024,7 +1094,12 @@
                     ? `Unlabeled cluster #${c.id}`
                     : (c.dominant_class_name ?? `Unlabeled cluster #${c.id}`)}
                 >
-                  {#if c.dominant_class_name && !unlabeledOnly}
+                  {#if c.isSlotCard}
+                    <!-- M4: dominant_pct is meaningless for the inventory
+                         card too (there's no "dominant" anything — every
+                         item IS the slot's class) — no invented "· 0%". -->
+                    {c.dominant_class_name}
+                  {:else if c.dominant_class_name && !unlabeledOnly}
                     {c.dominant_class_name}
                     <span class="text-zinc-500">
                       · {((c.dominant_pct ?? 0) * 100).toFixed(0)}%

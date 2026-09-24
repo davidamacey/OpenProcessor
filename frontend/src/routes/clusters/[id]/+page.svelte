@@ -429,11 +429,27 @@
 
   async function runVlm(): Promise<void> {
     if (vlmRunning) return;
+    // p2/M7: a nag-confirm, unlike the one-keystroke label/move/discard
+    // actions above (which Z undoes instantly) — this kicks off a
+    // background VLM sweep over every unvalidated member of the cluster
+    // with no undo, so a misclick isn't free.
+    if (
+      !window.confirm(`Run the VLM over every unvalidated crop in cluster #${clusterId}?`)
+    ) {
+      return;
+    }
     vlmRunning = true;
     vlmJob = null;
     try {
       vlmJob = await runVlmOnCluster(clusterId);
-      const final = await pollAutoLabelJob((j) => (vlmJob = j));
+      // M7: poll only the job we just started — see pollAutoLabelJob's
+      // `expectedJobId` doc comment for why this matters.
+      const final = await pollAutoLabelJob(
+        (j) => (vlmJob = j),
+        undefined,
+        undefined,
+        vlmJob.job_id,
+      );
       const stages = (final.result?.stages ?? {}) as Record<
         string,
         Record<string, unknown>
@@ -540,8 +556,13 @@
 
   async function confirmMovePicker(): Promise<void> {
     const id = Number(movePickerValue);
-    if (!Number.isFinite(id) || id < 0) {
-      toastStore.error('Cluster id must be a non-negative integer.');
+    // A negative (or otherwise invalid-as-a-cluster-id) value is no
+    // longer rejected client-side — the server owns that rule and
+    // returns its own 400 detail (see moveCropIds/M10), which the
+    // toast then shows verbatim. Only a genuinely non-numeric entry is
+    // caught here, since NaN can't even be sent as a JSON int.
+    if (!Number.isFinite(id)) {
+      toastStore.error('Cluster id must be a number.');
       return;
     }
     movePickerOpen = false;

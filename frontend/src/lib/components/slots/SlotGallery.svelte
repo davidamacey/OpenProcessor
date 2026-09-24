@@ -131,6 +131,15 @@
         >
           {gallery.plateClusterBusy ? 'Loading…' : 'Reload'}
         </button>
+      {:else if gallery.viewingAllPlates}
+        <button
+          type="button"
+          class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+          onclick={gallery.backToPlateClusters}
+        >
+          ← Clusters
+        </button>
+        <span class="font-medium text-zinc-200">All plates</span>
       {:else if gallery.selectedPlateCluster == null}
         <button
           type="button"
@@ -158,6 +167,20 @@
           title="Sub-type the false-positive bucket and (re)build its centroids"
         >
           {gallery.plateClusterBusy ? 'Building…' : 'Build FP centroids'}
+        </button>
+        <!-- M3: plate clusters only cover plates that have gone through
+             "Cluster plates" — before that (or for plates the run left
+             out) the bucket grid below has no card for them at all, so
+             this is the only way in. Always shown here, not gated on
+             "no non-FP clusters exist", so it stays reachable once
+             clustering starts covering only part of the pool too. -->
+        <button
+          type="button"
+          class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30"
+          onclick={gallery.openAllPlates}
+          title="Browse every plate, including ones not in any cluster bucket yet"
+        >
+          Browse all plates
         </button>
       {:else}
         <button
@@ -216,7 +239,6 @@
       {/if}
       <span class="font-mono text-[11px] text-zinc-500">
         {gallery.platePager.items.length.toLocaleString()} / {gallery.platePager.total.toLocaleString()}
-        gallery.platePager.items
       </span>
     </div>
 
@@ -272,7 +294,7 @@
 
   {#if gallery.platePager.error}
     <p class="text-sm text-red-300">API unavailable: {gallery.platePager.error}</p>
-  {:else if !gallery.suspectedFpView && gallery.selectedPlateCluster == null && gallery.plateClusters.length > 0}
+  {:else if !gallery.suspectedFpView && !gallery.viewingAllPlates && gallery.selectedPlateCluster == null && gallery.plateClusters.length > 0}
     <!-- Plate cluster cards. Click one to open its plates (with the
          bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
          get a blue border so refined buckets are easy to spot. The

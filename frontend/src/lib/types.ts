@@ -412,6 +412,12 @@ export interface Cluster {
   sub_clusters?: number;
   centroid_sha?: string;
   updated_at: string | null;
+  /** Set only on the client-built license_plate inventory entry pinned
+   *  atop `/clusters` (M4, docs/design/interactive-pass-2026-09-24.md) —
+   *  it is not a real cluster (no purity, no cluster_kind), so the grid
+   *  must not draw a pure/mixed/noisy badge for it or key it against a
+   *  real cluster id. Absent (not false) on every server-served Cluster. */
+  isSlotCard?: boolean;
 }
 
 export interface StatsSummary {

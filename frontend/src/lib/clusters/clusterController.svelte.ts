@@ -440,6 +440,12 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
       const res = await moveCropsToCluster(ids, targetClusterId);
       const moved = res.updated ?? ids.length;
       const conflicts = res.conflicts?.length ?? 0;
+      // M5: a move is a label-history write like bulkLabel — record the
+      // server's own `updated_ids` (never the local `ids` minus
+      // conflicts) as one undo entry so Z restores exactly what the
+      // backend actually moved, through the same label undo/undo_batch
+      // route bulkLabel already uses.
+      undoStore.recordWrites(res.updated_ids);
       if (conflicts > 0) {
         // These specific ids never actually left the source cluster —
         // let them back in once the reload below re-syncs.

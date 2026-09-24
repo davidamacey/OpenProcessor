@@ -2020,16 +2020,35 @@ export function runVlmOnCluster(
  * own `setTimeout` loop — `AutoLabelPanel` keeps its own poller since it
  * also needs to detect a daemon-fired run while idle, which this helper,
  * only ever started right after `runVlmOnCluster`, does not.
+ *
+ * `expectedJobId` (M7, docs/design/interactive-pass-2026-09-24.md): the
+ * status endpoint has a single slot for "the current/most recent job",
+ * not one per job. A caller that just started a job can otherwise poll
+ * once, catch the *previous* job's already-terminal status in that same
+ * tick (a real race, not hypothetical — observed live: a 1-crop cluster
+ * run toasted "0 crops (0 updated)" because the read landed before the
+ * new job had even flipped to `running`), and report its stale result as
+ * its own. There is no `GET .../status/{job_id}` route yet (backend
+ * gap — see the same doc's BE fix list item 8), so this is the frontend
+ * half: skip any status whose `job_id` doesn't match, and bound the wait
+ * so a backend that genuinely drops the job doesn't hang forever.
  */
 export async function pollAutoLabelJob(
   onUpdate: (job: AutoLabelJobState) => void,
   signal?: AbortSignal,
   intervalMs = 1500,
+  expectedJobId?: string,
+  maxWaitMs = 5 * 60_000,
 ): Promise<AutoLabelJobState> {
+  const deadline = Date.now() + maxWaitMs;
   for (;;) {
     const job = await getAutoLabelStatus(signal);
-    onUpdate(job);
-    if (job.status !== 'running') return job;
+    if (expectedJobId == null || job.job_id === expectedJobId) {
+      onUpdate(job);
+      if (job.status !== 'running') return job;
+    } else if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for job ${expectedJobId} to appear in status.`);
+    }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }

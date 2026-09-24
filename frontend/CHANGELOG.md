@@ -1314,3 +1314,55 @@ components` and introducing the three-tier scale above).
   matching class at all, so the lookup silently returned nothing. Now
   uses a real `cluster_id` filter (new backend query param) that works
   regardless of cluster kind.
+- `/clusters` and `/clusters/[id]` frontend findings from
+  `docs/design/interactive-pass-2026-09-24.md` §6 FRONTEND:
+  - **M5**: Z did not undo a Move (M) — `moveCropIds`
+    (`clusterController.svelte.ts`) now records the server's own
+    `updated_ids` as one undo entry, same as `bulkLabel`/discard, so Z
+    restores a moved crop through the existing label undo/undo_batch
+    route.
+  - **M3**: the license_plate plate gallery only ever rendered
+    region-cluster cards — when the only bucket was the permanent
+    false-positive one, every other plate was unreachable (233 of 234,
+    live), with no "unclustered" entry and no flat-grid fallback. Added
+    a "Browse all plates" entry point (`viewingAllPlates` on
+    `plateGalleryController.svelte.ts`, `openAllPlates()`) that opens
+    the flat gallery with no `region_cluster_id` filter. Also deleted
+    the stray literal `gallery.platePager.items` template text leaking
+    into the counter strip (`SlotGallery.svelte`).
+  - **M4**: the synthetic license_plate inventory card on `/clusters`
+    only rendered in about 1 of 8 loads (a load-order race against
+    `classesStore`'s own fetch), showed an invented "noisy 0%" purity
+    badge and "· 0%" dominant-pct, and hid the real class-kind cluster
+    sharing its id. `loadLicensePlateCard` now builds a fully-typed
+    `Cluster` (no `as Cluster` cast masking missing fields), re-runs
+    whenever `classesStore.classes` changes rather than once after the
+    first load, and the card is marked `isSlotCard` so the grid renders
+    no purity badge and no dominant-pct for it, keys it independently
+    of a same-id real cluster (`slot-${id}` vs `id`), and no longer
+    filters that real cluster out of the grid.
+  - **M7 (frontend half)**: Run VLM on a cluster could read the
+    _previous_ auto-label job's already-terminal status in the same
+    tick it started a new one (the status endpoint has one slot for
+    "the current job", not one per job), toasting a stale "0 crops (0
+    updated)". `pollAutoLabelJob` (`api.ts`) now takes an optional
+    `expectedJobId` and skips any status whose `job_id` doesn't match,
+    bounded by a 5-minute timeout; `runVlm` passes the id the `POST
+/vlm/label_cluster/{id}` response just returned. Added a
+    `window.confirm` before starting the run — it's a no-undo
+    background sweep over the whole cluster, unlike the one-keystroke
+    label/move/discard actions Z already reverses instantly.
+  - Invalid move target: entering a negative cluster id in the move
+    picker used to be rejected by a client-side rule before the
+    server's own 400 could ever show. Deleted that rule (only a
+    genuinely non-numeric entry is still caught client-side); the
+    server's 400 detail now surfaces via the existing
+    `Move failed: …` toast.
+  - m22: `/clusters?class=license_plate` (a name-form deep link) was
+    silently ignored — `classFilter` only ever parsed a numeric id. It
+    now falls back to a case-insensitive name lookup against the loaded
+    class registry.
+  - m18: the item-text search's empty state ("No crops matched that
+    text.") rendered at the same time as the server's 400 detail,
+    reading as two contradictory messages. The empty-state copy is now
+    gated on there being no error.
