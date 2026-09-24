@@ -38,7 +38,7 @@
     runVlmOnCluster,
     type AutoLabelJobState,
   } from '$lib/api';
-  import type { Crop, StatsSummary } from '$lib/types';
+  import type { Crop, ExportResult, StatsSummary } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
@@ -59,6 +59,20 @@
   // /pipeline/auto_label/status), same job shape AutoLabelPanel shows
   // for a full recluster.
   let vlmJob = $state<AutoLabelJobState | null>(null);
+
+  // M13 (2026-09-24 interactive pass): "Export Dataset (YOLO)" used to
+  // fire POST {API_PREFIX}/export/yolo with no confirmation and toast
+  // "job started" — but that endpoint is synchronous (verified live and
+  // against openprocessor's export_yolo handler: it `await`s the full
+  // 5-step export pipeline before returning), so the toast lied about
+  // what had actually happened by the time it appeared. A confirm step
+  // now gates the click (the export can take a while and touches the
+  // frozen dataset), and the modal renders the real returned fields
+  // once the request resolves rather than assuming a job id exists.
+  let exportConfirmOpen = $state<boolean>(false);
+  let exportRunning = $state<boolean>(false);
+  let exportResult = $state<ExportResult | null>(null);
+  let exportError = $state<string | null>(null);
 
   async function refreshLegacy(): Promise<void> {
     legacyLoading = true;
@@ -116,12 +130,28 @@
     }
   }
 
+  function openExportConfirm(): void {
+    exportResult = null;
+    exportError = null;
+    exportConfirmOpen = true;
+  }
+
   async function runExport(): Promise<void> {
+    exportRunning = true;
+    exportResult = null;
+    exportError = null;
     try {
-      const res = await exportYolo();
-      toastStore.success(`Export job started: ${res.job_id ?? res.status}`);
+      // Synchronous — the response IS the finished export, not a
+      // queued-job acknowledgement. Render it directly.
+      exportResult = await exportYolo();
+      toastStore.success(
+        `Export complete: ${exportResult.export_dir ?? exportResult.status}`,
+      );
     } catch (e) {
-      toastStore.error(`Export failed: ${(e as Error).message}`);
+      exportError = (e as Error).message;
+      toastStore.error(`Export failed: ${exportError}`);
+    } finally {
+      exportRunning = false;
     }
   }
 
@@ -172,7 +202,9 @@
     <button class="btn btn-primary" type="button" onclick={() => (vlmOpen = true)}>
       Run VLM Labeling
     </button>
-    <button class="btn" type="button" onclick={runExport}>Export Dataset (YOLO)</button>
+    <button class="btn" type="button" onclick={openExportConfirm}>
+      Export Dataset (YOLO)
+    </button>
     <span class="grow"></span>
     <button
       class="btn"
@@ -192,8 +224,18 @@
   <section class="surface p-4">
     <header class="mb-3 flex items-center justify-between">
       <h2 class="text-sm font-semibold text-zinc-300">Class balance (validated)</h2>
+      <!-- m6 (2026-09-24 interactive pass): the legend used to hardcode
+           500/100, contradicting the served thresholds
+           (block_below/warn_below on legacyStats.thresholds, the same
+           values the bar colors are already computed from). Render the
+           real numbers, or nothing once loaded but absent, rather than
+           a number that never matches the bars. -->
       <span class="text-xs text-zinc-500">
-        green ≥500 · orange 100–499 · red &lt;100
+        {#if legacyStats?.thresholds}
+          green &ge;{legacyStats.thresholds.warn_below} · orange {legacyStats.thresholds
+            .block_below}–{legacyStats.thresholds.warn_below - 1} · red &lt;{legacyStats
+            .thresholds.block_below}
+        {/if}
       </span>
     </header>
 
@@ -291,6 +333,82 @@
         <button type="button" class="btn btn-primary" onclick={runVlm} disabled={vlmBusy}>
           {vlmBusy ? 'Running...' : 'Run'}
         </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if exportConfirmOpen}
+  <!-- M13 (2026-09-24 interactive pass): confirm before kicking off a
+       synchronous full-dataset YOLO export, and show the served result
+       (or error) once it resolves — no "job started" fiction. -->
+  <div
+    class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div
+      class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    >
+      <h3 class="mb-3 text-base font-semibold">Export dataset (YOLO)</h3>
+      {#if !exportResult && !exportError}
+        <p class="mb-4 text-xs text-zinc-500">
+          Runs the full YOLO export pipeline synchronously (resize, stratified split
+          honoring the frozen test holdout, manifest write) — this can take a while and
+          the page will wait for it to finish.
+        </p>
+      {/if}
+      {#if exportRunning}
+        <p class="mb-4 text-xs text-zinc-400">Exporting… this may take a few minutes.</p>
+      {/if}
+      {#if exportError}
+        <p class="mb-4 text-xs text-red-300">Export failed: {exportError}</p>
+      {/if}
+      {#if exportResult}
+        <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <dt class="text-zinc-500">Status</dt>
+          <dd class="font-mono text-zinc-200">{exportResult.status}</dd>
+          {#if exportResult.export_dir}
+            <dt class="text-zinc-500">Export dir</dt>
+            <dd class="break-all font-mono text-zinc-200">{exportResult.export_dir}</dd>
+          {/if}
+          {#if exportResult.dataset_sha}
+            <dt class="text-zinc-500">Dataset SHA</dt>
+            <dd class="break-all font-mono text-zinc-200">{exportResult.dataset_sha}</dd>
+          {/if}
+          {#if exportResult.split_counts}
+            <dt class="text-zinc-500">Split counts</dt>
+            <dd class="font-mono text-zinc-200">
+              {Object.entries(exportResult.split_counts)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(' · ')}
+            </dd>
+          {/if}
+          {#if exportResult.finished_at}
+            <dt class="text-zinc-500">Finished</dt>
+            <dd class="font-mono text-zinc-200">{exportResult.finished_at}</dd>
+          {/if}
+        </dl>
+      {/if}
+      <div class="flex justify-end gap-2">
+        <button
+          type="button"
+          class="btn"
+          onclick={() => (exportConfirmOpen = false)}
+          disabled={exportRunning}
+        >
+          {exportResult || exportError ? 'Close' : 'Cancel'}
+        </button>
+        {#if !exportResult && !exportError}
+          <button
+            type="button"
+            class="btn btn-primary"
+            onclick={runExport}
+            disabled={exportRunning}
+          >
+            {exportRunning ? 'Exporting…' : 'Export'}
+          </button>
+        {/if}
       </div>
     </div>
   </div>

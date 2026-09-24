@@ -904,6 +904,45 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- FRONTEND fixes from the 2026-09-24 interactive-pass follow-up
+  (`docs/design/interactive-pass-2026-09-24.md` §6):
+  - **M1** — the `/review` Dismissed panel sent `sort=recent`, which
+    400s (`GET {API_PREFIX}/crops`'s `sort` is a closed field list; the
+    default is `updated_at:desc`). Fixed to request `updated_at:desc`;
+    a failed load now shows an inline error state instead of falling
+    through to "No dismissed crops."
+  - **M2, M12** — opening `/review`'s Details disclosure used to
+    collapse the crop/plate image to 0px (a `flex-1` image container
+    shrinking to make room for the growing Details content). The image
+    now sits in a `shrink-0` panel with a 300px floor height; everything
+    below it (metadata, slot fields, Details) scrolls in its own
+    `overflow-y-auto` region instead.
+  - **B2 (frontend half)** — confirming a plate/region box that the
+    operator didn't touch used to always `PUT region` with the same
+    box, which the backend treats as a human-drawn box and uses to
+    overwrite `region_detector`/`region_score`, destroying detector
+    provenance. `confirmSlot()` now compares the edited box against the
+    seeded (served) box and, when unchanged and the deployment serves a
+    `confirm_status` (`GET {API_PREFIX}/regions/statuses`), sends a
+    status-only `PATCH region_meta` instead. A box that actually
+    changed still goes through `PUT region` (`frame: 'parent'`).
+  - **M13** — the dashboard's "Export Dataset (YOLO)" quick action fired
+    `POST {API_PREFIX}/export/yolo` with no confirmation and toasted
+    "Export job started", but that endpoint is synchronous (verified
+    against openprocessor's `export_yolo` handler — it awaits the full
+    export pipeline before returning; there is no `job_id`). It now
+    opens a confirm dialog and renders the real returned
+    `export_dir`/`dataset_sha`/`split_counts`/`finished_at` fields (or
+    the error) once the request resolves. `ExportResult` (`types.ts`)
+    now matches the served shape.
+  - **m6** — the dashboard's class-balance legend hardcoded "green ≥500
+    · orange 100–499 · red <100", contradicting the served
+    `block_below`/`warn_below` thresholds the bar colors are actually
+    computed from. Now rendered from `legacyStats.thresholds`.
+  - **M14** — `/train`'s cohort preview used to render once, after
+    every class group (~4,700px below a chip clicked near the top),
+    which looked like the click did nothing. It now renders inline
+    under the class group whose chip was clicked.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —

@@ -19,7 +19,7 @@ describe("W1: un-dismiss panel reverses discard()'s reviewDismissCrop", () => {
   it('toggleDismissedPanel loads {API_PREFIX}/crops?review_dismissed=true', () => {
     const fn = src.match(/async function toggleDismissedPanel\([\s\S]*?\n {2}\}/)?.[0];
     expect(fn).toBeDefined();
-    expect(fn).toMatch(/getCrops\(\{ review_dismissed: true/);
+    expect(fn).toMatch(/getCrops\(\{\s*review_dismissed: true/);
   });
 
   it('undismiss calls reviewUndismissCrop and drops the item from the local list', () => {

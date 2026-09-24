@@ -118,9 +118,28 @@ export interface ExportStatus {
   message?: string | null;
 }
 
-/** Server response from `POST {API_PREFIX}/export/yolo`. */
+/**
+ * Server response from `POST {API_PREFIX}/export/yolo` — synchronous
+ * (verified live against openprocessor's `export_yolo`, `op_export.py`:
+ * `service.export_yolo(...)` is `await`ed before the handler returns).
+ * There is no `job_id`/queued state on this endpoint at all — the
+ * response already carries the finished export's own fields. M13
+ * (2026-09-24 interactive pass): the dashboard used to read `job_id`
+ * (always undefined) and toast "Export job started", which never
+ * matched what actually happened.
+ */
 export interface ExportResult {
   status: string;
+  export_dir?: string | null;
+  version_tag?: string | null;
+  manifest_path?: string | null;
+  dataset_sha?: string | null;
+  split_counts?: Record<string, number> | null;
+  dedup?: number | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  /** @deprecated Never served by POST /export/yolo — kept only so a
+   *  caller written against the old shape still type-checks. */
   job_id?: string | null;
   message?: string | null;
 }
