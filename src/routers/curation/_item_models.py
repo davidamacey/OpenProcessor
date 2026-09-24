@@ -60,6 +60,11 @@ class ItemDoc(BaseModel):
     class_labeled_at: str | None = None
     class_labeler: str | None = None
     vlm_confidence: str | None = None
+    # When a VLM was last asked for this item's class, and why that attempt
+    # gave no class (no_answer / no_match / invalid_index / unparseable);
+    # null reason = it answered. An empty answer leaves the class untouched.
+    vlm_class_attempted_at: str | None = None
+    vlm_class_empty_reason: str | None = None
     # VLM class suggestion: the registry class the VLM chose while the
     # label is unvalidated (class_source vlm / vlm_reclassified), or, for
     # vlm_new_class_pending, the proposed new class name with a null id.

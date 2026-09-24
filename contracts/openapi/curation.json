@@ -2413,6 +2413,28 @@
             "title": "Updated At",
             "type": "string"
           },
+          "vlm_class_attempted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Attempted At"
+          },
+          "vlm_class_empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Class Empty Reason"
+          },
           "vlm_confidence": {
             "anyOf": [
               {

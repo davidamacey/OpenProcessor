@@ -32,6 +32,8 @@
     "class_labeled_at",
     "class_labeler",
     "vlm_confidence",
+    "vlm_class_attempted_at",
+    "vlm_class_empty_reason",
     "vlm_proposed_class_id",
     "vlm_proposed_class_name",
     "proposed_class_id",
@@ -1110,6 +1112,30 @@
         "default": "",
         "title": "Updated At",
         "type": "string"
+      },
+      "vlm_class_attempted_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Class Attempted At"
+      },
+      "vlm_class_empty_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Class Empty Reason"
       },
       "vlm_confidence": {
         "anyOf": [

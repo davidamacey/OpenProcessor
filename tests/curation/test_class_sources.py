@@ -152,6 +152,10 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     # CM-1 revert script: restores a prior class_source recorded in
     # class_id_history -- a pass-through re-write, not a new value.
     "entry.get('class_source')": None,
+    # Empty-VLM-answer repair: restores the class source the item had before
+    # the empty answer -- 'vlm', or the one ingest stamps for its detector.
+    'VLM_CLASS_SOURCE': 'vlm',
+    'ingest_source': None,
 }
 
 

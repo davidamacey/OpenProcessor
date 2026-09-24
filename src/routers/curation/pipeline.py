@@ -419,7 +419,7 @@ async def pipeline_auto_label(
     # or the v6+VLM two-signal path.
 
     from src.clients.occ import occ_skip_on_conflict_bulk as _occ_skip_bulk
-    from src.services.curation.history import record_class_history as _record_history
+    from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
 
     async def _run_chunk(ids: list[str]) -> tuple[int, int, list[dict[str, Any]]]:
         # A single mget_crops call per chunk instead of per-crop
@@ -468,18 +468,6 @@ async def pipeline_auto_label(
             labeled_at=now,
         )
         for p in preds:
-            # Capture the VLM's raw answer on EVERY prediction so we can
-            # later aggregate the long tail and grow the registry. Even
-            # when the response was unparseable we keep p.raw_response
-            # (best-effort excerpt) so v6-missed open-vocabulary
-            # classifications still seed the next training round. The
-            # ``__new__`` sentinel itself is not informative — prefer the
-            # populated ``proposed_class`` slug when present, then the
-            # parsed class_name, finally the raw model output.
-            raw_label = (
-                p.proposed_class if p.class_name == '__new__' else (p.class_name or p.raw_response)
-            )
-
             # Always write the VLM's make/model/region_visible when
             # reported, regardless of which class-resolution path fires.
             _vlm_extras: dict[str, Any] = {}
@@ -489,65 +477,20 @@ async def pipeline_auto_label(
                 _vlm_extras['vlm_item_model'] = p.model
             if p.plate_visible is not None:
                 _vlm_extras[get_region_fields().visible] = p.plate_visible
-
-            if p.class_name == '__new__' and p.proposed_class:
-                proposed_resolved = _resolve_class_name(p.proposed_class, confidence=p.confidence)
-                if proposed_resolved is not None:
-                    # The VLM's slug resolved via synonyms — normal prediction.
-                    cid = name_to_id[proposed_resolved]
-                    updates_by_id[p.img_id] = {
-                        'class_id': cid,
-                        'class_name': proposed_resolved,
-                        'class_source': 'vlm',
-                        # Clear stale label_source so a prior auto_promote
-                        # validation tag can't survive the VLM overwrite.
-                        'label_source': 'vlm',
-                        'vlm_confidence': p.confidence,
-                        'vlm_raw_class': p.proposed_class,
-                        'vlm_raw_label': raw_label,
-                        **_vlm_extras,
-                        **_vlm_class_prov,
-                        'updated_at': now,
-                    }
-                    continue
-                # Truly new — surface for the curator queue.
-                proposals.append({'crop_id': p.img_id, 'proposed_class': p.proposed_class})
-                updates_by_id[p.img_id] = {
-                    'class_source': 'vlm_new_class_pending',
-                    'label_source': 'vlm',
-                    'vlm_proposed_class': p.proposed_class,
-                    'vlm_raw_label': raw_label,
-                    'vlm_confidence': p.confidence,
-                    'needs_new_class': True,
-                    **_vlm_extras,
-                    'updated_at': now,
-                }
+            update, proposal = prediction_class_update(
+                p,
+                name_to_id=name_to_id,
+                resolve=_resolve_class_name,
+                now=now,
+                provenance=_vlm_class_prov,
+                extras=_vlm_extras,
+                set_cluster=True,
+            )
+            if update is None:
                 continue
-            resolved = _resolve_class_name(p.class_name, confidence=p.confidence)
-            if resolved is None:
-                updates_by_id[p.img_id] = {
-                    'class_source': 'vlm_unmatched',
-                    'label_source': 'vlm',
-                    'vlm_raw_class': p.class_name,
-                    'vlm_raw_label': raw_label,
-                    'vlm_confidence': p.confidence,
-                    **_vlm_extras,
-                    'updated_at': now,
-                }
-                continue
-            cid = name_to_id[resolved]
-            updates_by_id[p.img_id] = {
-                'class_id': cid,
-                'class_name': resolved,
-                'class_source': 'vlm',
-                'label_source': 'vlm',
-                'vlm_confidence': p.confidence,
-                'vlm_raw_label': raw_label,
-                'cluster_id': cid,
-                **_vlm_extras,
-                **_vlm_class_prov,
-                'updated_at': now,
-            }
+            if proposal is not None:
+                proposals.append(proposal)
+            updates_by_id[p.img_id] = update
         if updates_by_id:
             # Worker-context bulk write via OCC. Human edits always win
             # on conflict; class_id_history snapshots the prior
@@ -557,10 +500,9 @@ async def pipeline_auto_label(
                 # write (or validation) since the scroll wins.
                 if not guard.allows(doc_id, current):
                     return {}
-                update = dict(updates_by_id[doc_id])
-                if 'class_id' in update:
-                    update['class_id_history'] = _record_history(current, writer='vlm_pipeline')
-                return update
+                return with_class_snapshot(
+                    dict(updates_by_id[doc_id]), current, writer='vlm_pipeline'
+                )
 
             try:
                 await _occ_skip_bulk(
@@ -576,6 +518,8 @@ async def pipeline_auto_label(
             else:
                 # Live UI updates per written crop.
                 for raw_id, doc in updates_by_id.items():
+                    if 'class_source' not in doc:
+                        continue  # empty answer: the class did not change
                     try:
                         publish_crop_classified(
                             str(raw_id),

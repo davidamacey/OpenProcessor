@@ -45,12 +45,12 @@ from src.services.curation.class_write_guard import (
     ClassWriteGuard,
     class_write_locked,
 )
-from src.services.curation.history import record_class_history
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     resolve_crop_root,
     resolve_safe_path,
 )
+from src.services.curation.vlm_class_attempt import prediction_class_update, with_class_snapshot
 
 
 ITEMS_INDEX = CURATION_ITEMS_INDEX
@@ -341,59 +341,18 @@ async def vlm_label_batch(
             _force_fit_bypass['attempted'] += 1
         return _resolve_class_name_fn(raw, name_to_id, confidence=confidence)  # type: ignore[arg-type]
 
+    empty_answers = 0
     for p in predictions:
-        # Capture the VLM's raw answer on EVERY branch (not just the
-        # unmatched exit) so a terms agg can quantify the long tail.
-        raw_label = p.proposed_class if p.class_name == '__new__' else p.class_name
-        if p.class_name == '__new__' and p.proposed_class:
-            proposed_resolved = _resolve(p.proposed_class, confidence=p.confidence)
-            if proposed_resolved is not None:
-                cid = name_to_id[proposed_resolved]
-                updates_by_id[p.img_id] = {
-                    'class_id': cid,
-                    'class_name': proposed_resolved,
-                    'class_source': 'vlm',
-                    'label_source': 'vlm',
-                    'vlm_confidence': p.confidence,
-                    'vlm_raw_class': p.proposed_class,
-                    'vlm_raw_label': raw_label,
-                    **_vlm_class_prov,
-                    'updated_at': now,
-                }
-                continue
-            proposals.append({'crop_id': p.img_id, 'proposed_class': p.proposed_class})
-            updates_by_id[p.img_id] = {
-                'class_source': 'vlm_new_class_pending',
-                'label_source': 'vlm',
-                'vlm_proposed_class': p.proposed_class,
-                'vlm_raw_label': raw_label,
-                'vlm_confidence': p.confidence,
-                'needs_new_class': True,
-                'updated_at': now,
-            }
+        update, proposal = prediction_class_update(
+            p, name_to_id=name_to_id, resolve=_resolve, now=now, provenance=_vlm_class_prov
+        )
+        if update is None:
             continue
-        resolved = _resolve(p.class_name, confidence=p.confidence)
-        if resolved is None:
-            updates_by_id[p.img_id] = {
-                'class_source': 'vlm_unmatched',
-                'label_source': 'vlm',
-                'vlm_raw_class': p.class_name,
-                'vlm_raw_label': raw_label,
-                'vlm_confidence': p.confidence,
-                'updated_at': now,
-            }
-            continue
-        cid = name_to_id[resolved]
-        updates_by_id[p.img_id] = {
-            'class_id': cid,
-            'class_name': resolved,
-            'class_source': 'vlm',
-            'label_source': 'vlm',
-            'vlm_confidence': p.confidence,
-            'vlm_raw_label': raw_label,
-            **_vlm_class_prov,
-            'updated_at': now,
-        }
+        if 'class_source' not in update:
+            empty_answers += 1
+        if proposal is not None:
+            proposals.append(proposal)
+        updates_by_id[p.img_id] = update
     if updates_by_id:
 
         def _merge_label_batch(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
@@ -406,10 +365,9 @@ async def vlm_label_batch(
             # never onto a human-owned or validated class.
             if not guard.allows(doc_id, current):
                 return {}
-            update = dict(updates_by_id[doc_id])
-            if 'class_id' in update:
-                update['class_id_history'] = record_class_history(current, writer='vlm_label_batch')
-            return update
+            return with_class_snapshot(
+                dict(updates_by_id[doc_id]), current, writer='vlm_label_batch'
+            )
 
         try:
             await occ_skip_on_conflict_bulk(
@@ -430,6 +388,8 @@ async def vlm_label_batch(
     return {
         'predicted': len(predictions),
         'updated': len(updates_by_id),
+        # Replies with no class: class fields left as they were, attempt recorded.
+        'empty_answers': empty_answers,
         'new_class_proposals': proposals,
         'force_fit_bypass': dict(_force_fit_bypass),
     }
