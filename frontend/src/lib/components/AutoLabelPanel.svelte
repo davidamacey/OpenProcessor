@@ -25,6 +25,8 @@
    * always been.
    */
   import { onMount, onDestroy } from 'svelte';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import AssistScopeBar from './AssistScopeBar.svelte';
   import {
     cancelAutoLabel,
@@ -42,6 +44,11 @@
 
   let job: AutoLabelJobState | null = $state(null);
   let busy: boolean = $state(false);
+  // p2 (2026-09-24 interactive pass): "Recluster now" used to fire on one
+  // click with no confirmation — it's a dataset-wide, potentially
+  // long-running pipeline run, so gate it behind an explicit confirm
+  // step the way the dashboard's other one-shot actions already are.
+  let confirmOpen: boolean = $state(false);
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   // Broaden mode: when true the residual AHC stage re-pools items
   // already sitting in candidate clusters so smaller candidates can fuse
@@ -148,7 +155,17 @@
     pollTimer = setTimeout(() => void poll(), ms);
   }
 
+  function requestStart(): void {
+    confirmOpen = true;
+  }
+
+  function closeConfirmStart(): void {
+    if (busy) return;
+    confirmOpen = false;
+  }
+
   async function start(): Promise<void> {
+    confirmOpen = false;
     busy = true;
     try {
       const sendRunVlm = resolveAutoLabelRunVlm(scope.toStartParams(), runVlm);
@@ -360,12 +377,57 @@
           Cancel
         </button>
       {:else}
-        <button class="btn btn-primary" type="button" onclick={start} disabled={busy}>
+        <button
+          class="btn btn-primary"
+          type="button"
+          onclick={requestStart}
+          disabled={busy}
+        >
           {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
         </button>
       {/if}
     </div>
   </div>
+
+  {#if confirmOpen}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Confirm recluster"
+      tabindex="-1"
+      use:focusOnMount
+      use:trapFocus={{ onEscape: closeConfirmStart }}
+      onclick={(e) => {
+        if (e.target === e.currentTarget) closeConfirmStart();
+      }}
+    >
+      <div
+        class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+      >
+        <h3 class="mb-3 text-base font-semibold">
+          {scopeClassName ? `Recluster · VLM: ${scopeClassName}` : 'Recluster now'}
+        </h3>
+        <p class="mb-4 text-xs text-zinc-400">
+          Starts the deployment's clustering pipeline{resolveAutoLabelRunVlm(
+            scope.toStartParams(),
+            runVlm,
+          )
+            ? ' and runs the VLM labeling stage'
+            : ''}. This can run for a while.
+        </p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="btn" onclick={closeConfirmStart} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" onclick={start} disabled={busy}>
+            {busy ? 'Starting…' : 'Start'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if job}
     <div class="mt-4 space-y-3">

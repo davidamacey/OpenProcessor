@@ -163,7 +163,10 @@
 
   {#if crop.class_labeled_at}
     <dt class="text-zinc-500">Labeled at</dt>
-    <dd class="font-mono text-zinc-400">{crop.class_labeled_at}</dd>
+    <!-- p6 (2026-09-24 interactive pass): the ISO timestamp has no
+         whitespace to wrap on, so it overflowed the fixed-width panel and
+         got visually clipped ("…+00:0") instead of wrapping. -->
+    <dd class="font-mono break-all text-zinc-400">{crop.class_labeled_at}</dd>
   {/if}
 
   {#if crop.class_labeler}

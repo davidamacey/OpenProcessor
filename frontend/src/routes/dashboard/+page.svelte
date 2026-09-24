@@ -25,6 +25,8 @@
    * the gap between polls.
    */
   import { apiBase } from '$lib/api';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
@@ -73,6 +75,19 @@
   let exportRunning = $state<boolean>(false);
   let exportResult = $state<ExportResult | null>(null);
   let exportError = $state<string | null>(null);
+
+  // m12 (2026-09-24 interactive pass): Esc/backdrop-click now dismiss
+  // these confirm dialogs too, guarded the same way as their own Cancel
+  // buttons — never while the underlying request is in flight.
+  function closeVlmDialog(): void {
+    if (vlmBusy) return;
+    vlmOpen = false;
+  }
+
+  function closeExportConfirm(): void {
+    if (exportRunning) return;
+    exportConfirmOpen = false;
+  }
 
   async function refreshLegacy(): Promise<void> {
     legacyLoading = true;
@@ -291,10 +306,18 @@
 </div>
 
 {#if vlmOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
+    aria-label="Run VLM on cluster"
+    tabindex="-1"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: closeVlmDialog }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeVlmDialog();
+    }}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
@@ -322,12 +345,7 @@
         </p>
       {/if}
       <div class="flex justify-end gap-2">
-        <button
-          type="button"
-          class="btn"
-          onclick={() => (vlmOpen = false)}
-          disabled={vlmBusy}
-        >
+        <button type="button" class="btn" onclick={closeVlmDialog} disabled={vlmBusy}>
           Cancel
         </button>
         <button type="button" class="btn btn-primary" onclick={runVlm} disabled={vlmBusy}>
@@ -342,10 +360,18 @@
   <!-- M13 (2026-09-24 interactive pass): confirm before kicking off a
        synchronous full-dataset YOLO export, and show the served result
        (or error) once it resolves — no "job started" fiction. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
+    aria-label="Export dataset confirm"
+    tabindex="-1"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: closeExportConfirm }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeExportConfirm();
+    }}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
@@ -394,7 +420,7 @@
         <button
           type="button"
           class="btn"
-          onclick={() => (exportConfirmOpen = false)}
+          onclick={closeExportConfirm}
           disabled={exportRunning}
         >
           {exportResult || exportError ? 'Close' : 'Cancel'}

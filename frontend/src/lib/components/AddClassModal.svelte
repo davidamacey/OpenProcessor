@@ -1,5 +1,6 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import { addClass } from '$lib/api';
   import { classesStore } from '$stores/classes.svelte';
   import { toastStore } from '$stores/toast.svelte';
@@ -78,19 +79,20 @@
 </script>
 
 {#if open}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
     aria-label="Add class"
     use:focusOnMount
+    use:trapFocus={{ onEscape: onclose }}
     tabindex="-1"
     onclick={(e) => {
       // Backdrop only: a click that bubbled up from the panel is not a
       // dismiss gesture.
       if (e.target === e.currentTarget) onclose();
     }}
-    onkeydown={(e) => e.key === 'Escape' && onclose()}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"

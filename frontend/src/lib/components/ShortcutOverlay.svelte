@@ -1,6 +1,7 @@
 <script lang="ts">
   import { setClassHotkey } from '$lib/classHotkey';
   import { isAssignableClass } from '$lib/classVisibility';
+  import { formatShortcutKey } from '$lib/keyboardDisplay';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import type { RegistryClass } from '$lib/types';
@@ -86,7 +87,7 @@
             {#each shortcuts as s (s.scope + ':' + s.key)}
               <li class="flex items-center justify-between gap-3 text-sm">
                 <span class="text-zinc-300">{s.description}</span>
-                <kbd class="font-mono text-[11px]">{s.key}</kbd>
+                <kbd class="font-mono text-[11px]">{formatShortcutKey(s.key)}</kbd>
               </li>
             {/each}
           </ul>

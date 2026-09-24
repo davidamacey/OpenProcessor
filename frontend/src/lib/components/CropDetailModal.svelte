@@ -1,5 +1,6 @@
 <script lang="ts">
   import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import { getSourceImageWithBbox, getThumbUrl } from '$lib/api';
   import type { Crop } from '$lib/types';
   import CropMetaPanel from './CropMetaPanel.svelte';
@@ -10,32 +11,20 @@
   }
 
   let { crop, onclose }: Props = $props();
-
-  // Close on Esc — matches the existing CropCard expanded-image modal so
-  // muscle memory carries over.
-  function onWindowKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onclose();
-    }
-  }
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} />
-
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
   role="dialog"
   aria-modal="true"
   aria-label="Crop details"
   use:focusOnMount
+  use:trapFocus={{ onEscape: onclose }}
   onclick={(e) => {
     // Backdrop only: a click that bubbled up from the panel is not a
     // dismiss gesture.
     if (e.target === e.currentTarget) onclose();
-  }}
-  onkeydown={(e) => {
-    if (e.key === 'Escape') onclose();
   }}
   tabindex="-1"
 >

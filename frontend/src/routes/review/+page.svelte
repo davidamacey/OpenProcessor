@@ -13,6 +13,7 @@
     setSlotBox,
     patchSlotMeta,
   } from '$lib/api';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
@@ -2183,10 +2184,15 @@
     onclick={closePicker}
     role="presentation"
   >
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div
       class="w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search classes"
+      tabindex="-1"
+      use:trapFocus={{ onEscape: closePicker }}
       onclick={(e) => e.stopPropagation()}
-      role="presentation"
     >
       <input
         bind:this={pickerInputEl}

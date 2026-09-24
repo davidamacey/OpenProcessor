@@ -53,6 +53,14 @@ class KeyboardStore {
   #regs: Registration[] = [];
   #listenerInstalled = false;
 
+  constructor() {
+    // m11 (2026-09-24 interactive pass): the listener used to install lazily
+    // on the first register() call, so `~`/`` ` `` did nothing on pages that
+    // register no shortcuts of their own (/clusters, /classes, /dashboard).
+    // The overlay toggle is a global affordance, so install at boot.
+    this.#install();
+  }
+
   /** Set the current page-scope. Pages call this in $effect on mount. */
   setScope(scope: string): void {
     this.scope = scope;
@@ -110,8 +118,19 @@ class KeyboardStore {
   #dispatch(e: KeyboardEvent): void {
     if (isTypingTarget(e.target)) return;
     const combo = normalize(e);
-    // Built-in: ~ toggles overlay, Esc closes overlay.
-    if (combo === '`' || combo === '~' || combo === 'shift+`') {
+    // Built-in: ` or Shift+` (~) toggles the overlay, Esc closes it.
+    // m11 (2026-09-24 interactive pass): on a US layout, Shift+` reports
+    // e.key === '~', which normalize() renders as "shift+~" — the old
+    // check only matched "shift+`", so Shift+backtick never worked. Match
+    // on the physical key (e.code) too, since some browsers/layouts still
+    // report e.key === '`' while shiftKey is true.
+    const isBacktickCombo =
+      combo === '`' ||
+      combo === '~' ||
+      combo === 'shift+`' ||
+      combo === 'shift+~' ||
+      e.code === 'Backquote';
+    if (isBacktickCombo) {
       e.preventDefault();
       this.toggleOverlay();
       return;

@@ -13,6 +13,8 @@
   } from '$lib/api';
   import type { ExportStatus, StatsSummary, TestHoldoutStats } from '$lib/types';
   import { buildExportRows, type ExportRow } from '$lib/export/exportDatasetRows';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -176,6 +178,16 @@
     freezePercent = 10;
     freezeSeed = 42;
     freezeOpen = true;
+  }
+
+  function closeFreeze(): void {
+    if (freezeBusy) return;
+    freezeOpen = false;
+  }
+
+  function closeExportModal(): void {
+    if (exportRunning) return;
+    exportModalOpen = false;
   }
 
   async function submitFreeze(): Promise<void> {
@@ -467,11 +479,18 @@
 
 <!-- Export progress modal -->
 {#if exportModalOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
     aria-label="Export progress"
+    tabindex="-1"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: closeExportModal }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeExportModal();
+    }}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
@@ -515,8 +534,11 @@
         <p class="text-xs text-zinc-400">No active export.</p>
       {/if}
       <div class="mt-4 flex justify-end">
-        <button type="button" class="btn" onclick={() => (exportModalOpen = false)}
-          >Close</button
+        <button
+          type="button"
+          class="btn"
+          onclick={closeExportModal}
+          disabled={exportRunning}>Close</button
         >
       </div>
     </div>
@@ -525,11 +547,18 @@
 
 <!-- Freeze test holdout modal -->
 {#if freezeOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
     aria-label="Freeze test holdout"
+    tabindex="-1"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: closeFreeze }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeFreeze();
+    }}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
@@ -556,12 +585,7 @@
         <input type="number" bind:value={freezeSeed} class="input w-full" />
       </label>
       <div class="flex justify-end gap-2">
-        <button
-          type="button"
-          class="btn"
-          onclick={() => (freezeOpen = false)}
-          disabled={freezeBusy}
-        >
+        <button type="button" class="btn" onclick={closeFreeze} disabled={freezeBusy}>
           Cancel
         </button>
         <button

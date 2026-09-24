@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import {
     flagNeedsNewClass,
@@ -1276,11 +1277,17 @@
 </div>
 
 {#if movePickerOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
     aria-label="Move crops to cluster"
+    tabindex="-1"
+    use:trapFocus={{ onEscape: cancelMovePicker }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) cancelMovePicker();
+    }}
   >
     <div
       class="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"

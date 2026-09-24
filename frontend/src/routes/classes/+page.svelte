@@ -12,6 +12,7 @@
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { focusOnMount } from '$lib/actions/focusOnMount';
+  import { trapFocus } from '$lib/actions/trapFocus';
   import { reservedHotkeyLetters, setClassHotkey } from '$lib/classHotkey';
   import type {
     ClassMergeDryRun,
@@ -165,6 +166,11 @@
     mergePreview = null;
     mergePreviewError = null;
     mergeOpen = true;
+  }
+
+  function closeMerge(): void {
+    if (busy) return;
+    mergeOpen = false;
   }
 
   const mergeSource = $derived(
@@ -717,11 +723,18 @@
 
 <!-- Merge modal -->
 {#if mergeOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
     role="dialog"
     aria-modal="true"
     aria-label="Merge classes"
+    tabindex="-1"
+    use:focusOnMount
+    use:trapFocus={{ onEscape: closeMerge }}
+    onclick={(e) => {
+      if (e.target === e.currentTarget) closeMerge();
+    }}
   >
     <div
       class="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
@@ -792,12 +805,7 @@
       {/if}
 
       <div class="flex justify-end gap-2">
-        <button
-          type="button"
-          class="btn"
-          onclick={() => (mergeOpen = false)}
-          disabled={busy}
-        >
+        <button type="button" class="btn" onclick={closeMerge} disabled={busy}>
           Cancel
         </button>
         <button

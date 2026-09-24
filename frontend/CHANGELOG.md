@@ -943,6 +943,34 @@ class`) so an operator can see where a crop lives before relabeling
     every class group (~4,700px below a chip clicked near the top),
     which looked like the click did nothing. It now renders inline
     under the class group whose chip was clicked.
+  - **m11** — the global `` ` ``/`~` shortcut-overlay toggle only
+    worked on pages that had registered at least one shortcut of their
+    own (`/review`, `/clusters/[id]`); `keyboardStore`'s window listener
+    installed lazily on the first `register()` call, so `/clusters`,
+    `/classes` and `/dashboard` never got one. It now installs at
+    construction. `Shift+`` `` (`~`) also normalizes to `"shift+~"`,
+which the old check (`combo === 'shift+\``) never matched — fixed
+    to match on the physical key too.
+  - **m12** — added a shared `trapFocus` action
+    (`src/lib/actions/trapFocus.ts`) that Tab-wraps focus inside a
+    dialog and restores it to the trigger on close, wired into every
+    modal named in the pass doc: the `/review` class picker, the
+    `/classes` merge dialog, the `/settings` shared-default confirm,
+    the dashboard Run-VLM/export confirms and the `AutoLabelPanel`
+    recluster confirm (new, see p2 below), `/export`'s progress and
+    freeze-holdout dialogs, `/clusters/[id]`'s move picker, the Add
+    Class modal and the crop detail modal. Previously Tab could walk
+    out of any of these into the page behind it.
+  - **p8** — the shortcut overlay printed the raw combo string
+    (`arrowright`) instead of a glyph. Added
+    `src/lib/keyboardDisplay.ts`'s `formatShortcutKey()` (→ ← ↑ ↓,
+    title-cased modifiers) and wired it into `ShortcutOverlay.svelte`.
+  - **p6** — the crop detail modal's "Labeled at" ISO timestamp had no
+    whitespace to wrap on and got visually clipped inside the
+    fixed-width metadata panel. Added `break-all` to that value.
+  - **p2** — `AutoLabelPanel`'s "Recluster now" fired with no
+    confirmation (Run VLM on `/clusters/[id]` already gained one in the
+    earlier merge pass fix). It now opens a confirm dialog first.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —
