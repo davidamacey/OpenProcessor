@@ -142,7 +142,7 @@ trainer. A deployment supplies:
   labels the detector missed) seeds every **newly created** item with
   region status `pending_detection` — the only way an item enters the
   worker's queue. An existing region status is never overwritten on
-  re-ingest. The per-image `n_plates` count in the ingest response is
+  re-ingest. The per-image `n_regions` count in the ingest response is
   the number of items seeded this way (`0` with no region profile), and
   `GET {prefix}/ingest/sam_drain` reports them under
   `pending_detection`. **Enabling a region profile on a deployment that

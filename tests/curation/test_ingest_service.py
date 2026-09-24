@@ -909,7 +909,7 @@ class TestRegionStatusSeeding:
             results=[IngestResult(image_path='/a.jpg', n_crops=3, n_region_queued=2)]
         )
         [resp] = _batch_response(batch, []).results
-        assert resp.n_plates == 2
+        assert resp.n_regions == 2
 
 
 # =============================================================================
