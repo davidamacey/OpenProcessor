@@ -33,7 +33,7 @@ _BAKEOFF_HARNESS_FILES = (
     'scripts/curation/bakeoff/baselines.json',
     'scripts/curation/bakeoff/run.py',
     'scripts/curation/bakeoff/bakeoff_runner.py',
-    'scripts/curation/bakeoff/paper_numbers.py',
+    'examples/bakeoff_lpr_paper/paper_numbers.py',
 )
 _HOST_MOUNT_PATH_RE = re.compile(r'/(?:mnt|home|Users)/[A-Za-z0-9_./\-]+')
 
