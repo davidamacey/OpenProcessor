@@ -881,6 +881,38 @@ export function getTrainingCandidates(
   );
 }
 
+/**
+ * `GET {API_PREFIX}/training_cohorts?class_id=` (2026-09-24 logic-moves
+ * W6, item 13) — the deployment's own training-cohort definitions,
+ * already resolved for the requested class (params fold `class_id` into
+ * every cohort). `row_kind: 'region'` cohorts only appear when the
+ * backend has a region profile configured; `class_id` omitted returns
+ * the generic (unscoped) definitions. `/train`'s `runCohortQuery`
+ * dispatches `endpoint`/`params` verbatim — no client re-derivation.
+ */
+export interface ServedTrainingCohort {
+  id: string;
+  label: string;
+  description: string;
+  cutoffs: Record<string, number>;
+  /** Relative to API_PREFIX, e.g. `/crops`, `/regions/training_candidates`. */
+  endpoint: string;
+  /** Already resolved for the requested class — no `{classId}` templates. */
+  params: Record<string, unknown>;
+  row_kind: 'crop' | 'region';
+}
+
+export function getTrainingCohorts(
+  classId?: number | null,
+  signal?: AbortSignal,
+): Promise<{ cohorts: ServedTrainingCohort[] }> {
+  return apiFetch<{ cohorts: ServedTrainingCohort[] }>(
+    `${API_PREFIX}/training_cohorts${qs({ class_id: classId ?? undefined })}`,
+    {},
+    signal,
+  );
+}
+
 export function getModelsStatus(signal?: AbortSignal): Promise<ModelsStatus> {
   return apiFetch<ModelsStatus>(`${API_PREFIX}/models/status`, {}, signal);
 }
@@ -1107,6 +1139,10 @@ type RawCluster = {
   dominant_class_name: string | null;
   dominant_count: number;
   purity: number | null;
+  /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
+  purity_tier: 'pure' | 'mixed' | 'noisy' | null;
+  /** Server's auto-promote eligibility gate for this cluster. */
+  promotable: boolean;
   is_unlabeled: boolean;
   n_subclusters: number;
   updated_at: string | null;
@@ -1124,9 +1160,23 @@ type RawClustersResp = {
   total_class_clusters: number;
   total_candidate_clusters: number;
   cluster_id_offset: number;
+  /** Thresholds behind every item's `purity_tier`/`promotable` — informational,
+   *  not re-applied client-side. */
+  purity_thresholds?: {
+    pure_min: number;
+    mixed_min: number;
+    promote_min_members: number;
+    promote_min_labelled_share: number;
+  } | null;
+  /** Similarity floor behind every crop's `cluster_is_core` — copied onto
+   *  each mapped `Cluster` so `/clusters/[id]`'s cut line never hardcodes it. */
+  core_similarity_min?: number | null;
 };
 
-function _rawClusterToCluster(c: RawCluster): Cluster {
+function _rawClusterToCluster(
+  c: RawCluster,
+  coreSimilarityMin: number | null = null,
+): Cluster {
   return {
     id: c.cluster_id,
     cluster_kind: c.cluster_kind,
@@ -1136,6 +1186,9 @@ function _rawClusterToCluster(c: RawCluster): Cluster {
     dominant_class_name: c.dominant_class_name,
     dominant_pct: c.purity,
     purity: c.purity,
+    purity_tier: c.purity_tier ?? null,
+    promotable: !!c.promotable,
+    core_similarity_min: coreSimilarityMin,
     is_unlabeled: c.is_unlabeled,
     representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
     has_subclusters: c.n_subclusters > 0,
@@ -1150,9 +1203,10 @@ export async function getClusters(
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<Cluster>> {
   // Single round-trip. The backend's {API_PREFIX}/clusters aggregation already
-  // returns dominant class, purity, validated_count, n_subclusters,
-  // cluster_kind, and is_unlabeled. The frontend ONLY shapes the result
-  // into the labeler's Cluster type — no semantic compute here.
+  // returns dominant class, purity, purity_tier, promotable,
+  // validated_count, n_subclusters, cluster_kind, and is_unlabeled. The
+  // frontend ONLY shapes the result into the labeler's Cluster type — no
+  // semantic compute here.
   const raw = await apiFetch<RawClustersResp>(
     `${API_PREFIX}/clusters${qs({
       per_cluster: 4,
@@ -1170,7 +1224,8 @@ export async function getClusters(
     {},
     signal,
   );
-  const items = (raw.items ?? []).map(_rawClusterToCluster);
+  const coreSimilarityMin = raw.core_similarity_min ?? null;
+  const items = (raw.items ?? []).map((c) => _rawClusterToCluster(c, coreSimilarityMin));
   return {
     items,
     total: raw.total ?? items.length,
@@ -1202,6 +1257,14 @@ export type RawCrop = {
   confidence?: number;
   cluster_id?: number | null;
   cluster_distance?: number | null;
+  /** Server-computed cosine similarity to this crop's cluster centroid
+   *  (0..1) — the served replacement for the old client `1 -
+   *  cluster_distance` estimate. Null when the backend hasn't computed
+   *  it for this crop. */
+  cluster_similarity?: number | null;
+  /** Server-computed: `cluster_similarity >= core_similarity_min`. Drives
+   *  the cluster-detail cut line — see `Crop.cluster_is_core`. */
+  cluster_is_core?: boolean | null;
   cluster_subid?: string | null;
   label_validated?: boolean;
   /** G2: the class-label-specific validation flag. `label_validated` is
@@ -1250,6 +1313,8 @@ export const RAW_CROP_KEYS = [
   'confidence',
   'cluster_id',
   'cluster_distance',
+  'cluster_similarity',
+  'cluster_is_core',
   'cluster_subid',
   'label_validated',
   'class_validated',
@@ -1298,8 +1363,9 @@ function mapRawCrop(c: RawCrop): Crop {
     class_validated: !!c.class_validated,
     label_confidence: c.confidence ?? null,
     cluster_id: c.cluster_id ?? null,
-    similarity_to_centroid:
-      c.cluster_distance != null ? Math.max(0, 1 - c.cluster_distance) : null,
+    // Served directly — no client 1-cosine-distance estimate.
+    similarity_to_centroid: c.cluster_similarity ?? null,
+    cluster_is_core: c.cluster_is_core ?? null,
     cluster_subid: c.cluster_subid ?? null,
     class_detector: c.class_detector ?? null,
     class_detector_version: c.class_detector_version ?? null,
@@ -1412,7 +1478,7 @@ export async function getCluster(
   const items = cropPage.crops.map(mapRawCrop);
   const found = clustersResp?.items?.find((c) => c.cluster_id === id) ?? null;
   const cluster: Cluster = found
-    ? _rawClusterToCluster(found)
+    ? _rawClusterToCluster(found, clustersResp?.core_similarity_min ?? null)
     : {
         // Fallback only if the cluster card lookup failed — leaves
         // identity fields null but lets the crop grid render.
@@ -1424,6 +1490,9 @@ export async function getCluster(
         dominant_class_name: null,
         dominant_pct: null,
         purity: null,
+        purity_tier: null,
+        promotable: false,
+        core_similarity_min: null,
         is_unlabeled: true,
         has_subclusters: false,
         n_subclusters: 0,
@@ -1796,43 +1865,50 @@ export async function batchPlateStatus(
   );
 }
 
-export async function runVlmOnCluster(
+/**
+ * Kick off a VLM-label run scoped to one cluster: `POST
+ * {API_PREFIX}/vlm/label_cluster/{cluster_id}[?prompt_pack=]`. The server
+ * selects every unvalidated, non-holdout, non-excluded member itself —
+ * the frontend no longer fetches the crop page or chunks ids client-side
+ * (that was the old `{API_PREFIX}/vlm/label_batch` chunk-of-64 loop,
+ * deleted 2026-09-24 logic-moves W3). Returns the queued job's state
+ * (`AutoLabelJobState`, defined below); 409 when another auto-label job
+ * is already running. Progress and the final per-stage result come from
+ * polling `{API_PREFIX}/pipeline/auto_label/status` — see
+ * `pollAutoLabelJob`.
+ */
+export function runVlmOnCluster(
   clusterId: number,
+  promptPack?: string | null,
   signal?: AbortSignal,
-): Promise<{ predicted: number; updated: number; new_class_proposals?: unknown[] }> {
-  // {API_PREFIX}/vlm/label_batch takes {crop_ids: [...]} (max 64) — the
-  // backend renamed the path segment gemma → vlm when it swapped Gemma
-  // for a pluggable VLM abstraction. The JSON field names (gemma_*) and
-  // the vlm_low_conf review-tab id are frozen wire contract and did
-  // NOT move. Fetch the
-  // unvalidated crops in this cluster first, then POST in chunks of 64.
-  type CropPage = { crops: Array<{ crop_id: string }> };
-  const page = await apiFetch<CropPage>(
-    `${API_PREFIX}/crops${qs({ cluster_id: clusterId, label_validated: false, page_size: 200 })}`,
-    {},
+): Promise<AutoLabelJobState> {
+  return apiFetch<AutoLabelJobState>(
+    `${API_PREFIX}/vlm/label_cluster/${clusterId}${qs({ prompt_pack: promptPack ?? undefined })}`,
+    { method: 'POST' },
     signal,
   );
-  const cropIds = page.crops.map((c) => c.crop_id);
-  if (cropIds.length === 0) return { predicted: 0, updated: 0, new_class_proposals: [] };
-  let predicted = 0;
-  let updated = 0;
-  const proposals: unknown[] = [];
-  for (let i = 0; i < cropIds.length; i += 64) {
-    const chunk = cropIds.slice(i, i + 64);
-    const r = await apiFetch<{
-      predicted: number;
-      updated: number;
-      new_class_proposals?: unknown[];
-    }>(
-      `${API_PREFIX}/vlm/label_batch`,
-      { method: 'POST', body: JSON.stringify({ crop_ids: chunk }) },
-      signal,
-    );
-    predicted += r.predicted ?? 0;
-    updated += r.updated ?? 0;
-    if (Array.isArray(r.new_class_proposals)) proposals.push(...r.new_class_proposals);
+}
+
+/**
+ * Poll `{API_PREFIX}/pipeline/auto_label/status` until the job leaves
+ * `running`, calling `onUpdate` with every intermediate state so a caller
+ * can render stage/progress. Shared by every caller of `runVlmOnCluster`
+ * (`/dashboard`, `/clusters/[id]`) instead of each page hand-rolling its
+ * own `setTimeout` loop — `AutoLabelPanel` keeps its own poller since it
+ * also needs to detect a daemon-fired run while idle, which this helper,
+ * only ever started right after `runVlmOnCluster`, does not.
+ */
+export async function pollAutoLabelJob(
+  onUpdate: (job: AutoLabelJobState) => void,
+  signal?: AbortSignal,
+  intervalMs = 1500,
+): Promise<AutoLabelJobState> {
+  for (;;) {
+    const job = await getAutoLabelStatus(signal);
+    onUpdate(job);
+    if (job.status !== 'running') return job;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  return { predicted, updated, new_class_proposals: proposals };
 }
 
 export type RefineClusterResponse = {

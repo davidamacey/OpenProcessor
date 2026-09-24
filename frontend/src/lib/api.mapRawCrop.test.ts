@@ -47,8 +47,10 @@ describe('mapRawCrop full field mapping', () => {
     // confidence -> label_confidence (the field is renamed on the wire).
     expect(crop.label_confidence).toBe(raw.confidence);
     expect(crop.cluster_id).toBe(raw.cluster_id);
-    // similarity_to_centroid = max(0, 1 - cluster_distance)
-    expect(crop.similarity_to_centroid).toBeCloseTo(1 - raw.cluster_distance!, 10);
+    // similarity_to_centroid is served verbatim as cluster_similarity — no
+    // client 1-cluster_distance computation (2026-09-24 logic-moves W6).
+    expect(crop.similarity_to_centroid).toBe(raw.cluster_similarity);
+    expect(crop.cluster_is_core).toBe(raw.cluster_is_core);
     expect(crop.cluster_subid).toBe(raw.cluster_subid);
     expect(crop.class_detector).toBe(raw.class_detector);
     expect(crop.class_detector_version).toBe(raw.class_detector_version);
@@ -84,7 +86,8 @@ describe('mapRawCrop full field mapping', () => {
       class_validated: false,
       test_holdout: false,
       confidence: 0,
-      cluster_distance: 0,
+      cluster_similarity: 0,
+      cluster_is_core: false,
       crop_rank_in_image: 0,
       mistakenness_score: 0,
     });
@@ -96,18 +99,20 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.class_validated).toBe(false);
     expect(crop.test_holdout).toBe(false);
     expect(crop.label_confidence).toBe(0);
-    expect(crop.similarity_to_centroid).toBe(1);
+    expect(crop.similarity_to_centroid).toBe(0);
+    expect(crop.cluster_is_core).toBe(false);
     expect(crop.crop_rank_in_image).toBe(0);
     expect(crop.mistakenness_score).toBe(0);
   });
 
-  it('leaves similarity_to_centroid null when cluster_distance is null, rather than computing 1 - null', async () => {
-    const raw = makeItem({ cluster_distance: null });
+  it('leaves similarity_to_centroid/cluster_is_core null when the backend has not computed them, rather than deriving them from cluster_distance', async () => {
+    const raw = makeItem({ cluster_similarity: null, cluster_is_core: null });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(raw)));
 
     const crop = await getCrop(raw.crop_id);
 
     expect(crop.similarity_to_centroid).toBeNull();
+    expect(crop.cluster_is_core).toBeNull();
   });
 
   it("falls back updated_at to '' when the wire omits it, rather than the string cast leaking a non-string", async () => {

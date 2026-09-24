@@ -250,9 +250,15 @@ export interface Crop {
   vlm_suggested_class_name?: string | null;
   /** The VLM's categorical confidence: `high` | `medium` | `low`. */
   vlm_confidence?: string | null;
-  /** Cluster + similarity-to-centroid (0..1). */
+  /** Cluster + similarity-to-centroid (0..1), served verbatim as
+   *  `cluster_similarity` — no client 1−cosine-distance computation. */
   cluster_id: number | null;
   similarity_to_centroid: number | null;
+  /** Server-computed: this crop's `cluster_similarity` is at/above the
+   *  cluster response's `core_similarity_min`. Null when the backend
+   *  hasn't computed a similarity for this crop yet. Drives the
+   *  cluster-detail "core" cut line — never a client-side 0.75 constant. */
+  cluster_is_core?: boolean | null;
   /** AHC sub-cluster id (string, e.g. "47a"), populated only after
    *  refine ran. Cleared by the backend whenever cluster_id changes
    *  (move / batch_label / class_merge / residual recluster) — the
@@ -310,6 +316,10 @@ export interface Crop {
  *  backend derives this from cluster_id; the frontend NEVER recomputes it. */
 export type ClusterKind = 'class' | 'candidate' | 'unassigned' | 'false_positive';
 
+/** Backend's purity banding (`purity_thresholds`: pure_min 0.85 / mixed_min
+ *  0.6) — served per cluster, never recomputed against a client constant. */
+export type PurityTier = 'pure' | 'mixed' | 'noisy';
+
 export interface Cluster {
   id: number;
   /** Backend-derived: "class" | "candidate" | "unassigned". */
@@ -321,6 +331,19 @@ export interface Cluster {
   dominant_class_name: string | null;
   dominant_pct: number | null;
   purity: number | null; // 0..1, null when no labelled members
+  /** Server-banded purity — drives the card's pure/mixed/noisy badge and
+   *  border color. Null only for the client-only "cluster card lookup
+   *  failed" stub in `getCluster`. */
+  purity_tier: PurityTier | null;
+  /** Server's auto-promote eligibility for this cluster (purity +
+   *  member-count + labelled-share gate — `purity_thresholds` on the
+   *  `{API_PREFIX}/clusters` response). */
+  promotable: boolean;
+  /** `{API_PREFIX}/clusters`' `core_similarity_min` (0.75), copied onto every
+   *  cluster in that response so a consumer doesn't need the raw list
+   *  response's top-level field. Null when the lookup that would have
+   *  supplied it failed (see `getCluster`'s stub). */
+  core_similarity_min: number | null;
   /** True when no member has a class_name — pure candidate. */
   is_unlabeled: boolean;
   representative_crop_ids: string[]; // up to 4
