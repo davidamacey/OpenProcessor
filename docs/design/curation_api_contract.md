@@ -999,6 +999,8 @@ detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
 | `<src>:combined_verify_ok` | VLM confirmed the candidate box (region written `detected`) |
 | `<src>:combined_verify_reject` | VLM rejected the candidate box |
 | `<src>:combined_verify_reject:region_visible_elsewhere` | VLM sees a region and answered `region_bbox_correct=false` for the candidate box |
+| `<src>:combined_verify_reject:verifier_no_verdict` | VLM gave no box verdict on every allowed attempt (see below) |
+| `vlm_visible:no_verdict` | visibility pre-filter gave no verdict on every allowed attempt; sent on to detection (fail open) |
 | `<src>:combined_no_region_visible` | VLM sees no region at all |
 | `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
 | `<seg>:skip_vlm_verify` | high-score segmenter box written without a VLM call |
@@ -1008,10 +1010,23 @@ detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
 A VLM reply that sees a region but gives no box verdict
 (`region_bbox_correct` `null`, absent, or a quoted null) is not a reject:
 nothing is written and the item stays pending for a retry, so no chain
-entry is stored for it.
+entry is stored for it. An unparseable / missing combined entry is
+treated the same way.
 Likewise an empty reply to the visibility pre-filter is no verdict (never
 `vlm_visible:no`): the item stays pending and is retried. `POST
 /vlm/region_visible_batch` leaves such crops out of its `visible` map.
+
+The VLM runs at temperature 0, so a no-verdict reply is often
+deterministic. Retries are bounded per item and stage by
+`OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS` (default 3, counted in the
+worker process, reset by a restart). At the cap the combined stage writes
+`verify_rejected` with `region_rejection_reason=verifier_no_verdict`, the
+candidate kept in `region_candidate_*` and `region_bbox_correct=null` (no
+verdict was given), so a human can confirm it or it can be retried with
+`requeue_regions.py --status verify_rejected --reason verifier_no_verdict`;
+the visibility stage sends the item on to detection (fail open). A VLM
+transport failure (no reply at all) is not a no-verdict reply: it is
+retried and never counted.
 
 The combined call marks the candidate box with a red rectangle drawn just
 *outside* the box (so it never covers the region's own pixels) and its
@@ -1088,8 +1103,15 @@ the worker keeps it for review instead of discarding it:
 `region_candidate_detector`, `region_candidate_detector_version`,
 `region_candidate_source`, plus `region_rejection_reason`
 (`region_visible_elsewhere` for a verifier `region_bbox_correct=false`,
-`sanity_reject:<gate reason>` for the geometry gate) and
-`region_bbox_correct=false` for the verifier verdict. The candidate is
+`sanity_reject:<gate reason>` for the geometry gate, `verifier_no_verdict`
+when the verifier never gave a box verdict) and `region_bbox_correct` for
+the verifier verdict (`false`, or `null` for `verifier_no_verdict`).
+`GET /regions/vocabulary` serves these reasons as `rejection_reasons`:
+`[{id, label, kind, match, label_template}]`, `kind` one of
+`model_verdict` / `automatic` / `needs_human`, `match` `exact` or
+`prefix` (`sanity_reject:` -- the rest of the stored value is the gate's
+reason, substituted for `{detail}` in `label_template`). A human-written
+reason is free text and not listed. The candidate is
 never an accepted region: `region_bbox_norm` stays `null`, so browse,
 clustering and export ignore it. A human reverses the rejection with the
 confirm write (see "Region lifecycle"); region undo restores it. An

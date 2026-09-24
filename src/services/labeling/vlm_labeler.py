@@ -261,6 +261,16 @@ class CombinedParseFailure(Exception):  # noqa: N818 - documented public symbol
     """
 
 
+class CombinedTransportFailure(CombinedParseFailure):
+    """The combined call itself failed (HTTP / transport): no reply at all.
+
+    Distinct from a reply without a verdict: a caller that bounds retries
+    of no-verdict replies must keep retrying these (the VLM may just be
+    down). Subclasses :class:`CombinedParseFailure` so callers that only
+    fall back on any failure keep working unchanged.
+    """
+
+
 class VlmHealth(BaseModel):
     """Health-probe response."""
 
@@ -1365,7 +1375,7 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            raise CombinedParseFailure(f'http error: {exc}') from exc
+            raise CombinedTransportFailure(f'http error: {exc}') from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))
         if not raw:
@@ -1414,10 +1424,12 @@ class VlmLabeler:
         before encoding so the VLM can reason about it visually.
 
         Returns ``{crop_id: VlmCombinedReply | None}``. A ``None`` value
-        means the per-crop entry could not be parsed (missing in
-        response, bad JSON, or whole-chunk HTTP failure) — the caller
-        should leave such crops in pending rather than write a terminal
-        status.
+        means the VLM answered but the per-crop entry could not be parsed
+        (missing in response, bad JSON) — a reply without a verdict.
+
+        Raises:
+            CombinedTransportFailure: an upstream call failed (HTTP /
+                transport) -- no reply at all, for the whole batch.
         """
 
         if not crops:
@@ -1468,6 +1480,8 @@ class VlmLabeler:
                     draw_overlay=draw_overlay,
                 )
                 return {crop.crop_id: reply}
+            except CombinedTransportFailure:
+                raise
             except CombinedParseFailure:
                 return {crop.crop_id: None}
 
@@ -1549,9 +1563,10 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            # Whole-chunk HTTP failure → per-crop None so the caller can
-            # leave each crop in pending for a future retry.
-            return {c.crop_id: None for c in chunk}
+            # No reply at all: raise, so the caller can tell an outage
+            # (keep retrying) from a reply that gave no verdict.
+            msg = f'http error: {exc}'
+            raise CombinedTransportFailure(msg) from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))
         finish_reason = ''
@@ -2072,6 +2087,7 @@ __all__ = [
     'DEFAULT_REQUESTS_PER_SECOND',
     'CombinedCrop',
     'CombinedParseFailure',
+    'CombinedTransportFailure',
     'ItemCrop',
     'RegionCrop',
     'VlmClassPrediction',

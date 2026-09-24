@@ -213,12 +213,6 @@ def candidate_fields(F: Any) -> tuple[str, ...]:
     )
 
 
-# ``RegionFields.rejection_reason`` values for a verifier reject. The
-# sanity-gate one carries the gate's reason after the prefix.
-REJECT_REASON_VERIFIER = 'region_visible_elsewhere'
-REJECT_REASON_SANITY_PREFIX = 'sanity_reject:'
-
-
 def candidate_reject_doc(
     *,
     candidate_in_source: tuple[float, float, float, float] | None,

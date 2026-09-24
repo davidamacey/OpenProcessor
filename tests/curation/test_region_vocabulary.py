@@ -42,6 +42,7 @@ def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient)
         'chain_actors',
         'text_rules',
         'text_choices',
+        'rejection_reasons',
     }
     # No region profile: no region text, so no rules.
     assert body['text_rules'] is None

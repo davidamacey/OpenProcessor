@@ -355,7 +355,10 @@ async def regions_vocabulary() -> dict[str, Any]:
     (W0: naming sweep finding m9).
 
     ``{detectors: [{id, label, role, filterable}], region_sources:
-    [{id, label, role}], chain_actors: [{id, label, role}]}``. Built from
+    [{id, label, role}], chain_actors: [{id, label, role}], text_rules,
+    text_choices, rejection_reasons: [{id, label, kind, match,
+    label_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /
+    ``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from
     the active region profile / ingest profiles / ``OP_VLM_MODEL`` --
     never a hardcoded model id. ``filterable`` marks the values that can
     appear in stored ``region_detector`` (the detector filter's exact

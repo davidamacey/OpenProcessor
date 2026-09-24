@@ -9673,7 +9673,7 @@
     },
     "/curation/regions/vocabulary": {
       "get": {
-        "description": "The deployment-configured detector/segmenter/verifier vocabulary\n(W0: naming sweep finding m9).\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}]}``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
+        "description": "The deployment-configured detector/segmenter/verifier vocabulary\n(W0: naming sweep finding m9).\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
         "operationId": "regions_vocabulary_curation_regions_vocabulary_get",
         "responses": {
           "200": {
