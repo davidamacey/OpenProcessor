@@ -691,6 +691,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -720,6 +721,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -765,6 +767,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -805,6 +808,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -827,6 +831,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -875,6 +880,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -893,6 +899,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -910,6 +917,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -1459,6 +1467,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           },
@@ -1620,17 +1629,6 @@
             "default": false,
             "title": "Class Validated",
             "type": "boolean"
-          },
-          "classifier_raw_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classifier Raw Confidence"
           },
           "cluster_distance": {
             "anyOf": [
@@ -3855,6 +3853,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -4029,6 +4028,7 @@
             "items": {
               "type": "string"
             },
+            "maxItems": 5000,
             "title": "Crop Ids",
             "type": "array"
           }
@@ -5089,6 +5089,33 @@
               ],
               "title": "Class Source"
             }
+          },
+          {
+            "description": "Offset into the card list for representatives",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Offset into the card list for representatives",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cards to compute representatives for",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Cards to compute representatives for",
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5270,7 +5297,7 @@
     },
     "/curation/clusters/representatives": {
       "get": {
-        "description": "Return up to ``per_cluster`` representative crop_ids for every cluster.\n\nSingle OpenSearch query using ``terms`` aggregation on ``cluster_id`` with a\n``top_hits`` sub-aggregation sorted by ascending cluster_distance (i.e.,\nclosest to centroid first). Designed for the labeler's clusters grid so it\ncan render all card thumbnails without N round-trips.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
+        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nF-15 / D-4: the cluster id list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster ids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
         "operationId": "cluster_representatives_curation_clusters_representatives_get",
         "parameters": [
           {
@@ -5316,6 +5343,19 @@
               "description": "Restrict to clusters containing this class",
               "title": "Class Id"
             }
+          },
+          {
+            "description": "Offset into the _count-desc cluster list",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Offset into the _count-desc cluster list",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5350,7 +5390,7 @@
     },
     "/curation/crops": {
       "get": {
-        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops whose ``classifier_raw_confidence`` is below the value OR that have no classifier\nprediction at all (blind spots).",
+        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops a classifier scored below the value (``confidence``) OR that have no classifier\nprediction at all (blind spots).",
         "operationId": "list_crops_curation_crops_get",
         "parameters": [
           {
@@ -5397,7 +5437,7 @@
             }
           },
           {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, classifier_raw_confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -5410,7 +5450,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, classifier_raw_confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
               "title": "Sort"
             }
           },

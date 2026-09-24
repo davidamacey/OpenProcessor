@@ -22,7 +22,6 @@
     "class_name",
     "class_source",
     "confidence",
-    "classifier_raw_confidence",
     "label_source",
     "label_validated",
     "class_validated",
@@ -279,18 +278,6 @@
         "default": false,
         "title": "Class Validated",
         "type": "boolean"
-      },
-      "classifier_raw_confidence": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Classifier Raw Confidence"
       },
       "cluster_distance": {
         "anyOf": [
