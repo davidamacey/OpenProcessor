@@ -46,7 +46,7 @@ describe('/settings deployment-defaults page', () => {
   });
 
   it('the advisory branch contains no <select and no Save button', () => {
-    const start = src.indexOf('Advertised but not yet wired');
+    const start = src.indexOf("Set by the backend's startup config");
     expect(start).toBeGreaterThan(-1);
     const sectionCloseIdx = src.indexOf('{/if}', start);
     const slice = src.slice(start, sectionCloseIdx === -1 ? undefined : sectionCloseIdx);
@@ -78,7 +78,8 @@ describe('/settings deployment-defaults page', () => {
   });
 
   it('the advisory branch still contains no Clear button', () => {
-    const start = src.indexOf('Advertised but not yet wired');
+    const start = src.indexOf("Set by the backend's startup config");
+    expect(start).toBeGreaterThan(-1);
     const sectionCloseIdx = src.indexOf('{/if}', start);
     const slice = src.slice(start, sectionCloseIdx === -1 ? undefined : sectionCloseIdx);
     expect(slice).not.toMatch(/>\s*Clear\s*</);
