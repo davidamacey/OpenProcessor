@@ -343,22 +343,39 @@ def test_human_class_writers_replace_detector_provenance(
 ) -> None:
     """Ingest stamps the detector's class provenance on every item, so a
     human relabel (batch label / move) must overwrite it — otherwise a
-    human-validated crop keeps claiming the detector produced its class."""
-    fake_opensearch.get = AsyncMock(
-        return_value={
-            '_source': {
-                'class_id': 1,
-                'class_source': 'item_model',
-                'class_detector': 'some_detector',
-                'class_detector_version': '1',
-                'class_labeler': 'ingest',
-                'test_holdout': False,
-            },
-            '_seq_no': 5,
-            '_primary_term': 1,
+    human-validated crop keeps claiming the detector produced its class.
+
+    Batch label/move route through occ_update_bulk (F-17: one mget + one
+    bulk call instead of one get+update round-trip per crop)."""
+    source = {
+        'class_id': 1,
+        'class_source': 'item_model',
+        'class_detector': 'some_detector',
+        'class_detector_version': '1',
+        'class_labeler': 'ingest',
+        'test_holdout': False,
+    }
+
+    async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
+        return {
+            'docs': [
+                {
+                    '_id': d['_id'],
+                    '_source': dict(source),
+                    '_seq_no': 5,
+                    '_primary_term': 1,
+                    'found': True,
+                }
+                for d in body['docs']
+            ]
         }
-    )
-    fake_opensearch.update = AsyncMock(return_value={'result': 'updated'})
+
+    async def _fake_bulk(*, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
+        items = [{'update': {'_id': a['update']['_id'], 'status': 200}} for a in body[0::2]]
+        return {'errors': False, 'items': items}
+
+    fake_opensearch.mget = AsyncMock(side_effect=_fake_mget)
+    fake_opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
     reg = MagicMock()
     reg.validate_id.return_value = True
     reg.get.return_value = MagicMock(class_name='gadget')
@@ -367,8 +384,9 @@ def test_human_class_writers_replace_detector_provenance(
         r = getattr(app_client, method)(url, json=body)
     assert r.status_code == 200, r.text
 
-    [call] = fake_opensearch.update.call_args_list
-    doc = call.kwargs['body']['doc']
+    [call] = fake_opensearch.bulk.call_args_list
+    bulk_body = call.kwargs['body']
+    doc = bulk_body[1]['doc']
     assert doc['class_detector'] == 'human'
     assert doc['class_labeler'] == 'human'
     assert doc['class_labeled_at']
@@ -433,13 +451,15 @@ def test_crops_listing_filters_test_holdout_by_default(
 
     r = app_client.get('/curation/crops')
     assert r.status_code == 200, r.text
-    must = captured['body']['query']['bool']['must']
+    # F-19: this is a pure predicate (must_not term), so it lives in
+    # filter context now, not must.
+    filt = captured['body']['query']['bool']['filter']
     has_test_filter = any(
         isinstance(m, dict)
         and 'bool' in m
         and 'must_not' in (m.get('bool') or {})
         and m['bool']['must_not'].get('term', {}).get('test_holdout') is True
-        for m in must
+        for m in filt
     )
     assert has_test_filter, 'test_holdout should be filtered out by default'
 
@@ -468,3 +488,14 @@ def test_crops_listing_includes_test_when_requested(
         for m in must
     )
     assert not has_test_filter
+
+
+def test_batch_label_rejects_more_than_5000_crop_ids(app_client: Any) -> None:
+    """F-17: crop_ids batch fields are capped at 5000 (max_length) so a
+    malformed/huge payload 422s instead of driving an unbounded OCC-bulk
+    write."""
+    r = app_client.put(
+        '/curation/crops/batch_label',
+        json={'crop_ids': [f'c{i}' for i in range(5001)], 'class_id': 1},
+    )
+    assert r.status_code == 422, r.text

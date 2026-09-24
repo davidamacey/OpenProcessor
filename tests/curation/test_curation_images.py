@@ -27,7 +27,7 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
-from src.config import CurationConfig, get_curation_config
+from src.config import CurationConfig, get_curation_config, get_region_fields
 
 
 _spec = _ilu.spec_from_file_location(
@@ -332,8 +332,15 @@ class _FakeOSClient:
     def __init__(self, source: dict | None = None, raise_not_found: bool = False) -> None:
         self._source = source
         self._raise_not_found = raise_not_found
+        self.last_call: dict | None = None
 
-    async def get(self, index: str, id: str) -> dict:  # noqa: A002, ARG002 - test stub mirrors OpenSearch signature
+    async def get(
+        self,
+        index: str,
+        id: str,  # noqa: A002 - test stub mirrors OpenSearch signature
+        _source_includes: list[str] | None = None,
+    ) -> dict:
+        self.last_call = {'index': index, 'id': id, '_source_includes': _source_includes}
         if self._raise_not_found:
             err = Exception(f'NotFoundError: no such crop {id}')
             raise err
@@ -367,13 +374,29 @@ def test_fetch_crop_uses_configured_items_index() -> None:
     seen: dict[str, str] = {}
 
     class _RecordingOS:
-        async def get(self, index: str, id: str) -> dict:  # noqa: A002, ARG002
+        async def get(self, index: str, id: str, **kwargs: object) -> dict:  # noqa: A002, ARG002
             seen['index'] = index
             return {'_source': {'image_path': 'x.jpg'}}
 
     cfg = CurationConfig(items_index='custom_items_index')
     asyncio.run(svc._fetch_crop('crop_1', _RecordingOS(), config=cfg))
     assert seen['index'] == 'custom_items_index'
+
+
+def test_fetch_crop_uses_source_includes_covering_every_caller_field() -> None:
+    """F-14: no embeddings/history round-trip — only the fields any
+    ``crops_router`` route actually reads off the returned doc."""
+    src = {'image_path': 'archive/foo.jpg', 'bbox_norm': [0.1, 0.1, 0.5, 0.5]}
+    client = _FakeOSClient(source=src)
+    asyncio.run(svc._fetch_crop('crop_1', client))
+    assert client.last_call is not None
+    includes = client.last_call['_source_includes']
+    assert includes is not None
+    # image_path + bbox_norm: all three crops_router routes.
+    # class_name: crop_full_image's overlay label.
+    # region bbox field: crop_full_image overlay + crop_region_thumbnail.
+    for field in ('image_path', 'bbox_norm', 'class_name', get_region_fields().bbox_norm):
+        assert field in includes, f'{field!r} missing from _source_includes: {includes}'
 
 
 if __name__ == '__main__':

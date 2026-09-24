@@ -64,6 +64,11 @@ ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
 # reason; tests/curation/test_item_embedding_field.py pins the two together.
 ITEM_EMBEDDING_FIELD = 'pe_embedding'
 
+# F-11: how long a released-then-not-yet-refreshed crop id stays in the
+# released_at guard. Mirrors scripts/curation/worker/runner.py's
+# _RELEASED_AT_TTL_S.
+_RELEASED_AT_TTL_S = 300.0
+
 # Default thresholds match ``pipeline_auto_label``'s skip logic so the
 # worker and the on-demand pipeline make the same decisions.
 # Skip Gemma classify when v6 model already labeled the crop with at
@@ -76,43 +81,107 @@ ITEM_EMBEDDING_FIELD = 'pe_embedding'
 DEFAULT_V6_CONF_SKIP = 0.80
 
 
-def _build_pending_query(v6_skip_conf: float) -> dict:
+_classifier_sources_empty_warned = False
+
+
+def _warn_classifier_sources_empty_once() -> None:
+    """Log once (not every poll) that the 'classifier already confident'
+    must_not guard is inactive because classifier_class_sources() is
+    empty in this environment (F-11)."""
+    global _classifier_sources_empty_warned  # noqa: PLW0603 - warn-once flag
+    if not _classifier_sources_empty_warned:
+        _classifier_sources_empty_warned = True
+        print(
+            '[vlm-worker] classifier_class_sources() is empty; the '
+            "'classifier already confident' skip guard is inactive -- "
+            'every crop is a VLM candidate regardless of classifier confidence.'
+        )
+
+
+def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = None) -> dict:
     """Crops that need the VLM right now.
 
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
     crops the on-demand pipeline would process are picked up by the worker.
+
+    F-20: ``exclude_ids`` pushes the producer's in-flight set into the
+    query server-side (``must_not: {ids: ...}``) instead of over-fetching
+    ``batch_size + len(in_flight)`` docs and filtering in-flight ids out
+    in Python.
     """
     # Lazy: keeps the module import light; src.config is all this pulls in.
     from src.services.curation.ingest_class_sources import classifier_class_sources
 
+    must_not: list[dict] = [{'term': {'class_validated': True}}]
+    classifier_sources = sorted(classifier_class_sources())
+    if classifier_sources:
+        # classifier already confident
+        must_not.append(
+            {
+                'bool': {
+                    'filter': [
+                        {'terms': {'class_source': classifier_sources}},
+                        {'range': {'confidence': {'gte': v6_skip_conf}}},
+                    ],
+                },
+            },
+        )
+    else:
+        # F-11: an empty terms clause matches nothing (correct as a
+        # must_not exclusion) but is dead weight in the query shape --
+        # only emit it when there's something to exclude, and log once
+        # so operators know this guard rail is inactive in this env.
+        _warn_classifier_sources_empty_once()
+    # F-20: one `terms` clause instead of 5 separate `term` clauses on the
+    # same field — same match semantics, one less clause for OS to eval.
+    must_not.append(
+        {
+            'terms': {
+                'class_source': [
+                    # Plan §1.5: prototype + ensemble_proto_rescue +
+                    # ensemble_consensus class_source values are gone.
+                    # Surviving auto-validation path is
+                    # 'classifier_vlm_agreement' (A-PR2 ensemble writer;
+                    # this query excludes already-labeled rows).
+                    # Gemma already labeled successfully:
+                    'vlm',
+                    'classifier_vlm_agreement',
+                    'cluster_majority_agreement',
+                    # Gemma already failed once — won't help to retry:
+                    'vlm_unmatched',
+                    'vlm_new_class_pending',
+                ],
+            },
+        },
+    )
+    if exclude_ids:
+        must_not.append({'ids': {'values': exclude_ids}})
     return {
         'bool': {
-            'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
-            'must_not': [
-                {'term': {'class_validated': True}},
-                # classifier already confident
-                {
-                    'bool': {
-                        'must': [
-                            {'terms': {'class_source': sorted(classifier_class_sources())}},
-                            {'range': {'confidence': {'gte': v6_skip_conf}}},
-                        ],
-                    },
-                },
-                # Plan §1.5: prototype + ensemble_proto_rescue + ensemble_consensus
-                # class_source values are gone. Surviving auto-validation
-                # path is class_source='classifier_vlm_agreement' (A-PR2 ensemble
-                # writer; this query excludes already-labeled rows).
-                # Gemma already labeled successfully
-                {'term': {'class_source': 'vlm'}},
-                {'term': {'class_source': 'classifier_vlm_agreement'}},
-                {'term': {'class_source': 'cluster_majority_agreement'}},
-                # Gemma already failed once — won't help to retry
-                {'term': {'class_source': 'vlm_unmatched'}},
-                {'term': {'class_source': 'vlm_new_class_pending'}},
-            ],
+            'filter': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
+            'must_not': must_not,
         },
     }
+
+
+def _filter_fresh_ids(
+    ids: list[str],
+    *,
+    in_flight: set[str],
+    released_at: dict[str, float],
+    fetch_started: float,
+) -> list[str]:
+    """Ids a producer may safely dispatch: not currently in flight, and not
+    released at or after ``fetch_started`` (F-11).
+
+    A fetch that started before (or at the same moment as) a consumer's
+    release may still observe pre-write state, since the write uses
+    ``refresh=False``. Only an id released strictly *before* this fetch
+    began is guaranteed fresh.
+    """
+    return [
+        i for i in ids if i not in in_flight and released_at.get(i, float('-inf')) < fetch_started
+    ]
 
 
 async def fetch_pending_ids(
@@ -121,16 +190,28 @@ async def fetch_pending_ids(
     opensearch_url: str,
     batch_size: int,
     v6_skip_conf: float,
+    exclude_ids: list[str] | None = None,
 ) -> list[str]:
-    """Pull up to ``batch_size`` crop IDs that need Gemma."""
+    """Pull up to ``batch_size`` crop IDs that need Gemma.
+
+    F-20: ``stored_fields: '_none_'`` skips loading the stored document
+    entirely (only ``_id``, always free metadata, is returned) — cheaper
+    than the previous ``_source: False`` for the same "ids only" result.
+    ``track_total_hits: False`` skips the exact-count pass this producer
+    never reads. ``exclude_ids`` (the caller's in-flight set) is pushed
+    into the query itself instead of being filtered out in Python after
+    over-fetching ``batch_size + len(in_flight)`` docs.
+    """
     body = {
         'size': batch_size,
-        '_source': False,
-        'query': _build_pending_query(v6_skip_conf),
+        'stored_fields': '_none_',
+        'track_total_hits': False,
+        'query': _build_pending_query(v6_skip_conf, exclude_ids=exclude_ids),
         # Oldest pending first — fairness across crops added across the
         # run; also avoids head-of-line starvation when new crops keep
-        # arriving from ingest.
-        'sort': [{'created_at': 'asc'}],
+        # arriving from ingest. crop_id tiebreaker keeps paging stable
+        # for same-timestamp crops.
+        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     r = await client.post(
         f'{opensearch_url}/{ITEMS_INDEX}/_search',
@@ -203,6 +284,14 @@ async def run(args: argparse.Namespace) -> int:
     # written the terminal class_source back to OS.
     in_flight: set[str] = set()
     in_flight_lock = asyncio.Lock()
+    # F-11: label_batch writes with refresh=False, so a producer fetch
+    # that starts right after a consumer discards a crop from in_flight
+    # can still see the pre-write state and re-dispatch it (duplicate GPU
+    # work). Ported from the region/SAM worker's runner.py pattern: hold
+    # each released id here for one refresh interval past
+    # _RELEASED_AT_TTL_S, keyed by release time, and require a fetch to
+    # have started after that release to treat the id as fresh again.
+    released_at: dict[str, float] = {}
 
     # Queue depth: small buffer between producer and consumers. Just
     # big enough to absorb one OS fetch latency. Larger doesn't help
@@ -232,29 +321,40 @@ async def run(args: argparse.Namespace) -> int:
                 await asyncio.sleep(0.05)
                 continue
             try:
-                # Fetch enough to refill the queue PLUS skip past the
-                # in-flight window. With concurrency=24 and many chunks
-                # in flight at once, the in_flight set can easily hold
-                # 1000+ ids; without this we re-fetch them as oldest
-                # every poll and queue 0 fresh.
+                # F-20: in-flight ids are excluded server-side (must_not
+                # ids) now, so the fetch only needs to refill the queue —
+                # no more "+ in_flight_count" over-fetch-then-filter. The
+                # 1000+ in-flight ids at concurrency=24 still ride along
+                # as a must_not clause, which OS evaluates as a cheap
+                # docvalue lookup rather than as extra hits to transfer
+                # and discard.
+                fetch_n = min(args.vlm_batch_size * args.concurrency * 2, 9000)  # OS hits cap
+                fetch_started = time.monotonic()
                 async with in_flight_lock:
-                    in_flight_count = len(in_flight)
-                fetch_n = (args.vlm_batch_size * args.concurrency * 2) + in_flight_count
-                fetch_n = min(fetch_n, 9000)  # OS hits cap
+                    exclude_ids = list(in_flight)
                 ids = await fetch_pending_ids(
                     client,
                     opensearch_url=args.opensearch,
                     batch_size=fetch_n,
                     v6_skip_conf=args.v6_conf_skip,
+                    exclude_ids=exclude_ids,
                 )
             except httpx.HTTPError as exc:
                 print(f'[vlm-worker] producer fetch error: {exc}')
                 await asyncio.sleep(args.poll_interval)
                 continue
 
-            # Filter out ids the consumers are still processing.
+            # Filter out ids the consumers are still processing, and ids
+            # released since (or shortly before) this fetch started -- the
+            # write used refresh=False, so a fetch that began around the
+            # same time as the release may still see stale state (F-11).
             async with in_flight_lock:
-                fresh = [i for i in ids if i not in in_flight]
+                fresh = _filter_fresh_ids(
+                    ids, in_flight=in_flight, released_at=released_at, fetch_started=fetch_started
+                )
+                horizon = fetch_started - _RELEASED_AT_TTL_S
+                for cid in [c for c, ts in released_at.items() if ts < horizon]:
+                    del released_at[cid]
 
             if not fresh:
                 metrics['consecutive_empty_polls'] += 1
@@ -310,9 +410,11 @@ async def run(args: argparse.Namespace) -> int:
             except Exception as exc:
                 print(f'[vlm-worker] consumer {consumer_id} error: {exc}')
             finally:
+                released = time.monotonic()
                 async with in_flight_lock:
                     for cid in chunk:
                         in_flight.discard(cid)
+                        released_at[cid] = released
                 queue.task_done()
 
     async def metrics_reporter() -> None:

@@ -193,7 +193,8 @@ class TestAutomatedClassWritersExcludeTestHoldout:
                     'clusters': {
                         'buckets': [
                             {
-                                'key': 7,
+                                # F-29: composite-agg bucket key is a dict.
+                                'key': {'cluster_id': 7},
                                 'doc_count': 10,
                                 'top_class': {
                                     'buckets': [{'key': 'sedan', 'doc_count': 9}],
@@ -223,7 +224,7 @@ class TestAutomatedClassWritersExcludeTestHoldout:
     async def test_classes_merge_query_has_holdout_must_not(self, tmp_path: Any) -> None:
         import src.routers.curation.classes as classes_mod
         from src.clients.curation_opensearch import ClassRegistry
-        from src.routers.curation._common import ClassMergeRequest
+        from src.routers.curation._class_models import ClassMergeRequest
 
         registry = ClassRegistry(path=tmp_path / 'class_registry.json')
         registry.add_class('sedan', group='vehicle')
@@ -302,7 +303,7 @@ class TestMergeClassRefusesFrozenCrops:
     @pytest.mark.asyncio
     async def test_merge_refuses_with_409_when_holdout_members_exist(self) -> None:
         import src.routers.curation.classes as classes_mod
-        from src.routers.curation._common import ClassMergeRequest
+        from src.routers.curation._class_models import ClassMergeRequest
 
         fake_os = AsyncMock()
         fake_os.count = AsyncMock(return_value={'count': 2})
@@ -393,14 +394,20 @@ class TestVlmLabelBatchHumanGuard:
         monkeypatch.setattr(vlm_mod, 'get_class_registry', lambda: fake_reg)
 
         fake_os = AsyncMock()
-        fake_os.get = AsyncMock(
+        fake_os.mget = AsyncMock(
             return_value={
-                '_source': {
-                    'class_source': 'human',
-                    'class_validated': True,
-                    'image_path': '/dev/null/never-read.jpg',
-                    'bbox_norm': [0.0, 0.0, 1.0, 1.0],
-                }
+                'docs': [
+                    {
+                        '_id': crop_id,
+                        'found': True,
+                        '_source': {
+                            'class_source': 'human',
+                            'class_validated': True,
+                            'image_path': '/dev/null/never-read.jpg',
+                            'bbox_norm': [0.0, 0.0, 1.0, 1.0],
+                        },
+                    }
+                ]
             }
         )
 

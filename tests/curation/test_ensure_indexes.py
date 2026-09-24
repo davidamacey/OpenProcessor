@@ -32,7 +32,11 @@ def test_every_ensure_migration_is_wired():
     )
     assert migration_names, 'expected at least one ensure_items_* export'
 
-    source = inspect.getsource(_common._ensure_indexes)
+    # F-28.4: the actual bootstrap sequence moved into
+    # _ensure_indexes_locked (called by _ensure_indexes while holding
+    # _ensure_indexes_lock) so the lock/fast-path wiring stays readable
+    # -- inspect that one for the migration calls.
+    source = inspect.getsource(_common._ensure_indexes_locked)
     called_names = set(re.findall(r'\bensure_items_\w+(?=\()', source))
 
     unwired = [

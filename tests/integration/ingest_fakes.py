@@ -186,8 +186,8 @@ class FakeOpenSearch:
                 if d.get('image_path') == path_term
             ]
             return {'hits': {'hits': hits[:1]}}
-        # label_import's items-by-image_id lookup (bool/must term).
-        musts = (query.get('bool') or {}).get('must') or []
+        # label_import's items-by-image_id lookup (bool/filter term).
+        musts = (query.get('bool') or {}).get('filter') or []
         image_id = next(
             (m['term']['image_id'] for m in musts if (m.get('term') or {}).get('image_id')), None
         )
@@ -220,9 +220,19 @@ class FakeOpenSearch:
             responses.append({'hits': {'hits': hits[:1]}})
         return {'responses': responses}
 
-    async def mget(self, *, body: dict[str, Any], index: str) -> dict[str, Any]:  # noqa: ARG002
+    async def mget(
+        self,
+        *,
+        body: dict[str, Any],
+        index: str | None = None,  # noqa: ARG002
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
+        # Two shapes land here: the {'ids': [...]} shape used directly by
+        # this module's own callers, and mget_crops' {'docs': [{'_id':...,
+        # '_index':...}, ...]} shape (occ_update_bulk, F-17/F-26).
+        ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
         docs = []
-        for doc_id in body['ids']:
+        for doc_id in ids:
             if doc_id in self.items:
                 docs.append(
                     {
@@ -284,7 +294,13 @@ class FakeOpenSearch:
         self.items.setdefault(id, {}).update(body['doc'])
         return {'_id': id, 'result': 'updated', '_seq_no': 2, '_primary_term': 1}
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(
+        self,
+        *,
+        index: str,  # noqa: ARG002
+        id: str,  # noqa: A002
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
         return {'_id': id, '_source': self.items.get(id, {}), '_seq_no': 1, '_primary_term': 1}
 
     async def count(self, index: str, body: dict | None = None) -> dict[str, Any]:  # noqa: ARG002

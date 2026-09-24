@@ -102,7 +102,11 @@ class _ItemTask:
     vehicle_bbox_norm: tuple[float, float, float, float]
     plate_status: str | None
     class_name: str
-    group: str
+    # F-11: dead field -- nothing writes or maps a ``group`` item field, so
+    # this was always empty in production. Kept (default '', never read by
+    # _is_secondary_shape) purely for source/test-fixture back-compat;
+    # cascade.py's _fetch_pending no longer requests it from OpenSearch.
+    group: str = ''
     # X-Request-ID carried over from the HTTP ingest call that produced
     # this crop ('-' for non-HTTP ingests). Bound to structlog contextvars
     # in every consumer's per-task processing block so worker logs can
@@ -259,18 +263,38 @@ def _is_secondary_shape(task: _ItemTask) -> bool:
     (``OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS``), which must match the
     class registry's ``group`` values. A profile with no groups routes
     nothing to the secondary-shape path.
+
+    F-11: ``task.group`` came from a ``group`` field on the item doc that
+    nothing ever writes or maps -- it was always empty, so this always
+    fell through to the name-suffix heuristic below. Resolve the group
+    from the class registry (the actual source of truth for
+    ``class_name -> group``) instead.
     """
     groups = region_profile().secondary_shape_groups
     if not groups:
         return False
-    if task.group:
-        return task.group in groups
-    # Some old crops have no ``group`` field stored. Best-effort fallback:
-    # a name suffix of ``bike`` is a strong signal under the reference
-    # naming convention (cruiserbike, sportbike, dirtbike, etc.). Keep
-    # this narrow — false positives just shift more crops to the
-    # secondary segmenter unnecessarily.
+    group = _class_group(task.class_name)
+    if group:
+        return group in groups
+    # No registry entry for this class_name (e.g. a stale/renamed class).
+    # Narrow best-effort fallback: a name suffix of ``bike`` is a strong
+    # signal under the reference naming convention (cruiserbike,
+    # sportbike, dirtbike, etc.). False positives just shift more crops
+    # to the secondary segmenter unnecessarily.
     return task.class_name.endswith('bike')
+
+
+def _class_group(class_name: str) -> str | None:
+    """``class_name -> group`` via the class registry, or ``None`` if the
+    class isn't registered."""
+    from src.clients.curation_opensearch import get_class_registry
+
+    if not class_name:
+        return None
+    for entry in get_class_registry().load().classes:
+        if entry.class_name == class_name:
+            return entry.group or None
+    return None
 
 
 # =============================================================================

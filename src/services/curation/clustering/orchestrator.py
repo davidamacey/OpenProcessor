@@ -121,6 +121,150 @@ def _subcluster_label(idx: int) -> str:
     return out
 
 
+# ---------------------------------------------------------------------------
+# F-3: guarded bulk writers.
+#
+# Every clustering writer below fetches candidates, spends seconds-to-minutes
+# fitting a model, then bulk-writes cluster_id/cluster_subid back. A blind
+# ``{'doc': {...}}`` update clobbers any human label/verification/exclusion
+# made to a doc *during* that fit. Each writer instead sends a guarded
+# painless ``script`` update that noops when the doc's current state shows
+# human ownership -- the write simply doesn't happen; the doc keeps whatever
+# the human set.
+#
+# A ``GuardClause`` list is the single source of truth for a guard: the same
+# list renders the painless condition (``_guard_condition_painless``) and
+# decides the noop in plain Python (``_guard_condition_matches``, used by
+# tests), so the two can't independently drift the way hand-written painless
+# text mirroring a separate Python predicate could.
+GuardClause = tuple[str, str, Any]
+
+
+def _guard_condition_painless(clauses: list[GuardClause]) -> str:
+    """Render an OR-of-clauses guard condition as painless source.
+
+    ``op='eq'`` -> ``ctx._source['field'] == <literal>``.
+    ``op='contains'`` -> ``ctx._source['field'] != null &&
+    ctx._source['field'].contains('<value>')``.
+
+    Bracket notation throughout (not ``ctx._source.field``) so this stays
+    correct even when a deployment renames a ``RegionFields`` attribute to
+    something that isn't a valid painless identifier.
+    """
+    parts: list[str] = []
+    for field, op, value in clauses:
+        if op == 'eq':
+            lit = 'true' if value is True else 'false' if value is False else f"'{value}'"
+            parts.append(f"ctx._source['{field}'] == {lit}")
+        elif op == 'contains':
+            parts.append(
+                f"(ctx._source['{field}'] != null && ctx._source['{field}'].contains('{value}'))"
+            )
+        else:
+            raise ValueError(f'unsupported guard op {op!r}')
+    return ' || '.join(parts)
+
+
+def _guard_condition_matches(clauses: list[GuardClause], source: dict[str, Any]) -> bool:
+    """Python-side mirror of :func:`_guard_condition_painless`.
+
+    The same ``clauses`` list drives both, so a future change to one
+    guard's fields/values automatically shows up on both sides -- there is
+    nothing to keep "in sync" because there's only one definition.
+    """
+    for field, op, value in clauses:
+        v = source.get(field)
+        if op == 'eq' and v == value:
+            return True
+        if op == 'contains' and isinstance(v, str) and value in v:
+            return True
+    return False
+
+
+# Mirrors src.clients.occ.is_human_owned_class's class_source check (a
+# string containing 'human') plus the class_validated / class_excluded
+# guards vlm.py's _class_locked already applies on its own write path. Kept
+# as its own clause list (rather than calling is_human_owned_class from
+# painless, which isn't possible) -- test_orchestrator_guarded_writes.py
+# cross-checks the two stay equivalent.
+CLASS_CLUSTER_WRITE_GUARD_CLAUSES: list[GuardClause] = [
+    ('class_validated', 'eq', True),
+    ('class_excluded', 'eq', True),
+    ('class_source', 'contains', 'human'),
+]
+
+
+def _guarded_class_cluster_write(cid: int, dist: float | None) -> dict[str, Any]:
+    """Guarded bulk-update body for the residual/assign class-cluster
+    writers (:func:`cluster_residuals`, :func:`assign_only_residuals`):
+    noop instead of overwriting a human-owned (or validated/excluded)
+    class row that changed while the fit was running."""
+    return {
+        'script': {
+            'lang': 'painless',
+            'params': {'cid': cid, 'dist': dist},
+            'source': (
+                f'if ({_guard_condition_painless(CLASS_CLUSTER_WRITE_GUARD_CLAUSES)})'
+                " { ctx.op = 'noop'; return; }"
+                " ctx._source['cluster_id'] = params.cid;"
+                " ctx._source.remove('cluster_subid');"
+                " ctx._source['cluster_distance'] = params.dist;"
+            ),
+        }
+    }
+
+
+def _region_write_guard_clauses(F: Any) -> list[GuardClause]:
+    """F-3 region-write guard: mirrors :func:`fp_candidate_must_not`'s human
+    clauses (``F.label_source``/``F.verifier`` == ``'human'``) plus
+    ``F.validated`` -- a VLM-validated region is not ground truth (see
+    ``fp_candidate_must_not``'s docstring) but a *human*-validated one is
+    final and must never be reshuffled by an automated re-cluster."""
+    return [
+        (F.label_source, 'eq', 'human'),
+        (F.verifier, 'eq', 'human'),
+        (F.validated, 'eq', True),
+    ]
+
+
+def _guarded_region_write(F: Any, fields: dict[str, Any]) -> dict[str, Any]:
+    """Guarded bulk-update body for the region-cluster writers
+    (:func:`cluster_region_residuals`, :func:`auto_assign_fp_from_centroids`):
+    noop instead of overwriting a human-verified/validated region. A
+    ``None`` value in ``fields`` removes that field instead of nulling it."""
+    clauses = _region_write_guard_clauses(F)
+    params: dict[str, Any] = {}
+    stmts: list[str] = []
+    for i, (field, value) in enumerate(fields.items()):
+        if value is None:
+            stmts.append(f"ctx._source.remove('{field}')")
+        else:
+            pname = f'v{i}'
+            params[pname] = value
+            stmts.append(f"ctx._source['{field}'] = params.{pname}")
+    source = f'if ({_guard_condition_painless(clauses)}) {{' + " ctx.op = 'noop'; return; }"
+    source += ''.join(f' {s};' for s in stmts)
+    return {'script': {'lang': 'painless', 'params': params, 'source': source}}
+
+
+def _log_bulk_write_errors(op: str, resp: dict[str, Any]) -> None:
+    """F-3 item 4: log each failed bulk item (id + status + reason) at
+    warning level instead of only a chunk-level 'errors: true' flag.
+    Doesn't raise -- matches this module's existing partial-bulk-failure
+    behavior of proceeding rather than aborting the whole run."""
+    for item in resp.get('items') or []:
+        action: dict[str, Any] = next(iter(item.values()), {})
+        status = action.get('status')
+        if status is not None and status >= 300:
+            logger.warning(
+                'clustering_bulk_write_item_failed',
+                op=op,
+                doc_id=action.get('_id'),
+                status=status,
+                error=action.get('error'),
+            )
+
+
 async def _fetch_cluster_members(
     client: AsyncOpenSearch,
     cluster_id: int,
@@ -178,28 +322,67 @@ async def _fetch_cluster_members(
     return members
 
 
+_SUBID_UPDATE_CHUNK = 1000
+
+
 async def _bulk_update_subids(
     client: AsyncOpenSearch,
     updates: list[tuple[str, str]],
     *,
     index: str = ITEMS_INDEX,
     subid_field: str = 'cluster_subid',
+    cluster_id_field: str = 'cluster_id',
+    expected_cluster_id: int | None = None,
+    chunk_size: int = _SUBID_UPDATE_CHUNK,
 ) -> int:
-    """Bulk-update ``subid_field`` on the supplied (doc_id, subid) pairs."""
+    """Bulk-update ``subid_field`` on the supplied (doc_id, subid) pairs.
+
+    F-3: when ``expected_cluster_id`` is given (refine's caller always
+    passes it -- the cluster being refined), the write is a guarded
+    painless script that noops if the doc's ``cluster_id_field`` no longer
+    equals ``expected_cluster_id``. Refine snapshots members, fits AHC
+    (can take seconds on a large cluster), then writes; a doc that moved to
+    a different cluster in that window (a human relabel, a move endpoint
+    call, another clustering job) must not have refine's now-stale
+    sub-cluster numbering stamped onto it.
+
+    Chunks into batches of ``chunk_size`` (<=1000) bulk actions with
+    ``refresh=False`` per chunk, then issues one explicit index refresh at
+    the end -- avoids refreshing the index once per chunk on a large
+    refine.
+    """
     if not updates:
         return 0
-    body: list[dict[str, Any]] = []
     now = datetime.now(UTC).isoformat()
-    for doc_id, subid in updates:
-        body.append({'update': {'_index': index, '_id': doc_id}})
-        body.append({'doc': {subid_field: subid, 'updated_at': now}})
-    resp = await client.bulk(body=body, refresh=True)
-    if resp.get('errors'):
-        logger.warning(
-            'legacy_bulk_update_subids_partial_errors',
-            n_items=len(updates),
-            sample=resp['items'][:3] if resp.get('items') else None,
-        )
+    for start in range(0, len(updates), chunk_size):
+        chunk = updates[start : start + chunk_size]
+        body: list[dict[str, Any]] = []
+        for doc_id, subid in chunk:
+            body.append({'update': {'_index': index, '_id': doc_id}})
+            if expected_cluster_id is None:
+                body.append({'doc': {subid_field: subid, 'updated_at': now}})
+            else:
+                body.append(
+                    {
+                        'script': {
+                            'lang': 'painless',
+                            'params': {'cid': expected_cluster_id, 'subid': subid, 'now': now},
+                            'source': (
+                                f"if (ctx._source['{cluster_id_field}'] != params.cid)"
+                                " { ctx.op = 'noop'; return; }"
+                                f" ctx._source['{subid_field}'] = params.subid;"
+                                ' ctx._source.updated_at = params.now;'
+                            ),
+                        }
+                    }
+                )
+        resp = await client.bulk(body=body, refresh=False)
+        if resp.get('errors'):
+            _log_bulk_write_errors('bulk_update_subids', resp)
+    try:
+        await client.indices.refresh(index=index)
+    except Exception as exc:
+        logger.warning('bulk_update_subids_refresh_failed', error=str(exc))
     return len(updates)
 
 
@@ -248,6 +431,34 @@ async def refine_cluster(
     """
     log = logger.bind(cluster_id=cluster_id, index=index, cluster_id_field=cluster_id_field)
     log.info('legacy_refine_cluster_start')
+
+    # F-16: count before scrolling every member's embedding — a cluster
+    # far past max_members should never pay for that fetch just to
+    # discover it's too large to refine.
+    count_resp = await client.count(
+        index=index, body={'query': {'term': {cluster_id_field: cluster_id}}}
+    )
+    precount = int((count_resp or {}).get('count', 0))
+    if precount > max_members:
+        log.warning(
+            'legacy_refine_cluster_skipped_too_large_precount',
+            n_members=precount,
+            max_allowed=max_members,
+        )
+        return {
+            'cluster_id': cluster_id,
+            'n_members': precount,
+            'n_subclusters': 0,
+            # Purity isn't computed here — that would need the same full
+            # fetch this precount check exists to avoid paying for.
+            'purity': None,
+            'action': 'skipped_too_large',
+            'reason': (
+                f'> {max_members} members ({precount} counted); AHC builds a full '
+                '~8*n^2-byte pairwise matrix — raise OP_MAX_REFINE_MEMBERS / '
+                'max_members if RAM allows'
+            ),
+        }
 
     members = await _fetch_cluster_members(
         client,
@@ -332,7 +543,14 @@ async def refine_cluster(
         subid = f'{cluster_id}{_subcluster_label(int(sub_idx))}'
         updates.append((member['_id'], subid))
 
-    n_updated = await _bulk_update_subids(client, updates, index=index, subid_field=subid_field)
+    n_updated = await _bulk_update_subids(
+        client,
+        updates,
+        index=index,
+        subid_field=subid_field,
+        cluster_id_field=cluster_id_field,
+        expected_cluster_id=cluster_id,
+    )
 
     # Per-sub-cluster purity, then weighted-mean as the cluster summary.
     sub_groups: dict[int, list[str | None]] = {}
@@ -425,9 +643,9 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
     """
     from src.services.curation.clustering import embedding_reduce as _ker
 
-    must: list[dict[str, Any]] = [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}]
+    filt: list[dict[str, Any]] = [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}]
     if strict:
-        must.append(
+        filt.append(
             {
                 'bool': {
                     'should': [
@@ -440,7 +658,7 @@ async def _count_residual_pool(client: AsyncOpenSearch, *, strict: bool = False)
         )
     query = {
         'bool': {
-            'must': must,
+            'filter': filt,
             'must_not': [
                 {'term': {'class_validated': True}},
                 {'terms': {'class_source': list(_ker.CONFIDENT_CLASS_SOURCES)}},
@@ -569,7 +787,7 @@ def _residual_pool_filter() -> dict[str, Any]:
     from src.services.curation.clustering import embedding_reduce as _ker
 
     return {
-        'must': [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}],
+        'filter': [{'exists': {'field': _ker.RESIDUAL_EMBEDDING_FIELD}}],
         'must_not': [
             {'term': {'class_validated': True}},
             {'terms': {'class_source': list(_ker.CONFIDENT_CLASS_SOURCES)}},
@@ -593,14 +811,14 @@ async def residual_gate_coverage(
     base = _residual_pool_filter()
     total_resp = await client.count(index=ITEMS_INDEX, body={'query': {'bool': base}})
     total = int(total_resp.get('count', 0))
-    field_must: list[dict[str, Any]] = list(base['must'])
+    field_filter: list[dict[str, Any]] = list(base['filter'])
     if max_rank is not None:
-        field_must.append({'exists': {'field': 'crop_rank_in_image'}})
+        field_filter.append({'exists': {'field': 'crop_rank_in_image'}})
     if min_blur_ratio is not None:
-        field_must.append({'exists': {'field': 'blur_lap_ratio'}})
+        field_filter.append({'exists': {'field': 'blur_lap_ratio'}})
     cov_resp = await client.count(
         index=ITEMS_INDEX,
-        body={'query': {'bool': {'must': field_must, 'must_not': base['must_not']}}},
+        body={'query': {'bool': {'filter': field_filter, 'must_not': base['must_not']}}},
     )
     with_fields = int(cov_resp.get('count', 0))
     coverage = (with_fields / total) if total else 1.0
@@ -630,10 +848,17 @@ async def _park_gated_residuals(
         return 0
     base = _residual_pool_filter()
     # "Fails the gate" = residual pool AND NOT(passes all gate clauses).
+    # F-29: also exclude docs already parked — rewriting cluster_id=-3 onto
+    # a doc that's already -3 (with cluster_subid already null) is a
+    # wasted write on every re-run of this gate.
     query = {
         'bool': {
-            'must': base['must'],
-            'must_not': [*base['must_not'], {'bool': {'must': gate}}],
+            'filter': base['filter'],
+            'must_not': [
+                *base['must_not'],
+                {'bool': {'filter': gate}},
+                {'term': {'cluster_id': PARKED_CLUSTER_ID}},
+            ],
         }
     }
     body = {
@@ -844,16 +1069,19 @@ async def cluster_residuals(
             if new_cid >= 0:
                 new_cid += RESIDUAL_CLUSTER_ID_OFFSET
             bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
-            # Clear cluster_subid: stale refine groupings from the doc's
-            # previous cluster have no meaning in the new candidate.
-            # cluster_distance: present for IVF (drives outlier sort), else
-            # cleared so a stale distance from a prior method can't mislead.
-            doc_update: dict[str, Any] = {'cluster_id': new_cid, 'cluster_subid': None}
-            doc_update['cluster_distance'] = float(dist) if dist is not None else None
-            bulk_body.append({'doc': doc_update})
+            # F-3: guarded script, not a blind 'doc' update -- clear
+            # cluster_subid (stale refine groupings from the doc's previous
+            # cluster have no meaning in the new candidate) and set
+            # cluster_distance (present for IVF, else null so a stale
+            # distance from a prior method can't mislead), but noop if a
+            # human relabeled/validated/excluded the doc since it was
+            # fetched for this fit.
+            bulk_body.append(
+                _guarded_class_cluster_write(new_cid, float(dist) if dist is not None else None)
+            )
         br = await client.bulk(body=bulk_body, refresh=False)
         if br.get('errors'):
-            logger.warning('legacy_cluster_bulk_partial_errors', chunk_start=start)
+            _log_bulk_write_errors('cluster_residuals', br)
         n_written += len(chunk)
         if progress is not None:
             progress.update(processed=n_written, total=len(pairs))
@@ -940,13 +1168,13 @@ async def assign_only_residuals(
     gate_clauses = gate_must_clauses(gate_max_rank, gate_min_blur_ratio)
 
     field = embedding_reduce.RESIDUAL_EMBEDDING_FIELD
-    must: list[dict[str, Any]] = [{'exists': {'field': field}}, *gate_clauses]
+    filt: list[dict[str, Any]] = [{'exists': {'field': field}}, *gate_clauses]
     must_not: list[dict[str, Any]] = [
         {'term': {'class_validated': True}},
         {'terms': {'class_source': list(embedding_reduce.CONFIDENT_CLASS_SOURCES)}},
         {'term': {'class_excluded': True}},
     ]
-    query = {'bool': {'must': must, 'must_not': must_not}}
+    query = {'bool': {'filter': filt, 'must_not': must_not}}
 
     total_estimate = 0
     if progress is not None:
@@ -985,18 +1213,11 @@ async def assign_only_residuals(
                 ):
                     new_cid = int(label) + RESIDUAL_CLUSTER_ID_OFFSET
                     bulk_body.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
-                    bulk_body.append(
-                        {
-                            'doc': {
-                                'cluster_id': new_cid,
-                                'cluster_subid': None,
-                                'cluster_distance': float(dist),
-                            }
-                        }
-                    )
+                    # F-3: guarded script — see cluster_residuals above.
+                    bulk_body.append(_guarded_class_cluster_write(new_cid, float(dist)))
                 br = await client.bulk(body=bulk_body, refresh=False)
                 if br.get('errors'):
-                    logger.warning('legacy_ivf_assign_bulk_partial_errors', chunk_start=n_written)
+                    _log_bulk_write_errors('assign_only_residuals', br)
                 n_written += len(chunk_ids)
                 if progress is not None:
                     progress.update(processed=n_written, total=total_estimate or n_written)
@@ -1083,15 +1304,15 @@ async def cluster_region_residuals(
     No confident-class gate and no RESIDUAL_CLUSTER_ID_OFFSET — regions are
     a single flat namespace in ``RegionFields.cluster_id`` (0..K-1).
     """
-    must: list[dict[str, Any]] = [{'exists': {'field': F.embedding}}]
+    filt: list[dict[str, Any]] = [{'exists': {'field': F.embedding}}]
     if max_rank is not None:
-        must.append({'range': {'crop_rank_in_image': {'lte': int(max_rank)}}})
+        filt.append({'range': {'crop_rank_in_image': {'lte': int(max_rank)}}})
     # FPs live in the permanent FALSE_POSITIVE_REGION_CLUSTER_ID bucket.
     # Exclude them so KMeans never reshuffles them back into good buckets
     # and the good buckets' centroids recompute clean.
     query = {
         'bool': {
-            'must': must,
+            'filter': filt,
             'must_not': [{'term': {F.status: RegionStatus.FALSE_POSITIVE}}],
         }
     }
@@ -1149,23 +1370,30 @@ async def cluster_region_residuals(
     n_written = 0
     for doc_id, lab, dist in zip(ids, labels, dists, strict=True):
         bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
+        # F-3: guarded script — noop instead of overwriting a
+        # human-verified/validated region; a fresh coarse partition
+        # invalidates any prior refine, so cluster_subid is removed.
         bulk.append(
-            {
-                'doc': {
+            _guarded_region_write(
+                F,
+                {
                     F.cluster_id: int(lab),
                     F.cluster_distance: float(dist),
-                    # A fresh coarse partition invalidates any prior refine.
                     F.cluster_subid: None,
                     'updated_at': now,
-                }
-            }
+                },
+            )
         )
         if len(bulk) >= 1000:
-            await client.bulk(body=bulk, refresh=False)
+            br = await client.bulk(body=bulk, refresh=False)
+            if br.get('errors'):
+                _log_bulk_write_errors('cluster_region_residuals', br)
             n_written += len(bulk) // 2
             bulk = []
     if bulk:
-        await client.bulk(body=bulk, refresh=False)
+        br = await client.bulk(body=bulk, refresh=False)
+        if br.get('errors'):
+            _log_bulk_write_errors('cluster_region_residuals', br)
         n_written += len(bulk) // 2
     try:
         await client.indices.refresh(index=ITEMS_INDEX)
@@ -1463,7 +1691,7 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
 
     query = {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {F.status: RegionStatus.FALSE_POSITIVE}},
                 {'exists': {'field': F.embedding}},
             ]
@@ -1601,7 +1829,7 @@ async def auto_assign_fp_from_centroids(
 
     query = {
         'bool': {
-            'must': [{'exists': {'field': F.embedding}}],
+            'filter': [{'exists': {'field': F.embedding}}],
             'must_not': fp_candidate_must_not(),
         }
     }
@@ -1638,23 +1866,33 @@ async def auto_assign_fp_from_centroids(
     bulk: list[dict[str, Any]] = []
     for doc_id, sub, d in moved:
         bulk.append({'update': {'_index': ITEMS_INDEX, '_id': doc_id}})
+        # F-3: guarded script — the query above already excludes
+        # human-verified regions via fp_candidate_must_not() at scroll
+        # time, but a human write between the scroll and this write
+        # (the scan + distance search can take a while) must still not
+        # be clobbered, hence the same defense-in-depth guard.
         bulk.append(
-            {
-                'doc': {
+            _guarded_region_write(
+                F,
+                {
                     F.status: RegionStatus.FALSE_POSITIVE,
                     F.label_source: 'auto_fp_centroid',
                     F.cluster_id: FALSE_POSITIVE_REGION_CLUSTER_ID,
                     F.cluster_subid: sub,
                     F.cluster_distance: d,
                     'updated_at': now,
-                }
-            }
+                },
+            )
         )
         if len(bulk) >= 1000:
-            await client.bulk(body=bulk, refresh=False)
+            br = await client.bulk(body=bulk, refresh=False)
+            if br.get('errors'):
+                _log_bulk_write_errors('auto_assign_fp_from_centroids', br)
             bulk = []
     if bulk:
-        await client.bulk(body=bulk, refresh=False)
+        br = await client.bulk(body=bulk, refresh=False)
+        if br.get('errors'):
+            _log_bulk_write_errors('auto_assign_fp_from_centroids', br)
     if moved:
         try:
             await client.indices.refresh(index=ITEMS_INDEX)

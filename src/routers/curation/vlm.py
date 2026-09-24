@@ -134,11 +134,11 @@ def _is_frozen_test_holdout(current_source: dict[str, Any]) -> bool:
 
 
 class VlmLabelBatchRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class VlmVerifyRegionsRequest(BaseModel):
-    crop_ids: list[str]
+    crop_ids: list[str] = Field(..., max_length=5000)
 
 
 class VlmVerifyRegionBatchItem(BaseModel):
@@ -254,11 +254,20 @@ async def vlm_label_batch(
     crops: list[ItemCrop] = []
     cache_hits = 0
     cache_misses = 0
+    # F-26: one mget_crops() call instead of N separate opensearch.get()
+    # round trips.
+    from src.clients.curation_opensearch import mget_crops
+
+    docs_by_id = await mget_crops(
+        opensearch,
+        list(payload.crop_ids),
+        index=ITEMS_INDEX,
+        source_includes=['class_source', 'class_validated', 'image_path', 'bbox_norm'],
+    )
     for crop_id in payload.crop_ids:
-        try:
-            doc = await opensearch.get(index=ITEMS_INDEX, id=crop_id)
-        except Exception as exc:
-            logger.warning('curation_vlm_crop_missing', crop_id=crop_id, error=str(exc))
+        doc = docs_by_id.get(crop_id)
+        if doc is None:
+            logger.warning('curation_vlm_crop_missing', crop_id=crop_id)
             continue
         src = doc.get('_source') or {}
         # Never send a human-owned or class-validated crop to the VLM for
@@ -432,12 +441,26 @@ async def vlm_verify_regions(
 
     labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     n_verified = 0
-    bulk: list[dict[str, Any]] = []
+    # F-26: keyed by crop_id rather than written straight to a plain bulk
+    # body -- the actual write goes through occ_skip_on_conflict_bulk
+    # below so a human verify/label landing on the same crop while this
+    # loop's VLM round-trips are in flight wins outright (conflict -> skip,
+    # never retried against).
+    updates_by_id: dict[str, dict[str, Any]] = {}
     now = _now_iso()
+    # F-26: one mget_crops() call instead of N separate opensearch.get()
+    # round trips.
+    from src.clients.curation_opensearch import mget_crops
+
+    docs_by_id = await mget_crops(
+        opensearch,
+        list(payload.crop_ids),
+        index=ITEMS_INDEX,
+        source_includes=[_F.bbox_norm, 'image_path'],
+    )
     for crop_id in payload.crop_ids:
-        try:
-            doc = await opensearch.get(index=ITEMS_INDEX, id=crop_id)
-        except Exception:
+        doc = docs_by_id.get(crop_id)
+        if doc is None:
             logger.debug('curation_vlm_region_verify_skip_missing', crop_id=crop_id)
             continue
         src = doc.get('_source') or {}
@@ -454,19 +477,34 @@ async def vlm_verify_regions(
             continue
         verdict = await labeler.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=jpeg))
         n_verified += 1
-        bulk.append({'update': {'_index': ITEMS_INDEX, '_id': crop_id}})
-        bulk.append(
-            {
-                'doc': {
-                    _F.verified: verdict.is_region,
-                    _F.reason: verdict.reason,
-                    'updated_at': now,
-                }
-            }
-        )
-    if bulk:
+        updates_by_id[crop_id] = {
+            _F.verified: verdict.is_region,
+            _F.reason: verdict.reason,
+            'updated_at': now,
+        }
+    if updates_by_id:
+
+        def _merge_verify_regions(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+            # A human verify/label landing on this crop while the VLM
+            # round-trip was in flight must win outright, never be
+            # overwritten by this write -- re-check against the freshest
+            # `current` (occ_skip_on_conflict_bulk re-fetches with
+            # seq_no) rather than the stale per-crop doc read at the top
+            # of the loop above. Mirrors the region-write human guard the
+            # clustering orchestrator's bulk writers use (F-3).
+            if current.get(_F.verifier) == 'human' or current.get(_F.label_source) == 'human':
+                return {}
+            return updates_by_id[doc_id]
+
         try:
-            await opensearch.bulk(body=bulk, refresh=False)
+            await occ_skip_on_conflict_bulk(
+                opensearch,
+                doc_ids=list(updates_by_id.keys()),
+                merger=_merge_verify_regions,
+                index=ITEMS_INDEX,
+                refresh=False,
+                writer_id='vlm_verify_regions',
+            )
         except Exception as exc:
             logger.warning('curation_vlm_region_bulk_failed', error=str(exc))
     return {'verified': n_verified}

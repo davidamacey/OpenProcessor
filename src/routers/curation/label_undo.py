@@ -72,7 +72,7 @@ async def _undo_one(opensearch: Any, crop_id: str, *, require_history: bool) -> 
             opensearch,
             doc_id=crop_id,
             merger=_undo_merger(require_history=require_history),
-            refresh=True,
+            refresh='wait_for',
             writer_id=HUMAN_UNLABEL_WRITER,
         )
     except (NothingToUndoError, OCCFinalConflictError):
@@ -218,7 +218,7 @@ async def _discard_one(opensearch: Any, crop_id: str, payload: CropDiscardReques
             opensearch,
             doc_id=crop_id,
             merger=_discard_merger(payload),
-            refresh=True,
+            refresh='wait_for',
             writer_id=HUMAN_DISCARD_WRITER,
         )
     except OCCFinalConflictError:
@@ -313,7 +313,11 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
 
     try:
         await occ_update_one(
-            opensearch, doc_id=crop_id, merger=_merge, refresh=True, writer_id='human:vlm_dismiss'
+            opensearch,
+            doc_id=crop_id,
+            merger=_merge,
+            refresh='wait_for',
+            writer_id='human:vlm_dismiss',
         )
     except _NoSuggestionError as exc:
         raise HTTPException(status_code=409, detail=f'no VLM suggestion on {crop_id}') from exc
@@ -372,7 +376,7 @@ async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
                 'review_dismissed_by': None,
                 'updated_at': _now_iso(),
             },
-            refresh=True,
+            refresh='wait_for',
             writer_id='human:review_undismiss',
         )
     except OCCFinalConflictError:

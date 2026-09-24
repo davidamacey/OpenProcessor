@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.clients.occ_bulk import occ_update_bulk
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     CropBatchLabelRequest,
@@ -23,30 +23,78 @@ from src.routers.curation._common import (
     _ensure_indexes,
     _now_iso,
     get_class_registry,
+    guard_page_depth,
     logger,
     router,
 )
 from src.services.curation.cluster_ids import cluster_kind
-from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
+from src.services.curation.crop_browse import (
+    classifier_low_confidence_clause,
+    confidence_band,
+    crops_page,
+    embedding_pool_query_and_count,
+    parse_crop_sort,
+)
 from src.services.curation.human_label import (
     candidate_move_update,
     human_class_provenance,
     human_label_update,
 )
 from src.services.curation.item_text import item_text_query
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import (
+    item_list_source_excludes,
+    item_source_excludes,
+    serialize_item,
+)
 
 
 _MAX_IDS = 500
 
 
-def _batch_outcome(
-    crop_ids: list[str], results: list[tuple[bool, dict[str, Any] | None]]
+async def _occ_bulk_human_relabel(
+    opensearch: Any,
+    crop_ids: list[str],
+    merger: Any,
+    *,
+    writer_id: str,
+    max_retries: int = 5,
 ) -> dict[str, Any]:
-    """``updated_ids`` lists exactly the crops written (the ones an undo of
-    this batch should pass); ``conflicts`` the ones that were not."""
-    updated_ids = [cid for cid, (ok, _c) in zip(crop_ids, results, strict=True) if ok]
-    conflicts = [c for ok, c in results if not ok and c is not None]
+    """Batch OCC relabel (F-17): one mget page + one bulk call instead of
+    one ``occ_update_one`` round-trip per crop. ``refresh='wait_for'`` is
+    attached only to the final bulk call of each retry round (see
+    :func:`src.clients.occ_bulk.occ_update_bulk`), not per crop.
+
+    ``current_source`` on each conflict entry is looked up with one
+    follow-up ``mget`` restricted to the (normally empty) conflict set,
+    to preserve the pre-existing response shape without re-adding a
+    per-crop read.
+    """
+    status_map = await occ_update_bulk(
+        opensearch,
+        index=CURATION_ITEMS_INDEX,
+        ids=list(crop_ids),
+        merge_fn=lambda _crop_id, source: merger(source),
+        max_retries=max_retries,
+        refresh='wait_for',
+    )
+    updated_ids = [cid for cid in crop_ids if status_map.get(cid) == 'updated']
+    conflict_ids = [cid for cid in crop_ids if status_map.get(cid) != 'updated']
+
+    conflicts: list[dict[str, Any]] = []
+    if conflict_ids:
+        from src.clients.curation_opensearch import mget_crops
+
+        docs = await mget_crops(
+            opensearch,
+            conflict_ids,
+            index=CURATION_ITEMS_INDEX,
+            source_includes=['class_source'],
+        )
+        for cid in conflict_ids:
+            source = (docs.get(cid) or {}).get('_source') or {}
+            conflicts.append({'crop_id': cid, 'current_source': source.get('class_source')})
+            logger.warning(f'{writer_id}_update_failed', crop_id=cid)
+
     return {'updated': len(updated_ids), 'updated_ids': updated_ids, 'conflicts': conflicts}
 
 
@@ -65,7 +113,7 @@ async def list_crops(
         Query(
             description=(
                 "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
-                'updated_at, created_at, confidence, classifier_raw_confidence, '
+                'updated_at, created_at, confidence, '
                 'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, '
                 'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
             )
@@ -135,7 +183,7 @@ async def list_crops(
     (e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops
     at or above a clarity threshold (the labeler slider); crops with no blur
     score are NOT dropped. ``classifier_conf_lt`` mines the "model wasn't sure" pool —
-    crops whose ``classifier_raw_confidence`` is below the value OR that have no classifier
+    crops a classifier scored below the value (``confidence``) OR that have no classifier
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
@@ -147,14 +195,15 @@ async def list_crops(
         return crops_page(total=len(found), page=1, page_size=len(wanted), crops=found)
     if limit is not None:
         page_size = limit
+    guard_page_depth(page, page_size)
     try:
         sort_clause = parse_crop_sort(sort)
         conf_clause = confidence_band(conf_min, conf_max)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    must: list[dict[str, Any]] = []
-    # Filter-context clauses (cached bitsets, no scoring) for the new
-    # primary-subject filters.
+    # F-19: every clause below is a pure predicate (term/exists/range/
+    # must_not-wrapped-term) — none score — so all of it lives in filter
+    # context, not must.
     filt: list[dict[str, Any]] = []
     if conf_clause is not None:
         filt.append(conf_clause)
@@ -164,31 +213,31 @@ async def list_crops(
             raise HTTPException(status_code=400, detail='item_text must contain a letter or digit')
         filt.append(text_clause)
     if class_id is not None:
-        must.append({'term': {'class_id': class_id}})
+        filt.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
-        must.append({'term': {'cluster_id': cluster_id}})
+        filt.append({'term': {'cluster_id': cluster_id}})
     if label_source:
-        must.append({'term': {'label_source': label_source}})
+        filt.append({'term': {'label_source': label_source}})
     if class_source:
         # class_source is mapped keyword directly on the live index — no
         # .keyword subfield exists.
-        must.append({'term': {'class_source': class_source}})
+        filt.append({'term': {'class_source': class_source}})
     if label_validated is not None:
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).
-        must.append({'term': {'class_validated': label_validated}})
+        filt.append({'term': {'class_validated': label_validated}})
     if source or hdd_source:
-        must.append({'term': {'hdd_source': source or hdd_source}})
+        filt.append({'term': {'hdd_source': source or hdd_source}})
     if review_dismissed is not None:
         dismissed: dict[str, Any] = {'exists': {'field': 'review_dismissed_at'}}
-        must.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
+        filt.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})
     if needs_new_class is not None:
         clause: dict[str, Any] = {'term': {'needs_new_class': True}}
-        must.append(clause if needs_new_class else {'bool': {'must_not': clause}})
+        filt.append(clause if needs_new_class else {'bool': {'must_not': clause}})
     if not include_test:
-        must.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
+        filt.append({'bool': {'must_not': {'term': {'test_holdout': True}}}})
     if not include_excluded:
-        must.append({'bool': {'must_not': {'term': {'class_excluded': True}}}})
+        filt.append({'bool': {'must_not': {'term': {'class_excluded': True}}}})
     if max_rank is not None:
         filt.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
     if min_blur_ratio is not None:
@@ -206,23 +255,9 @@ async def list_crops(
             }
         )
     if classifier_conf_lt is not None:
-        # Low-confidence band OR no v6 prediction at all (COCO/VLM-only
-        # blind spots) — not silently dropped by a plain range clause.
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'classifier_raw_confidence': {'lt': classifier_conf_lt}}},
-                        {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
+        filt.append(classifier_low_confidence_clause(classifier_conf_lt))
 
     bool_q: dict[str, Any] = {}
-    if must:
-        bool_q['must'] = must
     if filt:
         bool_q['filter'] = filt
     query_clause: dict[str, Any] = {'bool': bool_q} if bool_q else {'match_all': {}}
@@ -235,8 +270,9 @@ async def list_crops(
         # queue sizes for filtered views — one count pass per query, fine at
         # this scale and matches the /curation/review endpoint.
         'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors to the card grid.
-        '_source': {'excludes': item_source_excludes()},
+        # Never ship the 1024-d embedding vectors or class_id_history
+        # to the card grid (F-25 -- history is undo-only).
+        '_source': {'excludes': item_list_source_excludes()},
     }
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -244,14 +280,20 @@ async def list_crops(
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     # Outlier ordering: rank this cluster's members by distance from their
-    # centroid (most atypical first) so operators can cherry-pick the worst
-    # offenders. Computed on-the-fly + cached; falls through to the default
-    # newest-first sort if the cluster is too large or has no embeddings.
+    # centroid (most atypical first). Computed on-the-fly + cached; falls
+    # through to the default newest-first sort if too large / no embeddings.
     if order == 'outliers' and cluster_id is not None:
-        from src.services.curation.clustering.outliers import compute_outlier_order
+        from src.services.curation.clustering.outliers import (
+            OUTLIER_EMBEDDING_FIELD,
+            compute_outlier_order,
+        )
 
+        # F-16: pool query + exact count scoped to the embedding-bearing subset.
+        pool_query, pool_count = await embedding_pool_query_and_count(
+            opensearch, CURATION_ITEMS_INDEX, query_clause, OUTLIER_EMBEDDING_FIELD
+        )
         ordered_ids = await compute_outlier_order(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total)
+            opensearch, CURATION_ITEMS_INDEX, pool_query, current_count=pool_count
         )
         if ordered_ids is not None:
             page_ids = ordered_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
@@ -266,14 +308,15 @@ async def list_crops(
             )
 
     # Diversity ordering: k-center-greedy coverage over the matched pool,
-    # same fallback contract as 'outliers' above — None means "disabled, or
-    # pool too large for an inline full-pool ranking", and the caller falls
-    # back to the default newest-first sort computed below.
+    # same fallback contract as 'outliers' above.
     if order == 'diverse':
-        from src.routers.curation.select import compute_diverse_order
+        from src.routers.curation.select import EMBEDDING_FIELD, compute_diverse_order
 
+        pool_query, pool_count = await embedding_pool_query_and_count(
+            opensearch, CURATION_ITEMS_INDEX, query_clause, EMBEDDING_FIELD
+        )
         diverse_ids = await compute_diverse_order(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total), k=k
+            opensearch, CURATION_ITEMS_INDEX, pool_query, current_count=pool_count, k=k
         )
         if diverse_ids is not None:
             page_ids = diverse_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
@@ -299,7 +342,7 @@ async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]
     resp = await opensearch.mget(
         index=CURATION_ITEMS_INDEX,
         body={'ids': ids},
-        _source_excludes=item_source_excludes(),
+        _source_excludes=item_list_source_excludes(),
     )
     return [
         serialize_item(d.get('_source') or {}, d.get('_id', ''))
@@ -322,7 +365,13 @@ async def get_crop(
     storage names.
     """
     try:
-        resp = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
+        # F-25: still excludes the 1024-d embedding vectors (matching
+        # every other item endpoint's behavior) -- but not
+        # class_id_history, since a single-item view may legitimately
+        # want it, unlike a paginated list.
+        resp = await opensearch.get(
+            index=CURATION_ITEMS_INDEX, id=crop_id, _source_excludes=item_source_excludes()
+        )
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
@@ -357,7 +406,7 @@ async def label_crop(
             opensearch,
             doc_id=crop_id,
             merger=_merge_label,
-            refresh=True,
+            refresh='wait_for',
             writer_id='human:label_crop',
         )
     except OCCFinalConflictError:
@@ -398,39 +447,14 @@ async def batch_label_crops(
             writer='human:batch_label_crops',
         )
 
-    async def _label_one(crop_id: str) -> tuple[bool, dict[str, Any] | None]:
-        try:
-            await occ_update_one(
-                opensearch,
-                doc_id=crop_id,
-                merger=_merge,
-                # Cluster drag-drop can race a background worker often
-                # enough that a short backoff isn't enough to outlast a
-                # single worker-batch write. Five retries covers ~2 s of
-                # contention.
-                max_retries=5,
-                refresh=True,
-                writer_id='human:batch_label_crops',
-            )
-            return True, None
-        except OCCFinalConflictError:
-            try:
-                doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
-                current_source = (doc.get('_source') or {}).get('class_source')
-            except Exception:
-                current_source = None
-            return False, {'crop_id': crop_id, 'current_source': current_source}
-        except Exception as exc:
-            logger.warning('batch_label_update_failed', crop_id=crop_id, error=str(exc))
-            return False, {'crop_id': crop_id, 'current_source': None}
-
-    # Parallelize the per-crop OCC writes. A serialized 10-crop drag-drop
-    # would otherwise take one round-trip per crop; asyncio.gather makes it
-    # ~one round-trip total. OpenSearch handles dozens of concurrent updates
-    # fine on a single index; this only ever runs on human-bounded
-    # drag-drop sizes.
-    results = await asyncio.gather(*(_label_one(cid) for cid in payload.crop_ids))
-    return _batch_outcome(payload.crop_ids, results)
+    # F-17: one mget page + one bulk call (regardless of batch size) via
+    # occ_update_bulk, instead of one occ_update_one round-trip per crop.
+    return await _occ_bulk_human_relabel(
+        opensearch,
+        payload.crop_ids,
+        _merge,
+        writer_id='human:batch_label_crops',
+    )
 
 
 @router.post('/crops/move')
@@ -490,31 +514,13 @@ async def move_crops(
             'updated_at': _now_iso(),
         }
 
-    async def _move_one(crop_id: str) -> tuple[bool, dict[str, Any] | None]:
-        try:
-            await occ_update_one(
-                opensearch,
-                doc_id=crop_id,
-                merger=_merge,
-                # Match batch_label_crops — see note there.
-                max_retries=5,
-                refresh=True,
-                writer_id='human:move_crops',
-            )
-            return True, None
-        except OCCFinalConflictError:
-            try:
-                doc = await opensearch.get(index=CURATION_ITEMS_INDEX, id=crop_id)
-                current_source = (doc.get('_source') or {}).get('class_source')
-            except Exception:
-                current_source = None
-            return False, {'crop_id': crop_id, 'current_source': current_source}
-        except Exception as exc:
-            logger.warning('move_crops_update_failed', crop_id=crop_id, error=str(exc))
-            return False, {'crop_id': crop_id, 'current_source': None}
-
-    results = await asyncio.gather(*(_move_one(cid) for cid in payload.crop_ids))
-    return _batch_outcome(payload.crop_ids, results)
+    # F-17: batched via occ_update_bulk — see batch_label_crops above.
+    return await _occ_bulk_human_relabel(
+        opensearch,
+        payload.crop_ids,
+        _merge,
+        writer_id='human:move_crops',
+    )
 
 
 @router.post('/crops/flag_new_class')
@@ -609,7 +615,7 @@ async def _occ_bulk_human_write(
             doc_ids=list(crop_ids),
             merger=merger,
             index=CURATION_ITEMS_INDEX,
-            refresh=True,
+            refresh='wait_for',
             writer_id=writer_id,
         )
     except Exception as exc:
@@ -673,7 +679,7 @@ async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[s
             index=CURATION_ITEMS_INDEX,
             id=crop_id,
             body=body,
-            refresh=True,
+            refresh='wait_for',
         )
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc

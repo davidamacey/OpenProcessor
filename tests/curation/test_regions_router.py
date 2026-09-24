@@ -27,8 +27,8 @@ F = get_region_fields()
 
 class _FakeRegionOS:
     """AsyncOpenSearch double covering exactly what regions.py's write
-    routes call: get/update (OCC single-doc), plus indices.refresh for
-    the batch-status endpoint."""
+    routes call: get/update (OCC single-doc), mget/bulk (F-17 batched
+    OCC writes), plus indices.refresh for the batch-status endpoint."""
 
     class _Indices:
         def __init__(self, outer: _FakeRegionOS) -> None:
@@ -41,10 +41,12 @@ class _FakeRegionOS:
         self._docs = docs or {}
         self._seq: dict[str, int] = dict.fromkeys(self._docs, 0)
         self.update_calls: list[dict[str, Any]] = []
+        self.bulk_calls: list[list[dict[str, Any]]] = []
+        self.mget_calls: list[list[str]] = []
         self.refresh_calls = 0
         self.indices = self._Indices(self)
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         if id not in self._docs:
             raise KeyError(id)
         return {
@@ -73,6 +75,56 @@ class _FakeRegionOS:
         self._docs[id].update(doc)
         self._seq[id] = self._seq.get(id, 0) + 1
         return {'result': 'updated'}
+
+    async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
+        ids = [d['_id'] for d in body['docs']]
+        self.mget_calls.append(ids)
+        docs = []
+        for doc_id in ids:
+            if doc_id in self._docs:
+                docs.append(
+                    {
+                        '_id': doc_id,
+                        '_index': next(
+                            (d.get('_index') for d in body['docs'] if d['_id'] == doc_id), None
+                        ),
+                        '_source': dict(self._docs[doc_id]),
+                        '_seq_no': self._seq[doc_id],
+                        '_primary_term': 1,
+                        'found': True,
+                    }
+                )
+            else:
+                docs.append({'_id': doc_id, 'found': False})
+        return {'docs': docs}
+
+    async def bulk(
+        self,
+        *,
+        body: list[dict[str, Any]],
+        refresh: bool | str = False,  # noqa: ARG002
+    ) -> dict[str, Any]:
+        self.bulk_calls.append(body)
+        items = []
+        for action, doc in zip(body[0::2], body[1::2], strict=True):
+            meta = action['update']
+            doc_id = meta['_id']
+            if self._seq.get(doc_id) != meta['if_seq_no']:
+                items.append(
+                    {
+                        'update': {
+                            '_id': doc_id,
+                            'status': 409,
+                            'error': {'type': 'version_conflict_engine_exception'},
+                        }
+                    }
+                )
+                continue
+            self._docs.setdefault(doc_id, {}).update(doc['doc'])
+            self._seq[doc_id] = self._seq.get(doc_id, 0) + 1
+            items.append({'update': {'_id': doc_id, 'status': 200}})
+        errors = any(i['update']['status'] not in (200, 201) for i in items)
+        return {'errors': errors, 'items': items}
 
 
 @pytest.fixture
@@ -295,7 +347,10 @@ def test_batch_set_region_status_updates_every_crop_and_refreshes(
     assert fake_os._docs['crop-1'][F.status] == 'detected'
     assert fake_os._docs['crop-2'][F.status] == 'detected'
     assert fake_os._docs['crop-1'][F.verified] is True
-    assert fake_os.refresh_calls == 1
+    # F-17: the batch write refreshes via the final bulk call's
+    # refresh='wait_for', not a separate forced indices.refresh().
+    assert fake_os.refresh_calls == 0
+    assert len(fake_os.bulk_calls) == 1
 
 
 def test_batch_set_region_status_false_positive_marks_fp_bucket_for_every_crop(

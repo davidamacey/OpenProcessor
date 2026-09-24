@@ -34,6 +34,9 @@ class _RecordingOS:
             ]
         }
 
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {'count': len(self.docs)}
+
 
 @pytest.fixture
 def fake_os() -> _RecordingOS:
@@ -70,15 +73,18 @@ def test_limit_is_bounded(client: TestClient) -> None:
 
 def test_default_sort_is_newest_first(client: TestClient, fake_os: _RecordingOS) -> None:
     assert client.get(f'{P}/crops').status_code == 200
-    (clause,) = fake_os.bodies[-1]['sort']
-    assert clause['updated_at']['order'] == 'desc'
+    sort = fake_os.bodies[-1]['sort']
+    assert sort[0]['updated_at']['order'] == 'desc'
+    # F-7: stable crop_id tiebreaker, always last.
+    assert sort[-1] == {'crop_id': {'order': 'asc'}}
 
 
 def test_sort_param_is_applied(client: TestClient, fake_os: _RecordingOS) -> None:
     r = client.get(f'{P}/crops', params={'sort': 'confidence:asc'})
     assert r.status_code == 200, r.text
-    (clause,) = fake_os.bodies[-1]['sort']
-    assert clause['confidence']['order'] == 'asc'
+    sort = fake_os.bodies[-1]['sort']
+    assert sort[0]['confidence']['order'] == 'asc'
+    assert sort[-1] == {'crop_id': {'order': 'asc'}}
     r = client.get(f'{P}/crops', params={'sort': 'updated_at:desc'})
     assert r.status_code == 200
     assert fake_os.bodies[-1]['sort'][0]['updated_at']['order'] == 'desc'
@@ -101,12 +107,21 @@ def test_confidence_band(client: TestClient, fake_os: _RecordingOS) -> None:
 
 def test_class_crops_passes_real_defaults(client: TestClient, fake_os: _RecordingOS) -> None:
     """/classes/{id}/crops calls list_crops directly; unset params must be
-    plain defaults, not FastAPI FieldInfo objects leaking into the query."""
+    plain defaults, not FastAPI FieldInfo objects leaking into the query.
+
+    F-19: class_id/test_holdout/class_excluded are pure predicates and
+    live in filter context now, but the optional params this test cares
+    about (max_rank, min_blur_ratio, classifier_conf_lt, item_text,
+    confidence band) must still be absent when unset."""
     r = client.get(f'{P}/classes/3/crops')
     assert r.status_code == 200, r.text
     body = fake_os.bodies[-1]
     assert body['size'] == 50
-    assert 'filter' not in body['query']['bool']
+    filt = body['query']['bool']['filter']
+    assert not any('range' in clause for clause in filt)
+    assert not any(
+        'should' in clause.get('bool', {}) for clause in filt if isinstance(clause, dict)
+    )
 
 
 def test_diverse_order_honors_k(
@@ -134,3 +149,15 @@ def test_diverse_order_honors_k(
 
     r = client.get(f'{P}/crops', params={'order': 'diverse'})
     assert r.json()['total'] == 6
+
+
+def test_page_too_deep_is_422(client: TestClient) -> None:
+    """F-7: from+size past the 10000 result-window ceiling must 422
+    explicitly rather than let OpenSearch 500 past index.max_result_window."""
+    r = client.get(f'{P}/crops', params={'page': 400, 'page_size': 30})
+    assert r.status_code == 422, r.text
+
+
+def test_page_within_window_is_fine(client: TestClient) -> None:
+    r = client.get(f'{P}/crops', params={'page': 300, 'page_size': 30})
+    assert r.status_code == 200, r.text

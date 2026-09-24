@@ -85,9 +85,9 @@ class _FakeOpenSearch:
 
     ``hits_by_class`` maps ``class_id -> [crop_id, ...]``; the scroll
     ``search`` simulates OpenSearch's own filtering behavior by honoring
-    a ``term: {class_id: ...}`` clause under ``query.bool.must`` if one is
-    present in the request body -- the same clause the class_id query
-    param (task d) is expected to add.
+    a ``term: {class_id: ...}`` clause under ``query.bool.must`` or
+    ``query.bool.filter`` if one is present in the request body -- the
+    same clause the class_id query param (task d) is expected to add.
     """
 
     def __init__(self, hits_by_class: dict[int, list[str]]) -> None:
@@ -101,9 +101,10 @@ class _FakeOpenSearch:
             # try/except-free `.get(...)` chain handles a missing key).
             return {}
         self.scroll_search_calls.append(body)
-        must = (body.get('query') or {}).get('bool', {}).get('must', [])
+        bool_query = (body.get('query') or {}).get('bool', {})
+        clauses = [*bool_query.get('must', []), *bool_query.get('filter', [])]
         class_filter = next(
-            (m['term']['class_id'] for m in must if 'class_id' in m.get('term', {})),
+            (m['term']['class_id'] for m in clauses if 'class_id' in m.get('term', {})),
             None,
         )
         hits = [
@@ -214,8 +215,8 @@ class TestPipelineClassIdScoping:
 
         assert summary['class_id'] == 3
         first_body = fake_os.scroll_search_calls[0]
-        must = (first_body.get('query') or {}).get('bool', {}).get('must', [])
-        assert {'term': {'class_id': 3}} in must
+        filters = (first_body.get('query') or {}).get('bool', {}).get('filter', [])
+        assert {'term': {'class_id': 3}} in filters
         # Only the two class-3 items are in scope -- forklift-1 (class 7)
         # is excluded.
         assert summary['stages']['unvalidated_after_promote'] == 2

@@ -234,7 +234,11 @@ async def scroll_hits(
     index: str,
     query: dict[str, Any],
     source: list[str],
-    page_size: int = 500,
+    # F-26: export _source is ~8 small fields (no bbox docvalues switch —
+    # see the audit doc's warning that multi-valued numeric docvalues come
+    # back sorted+deduplicated, which would corrupt bbox_norm arrays), so
+    # a bigger scroll page is safe and cuts round trips on large exports.
+    page_size: int = 2000,
     scroll_ttl: str = '5m',
     cap: int | None = None,
 ) -> list[dict[str, Any]]:

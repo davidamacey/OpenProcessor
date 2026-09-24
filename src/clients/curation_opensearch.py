@@ -41,6 +41,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -193,27 +194,19 @@ def _images_body() -> dict[str, Any]:
 # One entry per class write (src/services/curation/history.py). Human label
 # writes record the full pre-write class state (class_detector* through
 # cluster_subid, restorable=true) so the labeler's Undo restores it exactly.
+#
+# F-22: mapped as an unindexed object, not `nested`. Nothing ever issues a
+# `nested` query or agg against this field (only mapping + plain `_source`
+# reads/writes) -- rg -n "'nested'" src scripts turns up none -- yet every
+# entry cost a hidden Lucene doc (the reference index carried 560k Lucene
+# docs for 348k items), every write rewrote the whole nested block, and every
+# top-level query without a positive clause picked up a `FieldExistsQuery
+# [_primary_term]` parent filter (measured 21-105ms of query time). `enabled:
+# False` keeps the data in `_source` (label_undo.py reads `_source`, not the
+# mapping) without indexing any of it.
 _CLASS_HISTORY_MAPPING: dict[str, Any] = {
-    'type': 'nested',
-    'properties': {
-        'class_id': {'type': 'integer'},
-        'class_name': {'type': 'keyword'},
-        'class_source': {'type': 'keyword'},
-        'label_source': {'type': 'keyword'},
-        'confidence': {'type': 'float'},
-        'class_detector': {'type': 'keyword'},
-        'class_detector_version': {'type': 'keyword'},
-        'class_labeler': {'type': 'keyword'},
-        'class_labeled_at': {'type': 'date'},
-        'class_validated': {'type': 'boolean'},
-        'cluster_id': {'type': 'integer'},
-        'cluster_subid': {'type': 'keyword'},
-        'restorable': {'type': 'boolean'},
-        'writer': {'type': 'keyword'},
-        'at': {'type': 'date'},
-        'review_dismissed_at': {'type': 'date'},
-        'review_dismissed_by': {'type': 'keyword'},
-    },
+    'type': 'object',
+    'enabled': False,
 }
 
 # Exclusion plus the other per-item human review decisions.
@@ -433,12 +426,20 @@ def _items_body() -> dict[str, Any]:
                 # Encoder embedding of the region-of-interest (cropped at
                 # the region bbox, pad-to-square). Lets regions be
                 # clustered / AHC-refined like item classes so
-                # false-positives and bad boxes surface as outliers. Plain
-                # float (not knn_vector) to match how the other overlay
-                # embeddings actually persist on a live index (index.knn
-                # disabled); clustering scroll-reads it and runs AHC/IVF in
-                # Python, so no ANN index is needed.
-                F.embedding: {'type': 'float'},
+                # false-positives and bad boxes surface as outliers.
+                # F-23/D-2: knn_vector, not a plain indexed float array. A
+                # 1024-value float array indexed 1024 BKD points plus
+                # useless sorted/deduplicated doc values and stored ~22KiB
+                # of JSON in _source per doc (measured fetch cost 50-70ms
+                # per 60 docs even with it _source-excluded, since derived
+                # source still has to skip past it). knn_vector gets
+                # binary derived source instead of JSON and becomes
+                # kNN-searchable for region FP matching. The previous
+                # comment here claimed index.knn was disabled on live
+                # indexes -- that's no longer true (op_items has
+                # index.knn: true), so the plain-float rationale no
+                # longer applies.
+                F.embedding: _knn_field(dim=config.encoder_embedding_dim),
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
@@ -516,12 +517,58 @@ def _settings_body() -> dict[str, Any]:
     }
 
 
+def _umap_state_body() -> dict[str, Any]:
+    """The retired clustering reducer's fitted-manifold cache
+    (``clustering/embedding_reduce.py``). ``reducer_b64`` is a pickled
+    UMAP reducer, base64-encoded, up to ~60 MB (see
+    ``_OPENSEARCH_PERSIST_MAX_BYTES``) -- mapped ``binary`` (stored,
+    never analyzed/indexed) rather than left to dynamic mapping, which
+    tokenized it as ``text`` (F-27)."""
+    return {
+        'settings': _plain_settings(),
+        'mappings': {
+            'dynamic': False,
+            'properties': {
+                'state_id': {'type': 'keyword'},
+                'reducer_b64': {'type': 'binary'},
+                'n_components': {'type': 'integer'},
+                'metric': {'type': 'keyword'},
+            },
+        },
+    }
+
+
+def _umap_viz_state_body() -> dict[str, Any]:
+    """Visualization-only projection's own metadata slot
+    (``src/services/curation/embedding_viz.py``) -- deliberately
+    distinct from :func:`_umap_state_body`. Metadata only, no pickled
+    blob."""
+    return {
+        'settings': _plain_settings(),
+        'mappings': {
+            'dynamic': False,
+            'properties': {
+                'state_id': {'type': 'keyword'},
+                'projection_version': {'type': 'keyword'},
+                'scope': {'type': 'keyword'},
+                'cluster_id': {'type': 'integer'},
+                'n_points': {'type': 'integer'},
+                'fitted_at': {'type': 'date'},
+                'n_components': {'type': 'integer'},
+                'metric': {'type': 'keyword'},
+            },
+        },
+    }
+
+
 INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.IMAGES: _images_body(),
     IndexRole.ITEMS: _items_body(),
     IndexRole.LABELS_CONFIRMED: _labels_confirmed_body(),
     IndexRole.CLASSES: _classes_body(),
     IndexRole.SETTINGS: _settings_body(),
+    IndexRole.UMAP_STATE: _umap_state_body(),
+    IndexRole.UMAP_VIZ_STATE: _umap_viz_state_body(),
 }
 
 
@@ -537,6 +584,22 @@ instance) would key by tenant id with this same literal as the
 single-tenant fallback."""
 
 
+# F-28.1: get_curation_settings is read on nearly every strategy-scoring
+# request path (strategy_defaults.py, strategy_registry.py both fetch it
+# per call). A 5s TTL cache avoids a GET-by-id round trip on every one of
+# those, while staying short enough that a settings change is visible
+# almost immediately -- and update_curation_settings below invalidates it
+# immediately on write anyway, so the TTL only matters between writes.
+# Keyed by index name so a caller passing a non-default cfg doesn't share
+# another deployment's cached doc.
+_SETTINGS_CACHE_TTL_SECONDS = 5.0
+_settings_cache: dict[str, tuple[dict[str, Any], float]] = {}
+
+
+def _invalidate_settings_cache(index: str) -> None:
+    _settings_cache.pop(index, None)
+
+
 async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) -> dict[str, Any]:
     """Fetch the shared curation-settings document.
 
@@ -550,9 +613,17 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
     merge sets a nested field to null rather than deleting the key) --
     filtered out here so a cleared axis simply doesn't appear in
     ``defaults``, identical to "never had an override."
+
+    F-28.1: cached for :data:`_SETTINGS_CACHE_TTL_SECONDS`, invalidated
+    immediately by :func:`update_curation_settings` on write.
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
+
+    cached = _settings_cache.get(index)
+    if cached is not None and time.monotonic() < cached[1]:
+        return cached[0]
+
     source: dict[str, Any] = {}
     try:
         resp = await client.get(index=index, id=CURATION_SETTINGS_DOC_ID)
@@ -566,11 +637,13 @@ async def get_curation_settings(client: Any, cfg: CurationConfig | None = None) 
         if not ('notfound' in msg or 'not found' in msg or '404' in msg):
             logger.warning('curation_settings_get_failed', error=str(exc))
     raw_defaults = source.get('defaults') or {}
-    return {
+    result = {
         'defaults': {k: v for k, v in raw_defaults.items() if v is not None},
         'updated_at': source.get('updated_at'),
         'updated_by': source.get('updated_by'),
     }
+    _settings_cache[index] = (result, time.monotonic() + _SETTINGS_CACHE_TTL_SECONDS)
+    return result
 
 
 async def update_curation_settings(
@@ -590,6 +663,13 @@ async def update_curation_settings(
     A ``None`` value for an axis clears its shared override -- stored as
     a literal null (see :func:`get_curation_settings`'s note on why that
     read path filters it back out).
+
+    F-28.1: no ``refresh=True`` -- the read-immediately-after-write below
+    is a single-doc ``GET`` (not ``_search``), which OpenSearch serves
+    real-time from the translog regardless of the index's refresh
+    interval, so forcing a segment refresh here bought nothing but
+    latency. The 5s settings cache is invalidated immediately (not left
+    to expire) so this read-after-write can never return a stale value.
     """
     active_cfg = cfg or config
     index = index_name(active_cfg, IndexRole.SETTINGS)
@@ -601,7 +681,8 @@ async def update_curation_settings(
         },
         'doc_as_upsert': True,
     }
-    await client.update(index=index, id=CURATION_SETTINGS_DOC_ID, body=body, refresh=True)
+    await client.update(index=index, id=CURATION_SETTINGS_DOC_ID, body=body)
+    _invalidate_settings_cache(index)
     return await get_curation_settings(client, cfg=active_cfg)
 
 
@@ -918,15 +999,35 @@ async def ensure_items_validation_split_fields(
 async def ensure_items_history_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
-    """PUT the ``class_id_history`` nested field onto the existing items
+    """PUT the ``class_id_history`` object field onto the existing items
     mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent. Writers land in
     ``src/services/curation/history.py``; this helper exists so a
     re-ingested or migrated index has the field ready when the writers go
     live.
+
+    F-22: a field's type can't change in place — an index built before this
+    field went from ``nested`` to ``object enabled:false`` still has it
+    mapped ``nested``, and OpenSearch would 400 on a conflicting
+    ``put_mapping`` every cold start. No-op whenever the field is already
+    present, regardless of its type; the type change itself only takes
+    effect on a reindex (see the F-5 migration note).
     """
     index = config.items_index
+    try:
+        existing = await client.indices.get_mapping(index=index)
+    except Exception as exc:
+        logger.info('curation_mapping_precheck_failed', index=index, error=str(exc))
+        existing = {}
+    for mapping in (existing or {}).values():
+        if 'class_id_history' in (mapping.get('mappings', {}).get('properties') or {}):
+            return {
+                'acknowledged': True,
+                'index': index,
+                'fields_added': [],
+                'skipped': 'field_already_present',
+            }
     body = {
         'properties': {
             'class_id_history': _CLASS_HISTORY_MAPPING,
@@ -1079,17 +1180,20 @@ async def ensure_items_region_embedding(
     cluster / AHC-refine regions so false-positives and bad boxes surface
     as outliers. Additive ``PUT <index>/_mapping`` — idempotent.
 
-    The region embedding is a plain ``float`` array (NOT knn_vector): a
-    live items index commonly has ``index.knn`` disabled — so do the other
-    overlay embeddings (also plain float) — and adding an HNSW field to it
-    fails. Clustering reads embeddings via scroll and runs AHC/IVF in
-    Python, so no ANN index is needed anyway.
+    F-23/D-2: ``knn_vector``, matching the current items mapping
+    (``op_items`` has ``index.knn: true``; the earlier plain-``float``
+    rationale here assumed ``index.knn`` was disabled, which is no longer
+    true). A ``put_mapping`` against an index still carrying the old plain
+    ``float`` mapping fails with a recoverable ``illegal_argument_exception``
+    (field type can't change in place — see ``_is_recoverable_mapping_conflict``)
+    and is logged at info, not error; the type change itself only takes
+    effect on a fresh index or a reindex.
     """
     index = config.items_index
     fields = [F.embedding, F.cluster_id, F.cluster_distance, F.cluster_subid]
     body = {
         'properties': {
-            F.embedding: {'type': 'float'},
+            F.embedding: _knn_field(dim=config.encoder_embedding_dim),
             F.cluster_id: {'type': 'integer'},
             F.cluster_distance: {'type': 'float'},
             F.cluster_subid: {'type': 'keyword'},
@@ -1740,11 +1844,19 @@ class ClassRegistry:
             await client.indices.create(index=index, body=INDEX_BODIES[IndexRole.CLASSES])
             logger.info('curation_index_created_on_sync', index=index)
 
+        # F-26: one bulk() instead of one index() per class.
         upserted = 0
-        for entry in reg.classes:
-            doc = entry.model_dump()
-            await client.index(index=index, id=str(entry.class_id), body=doc, refresh=False)
-            upserted += 1
+        if reg.classes:
+            bulk_body: list[dict[str, Any]] = []
+            for entry in reg.classes:
+                bulk_body.append({'index': {'_index': index, '_id': str(entry.class_id)}})
+                bulk_body.append(entry.model_dump())
+            resp = await client.bulk(body=bulk_body, refresh=False)
+            if isinstance(resp, dict) and resp.get('errors'):
+                logger.warning(
+                    'curation_registry_sync_partial_errors', sample=resp.get('items', [])[:3]
+                )
+            upserted = len(reg.classes)
         await client.indices.refresh(index=index)
         logger.info('curation_registry_sync', upserted=upserted, n_classes=len(reg.classes))
         return {'upserted': upserted, 'n_classes': len(reg.classes)}

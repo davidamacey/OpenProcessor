@@ -68,8 +68,15 @@ class _FakeOpenSearch:
         return {'_scroll_id': scroll_id, 'hits': {'hits': hits}}
 
     def _match(self, query: dict[str, Any]) -> list[dict[str, Any]]:
-        """Crude status-terms matcher, enough to split the three region pools."""
-        clauses = query.get('bool', {}).get('must', [])
+        """Crude status-terms matcher, enough to split the three region pools.
+
+        F-29: the empty-frame sample query is wrapped in ``function_score``
+        (random_score) rather than a bare bool — unwrap it first.
+        """
+        if 'function_score' in query:
+            query = query['function_score']['query']
+        # F-19: status/class_id predicates now live in filter context.
+        clauses = query.get('bool', {}).get('filter', [])
         wanted: set[str] = set()
         for clause in clauses:
             for field_name, values in clause.get('terms', {}).items():
@@ -445,6 +452,32 @@ async def test_region_mode_splits_positives_hard_negatives_and_empties(tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_region_mode_empty_frame_sample_uses_random_score_with_fixed_seed(tmp_path):
+    """F-29: the empty-frame sample must not be index-order-biased (the
+    same leading docs every export) — it's a function_score/random_score
+    query with a fixed seed instead."""
+    from src.services.curation.export_single_class_rows import EMPTY_FRAME_SAMPLE_SEED
+
+    docs = [
+        _region_item(i, RegionStatus.DETECTED, region_bbox=[0.4, 0.4, 0.5, 0.45]) for i in range(4)
+    ]
+    profile = SingleClassExportProfile(box_source='region', region_class_name='plate')
+    fake_os = _FakeOpenSearch(docs, by_status=True)
+    service = _service(tmp_path, fake_os, profile)
+
+    await service.export(empty_bg_ratio=0.5, seed=1, copy_images=False)
+
+    empty_queries = [
+        q
+        for q in fake_os.queries
+        if 'function_score' in q and 'random_score' in q['function_score']
+    ]
+    assert empty_queries, 'expected at least one random_score-wrapped empty-frame query'
+    rs = empty_queries[0]['function_score']['random_score']
+    assert rs['seed'] == EMPTY_FRAME_SAMPLE_SEED
+
+
+@pytest.mark.asyncio
 async def test_region_mode_ignores_verify_rejected(tmp_path):
     """A model-rejected region is an unverified non-detection — training on
     it teaches the next detector the current one's mistakes."""
@@ -472,8 +505,8 @@ async def test_region_mode_filters_by_parent_class_ids(tmp_path):
 
     # The parent-class narrowing is pushed into OpenSearch, not applied
     # after scrolling the whole index.
-    must = fake.queries[0]['bool']['must']
-    assert {'terms': {'class_id': [0, 2]}} in must
+    filt = fake.queries[0]['bool']['filter']
+    assert {'terms': {'class_id': [0, 2]}} in filt
 
 
 @pytest.mark.asyncio

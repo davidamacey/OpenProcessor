@@ -46,7 +46,7 @@ LEGACY_SORT_CLAUSE = {
     'primary_low_conf': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
         {
-            'classifier_raw_confidence': {
+            'confidence': {
                 'order': 'asc',
                 'missing': '_last',
                 'unmapped_type': 'double',
@@ -270,6 +270,18 @@ def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) ->
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool']['must_not']
     assert {'term': {'test_holdout': True}} in must_not
+
+
+def test_review_page_too_deep_is_422(app_client: TestClient) -> None:
+    """F-7: from+size past the 10000 result-window ceiling must 422
+    explicitly rather than let OpenSearch 500 past index.max_result_window."""
+    r = app_client.get('/curation/review/all', params={'page': 400, 'page_size': 30})
+    assert r.status_code == 422, r.text
+
+
+def test_review_page_within_window_is_fine(app_client: TestClient) -> None:
+    r = app_client.get('/curation/review/all', params={'page': 300, 'page_size': 30})
+    assert r.status_code == 200, r.text
 
 
 if __name__ == '__main__':

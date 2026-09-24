@@ -53,9 +53,32 @@ _LINK_RE = re.compile(r'\]\(([^)\s]+)\)')
 _RELATIVE_MD_PATH_RE = re.compile(r'^[\w./\-]+\.md$')
 
 
+def _tracked_markdown_files() -> set[Path] | None:
+    """Markdown files git tracks, or ``None`` outside a git checkout.
+
+    Gitignored local artifacts (e.g. ``artifacts_local/``) aren't part of
+    the repository, so their links are not this test's concern.
+    """
+    import subprocess  # nosec B404 - fixed git invocation, no shell
+
+    try:
+        out = subprocess.run(  # nosec B603 B607
+            ['git', 'ls-files', '-z', '--', '*.md'],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return {REPO_ROOT / p for p in out.decode().split('\0') if p}
+
+
 def _iter_markdown_files() -> list[Path]:
+    tracked = _tracked_markdown_files()
     files = []
     for path in REPO_ROOT.rglob('*.md'):
+        if tracked is not None and path not in tracked:
+            continue
         rel_parts = set(path.relative_to(REPO_ROOT).parts)
         if rel_parts & _SKIP_DIR_NAMES:
             continue

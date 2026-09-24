@@ -16,12 +16,14 @@ from fastapi import HTTPException, Query
 
 from src.clients.curation_opensearch import ClassRegistryError
 from src.clients.occ import OCCFinalConflictError, occ_update_one
-from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
-    OpenSearchDep,
+from src.routers.curation._class_models import (
     ResolveConflict,
     ResolveNewClassRequest,
     ResolveNewClassResponse,
+)
+from src.routers.curation._common import (
+    CURATION_ITEMS_INDEX,
+    OpenSearchDep,
     _ensure_indexes,
     get_class_registry,
     logger,

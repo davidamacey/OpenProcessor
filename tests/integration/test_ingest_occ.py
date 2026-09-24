@@ -57,6 +57,8 @@ class FakeUpsertOpenSearch:
     def __init__(self) -> None:
         self._docs: dict[str, dict[str, Any]] = {}
         self._seq: dict[str, int] = {}
+        self.mget_calls: list[dict[str, Any]] = []
+        self.bulk_calls: list[list[dict[str, Any]]] = []
 
     async def index(
         self,
@@ -69,15 +71,32 @@ class FakeUpsertOpenSearch:
         self._docs[id] = dict(body)
         self._seq[id] = self._seq.get(id, -1) + 1
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(
+        self,
+        *,
+        index: str,  # noqa: ARG002
+        id: str,  # noqa: A002
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
         return {'_id': id, '_source': dict(self._docs[id]), 'found': True}
 
     async def count(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
         return {'count': len(self._docs)}
 
-    async def mget(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def mget(
+        self,
+        *,
+        index: str | None = None,  # noqa: ARG002
+        body: dict[str, Any],
+        _source_excludes: list[str] | None = None,
+    ) -> dict[str, Any]:
+        # Two shapes land here: occ_upsert_bulk's own {'ids': [...]} calls,
+        # and mget_crops' {'docs': [{'_id':..., '_index':...}, ...]} shape
+        # (occ_update_bulk, F-26 Phase 2).
+        self.mget_calls.append(body)
+        ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
         docs = []
-        for doc_id in body['ids']:
+        for doc_id in ids:
             if doc_id in self._docs:
                 docs.append(
                     {
@@ -98,17 +117,41 @@ class FakeUpsertOpenSearch:
         body: list[dict[str, Any]],
         refresh: bool | str = False,  # noqa: ARG002
     ) -> dict[str, Any]:
+        self.bulk_calls.append(body)
         items = []
         for action, doc in zip(body[0::2], body[1::2], strict=True):
-            if 'create' not in action:
-                continue  # pragma: no cover - occ_upsert_bulk only bulk-creates
-            doc_id = action['create']['_id']
-            if doc_id in self._docs:
-                items.append({'create': {'_id': doc_id, 'status': 409}})
-                continue
-            self._docs[doc_id] = dict(doc)
-            self._seq[doc_id] = 0
-            items.append({'create': {'_id': doc_id, 'status': 201}})
+            if 'create' in action:
+                doc_id = action['create']['_id']
+                if doc_id in self._docs:
+                    items.append({'create': {'_id': doc_id, 'status': 409}})
+                    continue
+                self._docs[doc_id] = dict(doc)
+                self._seq[doc_id] = 0
+                items.append({'create': {'_id': doc_id, 'status': 201}})
+            elif 'update' in action:
+                # F-26 Phase 2: occ_upsert_bulk's per-doc human-guard
+                # updates now go through occ_update_bulk's conditional
+                # bulk instead of one client.update() per doc.
+                meta = action['update']
+                doc_id = meta['_id']
+                current_seq = self._seq.get(doc_id, -1)
+                if current_seq != meta['if_seq_no']:
+                    items.append(
+                        {
+                            'update': {
+                                '_id': doc_id,
+                                'status': 409,
+                                'error': {'type': 'version_conflict_engine_exception'},
+                            }
+                        }
+                    )
+                    continue
+                self._docs[doc_id].update(doc.get('doc', {}))
+                self._seq[doc_id] = current_seq + 1
+                items.append({'update': {'_id': doc_id, 'status': 200}})
+            else:  # pragma: no cover - defensive
+                msg = f'unsupported bulk action: {action}'
+                raise ValueError(msg)
         return {'items': items}
 
     async def update(
@@ -312,3 +355,54 @@ async def test_non_human_doc_overwritten_normally() -> None:
     got = await client.get(index=index, id=crop_id)
     assert got['_source']['class_id'] == 9
     assert got['_source']['class_name'] == 'truck'
+
+
+async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
+    """F-26: the update phase of occ_upsert_bulk (existing docs whose
+    human-guard fields must be preserved/checked) must batch through
+    one occ_update_bulk call -- one mget + one bulk -- instead of one
+    client.update() per doc."""
+    from src.clients.occ import occ_upsert_bulk
+
+    client = FakeUpsertOpenSearch()
+    index = 'op_items_test'
+
+    # Seed 5 existing docs directly (bypass the create phase).
+    crop_ids = [f'crop-existing-{i}' for i in range(5)]
+    for i, cid in enumerate(crop_ids):
+        await client.index(
+            index=index,
+            id=cid,
+            body={
+                'crop_id': cid,
+                'image_id': f'img-{i}',
+                'class_id': 0,
+                'class_name': 'sedan',
+                'class_source': 'ingest',
+            },
+        )
+
+    docs = [
+        {
+            'crop_id': cid,
+            'image_id': f'img-{i}',
+            'class_id': 1,
+            'class_name': 'truck',
+            'class_source': 'ingest',
+        }
+        for i, cid in enumerate(crop_ids)
+    ]
+
+    mget_calls_before = len(client.mget_calls)
+    bulk_calls_before = len(client.bulk_calls)
+
+    result = await occ_upsert_bulk(
+        client, docs, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest'
+    )
+
+    assert result['updated'] == 5
+    # One mget (Phase 1's existence check) + one mget (occ_update_bulk's
+    # page) + one bulk (occ_update_bulk's conditional update) -- not 5
+    # separate client.update() round trips.
+    assert len(client.mget_calls) - mget_calls_before == 2
+    assert len(client.bulk_calls) - bulk_calls_before == 1

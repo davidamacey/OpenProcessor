@@ -255,7 +255,8 @@ class _FakeAutoPromoteOS:
                     'clusters': {
                         'buckets': [
                             {
-                                'key': 1,
+                                # F-29: composite-agg bucket key is a dict.
+                                'key': {'cluster_id': 1},
                                 'doc_count': 5,
                                 'top_class': {
                                     'buckets': [{'key': 'honda', 'doc_count': 5}],
@@ -466,7 +467,7 @@ async def _run_class_merge_case(monkeypatch: pytest.MonkeyPatch) -> list[dict[st
     from types import SimpleNamespace
 
     import src.routers.curation.classes as classes_mod
-    from src.routers.curation._common import ClassMergeRequest
+    from src.routers.curation._class_models import ClassMergeRequest
 
     fake_reg = SimpleNamespace(
         merge_class=lambda source_id, target_id: {

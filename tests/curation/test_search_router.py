@@ -103,26 +103,39 @@ def test_search_text_happy_path(app_client: TestClient):
     # encode_text was offloaded, never called with the wrong signature.
     app_client.fake_encoder.encode_text.assert_called_once_with(['white pickup truck'])
 
-    # kNN query body never carries pe_embedding/v6_embedding/region_embedding.
+    # kNN query body never carries pe_embedding/v6_embedding/region_embedding
+    # or class_id_history (F-25 -- this is a paginated list endpoint).
     _args, kwargs = app_client.fake_os.search.call_args
     body_sent = kwargs.get('body') or _args[-1]
     assert set(body_sent['_source']['excludes']) == {
         'pe_embedding',
         'v6_embedding',
         'region_embedding',
+        'class_id_history',
     }
     assert 'knn' in body_sent['query']
     assert 'pe_embedding' in body_sent['query']['knn']
 
 
 def test_search_text_min_score_filters_results(app_client: TestClient):
+    """F-24: min_score is applied by OpenSearch itself now (top-level
+    request body field), not filtered out of the full hit list in
+    Python -- so the fake must apply it like real OpenSearch would."""
     hits = [
         {'_id': 'a', '_score': 0.9, '_source': {'crop_id': 'a'}},
         {'_id': 'b', '_score': 0.1, '_source': {'crop_id': 'b'}},
     ]
-    app_client.fake_os.search = AsyncMock(
-        return_value={'hits': {'hits': hits, 'total': {'value': 2}}}
-    )
+
+    async def _search(*, index: str, body: dict) -> dict:
+        pool = hits
+        min_score = body.get('min_score')
+        if min_score is not None:
+            pool = [h for h in pool if h['_score'] >= min_score]
+        frm = body.get('from', 0)
+        size = body.get('size', len(pool))
+        return {'hits': {'hits': pool[frm : frm + size], 'total': {'value': len(pool)}}}
+
+    app_client.fake_os.search = AsyncMock(side_effect=_search)
     resp = app_client.get('/curation/search/text', params={'q': 'red sedan', 'min_score': 0.5})
     assert resp.status_code == 200
     body = resp.json()

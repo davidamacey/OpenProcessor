@@ -605,7 +605,7 @@ class TestChainFormatMatchesReaders:
         query, _ = _training_candidate_query('detector_blind_spots', profile)
         chain_terms = [
             clause['term'][F.detector_chain]
-            for clause in query['bool']['must']
+            for clause in query['bool']['filter']
             if 'term' in clause and F.detector_chain in clause['term']
         ]
         assert chain_terms, 'blind-spot cohort no longer filters on the chain'
@@ -620,7 +620,7 @@ class TestChainFormatMatchesReaders:
         query, _ = _training_candidate_query('disagreement', profile)
         terms = [
             c['term'][F.detector_chain]
-            for c in query['bool']['must']
+            for c in query['bool']['filter']
             if 'term' in c and F.detector_chain in c['term']
         ]
         assert terms == [f'{profile.detector_model}:hit', f'{profile.segmenter_name}:hit']

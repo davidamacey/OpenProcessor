@@ -63,7 +63,6 @@ def _stored_doc(storage: RegionFields) -> dict[str, Any]:
         'class_name': 'thing',
         'class_source': 'vlm',
         'confidence': 0.42,
-        'classifier_raw_confidence': 0.4,
         'label_source': 'vlm',
         'class_validated': False,
         'vlm_confidence': 'medium',
@@ -92,7 +91,7 @@ class _FakeItemsOS:
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {'hits': {'total': {'value': 1}, 'hits': [self._hit()]}}
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         if id != self.doc['crop_id']:
             raise KeyError(id)
         return {**self._hit(), 'found': True}
@@ -183,7 +182,9 @@ def test_region_values_reach_the_wire(monkeypatch: pytest.MonkeyPatch) -> None:
     for attr, value in _region_values().items():
         assert crop[wire.region_wire_key(attr)] == value, attr
     assert crop['vlm_confidence'] == 'medium'
-    assert crop['classifier_raw_confidence'] == 0.4
+    # F-6 / D-1: classifier_raw_confidence is retired -- never written in
+    # production, so it must no longer appear on the wire at all.
+    assert 'classifier_raw_confidence' not in crop
 
 
 def test_vlm_suggestion_keys_on_every_item() -> None:
@@ -257,8 +258,8 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
     """The PUT response echoes wire keys, not the overridden storage keys."""
 
     class _WritableOS(_FakeItemsOS):
-        async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002
-            resp = await super().get(index=index, id=id)
+        async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+            resp = await super().get(index=index, id=id, **kw)
             return {**resp, '_seq_no': 0, '_primary_term': 1}
 
         async def update(self, **kwargs: Any) -> dict[str, Any]:

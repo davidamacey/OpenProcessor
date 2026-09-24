@@ -74,6 +74,17 @@ async def compute_outlier_order(
     ):
         return cached['order']  # type: ignore[no-any-return]
 
+    # F-16: count before scrolling — a cluster far past _MAX_MEMBERS should
+    # never pay for a scroll (even a partial, break-early one) just to
+    # discover it's too large; the exact count is cheap and decides that
+    # up front.
+    if current_count is None:
+        count_resp = await client.count(index=index, body={'query': query})
+        current_count = int((count_resp or {}).get('count', 0))
+    if current_count > _MAX_MEMBERS:
+        logger.info('curation_outlier_skip_too_large_precount', index=index, n_seen=current_count)
+        return None
+
     ids: list[str] = []
     vecs: list[list[float]] = []
     body = {'size': _SCROLL_PAGE, 'query': query, '_source': [embedding_field]}

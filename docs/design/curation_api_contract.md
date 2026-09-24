@@ -362,10 +362,50 @@ promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
 denominator (it used to count only the top-5 classes, overstating purity
 on many-class clusters).
 
+**Representatives are now paged (F-15 / D-4, breaking change).**
+`GET /clusters` used to attach representative crops to *every* returned
+card via a `top_hits` sub-aggregation, which decompressed stored
+`_source` for every representative across every bucket in the response
+regardless of what the client actually displayed. It now returns every
+card (still up to `max_clusters`, still carrying `size`/`purity`/etc.)
+but only fills in `representatives` for cards in the
+`[representatives_offset, representatives_offset + representatives_limit)`
+window of the *returned, kind-filtered, `_count`-desc-ordered* card
+list — new query params `offset` (default `0`) and `limit` (default
+`50`, max `500`). Cards outside that window still carry the
+`representatives` key, but as an empty list `[]` — the field never
+disappears, so existing clients that only read `card.representatives`
+degrade to "no thumbnails for this card" rather than a KeyError. The
+response also now reports `representatives_offset` /
+`representatives_limit` so the frontend knows which window was served.
+Passing `per_cluster=0` (as before) skips representative computation
+entirely — no `_msearch` is issued.
+
+Representatives are computed by one `_msearch` (one query per cluster
+in the window, each `{size: per_cluster, query: {bool: {filter:
+[{term: {cluster_id}}], must_not: [{term: {class_excluded: true}}]}},
+_source: [crop_id, cluster_distance, class_name, cluster_subid], sort:
+[{cluster_distance: asc}, {crop_id: asc}]}`) instead of a per-bucket
+`top_hits` sub-agg on the cards aggregation itself.
+
+**Frontend action required:** paginate the cluster grid by requesting
+successive `offset`/`limit` windows (matching whatever page of cards is
+actually rendered) rather than assuming every card in one `GET
+/clusters` response already carries thumbnails.
+
+`GET /clusters/representatives` has the same shape change: the
+`clusters` dict in the response now only contains keys for cluster ids
+in the `[offset, offset + max_clusters)` window (ordered by member
+count desc) — call again with a larger `offset` for the next page. New
+`offset` query param (default `0`); response gains `offset` and
+`max_clusters` fields. Previously this endpoint returned representatives
+for every cluster (up to `max_clusters` total) in one response with no
+paging concept at all.
+
 `GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
 50), `limit` (1–500; alias for `page_size`, wins when both are set),
 `sort` (`'<field>[:asc|desc]'`, default `updated_at:desc`; fields
-`updated_at`, `created_at`, `confidence`, `classifier_raw_confidence`,
+`updated_at`, `created_at`, `confidence`,
 `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`,
 `cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
 else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
@@ -615,7 +655,7 @@ always all present (a value is `null` when the stored doc has no value;
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (57): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `classifier_raw_confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
+Item keys (56): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
 
 Region keys (34, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.

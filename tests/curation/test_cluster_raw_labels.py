@@ -23,7 +23,8 @@ def _matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
     if not query:
         return True
     if 'bool' in query:
-        return all(_matches(doc, q) for q in query['bool'].get('must', []))
+        clauses = [*query['bool'].get('must', []), *query['bool'].get('filter', [])]
+        return all(_matches(doc, q) for q in clauses)
     if 'exists' in query:
         return doc.get(query['exists']['field']) is not None
     if 'term' in query:
@@ -267,6 +268,20 @@ async def test_rerun_keeps_cluster_ids_stable(script_mod: Any) -> None:
     first = {k: d.get(rlc.CLUSTER_ID_FIELD) for k, d in fake.items.items()}
     await script_mod.run(fake, index='items', embed=rlc.hash_embed, distance_threshold=0.6)
     assert {k: d.get(rlc.CLUSTER_ID_FIELD) for k, d in fake.items.items()} == first
+
+
+@pytest.mark.asyncio
+async def test_rerun_on_unchanged_corpus_writes_nothing(script_mod: Any) -> None:
+    """F-29: a re-cluster of an unchanged label corpus must not rewrite
+    every row — write_back skips docs whose stored cluster id already
+    matches the fresh assignment."""
+    fake = FakeItemsOpenSearch(_corpus())
+    await script_mod.run(fake, index='items', embed=rlc.hash_embed, distance_threshold=0.6)
+    assert fake.bulk_bodies  # first run did write something
+    fake.bulk_bodies.clear()
+
+    await script_mod.run(fake, index='items', embed=rlc.hash_embed, distance_threshold=0.6)
+    assert fake.bulk_bodies == []
 
 
 def test_auto_embedder_falls_back_to_hash(script_mod: Any, monkeypatch: pytest.MonkeyPatch) -> None:

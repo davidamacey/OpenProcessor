@@ -14,15 +14,53 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from opensearchpy import AsyncOpenSearch
+
 from fastapi.responses import StreamingResponse
 
 from src.routers.curation._common import OpenSearchDep, router
+
+
+# F-21: the dataset-stats aggregation used to re-run once per SSE client
+# every STATS_REFRESH_SECONDS (15s) -- N open dashboard tabs meant N
+# identical `_search?size=0` round-trips every 15s. This module-level
+# cache is shared by every SSE connection; the lock ensures that when
+# several connections' timers fire in the same window, only the first
+# actually queries OpenSearch -- the rest await the same in-flight
+# refresh (or the fresh cache value it just wrote) instead of each
+# issuing their own query.
+_STATS_CACHE_TTL_SECONDS = 10.0
+_stats_cache_lock = asyncio.Lock()
+_stats_cache_payload: dict[str, Any] | None = None
+_stats_cache_expires_at: float = 0.0
+
+
+async def _cached_stats_payload(opensearch: AsyncOpenSearch) -> dict[str, Any]:
+    """Return the dataset-stats payload, refreshing at most once per
+    ``_STATS_CACHE_TTL_SECONDS`` across every concurrent SSE connection."""
+    global _stats_cache_payload, _stats_cache_expires_at  # noqa: PLW0603
+
+    from src.routers.curation.stats import stats_dataset
+
+    async with _stats_cache_lock:
+        # Re-check inside the lock: another connection may have just
+        # refreshed it while we were waiting to acquire.
+        if _stats_cache_payload is not None and time.monotonic() < _stats_cache_expires_at:
+            return _stats_cache_payload
+        try:
+            payload = await stats_dataset(opensearch)
+        except Exception as exc:
+            payload = {'error': f'{type(exc).__name__}: {exc}'}
+        _stats_cache_payload = payload
+        _stats_cache_expires_at = time.monotonic() + _STATS_CACHE_TTL_SECONDS
+        return payload
 
 
 @router.get('/pipeline/events')
@@ -52,7 +90,6 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
     The dashboard consumes this with ``new EventSource(url)`` and
     switches on ``ev.type`` (snapshot | state | stats).
     """
-    from src.routers.curation.stats import stats_dataset
     from src.services.curation.autolabel import job as auto_label_job
 
     HEARTBEAT_SECONDS = 15.0
@@ -66,13 +103,11 @@ async def pipeline_events(opensearch: OpenSearchDep) -> StreamingResponse:
     STATS_REFRESH_SECONDS = 15.0
 
     async def _build_stats_payload() -> dict[str, Any]:
-        """Single OpenSearch round-trip for the dashboard rollup. Same
-        body the REST /curation/stats/dataset endpoint serves — reusing
-        the handler keeps the two outputs identical."""
-        try:
-            return await stats_dataset(opensearch)
-        except Exception as exc:
-            return {'error': f'{type(exc).__name__}: {exc}'}
+        """Dashboard rollup, shared across every open SSE connection via
+        :func:`_cached_stats_payload`'s module-level TTL cache (F-21) —
+        the REST ``/curation/stats/dataset`` endpoint's body, not a
+        separate query."""
+        return await _cached_stats_payload(opensearch)
 
     def _sse(event: str, data: Any) -> str:
         body = json.dumps(data, default=str)

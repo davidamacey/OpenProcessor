@@ -300,7 +300,7 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             'regions_validated_by_human': {
                 'filter': {
                     'bool': {
-                        'must': [{'term': {fields.validated: True}}],
+                        'filter': [{'term': {fields.validated: True}}],
                         'should': [
                             {'term': {fields.detector: 'human'}},
                             {'term': {fields.verifier: 'human'}},
@@ -364,7 +364,13 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     fields = get_region_fields()
     body = _build_dataset_query_body(fields)
     try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
+        # F-21: this is also the query the SSE stats stream re-runs
+        # every ~10-15s (see pipeline_events.py's TTL cache). Shard
+        # request-cache eligible (size:0, no `now`/random scoring) —
+        # OpenSearch invalidates it on every index refresh anyway, so
+        # this only helps (bursts of refresh-free polls hit cache) and
+        # can't make results staler than they already are.
+        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body, request_cache=True)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch error: {exc}') from exc
 

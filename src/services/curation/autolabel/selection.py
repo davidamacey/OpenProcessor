@@ -32,11 +32,11 @@ def vlm_selection_query(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """The ``query`` for the VLM stage's scroll."""
-    must: list[dict[str, Any]] = []
+    filters: list[dict[str, Any]] = []
     if class_id is not None:
-        must.append({'term': {'class_id': class_id}})
+        filters.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
-        must.append({'term': {'cluster_id': cluster_id}})
+        filters.append({'term': {'cluster_id': cluster_id}})
         must_not: list[dict[str, Any]] = [
             {'term': {'class_validated': True}},
             {'term': {'test_holdout': True}},
@@ -48,7 +48,7 @@ def vlm_selection_query(
             {'term': {'class_validated': True}},
             {
                 'bool': {
-                    'must': [
+                    'filter': [
                         {'terms': {'class_source': sorted(classifier_class_sources())}},
                         {'range': {'confidence': {'gte': classifier_confidence_skip_vlm}}},
                     ],
@@ -59,21 +59,21 @@ def vlm_selection_query(
             {'range': {'vlm_verify_completed_at': {'gte': recent_cutoff}}},
         ]
     query: dict[str, Any] = {'bool': {'must_not': must_not}}
-    if must:
-        query['bool']['must'] = must
+    if filters:
+        query['bool']['filter'] = filters
     return query
 
 
 def unvalidated_count_query(*, class_id: int | None, cluster_id: int | None) -> dict[str, Any]:
     """Unvalidated items left in the run's scope (the dashboard's count)."""
-    must = [
+    filters = [
         {'term': {field: value}}
         for field, value in (('class_id', class_id), ('cluster_id', cluster_id))
         if value is not None
     ]
     bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
-    if must:
-        bool_q['must'] = must
+    if filters:
+        bool_q['filter'] = filters
     return {'bool': bool_q}
 
 

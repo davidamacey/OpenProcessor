@@ -51,6 +51,75 @@ def _candidate_dominant_name(cls_buckets: list[dict[str, Any]], labelled: int) -
     return None
 
 
+_REPS_SORT: list[dict[str, Any]] = [
+    {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
+    {'crop_id': 'asc'},
+]
+_REPS_SOURCE = ['crop_id', 'cluster_distance', 'class_name', 'cluster_subid']
+
+
+def _rep_msearch_body(cluster_id: int, per_cluster: int) -> dict[str, Any]:
+    """One msearch query body: top ``per_cluster`` reps for one cluster.
+
+    F-15 / D-4: replaces the old per-bucket ``top_hits`` sub-agg (which
+    decompressed stored ``_source`` for every representative across
+    *every* bucket) with one ``_msearch`` request per cluster in the
+    caller's page — issued only for clusters actually on screen.
+    """
+    return {
+        'size': per_cluster,
+        'query': {
+            'bool': {
+                'filter': [{'term': {'cluster_id': cluster_id}}],
+                'must_not': [{'term': {'class_excluded': True}}],
+            }
+        },
+        '_source': _REPS_SOURCE,
+        'sort': _REPS_SORT,
+    }
+
+
+def _reps_from_hits(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    reps: list[dict[str, Any]] = []
+    for h in hits:
+        src = h.get('_source') or {}
+        crop_id = src.get('crop_id') or h.get('_id')
+        if crop_id:
+            reps.append(
+                {
+                    'crop_id': crop_id,
+                    'cluster_distance': src.get('cluster_distance'),
+                    'class_name': src.get('class_name'),
+                    'cluster_subid': src.get('cluster_subid'),
+                },
+            )
+    return reps
+
+
+async def _fill_page_representatives(
+    opensearch: Any,
+    page_items: list[dict[str, Any]],
+    per_cluster: int,
+) -> None:
+    """Fetch + fill ``representatives`` in place for ``page_items`` only."""
+    if not page_items:
+        return
+    body_lines: list[dict[str, Any]] = []
+    for item in page_items:
+        body_lines.append({'index': CURATION_ITEMS_INDEX})
+        body_lines.append(_rep_msearch_body(item['cluster_id'], per_cluster))
+    try:
+        resp = await opensearch.msearch(body=body_lines)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f'representatives msearch failed: {exc}'
+        ) from exc
+    responses = resp.get('responses', [])
+    for item, sub in zip(page_items, responses, strict=False):
+        hits = ((sub or {}).get('hits') or {}).get('hits') or []
+        item['representatives'] = _reps_from_hits(hits)
+
+
 @router.get('/clusters')
 async def list_clusters(
     opensearch: OpenSearchDep,
@@ -76,6 +145,13 @@ async def list_clusters(
     max_rank: int | None = Query(None, ge=1),
     min_blur_ratio: float | None = Query(None, ge=0.0),
     class_source: str | None = Query(None),
+    # F-15 / D-4: representatives are only computed for this page of the
+    # ordered (post-kind-filter) card list, not for every bucket the
+    # aggregation returns. offset/limit page *representatives only* —
+    # every card up to max_clusters is still returned, just with an
+    # empty ``representatives`` list outside the page.
+    offset: int = Query(0, ge=0, description='Offset into the card list for representatives'),
+    limit: int = Query(50, ge=1, le=500, description='Cards to compute representatives for'),
 ) -> dict[str, Any]:
     """Authoritative per-cluster card payload for the labeler.
 
@@ -133,11 +209,22 @@ async def list_clusters(
         # class_source is mapped keyword directly on the live index — no
         # .keyword subfield exists (same root cause as top_class below).
         gate_filter.append({'term': {'class_source': class_source}})
+    # F-12: push `kind` into the query as a bounded cluster_id range filter
+    # *before* aggregating, rather than terms-aggregating every kind
+    # together (size: max_clusters) and dropping mismatched-kind buckets
+    # in Python afterward. Without this, candidate cluster ids (>= the
+    # residual offset, often far more numerous than the ~80 class ids)
+    # can rank ahead of class buckets by _count desc and crowd them out of
+    # the truncated agg entirely -- a kind='class' request could come back
+    # missing real class clusters.
+    if kind == 'class':
+        gate_filter.append({'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}})
+    elif kind == 'candidate':
+        gate_filter.append({'range': {'cluster_id': {'gte': RESIDUAL_CLUSTER_ID_OFFSET}}})
     outer_query: dict[str, Any] = {
         'bool': {
-            'must': [_base_match],
+            'filter': [_base_match, *gate_filter],
             'must_not': [{'term': {'class_excluded': True}}],
-            **({'filter': gate_filter} if gate_filter else {}),
         }
     }
     cluster_terms_agg: dict[str, Any] = {
@@ -167,27 +254,6 @@ async def list_clusters(
             'latest_update': {'max': {'field': 'updated_at'}},
         },
     }
-    if per_cluster > 0:
-        cluster_terms_agg['aggs']['reps'] = {
-            'top_hits': {
-                'size': per_cluster,
-                'sort': [
-                    {
-                        'cluster_distance': {
-                            'order': 'asc',
-                            'missing': '_last',
-                            'unmapped_type': 'double',
-                        },
-                    },
-                ],
-                '_source': [
-                    'crop_id',
-                    'cluster_distance',
-                    'class_name',
-                    'cluster_subid',
-                ],
-            },
-        }
     body = {'size': 0, 'query': outer_query, 'aggs': {'clusters': cluster_terms_agg}}
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
@@ -222,19 +288,6 @@ async def list_clusters(
         # cluster is a class cluster (cluster_id == class_id by invariant);
         # candidate clusters have no class id yet so it stays None.
         dominant_class_id: int | None = cid if ck == 'class' and top_name else None
-        reps: list[dict[str, Any]] = []
-        for h in bucket.get('reps', {}).get('hits', {}).get('hits', []) or []:
-            src = h.get('_source') or {}
-            crop_id = src.get('crop_id') or h.get('_id')
-            if crop_id:
-                reps.append(
-                    {
-                        'crop_id': crop_id,
-                        'cluster_distance': src.get('cluster_distance'),
-                        'class_name': src.get('class_name'),
-                        'cluster_subid': src.get('cluster_subid'),
-                    },
-                )
         items.append(
             {
                 'cluster_id': cid,
@@ -259,13 +312,19 @@ async def list_clusters(
                 'is_unlabeled': is_unlabeled,
                 'n_subclusters': n_subclusters,
                 'updated_at': bucket.get('latest_update', {}).get('value_as_string'),
-                'representatives': reps,
+                # Populated below, only for the [offset, offset+limit) page
+                # (F-15 / D-4) — every other card keeps an empty list.
+                'representatives': [],
             },
         )
         if ck == 'candidate':
             total_candidate += 1
         elif ck == 'class':
             total_class += 1
+
+    if per_cluster > 0:
+        await _fill_page_representatives(opensearch, items[offset : offset + limit], per_cluster)
+
     return {
         'items': items,
         'total': len(items),
@@ -274,6 +333,8 @@ async def list_clusters(
         'cluster_id_offset': RESIDUAL_CLUSTER_ID_OFFSET,
         'purity_thresholds': purity_thresholds(),
         'core_similarity_min': CORE_SIMILARITY_MIN,
+        'representatives_offset': offset,
+        'representatives_limit': limit,
     }
 
 
@@ -283,21 +344,31 @@ async def cluster_representatives(
     per_cluster: int = Query(4, ge=1, le=10, description='Top crops per cluster'),
     max_clusters: int = Query(200, ge=1, le=1000),
     class_id: int | None = Query(None, description='Restrict to clusters containing this class'),
+    offset: int = Query(0, ge=0, description='Offset into the _count-desc cluster list'),
 ) -> dict[str, Any]:
-    """Return up to ``per_cluster`` representative crop_ids for every cluster.
+    """Return up to ``per_cluster`` representative crop_ids per cluster, one page.
 
-    Single OpenSearch query using ``terms`` aggregation on ``cluster_id`` with a
-    ``top_hits`` sub-aggregation sorted by ascending cluster_distance (i.e.,
-    closest to centroid first). Designed for the labeler's clusters grid so it
-    can render all card thumbnails without N round-trips.
+    F-15 / D-4: the cluster id list still comes from one cheap ``terms``
+    aggregation (no sub-agg), but representatives are fetched via one
+    ``_msearch`` covering only the ``[offset, offset+max_clusters)`` page
+    of cluster ids (ordered by member count desc) — not via a
+    ``top_hits`` sub-agg that would decompress stored ``_source`` for
+    every representative across every bucket. Only clusters in that page
+    appear as keys in the response; call again with a larger ``offset``
+    for the next page.
 
     When ``class_id`` is set, the outer query filters to crops with that
     class so the agg only returns clusters that contain at least one
     member of the class — driving the labeler's class-sidebar filter.
     """
-    query: dict[str, Any] = (
-        {'term': {'class_id': class_id}} if class_id is not None else {'match_all': {}}
-    )
+    # F-12: excluded items must not surface as cluster representatives
+    # either -- this endpoint had no class_excluded guard at all before.
+    query: dict[str, Any] = {
+        'bool': {
+            'filter': [{'term': {'class_id': class_id}}] if class_id is not None else [],
+            'must_not': [{'term': {'class_excluded': True}}],
+        }
+    }
     body = {
         'size': 0,
         'query': query,
@@ -305,30 +376,8 @@ async def cluster_representatives(
             'clusters': {
                 'terms': {
                     'field': 'cluster_id',
-                    'size': max_clusters,
+                    'size': offset + max_clusters,
                     'order': {'_count': 'desc'},
-                },
-                'aggs': {
-                    'reps': {
-                        'top_hits': {
-                            'size': per_cluster,
-                            'sort': [
-                                {
-                                    'cluster_distance': {
-                                        'order': 'asc',
-                                        'missing': '_last',
-                                        'unmapped_type': 'double',
-                                    }
-                                }
-                            ],
-                            '_source': [
-                                'crop_id',
-                                'cluster_distance',
-                                'class_name',
-                                'cluster_subid',
-                            ],
-                        },
-                    },
                 },
             },
         },
@@ -338,25 +387,23 @@ async def cluster_representatives(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f'representatives query failed: {exc}') from exc
 
-    out: dict[str, Any] = {}
-    for bucket in resp.get('aggregations', {}).get('clusters', {}).get('buckets', []):
-        cid = int(bucket['key'])
-        hits = bucket.get('reps', {}).get('hits', {}).get('hits', [])
-        crops = []
-        for h in hits:
-            src = h.get('_source') or {}
-            crop_id = src.get('crop_id') or h.get('_id')
-            if crop_id:
-                crops.append(
-                    {
-                        'crop_id': crop_id,
-                        'cluster_distance': src.get('cluster_distance'),
-                        'class_name': src.get('class_name'),
-                        'cluster_subid': src.get('cluster_subid'),
-                    }
-                )
-        out[str(cid)] = crops
-    return {'clusters': out, 'count': len(out)}
+    buckets = resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
+    page_cluster_ids: list[int] = [int(b['key']) for b in buckets[offset : offset + max_clusters]]
+
+    page_items: list[dict[str, Any]] = [
+        {'cluster_id': cid, 'representatives': []} for cid in page_cluster_ids
+    ]
+    if page_items:
+        await _fill_page_representatives(opensearch, page_items, per_cluster)
+
+    out: dict[str, Any] = {str(item['cluster_id']): item['representatives'] for item in page_items}
+
+    return {
+        'clusters': out,
+        'count': len(out),
+        'offset': offset,
+        'max_clusters': max_clusters,
+    }
 
 
 @router.post('/clusters/refine/{cluster_id}')

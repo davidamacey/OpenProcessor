@@ -87,12 +87,14 @@ def test_no_query_targets_a_dynamic_keyword_subfield_of_a_region_field() -> None
     assert not offenders, offenders
 
 
-def test_class_history_snapshot_fields_are_mapped() -> None:
-    from src.services.curation.history import CLASS_STATE_FIELDS
-
-    nested = _PROPS['class_id_history']['properties']
-    for field in (*CLASS_STATE_FIELDS, 'restorable', 'writer', 'at'):
-        assert field in nested, f'class_id_history.{field} has no explicit mapping'
+def test_class_history_is_an_unindexed_object() -> None:
+    """F-22: class_id_history is never queried as `nested` (rg -n "'nested'"
+    src scripts turns up none), yet a nested mapping cost a hidden Lucene doc
+    per entry and a FieldExistsQuery[_primary_term] parent filter on every
+    top-level query. Mapped `object enabled:False` instead -- the per-entry
+    fields (CLASS_STATE_FIELDS etc.) stay in `_source`, unmapped, which is
+    all label_undo.py (a plain `_source` read, never a query/agg) needs."""
+    assert _PROPS['class_id_history'] == {'type': 'object', 'enabled': False}
 
 
 @pytest.mark.parametrize(

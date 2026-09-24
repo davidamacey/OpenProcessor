@@ -45,6 +45,13 @@ HARD_NEGATIVE_REGION_STATUSES: frozenset[str] = frozenset({RegionStatus.FALSE_PO
 # into the negatives teaches the next detector the current one's mistakes.
 EMPTY_REGION_STATUSES: frozenset[str] = frozenset({RegionStatus.NO_REGION_VISIBLE.value})
 
+# F-29: fixed seed for the empty-frame sample's random_score. A scroll
+# with no sort effectively returns index/segment order — always the same
+# leading docs — which is a biased sample repeated on every export. A
+# fixed seed keeps repeated exports of the same pool reproducible while
+# no longer always picking the same docs first.
+EMPTY_FRAME_SAMPLE_SEED = 1337
+
 
 @dataclass
 class _FrameRow:
@@ -118,7 +125,7 @@ class RowCollector:
             index=self.config.items_index,
             query={
                 'bool': {
-                    'must': [{'term': {'class_validated': True}}],
+                    'filter': [{'term': {'class_validated': True}}],
                     'must_not': [{'exists': {'field': 'review_dismissed_at'}}],
                 }
             },
@@ -204,7 +211,19 @@ class RowCollector:
             empty_hits = await scroll_hits(
                 self.opensearch,
                 index=self.config.items_index,
-                query=self._region_query({'terms': {f.status: sorted(EMPTY_REGION_STATUSES)}}),
+                # F-29: random_score with a fixed seed instead of the bare
+                # bool query, which a sort-less scroll returns in
+                # index/segment order — the same leading docs on every
+                # export.
+                query={
+                    'function_score': {
+                        'query': self._region_query(
+                            {'terms': {f.status: sorted(EMPTY_REGION_STATUSES)}}
+                        ),
+                        'random_score': {'seed': EMPTY_FRAME_SAMPLE_SEED, 'field': '_seq_no'},
+                        'boost_mode': 'replace',
+                    }
+                },
                 source=source,
                 # Over-read: empty frames carry several items each, and this
                 # export needs distinct FRAMES, not documents.
@@ -219,10 +238,10 @@ class RowCollector:
 
     def _region_query(self, status_clause: dict[str, Any]) -> dict[str, Any]:
         """Region-status clause, narrowed to the profile's parent classes."""
-        must: list[dict[str, Any]] = [status_clause]
+        filt: list[dict[str, Any]] = [status_clause]
         if self.profile.class_ids:
-            must.append({'terms': {'class_id': list(self.profile.class_ids)}})
-        return {'bool': {'must': must}}
+            filt.append({'terms': {'class_id': list(self.profile.class_ids)}})
+        return {'bool': {'filter': filt}}
 
     def _build_region_rows(
         self, hits: list[dict[str, Any]], *, image_mode: ImageMode

@@ -119,13 +119,14 @@ def active_name_to_id(registry: ClassRegistry) -> dict[str, int]:
 def unmatched_query(source: UnmatchedLabelSource) -> dict[str, Any]:
     return {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {'class_source': source.unmatched_source}},
                 {'exists': {'field': source.raw_label_field}},
             ],
             'must_not': [
                 {'term': {'class_validated': True}},
                 {'term': {'test_holdout': True}},
+                {'term': {'class_excluded': True}},
             ],
         }
     }
@@ -217,6 +218,7 @@ async def reclassify_unmatched(
                     current.get('class_source') != source.unmatched_source
                     or current.get('class_validated')
                     or current.get('test_holdout')
+                    or current.get('class_excluded')
                     or is_human_owned_class(current)
                 ):
                     return {}

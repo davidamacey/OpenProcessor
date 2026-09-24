@@ -34,6 +34,29 @@ def _fake_os(hits: list[dict]) -> AsyncMock:
     return fake
 
 
+def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
+    """Simulates OpenSearch's real from/size/min_score slicing (F-24) —
+    ``candidates`` is the fixed, already score-ordered ANN result set the
+    ``knn`` clause would produce server-side; the fake applies min_score
+    then from/size the same way OpenSearch would, so tests exercise the
+    real request shape instead of asserting against a stub that ignores
+    the body."""
+    fake = AsyncMock()
+
+    async def _search(*, index: str, body: dict) -> dict:
+        pool = candidates
+        min_score = body.get('min_score')
+        if min_score is not None:
+            pool = [h for h in pool if h.get('_score', 0.0) >= min_score]
+        total = len(pool)
+        frm = body.get('from', 0)
+        size = body.get('size', len(pool))
+        return {'hits': {'hits': pool[frm : frm + size], 'total': {'value': total}}}
+
+    fake.search = AsyncMock(side_effect=_search)
+    return fake
+
+
 # =============================================================================
 # _build_filter
 # =============================================================================
@@ -56,6 +79,8 @@ def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
     assert {'term': {'class_validated': True}} in must_not
     assert {'exists': {'field': 'review_dismissed_at'}} in must_not
     assert {'term': {'test_holdout': True}} in must_not
+    # F-4: an excluded item must never surface in semantic search either.
+    assert {'term': {'class_excluded': True}} in must_not
 
 
 def test_build_filter_include_test_keeps_holdout_crops():
@@ -247,13 +272,17 @@ async def test_semantic_text_search_actually_offloads_to_the_given_executor():
 
 
 @pytest.mark.asyncio
-async def test_semantic_text_search_min_score_drops_low_hits():
+async def test_semantic_text_search_min_score_is_sent_to_opensearch():
+    """F-24: min_score moves into the request body's top-level
+    min_score, applied by OpenSearch itself instead of filtered out of
+    the full hit list in Python."""
     hits = [
         {'_id': 'a', '_score': 0.9, '_source': {'crop_id': 'a'}},
         {'_id': 'b', '_score': 0.2, '_source': {'crop_id': 'b'}},
     ]
+    fake_os = _fake_os_paged(hits)
     result = await semantic_search.semantic_text_search(
-        opensearch=_fake_os(hits),
+        opensearch=fake_os,
         pe_encoder=_fake_encoder(),
         executor=None,
         query='white pickup truck',
@@ -261,23 +290,79 @@ async def test_semantic_text_search_min_score_drops_low_hits():
         page_size=30,
         min_score=0.5,
     )
+    assert fake_os.search.await_args is not None
+    assert fake_os.search.await_args.kwargs['body']['min_score'] == 0.5
     assert result['total'] == 1
     assert result['items'][0]['crop_id'] == 'a'
 
 
 @pytest.mark.asyncio
-async def test_semantic_text_search_paginates_in_python():
+async def test_semantic_text_search_pages_via_from_size_not_python_slicing():
+    """F-24: OpenSearch's from/size do the paging now (not a Python
+    slice over an over-fetched k-sized hit list)."""
     hits = [{'_id': str(i), '_score': 1.0, '_source': {'crop_id': str(i)}} for i in range(5)]
+    fake_os = _fake_os_paged(hits)
     result = await semantic_search.semantic_text_search(
-        opensearch=_fake_os(hits),
+        opensearch=fake_os,
         pe_encoder=_fake_encoder(),
         executor=None,
         query='q',
         page=2,
         page_size=2,
     )
+    assert fake_os.search.await_args is not None
+    body = fake_os.search.await_args.kwargs['body']
+    assert body['from'] == 2
+    assert body['size'] == 2
     assert result['total'] == 5
     assert [i['crop_id'] for i in result['items']] == ['2', '3']
+
+
+@pytest.mark.asyncio
+async def test_semantic_text_search_from_size_paging_matches_old_python_slicing():
+    """Load-bearing regression: for a fixed ANN candidate set, paging via
+    from/size returns the identical ids/order across pages 1-3 that the
+    old "fetch k, slice in Python" approach produced."""
+    hits = [
+        {'_id': str(i), '_score': 1.0 - i * 0.01, '_source': {'crop_id': str(i)}} for i in range(9)
+    ]
+    page_size = 3
+    all_page_items: list[list[str]] = []
+    for page in (1, 2, 3):
+        result = await semantic_search.semantic_text_search(
+            opensearch=_fake_os_paged(hits),
+            pe_encoder=_fake_encoder(),
+            executor=None,
+            query='q',
+            page=page,
+            page_size=page_size,
+        )
+        all_page_items.append([i['crop_id'] for i in result['items']])
+
+    # Equivalent to slicing the same score-ordered candidate list in
+    # Python page by page — same ids, same order, no gaps/overlaps.
+    expected = [str(i) for i in range(9)]
+    assert all_page_items == [expected[0:3], expected[3:6], expected[6:9]]
+
+
+@pytest.mark.asyncio
+async def test_semantic_text_search_k_is_ann_depth_not_page_size():
+    """F-24: `k` (ANN candidate depth) stays page*page_size — it must not
+    collapse to page_size just because from/size now do the slicing."""
+    fake_os = _fake_os_paged([])
+    await semantic_search.semantic_text_search(
+        opensearch=fake_os,
+        pe_encoder=_fake_encoder(),
+        executor=None,
+        query='q',
+        page=3,
+        page_size=20,
+    )
+    assert fake_os.search.await_args is not None
+    body = fake_os.search.await_args.kwargs['body']
+    assert body['query']['knn']['pe_embedding']['k'] == 60  # page(3) * page_size(20)
+    assert body['size'] == 20
+    assert body['from'] == 40
 
 
 @pytest.mark.asyncio
@@ -307,8 +392,11 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
     )
     _args, kwargs = fake_os.search.call_args
     body = kwargs['body']
+    # F-25: also excludes class_id_history — this is a paginated list
+    # endpoint, and no list renderer reads it.
     assert set(body['_source']['excludes']) == {
         'pe_embedding',
         'v6_embedding',
         'region_embedding',
+        'class_id_history',
     }

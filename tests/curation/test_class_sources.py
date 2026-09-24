@@ -145,6 +145,7 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     'class_source': None,
     "doc.get('class_source', '')": None,
     "src.get('class_source', '')": None,
+    "src.get('class_source')": None,
     "str(src.get('class_source') or '')": None,
     "current_source.get('class_source')": None,
     "(h.get('_source') or {}).get('class_source')": None,

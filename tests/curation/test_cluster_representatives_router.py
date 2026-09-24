@@ -2,6 +2,11 @@
 Unit tests for the curation clustering router's
 ``GET /curation/clusters/representatives`` endpoint. Mocks the
 OpenSearch dependency and asserts the response shape.
+
+F-15 / D-4: representatives no longer come from a per-bucket
+``top_hits`` sub-agg — the ``terms`` agg only returns cluster ids, and
+one ``_msearch`` (one body per cluster in the requested page) fetches
+representatives for that page only.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ def fake_opensearch() -> AsyncMock:
     fake.indices.create = AsyncMock(return_value={'acknowledged': True})
     fake.indices.refresh = AsyncMock(return_value={'_shards': {}})
     fake.search = AsyncMock(return_value={'hits': {'hits': []}, 'aggregations': {}})
+    fake.msearch = AsyncMock(return_value={'responses': []})
     return fake
 
 
@@ -50,15 +56,15 @@ def app_client(fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock):
         yield client
 
 
-def _bucket(cluster_id: int, hits: list[dict[str, Any]]) -> dict[str, Any]:
+def _cluster_id_buckets(*cluster_ids: int) -> dict[str, Any]:
     return {
-        'key': cluster_id,
-        'doc_count': len(hits),
-        'reps': {'hits': {'hits': hits}},
+        'aggregations': {
+            'clusters': {'buckets': [{'key': cid, 'doc_count': 1} for cid in cluster_ids]}
+        },
     }
 
 
-def _hit(crop_id: str, distance: float, class_name: str | None) -> dict[str, Any]:
+def _msearch_hit(crop_id: str, distance: float, class_name: str | None) -> dict[str, Any]:
     return {
         '_id': crop_id,
         '_source': {
@@ -72,31 +78,30 @@ def _hit(crop_id: str, distance: float, class_name: str | None) -> dict[str, Any
 def test_cluster_representatives_returns_keyed_dict(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
-    fake_opensearch.search = AsyncMock(
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets(1, 42))
+    fake_opensearch.msearch = AsyncMock(
         return_value={
-            'aggregations': {
-                'clusters': {
-                    'buckets': [
-                        _bucket(
-                            1,
-                            [
-                                _hit('c1-a', 0.10, 'cruiserbike'),
-                                _hit('c1-b', 0.12, 'cruiserbike'),
-                                _hit('c1-c', 0.15, None),
-                            ],
-                        ),
-                        _bucket(
-                            42,
-                            [
-                                _hit('c42-a', 0.05, 'sportycar'),
-                                _hit('c42-b', 0.07, 'sportycar'),
-                                _hit('c42-c', 0.09, 'pickup'),
-                            ],
-                        ),
-                    ],
+            'responses': [
+                {
+                    'hits': {
+                        'hits': [
+                            _msearch_hit('c1-a', 0.10, 'cruiserbike'),
+                            _msearch_hit('c1-b', 0.12, 'cruiserbike'),
+                            _msearch_hit('c1-c', 0.15, None),
+                        ],
+                    },
                 },
-            },
-        }
+                {
+                    'hits': {
+                        'hits': [
+                            _msearch_hit('c42-a', 0.05, 'sportycar'),
+                            _msearch_hit('c42-b', 0.07, 'sportycar'),
+                            _msearch_hit('c42-c', 0.09, 'pickup'),
+                        ],
+                    },
+                },
+            ],
+        },
     )
 
     r = app_client.get('/curation/clusters/representatives')
@@ -118,9 +123,11 @@ def test_cluster_representatives_returns_keyed_dict(
     assert [c['class_name'] for c in crops_42] == ['sportycar', 'sportycar', 'pickup']
 
 
-def test_cluster_representatives_query_shape(app_client: Any, fake_opensearch: AsyncMock) -> None:
-    """Verify the OpenSearch body uses the expected aggregation."""
-    fake_opensearch.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
+def test_cluster_representatives_query_shape_has_no_top_hits(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    """The terms agg must no longer carry a top_hits sub-agg (F-15)."""
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets())
 
     r = app_client.get('/curation/clusters/representatives?per_cluster=3&max_clusters=50')
     assert r.status_code == 200, r.text
@@ -133,55 +140,126 @@ def test_cluster_representatives_query_shape(app_client: Any, fake_opensearch: A
 
     terms = body['aggs']['clusters']['terms']
     assert terms['field'] == 'cluster_id'
-    assert terms['size'] == 50
+    assert terms['size'] == 50  # offset(0) + max_clusters(50)
+    assert 'top_hits' not in str(body['aggs']['clusters'])
+    assert 'aggs' not in body['aggs']['clusters']
 
-    top_hits = body['aggs']['clusters']['aggs']['reps']['top_hits']
-    assert top_hits['size'] == 3
-    assert top_hits['sort'] == [
-        {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
-    ]
-    assert top_hits['_source'] == ['crop_id', 'cluster_distance', 'class_name', 'cluster_subid']
+    fake_opensearch.msearch.assert_not_awaited()  # no cluster ids -> no msearch
+
+
+def test_cluster_representatives_msearch_only_covers_the_page(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets(1, 42))
+    fake_opensearch.msearch = AsyncMock(return_value={'responses': [{}, {}]})
+
+    r = app_client.get('/curation/clusters/representatives?per_cluster=3')
+    assert r.status_code == 200, r.text
+
+    fake_opensearch.msearch.assert_awaited_once()
+    assert fake_opensearch.msearch.await_args is not None
+    msearch_body = fake_opensearch.msearch.await_args.kwargs['body']
+    # One header + one query per cluster in the page.
+    assert len(msearch_body) == 4
+    headers = msearch_body[0::2]
+    queries = msearch_body[1::2]
+    assert all(h == {'index': 'op_items'} for h in headers)
+    for q in queries:
+        assert 'top_hits' not in str(q)
+        assert q['size'] == 3
+        assert q['query']['bool']['filter'] == [{'term': {'cluster_id': 1}}] or q['query']['bool'][
+            'filter'
+        ] == [{'term': {'cluster_id': 42}}]
+        assert q['query']['bool']['must_not'] == [{'term': {'class_excluded': True}}]
+        assert q['sort'] == [
+            {'cluster_distance': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
+            {'crop_id': 'asc'},
+        ]
+        assert q['_source'] == ['crop_id', 'cluster_distance', 'class_name', 'cluster_subid']
+
+
+def test_cluster_representatives_offset_limits_page_size(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets(1, 2, 3))
+    fake_opensearch.msearch = AsyncMock(return_value={'responses': [{}]})
+
+    r = app_client.get('/curation/clusters/representatives?offset=2&max_clusters=1')
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['offset'] == 2
+    assert set(body['clusters'].keys()) == {'3'}
+
+    assert fake_opensearch.search.await_args is not None
+    terms = fake_opensearch.search.await_args.kwargs['body']['aggs']['clusters']['terms']
+    assert terms['size'] == 3  # offset(2) + max_clusters(1)
+
+
+def test_cluster_representatives_excludes_class_excluded_items(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    """F-12: excluded items must not surface as cluster representatives --
+    this endpoint had no class_excluded guard at all before."""
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets())
+
+    r = app_client.get('/curation/clusters/representatives')
+    assert r.status_code == 200, r.text
+
+    assert fake_opensearch.search.await_args is not None
+    body = fake_opensearch.search.await_args.kwargs['body']
+    assert body['query'] == {
+        'bool': {'filter': [], 'must_not': [{'term': {'class_excluded': True}}]}
+    }
+
+
+def test_cluster_representatives_class_id_filter_keeps_class_excluded_guard(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets())
+
+    r = app_client.get('/curation/clusters/representatives?class_id=7')
+    assert r.status_code == 200, r.text
+
+    assert fake_opensearch.search.await_args is not None
+    body = fake_opensearch.search.await_args.kwargs['body']
+    assert body['query'] == {
+        'bool': {
+            'filter': [{'term': {'class_id': 7}}],
+            'must_not': [{'term': {'class_excluded': True}}],
+        }
+    }
 
 
 def test_cluster_representatives_handles_empty_buckets(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
-    fake_opensearch.search = AsyncMock(return_value={'aggregations': {'clusters': {'buckets': []}}})
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets())
     r = app_client.get('/curation/clusters/representatives')
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body == {'clusters': {}, 'count': 0}
+    assert body['clusters'] == {}
+    assert body['count'] == 0
 
 
 def test_cluster_representatives_falls_back_to_doc_id(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
     """If a hit's _source omits crop_id, the response uses the OpenSearch _id."""
-    fake_opensearch.search = AsyncMock(
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets(5))
+    fake_opensearch.msearch = AsyncMock(
         return_value={
-            'aggregations': {
-                'clusters': {
-                    'buckets': [
-                        {
-                            'key': 5,
-                            'doc_count': 1,
-                            'reps': {
-                                'hits': {
-                                    'hits': [
-                                        {
-                                            '_id': 'os-doc-id-9',
-                                            '_source': {
-                                                'cluster_distance': 0.2,
-                                                'class_name': 'pickup',
-                                            },
-                                        },
-                                    ],
-                                },
+            'responses': [
+                {
+                    'hits': {
+                        'hits': [
+                            {
+                                '_id': 'os-doc-id-9',
+                                '_source': {'cluster_distance': 0.2, 'class_name': 'pickup'},
                             },
-                        },
-                    ],
+                        ],
+                    },
                 },
-            },
+            ],
         }
     )
     r = app_client.get('/curation/clusters/representatives')
@@ -197,3 +275,13 @@ def test_cluster_representatives_500_on_opensearch_error(
     r = app_client.get('/curation/clusters/representatives')
     assert r.status_code == 500
     assert 'representatives query failed' in r.text
+
+
+def test_cluster_representatives_500_on_msearch_error(
+    app_client: Any, fake_opensearch: AsyncMock
+) -> None:
+    fake_opensearch.search = AsyncMock(return_value=_cluster_id_buckets(1))
+    fake_opensearch.msearch = AsyncMock(side_effect=RuntimeError('boom'))
+    r = app_client.get('/curation/clusters/representatives')
+    assert r.status_code == 500
+    assert 'representatives msearch failed' in r.text

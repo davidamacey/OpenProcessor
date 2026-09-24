@@ -8,14 +8,16 @@ from fastapi import HTTPException, Query, status
 
 from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError
 from src.config.region_fields import get_region_fields
-from src.routers.curation._common import (
-    CURATION_ITEMS_INDEX,
-    CURATION_LABELS_CONFIRMED_INDEX,
+from src.routers.curation._class_models import (
     ClassCreateRequest,
     ClassEntry,
     ClassListResponse,
     ClassMergeRequest,
     ClassUpdateRequest,
+)
+from src.routers.curation._common import (
+    CURATION_ITEMS_INDEX,
+    CURATION_LABELS_CONFIRMED_INDEX,
     CropsPageResponse,
     OpenSearchDep,
     _now_iso,
@@ -25,6 +27,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation.crops import list_crops
 from src.services.curation.class_sources import class_source_catalog
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
@@ -103,8 +106,21 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                         },
                     },
                 },
+                # F-12: restrict to class-kind cluster ids (cluster_id ==
+                # class_id by invariant) via a filter agg before
+                # terms-aggregating, so candidate/residual cluster ids
+                # (>= RESIDUAL_CLUSTER_ID_OFFSET, often far more numerous
+                # than the ~80 class ids) can't crowd real class buckets
+                # out of the size-1000 cap.
                 'by_cluster': {
-                    'terms': {'field': 'cluster_id', 'size': 1000},
+                    'filter': {
+                        'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}
+                    },
+                    'aggs': {
+                        'classes': {
+                            'terms': {'field': 'cluster_id', 'size': 1000},
+                        },
+                    },
                 },
             },
         }
@@ -114,7 +130,8 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             cid = int(bucket['key'])
             counts[cid] = int(bucket.get('doc_count', 0))
             validated[cid] = int((bucket.get('validated') or {}).get('doc_count', 0))
-        for bucket in aggs.get('by_cluster', {}).get('buckets', []):
+        by_cluster_buckets = (aggs.get('by_cluster') or {}).get('classes', {}).get('buckets', [])
+        for bucket in by_cluster_buckets:
             cid = int(bucket['key'])
             cluster_size[cid] = int(bucket.get('doc_count', 0))
     except Exception as exc:
@@ -137,7 +154,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             body={
                 'query': {
                     'bool': {
-                        'must': [
+                        'filter': [
                             {'exists': {'field': fields.bbox_norm}},
                             {'term': {'class_validated': True}},
                         ]
@@ -290,12 +307,12 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
         resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
         return int(resp.get('count', 0))
 
-    holdout = await _count({'bool': {'must': [of_source], 'filter': [not_holdout]}})
-    relabel = await _count({'bool': {'must': [of_source], 'must_not': [not_holdout]}})
+    holdout = await _count({'bool': {'filter': [of_source, not_holdout]}})
+    relabel = await _count({'bool': {'filter': [of_source], 'must_not': [not_holdout]}})
     unvalidate = await _count(
         {
             'bool': {
-                'must': [of_source, {'term': {'class_validated': True}}],
+                'filter': [of_source, {'term': {'class_validated': True}}],
                 'must_not': [not_holdout],
             }
         }
@@ -334,8 +351,10 @@ async def merge_class(
         body={
             'query': {
                 'bool': {
-                    'must': [{'term': {'class_id': payload.source_id}}],
-                    'filter': [{'term': {'test_holdout': True}}],
+                    'filter': [
+                        {'term': {'class_id': payload.source_id}},
+                        {'term': {'test_holdout': True}},
+                    ],
                 },
             },
         },
@@ -365,13 +384,19 @@ async def merge_class(
     }
     merge_query = {
         'bool': {
-            'must': [{'term': {'class_id': payload.source_id}}],
+            'filter': [{'term': {'class_id': payload.source_id}}],
             'must_not': [{'term': {'test_holdout': True}}],
         },
     }
     # The confirmed-labels index has no class_id_history / class_validated
     # field (its label_source means "original label provenance", not
     # "is this human-confirmed") — stays a plain update_by_query.
+    #
+    # F-29: this index has no mapping for cluster_id/cluster_subid — they
+    # were only ever written here (nothing reads them off this index;
+    # models.py's health check only checks index existence), so an
+    # unmapped field was accumulating on every merge for no reader. Drop
+    # both writes rather than add a mapping for dead fields.
     try:
         await opensearch.update_by_query(
             index=CURATION_LABELS_CONFIRMED_INDEX,
@@ -381,8 +406,6 @@ async def merge_class(
                         'ctx._source.class_id = params.class_id;'
                         'ctx._source.class_name = params.class_name;'
                         'ctx._source.class_source = params.class_source;'
-                        'ctx._source.cluster_id = params.class_id;'
-                        'ctx._source.remove("cluster_subid");'
                         'ctx._source.updated_at = params.updated_at;'
                     ),
                     'params': relabel_doc,
@@ -436,12 +459,15 @@ async def merge_class(
     try:
         crop_ids = await _scroll_merge_ids()
         if crop_ids:
+            # F-29: refresh once after every page instead of forcing a
+            # refresh=True on each of occ_skip_on_conflict_bulk's
+            # per-500-id pages.
             bulk_result = await occ_skip_on_conflict_bulk(
                 opensearch,
                 doc_ids=crop_ids,
                 merger=_merge_crop,
                 index=CURATION_ITEMS_INDEX,
-                refresh=True,
+                refresh=False,
                 writer_id='class_merge',
             )
             if bulk_result.get('errors'):
@@ -450,6 +476,10 @@ async def merge_class(
                     index=CURATION_ITEMS_INDEX,
                     errors=len(bulk_result['errors']),
                 )
+            try:
+                await opensearch.indices.refresh(index=CURATION_ITEMS_INDEX)
+            except Exception as exc:
+                logger.debug('merge_relabel_final_refresh_failed', error=str(exc))
     except Exception as exc:
         logger.warning('merge_relabel_failed', index=CURATION_ITEMS_INDEX, error=str(exc))
     return result
