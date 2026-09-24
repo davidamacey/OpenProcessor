@@ -61,6 +61,21 @@ _STRATUM_SCAN_PAGE_SIZE = 1000
 # stratum, ~1300x today's entire cohort (382 crops).
 _STRATUM_SCAN_MAX_PAGES = 500
 
+# F-8 sentinels for the composite agg's missing_bucket strata (a doc with no
+# class_id or no hdd_source). class_id uses -1 (never a real class id);
+# hdd_source uses an explicit string sentinel since '' was already a
+# plausible (if unlikely) real value and would be ambiguous with "missing".
+_MISSING_CLASS_ID_STRATUM = -1
+_MISSING_HOLDOUT_SOURCE_STRATUM = '__none__'
+
+
+def _equals_or_missing(field: str, value: Any, missing_sentinel: Any) -> dict[str, Any]:
+    """``{'term': {field: value}}``, or (when ``value`` is the missing
+    sentinel) a clause matching docs where ``field`` doesn't exist at all."""
+    if value == missing_sentinel:
+        return {'bool': {'must_not': [{'exists': {'field': field}}]}}
+    return {'term': {field: value}}
+
 
 def build_cohort_query() -> dict[str, Any]:
     """The freeze cohort: human-validated crops only.
@@ -95,8 +110,8 @@ async def scan_stratum_crop_ids(
         'bool': {
             'must': [
                 cohort_query,
-                {'term': {'class_id': class_id}},
-                {'term': {'hdd_source': hdd_source}},
+                _equals_or_missing('class_id', class_id, _MISSING_CLASS_ID_STRATUM),
+                _equals_or_missing('hdd_source', hdd_source, _MISSING_HOLDOUT_SOURCE_STRATUM),
             ]
         }
     }
@@ -164,8 +179,13 @@ async def fetch_cohort_strata(
         composite: dict[str, Any] = {
             'size': _STRATA_PAGE_SIZE,
             'sources': [
-                {'class_id': {'terms': {'field': 'class_id'}}},
-                {'hdd_source': {'terms': {'field': 'hdd_source'}}},
+                # F-8: missing_bucket keeps docs with no class_id/hdd_source
+                # in the strata enumeration (as an explicit null key)
+                # instead of silently dropping them from the composite agg
+                # entirely -- a doc missing one of these fields would
+                # otherwise never be frozen into any stratum at all.
+                {'class_id': {'terms': {'field': 'class_id', 'missing_bucket': True}}},
+                {'hdd_source': {'terms': {'field': 'hdd_source', 'missing_bucket': True}}},
             ],
         }
         if after_key:
@@ -180,8 +200,19 @@ async def fetch_cohort_strata(
         page_buckets = strata.get('buckets', [])
         for bucket in page_buckets:
             key = bucket.get('key') or {}
-            class_id = int(key.get('class_id') or -1)
-            hdd_source = str(key.get('hdd_source') or '')
+            # F-8: `int(key.get('class_id') or -1)` treated class_id == 0
+            # the same as a missing key (`0 or -1` == -1 in Python),
+            # silently misbucketing every class-0 crop as "unknown". Only
+            # an actually-missing/None key (missing_bucket above) falls
+            # back to the sentinel now.
+            raw_class_id = key.get('class_id')
+            class_id = int(raw_class_id) if raw_class_id is not None else _MISSING_CLASS_ID_STRATUM
+            raw_hdd_source = key.get('hdd_source')
+            hdd_source = (
+                str(raw_hdd_source)
+                if raw_hdd_source is not None
+                else _MISSING_HOLDOUT_SOURCE_STRATUM
+            )
             crop_ids = await scan_stratum_crop_ids(opensearch, index, query, class_id, hdd_source)
             buckets.append({'class_id': class_id, 'hdd_source': hdd_source, 'crop_ids': crop_ids})
         after_key = strata.get('after_key')
