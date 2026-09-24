@@ -103,14 +103,13 @@ def test_yolov5_loader_requires_a_fork_checkout(mod: ModuleType, tmp_path: Path)
     mod.validate_args(_args(mod, argv))
 
 
-def test_yolov5_fork_default_follows_the_shared_env_var(
+def test_yolov5_fork_default_ignores_the_removed_env_var(
     mod: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Same env var ``src/services/detection/ensemble_nms.py`` reads."""
-    monkeypatch.setenv(mod.YOLOV5_FORK_ENV, '/opt/forks/yolov5')
-    assert mod.default_yolov5_fork() == '/opt/forks/yolov5'
-    monkeypatch.delenv(mod.YOLOV5_FORK_ENV)
-    assert mod.default_yolov5_fork() == mod.DEFAULT_YOLOV5_FORK
+    """The serving path's NMS is native, so no shared fork env var remains."""
+    monkeypatch.setenv('DETECTION_YOLOV5_FORK', '/opt/forks/yolov5')
+    args = _args(mod, BASE_ARGV)
+    assert args.yolov5_fork == Path(mod.DEFAULT_YOLOV5_FORK)
 
 
 def test_main_exits_2_on_invalid_arguments(

@@ -112,9 +112,10 @@ docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
     --triton-name my_detector_dual_head \
     --imgsz 1280 --max-batch 16 --formats onnx trt
 
-# Legacy YOLOv5-fork checkpoint (fork path defaults to $DETECTION_YOLOV5_FORK)
+# Legacy YOLOv5-fork checkpoint (the fork is only needed to load its checkpoints)
 docker compose exec yolo-api python /app/export/export_detector_dual_head.py \
     --weights /app/pytorch_models/legacy_v5.pt --loader yolov5 \
+    --yolov5-fork /app/external/yolov5 \
     --imgsz 1280 --triton-name legacy_v5_dual_head
 ```
 
