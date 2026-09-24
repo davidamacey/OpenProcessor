@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from pydantic import BaseModel, Field
 
 from src.services.curation import wire
 from src.services.curation.class_sources import CLASS_SOURCE_ROLES
@@ -239,3 +240,85 @@ def test_python_override_env_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = _load('_contract_runtime')
     monkeypatch.setenv(runtime.PYTHON_OVERRIDE_ENV, '/opt/custom/python')
     assert runtime.resolve_python() == '/opt/custom/python'
+
+
+class _Leaf(BaseModel):
+    text: str | None = None
+    box: list[float] | None = None
+
+
+class _Middle(BaseModel):
+    leaves: list[_Leaf] = Field(default_factory=list)
+    best: _Leaf | None = None
+
+
+class _Node(BaseModel):
+    name: str
+    children: list[_Node] = Field(default_factory=list)
+
+
+class _Root(BaseModel):
+    id: str
+    middles: list[_Middle] = Field(default_factory=list)
+    maybe_middles: list[_Middle] | None = None
+    tree: _Node | None = None
+
+
+def test_ref_types_render_by_name(mod: ModuleType) -> None:
+    refs: set[str] = set()
+    assert mod.ts_type({'$ref': '#/$defs/Thing'}, refs) == 'Thing'
+    assert mod.ts_type({'type': 'array', 'items': {'$ref': '#/$defs/A'}}, refs) == 'A[]'
+    assert (
+        mod.ts_type(
+            {'anyOf': [{'type': 'array', 'items': {'$ref': '#/$defs/B'}}, {'type': 'null'}]}, refs
+        )
+        == 'B[] | null'
+    )
+    assert refs == {'Thing', 'A', 'B'}
+
+
+def test_nested_refs_emit_sorted_interfaces_transitively(mod: ModuleType) -> None:
+    schema = _Root.model_json_schema(mode='serialization')
+    refs: set[str] = set()
+    fields = {k: mod.ts_type(v, refs) for k, v in schema['properties'].items()}
+    assert fields == {
+        'id': 'string',
+        'middles': '_Middle[]',
+        'maybe_middles': '_Middle[] | null',
+        'tree': '_Node | null',
+    }
+    text = '\n'.join(mod.ts_interfaces(schema, refs))
+    # _Leaf is only reachable through _Middle; _Node refers to itself.
+    assert text == '\n'.join(
+        [
+            'export interface _Leaf {',
+            '  text: string | null;',
+            '  box: number[] | null;',
+            '}',
+            '',
+            'export interface _Middle {',
+            '  leaves: _Leaf[];',
+            '  best: _Leaf | null;',
+            '}',
+            '',
+            'export interface _Node {',
+            '  name: string;',
+            '  children: _Node[];',
+            '}',
+            '',
+        ]
+    )
+
+
+def test_ref_to_missing_def_is_fatal(mod: ModuleType) -> None:
+    with pytest.raises(ValueError, match='undefined'):
+        mod.ts_interfaces({'$defs': {}}, {'Ghost'})
+
+
+def test_committed_item_wire_ts_declares_nested_models() -> None:
+    ts = (CONTRACTS / 'ts' / 'itemWire.ts').read_text(encoding='utf-8')
+    schema = json.loads((CONTRACTS / 'json' / 'item_wire.json').read_text(encoding='utf-8'))[
+        'json_schema'
+    ]
+    for name in schema.get('$defs', {}):
+        assert f'export interface {name} {{' in ts

@@ -3,6 +3,13 @@
 // DO NOT EDIT BY HAND: edit the Python source and re-run
 // `python3 scripts/codegen/generate_contracts.py`.
 
+export interface ItemTextLine {
+  text: string | null;
+  box_norm: number[] | null;
+  confidence: number | null;
+  rel_height: number | null;
+}
+
 /**
  * The wire item every item-returning curation endpoint emits. Every key is
  * always present; a missing stored value is sent as null or the default.
@@ -63,6 +70,9 @@ export interface ItemWire {
   region_text_confidence: number | null;
   region_text_source: string | null;
   region_text_engine_version: string | null;
+  region_text_vlm: string | null;
+  region_text_ocr: string | null;
+  region_text_disagreement: boolean | null;
   region_validated: boolean | null;
   region_verified: boolean | null;
   region_verified_at: string | null;
@@ -81,6 +91,7 @@ export interface ItemWire {
   region_source: string | null;
   region_pairing: unknown;
   region_skip_verify: boolean | null;
+  item_text_lines: ItemTextLine[];
 }
 
 export type ItemWireKey = keyof ItemWire;
@@ -141,6 +152,9 @@ export const ITEM_WIRE_KEYS = [
   'region_text_confidence',
   'region_text_source',
   'region_text_engine_version',
+  'region_text_vlm',
+  'region_text_ocr',
+  'region_text_disagreement',
   'region_validated',
   'region_verified',
   'region_verified_at',
@@ -159,6 +173,7 @@ export const ITEM_WIRE_KEYS = [
   'region_source',
   'region_pairing',
   'region_skip_verify',
+  'item_text_lines',
 ] as const satisfies readonly ItemWireKey[];
 
 /** Region-of-interest attributes (fixed wire names, whatever the storage names). */
@@ -176,6 +191,9 @@ export const REGION_WIRE_KEYS = [
   'region_text_confidence',
   'region_text_source',
   'region_text_engine_version',
+  'region_text_vlm',
+  'region_text_ocr',
+  'region_text_disagreement',
   'region_validated',
   'region_verified',
   'region_verified_at',
