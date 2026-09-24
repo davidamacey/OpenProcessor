@@ -602,7 +602,7 @@ async def build_uncertainty_queue(
     count_body: dict[str, Any] = {
         'query': {
             'bool': {
-                'must': [{'exists': {'field': 'probe_pred_entropy'}}],
+                'filter': [{'exists': {'field': 'probe_pred_entropy'}}],
                 'must_not': [{'term': {'test_holdout': True}}],
             }
         }

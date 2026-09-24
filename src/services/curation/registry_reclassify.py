@@ -119,7 +119,7 @@ def active_name_to_id(registry: ClassRegistry) -> dict[str, int]:
 def unmatched_query(source: UnmatchedLabelSource) -> dict[str, Any]:
     return {
         'bool': {
-            'must': [
+            'filter': [
                 {'term': {'class_source': source.unmatched_source}},
                 {'exists': {'field': source.raw_label_field}},
             ],

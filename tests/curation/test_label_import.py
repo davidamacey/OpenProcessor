@@ -64,8 +64,8 @@ class FakeLabelOpenSearch:
                 if doc.get('image_path') == path
             ]
             return {'hits': {'hits': hits[:1]}}
-        # items index: bool must image_id term, must_not test_holdout.
-        must = (query.get('bool') or {}).get('must') or []
+        # items index: bool filter image_id term, must_not test_holdout.
+        must = (query.get('bool') or {}).get('filter') or []
         image_id = None
         for clause in must:
             term = clause.get('term') or {}

@@ -170,7 +170,7 @@ async def _lookup_existing_crops(
         'size': 200,
         'query': {
             'bool': {
-                'must': [{'term': {'image_id': image_id}}],
+                'filter': [{'term': {'image_id': image_id}}],
                 'must_not': [{'term': {'test_holdout': True}}],
             },
         },
