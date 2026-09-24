@@ -387,6 +387,7 @@ def _ocr_recognizer_mock():
     return r
 
 
+@pytest.mark.usefixtures('reference_region_profile')
 class TestCascadeWithTheShippedSegmenter:
     """The worker's cascade, with the real client wired to the real server."""
 

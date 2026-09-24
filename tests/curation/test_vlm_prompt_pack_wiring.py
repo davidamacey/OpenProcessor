@@ -30,11 +30,9 @@ def _reset_vlm_labeler_singleton() -> Iterator[None]:
     """The singleton is cached as a function attribute on
     ``_get_vlm_labeler`` -- clear it around every test in this module so
     one test's patched pack can't leak into another's."""
-    if hasattr(vlm_mod._get_vlm_labeler, '_inst'):
-        del vlm_mod._get_vlm_labeler._inst
+    vlm_mod._get_vlm_labeler.__dict__.pop('_insts', None)
     yield
-    if hasattr(vlm_mod._get_vlm_labeler, '_inst'):
-        del vlm_mod._get_vlm_labeler._inst
+    vlm_mod._get_vlm_labeler.__dict__.pop('_insts', None)
 
 
 def test_get_vlm_labeler_uses_generic_pack_by_default() -> None:
@@ -73,3 +71,29 @@ def test_pipeline_class_catalog_uses_resolved_pack(monkeypatch: pytest.MonkeyPat
     src = _Path(pipeline.__file__).read_text()
     assert 'from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK' not in src
     assert 'resolve_prompt_pack' in src
+
+
+def test_get_vlm_labeler_selects_and_caches_per_pack_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Selection is by pack name, one cached labeler per pack; the default
+    (no name) is the OP_PROMPT_PACK_PATH pack; unknown names raise."""
+    from dataclasses import replace
+
+    from src.config.curation import CurationConfig
+    from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
+
+    default_path = tmp_path / 'default.json'
+    extra_path = tmp_path / 'extra.json'
+    replace(GENERIC_ITEM_PACK, name='pallet_v1').to_json(default_path)
+    replace(GENERIC_ITEM_PACK, name='food_v2').to_json(extra_path)
+    cfg = CurationConfig(prompt_pack_path=default_path, prompt_pack_paths=(extra_path,))
+    monkeypatch.setattr('src.config.curation.get_curation_config', lambda: cfg)
+
+    assert vlm_mod._get_vlm_labeler()._pack.name == 'pallet_v1'
+    food = vlm_mod._get_vlm_labeler('food_v2')
+    assert food._pack.name == 'food_v2'
+    assert vlm_mod._get_vlm_labeler('food_v2') is food
+    assert vlm_mod._get_vlm_labeler(GENERIC_ITEM_PACK.name)._pack is GENERIC_ITEM_PACK
+    with pytest.raises(ValueError, match='unknown prompt pack'):
+        vlm_mod._get_vlm_labeler('nope')

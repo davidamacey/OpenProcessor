@@ -239,7 +239,21 @@ async def lifespan(app: FastAPI):
     # lifespan (not at module scope) so the whole block stays optional and
     # testable — same shape as the reconcile blocks above.
     try:
+        from src.config import get_gpu_arbiter_config
         from src.services.training.gpu_arbiter import reconcile_on_startup
+
+        # Resolved via GpuArbiterConfig.from_env() (OP_GPU_ALLOWED_IDS,
+        # OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER,
+        # OP_BAKEOFF_JOBS_DIR). Logged so an operator can confirm the GPU
+        # fence actually took effect.
+        arbiter_cfg = get_gpu_arbiter_config()
+        logger.info(
+            'gpu_arbiter_config',
+            allowed_gpu_ids=sorted(arbiter_cfg.allowed_gpu_ids) or 'unrestricted',
+            containers=list(arbiter_cfg.containers),
+            trainer_container=arbiter_cfg.trainer_container,
+            bakeoff_jobs_dir=arbiter_cfg.bakeoff_jobs_dir,
+        )
 
         action = await reconcile_on_startup()
         logger.info('gpu_arbiter_reconciled', action=action.action, detail=action.detail)

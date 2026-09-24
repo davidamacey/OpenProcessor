@@ -440,18 +440,18 @@ class VlmLabeler:
     ) -> None:
         if max_images_per_call < 1:
             raise ValueError('max_images_per_call must be >= 1')
-        # Defensive hard cap independent of the caller-supplied default —
-        # align with your deployment's --limit-mm-per-prompt before
-        # raising.
-        _max_hard = 8
+        # Hard cap = the deployment's configured upstream limit
+        # (OP_VLM_MAX_IMAGES_PER_CALL), so even an explicit caller value
+        # can't exceed what the serving engine accepts per prompt.
+        _max_hard = DEFAULT_MAX_IMAGES_PER_CALL
         if max_images_per_call > _max_hard:
             logger.warning(
                 'vlm_labeler.max_images_clamped',
                 requested=max_images_per_call,
                 clamped_to=_max_hard,
                 reason=(
-                    f"vlm_labeler hard cap is {_max_hard}; align with your VLM deployment's "
-                    'limit-mm-per-prompt before raising.'
+                    f'vlm_labeler hard cap is {_max_hard} (OP_VLM_MAX_IMAGES_PER_CALL); '
+                    "align it with your VLM deployment's per-prompt image limit."
                 ),
             )
             max_images_per_call = _max_hard

@@ -28,14 +28,17 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE, class_provenance
+from src.services.detection.cascade_detect import class_provenance
 
 
 def _human_class_provenance() -> dict[str, Any]:
     """Class provenance for every human class write in this module."""
+    from src.services.detection.profile_registry import region_profile_or_neutral
+
+    human = region_profile_or_neutral()
     return class_provenance(
-        detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-        detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+        detector=human.human_detector_name,
+        detector_version=human.human_detector_version,
         labeler='human',
     )
 
