@@ -52,45 +52,63 @@ CLASS_SOURCE_ROLES: tuple[str, ...] = (
     'label_import',
 )
 
-_FIXED_ENTRIES: tuple[tuple[str, str, str], ...] = (
-    (DEFAULT_PROPOSAL_CLASS_SOURCE, 'Unclassified proposal', 'proposal'),
-    (VLM_CLASS_SOURCE, 'Labeled by the VLM', 'vlm'),
-    (VLM_UNMATCHED_CLASS_SOURCE, 'VLM answer not in the class registry', 'vlm_unmatched'),
-    (VLM_NEW_CLASS_PENDING_CLASS_SOURCE, 'VLM proposed a new class', 'vlm_new_class_pending'),
+_FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
+    (DEFAULT_PROPOSAL_CLASS_SOURCE, 'Unclassified proposal', 'proposal', 'Proposal'),
+    (VLM_CLASS_SOURCE, 'Labeled by the VLM', 'vlm', 'VLM'),
+    (
+        VLM_UNMATCHED_CLASS_SOURCE,
+        'VLM answer not in the class registry',
+        'vlm_unmatched',
+        'VLM unmatched',
+    ),
+    (
+        VLM_NEW_CLASS_PENDING_CLASS_SOURCE,
+        'VLM proposed a new class',
+        'vlm_new_class_pending',
+        'New class?',
+    ),
     (
         VLM_RECLASSIFIED_CLASS_SOURCE,
         'VLM answer matched after the registry grew',
         'vlm_reclassified',
+        'VLM rematch',
     ),
-    (CLUSTER_MAJORITY_CLASS_SOURCE, 'Cluster majority agreement', 'cluster'),
-    (HUMAN_CLASS_SOURCE, 'Labeled by a human', 'human'),
-    (HUMAN_MOVE_CLASS_SOURCE, 'Moved to a cluster by a human', 'human'),
-    (CLASS_MERGE_CLASS_SOURCE, 'Relabeled by a class merge', 'merge'),
-    (LABEL_IMPORT_CLASS_SOURCE, 'Imported label', 'label_import'),
+    (CLUSTER_MAJORITY_CLASS_SOURCE, 'Cluster majority agreement', 'cluster', 'Cluster'),
+    (HUMAN_CLASS_SOURCE, 'Labeled by a human', 'human', 'Human'),
+    (HUMAN_MOVE_CLASS_SOURCE, 'Moved to a cluster by a human', 'human', 'Human move'),
+    (CLASS_MERGE_CLASS_SOURCE, 'Relabeled by a class merge', 'merge', 'Merge'),
+    (LABEL_IMPORT_CLASS_SOURCE, 'Imported label', 'label_import', 'Imported'),
 )
 
 
-def _entry(source_id: str, label: str, role: str) -> dict[str, str]:
-    return {'id': source_id, 'label': label, 'role': role}
+def _entry(source_id: str, label: str, role: str, short_label: str) -> dict[str, str]:
+    return {'id': source_id, 'label': label, 'role': role, 'short_label': short_label}
 
 
 def class_source_catalog() -> list[dict[str, str]]:
-    """``[{id, label, role}, ...]`` for every ``class_source`` value this
+    """``[{id, label, role, short_label}, ...]`` for every ``class_source`` value this
     deployment can write: the configured ingest profiles' values first,
     then the fixed writer values. Reads the ingest env on every call."""
     out: list[dict[str, str]] = []
     primary = ingest_primary_profile()
     p_model = primary.detector_model or primary.name
-    out.append(_entry(f'{primary.name}_proposal', f'Proposed by {p_model}', 'proposal'))
+    out.append(_entry(f'{primary.name}_proposal', f'Proposed by {p_model}', 'proposal', 'Proposal'))
     if primary.assigns_class:
         out.append(
-            _entry(f'{primary.name}_low_conf', f'{p_model} below confidence floor', 'low_conf')
+            _entry(
+                f'{primary.name}_low_conf',
+                f'{p_model} below confidence floor',
+                'low_conf',
+                'Low conf',
+            )
         )
-        out.append(_entry(f'{primary.name}_model', f'Classified by {p_model}', 'model'))
+        out.append(_entry(f'{primary.name}_model', f'Classified by {p_model}', 'model', 'Model'))
     secondary = ingest_secondary_profile()
     if secondary is not None:
         s_model = secondary.detector_model or secondary.name
-        out.append(_entry(f'{secondary.name}_model', f'Classified by {s_model}', 'model'))
+        out.append(
+            _entry(f'{secondary.name}_model', f'Classified by {s_model}', 'model', 'Classifier')
+        )
     seen = {e['id'] for e in out}
     out.extend(_entry(*fixed) for fixed in _FIXED_ENTRIES if fixed[0] not in seen)
     return out

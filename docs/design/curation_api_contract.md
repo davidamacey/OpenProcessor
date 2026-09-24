@@ -151,7 +151,7 @@ rank just the first `k` k-center-greedy picks; `total` is then `k`).
 - `ClassCreateRequest`: `name`, `group`, `notes`
 - `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
 - `ClassMergeRequest`: `source_id`, `target_id`
-- `GET /class_sources` -> `{"class_sources": [{"id", "label", "role"}, ...]}` — see "`class_source` values" below
+- `GET /class_sources` -> `{"class_sources": [{"id", "label", "role", "short_label"}, ...]}` — see "`class_source` values" below
 
 ### VLM labeling/verification
 
@@ -426,7 +426,7 @@ single-class versions under `<export_root>/<profile_name>/<version>/`, and
 ### `class_source` values — `GET /class_sources`
 
 `GET {prefix}/class_sources` returns
-`{"class_sources": [{"id": str, "label": str, "role": str}, ...]}`: every
+`{"class_sources": [{"id": str, "label": str, "role": str, "short_label": str}, ...]}` (`short_label`: 1-2 words for badges; `label`: full text for menus/tooltips): every
 `class_source` value this deployment can write, built by
 `class_source_catalog()` (`src/services/curation/class_sources.py`).
 Ingest values come first, derived from the configured ingest profiles
