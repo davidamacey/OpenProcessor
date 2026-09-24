@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 
@@ -81,7 +82,7 @@ def build_tab_query(
                         {
                             'bool': {
                                 'must_not': [{'exists': {'field': 'class_id'}}],
-                                'must': [{'exists': {'field': 'embedding'}}],
+                                'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
                             }
                         },
                     ],

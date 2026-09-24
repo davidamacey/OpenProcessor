@@ -50,6 +50,19 @@ def matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
         return any(v in values for v in _values(doc, field))
     if 'exists' in query:
         return bool(_values(doc, query['exists']['field']))
+    if 'range' in query:
+        ((field, bounds),) = query['range'].items()
+        ops = {
+            'gt': lambda a, b: a > b,
+            'gte': lambda a, b: a >= b,
+            'lt': lambda a, b: a < b,
+            'lte': lambda a, b: a <= b,
+        }
+        return any(
+            all(ops[op](v, bound) for op, bound in bounds.items() if op in ops)
+            for v in _values(doc, field)
+            if v is not None
+        )
     if 'bool' in query:
         b = query['bool']
         for key in ('must', 'filter'):

@@ -35,6 +35,12 @@ if TYPE_CHECKING:
 # compatibility with existing indexes.
 BACKBONE_EMBEDDING_FIELD = 'v6_embedding'
 
+# Items-index field holding the per-item encoder embedding
+# (``CurationConfig.encoder_embedding_dim`` wide). Queues that gate on "the
+# item has been embedded" must use this name -- the items index has no
+# generic ``embedding`` field.
+ITEM_EMBEDDING_FIELD = 'pe_embedding'
+
 
 class IndexRole(str, Enum):
     """Logical role of a curation OpenSearch index.

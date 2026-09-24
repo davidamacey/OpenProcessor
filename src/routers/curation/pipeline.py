@@ -8,6 +8,7 @@ from fastapi import HTTPException, Query
 
 from src.clients.curation_opensearch import mget_crops
 from src.config import get_region_fields
+from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
     OpenSearchDep,
@@ -27,6 +28,15 @@ from src.routers.curation.pipeline_params import (
 )
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.curation.event_hub import publish_crop_classified
+
+
+# Fields the VLM sweep reads per unvalidated item.
+VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
+    'crop_id',
+    'image_path',
+    'bbox_norm',
+    ITEM_EMBEDDING_FIELD,
+)
 
 
 @router.post('/pipeline/auto_label/start')
@@ -337,7 +347,7 @@ async def pipeline_auto_label(
         unvalidated_query['bool'].setdefault('must', []).append({'term': {'class_id': class_id}})
     initial_body = {
         'size': SCROLL_PAGE,
-        '_source': ['crop_id', 'image_path', 'bbox_norm', 'embedding'],
+        '_source': list(VLM_SWEEP_SOURCE_FIELDS),
         'query': unvalidated_query,
         'sort': [{'updated_at': 'asc'}],
     }

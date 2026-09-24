@@ -57,6 +57,9 @@ DEFAULT_OS = os.environ.get('OPENSEARCH_URL', 'http://localhost:4607')
 # Kept as a bare os.environ.get (no src import) so this lightweight
 # httpx-only worker doesn't pull in the full src.clients import chain.
 ITEMS_INDEX = os.environ.get('OP_ITEMS_INDEX_OVERRIDE') or 'op_items'
+# Mirrors src.config.curation.ITEM_EMBEDDING_FIELD for the same no-src-import
+# reason; tests/curation/test_item_embedding_field.py pins the two together.
+ITEM_EMBEDDING_FIELD = 'pe_embedding'
 
 # Default thresholds match ``pipeline_auto_label``'s skip logic so the
 # worker and the on-demand pipeline make the same decisions.
@@ -78,7 +81,7 @@ def _build_pending_query(v6_skip_conf: float) -> dict:
     """
     return {
         'bool': {
-            'must': [{'exists': {'field': 'embedding'}}],
+            'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
             'must_not': [
                 {'term': {'class_validated': True}},
                 # v6 already confident
