@@ -262,10 +262,12 @@ def test_detection_profile_axis_is_empty_by_default(app_client: TestClient) -> N
 def test_detection_profile_axis_advertises_the_selected_profile(
     app_client: TestClient,
 ) -> None:
-    """``OP_REGION_PROFILE=license_plate`` selects the built-in reference
-    profile; the axis lists it, keyed by its ``name``, as the sole
-    stable/default entry."""
-    from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
+    """``reference_region_profile`` (``OP_REGION_PROFILE_PATH`` pointed at
+    the ``license_plate`` example file) selects that profile; the axis
+    lists it, keyed by its ``name``, as the sole stable/default entry."""
+    from _region_profile_fixture import (
+        EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
+    )
 
     r = app_client.get('/curation/methods')
     assert r.status_code == 200

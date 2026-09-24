@@ -19,11 +19,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE
 from PIL import Image
 
 from src.config import DetectionProfile
 from src.services.detection.cascade_detect import (
-    REFERENCE_LICENSE_PLATE_PROFILE,
     OcrRegion,
     RegionCandidate,
     RegionDetector,

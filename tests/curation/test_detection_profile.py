@@ -116,6 +116,8 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'CLASS_IDS': '2, 3,7',
         'ASSIGNS_CLASS': 'true',
         'LABELS_PATH': '/models/proposer/labels.txt',
+        'REGION_CLASS_NAME': 'env_region_class',
+        'DISPLAY_NAME': 'Env Regions',
     }
     prefix = 'OP_TEST_DETECTION_'
     for suffix, value in env_values.items():
@@ -178,6 +180,14 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.class_ids == frozenset({2, 3, 7})
     assert profile.assigns_class is True
     assert profile.labels_path == '/models/proposer/labels.txt'
+    assert profile.region_class_name == 'env_region_class'
+    assert profile.display_name == 'Env Regions'
+
+
+def test_region_class_name_and_display_name_default_empty() -> None:
+    profile = DetectionProfile(name='region')
+    assert profile.region_class_name == ''
+    assert profile.display_name == ''
 
 
 def test_from_env_overrides_only_set_vars_others_default(monkeypatch) -> None:

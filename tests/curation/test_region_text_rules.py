@@ -13,11 +13,11 @@ import dataclasses
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
 from scripts.curation.worker.verify import _region_write_doc
 from src.config import DetectionProfile, get_region_fields
 from src.services.detection.cascade_detect import RegionCandidate
-from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 from src.services.detection.region_text import (
     DominantTextConfig,
     OcrLine,
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 
 F = get_region_fields()
-REF = REFERENCE_LICENSE_PLATE_PROFILE
+REF = NEUTRAL_REGION_PROFILE
 REF_RULES = RegionTextRules.from_profile(REF, prompt_examples=('ABC1234', 'DNV20'))
 REF_CFG = DominantTextConfig.from_profile(REF)
 

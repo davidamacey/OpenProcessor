@@ -33,7 +33,7 @@ def test_candidate_source_constants_are_generic() -> None:
 
 
 def test_candidate_detector_lookup_uses_generic_keys(monkeypatch) -> None:
-    from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
+    from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 
     task = _ItemTask.__new__(_ItemTask)  # bypass required-field construction
 
@@ -41,34 +41,34 @@ def test_candidate_detector_lookup_uses_generic_keys(monkeypatch) -> None:
         (
             CANDIDATE_SEGMENTER,
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
-                REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
+                NEUTRAL_REGION_PROFILE.segmenter_name,
+                NEUTRAL_REGION_PROFILE.segmenter_version,
             ),
         ),
         (
             CANDIDATE_SEGMENTER_TEXT_HINT,
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name,
-                REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version,
+                NEUTRAL_REGION_PROFILE.segmenter_name,
+                NEUTRAL_REGION_PROFILE.segmenter_version,
             ),
         ),
         (
             CANDIDATE_DETECTOR,
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
-                REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+                NEUTRAL_REGION_PROFILE.detector_model,
+                NEUTRAL_REGION_PROFILE.detector_version,
             ),
         ),
         (
             CANDIDATE_DETECTOR_EXISTING,
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
-                REFERENCE_LICENSE_PLATE_PROFILE.detector_version,
+                NEUTRAL_REGION_PROFILE.detector_model,
+                NEUTRAL_REGION_PROFILE.detector_version,
             ),
         ),
     ):
         task.candidate_source = source
-        assert candidate_detector(task, REFERENCE_LICENSE_PLATE_PROFILE) == expected
+        assert candidate_detector(task, NEUTRAL_REGION_PROFILE) == expected
 
     task.candidate_source = 'sam3'  # a retired value must not resolve specially anymore
-    assert candidate_detector(task, REFERENCE_LICENSE_PLATE_PROFILE) == ('sam3', '1')
+    assert candidate_detector(task, NEUTRAL_REGION_PROFILE) == ('sam3', '1')

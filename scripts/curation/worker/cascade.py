@@ -306,7 +306,7 @@ async def _resegment_from_text_hint(
         return None, sub_box
     projected = _project_subcrop_box_to_parent(sub_cand.bbox_norm, sub_box)
     return (
-        RegionCandidate(bbox_norm=projected, score=sub_cand.score),
+        RegionCandidate(bbox_norm=projected, score=sub_cand.score, source=sub_cand.source),
         sub_box,
     )
 

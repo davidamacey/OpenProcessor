@@ -21,10 +21,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _region_profile_fixture import (
+    EXAMPLE_LICENSE_PLATE_PROFILE as REFERENCE_LICENSE_PLATE_PROFILE,
+    NEUTRAL_REGION_PROFILE,
+)
 from PIL import Image
 
 from src.services.detection.cascade_detect import (
-    REFERENCE_LICENSE_PLATE_PROFILE,
     RegionCandidate,
     RegionDetector,
     _decode_yolo_output,
@@ -319,12 +322,12 @@ class TestRegionDetectorSingle:
     async def test_detect_returns_candidate(self) -> None:
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.85)
         pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         result = await detector.detect(_make_jpeg())
         assert result is not None
         assert isinstance(result, RegionCandidate)
-        assert result.source == 'license_plate_detector'
+        assert result.source == NEUTRAL_REGION_PROFILE.detector_model
         assert result.rectangularity is None
         assert 0.0 <= result.bbox_norm[0] < result.bbox_norm[2] <= 1.0
         assert 0.0 <= result.bbox_norm[1] < result.bbox_norm[3] <= 1.0
@@ -333,14 +336,14 @@ class TestRegionDetectorSingle:
     async def test_detect_below_floor_returns_none(self) -> None:
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.05)
         pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         assert await detector.detect(_make_jpeg()) is None
 
     @pytest.mark.asyncio
     async def test_detect_empty_bytes_returns_none(self) -> None:
         pool = _make_mock_pool(np.zeros((1, 5, 10), dtype=np.float32))
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         assert await detector.detect(b'') is None
         # Also: corrupt bytes don't raise, just degrade.
@@ -349,7 +352,7 @@ class TestRegionDetectorSingle:
     @pytest.mark.asyncio
     async def test_detect_swallows_triton_error(self) -> None:
         pool = _make_mock_pool(raises=RuntimeError('triton blew up'))
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         # Ingest must not crash on Triton failures.
         assert await detector.detect(_make_jpeg()) is None
@@ -362,7 +365,7 @@ class TestRegionDetectorSingle:
 
         pool = MagicMock()
         pool.infer = AsyncMock(return_value=_NullResult())
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         assert await detector.detect(_make_jpeg()) is None
 
@@ -377,7 +380,7 @@ class TestRegionDetectorBatch:
     async def test_detect_batch_aligns_results(self) -> None:
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.7)
         pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         crops = [_make_jpeg() for _ in range(5)]
         results = await detector.detect_batch(crops)
@@ -388,7 +391,7 @@ class TestRegionDetectorBatch:
     @pytest.mark.asyncio
     async def test_detect_batch_empty_input(self) -> None:
         pool = _make_mock_pool(np.zeros((1, 5, 10), dtype=np.float32))
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
         assert await detector.detect_batch([]) == []
         # Triton was never called.
         pool.infer.assert_not_awaited()
@@ -397,7 +400,7 @@ class TestRegionDetectorBatch:
     async def test_detect_batch_skips_corrupt_bytes(self) -> None:
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.7)
         pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         crops: list[bytes] = [_make_jpeg(), b'', b'not-a-jpeg', _make_jpeg()]
         results = await detector.detect_batch(crops)
@@ -412,7 +415,7 @@ class TestRegionDetectorBatch:
         """More than ``profile.batch_limit`` crops still all get a result."""
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.6)
         pool = _make_mock_pool(raw)
-        detector = RegionDetector(pool)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         # 40 > 16 (the chunk limit) — exercises multiple chunks.
         crops = [_make_jpeg() for _ in range(40)]
@@ -555,7 +558,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.95, 0.80, 0.60],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         # Third entry's '??' canonicalizes to an empty string (no
         # alphanumerics survive the filter), so it's dropped — left
@@ -583,7 +586,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.99, 0.80],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         pick = rec.pick_best_plate_region(regions)
         # Larger plate-shaped region wins despite lower rec_score.
@@ -609,7 +612,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.98, 0.95, 0.92],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         # Loose plate-shape filter accepts them, but the stricter
         # is_plate_text_candidate rejects all three because they lack digits.
@@ -632,7 +635,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.55],  # below profile.text_hint_rec_floor=0.70
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert len(regions) == 1
         assert not regions[0].is_plate_text_candidate
@@ -653,7 +656,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.88],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert regions[0].is_plate_text_candidate
         assert rec.pick_best_plate_region(regions) is regions[0]
@@ -673,7 +676,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.95],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert len(regions) == 1
         assert not regions[0].is_plate_shaped
@@ -696,7 +699,7 @@ class TestPaddleOcrTextRecognizer:
                 rec_scores=[0.95, 0.90],
             )
         )
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         result = await rec.read_plate_region(_jpeg_bytes())
         assert result is not None
         text, conf = result
@@ -710,7 +713,7 @@ class TestPaddleOcrTextRecognizer:
 
         pool = MagicMock()
         pool.infer = AsyncMock(side_effect=RuntimeError('triton down'))
-        rec = PaddleOcrTextRecognizer(pool)
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert regions == []
 

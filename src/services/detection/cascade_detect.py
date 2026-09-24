@@ -1,27 +1,23 @@
-"""Generic sub-region detection cascade — LPR-style detector + PaddleOCR.
+"""Generic sub-region detection cascade — YOLO-style detector + PaddleOCR.
 
-Ported from the reference license-plate (LPR) detector (see
-``docs/design/curation_design_rationale.md`` §2.3 / §5 — Chunk 8; this
-is one of the ratchet-exempt oversize files).
+See ``docs/design/curation_design_rationale.md`` §2.3 / §5 — Chunk 8; this
+is one of the ratchet-exempt oversize files.
 Wraps a YOLO-style Triton detector to produce sub-region bounding boxes
 in the **item crop's** coordinate frame (normalized to ``[0, 1]``), plus
 a PaddleOCR-based text detector/recognizer used as a last-resort
 rescue path and text-hint source.
 
-Every heuristic that used to be a hardcoded module constant (detector
-identity, confidence floors, aspect bands, OCR wiring) now lives on a
-:class:`~src.config.DetectionProfile` instance, so a deployment can
-describe a different region type (a box, a tractor's ID plate, …)
-without forking this module. ``REFERENCE_LICENSE_PLATE_PROFILE`` (defined
-in :mod:`src.services.detection.reference_profiles`, re-exported here)
-reproduces the reference license-plate constants — it is an *example*
-profile. It is **not** registered or active unless a deployment selects
-it (``OP_REGION_PROFILE=license_plate``); see
-:mod:`src.services.detection.profile_registry` for how the active region
-profile is resolved. The class/function parameter defaults below still
-name it, so library callers that construct a detector without a profile
-get a working example configuration — production callers (the detection
-worker) always pass the active profile explicitly.
+Every heuristic (detector identity, confidence floors, aspect bands, OCR
+wiring) lives on a :class:`~src.config.DetectionProfile` instance, so a
+deployment can describe any region type (a license plate, a box, a
+tractor's ID plate, …) without forking this module. **No profile ships
+built in.** ``RegionDetector`` / ``PaddleOcrRegionDetector`` /
+``PaddleOcrTextRecognizer`` all require a profile explicitly — the
+caller resolves it from :mod:`src.services.detection.profile_registry`
+(``get_active_region_profile()``, or a deployment's own registered
+profile) or raises, rather than silently falling back to any example
+domain. See ``examples/region_profiles/`` for a worked example a
+deployment can point ``OP_REGION_PROFILE_PATH`` at.
 """
 
 from __future__ import annotations
@@ -30,7 +26,7 @@ import io
 import logging
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -41,7 +37,6 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from src.config import DetectionProfile, get_region_fields
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox
 from src.services.detection.profile_registry import ensure_env_region_profile
-from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 from src.services.detection.region_text import OcrLine
 
 
@@ -58,7 +53,7 @@ logger = logging.getLogger(__name__)
 # valid: no profile is registered and region detection stays off.
 ensure_env_region_profile()
 
-# The lpr_nanov11_640-shaped TRT engine is exported with a fixed
+# The reference detector engine is exported with a fixed
 # [1, 3, N, N] input — Triton's dynamic batching layers multiple
 # requests onto the GPU but each request is still a single image. We
 # respect that by sending many concurrent single-image requests rather
@@ -87,7 +82,7 @@ class RegionCandidate:
 
     bbox_norm: tuple[float, float, float, float]
     score: float
-    source: str = REFERENCE_LICENSE_PLATE_PROFILE.detector_model
+    source: str = ''
     rectangularity: float | None = None
 
 
@@ -235,8 +230,8 @@ def _decode_jpeg(jpeg_bytes: bytes) -> Image.Image:
 
 def _letterbox(
     img: Image.Image,
-    target: int = REFERENCE_LICENSE_PLATE_PROFILE.input_size,
-    fill: tuple[int, int, int] = REFERENCE_LICENSE_PLATE_PROFILE.letterbox_fill,
+    target: int = 640,
+    fill: tuple[int, int, int] = (114, 114, 114),
 ) -> tuple[np.ndarray, float, tuple[float, float]]:
     """Letterbox a PIL image to ``target`` by ``target`` for the detector.
 
@@ -259,9 +254,9 @@ def _decode_yolo_output(
     pad: tuple[float, float],
     crop_w: int,
     crop_h: int,
-    confidence_floor: float = REFERENCE_LICENSE_PLATE_PROFILE.confidence_floor,
-    input_size: int = REFERENCE_LICENSE_PLATE_PROFILE.input_size,
-    source: str = REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+    confidence_floor: float = 0.4,
+    input_size: int = 640,
+    source: str = '',
 ) -> RegionCandidate | None:
     """Decode a YOLOv11-shaped ``[1, 5, N]`` raw output to a normalized region box.
 
@@ -360,7 +355,8 @@ class RegionDetector:
         ```python
         pool = AsyncTritonPool(url='triton-server:8001')
         await pool.initialize()
-        detector = RegionDetector(pool)
+        profile = get_active_region_profile()  # or a deployment's own DetectionProfile
+        detector = RegionDetector(pool, profile)
 
         region = await detector.detect(crop_jpeg_bytes)
         if region is not None:
@@ -371,7 +367,7 @@ class RegionDetector:
     def __init__(
         self,
         triton_pool: AsyncTritonPool,
-        profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE,
+        profile: DetectionProfile,
         *,
         confidence_floor: float | None = None,
         model_name: str | None = None,
@@ -381,8 +377,9 @@ class RegionDetector:
         Args:
             triton_pool: An initialized :class:`AsyncTritonPool`.
             profile: Aspect/area heuristics + model identity for this
-                region type. Defaults to the reference license-plate
-                profile so existing call sites keep working unchanged.
+                region type. Required -- the caller resolves the active
+                profile (or its own) rather than getting a silent
+                example default.
             confidence_floor: Override the profile's confidence floor;
                 tests sometimes want stricter or looser filtering for
                 one-off jobs.
@@ -583,7 +580,7 @@ class PaddleOcrRegionDetector:
     def __init__(
         self,
         triton_pool: AsyncTritonPool,
-        profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE,
+        profile: DetectionProfile,
         *,
         model_name: str | None = None,
         input_size: int | None = None,
@@ -760,8 +757,7 @@ class OcrRegion:
 
     ``profile`` carries the aspect/length/score thresholds this
     region's shape-and-text checks are evaluated against — defaults to
-    :data:`REFERENCE_LICENSE_PLATE_PROFILE` so existing callers that don't thread a
-    profile through keep working unchanged.
+    Required -- no example profile is substituted silently.
     """
 
     bbox_norm: tuple[float, float, float, float]
@@ -769,7 +765,7 @@ class OcrRegion:
     text_raw: str  # exact OCR string (may include unicode / punctuation)
     det_score: float
     rec_score: float
-    profile: DetectionProfile = field(default_factory=lambda: REFERENCE_LICENSE_PLATE_PROFILE)
+    profile: DetectionProfile
 
     @property
     def is_plate_shaped(self) -> bool:
@@ -984,7 +980,7 @@ class PaddleOcrTextRecognizer:
     def __init__(
         self,
         triton_pool: AsyncTritonPool,
-        profile: DetectionProfile = REFERENCE_LICENSE_PLATE_PROFILE,
+        profile: DetectionProfile,
         *,
         model_name: str | None = None,
         rec_score_floor: float = 0.5,
@@ -1175,7 +1171,6 @@ class PaddleOcrTextRecognizer:
 
 
 __all__ = [
-    'REFERENCE_LICENSE_PLATE_PROFILE',
     'OcrRegion',
     'PaddleOcrRegionDetector',
     'PaddleOcrTextRecognizer',

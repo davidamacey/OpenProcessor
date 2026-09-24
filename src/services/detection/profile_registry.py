@@ -7,17 +7,24 @@ advertises an empty ``detection_profile`` axis, and region detection (the
 detection worker's cascade) stays off. Consumers must treat ``None`` as
 "no region detection configured" and degrade cleanly.
 
-A deployment configures its region profile purely through the environment:
+The app ships with **no built-in region profile** — a different domain
+(a license plate, a barcode, a manufacturing defect, …) is configured
+purely through the environment:
 
-- ``OP_REGION_PROFILE=<name>`` selects a profile by name — one already
-  registered by startup code, or a built-in reference profile from
-  :mod:`src.services.detection.reference_profiles` (e.g. ``license_plate``).
-  An unknown name raises ``ValueError``.
-- ``OP_REGION_DETECTION_<FIELD>`` overrides individual fields on top of the
-  selected profile (e.g. ``OP_REGION_DETECTION_SAM_TEXT_PROMPT``,
-  ``OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS``). With no
-  ``OP_REGION_PROFILE`` these build a profile from the dataclass defaults
-  (named by ``OP_REGION_DETECTION_NAME``, else ``region``).
+- ``OP_REGION_PROFILE_PATH=<path>`` loads a profile from a JSON file (see
+  :func:`region_profile_from_file` and ``examples/region_profiles/`` for
+  a worked example). This is the normal way to select a non-trivial
+  profile; the repo ships no profile data outside ``examples/``.
+- ``OP_REGION_PROFILE=<name>`` selects a profile a deployment's own
+  startup code already registered via :func:`register_profile`. An
+  unknown name raises ``ValueError``. It does **not** resolve any
+  built-in profile — there isn't one.
+- ``OP_REGION_DETECTION_<FIELD>`` overrides individual fields on top of
+  whichever profile ``OP_REGION_PROFILE_PATH`` / ``OP_REGION_PROFILE``
+  selected (e.g. ``OP_REGION_DETECTION_SAM_TEXT_PROMPT``,
+  ``OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS``). With neither set,
+  these alone build a profile from the dataclass defaults (named by
+  ``OP_REGION_DETECTION_NAME``, else ``region``).
 
 The resolved profile is :func:`register_profile`'d as the default, so it
 is exactly what ``GET /methods`` advertises. The ingest item detectors
@@ -59,25 +66,76 @@ def register_profile(profile: DetectionProfile, *, default: bool = False) -> Non
         _DEFAULT_NAME = profile.name
 
 
+def region_profile_from_file(path: str) -> DetectionProfile:
+    """Load a :class:`DetectionProfile` from a JSON file.
+
+    The file is a flat object of ``{field_name: value}`` pairs (unknown
+    keys, and an underscore-prefixed ``_comment``, are rejected /
+    ignored respectively); ``name`` is required. Tuple fields
+    (``letterbox_fill``, ``auto_confirm_aspect``, ``auto_confirm_area_frac``)
+    and frozenset fields (``secondary_shape_groups``, ``class_ids``,
+    ``text_stopwords``, ``text_placeholders``) are given as JSON lists.
+    See ``examples/region_profiles/license_plate.json`` for a worked
+    example. Raises on a malformed file or an unknown field name — a
+    typo must fail loudly, not silently fall back to a default.
+    """
+    import json
+    from dataclasses import fields as dc_fields
+    from pathlib import Path
+
+    from src.config import DetectionProfile
+
+    raw = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(raw, dict):
+        msg = f'region profile file {path!r} must contain a JSON object'
+        raise ValueError(msg)
+    data = {k: v for k, v in raw.items() if not k.startswith('_')}
+    if 'name' not in data:
+        msg = f'region profile file {path!r} is missing the required "name" field'
+        raise ValueError(msg)
+
+    field_by_name = {f.name: f for f in dc_fields(DetectionProfile)}
+    kwargs: dict[str, object] = {}
+    for key, value in data.items():
+        f = field_by_name.get(key)
+        if f is None:
+            msg = f'region profile file {path!r}: unknown field {key!r}'
+            raise ValueError(msg)
+        annotation = str(f.type)
+        if annotation.startswith('tuple'):
+            kwargs[key] = tuple(value)
+        elif annotation.startswith('frozenset'):
+            kwargs[key] = frozenset(value)
+        else:
+            kwargs[key] = value
+    return DetectionProfile(**kwargs)  # type: ignore[arg-type]
+
+
 def region_profile_from_env() -> DetectionProfile | None:
     """Resolve the region profile the environment asks for (see module
     docstring), without registering it. ``None`` when nothing is configured.
     """
     from src.config import DetectionProfile
     from src.config.detection_profile import reject_legacy_detection_env
-    from src.services.detection.reference_profiles import REFERENCE_PROFILES
 
     reject_legacy_detection_env()
+    path = os.environ.get('OP_REGION_PROFILE_PATH', '').strip()
     name = os.environ.get('OP_REGION_PROFILE', '').strip()
     has_overrides = DetectionProfile.env_overrides_present(REGION_DETECTION_ENV_PREFIX)
-    if not name and not has_overrides:
+    if not path and not name and not has_overrides:
         return None
     base: DetectionProfile | None = None
-    if name:
-        base = _REGISTRY.get(name) or REFERENCE_PROFILES.get(name)
+    if path:
+        base = region_profile_from_file(path)
+    elif name:
+        base = _REGISTRY.get(name)
         if base is None:
-            known = sorted(set(_REGISTRY) | set(REFERENCE_PROFILES))
-            msg = f'OP_REGION_PROFILE={name!r} is not a registered or built-in profile; known: {known}'
+            known = sorted(_REGISTRY)
+            msg = (
+                f'OP_REGION_PROFILE={name!r} is not a registered profile (no profile ships '
+                'built in -- set OP_REGION_PROFILE_PATH to a profile file instead, e.g. '
+                f'examples/region_profiles/license_plate.json); known registered: {known}'
+            )
             raise ValueError(msg)
     return DetectionProfile.from_env(REGION_DETECTION_ENV_PREFIX, name='region', base=base)
 
@@ -146,6 +204,7 @@ __all__ = [
     'get_profile',
     'get_profiles',
     'region_profile_from_env',
+    'region_profile_from_file',
     'region_profile_or_neutral',
     'register_profile',
 ]

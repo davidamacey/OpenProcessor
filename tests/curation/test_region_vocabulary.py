@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _region_profile_fixture import EXAMPLE_LICENSE_PLATE_PROFILE_PATH
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -63,7 +64,7 @@ def test_regions_vocabulary_reflects_the_active_profile(
 ) -> None:
     from src.services.detection import profile_registry
 
-    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     profile_registry._reset_registry_for_tests()
     try:
         resp = client.get('/curation/regions/vocabulary')
@@ -94,7 +95,7 @@ def test_regions_vocabulary_env_configured_detector_reflected(
     vocabulary follows, proving nothing is hardcoded."""
     from src.services.detection import profile_registry
 
-    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
     monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', 'my_custom_region_yolo')
     profile_registry._reset_registry_for_tests()
     try:
@@ -128,6 +129,35 @@ def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None
         assert tab['description']
     by_id = {t['id']: t for t in body['tabs']}
     assert by_id['classifier_blind_spots']['label'] == 'Classifier blind spots'
+
+
+def test_review_tabs_regions_label_falls_back_to_generic_without_a_profile(
+    client: TestClient,
+) -> None:
+    """No region profile configured -> the 'regions' tab still says
+    'Regions', not a stale domain-specific label."""
+    resp = client.get('/curation/review/tabs')
+    assert resp.status_code == 200, resp.text
+    by_id = {t['id']: t for t in resp.json()['tabs']}
+    assert by_id['regions']['label'] == 'Regions'
+
+
+def test_review_tabs_regions_label_uses_the_active_profiles_display_name(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The active region profile's ``display_name`` (e.g. 'Plates') becomes
+    the 'regions' tab's label, not the generic fallback."""
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
+    profile_registry._reset_registry_for_tests()
+    try:
+        resp = client.get('/curation/review/tabs')
+        assert resp.status_code == 200, resp.text
+        by_id = {t['id']: t for t in resp.json()['tabs']}
+        assert by_id['regions']['label'] == 'Plates'
+    finally:
+        profile_registry._reset_registry_for_tests()
 
 
 def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> None:

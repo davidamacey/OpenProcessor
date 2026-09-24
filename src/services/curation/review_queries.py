@@ -148,12 +148,17 @@ def review_tab_catalog() -> list[dict[str, Any]]:
     Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
     a matching ``TAB_LABELS`` entry -- the same "one source of truth"
     contract ``test_class_sources.py`` enforces for ``class_source``.
+
+    The ``regions`` tab's label/description come from the active region
+    profile's ``display_name`` when one is configured (e.g. "Plates"),
+    falling back to the generic ``TAB_LABELS`` entry ("Regions") when
+    there is no active profile or it set no ``display_name``.
     """
     return [
         {
             'id': tab,
-            'label': TAB_LABELS[tab][0],
-            'description': TAB_LABELS[tab][1],
+            'label': _tab_label(tab),
+            'description': _tab_description(tab),
             'filters': list(tab_filters(tab)),
             'filter_defaults': dict(TAB_FILTER_DEFAULTS.get(tab, {})),
             'filter_specs': [
@@ -164,6 +169,20 @@ def review_tab_catalog() -> list[dict[str, Any]]:
         }
         for tab in KNOWN_TABS
     ]
+
+
+def _tab_label(tab: str) -> str:
+    if tab == 'regions':
+        from src.services.detection.profile_registry import get_active_region_profile
+
+        profile = get_active_region_profile()
+        if profile is not None and profile.display_name:
+            return profile.display_name
+    return TAB_LABELS[tab][0]
+
+
+def _tab_description(tab: str) -> str:
+    return TAB_LABELS[tab][1]
 
 
 def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default: str) -> str:
