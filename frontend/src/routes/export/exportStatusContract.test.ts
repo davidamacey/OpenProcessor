@@ -243,6 +243,31 @@ describe('/export — served split counts (OpenProcessor 6c77deb)', () => {
         s.textContent?.includes('Per-class object counts'),
       ),
     ).toBe(false);
+    // skipped_items is absent on an older export -> no chip.
+    expect(target.querySelector('[data-testid="export-skipped-items"]')).toBeNull();
+  });
+
+  it('renders the served skipped_items counts (OpenProcessor ad9f8d3)', async () => {
+    const freezeCalls: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal(
+      'fetch',
+      makeFetchMock(freezeCalls, {
+        ...EXPORT_STATUS_SUCCESS,
+        skipped_items: { no_image_id: 3, no_usable_box_or_class: 7 },
+      }),
+    );
+
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(ExportPage, { target } as never);
+    flushSync();
+    await flushMicrotasks();
+    flushSync();
+
+    const chip = target.querySelector('[data-testid="export-skipped-items"]');
+    expect(chip?.textContent?.replace(/\s+/g, ' ')).toContain(
+      '3 no image id · 7 no usable box/class',
+    );
   });
 });
 

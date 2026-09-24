@@ -208,6 +208,7 @@
           res.unlabeled_items_on_exported_images ?? null,
         images_with_unlabeled_items: res.images_with_unlabeled_items ?? null,
         images_dropped_not_fully_labeled: res.images_dropped_not_fully_labeled ?? null,
+        skipped_items: res.skipped_items ?? null,
       };
       if (res.status === 'running' || res.status === 'pending') {
         toastStore.info(`Export started: ${res.status}`);
@@ -692,7 +693,7 @@
       <!-- Partial-frame policy + counts (d5343cb) — null on an older
            export (formatCount renders "—"); the whole block hides when
            nothing here was ever recorded. -->
-      {#if exportState.require_fully_labeled_images != null || exportState.unlabeled_items_on_exported_images != null || exportState.images_with_unlabeled_items != null || exportState.images_dropped_not_fully_labeled != null}
+      {#if exportState.require_fully_labeled_images != null || exportState.unlabeled_items_on_exported_images != null || exportState.images_with_unlabeled_items != null || exportState.images_dropped_not_fully_labeled != null || exportState.skipped_items != null}
         <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
           {#if exportState.require_fully_labeled_images != null}
             <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
@@ -725,6 +726,19 @@
             >
               images dropped (not fully labeled): <span class="font-mono text-zinc-200"
                 >{formatCount(exportState.images_dropped_not_fully_labeled)}</span
+              >
+            </span>
+          {/if}
+          {#if exportState.skipped_items != null}
+            <span
+              class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+              title="Validated items the export couldn't write: no source image id, or no usable box/class."
+              data-testid="export-skipped-items"
+            >
+              skipped items: <span class="font-mono text-zinc-200"
+                >{formatCount(exportState.skipped_items.no_image_id)} no image id · {formatCount(
+                  exportState.skipped_items.no_usable_box_or_class,
+                )} no usable box/class</span
               >
             </span>
           {/if}

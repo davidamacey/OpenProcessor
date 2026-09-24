@@ -1288,6 +1288,9 @@ class`) so an operator can see where a crop lives before relabeling
 
 ### Fixed
 
+- `/export` shows the served `skipped_items` counts (validated items the
+  export couldn't write: no source image id, or no usable box/class),
+  adopting OpenProcessor ad9f8d3. Older exports carry none and show no chip.
 - `CropCard`'s region ring and edit button: the card looked up its slot
   by the crop's own class, which is never the region's class, so the
   ring never drew on a region-bearing item and the always-visible ✎

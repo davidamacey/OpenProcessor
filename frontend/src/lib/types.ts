@@ -182,6 +182,15 @@ export interface ExportStatus {
   /** Images left out by `require_fully_labeled_images` (0 when it was
    *  off). */
   images_dropped_not_fully_labeled?: number | null;
+  /** Validated items the export couldn't write, by reason. Null for an
+   *  export made before OpenProcessor ad9f8d3. */
+  skipped_items?: ExportSkippedItems | null;
+}
+
+/** `ExportSkippedItems` (OpenProcessor ad9f8d3). */
+export interface ExportSkippedItems {
+  no_image_id: number;
+  no_usable_box_or_class: number;
 }
 
 /**
@@ -218,6 +227,8 @@ export interface ExportResult {
   images_with_unlabeled_items?: number | null;
   /** Images left out by `require_fully_labeled_images`. */
   images_dropped_not_fully_labeled?: number | null;
+  /** Validated items the export couldn't write, by reason. */
+  skipped_items?: ExportSkippedItems | null;
   dedup?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
