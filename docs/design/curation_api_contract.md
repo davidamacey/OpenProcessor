@@ -792,8 +792,24 @@ per class.
 `manifest_path`, `dataset_sha`, `image_count`, `object_count`,
 `split_counts`, `split_object_counts`, `require_fully_labeled_images`,
 `unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
-`images_dropped_not_fully_labeled`, `dedup` (the requested threshold),
-`started_at`, `finished_at`.
+`images_dropped_not_fully_labeled`, `skipped_items`
+(`{no_image_id, no_usable_box_or_class}`), `dedup` (the requested
+threshold), `started_at`, `finished_at`.
+
+**`dataset_sha`** is a hash of the export's actual on-disk *content*, not
+of which item ids were selected — two exports of the same items with
+different splits, a corrected box, or a different class map (even with
+byte-identical label files, e.g. after a pure registry rename) always get
+different `dataset_sha`s. Concretely it hashes, over every written
+`labels/<split>/*.txt` file sorted by relative path: the relative path
+(so a split reassignment changes the digest even when the label bytes
+don't) and the sha256 of the file's bytes, then folds in the export's
+ordered `names:` list (`data.yaml` / dense export id → class name) so a
+class rename with no id change still changes the digest. The multi-class
+export records the full 64-hex sha256 digest; `POST /export/single_class`
+records the same digest truncated to 16 hex chars. The shared
+implementation is `label_content_sha` in
+`src/services/curation/export_support.py`.
 
 Example manifest excerpt (`img-a` with three objects of two classes,
 `img-b` with one, and `img-c` with one validated object next to one
@@ -822,10 +838,13 @@ unreviewed item). It writes `labels/train/img-a.txt` (three lines, e.g.
 ```
 
 `POST /export/single_class` builds a narrowed dataset for a single class
-or a class subset, with a stronger integrity envelope than the
-multi-class export: `dataset_sha` hashes the written label *content*,
-`frozen_test_sha` hashes the test split's identity, and the profile's
-own `current` symlink is flipped atomically. `GET
+or a class subset, with an extra integrity field the multi-class export
+doesn't need: `frozen_test_sha` hashes the test split's *identity*
+(which frames, not their content — a label correction inside the test
+set must not trip it) so "the held-out set never changed between two
+runs" is checkable. `dataset_sha` uses the same content-hash mechanism as
+the multi-class export (see above). The profile's own `current` symlink
+is flipped atomically. `GET
 /export/single_class/status?profile_name=...` reports the last run for
 one profile, with the same `idle`/`unknown`/`success` contract as
 `GET /export/status`. Each `profile_name` gets its own output root and
@@ -903,10 +922,12 @@ completed multi-class export — the `current` symlink's manifest:
 per split), `class_split_counts` (objects per class per split, rows as
 in the manifest), `require_fully_labeled_images`,
 `unlabeled_items_on_exported_images`, `images_with_unlabeled_items`,
-`images_dropped_not_fully_labeled`. A field the manifest does not record
-(an export written before it existed) is `null`. `idle` sets every other
-field to `null`; `unknown` (manifest missing/unreadable) sets only `path`
-/ `export_dir`.
+`images_dropped_not_fully_labeled`, `skipped_items`
+(`{no_image_id, no_usable_box_or_class}`). A field the manifest does not
+record (an export written before it existed) is `null` — this is the
+common case for `skipped_items` against an export from before it was
+added to the manifest. `idle` sets every other field to `null`; `unknown`
+(manifest missing/unreadable) sets only `path` / `export_dir`.
 
 ```json
 {
@@ -930,7 +951,8 @@ field to `null`; `unknown` (manifest missing/unreadable) sets only `path`
   "require_fully_labeled_images": false,
   "unlabeled_items_on_exported_images": 1,
   "images_with_unlabeled_items": 1,
-  "images_dropped_not_fully_labeled": 0
+  "images_dropped_not_fully_labeled": 0,
+  "skipped_items": {"no_image_id": 0, "no_usable_box_or_class": 0}
 }
 ```
 

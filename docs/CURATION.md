@@ -353,10 +353,14 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
 8. Export a dataset with `POST /curation/export/yolo` once you have
    labeled data — or `POST /curation/export/single_class` to build a
    narrowed dataset for one class (or a class subset), which adds
-   background/hard-negative frames the narrowed detector needs and a
-   stronger integrity envelope (`dataset_sha` over the written label
-   content, `frozen_test_sha` over the test split's identity, an
-   atomically-flipped per-profile `current` symlink).
+   background/hard-negative frames the narrowed detector needs and an
+   extra integrity field: `frozen_test_sha` over the test split's
+   identity. Both exporters record `dataset_sha`, a hash of the actual
+   written label *content* (which frames, in which split, with which
+   boxes) plus the export's ordered class-name list — not of which item
+   ids were selected, so a split reassignment, a corrected box, or a
+   class rename all change it even when something else about the export
+   looks unchanged. Both flip their `current` symlink atomically.
 
    The multi-class export writes **one image file and one label file per
    source image** (`images/<split>/<image_id>.<ext>` +
