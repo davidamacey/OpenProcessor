@@ -256,10 +256,23 @@ def _free_gb(path: str) -> float | None:
     ``severity='unknown'``, never ``'ok'``.
     """
     try:
-        usage = shutil.disk_usage(path)
+        usage = shutil.disk_usage(_nearest_existing(path))
     except OSError:
         return None
     return usage.free / (1024**3)
+
+
+def _nearest_existing(path: str) -> Path:
+    """``path`` or its closest existing ancestor -- a staging dir on a fresh
+    volume doesn't exist until the first run, but its mount does. Raises
+    ``OSError`` for anything other than a missing component."""
+    for candidate in (Path(path), *Path(path).parents):
+        try:
+            candidate.stat()
+        except FileNotFoundError:
+            continue
+        return candidate
+    return Path('/')
 
 
 def _resolve_disk_check_path(spec: TrainJobSpec) -> str:
@@ -293,17 +306,12 @@ def _training_volume_mount_sane(path: str) -> bool:
     "can't confirm it's sane" (False), not a soft pass.
     """
     try:
-        root_dev = Path('/').stat().st_dev
-        for candidate in (Path(path), *Path(path).parents):
-            if candidate == Path('/'):
-                return False
-            try:
-                return candidate.stat().st_dev != root_dev
-            except FileNotFoundError:
-                continue
+        existing = _nearest_existing(path)
+        if existing == Path('/'):
+            return False
+        return existing.stat().st_dev != Path('/').stat().st_dev
     except OSError:
         return False
-    return False
 
 
 def _read_export_manifest(dataset_export_dir: str | None) -> dict[str, Any]:

@@ -226,6 +226,14 @@ def test_free_gb_normal_case_returns_sane_number(tmp_path: Any) -> None:
     assert free > 0
 
 
+def test_free_gb_measures_mounted_ancestor_of_missing_dir(tmp_path: Any) -> None:
+    from src.routers.curation_train import _free_gb
+
+    free = _free_gb(str(tmp_path / 'training_staging' / 'not_created'))
+    assert free is not None
+    assert free > 0
+
+
 def test_training_volume_mount_sane_false_when_same_device_as_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
