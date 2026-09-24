@@ -179,7 +179,7 @@ DATASET_STATS = {
         "by_yolo11_proposal": 160,
         "other": 0,
     },
-    "plates": {
+    "regions": {
         "boxed": 1800,
         "confirmed": 1500,
         "total_detected": 1900,
@@ -214,7 +214,10 @@ STATS_CLASSES = {
 }
 
 
-def crop(i: int, cluster_id: int = 1, with_plate: bool = False) -> dict[str, Any]:
+REGION_TAB_LABEL = "Regions"
+
+
+def crop(i: int, cluster_id: int = 1, with_region: bool = False) -> dict[str, Any]:
     """One raw wire-shaped crop — same field names as playwright_labeling_flow.py's
     crop(), which mapRawCrop() (src/lib/api.ts) is verified to read from."""
     c: dict[str, Any] = {
@@ -231,21 +234,21 @@ def crop(i: int, cluster_id: int = 1, with_plate: bool = False) -> dict[str, Any
         "label_source": "human" if i % 3 else "model_suggestion",
         "updated_at": "2026-09-20T12:00:00+00:00",
     }
-    if with_plate:
+    if with_region:
         c.update(
             {
-                "plate_bbox_norm": [0.3, 0.55, 0.55, 0.68],
-                "plate_score": 0.91,
-                "plate_status": "detected",
-                "plate_verified": bool(i % 2),
-                "plate_detector": "lpr_nanov11_640",
-                "plate_detector_version": "1.0",
-                "plate_detector_chain": ["lpr_nanov11_640:hit", "gemma:verify_ok"],
-                "plate_bbox_frame": "source",
-                "plate_verifier": "gemma-4-e4b",
-                "plate_text": f"SSCC-{100000 + i}",
-                "plate_text_source": "gemma",
-                "plate_text_confidence": 0.83,
+                "region_bbox_norm": [0.3, 0.55, 0.55, 0.68],
+                "region_score": 0.91,
+                "region_status": "detected",
+                "region_verified": bool(i % 2),
+                "region_detector": "lpr_nanov11_640",
+                "region_detector_version": "1.0",
+                "region_detector_chain": ["lpr_nanov11_640:hit", "gemma:verify_ok"],
+                "region_bbox_frame": "source",
+                "region_verifier": "gemma-4-e4b",
+                "region_text": f"SSCC-{100000 + i}",
+                "region_text_source": "gemma",
+                "region_text_confidence": 0.83,
             }
         )
     return c
@@ -276,11 +279,11 @@ CLUSTERS = {
 
 
 def review_items(tab: str, n: int = 12) -> dict[str, Any]:
-    is_plates = "plate" in tab
+    is_regions = tab == "regions"
     items = []
     for i in range(n):
-        c = crop(i, with_plate=is_plates)
-        c["reason"] = "plate_review" if is_plates else "uncertainty"
+        c = crop(i, with_region=is_regions)
+        c["reason"] = "region_review" if is_regions else "uncertainty"
         c["proposed_class_id"] = CLASSES[0]["id"]
         c["proposed_class_name"] = CLASSES[0]["name"]
         items.append(c)
@@ -371,7 +374,7 @@ MODELS_STATUS = {
         {
             "name": "lpr_nanov11_640",
             "friendly_name": "LPR detector",
-            "role": "plate",
+            "role": "detector",
             "kind": "triton",
             "model_type": "detector",
             "status": "ready",
@@ -382,7 +385,6 @@ MODELS_STATUS = {
             "avg_latency_ms": 5.1,
             "last_error": None,
             "endpoint": "http://openprocessor:8000",
-            "is_lpr": True,
         },
     ]
 }
@@ -570,13 +572,17 @@ class Stub:
             cid = int(m.group(1)) if m else 1
             crops = [crop(cid * 10 + k, cluster_id=cid) for k in range(9)]
             return ok({"total": len(crops), "page": 1, "page_size": 60, "crops": crops})
+        if path.split("?")[0] == "/curation/review/tabs":
+            # Served label for the region tab, so the capture below can
+            # click it by a deployment-neutral name.
+            return ok({"tabs": [{"id": "regions", "label": REGION_TAB_LABEL}]})
         if path.startswith("/curation/review/"):
             tab = path.split("/curation/review/")[-1].split("?")[0]
             return ok(review_items(tab))
         if path.startswith("/curation/regions/training_candidates"):
             return ok({"items": [], "total": 0, "page": 1, "page_size": 30})
         if path.startswith("/curation/regions"):
-            return ok(review_items("plates"))
+            return ok(review_items("regions"))
         if path.startswith("/curation/export/status"):
             return ok(EXPORT_STATUS)
         if path.startswith("/curation/export/datasets"):
@@ -653,7 +659,7 @@ CAPTURES = [
     "cluster-detail",
     "crop-detail-modal",
     "review",
-    "review-plates",
+    "review-regions",
     "classes",
     "export",
     "train",
@@ -721,16 +727,13 @@ def run_captures(page: Page, base: str, out_dir: Path) -> list[Path]:
     goto(page, base, "/review")
     shots.append(capture(page, out_dir, "review"))
 
-    # `?tab=plates` resolves via reviewTabs.ts's tabFromUrlId() in unit
-    # tests but review/+page.svelte never reads the query param on
-    # mount (verified: no `searchParams`/`tabFromUrlId` reference in that
-    # file) — so the URL bookmark doesn't actually switch tabs in the
-    # live UI today. Click the "Plates" nav tab directly instead.
+    # The region tab's urlId is deployment-specific, so click the tab by
+    # the label the stubbed /review/tabs serves instead of deep-linking.
     goto(page, base, "/review")
-    page.get_by_role("button", name="Plates").first.click()
+    page.get_by_role("button", name=REGION_TAB_LABEL).first.click()
     page.wait_for_timeout(500)
     wait_images(page)
-    shots.append(capture(page, out_dir, "review-plates"))
+    shots.append(capture(page, out_dir, "review-regions"))
 
     goto(page, base, "/classes")
     shots.append(capture(page, out_dir, "classes"))

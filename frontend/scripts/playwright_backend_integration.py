@@ -192,9 +192,9 @@ def pick_crops(api: Api, cluster_id: int, n: int) -> list[dict[str, Any]]:
     return page.get("crops", [])
 
 
-def pick_plate_crop(api: Api) -> dict[str, Any] | None:
-    """A crop with an existing plate region, for steps 7/8."""
-    page = http_get(api.url("/plates?page_size=5&verified=false"))
+def pick_region_crop(api: Api) -> dict[str, Any] | None:
+    """A crop with an existing region box, for steps 7/8."""
+    page = http_get(api.url("/regions?page_size=5&verified=false"))
     items = page.get("items", [])
     return items[0] if items else None
 
@@ -325,7 +325,7 @@ def step1_navigation(page: Any, front: str, timeout: int) -> bool:
     return ok_all
 
 
-def step2_thumbnails(page: Any, front: str, api: Api, timeout: int) -> bool:
+def step2_thumbnails(page: Any, front: str, api: Api, timeout: int, region_class: str) -> bool:
     def render_check(path: str, label: str) -> tuple[bool, list[dict[str, Any]]]:
         page.goto(f"{front}{path}", wait_until="domcontentloaded", timeout=timeout)
         # `domcontentloaded` fires before this SPA's client-side data fetch
@@ -357,40 +357,41 @@ def step2_thumbnails(page: Any, front: str, api: Api, timeout: int) -> bool:
 
     clusters_ok, clusters_imgs = render_check("/clusters", "clusters grid")
 
-    # The plates gallery (and the region_thumbnail guard below, which can
+    # The region gallery (and the region_thumbnail guard below, which can
     # only observe a src if the gallery has rows to render) only has
-    # anything to show on a deployment whose class registry actually
-    # includes `license_plate` -- a from-scratch generic test dataset
-    # (e.g. a warehouse/pallet domain) legitimately has none, and an
-    # empty gallery there is correct behavior, not a failure. Check the
-    # registry first so this step reports a skip instead of a false FAIL.
+    # anything to show on a deployment with a region profile whose
+    # region-bearing class is known. Which class that is depends on the
+    # deployment, so it comes from --region-class / REGION_CLASS; with
+    # none given, or when the class isn't in the registry, this step
+    # reports a skip instead of a false FAIL.
     classes = http_get(api.url("/classes"))
-    has_lp_class = any(
-        c.get("class_name") == "license_plate" for c in classes.get("classes", [])
+    has_region_class = bool(region_class) and any(
+        c.get("class_name") == region_class for c in classes.get("classes", [])
     )
+    skip_note = f"skipped: region class {region_class!r} not configured or not in this dataset"
 
-    if has_lp_class:
-        plates_ok, plates_imgs = render_check("/clusters?class=license_plate", "plates gallery")
+    if has_region_class:
+        gallery_ok, gallery_imgs = render_check(f"/clusters?class={region_class}", "region gallery")
     else:
-        plates_ok, plates_imgs = True, []  # nothing to assert; see skip note below
+        gallery_ok, gallery_imgs = True, []  # nothing to assert; see skip note below
 
     region_seg = f"{api.prefix}/crops/"
     has_region = any(
-        region_seg in i["src"] and "region_thumbnail" in i["src"] for i in plates_imgs
+        region_seg in i["src"] and "region_thumbnail" in i["src"] for i in gallery_imgs
     )
 
     ok = check(
-        "step 2: >=1 <img> naturalWidth>0 on /clusters and the plates gallery",
-        clusters_ok and plates_ok,
-        f"clusters_ok={clusters_ok} plates_ok={plates_ok}"
-        + ("" if has_lp_class else " (skipped: no license_plate class in this dataset)"),
+        "step 2: >=1 <img> naturalWidth>0 on /clusters and the region gallery",
+        clusters_ok and gallery_ok,
+        f"clusters_ok={clusters_ok} gallery_ok={gallery_ok}"
+        + ("" if has_region_class else f" ({skip_note})"),
     )
     ok2 = check(
         "step 2: >=1 rendered src contains {prefix}/crops/...region_thumbnail (bug-#3 guard)",
-        has_region if has_lp_class else True,
-        f"sample srcs={[i['src'] for i in plates_imgs[:3]]}"
-        if has_lp_class
-        else "skipped: no license_plate class in this dataset",
+        has_region if has_region_class else True,
+        f"sample srcs={[i['src'] for i in gallery_imgs[:3]]}"
+        if has_region_class
+        else skip_note,
     )
     record_step(
         2,
@@ -398,9 +399,9 @@ def step2_thumbnails(page: Any, front: str, api: Api, timeout: int) -> bool:
         [
             {
                 "clusters_ok": clusters_ok,
-                "plates_ok": plates_ok,
+                "gallery_ok": gallery_ok,
                 "has_region_thumb": has_region,
-                "has_license_plate_class": has_lp_class,
+                "has_region_class": has_region_class,
             }
         ],
     )
@@ -499,40 +500,45 @@ def step6_review_dismiss(api: Api, crop_id: str) -> bool:
 def step7_region_write_restore(api: Api, crop: dict[str, Any]) -> bool:
     crop_id = crop["crop_id"]
     prior = http_get(api.url(f"/crops/{crop_id}"))
-    prior_status = prior.get("plate_status")
-    prior_text = prior.get("plate_text")
+    prior_status = prior.get("region_status")
+    prior_text = prior.get("region_text")
 
     bbox = [0.1, 0.1, 0.2, 0.2]
-    write_result = http_json(api.url(f"/crops/{crop_id}/plate", "PUT"), "PUT", {"bbox_norm": bbox})
+    write_result = http_json(
+        api.url(f"/crops/{crop_id}/region", "PUT"), "PUT", {"region_bbox_norm": bbox}
+    )
     meta_result = http_json(
-        api.url(f"/crops/{crop_id}/plate_meta", "PATCH"),
+        api.url(f"/crops/{crop_id}/region_meta", "PATCH"),
         "PATCH",
-        {"plate_text": "TESTROUNDTRIP", "plate_status": "detected"},
+        {"region_text": "TESTROUNDTRIP", "region_status": "detected"},
     )
     refetched = http_get(api.url(f"/crops/{crop_id}"))
     round_trip_ok = check(
-        "step 7: plate write round-trips (plate_detector=='human', plate_text set)",
-        refetched.get("plate_detector") == "human"
-        and refetched.get("plate_text") == "TESTROUNDTRIP",
-        f"plate_detector={refetched.get('plate_detector')} plate_text={refetched.get('plate_text')!r}",
+        "step 7: region write round-trips (region_detector=='human', region_text set)",
+        refetched.get("region_detector") == "human"
+        and refetched.get("region_text") == "TESTROUNDTRIP",
+        f"region_detector={refetched.get('region_detector')} "
+        f"region_text={refetched.get('region_text')!r}",
     )
 
-    # Restore what we can (§3.8 rule 2).
-    restore_bbox = prior.get("plate_bbox_norm") or prior.get("bbox_norm")
-    if restore_bbox:
-        http_json(api.url(f"/crops/{crop_id}/plate", "PUT"), "PUT", {"bbox_norm": restore_bbox})
-    else:
-        http_json(api.url(f"/crops/{crop_id}/plate", "PUT"), "PUT", {"bbox_norm": None})
+    # Restore what we can (§3.8 rule 2). region_bbox_norm is stored in the
+    # source frame, which is also PUT /region's default frame.
+    restore_bbox = prior.get("region_bbox_norm")
     http_json(
-        api.url(f"/crops/{crop_id}/plate_meta", "PATCH"),
+        api.url(f"/crops/{crop_id}/region", "PUT"),
+        "PUT",
+        {"region_bbox_norm": restore_bbox or None},
+    )
+    http_json(
+        api.url(f"/crops/{crop_id}/region_meta", "PATCH"),
         "PATCH",
-        {"plate_text": prior_text, "plate_status": prior_status},
+        {"region_text": prior_text, "region_status": prior_status},
     )
     after_restore = http_get(api.url(f"/crops/{crop_id}"))
     restore_ok = check(
-        "step 7: restore succeeds (plate_text back to prior value)",
-        after_restore.get("plate_text") == prior_text,
-        f"expected={prior_text!r} got={after_restore.get('plate_text')!r}",
+        "step 7: restore succeeds (region_text back to prior value)",
+        after_restore.get("region_text") == prior_text,
+        f"expected={prior_text!r} got={after_restore.get('region_text')!r}",
     )
     record_step(
         7,
@@ -542,7 +548,7 @@ def step7_region_write_restore(api: Api, crop: dict[str, Any]) -> bool:
                 "crop_id": crop_id,
                 "write_result": write_result,
                 "meta_result": meta_result,
-                "prior": {"plate_status": prior_status, "plate_text": prior_text},
+                "prior": {"region_status": prior_status, "region_text": prior_text},
                 "restored": restore_ok,
             }
         ],
@@ -553,26 +559,25 @@ def step7_region_write_restore(api: Api, crop: dict[str, Any]) -> bool:
 def step8_batch_region_status(api: Api, crops: list[dict[str, Any]]) -> bool:
     crop_ids = [c["crop_id"] for c in crops]
     if not crop_ids:
-        return check("step 8: batch region status", False, "no plate crops available")
-    prior_statuses = {c["crop_id"]: c.get("plate_status") for c in crops}
+        return check("step 8: batch region status", False, "no region crops available")
+    prior_statuses = {c["crop_id"]: c.get("region_status") for c in crops}
 
     result = http_json(
-        api.url("/plates/batch_status", "POST"),
+        api.url("/regions/batch_status", "POST"),
         "POST",
         {
             "crop_ids": crop_ids,
-            "plate_status": "false_positive",
-            "plate_verified": None,
-            "label_source": "human",
+            "region_status": "false_positive",
+            "region_label_source": "human",
         },
     )
     ok = check(
-        "step 8: POST /plates/batch_status updated == len(crop_ids)",
+        "step 8: POST /regions/batch_status updated == len(crop_ids)",
         result.get("updated") == len(crop_ids),
         f"updated={result.get('updated')} expected={len(crop_ids)}",
     )
     reflected = all(
-        http_get(api.url(f"/crops/{cid}")).get("plate_status") == "false_positive"
+        http_get(api.url(f"/crops/{cid}")).get("region_status") == "false_positive"
         for cid in crop_ids
     )
     ok2 = check("step 8: re-GET reflects the status", reflected)
@@ -580,9 +585,9 @@ def step8_batch_region_status(api: Api, crops: list[dict[str, Any]]) -> bool:
     # Restore prior statuses.
     for cid in crop_ids:
         http_json(
-            api.url(f"/crops/{cid}/plate_meta", "PATCH"),
+            api.url(f"/crops/{cid}/region_meta", "PATCH"),
             "PATCH",
-            {"plate_status": prior_statuses.get(cid)},
+            {"region_status": prior_statuses.get(cid)},
         )
     record_step(8, "batch region status", [{"crop_ids": crop_ids, "result": result}])
     return ok and ok2
@@ -781,7 +786,7 @@ def step12_train_read_path(api: Api, page: Any, front: str) -> bool:
 # --------------------------------------------------------------------------
 
 
-def dry_run(api: Api, front: str) -> int:
+def dry_run(api: Api, front: str, region_class: str) -> int:
     """Print every URL this run would touch and exit, without a browser.
 
     This is what makes the script verifiable with no backend: run it at
@@ -804,7 +809,8 @@ def dry_run(api: Api, front: str) -> int:
     add("2", "GET", api.url("/crops/{crop_id}/thumbnail"))
     add("2", "GET", api.url("/crops/{crop_id}/region_thumbnail"))
     add("2", "GET", f"{front}/clusters")
-    add("2", "GET", f"{front}/clusters?class=license_plate")
+    if region_class:
+        add("2", "GET", f"{front}/clusters?class={region_class}")
 
     add("3", "PUT", api.url("/crops/{crop_id}/label"))
     add("3", "GET", api.url("/crops/{crop_id}"))
@@ -818,10 +824,10 @@ def dry_run(api: Api, front: str) -> int:
     add("6", "GET", api.url("/review/all"))
 
     add("7", "GET", api.url("/crops/{crop_id}"))
-    add("7", "PUT", api.url("/crops/{crop_id}/plate"))
-    add("7", "PATCH", api.url("/crops/{crop_id}/plate_meta"))
+    add("7", "PUT", api.url("/crops/{crop_id}/region"))
+    add("7", "PATCH", api.url("/crops/{crop_id}/region_meta"))
 
-    add("8", "POST", api.url("/plates/batch_status"))
+    add("8", "POST", api.url("/regions/batch_status"))
 
     add("9", "GET", api.url("/crops"))
     add("9", "POST", api.url("/vlm/label_batch"))
@@ -892,6 +898,13 @@ def build_argparser() -> argparse.ArgumentParser:
         "cluster refine and the VLM batch on a re-run.",
     )
     p.add_argument("--timeout", type=int, default=20000, help="Per-navigation timeout (ms).")
+    p.add_argument(
+        "--region-class",
+        default=os.environ.get("REGION_CLASS", ""),
+        help="Class name the deployment's region profile binds to (the class "
+        "whose /clusters?class= view is the region gallery). Empty skips "
+        "the region-gallery half of step 2.",
+    )
     return p
 
 
@@ -902,7 +915,7 @@ def main() -> int:
     front = args.url.rstrip("/")
 
     if args.dry_run:
-        return dry_run(api, front)
+        return dry_run(api, front, args.region_class)
 
     skip_steps = {int(s) for s in args.skip_steps.split(",") if s.strip()}
 
@@ -935,7 +948,7 @@ def main() -> int:
         target_crop = crops[0]
 
         if 2 not in skip_steps:
-            step2_thumbnails(page, front, api, args.timeout)
+            step2_thumbnails(page, front, api, args.timeout, args.region_class)
         if 3 not in skip_steps:
             step3_label_crop(api, target_crop)
         if 4 not in skip_steps:
@@ -944,17 +957,17 @@ def main() -> int:
         if 6 not in skip_steps:
             step6_review_dismiss(api, target_crop["crop_id"])
 
-        plate_crop = pick_plate_crop(api)
-        if 7 not in skip_steps and plate_crop:
-            step7_region_write_restore(api, plate_crop)
+        region_crop = pick_region_crop(api)
+        if 7 not in skip_steps and region_crop:
+            step7_region_write_restore(api, region_crop)
         elif 7 not in skip_steps:
-            check("step 7: region write + restore", False, "no plate crop available")
+            check("step 7: region write + restore", False, "no region crop available")
 
-        plate_crops = [pick_plate_crop(api)] if plate_crop else []
-        if 8 not in skip_steps and plate_crops and plate_crops[0]:
-            step8_batch_region_status(api, [c for c in plate_crops if c])
+        region_crops = [pick_region_crop(api)] if region_crop else []
+        if 8 not in skip_steps and region_crops and region_crops[0]:
+            step8_batch_region_status(api, [c for c in region_crops if c])
         elif 8 not in skip_steps:
-            check("step 8: batch region status", False, "no plate crops available")
+            check("step 8: batch region status", False, "no region crops available")
 
         step9_vlm_label_batch(api, cluster_id, skip=9 in skip_steps)
 
