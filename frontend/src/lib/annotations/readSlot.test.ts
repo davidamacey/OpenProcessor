@@ -113,6 +113,85 @@ describe('readSlot / licensePlateSlot', () => {
   });
 });
 
+describe('readSlot — dq-region candidate box / auto-confirm / text choice (2026-09-24)', () => {
+  const parent: XYXY = [0, 0, 0.4, 0.2];
+
+  it('reads a verify_rejected candidate box when there is no main box', () => {
+    const raw = {
+      region_bbox_norm: null,
+      region_status: 'verify_rejected',
+      region_rejection_reason: 'sanity_reject:aspect_ratio',
+      region_candidate_bbox_norm: [0.1, 0.08, 0.3, 0.12],
+      region_candidate_score: 0.42,
+      region_candidate_detector: 'lpr_nanov11_640',
+      region_candidate_detector_version: 'v3',
+      region_candidate_source: 'detector',
+    };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.subBox?.rawXyxy).toBeNull();
+    expect(d.subBox?.candidate).not.toBeNull();
+    expect(d.subBox?.candidate?.rawXyxy).toEqual([0.1, 0.08, 0.3, 0.12]);
+    expect(d.subBox?.candidate?.score).toBeCloseTo(0.42);
+    expect(d.subBox?.candidate?.detector).toBe('lpr_nanov11_640');
+    expect(d.subBox?.candidate?.detectorVersion).toBe('v3');
+    expect(d.subBox?.candidate?.source).toBe('detector');
+    // Projected into the parent frame the same way the main box is.
+    expect(d.subBox?.candidate?.parent?.cx).toBeCloseTo(0.5);
+    expect(d.lifecycle?.rejectionReason).toBe('sanity_reject:aspect_ratio');
+  });
+
+  it('prefers the server-projected candidateBboxInParentField over its own projection', () => {
+    const raw = {
+      region_candidate_bbox_norm: [0.1, 0.08, 0.3, 0.12],
+      region_candidate_bbox_in_parent: [0.4, 0.4, 0.6, 0.6],
+    };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.subBox?.candidate?.parent?.cx).toBeCloseTo(0.5);
+    expect(d.subBox?.candidate?.parent?.w).toBeCloseTo(0.2);
+  });
+
+  it('has no candidate when candidateBboxField is absent', () => {
+    const raw = { region_bbox_norm: [0.1, 0.08, 0.3, 0.12] };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.subBox?.candidate).toBeNull();
+  });
+
+  it('reads region_validated as human-only validation, separate from region_verified', () => {
+    const raw = {
+      region_status: 'detected',
+      region_verified: true,
+      region_validated: false,
+      region_auto_confirmed: true,
+    };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.lifecycle?.verified).toBe(true);
+    expect(d.lifecycle?.validated).toBe(false);
+    expect(d.lifecycle?.autoConfirmed).toBe(true);
+  });
+
+  it('reads the text-choice and vlm-invalid-reason fields', () => {
+    const raw = {
+      region_text: 'ABC123',
+      region_text_choice: 'vlm_preferred',
+      region_text_vlm_invalid: null,
+    };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.text?.choice).toBe('vlm_preferred');
+    expect(d.text?.invalidReason).toBeNull();
+  });
+
+  it('reads a vlm_invalid text choice with its reason', () => {
+    const raw = {
+      region_text: '123456',
+      region_text_choice: 'vlm_invalid',
+      region_text_vlm_invalid: 'sequence',
+    };
+    const d = readSlot(raw, licensePlateSlot, parent);
+    expect(d.text?.choice).toBe('vlm_invalid');
+    expect(d.text?.invalidReason).toBe('sequence');
+  });
+});
+
 describe('projectFromParent — inverse of the private projectToParent', () => {
   const cases: Array<{ frame: SlotFrame; parentXyxy: XYXY; childSourceXyxy: XYXY }> = [
     {

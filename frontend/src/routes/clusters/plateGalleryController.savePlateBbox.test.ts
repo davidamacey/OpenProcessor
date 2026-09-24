@@ -85,11 +85,14 @@ describe('savePlateBbox — no redundant write', () => {
         parent: { cx: 0.5, cy: 0.5, w: 0.2, h: 0.1 },
         score: null,
         visible: true,
+        candidate: null,
       },
       lifecycle: {
         status: 'detected',
         state: null,
         verified: true,
+        validated: true,
+        autoConfirmed: null,
         rejectionReason: null,
       },
     });
@@ -118,11 +121,14 @@ describe('savePlateBbox — no redundant write', () => {
         parent: null,
         score: null,
         visible: null,
+        candidate: null,
       },
       lifecycle: {
         status: 'no_region_visible',
         state: null,
         verified: null,
+        validated: null,
+        autoConfirmed: null,
         rejectionReason: null,
       },
     });
