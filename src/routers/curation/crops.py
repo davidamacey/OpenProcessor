@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
@@ -26,6 +26,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.services.curation.crop_browse import confidence_band, parse_crop_sort
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE, class_provenance
 
@@ -42,8 +43,24 @@ def _human_class_provenance() -> dict[str, Any]:
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
 async def list_crops(
     opensearch: OpenSearchDep,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
+    # Annotated defaults (not `= Query(...)`) so direct Python callers such
+    # as GET /classes/{id}/crops get real values, not FieldInfo objects.
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=500)] = 50,
+    limit: Annotated[
+        int | None, Query(ge=1, le=500, description='Alias for page_size; wins when both set.')
+    ] = None,
+    sort: Annotated[
+        str | None,
+        Query(
+            description=(
+                "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
+                'updated_at, created_at, confidence, classifier_raw_confidence, '
+                'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, '
+                'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
+            )
+        ),
+    ] = None,
     class_id: int | None = None,
     cluster_id: int | None = None,
     label_source: str | None = None,
@@ -52,18 +69,26 @@ async def list_crops(
     hdd_source: str | None = None,
     include_test: bool = False,
     include_excluded: bool = False,
-    max_rank: int | None = Query(None, ge=1),
-    min_blur_ratio: float | None = Query(None, ge=0.0),
-    classifier_conf_lt: float | None = Query(None, ge=0.0, le=1.0),
-    order: str = Query(
-        'default',
-        description=(
-            "'outliers' ranks a cluster's members farthest-from-centroid first. "
-            "'diverse' ranks the matched pool by k-center-greedy coverage "
-            '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
-            'order value when the flag is off).'
+    max_rank: Annotated[int | None, Query(ge=1)] = None,
+    min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
+    classifier_conf_lt: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    conf_min: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    conf_max: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    order: Annotated[
+        str,
+        Query(
+            description=(
+                "'outliers' ranks a cluster's members farthest-from-centroid first. "
+                "'diverse' ranks the matched pool by k-center-greedy coverage "
+                '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
+                'order value when the flag is off).'
+            )
         ),
-    ),
+    ] = 'default',
+    k: Annotated[
+        int | None,
+        Query(ge=1, le=10_000, description='order=diverse only: rank just the first k picks.'),
+    ] = None,
 ) -> dict[str, Any]:
     """Paginated crop browse with the standard filter set.
 
@@ -76,14 +101,23 @@ async def list_crops(
     (e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops
     at or above a clarity threshold (the labeler slider); crops with no blur
     score are NOT dropped. ``classifier_conf_lt`` mines the "model wasn't sure" pool —
-    crops whose ``classifier_raw_confidence`` is below the value OR that have no v6
+    crops whose ``classifier_raw_confidence`` is below the value OR that have no classifier
     prediction at all (blind spots).
     """
     await _ensure_indexes(opensearch)
+    if limit is not None:
+        page_size = limit
+    try:
+        sort_clause = parse_crop_sort(sort)
+        conf_clause = confidence_band(conf_min, conf_max)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     must: list[dict[str, Any]] = []
     # Filter-context clauses (cached bitsets, no scoring) for the new
     # primary-subject filters.
     filt: list[dict[str, Any]] = []
+    if conf_clause is not None:
+        filt.append(conf_clause)
     if class_id is not None:
         must.append({'term': {'class_id': class_id}})
     if cluster_id is not None:
@@ -145,7 +179,7 @@ async def list_crops(
         'from': (page - 1) * page_size,
         'size': page_size,
         'query': query_clause,
-        'sort': [{'updated_at': {'order': 'desc'}}],
+        'sort': sort_clause,
         # Exact total (not the default 10k cap) so the labeler shows real
         # queue sizes for filtered views — one count pass per query, fine at
         # this scale and matches the /curation/review endpoint.
@@ -188,7 +222,7 @@ async def list_crops(
         from src.routers.curation.select import compute_diverse_order
 
         diverse_ids = await compute_diverse_order(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total)
+            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total), k=k
         )
         if diverse_ids is not None:
             page_ids = diverse_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
