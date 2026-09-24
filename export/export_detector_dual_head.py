@@ -32,10 +32,10 @@ Loaders
 -------
 ``--loader ultralytics``  Ultralytics checkpoints/YAMLs (YOLOv8/11/26, ...).
 ``--loader yolov5``       A YOLOv5 fork checkout (``models/yolo.py`` on
-                          disk); the same fork
-                          :mod:`src.services.detection.ensemble_nms` uses
-                          for client-side NMS, so its ``DETECTION_YOLOV5_FORK``
-                          env var is honoured as the default path.
+                          disk, passed via ``--yolov5-fork``), needed only to
+                          unpickle that fork's checkpoints. The serving path
+                          does not need it: client-side NMS in
+                          :mod:`src.services.detection.ensemble_nms` is native.
 ``--loader auto``         (default) Ultralytics first, fork as fallback.
 
 Usage
@@ -66,7 +66,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -105,10 +104,7 @@ DEFAULT_IMG_SIZE = 640
 DEFAULT_MAX_BATCH = 8
 DEFAULT_MODELS_DIR = Path('/app/models')
 DEFAULT_ONNX_DIR = Path('/app/pytorch_models')
-# Same default + env var as src/services/detection/ensemble_nms.py, so a
-# deployment points at its fork once.
 DEFAULT_YOLOV5_FORK = './external/yolov5'
-YOLOV5_FORK_ENV = 'DETECTION_YOLOV5_FORK'
 
 WORKSPACE_GB = 4
 # Triton model names are directory names in the model repository.
@@ -161,11 +157,6 @@ class DualHeadExport:
 # ============================================================================
 
 
-def default_yolov5_fork() -> str:
-    """Fork checkout path, honouring the shared ``DETECTION_YOLOV5_FORK`` env var."""
-    return os.environ.get(YOLOV5_FORK_ENV, DEFAULT_YOLOV5_FORK)
-
-
 def validate_args(args: argparse.Namespace) -> None:
     """Reject argument combinations that cannot produce a loadable model.
 
@@ -199,7 +190,7 @@ def validate_args(args: argparse.Namespace) -> None:
     if args.loader == 'yolov5' and not (Path(args.yolov5_fork) / 'models' / 'yolo.py').exists():
         msg = (
             f'--loader yolov5 needs a fork checkout; {args.yolov5_fork}/models/yolo.py '
-            f'not found. Pass --yolov5-fork or set {YOLOV5_FORK_ENV}.'
+            f'not found. Pass --yolov5-fork.'
         )
         raise ValueError(msg)
 
@@ -735,8 +726,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--yolov5-fork',
         type=Path,
-        default=Path(default_yolov5_fork()),
-        help=f'YOLOv5 fork checkout (default: ${YOLOV5_FORK_ENV} or {DEFAULT_YOLOV5_FORK}).',
+        default=Path(DEFAULT_YOLOV5_FORK),
+        help=f'YOLOv5 fork checkout (default: {DEFAULT_YOLOV5_FORK}).',
     )
     parser.add_argument(
         '--feature-module',

@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import io
-import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -18,13 +16,6 @@ from src.services.curation.ingest import MAX_INGEST_CONCURRENCY, CurationIngestS
 
 
 del MAX_INGEST_CONCURRENCY  # imported only to confirm the module exports it
-
-# The secondary detector's client-side NMS imports a YOLOv5 fork; point it at
-# the test fixture fork (see tests/curation/test_ensemble_nms.py).
-os.environ.setdefault(
-    'DETECTION_YOLOV5_FORK',
-    str(Path(__file__).resolve().parent.parent / 'fixtures' / 'yolov5_fork'),
-)
 
 
 @dataclass
@@ -1158,7 +1149,7 @@ class TestBackboneEmbedding:
         from src.services.detection import ensemble_nms
 
         def _broken_nms(*_a: Any, **_k: Any) -> Any:
-            raise RuntimeError('nms fork unavailable')
+            raise RuntimeError('nms unavailable')
 
         monkeypatch.setattr(ensemble_nms, 'apply_ensemble_nms', _broken_nms)
         svc, os_fake, _ = _make_dual_service(feature_map=_feature_map())
