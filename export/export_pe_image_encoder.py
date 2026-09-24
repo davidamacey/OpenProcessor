@@ -31,7 +31,7 @@ the model its own curation code requires.
 
 The input tensor must be preprocessed exactly the way
 ``src/services/detection/pe_preprocess.py`` does it: resize shorter edge to
-336, center-crop 336x336, scale to [0, 1], ImageNet mean/std normalize, CHW
+336, center-crop 336x336, scale to [0, 1], PE-Core 0.5/0.5 normalize, CHW
 float32. The exported graph L2-normalizes its own output; ``PEEncoder``
 re-normalizes defensively, so either is safe.
 
@@ -217,7 +217,7 @@ def render_config(cfg: PETritonConfig) -> str:
 # visualization. The tensor names below are a contract with that client.
 #
 # Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] FP32,
-#         ImageNet mean/std normalized (see src/services/detection/pe_preprocess.py)
+#         PE-Core 0.5/0.5 mean/std normalized (see src/services/detection/pe_preprocess.py)
 # Output: {cfg.output_name} [B, {cfg.embedding_dim}] FP32, L2-normalized
 #
 {provenance}

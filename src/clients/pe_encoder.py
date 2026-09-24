@@ -281,7 +281,7 @@ class PEEncoder:
         """Preprocess + encode a list of HWC-uint8 RGB item crops.
 
         Applies the canonical PE preprocessing (resize-shorter-edge,
-        center-crop, ImageNet normalize — see
+        center-crop, PE-Core 0.5/0.5 normalize — see
         :mod:`src.services.detection.pe_preprocess`) to each crop, then
         chunks at ``max_batch`` to respect the encoder's configured Triton
         max batch size. :meth:`encode_images` already L2-normalizes its
@@ -314,7 +314,7 @@ class PEEncoder:
         """PE-Core whole-frame embedding for a source image on disk.
 
         Goes through :func:`src.services.detection.pe_preprocess.whole_frame_chw`
-        (cv2 1/8 decode + resize-shorter-edge + center-crop + ImageNet
+        (cv2 1/8 decode + resize-shorter-edge + center-crop + PE-Core 0.5/0.5
         normalize) so the vector lands in the same space as any other
         whole-frame caller (e.g. a backfill script), then runs it through
         the same Triton image encoder as :meth:`embed_crops`.
