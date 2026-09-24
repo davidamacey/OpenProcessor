@@ -833,12 +833,17 @@ detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
 | `vlm_visible:yes` / `vlm_visible:no` | VLM pre-filter: a region is / isn't visible in the item |
 | `<src>:combined_verify_ok` | VLM confirmed the candidate box (region written `detected`) |
 | `<src>:combined_verify_reject` | VLM rejected the candidate box |
-| `<src>:combined_verify_reject:region_visible_elsewhere` | VLM sees a region, but not in the candidate box |
+| `<src>:combined_verify_reject:region_visible_elsewhere` | VLM sees a region and answered `region_bbox_correct=false` for the candidate box |
 | `<src>:combined_no_region_visible` | VLM sees no region at all |
 | `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
 | `<seg>:skip_vlm_verify` | high-score segmenter box written without a VLM call |
 | `<src>:accepted_unverified` | no VLM configured: box written `detected` with `region_verified=false` (text from OCR) |
 | `<ocr>:text_hint:hit` / `:miss` / `:no_region_shape`, `<seg>:text_hint:miss` | OCR-hinted segmenter re-pass |
+
+A VLM reply that sees a region but gives no box verdict
+(`region_bbox_correct` `null`, absent, or a quoted null) is not a reject:
+nothing is written and the item stays pending for a retry, so no chain
+entry is stored for it.
 
 Readers match whole entries with `term` queries — e.g. `GET
 /regions/training_candidates?mode=detector_blind_spots` requires

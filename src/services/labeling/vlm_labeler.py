@@ -236,8 +236,8 @@ class VlmCombinedReply(BaseModel):
     plate_bbox_correct: bool | None = Field(
         default=None,
         description='True if the proposed region bbox correctly outlines the sub-region; '
-        'False if the sub-region is visible elsewhere; None when no candidate bbox was '
-        'supplied.',
+        'False if the sub-region is visible elsewhere; None when the reply gave no '
+        'verdict on the box (no candidate supplied, or the answer was null / absent).',
     )
     plate_text: str | None = None
     plate_confidence: ConfidenceLevel | None = None
@@ -435,14 +435,17 @@ def _normalize_confidence(value: Any) -> ConfidenceLevel:
 
 
 _TRUE_STRINGS = frozenset({'true', 'yes', 'y', '1'})
-_FALSE_STRINGS = frozenset({'false', 'no', 'n', '0', 'null', 'none', ''})
+_FALSE_STRINGS = frozenset({'false', 'no', 'n', '0'})
 
 
 def _coerce_bool(value: Any) -> bool | None:
     """Strict boolean read of a VLM reply field; ``None`` when unrecognized.
 
     ``bool("false")`` is ``True``, so a model that quotes its booleans
-    would otherwise have every "false" read as an accept.
+    would otherwise have every "false" read as an accept. A quoted null
+    (``"null"``, ``"none"``, ``""``) is no answer, not a ``False``: read
+    as ``False`` it turned a verifier that gave no box verdict into a
+    reject.
     """
     if isinstance(value, bool):
         return value
@@ -494,7 +497,8 @@ def _combined_reply_from_entry(
     pending rather than stamping ``no_region_visible`` or an accept off a
     reply that never answered). ``region_bbox_correct`` reads ``None``
     unless it is a recognizable boolean, so only an explicit ``true``
-    can accept a box.
+    can accept a box and only an explicit ``false`` can reject one;
+    ``None`` is no verdict.
     """
     visible = _coerce_bool(entry.get(fields.visible))
     if visible is None:

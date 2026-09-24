@@ -413,6 +413,10 @@ async def run(args: argparse.Namespace) -> int:
         # the next producer poll re-fetches it (no terminal status
         # stamped).
         'combined_parse_failure': 0,
+        # combined_no_bbox_verdict: the VLM said a region is visible but
+        # answered null / nothing on the candidate box. Left pending (no
+        # write) for a retry, never counted as a reject.
+        'combined_no_bbox_verdict': 0,
         # combined_no_plate_visible: the VLM confirmed no region is
         # visible at all. Terminal write.
         'combined_no_plate_visible': 0,
@@ -975,6 +979,8 @@ async def run(args: argparse.Namespace) -> int:
           - plate_bbox_correct=True, plate_visible=True (+ bbox passes
             sanity gate) -> write 'detected' with full region + class
             fields via :func:`_combined_write_doc`.
+          - plate_visible=True, plate_bbox_correct=None (null / absent)
+            -> no verdict: no write, the item stays pending for a retry.
           - plate_visible=True but plate_bbox_correct=False (or sanity
             gate fails) -> write 'verify_rejected' + class fields. Do
             NOT re-loop the secondary segmenter (would re-introduce 2
@@ -1168,13 +1174,27 @@ async def run(args: argparse.Namespace) -> int:
                                 t.update_doc[F.text_source] = TEXT_SOURCE_OCR
                                 t.update_doc[F.text_engine_version] = ocr_engine_id(profile)
                                 t.update_doc[F.text_confidence] = t.candidate_text_confidence
+                        elif reply.plate_visible and reply.plate_bbox_correct is None:
+                            # The VLM sees a region but gave no verdict on
+                            # the candidate box (null / absent). No verdict
+                            # is not a reject: leave the item pending --
+                            # drop it from in_flight so the next producer
+                            # poll retries it, same as a parse failure.
+                            metrics['combined_no_bbox_verdict'] += 1
+                            logger.info(
+                                'stage_b_combined_no_bbox_verdict',
+                                crop_id=t.crop_id,
+                                request_id=t.request_id,
+                            )
+                            async with in_flight_lock:
+                                in_flight.discard(t.crop_id)
+                            continue
                         elif reply.plate_visible:
-                            # plate_bbox_correct is False/None but the
-                            # VLM says a region IS visible. Write
-                            # verify_rejected + class fields and do NOT
-                            # re-loop the secondary segmenter (would
-                            # re-introduce 2 VLM calls per crop). Human
-                            # review picks these up.
+                            # plate_bbox_correct is False but the VLM says
+                            # a region IS visible. Write verify_rejected +
+                            # class fields and do NOT re-loop the
+                            # secondary segmenter (would re-introduce 2 VLM
+                            # calls per crop).
                             metrics['combined_bbox_wrong'] += 1
                             t.detection_trace.append(
                                 f'{actor}:combined_verify_reject:region_visible_elsewhere'
@@ -1333,6 +1353,7 @@ async def run(args: argparse.Namespace) -> int:
                 combined_bbox_wrong=metrics['combined_bbox_wrong'],
                 combined_no_plate_visible=metrics['combined_no_plate_visible'],
                 combined_parse_failure=metrics['combined_parse_failure'],
+                combined_no_bbox_verdict=metrics['combined_no_bbox_verdict'],
             )
             last_processed = metrics['total_processed']
             last_t = now
