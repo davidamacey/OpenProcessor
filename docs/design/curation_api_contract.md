@@ -389,7 +389,9 @@ concurrent-write conflict counts as an error).
 ### Cluster cards (`GET /clusters`)
 
 `labelled_count` is the number of members with any `class_name`;
-`dominant_count` / `purity` describe the top class among them. For a
+`dominant_count` / `label_purity` describe the top class among them
+(`label_purity` = `dominant_count / labelled_count`), and
+`labelled_share` = `labelled_count / size`. For a
 candidate cluster (`cluster_id >= cluster_id_offset`)
 `dominant_class_name` is set only for a unique top class with at least
 3 members and at least half of the labelled members
@@ -398,14 +400,28 @@ candidate cluster (`cluster_id >= cluster_id_offset`)
 always `null` for candidates. Class clusters report their top class as
 before.
 
-Each card also carries `purity_tier` (`pure` / `mixed` / `noisy`, `null`
-with no labelled member) and `promotable` (the auto-promote gate: at least
-`promote_min_members` members, at least `promote_min_labelled_share` of
-them labelled, purity at least `pure_min`). The response serves the cut
+**`purity` (DQ-M2, changed meaning).** Label purity is 1.0 on every
+class cluster by construction (`cluster_id == class_id`), so it used to
+call visibly mixed class clusters "pure", and on candidates it covered only
+the few labelled members. A card's `purity` is now a geometric signal
+independent of the labels: the share of the cluster's members whose
+nearest cluster centroid (among every cluster's member-mean centroid over
+the item embedding) is their own cluster's. It is computed by the
+cluster-geometry pass that follows every auto-label clustering stage
+(`cluster_nearest_id` per item) and counts only members measured for
+their current cluster. `purity_n` is how many members it was computed
+over, `purity_basis` is `"nearest_centroid"`; `purity`, `purity_tier` are
+`null` while `purity_n` is `0` (no pass since the members arrived).
+
+Each card also carries `purity_tier` (`pure` / `mixed` / `noisy` from
+`purity`) and `promotable` (the auto-promote gate — unchanged, on the
+labels: at least `promote_min_members` members, at least
+`promote_min_labelled_share` of them labelled, `label_purity` at least
+`pure_min`; never true for a class cluster). The response serves the cut
 points: `purity_thresholds: {pure_min: 0.85, mixed_min: 0.6,
 promote_min_members: 4, promote_min_labelled_share: 0.5}` (source:
-`src/services/curation/cluster_purity.py`; `pure_min` *is* the gate, so a
-"pure" card is always one the gate would promote on purity) and
+`src/services/curation/cluster_purity.py`; the same `pure_min` / `mixed_min`
+cut both `purity` into tiers and `label_purity` at the gate) and
 `core_similarity_min: 0.75` (the cut line for the items' `cluster_is_core`).
 `POST /clusters/auto_promote` counts every labelled member in the purity
 denominator (it used to count only the top-5 classes, overstating purity
@@ -467,7 +483,14 @@ use it to hydrate a `POST /select/diverse` page in one call),
 `include_test`, `include_excluded`, `max_rank`,
 `min_blur_ratio`, `classifier_conf_lt`, `conf_min` / `conf_max`
 (inclusive band on `confidence`, `400` if min > max), `order`
-(`default`/`outliers`/`diverse`), `k` (1–10000, `order=diverse` only:
+(`default`/`outliers`/`core_first`/`diverse`; `outliers` and `core_first`
+need `cluster_id`: members farthest from / nearest to the centroid of the
+matched members first. Under `core_first` each served item's
+`cluster_distance` / `cluster_similarity` / `cluster_is_core` is recomputed
+against that same live centroid, so the cluster view's cut line — the
+first item with `cluster_is_core: false` — always matches the order;
+`method` reports the order that ran, and a pool too large to rank falls
+back to `sort`), `k` (1–10000, `order=diverse` only:
 rank just the first `k` k-center-greedy picks; `total` is then `k`),
 `item_text` (≤200 chars; text read on the item crop — every letter/digit
 word of the query must be a case-insensitive prefix of one of the item's
@@ -493,7 +516,12 @@ returned fields (`vlm_confidence`, `vlm_raw_label`, …), `class_source`
 values (`vlm`, `vlm_unmatched`, …), the review tab `vlm_low_conf`, the
 auto-label params and the stats keys (see B3).
 
-- `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`
+- `VlmLabelBatchRequest` (`POST /vlm/label_batch`): `crop_ids`. A reply that
+  resolves to a registry class also sets `cluster_id = class_id` (and clears
+  `cluster_subid`) unless the item is excluded, as the worker's combined call
+  and the pipeline's normalize do (DQ-m3) — the item no longer waits in its
+  candidate or old class cluster for the next clustering run. Undo restores
+  the prior placement.
 - `VlmVerifyRegionsRequest` (`POST /vlm/verify_regions`): `crop_ids`
 - `VlmVerifyRegionBatchItem`: `crop_id`, `region_image_b64` (base64 JPEG of the region crop, no `data:` prefix), `candidate_text` (optional, upstream OCR hint, echoed back not consumed)
 - `VlmVerifyRegionBatchRequest` (`POST /vlm/verify_region_batch`): `items: list[VlmVerifyRegionBatchItem]`
@@ -505,14 +533,36 @@ auto-label params and the stats keys (see B3).
 
 ### Review / holdout
 
+On the `mismatches` tab each item's `reason` says why it is there
+(DQ-m4): the default "VLM's reply did not match any registry class";
+`VLM named registry class '<answer>' at <vlm_confidence> confidence; not
+applied` when the VLM's answer (`vlm_raw_class`, else `vlm_raw_label`) is an
+active registry class name (a low-confidence answer the label path routes
+to review); `VLM gave no class answer` when none is stored.
+
+`vlm_low_conf` selects items whose label came from the VLM (a VLM
+`class_source`) and whose `vlm_confidence` is `medium` or `low`. It no
+longer also requires `confidence < 0.80` (that is the detector/classifier
+score — DQ-M8).
+
 `GET /review/{tab}` tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`,
 `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`,
 `coco_blind_spots`, **`new_class_proposals`** (items flagged
 `needs_new_class` by a human, or `class_source: vlm_new_class_pending`).
-Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
-`min_blur_ratio`, `min_mistakenness`, `hide_near_duplicates`, **`class_id`**,
-**`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
-`400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
+Filters (every tab): `include_test`, `max_rank` (`crop_rank_in_image <=
+max_rank`; omitted = no limit, except `primary_low_conf` /
+`coco_blind_spots`, which default to `2`), `min_blur_ratio`,
+`min_mistakenness`, `hide_near_duplicates`, **`class_id`**, **`source`**,
+**`conf_min` / `conf_max`** (inclusive band on `confidence`, `400` if
+min > max), `sort`; `text` on the `regions` tab only (ignored elsewhere).
+
+`GET /review/tabs` → `{tabs: [{id, label, description, filters,
+filter_defaults}]}`: `filters` is the list of query parameters the tab
+honours (a parameter not listed is accepted and ignored), `filter_defaults`
+the values it applies when one is omitted (`{"max_rank": 2}` for the two
+primary-subject tabs, else `{}`). The queue query reads the same table, so
+the catalog can't advertise a filter a tab ignores (DQ-M6: `max_rank` used
+to be honoured only by the two primary tabs). Response: `total`, `page`, `page_size`,
 `items` (item + `reason`), `sort_applied` (the sort id that actually ran),
 `sort_fallback_reason` (`null`, or a human-readable string when the
 resolved default was replaced — see below).
@@ -538,13 +588,34 @@ out of the queue `rank`/`page` are `null` and `reason` is `not_found` or
 queue depth) — use it for `/review?crop_id=` deep links instead of paging.
 
 `GET /review/new_class_proposals/summary?size=&samples=` →
-`{total_pending, top_terms: [{label, count, sample_crop_ids}]}`: the VLM's
-proposed new-class names over unvalidated `vlm_new_class_pending` items,
-most common first.
+`{total_pending, without_term, top_terms, flagged_terms, term_rules}`
+(DQ-M11). The summary, the `new_class_proposals` queue and the resolve
+below share one selection (`src/services/curation/new_class_terms.py`
+`proposal_query`), so `total_pending` equals the queue's `total`, and each
+term's `count` equals what a resolve for that `label` matches.
+`without_term` counts queue items with no proposed name (a human flag).
+Each term is `{label, count, sample_crop_ids, flag, class_id}`, most
+common first; `top_terms` holds only terms worth creating (`flag: null`),
+`flagged_terms` the rest:
+
+| `flag` | Rule | Suggested action |
+|---|---|---|
+| `existing_class` | the name (normalized: lowercase, spaces/hyphens → `_`) is an active registry class; `class_id` is set | resolve with `class_id` |
+| `generic_parent` | the whole name is in `OP_NEW_CLASS_GENERIC_TERMS`, or is a registry `group` name or one `-`-separated part of one | assign a specific class, don't create |
+| `non_object` | the name, or one `_`-separated token of it, is in `OP_NEW_CLASS_NON_OBJECT_TERMS` | discard / exclude |
+
+`term_rules` serves the active rule: `{generic_terms, non_object_terms,
+registry_groups_are_generic: true, existing_classes_flagged: true,
+generic_terms_env, non_object_terms_env}`. Both env lists are
+comma-separated and empty by default — no vocabulary is built in.
+Generic terms match whole names only (`sports_car` is not flagged by a
+generic `car`).
 
 `POST /review/new_class_proposals/resolve?dry_run=` (`ResolveNewClassRequest`
-→ `ResolveNewClassResponse`): bulk-resolves **every** unvalidated
-`vlm_new_class_pending` item proposing `label`, not just the summary's
+→ `ResolveNewClassResponse`): bulk-resolves **every** item of the
+new-class queue proposing `label` (`vlm_new_class_pending` rows and
+`needs_new_class` flags carrying that `vlm_proposed_class`; never a
+validated, review-dismissed, excluded or test-holdout item), not just the summary's
 capped `sample_crop_ids`. Exactly one of `class_id` (map to an existing
 registry class) / `create` (`{class_name, group, notes}`, registered
 through the same path as `POST /classes`) — else `422`; unknown `class_id`
@@ -593,6 +664,29 @@ one profile, with the same `idle`/`unknown`/`success` contract as
 `GET /export/status`. Each `profile_name` gets its own output root and
 its own `current` symlink, so narrowed exports never clobber each other
 or the multi-class dataset.
+
+**Readiness (DQ-M9).** Both exports refuse with `422`
+(`detail: "nothing to export: <reason>"`) when nothing is exportable —
+`POST /export/yolo`: no item is `class_validated` (and not
+review-dismissed), none has a box and class, or every one is on a class
+id missing from (or deprecated in) the registry; `POST
+/export/single_class`: no item matches the profile. Nothing is written
+and `current` keeps pointing at the previous export. Every manifest
+records `items_index: {index, uuid, created_at}` — the items index it was
+read from (`null` if it could not be read).
+
+`POST /train/preflight` adds two checks (see
+`src/services/curation/export_readiness.py`):
+
+| Check | `block` when | `unknown` when |
+|---|---|---|
+| `export_not_empty` | the manifest's `image_count` (else the sum of `split_counts`) is `0` | no readable manifest / no count |
+| `export_generation` | the manifest's `items_index.uuid` differs from the live items index's (the index was rebuilt since the export); for an unstamped export, its `exported_at` is before the live index's creation | the live index can't be read, or the manifest has neither a stamp nor `exported_at` |
+
+The index `uuid` is the staleness signal because it changes on every
+index creation and is immune to clock skew; label edits after an export
+are deliberately not "stale" (exports are snapshots, and retraining on a
+past one is supported).
 
 ### Capability discovery — `GET /methods`
 
@@ -706,14 +800,14 @@ read-modify-write round trip in application code.
 
 ## Item wire format
 
-Built by `serialize_item()` in `src/services/curation/wire.py`. 92 keys,
+Built by `serialize_item()` in `src/services/curation/wire.py`. 97 keys,
 always all present (a value is `null` when the stored doc has no value;
 `bbox_norm` defaults to `[]`, `class_name`/`class_source`/
 `label_source`/`updated_at`/`source`/`proposed_class_name` to `""`,
 `confidence` to `0.0`, `label_validated`/`class_validated`/`test_holdout`/
 `needs_new_class`/`class_excluded` to `false`, `item_text_lines` to `[]`).
 
-Item keys (58): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
+Item keys (62): `id`, `crop_id`, `image_id`, `image_path`, `source_image_path`, `bbox_norm`, `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `vlm_confidence`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name`, `needs_new_class`, `needs_new_class_note`, `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid`, `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `source`, `test_holdout`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `proposal_name`, `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative`, `updated_at`, `thumbnail_url`, `region_thumbnail_url`, `item_text_lines`, `region_bbox_in_parent`.
 
 `vlm_class_attempted_at` / `vlm_class_empty_reason`: when a VLM was last
 asked for the item's class, and why that attempt gave no class — `no_answer`
@@ -723,6 +817,11 @@ answered. An empty answer leaves every class field as it was (it is **not**
 `vlm_unmatched`, which means the VLM named a label outside the registry and
 carries it in `vlm_raw_class`). Such items appear in the `all` review tab and
 stay out of the VLM selectors for 24 h.
+
+`vlm_raw_class`: the VLM's class answer verbatim, `null` when none is
+stored. On a `vlm_unmatched` item it is the label the VLM named that is not
+in the registry (the item's `class_name` is whatever it already carried),
+so a reviewer sees what the VLM actually said.
 
 Region keys (34, one per `RegionFields` attribute except `embedding`,
 `prefix` and the `*_legacy` rollback columns): `region_bbox_norm`, `region_bbox_frame`, `region_bbox_correct`, `region_status`, `region_score`, `region_confidence`, `region_reason`, `region_rejection_reason`, `region_text`, `region_text_raw`, `region_text_confidence`, `region_text_source`, `region_text_engine_version`, `region_text_vlm`, `region_text_ocr`, `region_text_disagreement`, `region_validated`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector`, `region_detector_version`, `region_detector_chain`, `region_detected_at`, `region_cluster_id`, `region_cluster_subid`, `region_cluster_distance`, `region_class_id`, `region_label_source`, `region_source`, `region_pairing`, `region_skip_verify`.
@@ -736,16 +835,37 @@ Derived keys (computed by the serializer, never stored):
   applies, on **every** item endpoint (was `/review`-only): the VLM
   suggestion when there is one, else `class_id` and `vlm_raw_class` or
   `class_name` or `""` (see "VLM class suggestion").
+- `confidence` is always the **detector/classifier score** stored at
+  ingest, whatever wrote the current label — never the VLM's. Label it as
+  such. `class_confidence` / `class_confidence_source` (DQ-M8) are the
+  confidence of the writer that set the label: for a VLM `class_source`
+  (`vlm`, `vlm_unmatched`, `vlm_new_class_pending`, `vlm_reclassified`)
+  the VLM's category (`vlm_confidence`) mapped high `0.92` / medium `0.70`
+  / low `0.40` with source `vlm` (`null` for a missing/unknown category);
+  for a classifier source (`<profile>_model`) the stored score with
+  source `model`; `null`/`null` for human, move, merge, import,
+  cluster-vote and unclassified-proposal labels.
 - `cluster_kind` — `class` / `candidate` / `unassigned` from `cluster_id`
   (`null` without one); same rule as the cluster cards.
 - `cluster_similarity` — `1 - cluster_distance` clamped to `[0, 1]` (`null`
   without a distance); `cluster_is_core` — `cluster_similarity >=
   core_similarity_min` (served on `GET /clusters`, `0.75`).
-  `cluster_distance` is the cosine distance to the item's candidate-cluster
-  centroid, written by every residual clustering run whatever the method
-  (IVF's own centroids; otherwise the cluster's member-mean centroid). It
-  is `null` for noise and for items placed without a clustering pass
-  (class clusters via labeling, until they are clustered).
+  `cluster_distance` is the cosine distance to the item's cluster
+  centroid. Candidate clusters: written by every residual clustering run
+  whatever the method (IVF's own centroids; otherwise the cluster's
+  member-mean centroid). Class clusters (DQ-M3): written by the
+  cluster-geometry pass that follows every auto-label clustering stage
+  (`stages.cluster_residuals.cluster_geometry` in the job summary), as the
+  distance to the class cluster's member-mean centroid. Every writer also
+  stores the stored-only `cluster_distance_cluster_id` (the cluster it was
+  measured against); when that differs from the item's current
+  `cluster_id` (the item moved since), `cluster_distance`,
+  `cluster_similarity` and `cluster_is_core` are served `null` rather than
+  describing a cluster the item has left. `null` also for noise and for
+  items not yet measured. `cluster_nearest_id` — the cluster whose
+  centroid is nearest the item (equal to `cluster_id` when the item sits
+  best where it is; the per-item input to a card's `purity`), from the same
+  pass and gated the same way.
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the

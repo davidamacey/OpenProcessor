@@ -49,19 +49,19 @@ def make_cache_key(index: str, query: dict[str, Any], embedding_field: str) -> s
     return f'{index}|{embedding_field}|{json.dumps(query, sort_keys=True)}'
 
 
-async def compute_outlier_order(
+async def compute_centroid_distances(
     client: AsyncOpenSearch,
     index: str,
     query: dict[str, Any],
     *,
     embedding_field: str = OUTLIER_EMBEDDING_FIELD,
     current_count: int | None = None,
-) -> list[str] | None:
-    """Return member doc ``_id``s ordered by descending centroid distance.
+) -> dict[str, float] | None:
+    """``{doc _id: cosine distance to the matched members' centroid}``.
 
     Cached per (index, query, field). ``current_count`` (the live count for
-    the same query) invalidates a cached order when membership changed.
-    Returns ``None`` when the cluster exceeds ``_MAX_MEMBERS`` (caller should
+    the same query) invalidates a cached result when membership changed.
+    Returns ``None`` when the pool exceeds ``_MAX_MEMBERS`` (caller should
     fall back to its default sort).
     """
     key = make_cache_key(index, query, embedding_field)
@@ -72,7 +72,7 @@ async def compute_outlier_order(
         and (now - cached['at']) < _TTL_S
         and (current_count is None or cached['count'] == current_count)
     ):
-        return cached['order']  # type: ignore[no-any-return]
+        return cached['distances']  # type: ignore[no-any-return]
 
     # F-16: count before scrolling — a cluster far past _MAX_MEMBERS should
     # never pay for a scroll (even a partial, break-early one) just to
@@ -114,7 +114,7 @@ async def compute_outlier_order(
         logger.info('legacy_outlier_skip_too_large', index=index, n_seen=len(ids))
         return None
     if not ids:
-        return []
+        return {}
 
     x = np.asarray(vecs, dtype=np.float32)
     # Unit-normalize members (pe_embedding is already L2-normed, but be safe),
@@ -125,10 +125,53 @@ async def compute_outlier_order(
     if cnorm > 0:
         centroid = centroid / cnorm
     dist = 1.0 - (xn @ centroid)
-    order = [ids[i] for i in np.argsort(-dist)]  # farthest (most atypical) first
+    distances = {doc_id: float(d) for doc_id, d in zip(ids, dist.tolist(), strict=True)}
 
-    _CACHE[key] = {'order': order, 'count': len(order), 'at': now}
-    return order
+    _CACHE[key] = {'distances': distances, 'count': len(distances), 'at': now}
+    return distances
 
 
-__all__ = ['OUTLIER_EMBEDDING_FIELD', 'compute_outlier_order', 'make_cache_key']
+async def compute_outlier_order(
+    client: AsyncOpenSearch,
+    index: str,
+    query: dict[str, Any],
+    *,
+    embedding_field: str = OUTLIER_EMBEDDING_FIELD,
+    current_count: int | None = None,
+) -> list[str] | None:
+    """Member doc ``_id``s ordered by descending centroid distance (most
+    atypical first); ``None`` when too large (see
+    :func:`compute_centroid_distances`)."""
+    distances = await compute_centroid_distances(
+        client, index, query, embedding_field=embedding_field, current_count=current_count
+    )
+    if distances is None:
+        return None
+    return sorted(distances, key=lambda doc_id: (-distances[doc_id], doc_id))
+
+
+async def compute_core_first_order(
+    client: AsyncOpenSearch,
+    index: str,
+    query: dict[str, Any],
+    *,
+    embedding_field: str = OUTLIER_EMBEDDING_FIELD,
+    current_count: int | None = None,
+) -> tuple[list[str], dict[str, float]] | None:
+    """``(ids nearest-the-centroid first, distances)``: the reverse of
+    :func:`compute_outlier_order`, for a core-then-outliers member view."""
+    distances = await compute_centroid_distances(
+        client, index, query, embedding_field=embedding_field, current_count=current_count
+    )
+    if distances is None:
+        return None
+    return sorted(distances, key=lambda doc_id: (distances[doc_id], doc_id)), distances
+
+
+__all__ = [
+    'OUTLIER_EMBEDDING_FIELD',
+    'compute_centroid_distances',
+    'compute_core_first_order',
+    'compute_outlier_order',
+    'make_cache_key',
+]

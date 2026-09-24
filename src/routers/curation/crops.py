@@ -32,9 +32,9 @@ from src.services.curation.crop_browse import (
     classifier_low_confidence_clause,
     confidence_band,
     crops_page,
-    embedding_pool_query_and_count,
     parse_crop_sort,
 )
+from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.human_label import (
     candidate_move_update,
     human_class_provenance,
@@ -159,7 +159,10 @@ async def list_crops(
         str,
         Query(
             description=(
-                "'outliers' ranks a cluster's members farthest-from-centroid first. "
+                "'outliers' ranks a cluster's members farthest-from-centroid first; "
+                "'core_first' nearest-first, with each item's cluster_distance / "
+                'cluster_similarity / cluster_is_core recomputed against the same live '
+                'centroid (both need cluster_id). '
                 "'diverse' ranks the matched pool by k-center-greedy coverage "
                 '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
                 'order value when the flag is off).'
@@ -278,56 +281,22 @@ async def list_crops(
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    # Outlier ordering: rank this cluster's members by distance from their
-    # centroid (most atypical first). Computed on-the-fly + cached; falls
-    # through to the default newest-first sort if too large / no embeddings.
-    if order == 'outliers' and cluster_id is not None:
-        from src.services.curation.clustering.outliers import (
-            OUTLIER_EMBEDDING_FIELD,
-            compute_outlier_order,
-        )
-
-        # F-16: pool query + exact count scoped to the embedding-bearing subset.
-        pool_query, pool_count = await embedding_pool_query_and_count(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, OUTLIER_EMBEDDING_FIELD
-        )
-        ordered_ids = await compute_outlier_order(
-            opensearch, CURATION_ITEMS_INDEX, pool_query, current_count=pool_count
-        )
-        if ordered_ids is not None:
-            page_ids = ordered_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
-            crops = await _crops_by_ids(opensearch, page_ids)
-            return crops_page(
-                total=len(ordered_ids),
-                page=page,
-                page_size=page_size,
-                crops=crops,
-                method='outliers',
-                n_pool=int(total),
-            )
-
-    # Diversity ordering: k-center-greedy coverage over the matched pool,
-    # same fallback contract as 'outliers' above.
-    if order == 'diverse':
-        from src.routers.curation.select import EMBEDDING_FIELD, compute_diverse_order
-
-        pool_query, pool_count = await embedding_pool_query_and_count(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, EMBEDDING_FIELD
-        )
-        diverse_ids = await compute_diverse_order(
-            opensearch, CURATION_ITEMS_INDEX, pool_query, current_count=pool_count, k=k
-        )
-        if diverse_ids is not None:
-            page_ids = diverse_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
-            crops = await _crops_by_ids(opensearch, page_ids)
-            return crops_page(
-                total=len(diverse_ids),
-                page=page,
-                page_size=page_size,
-                crops=crops,
-                method='diverse',
-                n_pool=int(total),
-            )
+    # Computed orders (outliers / core_first / diverse) rank the matched
+    # pool; None falls through to the plain sort above.
+    ordered = await ordered_crops_page(
+        opensearch,
+        index=CURATION_ITEMS_INDEX,
+        order=order,
+        query_clause=query_clause,
+        cluster_id=cluster_id,
+        page=page,
+        page_size=page_size,
+        k=k,
+        n_pool=int(total),
+        fetch_items=_crops_by_ids,
+    )
+    if ordered is not None:
+        return ordered
 
     hits = (resp.get('hits') or {}).get('hits') or []
     crops = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]

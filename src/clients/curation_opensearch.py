@@ -211,6 +211,16 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
 }
 
 # Exclusion plus the other per-item human review decisions.
+# Cluster geometry written by the clustering run
+# (src/services/curation/clustering/cluster_geometry.py): the cluster id a
+# stored cluster_distance was measured against, so a reader can tell a
+# distance that went stale when the item moved to another cluster.
+CLUSTER_GEOMETRY_MAPPING: dict[str, Any] = {
+    'cluster_distance_cluster_id': {'type': 'integer'},
+    # Cluster whose centroid is nearest the item (cluster purity, DQ-M2).
+    'cluster_nearest_id': {'type': 'integer'},
+}
+
 _EXCLUSION_MAPPING: dict[str, Any] = {
     'class_excluded': {'type': 'boolean'},
     'excluded_at': {'type': 'date'},
@@ -306,6 +316,7 @@ def _items_body() -> dict[str, Any]:
                 'cluster_id': {'type': 'integer'},
                 'cluster_distance': {'type': 'float'},
                 'cluster_subid': {'type': 'keyword'},  # AHC sub-cluster id (e.g. "47a")
+                **CLUSTER_GEOMETRY_MAPPING,
                 # Region-of-interest clustering — independent of the item
                 # cluster_* above (an item's region rides on an item that
                 # already owns those). Coarse IVF partition + per-bucket AHC
@@ -1103,6 +1114,26 @@ async def ensure_items_exclusion_fields(
     return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
 
 
+async def ensure_items_cluster_geometry_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT :data:`CLUSTER_GEOMETRY_MAPPING` onto the items mapping — one
+    ``PUT _mapping`` per field, additive and idempotent."""
+    index = config.items_index
+    added: list[str] = []
+    for field, spec in CLUSTER_GEOMETRY_MAPPING.items():
+        try:
+            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
+            added.append(field)
+        except Exception as exc:
+            msg = str(exc)
+            if not _is_recoverable_mapping_conflict(msg):
+                logger.error('curation_mapping_migration_failed', index=index, error=msg)
+                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
+    logger.info('curation_mapping_migration', index=index, fields=added)
+    return {'acknowledged': True, 'index': index, 'fields_added': added}
+
+
 async def ensure_items_text_reader_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
@@ -1890,6 +1921,7 @@ def get_class_registry() -> ClassRegistry:
 
 
 __all__ = [
+    'CLUSTER_GEOMETRY_MAPPING',
     'CURATION_SETTINGS_DOC_ID',
     'INDEX_BODIES',
     'ClassRegistry',
@@ -1898,6 +1930,7 @@ __all__ = [
     'RegistryClassEntry',
     'create_curation_indexes',
     'ensure_items_class_name_keyword',
+    'ensure_items_cluster_geometry_fields',
     'ensure_items_embedding_fields',
     'ensure_items_exclusion_fields',
     'ensure_items_history_fields',

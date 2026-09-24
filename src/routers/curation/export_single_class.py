@@ -25,6 +25,7 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.routers.curation._common import ExportSingleClassRequest, OpenSearchDep, logger, router
+from src.services.curation.export_readiness import NothingToExportError
 from src.services.curation.export_single_class import (
     MANIFEST_FILENAME,
     SingleClassExportProfile,
@@ -75,6 +76,10 @@ async def export_single_class(
             img_max_side=payload.img_max_side,
             copy_images=payload.copy_images,
         )
+    except NothingToExportError as exc:
+        # Nothing matched: refused before any directory or symlink is written.
+        logger.warning('single_class_export_refused_empty', reason=str(exc))
+        raise HTTPException(status_code=422, detail=f'nothing to export: {exc}') from exc
     except ValueError as exc:
         # Configuration the caller can fix (empty class_ids, an image_mode
         # that doesn't apply to the chosen box_source) — a 422, not a 500.

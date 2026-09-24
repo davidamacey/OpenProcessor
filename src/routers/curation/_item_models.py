@@ -42,7 +42,13 @@ class ItemDoc(BaseModel):
     class_id: int | None = None
     class_name: str | None = ''
     class_source: str | None = ''
+    # The detector/classifier score, whatever wrote the label.
     confidence: float = 0.0
+    # Confidence of the writer that set the label: the VLM category mapped
+    # through high 0.92 / medium 0.70 / low 0.40 ('vlm'), or the classifier
+    # score ('model'); null for human / merge / import / proposal labels.
+    class_confidence: float | None = None
+    class_confidence_source: Literal['vlm', 'model'] | None = None
     # label_source is nullable: VLM writers set it to None when
     # overwriting a prior validation tag.
     label_source: str | None = ''
@@ -59,6 +65,9 @@ class ItemDoc(BaseModel):
     # null reason = it answered. An empty answer leaves the class untouched.
     vlm_class_attempted_at: str | None = None
     vlm_class_empty_reason: str | None = None
+    # The VLM's class answer verbatim (for vlm_unmatched: the label it
+    # named that is not in the registry).
+    vlm_raw_class: str | None = None
     # VLM class suggestion: the registry class the VLM chose while the
     # label is unvalidated (class_source vlm / vlm_reclassified), or, for
     # vlm_new_class_pending, the proposed new class name with a null id.
@@ -77,6 +86,8 @@ class ItemDoc(BaseModel):
     # core when at or above GET /clusters core_similarity_min.
     cluster_similarity: float | None = None
     cluster_is_core: bool | None = None
+    # Cluster whose centroid is nearest this item (cluster-geometry pass).
+    cluster_nearest_id: int | None = None
     # AHC sub-cluster id (e.g. "47a"); cleared whenever cluster_id changes.
     cluster_subid: str | None = None
     class_excluded: bool = False

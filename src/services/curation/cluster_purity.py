@@ -1,8 +1,15 @@
 """Cluster purity thresholds — shared by the auto-promote gate and the
-cluster cards, so a card never calls a cluster "pure" that the gate
-wouldn't promote. Leaf module.
+cluster cards. Leaf module.
 
-``purity`` is the top class's share of a cluster's labelled members.
+Two purities use these cut points:
+
+* the auto-promote gate's *label purity*: the top class's share of a
+  cluster's labelled members (served on cards as ``label_purity``);
+* a card's ``purity`` / ``purity_tier`` (DQ-M2): the share of measured
+  members whose nearest cluster centroid is their own cluster's
+  (``src/services/curation/clustering/cluster_geometry.py``). Label purity
+  is 1.0 on every class cluster by construction, so it can't be a card's
+  headline signal.
 """
 
 from __future__ import annotations

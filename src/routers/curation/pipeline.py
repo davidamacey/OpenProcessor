@@ -245,6 +245,12 @@ async def pipeline_auto_label(
         except Exception as exc:
             logger.warning('pipeline_cluster_residuals_failed', error=str(exc))
             summary['stages']['cluster_residuals'] = {'status': 'error', 'error': str(exc)}
+        from src.services.curation.clustering.cluster_geometry import cluster_geometry_stage
+
+        # DQ-M3: every cluster (class ones too) gets centroid geometry.
+        summary['stages']['cluster_residuals']['cluster_geometry'] = await with_elapsed_tick(
+            progress, cluster_geometry_stage(opensearch)
+        )
 
     # ---- stage 2: auto-promote ------------------------------------------
     if progress is not None:

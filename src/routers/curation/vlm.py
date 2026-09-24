@@ -45,6 +45,7 @@ from src.services.curation.class_write_guard import (
     ClassWriteGuard,
     class_write_locked,
 )
+from src.services.curation.clustering.id_normalize import class_cluster_placement
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     resolve_crop_root,
@@ -365,9 +366,11 @@ async def vlm_label_batch(
             # never onto a human-owned or validated class.
             if not guard.allows(doc_id, current):
                 return {}
-            return with_class_snapshot(
-                dict(updates_by_id[doc_id]), current, writer='vlm_label_batch'
-            )
+            update = dict(updates_by_id[doc_id])
+            # A registry class moves the item into its class cluster now,
+            # as the worker's combined call does (DQ-m3).
+            update.update(class_cluster_placement(update, current))
+            return with_class_snapshot(update, current, writer='vlm_label_batch')
 
         try:
             await occ_skip_on_conflict_bulk(

@@ -1,8 +1,9 @@
 """Curation review-queue router — ``GET/POST /curation/review/*``.
 
 ``POST /review/new_class_proposals/resolve`` lives in the sibling
-``review_resolve.py`` module (LOC-ceiling split — see that file's
-docstring), registered on this same shared ``router``.
+``review_resolve.py`` module and ``GET /review/new_class_proposals/summary``
+in ``review_proposals.py`` (LOC-ceiling splits), both registered on this
+same shared ``router``.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from src.routers.curation._common import (
     TestHoldoutFreezeResponse,
     _ensure_indexes,
     _now_iso,
+    get_class_registry,
     guard_page_depth,
     is_not_found,
     logger,
@@ -255,7 +257,16 @@ TextQ = Annotated[
     str | None,
     Query(description='Regions tab only: case-insensitive substring search on region_text.'),
 ]
-MaxRankQ = Annotated[int | None, Query(ge=1, description='Keep crop_rank_in_image <= this.')]
+MaxRankQ = Annotated[
+    int | None,
+    Query(
+        ge=1,
+        description=(
+            'Keep crop_rank_in_image <= this (every tab). Omitted: no limit, '
+            "except a tab's served filter_defaults (GET /review/tabs)."
+        ),
+    ),
+]
 BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
 MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]
 NearDupQ = Annotated[bool, Query(description='Hide non-representative near-duplicates.')]
@@ -281,11 +292,13 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
 
 
 @router.get('/review/tabs')
-async def review_tabs() -> dict[str, list[dict[str, str]]]:
+async def review_tabs() -> dict[str, list[dict[str, Any]]]:
     """Every review tab's ``id``/``label``/``description`` (W0: naming
-    sweep finding m9) — the frontend renders this instead of hardcoding
-    tab labels. Must be registered before ``GET /review/{tab}`` so it
-    isn't shadowed as ``tab='tabs'``."""
+    sweep finding m9) plus ``filters`` (the query parameters it honours)
+    and ``filter_defaults`` (values it applies when one is omitted) — the
+    frontend renders this instead of hardcoding tab labels or assuming a
+    filter works everywhere. Must be registered before ``GET /review/{tab}``
+    so it isn't shadowed as ``tab='tabs'``."""
     return {'tabs': review_queries.review_tab_catalog()}
 
 
@@ -352,11 +365,25 @@ async def review_queue(
     total_obj = (resp.get('hits') or {}).get('total') or {}
     total = int(total_obj.get('value', 0))
     hits = (resp.get('hits') or {}).get('hits') or []
+    registry_names: frozenset[str] = frozenset()
+    if tab == 'mismatches':
+        from src.services.curation.new_class_terms import normalize_term
+
+        registry_names = frozenset(
+            normalize_term(c.class_name)
+            for c in get_class_registry().load().classes
+            if not c.deprecated
+        )
     items: list[dict[str, Any]] = []
     for h in hits:
-        item = serialize_item(h.get('_source') or {}, h.get('_id', ''))
+        src = h.get('_source') or {}
+        item = serialize_item(src, h.get('_id', ''))
         # Review-only extra on top of the shared wire item.
-        item['reason'] = req.reason
+        item['reason'] = (
+            review_queries.mismatch_reason(src, registry_names, req.reason)
+            if tab == 'mismatches'
+            else req.reason
+        )
         items.append(item)
     return {
         'total': int(total),
@@ -449,54 +476,6 @@ async def review_locate(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     rank = await _count({'bool': {'filter': [req.query, before]}})
     return {**out, 'in_queue': True, 'rank': rank, 'page': rank // page_size + 1}
-
-
-@router.get('/review/new_class_proposals/summary')
-async def review_new_class_summary(
-    opensearch: OpenSearchDep,
-    size: Annotated[int, Query(ge=1, le=1000)] = 100,
-    samples: Annotated[int, Query(ge=0, le=20)] = 5,
-) -> dict[str, Any]:
-    """The VLM's proposed new-class names across ``vlm_new_class_pending``
-    items: ``{total_pending, top_terms: [{label, count, sample_crop_ids}]}``,
-    most common first — the input for deciding which classes to add."""
-    await _ensure_indexes(opensearch)
-    terms: dict[str, Any] = {
-        'terms': {'field': 'vlm_proposed_class', 'size': size, 'min_doc_count': 1}
-    }
-    if samples:
-        terms['aggs'] = {'samples': {'top_hits': {'size': samples, '_source': ['crop_id']}}}
-    body = {
-        'size': 0,
-        'query': {
-            'bool': {
-                'filter': [{'term': {'class_source': 'vlm_new_class_pending'}}],
-                'must_not': [{'term': {'class_validated': True}}],
-            }
-        },
-        'aggs': {'proposed': terms},
-        'track_total_hits': True,
-    }
-    try:
-        resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    buckets = ((resp.get('aggregations') or {}).get('proposed') or {}).get('buckets') or []
-    return {
-        'total_pending': int(total),
-        'top_terms': [
-            {
-                'label': str(b.get('key', '')),
-                'count': int(b.get('doc_count', 0)),
-                'sample_crop_ids': [
-                    (h.get('_source') or {}).get('crop_id') or h.get('_id')
-                    for h in ((b.get('samples') or {}).get('hits') or {}).get('hits') or []
-                ],
-            }
-            for b in buckets
-        ],
-    }
 
 
 @router.post('/test_holdout/freeze', response_model=TestHoldoutFreezeResponse)

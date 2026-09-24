@@ -6,7 +6,9 @@
   cluster reads as purer than it is and gets promoted.
 - ``GET /clusters`` serves ``purity_tier`` and ``promotable`` per card
   from the same thresholds, plus the thresholds themselves and the
-  core-member similarity cut line.
+  core-member similarity cut line. ``promotable`` reads the label purity
+  (``label_purity``); the tier reads the card's geometry ``purity``
+  (DQ-M2, see ``test_cluster_purity_geometry.py``).
 """
 
 from __future__ import annotations
@@ -97,7 +99,10 @@ async def _cards(*buckets: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _bucket(cid: int, size: int, classes: list[tuple[str, int]]) -> dict[str, Any]:
+def _bucket(
+    cid: int, size: int, classes: list[tuple[str, int]], fits: int | None = None
+) -> dict[str, Any]:
+    """``fits`` of ``size`` members measured as nearest their own centroid."""
     return {
         'key': cid,
         'doc_count': size,
@@ -106,6 +111,8 @@ def _bucket(cid: int, size: int, classes: list[tuple[str, int]]) -> dict[str, An
         'validated': {'doc_count': 0},
         'subclusters': {'value': 0},
         'latest_update': {},
+        'geometry_measured': {'doc_count': size if fits is not None else 0},
+        'geometry_fits': {'doc_count': fits or 0},
     }
 
 
@@ -113,9 +120,9 @@ def _bucket(cid: int, size: int, classes: list[tuple[str, int]]) -> dict[str, An
 async def test_cluster_cards_serve_tier_promotable_and_thresholds() -> None:
     candidate_id = RESIDUAL_CLUSTER_ID_OFFSET + 1
     resp = await _cards(
-        _bucket(candidate_id, 10, [('a', 9), ('b', 1)]),  # 0.9 -> pure, promotable
-        _bucket(2, 10, [('a', 8), ('b', 2)]),  # 0.8 -> mixed (below the 0.85 gate)
-        _bucket(3, 10, [('a', 5), ('b', 5)]),  # 0.5 -> noisy
+        _bucket(candidate_id, 10, [('a', 9), ('b', 1)], fits=9),  # 0.9 -> pure, promotable
+        _bucket(2, 10, [('a', 8), ('b', 2)], fits=8),  # 0.8 -> mixed (below the 0.85 gate)
+        _bucket(3, 10, [('a', 5), ('b', 5)], fits=5),  # 0.5 -> noisy
     )
     cards = {c['cluster_id']: c for c in resp['items']}
     assert (cards[candidate_id]['purity_tier'], cards[candidate_id]['promotable']) == (
@@ -142,9 +149,10 @@ async def test_cluster_cards_never_mark_a_class_cluster_promotable() -> None:
     offset) are real auto-promote targets.
     """
     resp = await _cards(
-        _bucket(5, 20, [('a', 20)]),  # class cluster, purity 1.0, well above min_members
+        _bucket(5, 20, [('a', 20)], fits=20),  # class cluster, purity 1.0, above min_members
     )
     card = resp['items'][0]
     assert card['cluster_kind'] == 'class'
+    assert card['label_purity'] == 1.0
     assert card['purity_tier'] == 'pure'
     assert card['promotable'] is False

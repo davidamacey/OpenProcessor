@@ -21,7 +21,11 @@ from typing import Any
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
-from src.services.curation.class_sources import vlm_suggestion, vlm_suggestion_dismissed
+from src.services.curation.class_sources import (
+    class_confidence,
+    vlm_suggestion,
+    vlm_suggestion_dismissed,
+)
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
 from src.services.curation.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 
@@ -133,6 +137,16 @@ def _proposed_class(
     }
 
 
+def current_cluster_distance(src: dict[str, Any]) -> Any:
+    """The stored ``cluster_distance`` if it was measured against the item's
+    current cluster (``cluster_distance_cluster_id`` absent — written
+    before that field existed — or equal to ``cluster_id``), else ``None``."""
+    ref = src.get('cluster_distance_cluster_id')
+    if ref is not None and ref != src.get('cluster_id'):
+        return None
+    return src.get('cluster_distance')
+
+
 def _api_prefix() -> str:
     from src.config import get_curation_config
 
@@ -157,7 +171,9 @@ def serialize_item(
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
-    similarity = cluster_similarity(src.get('cluster_distance'))
+    distance = current_cluster_distance(src)
+    similarity = cluster_similarity(distance)
+    label_conf, label_conf_source = class_confidence(src)
     item: dict[str, Any] = {
         'id': crop_id,
         'crop_id': crop_id,
@@ -168,7 +184,13 @@ def serialize_item(
         'class_id': src.get('class_id'),
         'class_name': src.get('class_name', ''),
         'class_source': src.get('class_source', ''),
+        # The detector/classifier score, whatever wrote the label.
         'confidence': float(src.get('confidence') or 0.0),
+        # The confidence of the writer that set the label (VLM category
+        # mapped to a number, or the classifier score); null for human /
+        # merge / import labels.
+        'class_confidence': label_conf,
+        'class_confidence_source': label_conf_source,
         'label_source': src.get('label_source', ''),
         # Derived: either the class or the region was confirmed.
         'label_validated': bool(
@@ -184,6 +206,10 @@ def serialize_item(
         # Last VLM class attempt, and why it gave no class (null = it did).
         'vlm_class_attempted_at': src.get('vlm_class_attempted_at'),
         'vlm_class_empty_reason': src.get('vlm_class_empty_reason'),
+        # The VLM's class answer verbatim — for vlm_unmatched, the label it
+        # named outside the registry (class_name is whatever the item
+        # already carried).
+        'vlm_raw_class': src.get('vlm_raw_class'),
         # The VLM's unvalidated class choice (registry id + name), or a
         # proposed new class (name only). Null otherwise.
         'vlm_proposed_class_id': vlm_class_id,
@@ -197,9 +223,17 @@ def serialize_item(
         'needs_new_class_note': src.get('needs_new_class_note'),
         'cluster_id': src.get('cluster_id'),
         'cluster_kind': cluster_kind(src.get('cluster_id')),
-        'cluster_distance': src.get('cluster_distance'),
+        # Null when measured against a cluster the item has since left.
+        'cluster_distance': distance,
         'cluster_similarity': similarity,
         'cluster_is_core': None if similarity is None else similarity >= CORE_SIMILARITY_MIN,
+        # Cluster whose centroid is nearest this item (== cluster_id when
+        # it sits best where it is); null unless measured for its cluster.
+        'cluster_nearest_id': (
+            src.get('cluster_nearest_id')
+            if src.get('cluster_distance_cluster_id') == src.get('cluster_id')
+            else None
+        ),
         'cluster_subid': src.get('cluster_subid'),
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),
@@ -265,6 +299,7 @@ __all__ = [
     'SEARCH_EXTRA_KEYS',
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
+    'current_cluster_distance',
     'item_list_source_excludes',
     'item_source_excludes',
     'region_bbox_in_parent',

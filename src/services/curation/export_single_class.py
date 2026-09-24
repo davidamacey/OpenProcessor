@@ -61,6 +61,11 @@ from src.clients.curation_opensearch import ClassRegistry, get_class_registry
 from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.export_readiness import (
+    MANIFEST_GENERATION_KEY,
+    NothingToExportError,
+    items_index_generation,
+)
 from src.services.curation.export_single_class_rows import ImageMode, RowCollector, _FrameRow
 from src.services.curation.export_support import (
     _code_sha,
@@ -247,13 +252,14 @@ class SingleClassExportService:
         self._validate(image_mode)
         started = datetime.now(UTC)
 
-        resolved_dir = Path(export_dir) if export_dir else self._default_export_dir(started)
-        for split in ('train', 'val', 'test'):
-            (resolved_dir / 'images' / split).mkdir(parents=True, exist_ok=True)
-            (resolved_dir / 'labels' / split).mkdir(parents=True, exist_ok=True)
-
+        generation = await items_index_generation(self.opensearch, self.config.items_index)
         names = self._resolve_class_names()
         rows = await self.collector.collect(image_mode=image_mode, empty_bg_ratio=empty_bg_ratio)
+        if not rows:
+            raise NothingToExportError(
+                f'no item matches class ids {list(self.profile.class_ids)} '
+                f'with box_source={self.profile.box_source!r}; nothing to export'
+            )
         rng = random.Random(seed)  # nosec B311 - reproducible sampling, not cryptography
         rows = self._select(
             rows,
@@ -281,6 +287,11 @@ class SingleClassExportService:
                 background_images=n_bg,
                 hard_negative_images=n_hard_neg,
             )
+
+        resolved_dir = Path(export_dir) if export_dir else self._default_export_dir(started)
+        for split in ('train', 'val', 'test'):
+            (resolved_dir / 'images' / split).mkdir(parents=True, exist_ok=True)
+            (resolved_dir / 'labels' / split).mkdir(parents=True, exist_ok=True)
 
         splits = self._assign_splits(rows, seed=seed, skip_test_split=skip_test_split)
         counts, stratum_distribution, image_jobs = self._write_labels(
@@ -334,6 +345,7 @@ class SingleClassExportService:
             'stratum_count': len(stratum_distribution),
             'image_count': counts.train + counts.val + counts.test,
             'image_copy': image_copy_stats,
+            MANIFEST_GENERATION_KEY: generation,
         }
         manifest_path = resolved_dir / MANIFEST_FILENAME
         atomic_write_text(manifest_path, json.dumps(manifest, indent=2, sort_keys=True))
