@@ -230,9 +230,9 @@ export interface OpCrop {
    *  Drives the clarity slider. */
   blur_lap_ratio?: number | null;
   /** Raw v6 detection confidence (recorded even below the 0.75 floor). */
-  v6_raw_confidence?: number | null;
+  classifier_raw_confidence?: number | null;
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
-  coco_proposal_name?: string | null;
+  proposal_name?: string | null;
   // -- Curation scores (Phase 3 review-queue strategies, 2026-09) --------
   // Provenance quad mirroring the region_detector/region_detector_version
   // pattern (docs/curation-strategy-plan-2026-09.md §4). `mistakenness`
@@ -302,22 +302,21 @@ export interface OpStats {
   }>;
 }
 
+/** `GET {API_PREFIX}/health`. `degraded` means a non-critical
+ *  dependency (e.g. the VLM) is down; labeling still works. */
 export interface OpHealth {
-  ok: boolean;
-  components: {
-    triton: 'ok' | 'degraded' | 'down';
-    opensearch: 'ok' | 'degraded' | 'down';
-    gemma_openwebui: 'ok' | 'degraded' | 'down';
-    class_registry_sha: string | null;
-  };
-  timestamp: string;
+  status: 'ok' | 'degraded' | 'down';
+  triton?: { reachable: boolean; detail?: string };
+  opensearch?: { reachable: boolean; indexes?: Record<string, boolean> };
+  vlm?: { reachable: boolean; model?: string | null };
+  registry?: { path?: string; exists?: boolean; mtime?: string | null };
 }
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation
 // (3 live rows, functionally identical to the `atypicality` sort already
 // offered via the strategy bar) — its backend /curation/review/outliers query
 // is untouched, but nothing in the frontend calls it anymore, so the
-// literal is gone from this union too. 'mismatches' / 'gemma_low_conf' /
+// literal is gone from this union too. 'mismatches' / 'vlm_low_conf' /
 // 'primary_low_conf' are no longer top-level UI tabs but still real
 // values here — they're driven by the All-tab preset chips instead (see
 // $lib/reviewTabs.ts's resolveEffectiveTab).
@@ -331,7 +330,7 @@ export type SlotReviewTab = `slot:${string}`;
 export type CoreReviewTab =
   | 'all'
   | 'mismatches'
-  | 'gemma_low_conf'
+  | 'vlm_low_conf'
   | 'uncertainty'
   | 'model_disagreements'
   | 'primary_low_conf'
@@ -451,8 +450,8 @@ export interface CropFilter {
   max_rank?: number | null;
   /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
   min_blur_ratio?: number | null;
-  /** Mine the low-confidence pool: v6_raw_confidence < this OR no v6 box. */
-  v6_conf_lt?: number | null;
+  /** Mine the low-confidence pool: classifier_raw_confidence < this OR no v6 box. */
+  classifier_conf_lt?: number | null;
 }
 
 export interface ClusterFilter {

@@ -100,7 +100,7 @@ export interface TrainingCohortsCapability {
  * Not a slot capability — hangs off a class, so a class with no
  * registered slot at all still has something to train on. Rides
  * entirely on `GET /curation/crops` (already accepts `class_id`,
- * `label_validated`, `v6_conf_lt`, and has a real response model) plus
+ * `label_validated`, `classifier_conf_lt`, and has a real response model) plus
  * the review surface's `model_disagreements` cohort, already
  * class-filterable. **Zero backend change.**
  */
@@ -136,7 +136,7 @@ export const CORE_COHORTS: CohortSpec[] = [
     query: {
       kind: 'endpoint',
       path: '/crops',
-      params: { class_id: '{classId}', v6_conf_lt: 0.5 },
+      params: { class_id: '{classId}', classifier_conf_lt: 0.5 },
     },
     rowKind: 'crop',
     reviewTarget: 'all',

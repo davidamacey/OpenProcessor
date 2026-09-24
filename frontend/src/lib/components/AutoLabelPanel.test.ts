@@ -33,8 +33,8 @@ describe('AutoLabelPanel.svelte', () => {
   it('the six pre-existing start params survive verbatim', () => {
     for (const key of [
       'train_clusters:',
-      'gemma_concurrency:',
-      'max_gemma_crops:',
+      'vlm_concurrency:',
+      'max_vlm_crops:',
       'recluster_unvalidated:',
       'gate_max_rank:',
       'gate_min_blur_ratio:',

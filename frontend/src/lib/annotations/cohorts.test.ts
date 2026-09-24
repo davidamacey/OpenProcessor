@@ -29,14 +29,14 @@ describe('compileCohortQuery', () => {
       {
         kind: 'endpoint',
         path: '/crops',
-        params: { label_validated: true, v6_conf_lt: 0.5 },
+        params: { label_validated: true, classifier_conf_lt: 0.5 },
       },
       { classId: 1, className: 'x' },
     );
     expect(compiled).toEqual({
       kind: 'endpoint',
       path: '/crops',
-      params: { label_validated: true, v6_conf_lt: 0.5 },
+      params: { label_validated: true, classifier_conf_lt: 0.5 },
     });
   });
 

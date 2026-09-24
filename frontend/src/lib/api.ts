@@ -900,11 +900,11 @@ export interface DatasetStats {
   labeled: {
     by_human: number;
     by_vlm: number;
-    by_v6: number;
-    by_yolo11_proposal: number;
+    by_classifier: number;
+    by_proposal: number;
     other: number;
   };
-  plates: {
+  regions: {
     /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  plate" count (matches the plate cluster view). */
     boxed?: number;
@@ -913,8 +913,8 @@ export interface DatasetStats {
     /** Sum of region_detector credit — includes rejected/failed attempts,
      *  so it OVERSTATES real plates. Kept for back-compat; not the headline. */
     total_detected: number;
-    by_lpr: number;
-    by_sam3: number;
+    by_detector: number;
+    by_segmenter: number;
     /** Legacy alias for ``by_human_drew``. */
     by_human: number;
     /** Crops where the operator drew a fresh plate bbox from scratch. */
@@ -922,7 +922,7 @@ export interface DatasetStats {
     /** Crops whose plate was verified by a human (Confirm Plate button). */
     verified_by_human?: number;
     /** Crops whose plate was verified by Gemma (auto-verify). */
-    verified_by_gemma?: number;
+    verified_by_vlm?: number;
     /**
      * Union: any plate the operator touched — drew the bbox OR
      * confirmed an AI-proposed one. The dashboard surfaces this as
@@ -1159,8 +1159,8 @@ type RawCrop = {
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
   blur_lap_ratio?: number | null;
-  v6_raw_confidence?: number | null;
-  coco_proposal_name?: string | null;
+  classifier_raw_confidence?: number | null;
+  proposal_name?: string | null;
   // Curation scores (Phase 3, docs/curation-strategy-plan-2026-09.md §4).
   // Optional/forward-tolerant: an un-backfilled pool just omits these.
   mistakenness_score?: number | null;
@@ -1195,8 +1195,8 @@ function mapRawCrop(c: RawCrop): OpCrop {
     crop_rank_in_image: c.crop_rank_in_image ?? null,
     crop_area_norm: c.crop_area_norm ?? null,
     blur_lap_ratio: c.blur_lap_ratio ?? null,
-    v6_raw_confidence: c.v6_raw_confidence ?? null,
-    coco_proposal_name: c.coco_proposal_name ?? null,
+    classifier_raw_confidence: c.classifier_raw_confidence ?? null,
+    proposal_name: c.proposal_name ?? null,
     mistakenness_score: c.mistakenness_score ?? null,
     mistakenness_method: c.mistakenness_method ?? null,
     mistakenness_version: c.mistakenness_version ?? null,
@@ -1222,7 +1222,7 @@ export async function getCluster(
     classSource?: string | null;
     maxRank?: number | null;
     minBlurRatio?: number | null;
-    v6ConfLt?: number | null;
+    classifierConfLt?: number | null;
     /**
      * Forwarded verbatim to `/curation/crops?order=`. Only `'outliers'` is
      * special-cased server-side today (op_crops.py `order` query param —
@@ -1273,7 +1273,7 @@ export async function getCluster(
   if (opts.classSource) cropQuery.class_source = opts.classSource;
   if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
   if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
-  if (opts.v6ConfLt != null) cropQuery.v6_conf_lt = opts.v6ConfLt;
+  if (opts.classifierConfLt != null) cropQuery.classifier_conf_lt = opts.classifierConfLt;
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
   const [cropPage, clustersResp] = await Promise.all([
@@ -1549,7 +1549,7 @@ export async function runGemmaOnCluster(
   // {API_PREFIX}/vlm/label_batch takes {crop_ids: [...]} (max 64) — the
   // backend renamed the path segment gemma → vlm when it swapped Gemma
   // for a pluggable VLM abstraction. The JSON field names (gemma_*) and
-  // the gemma_low_conf review-tab id are frozen wire contract and did
+  // the vlm_low_conf review-tab id are frozen wire contract and did
   // NOT move. Fetch the
   // unvalidated crops in this cluster first, then POST in chunks of 64.
   type CropPage = { crops: Array<{ crop_id: string }> };
@@ -2330,10 +2330,10 @@ export interface AutoLabelStartParams {
   train_clusters?: boolean;
   promote_min_purity?: number;
   promote_min_members?: number;
-  gemma_batch_size?: number;
-  gemma_concurrency?: number;
-  max_gemma_crops?: number;
-  v6_confidence_skip_gemma?: number;
+  vlm_batch_size?: number;
+  vlm_concurrency?: number;
+  max_vlm_crops?: number;
+  classifier_confidence_skip_vlm?: number;
   /** When true, broaden the residual AHC pool to include items already
    *  in candidate clusters so smaller candidates can merge into bigger
    *  ones. Default false — only fresh / class-bucketed items are

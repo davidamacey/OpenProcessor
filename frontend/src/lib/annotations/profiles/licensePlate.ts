@@ -296,7 +296,7 @@ export const licensePlateSlot: SlotSpec = {
   },
 
   stats: {
-    key: 'plates',
+    key: 'regions',
     panelTitle: 'Plate detections',
     coverageTitle: 'Plate coverage',
   },

@@ -1133,7 +1133,7 @@ describe('startAutoLabel', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await startAutoLabel({ train_clusters: true, gemma_concurrency: 16 });
+    await startAutoLabel({ train_clusters: true, vlm_concurrency: 16 });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('class_id');

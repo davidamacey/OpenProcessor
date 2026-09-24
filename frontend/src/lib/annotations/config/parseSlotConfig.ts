@@ -1408,7 +1408,7 @@ function defaultParseContext(): Required<ParseContext> {
       'model_disagreements',
       'coco_blind_spots',
       'mismatches',
-      'gemma_low_conf',
+      'vlm_low_conf',
       'primary_low_conf',
     ]),
     takenEndpointIds: new Set([

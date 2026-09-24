@@ -8,7 +8,7 @@
    * final stage-by-stage summary once the run lands.
    *
    * The pipeline (cluster_id_normalize → AHC residuals → auto_promote
-   * → gemma → finalize) is the same one the cluster-refresh daemon runs, so
+   * → vlm → finalize) is the same one the cluster-refresh daemon runs, so
    * kicking it off here is functionally identical to the existing cron
    * path — just with operator visibility. The previous CLIP-prototype
    * labeling stage was removed because a single mean centroid couldn't
@@ -90,13 +90,13 @@
 
   // Human-readable label per stage. Order matters — pipeline stages move
   // forward through this list. The percent indicator only renders for
-  // 'gemma' because that's the only stage with a meaningful total.
+  // 'vlm' because that's the only stage with a meaningful total.
   const STAGE_LABEL: Record<string, string> = {
     '': 'preparing…',
     cluster_id_normalize: 'aligning cluster_id with class_id',
     cluster_residuals: 'clustering residual pool (AHC)',
     auto_promote: 'promoting high-purity clusters',
-    gemma: 'Gemma sweep over unvalidated crops',
+    vlm: 'VLM sweep over unvalidated crops',
     finalize: 'final normalization and accounting',
   };
 
@@ -104,7 +104,7 @@
     'cluster_id_normalize',
     'cluster_residuals',
     'auto_promote',
-    'gemma',
+    'vlm',
     'finalize',
   ];
 
@@ -145,10 +145,10 @@
     try {
       job = await startAutoLabel({
         train_clusters: true,
-        gemma_concurrency: 16,
+        vlm_concurrency: 16,
         // 0 = process every unvalidated crop. Operators can ramp down
         // later if they want to time-box a run.
-        max_gemma_crops: 0,
+        max_vlm_crops: 0,
         recluster_unvalidated: mergeCandidates,
         gate_max_rank: clusterScope === 0 ? null : clusterScope,
         gate_min_blur_ratio: clusterBlur > 0 ? clusterBlur : null,
