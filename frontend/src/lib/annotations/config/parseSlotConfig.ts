@@ -814,6 +814,12 @@ function parseLifecycle(
     );
     return null;
   }
+  if (raw.boxCorrectField !== undefined && !isWireField(raw.boxCorrectField)) {
+    errors.push(
+      `slot "${key}": capabilities.lifecycle.boxCorrectField is invalid — skipped`,
+    );
+    return null;
+  }
   const states = parseStates(raw.states, key, errors);
   if (states === null) return null;
   const values = new Set(states.map((s) => s.value));
@@ -849,6 +855,8 @@ function parseLifecycle(
     out.rejectionReasonField = raw.rejectionReasonField as string;
   if (raw.labelSourceField !== undefined)
     out.labelSourceField = raw.labelSourceField as string;
+  if (raw.boxCorrectField !== undefined)
+    out.boxCorrectField = raw.boxCorrectField as string;
   if (raw.falsePositiveState !== undefined)
     out.falsePositiveState = raw.falsePositiveState as string;
   return out;

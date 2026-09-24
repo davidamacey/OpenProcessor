@@ -94,6 +94,7 @@ describe('savePlateBbox — no redundant write', () => {
         validated: true,
         autoConfirmed: null,
         rejectionReason: null,
+        boxCorrect: null,
       },
     });
     gallery.platePager.items = [fakePlateItem('c1')];
@@ -130,6 +131,7 @@ describe('savePlateBbox — no redundant write', () => {
         validated: null,
         autoConfirmed: null,
         rejectionReason: null,
+        boxCorrect: null,
       },
     });
     gallery.platePager.items = [fakePlateItem('c2')];

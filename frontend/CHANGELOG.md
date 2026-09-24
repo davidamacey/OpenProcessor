@@ -8,6 +8,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adopted OpenProcessor `main` 840beb8 (rejection-reason vocabulary +
+  review `filter_specs`, contracts synced from 1bea18b):
+  - **Labeled rejection reasons.** `GET {API_PREFIX}/regions/vocabulary`
+    gained `rejection_reasons` (`{id, label, kind, match, label_template}`)
+    — `regionVocabularyStore.rejectionReasonLabel` now resolves an exact
+    match first, then a longest-prefix match (`label_template`'s
+    `{detail}` filled from the rest of the stored value, e.g.
+    `sanity_reject:degenerate_zero_size` → "Box failed the geometry check
+    (degenerate_zero_size)"), and falls back to the raw stored value
+    verbatim (never titlecased) when nothing matches. The old
+    client-side "Sanity check failed:" prefix and titlecase placeholder
+    for rejection reasons are gone. New `rejectionReasonKind(id)` drives
+    styling everywhere a rejected candidate renders (`/review`'s inline
+    slot panel, `SlotCard`, `CropMetaPanel`): `model_verdict` reads red
+    ("the model rejected it"), `automatic` reads amber (a geometry
+    gate), and `needs_human` reads neutral zinc and is never worded as a
+    rejection ("candidate · needs review" / "Needs review", not
+    "rejected"/"Rejection").
+  - **`region_bbox_correct`.** New `LifecycleCapability.boxCorrectField`
+    (declared on `licensePlateSlot`, read by `readSlot` into
+    `SlotData.lifecycle.boxCorrect`) — the verifier's own box-correctness
+    verdict, `false` being the actual "model said wrong box" signal.
+    Folded into the existing Validation/status row as a "model: box
+    wrong" chip in `/review`'s inline panel and `CropMetaPanel`, not a
+    new row.
+  - **Generic served-enum review filter bar.** `GET {API_PREFIX}/review/tabs`
+    entries gained `filter_specs` (`{param, kind: 'enum', label, options}`)
+    — `/review` renders one `<select>` per entry generically (no
+    tab/param-specific markup), sends the picked value as its own query
+    param on both `GET {API_PREFIX}/review/{tab}` and its `/locate` route,
+    resets on tab change, and persists in the URL like `?preset=` does.
+    The Plates tab's `region_status` (all / detected only /
+    verifier-rejected candidates only) is the first live spec.
+    `reviewTabsVocabularyStore` gained `filterSpecsFor`.
+  - **Per-item reason wording fix.** A slot-tab item's own
+    `region_rejection_reason`, when present, now wins over the generic
+    per-item `reason` string in `/review`'s Reason row — the backend's
+    `reason` always reads "verifier rejected this candidate (…) — needs
+    human review" even for a `needs_human` item with no actual verdict,
+    which is wrong wording for that case. The generic `reason` still
+    renders as before on core tabs (e.g. the Mismatches preset) that
+    don't carry a `region_rejection_reason` at all.
 - Adopted OpenProcessor `main` f7171cc (cutover/dq-region — region verdict
   integrity: null≠reject, rejected candidates kept + reviewable,
   auto-confirm split from human validation, region-text rules):

@@ -2050,6 +2050,28 @@ export interface RegionTextRules {
   invalid_reasons: string[];
 }
 
+/** What kind of thing rejected a region candidate (openprocessor fix #29,
+ *  2026-09-24) — drives both the label lookup and the styling: a
+ *  `model_verdict` is the verifier judging the box wrong, `automatic` is
+ *  a geometry sanity gate, and `needs_human` means no verdict was given
+ *  at all — it must never be worded as a rejection. */
+export type RejectionReasonKind = 'model_verdict' | 'automatic' | 'needs_human';
+
+/** One pipeline-written `region_rejection_reason` value
+ *  (`GET {API_PREFIX}/regions/vocabulary`, openprocessor fix #29). `match: 'exact'`
+ *  entries match the stored value verbatim; `match: 'prefix'` entries
+ *  match a stored-value prefix (e.g. `sanity_reject:`) with
+ *  `label_template`'s `{detail}` filled from whatever follows the
+ *  prefix. A stored value matching nothing here (older free-text human
+ *  reasons) renders verbatim — see `regionVocabularyStore.rejectionReasonLabel`. */
+export interface RejectionReasonEntry {
+  id: string;
+  label: string;
+  kind: RejectionReasonKind;
+  match: 'exact' | 'prefix';
+  label_template: string | null;
+}
+
 export interface RegionVocabularyResponse {
   detectors: RegionVocabularyEntry[];
   region_sources: RegionVocabularyEntry[];
@@ -2063,6 +2085,8 @@ export interface RegionVocabularyResponse {
   /** The active profile's region-text validity rules, or `null` without
    *  a region profile. */
   text_rules: RegionTextRules | null;
+  /** Labeled `region_rejection_reason` vocabulary (openprocessor fix #29). */
+  rejection_reasons: RejectionReasonEntry[];
 }
 
 /** The deployment-configured detector/segmenter/verifier vocabulary
@@ -2083,7 +2107,28 @@ export async function getRegionVocabulary(
     chain_actors: res.chain_actors ?? [],
     text_choices: res.text_choices ?? [],
     text_rules: res.text_rules ?? null,
+    rejection_reasons: res.rejection_reasons ?? [],
   };
+}
+
+/** One `value`/`label` option of a `ReviewFilterSpec` (840beb8 adoption). */
+export interface ReviewFilterOption {
+  value: string;
+  label: string;
+}
+
+/** Self-describing spec for one of a review tab's filters with a fixed
+ *  value set (`GET {API_PREFIX}/review/tabs`, 840beb8 adoption) — e.g. the
+ *  Plates tab's `region_status` (all / detected only / verifier-rejected
+ *  candidates only). `param` is the query parameter to send on both
+ *  `GET {API_PREFIX}/review/{tab}` and its `/locate` route; an unknown value 400s.
+ *  The frontend renders one `<select>` per entry generically — no
+ *  tab-specific code reads `param` by name. */
+export interface ReviewFilterSpec {
+  param: string;
+  kind: 'enum';
+  label: string;
+  options: ReviewFilterOption[];
 }
 
 /** One entry of `GET {API_PREFIX}/review/tabs` (W0 finding m9) — the served
@@ -2101,6 +2146,10 @@ export interface ReviewTabVocabularyEntry {
   /** Values the tab applies when a filter is omitted, e.g.
    *  `{max_rank: 2}` for the two primary-subject tabs. */
   filter_defaults?: Record<string, unknown>;
+  /** Self-describing enum filters this tab honours (840beb8 adoption) —
+   *  empty for a tab with none, or on an older backend that doesn't
+   *  serve the field yet. */
+  filter_specs: ReviewFilterSpec[];
 }
 
 /** Every review tab's served `id`/`label`/`description`, in `KNOWN_TABS`
@@ -2130,6 +2179,28 @@ export async function getReviewTabsVocabulary(
         t.filter_defaults && typeof t.filter_defaults === 'object'
           ? t.filter_defaults
           : undefined,
+      filter_specs: Array.isArray(t.filter_specs)
+        ? t.filter_specs
+            .filter(
+              (s): s is ReviewFilterSpec =>
+                !!s &&
+                typeof s.param === 'string' &&
+                s.kind === 'enum' &&
+                typeof s.label === 'string' &&
+                Array.isArray(s.options),
+            )
+            .map((s) => ({
+              param: s.param,
+              kind: 'enum' as const,
+              label: s.label,
+              options: s.options
+                .filter(
+                  (o): o is ReviewFilterOption =>
+                    !!o && typeof o.value === 'string' && typeof o.label === 'string',
+                )
+                .map((o) => ({ value: o.value, label: o.label })),
+            }))
+        : [],
     }));
 }
 

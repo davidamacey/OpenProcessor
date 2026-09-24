@@ -229,6 +229,11 @@ export interface LifecycleCapability {
    *  Plates: `region_auto_confirmed`. */
   autoConfirmedField?: WireField;
   rejectionReasonField?: WireField;
+  /** Boolean "the verifier judged this box correct" (840beb8 adoption)
+   *  — `false` is the actual "model said wrong box" signal distinct from
+   *  a rejection reason's `kind`. `null`/absent means no verdict was
+   *  given. Plates: `region_bbox_correct`. */
+  boxCorrectField?: WireField;
   /** Who made a human write (e.g. `region_label_source`). Sent as
    *  `'human'` on batch status writes when declared. */
   labelSourceField?: WireField;
@@ -380,6 +385,9 @@ export interface SlotData {
      *  human — see `LifecycleCapability.autoConfirmedField`. */
     autoConfirmed: boolean | null;
     rejectionReason: string | null;
+    /** The verifier's own box-correctness verdict — see
+     *  `LifecycleCapability.boxCorrectField`. */
+    boxCorrect: boolean | null;
   };
 }
 

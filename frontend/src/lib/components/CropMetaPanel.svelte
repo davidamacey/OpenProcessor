@@ -251,7 +251,7 @@
              machine-accepted but not yet reviewed). Neither reuses
              region_verified, whose meaning ("a verification pass ran")
              is now a third, distinct thing. -->
-        {#if data?.lifecycle?.validated != null || data?.lifecycle?.autoConfirmed != null}
+        {#if data?.lifecycle?.validated != null || data?.lifecycle?.autoConfirmed != null || data?.lifecycle?.boxCorrect != null}
           <dt class="text-zinc-500">Validation</dt>
           <dd class="flex flex-wrap items-center gap-1.5">
             {#if data.lifecycle.validated}
@@ -266,8 +266,22 @@
               >
                 auto-confirmed (unreviewed)
               </span>
-            {:else}
+            {:else if data.lifecycle.validated != null || data.lifecycle.autoConfirmed != null}
               <span class="text-zinc-500">not yet reviewed</span>
+            {/if}
+            <!-- 840beb8 adoption: region_bbox_correct is the verifier's
+                 own box-correctness verdict — false is the actual "model
+                 said wrong box" signal, distinct from a rejection
+                 reason's kind (which can be an automatic geometry gate
+                 or "needs human" with no model verdict at all). Folded
+                 into this row rather than a new one (mind the review
+                 viewport budget). -->
+            {#if data.lifecycle.boxCorrect === false}
+              <span
+                class="rounded border border-red-500/40 bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200"
+              >
+                model: box wrong
+              </span>
             {/if}
           </dd>
         {/if}
@@ -396,8 +410,24 @@
         {/if}
 
         {#if data?.lifecycle?.rejectionReason}
-          <dt class="text-zinc-500">Rejection</dt>
-          <dd class="text-zinc-300">
+          {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
+            data.lifecycle.rejectionReason,
+          )}
+          <!-- 840beb8 adoption: style/label by the served kind —
+               model_verdict (the verifier judged the box wrong) reads as
+               a rejection, automatic (a geometry gate) is neutral/amber,
+               needs_human (no verdict given) must never be worded as a
+               rejection. -->
+          <dt class="text-zinc-500">
+            {rejectionKind === 'needs_human' ? 'Needs review' : 'Rejection'}
+          </dt>
+          <dd
+            class={rejectionKind === 'model_verdict'
+              ? 'text-red-300'
+              : rejectionKind === 'needs_human'
+                ? 'text-zinc-300'
+                : 'text-amber-300'}
+          >
             {regionVocabularyStore.rejectionReasonLabel(data.lifecycle.rejectionReason)}
           </dd>
         {/if}

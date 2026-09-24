@@ -19,6 +19,7 @@ function resetStore(): void {
   regionVocabularyStore.detectors = [];
   regionVocabularyStore.regionSources = [];
   regionVocabularyStore.chainActors = [];
+  regionVocabularyStore.rejectionReasons = [];
   regionVocabularyStore.loaded = false;
 }
 
@@ -104,5 +105,111 @@ describe('regionVocabularyStore.init', () => {
     await regionVocabularyStore.init();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// openprocessor fix #29 / 840beb8 adoption: region_rejection_reason gets a
+// real labeled vocabulary — exact matches, prefix matches (with
+// {detail} substitution), and an unmatched value rendering verbatim
+// (never titlecased — that placeholder only ever covered text_choices/
+// invalid_reasons, which still have no served labels).
+const REJECTION_PAYLOAD = {
+  ...PAYLOAD,
+  rejection_reasons: [
+    {
+      id: 'region_visible_elsewhere',
+      label: 'Verifier: the box is wrong (region is elsewhere)',
+      kind: 'model_verdict',
+      match: 'exact',
+      label_template: null,
+    },
+    {
+      id: 'sanity_reject:',
+      label: 'Box failed the geometry check',
+      kind: 'automatic',
+      match: 'prefix',
+      label_template: 'Box failed the geometry check ({detail})',
+    },
+    {
+      id: 'verifier_no_verdict',
+      label: 'Verifier gave no verdict — needs human review',
+      kind: 'needs_human',
+      match: 'exact',
+      label_template: null,
+    },
+  ],
+};
+
+describe('regionVocabularyStore.rejectionReasonLabel / rejectionReasonKind', () => {
+  it('resolves an exact match to its served label and kind', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, REJECTION_PAYLOAD)),
+    );
+    await regionVocabularyStore.init();
+
+    expect(regionVocabularyStore.rejectionReasonLabel('region_visible_elsewhere')).toBe(
+      'Verifier: the box is wrong (region is elsewhere)',
+    );
+    expect(regionVocabularyStore.rejectionReasonKind('region_visible_elsewhere')).toBe(
+      'model_verdict',
+    );
+  });
+
+  it('resolves a prefix match, filling {detail} from the rest of the stored value', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, REJECTION_PAYLOAD)),
+    );
+    await regionVocabularyStore.init();
+
+    expect(
+      regionVocabularyStore.rejectionReasonLabel('sanity_reject:degenerate_zero_size'),
+    ).toBe('Box failed the geometry check (degenerate_zero_size)');
+    expect(
+      regionVocabularyStore.rejectionReasonKind('sanity_reject:degenerate_zero_size'),
+    ).toBe('automatic');
+  });
+
+  it('a needs_human reason resolves without ever being worded as a rejection', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, REJECTION_PAYLOAD)),
+    );
+    await regionVocabularyStore.init();
+
+    const label = regionVocabularyStore.rejectionReasonLabel('verifier_no_verdict');
+    expect(label).toBe('Verifier gave no verdict — needs human review');
+    expect(label.toLowerCase()).not.toContain('rejected');
+    expect(regionVocabularyStore.rejectionReasonKind('verifier_no_verdict')).toBe(
+      'needs_human',
+    );
+  });
+
+  it('an unmatched value renders verbatim (not titlecased) and kind is null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, REJECTION_PAYLOAD)),
+    );
+    await regionVocabularyStore.init();
+
+    // Older free-text human reason, and the documented bare-gate-name
+    // case (an older row with no `sanity_reject:` prefix at all).
+    expect(regionVocabularyStore.rejectionReasonLabel('degenerate_zero_size')).toBe(
+      'degenerate_zero_size',
+    );
+    expect(regionVocabularyStore.rejectionReasonKind('degenerate_zero_size')).toBeNull();
+  });
+
+  it('absent id renders "—" for the label and null for the kind', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, REJECTION_PAYLOAD)),
+    );
+    await regionVocabularyStore.init();
+
+    expect(regionVocabularyStore.rejectionReasonLabel(null)).toBe('—');
+    expect(regionVocabularyStore.rejectionReasonKind(null)).toBeNull();
+    expect(regionVocabularyStore.rejectionReasonKind(undefined)).toBeNull();
   });
 });

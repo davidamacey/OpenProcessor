@@ -19,15 +19,17 @@ import {
   type RegionTextRules,
   type RegionVocabularyEntry,
   type RegionVocabularyRole,
+  type RejectionReasonEntry,
+  type RejectionReasonKind,
 } from '$lib/api';
 
 /** Titlecases a `snake_case` id as a display-label placeholder for a
  *  vocabulary the backend doesn't serve labels for yet (dq-region
- *  `text_choices`/`invalid_reasons` today; rejection reasons until
- *  openprocessor fix #29 lands `region_rejection_reason` labels on
- *  `GET {API_PREFIX}/regions/vocabulary`). Replace the call site with the
- *  served label the moment the backend adds one — this is a stand-in,
- *  not a hand-maintained label table. */
+ *  `text_choices`/`invalid_reasons` — `region_rejection_reason` got its
+ *  own labeled vocabulary in openprocessor fix #29, see
+ *  `rejectionReasonLabel` below, so this no longer covers it). Replace
+ *  the call site with the served label the moment the backend adds one
+ *  — this is a stand-in, not a hand-maintained label table. */
 function titlecaseId(id: string): string {
   return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -40,6 +42,9 @@ class RegionVocabularyStore {
   textChoices = $state<string[]>([]);
   /** The active profile's region-text validity rules, or `null`. */
   textRules = $state<RegionTextRules | null>(null);
+  /** Labeled `region_rejection_reason` vocabulary (openprocessor fix #29,
+   *  840beb8 adoption). */
+  rejectionReasons = $state<RejectionReasonEntry[]>([]);
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
 
@@ -70,12 +75,14 @@ class RegionVocabularyStore {
         this.chainActors = res.chain_actors;
         this.textChoices = res.text_choices;
         this.textRules = res.text_rules;
+        this.rejectionReasons = res.rejection_reasons;
       } catch {
         this.detectors = [];
         this.regionSources = [];
         this.chainActors = [];
         this.textChoices = [];
         this.textRules = null;
+        this.rejectionReasons = [];
       } finally {
         this.loaded = true;
         this.#inflight = null;
@@ -111,24 +118,55 @@ class RegionVocabularyStore {
     return titlecaseId(id);
   }
 
+  /** Resolves a stored `region_rejection_reason` value against the
+   *  served vocabulary — an exact match first, then the longest matching
+   *  `match: 'prefix'` entry (so `sanity_reject:<gate>` resolves through
+   *  its `sanity_reject:` entry), `null` when nothing matches (an older
+   *  free-text human reason). */
+  #resolveRejectionReason(id: string): RejectionReasonEntry | null {
+    const exact = this.rejectionReasons.find((e) => e.match === 'exact' && e.id === id);
+    if (exact) return exact;
+    const prefixMatches = this.rejectionReasons.filter(
+      (e) => e.match === 'prefix' && id.startsWith(e.id),
+    );
+    if (prefixMatches.length === 0) return null;
+    // Longest prefix wins in the (currently hypothetical) case of two
+    // overlapping prefix entries.
+    return prefixMatches.reduce((best, e) => (e.id.length > best.id.length ? e : best));
+  }
+
   /**
-   * Human label for a `region_rejection_reason` id (dq-region,
-   * 2026-09-24) — `sanity_reject:<gate>`, `region_visible_elsewhere`,
-   * `verifier_no_verdict`, or an older free-text reason. `openprocessor`
-   * fix #29 will add labeled entries to `GET {API_PREFIX}/regions/vocabulary`
-   * (with a flag distinguishing a model verdict from "needs human,
-   * verdict inconclusive"); until then this renders the raw served id
-   * titlecased, verbatim reason text unchanged — deliberately does NOT
-   * infer "wrong box" from `verify_rejected` alone, since
-   * `verifier_no_verdict` means the opposite (needs human review, not a
-   * model rejection). That distinction is `region_bbox_correct`
-   * (`false` = model said wrong box), not this reason id. */
+   * Human label for a `region_rejection_reason` id (dq-region 2026-09-24,
+   * labeled by openprocessor fix #29 / 840beb8) — `sanity_reject:<gate>`,
+   * `region_visible_elsewhere`, `verifier_no_verdict`, or an older
+   * free-text reason. Resolves an exact match first, then a prefix match
+   * (`label_template`'s `{detail}` filled from whatever follows the
+   * matched prefix), and falls back to the raw stored value verbatim —
+   * never titlecased — when nothing in the served vocabulary matches.
+   * Deliberately does NOT infer "wrong box" from `verify_rejected` alone,
+   * since `verifier_no_verdict` means the opposite (needs human review,
+   * not a model rejection) — see `rejectionReasonKind` and
+   * `region_bbox_correct` (`false` = model said wrong box) for that
+   * distinction. */
   rejectionReasonLabel(id: string | null | undefined): string {
     if (!id) return '—';
-    if (id.startsWith('sanity_reject:')) {
-      return `Sanity check failed: ${titlecaseId(id.slice('sanity_reject:'.length))}`;
+    const entry = this.#resolveRejectionReason(id);
+    if (!entry) return id;
+    if (entry.match === 'prefix' && entry.label_template) {
+      const detail = id.slice(entry.id.length);
+      return entry.label_template.replace('{detail}', detail);
     }
-    return titlecaseId(id);
+    return entry.label;
+  }
+
+  /** The served `kind` for a `region_rejection_reason` id — `null` when
+   *  the value isn't in the served vocabulary (an older free-text human
+   *  reason). Drives styling: `model_verdict` (the verifier judged the
+   *  box wrong) vs `automatic` (a geometry gate) vs `needs_human` (no
+   *  verdict at all — must never be worded as a rejection). */
+  rejectionReasonKind(id: string | null | undefined): RejectionReasonKind | null {
+    if (!id) return null;
+    return this.#resolveRejectionReason(id)?.kind ?? null;
   }
 }
 

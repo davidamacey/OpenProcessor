@@ -37,6 +37,7 @@
   import { readSlot } from '$lib/annotations/readSlot';
   import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import type { SlotSpec, XYXY } from '$lib/annotations/types';
+  import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
   interface Props {
     crop: PlateBrowseItem;
@@ -198,9 +199,25 @@
         false pos
       </span>
     {:else if isRejectedCandidate}
+      {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
+        data.lifecycle?.rejectionReason,
+      )}
+      <!-- 840beb8 adoption: badge color follows the served kind —
+           model_verdict (verifier rejected) reads red, needs_human (no
+           verdict) reads neutral zinc rather than a rejection color,
+           automatic (geometry gate) keeps the original amber. Tooltip is
+           the served label, not the raw id. -->
       <span
-        class="absolute top-1 right-1 rounded border border-amber-500/60 bg-amber-600/85 px-1 py-0.5 text-[9px] font-semibold text-white"
-        title={data.lifecycle?.rejectionReason ?? undefined}
+        class={`absolute top-1 right-1 rounded border px-1 py-0.5 text-[9px] font-semibold text-white ${
+          rejectionKind === 'model_verdict'
+            ? 'border-red-500/60 bg-red-600/85'
+            : rejectionKind === 'needs_human'
+              ? 'border-zinc-500/60 bg-zinc-600/85'
+              : 'border-amber-500/60 bg-amber-600/85'
+        }`}
+        title={data.lifecycle?.rejectionReason
+          ? regionVocabularyStore.rejectionReasonLabel(data.lifecycle.rejectionReason)
+          : undefined}
       >
         candidate
       </span>

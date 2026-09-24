@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('getRegionVocabulary', () => {
-  it('GETs {API_PREFIX}/regions/vocabulary and returns detectors/region_sources/chain_actors/text_choices/text_rules', async () => {
+  it('GETs {API_PREFIX}/regions/vocabulary and returns detectors/region_sources/chain_actors/text_choices/text_rules/rejection_reasons', async () => {
     const payload = {
       detectors: [
         { id: 'lpr_nanov11_640', label: 'LPR', role: 'detector', filterable: true },
@@ -44,6 +44,30 @@ describe('getRegionVocabulary', () => {
         no_reading_words: ['NULL'],
         invalid_reasons: ['placeholder', 'sequence'],
       },
+      // openprocessor fix #29 / 840beb8 adoption.
+      rejection_reasons: [
+        {
+          id: 'region_visible_elsewhere',
+          label: 'Verifier: the box is wrong (region is elsewhere)',
+          kind: 'model_verdict',
+          match: 'exact',
+          label_template: null,
+        },
+        {
+          id: 'sanity_reject:',
+          label: 'Box failed the geometry check',
+          kind: 'automatic',
+          match: 'prefix',
+          label_template: 'Box failed the geometry check ({detail})',
+        },
+        {
+          id: 'verifier_no_verdict',
+          label: 'Verifier gave no verdict — needs human review',
+          kind: 'needs_human',
+          match: 'exact',
+          label_template: null,
+        },
+      ],
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(payload));
     vi.stubGlobal('fetch', fetchMock);
@@ -55,7 +79,7 @@ describe('getRegionVocabulary', () => {
     expect(res).toEqual(payload);
   });
 
-  it('defaults each list to empty and text_rules to null when the response omits them', async () => {
+  it('defaults each list to empty, text_rules to null, and rejection_reasons to [] when the response omits them', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
 
     const res = await getRegionVocabulary();
@@ -66,16 +90,39 @@ describe('getRegionVocabulary', () => {
       chain_actors: [],
       text_choices: [],
       text_rules: null,
+      rejection_reasons: [],
     });
   });
 });
 
 describe('getReviewTabsVocabulary', () => {
-  it('GETs {API_PREFIX}/review/tabs and returns the tabs array', async () => {
+  it('GETs {API_PREFIX}/review/tabs and returns the tabs array, including filter_specs', async () => {
     const payload = {
       tabs: [
-        { id: 'all', label: 'All crops', description: 'Every crop in the pool' },
-        { id: 'regions', label: 'License plates' },
+        {
+          id: 'all',
+          label: 'All crops',
+          description: 'Every crop in the pool',
+          filter_specs: [],
+        },
+        {
+          id: 'regions',
+          label: 'License plates',
+          filters: ['text', 'region_status'],
+          filter_defaults: { region_status: 'all' },
+          filter_specs: [
+            {
+              param: 'region_status',
+              kind: 'enum',
+              label: 'Status',
+              options: [
+                { value: 'all', label: 'All (accepted + rejected candidates)' },
+                { value: 'detected', label: 'Detected only' },
+                { value: 'verify_rejected', label: 'Verifier-rejected candidates only' },
+              ],
+            },
+          ],
+        },
       ],
     };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(payload));
@@ -88,7 +135,7 @@ describe('getReviewTabsVocabulary', () => {
     expect(res).toEqual(payload.tabs);
   });
 
-  it('filters out entries missing a valid id/label, and defaults to [] when tabs is absent', async () => {
+  it('filters out entries missing a valid id/label, and defaults to [] (filters/filter_defaults/filter_specs) when absent', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -103,9 +150,40 @@ describe('getReviewTabsVocabulary', () => {
     );
 
     const res = await getReviewTabsVocabulary();
-    expect(res).toEqual([{ id: 'all', label: 'All' }]);
+    expect(res).toEqual([{ id: 'all', label: 'All', filter_specs: [] }]);
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})));
     expect(await getReviewTabsVocabulary()).toEqual([]);
+  });
+
+  it('drops a malformed filter_specs entry (missing kind/options) rather than throwing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          tabs: [
+            {
+              id: 'regions',
+              label: 'License plates',
+              filter_specs: [
+                { param: 'region_status', kind: 'enum', label: 'Status', options: [] },
+                { param: 'bad', label: 'Bad — no kind' },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const res = await getReviewTabsVocabulary();
+    expect(res).toEqual([
+      {
+        id: 'regions',
+        label: 'License plates',
+        filter_specs: [
+          { param: 'region_status', kind: 'enum', label: 'Status', options: [] },
+        ],
+      },
+    ]);
   });
 });

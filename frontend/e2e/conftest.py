@@ -211,6 +211,16 @@ class Stub:
                 "chain_actors": [
                     {"id": "gemma-4-e4b", "label": "Gemma", "role": "verifier"},
                 ],
+                # openprocessor fix #29 / 840beb8 adoption: labeled
+                # `region_rejection_reason` vocabulary. Empty by default —
+                # unlike detectors/chain_actors above, no shared default
+                # data is needed for most tests (the rejection-styled
+                # candidate badge/Reason row is exercised by dedicated
+                # tests that stub their own entries), and an empty list
+                # keeps the pre-existing wording ("rejected candidate ·
+                # confirm to accept") unchanged for every test that
+                # doesn't care about kind-based styling.
+                "rejection_reasons": [],
             },
         )
         # W0 naming-sweep finding m9: every review tab's served
