@@ -23,9 +23,14 @@ describe('W5: /review?crop_id= deep link calls locateInReviewQueue, not a paging
     expect(fn).toMatch(
       /await locateInReviewQueue\(\s*endpointForTab\(effectiveTab\),\s*cropId,\s*pageSize,\s*_filter\(\),\s*\)/,
     );
-    // Loads pages up to the located page, then jumps the cursor — never a
-    // blind "load up to N items" scan.
-    expect(fn).toMatch(/while \(queue\.loadedPages < loc\.page && queue\.hasMore\)/);
+    // DQ-M7 (2026-09-24 data-quality pass, see dqM7Locate.test.ts):
+    // fetches only the located page via queue.loadPage(loc.page) — the
+    // original while-loop here paged 1..loc.page one request per page
+    // (103 requests / 5.7s at rank 3000/page 101, with item #1's
+    // keybindings live the whole time), which was a regression this test
+    // used to pin as the intended behavior. It's the bug DQ-M7 fixes.
+    expect(fn).toMatch(/await queue\.loadPage\(loc\.page\)/);
+    expect(fn).not.toMatch(/while \(queue\.loadedPages < loc\.page/);
   });
 
   it('never references the deleted DEEP_LINK_MAX_ITEMS paging-scan constant', () => {

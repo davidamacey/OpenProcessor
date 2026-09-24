@@ -14,6 +14,7 @@
     patchSlotMeta,
   } from '$lib/api';
   import { trapFocus } from '$lib/actions/trapFocus';
+  import { focusOnMount } from '$lib/actions/focusOnMount';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import CropMetaPanel from '$lib/components/CropMetaPanel.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
@@ -56,6 +57,7 @@
     ReviewTab,
   } from '$lib/types';
   import { createPager } from '$lib/pager.svelte';
+  import { capCropDisplayStyle } from '$lib/review/cropDisplaySize';
   import { createStrategyBar } from '$lib/strategyBar.svelte';
   import { isSemanticSearchAvailable } from '$lib/strategies';
   import { subscribeCurationEvents, type CurationEventSubscription } from '$lib/sse';
@@ -66,6 +68,7 @@
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { classSourcesStore } from '$stores/classSources.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { onMount } from 'svelte';
@@ -88,7 +91,15 @@
   // cohort preview) open that tab and jump to that crop.
   const deepLink = reviewDeepLink(page.url.searchParams);
   let tab = $state<ReviewTab>(deepLink.tab);
-  let pendingCropId: string | null = deepLink.cropId;
+  let pendingCropId = $state<string | null>(deepLink.cropId);
+  // DQ-M7 (2026-09-24 data-quality pass): true from mount until a
+  // `?crop_id=` deep link either lands on its target or gives up. While
+  // true, the tab-action keybinding effect below registers nothing, so a
+  // keypress during the ~4s a deep link to a late page used to spend
+  // showing item #1 (while paging 1..page sequentially) can no longer act
+  // on the wrong crop. False immediately when there's no deep link to
+  // resolve.
+  let awaitingDeepLink = $state<boolean>(deepLink.cropId != null);
   // The slot backing the current tab, if any — the single derived value
   // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
   // hangs every former `tab === 'plates'` call site off, instead of a
@@ -446,6 +457,7 @@
       // link rather than spin forever waiting for a match that can
       // never resolve.
       pendingCropId = null;
+      awaitingDeepLink = false;
       return;
     }
     jumpingToCrop = true;
@@ -470,9 +482,11 @@
       // sort than what the bar shows.
       sortApplied = loc.sort_applied ?? sortApplied;
       sortFallbackReason = loc.sort_fallback_reason ?? sortFallbackReason;
-      while (queue.loadedPages < loc.page && queue.hasMore) {
-        await queue.loadMore();
-      }
+      // DQ-M7: fetch ONLY the located page — no more paging 1..loc.page
+      // one request per page (103 requests / 5.7s at rank 3000, page 101).
+      // The initial page-1 load that seeded `queue` (from the tab/filter
+      // effect) gets replaced wholesale here rather than ever being shown.
+      await queue.loadPage(loc.page);
       const idx = queue.items.findIndex((i) => i.id === cropId);
       cursor =
         idx >= 0 ? idx : Math.max(0, Math.min(loc.rank ?? 0, queue.items.length - 1));
@@ -481,6 +495,7 @@
     } finally {
       jumpingToCrop = false;
       pendingCropId = null;
+      awaitingDeepLink = false;
     }
   }
 
@@ -662,6 +677,12 @@
   onMount(() => stopDiversePolling);
 
   const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
+  // DQ-M8: served role (classSourcesStore, GET {API_PREFIX}/class_sources), not
+  // a hardcoded string match — mirrors sourceBadge.ts's
+  // role.startsWith('vlm') check for the label-source badge.
+  const isCurrentLabelVlmSourced = $derived(
+    (classSourcesStore.roleFor(current?.label_source) ?? '').startsWith('vlm'),
+  );
 
   const topClasses = $derived(classesStore.topNForCluster(0, 10));
 
@@ -865,6 +886,16 @@
   // re-derived by hand. The seeding effect re-runs whenever the cursor
   // advances to a new crop.
   let editedSlotBox = $state<BBoxNorm | null>(null);
+  // DQ-M5: natural pixel size of the currently-rendered crop thumbnail,
+  // read back via Svelte's bind:naturalWidth/naturalHeight once the <img>
+  // loads. Drives capCropDisplayStyle() so a tiny crop upscales by at most
+  // CROP_UPSCALE_CAP instead of filling the whole (now height-capped)
+  // panel — see cropDisplaySize.ts for the full rationale.
+  let cropNaturalWidth = $state(0);
+  let cropNaturalHeight = $state(0);
+  const cropDisplayStyle = $derived(
+    capCropDisplayStyle(cropNaturalWidth, cropNaturalHeight),
+  );
   // B2 (2026-09-24 interactive pass): the served box at seed time, kept
   // alongside editedSlotBox so confirmSlot() can tell "operator didn't
   // touch the box" from "operator edited it" — a same-box confirm must
@@ -888,6 +919,43 @@
   let editedSlotText = $state<string>('');
   let editedSlotStatus = $state<string>('');
   let editedRejectionReason = $state<string>('');
+
+  // DQ-m6 (docs/design/data-quality-pass-2026-09-24.md): rejectSlot()
+  // used `window.prompt()` for this — a native, OS-level dialog. It
+  // blocks the JS thread while open, which is exactly why the audit's
+  // screenshot/automation pass saw "no prompt before or after the
+  // write": a native dialog renders outside the page's DOM/CDP surface,
+  // so nothing shows up in a page screenshot, and an automated
+  // click/keypress driver that doesn't specifically arm a native-dialog
+  // handler gets it silently auto-dismissed (Playwright's default),
+  // which reads as "the prompt didn't appear" even though the code path
+  // ran. An in-app modal is real DOM — screenshot-visible, keyboard-
+  // driveable the same way every other modal on this page already is
+  // (Enter submits, Esc cancels), and testable without special dialog
+  // plumbing.
+  let rejectReasonPromptOpen = $state(false);
+  let rejectReasonPromptValue = $state('');
+  let rejectReasonPromptResolve: ((value: string | null) => void) | null = null;
+
+  function promptForRejectionReason(): Promise<string | null> {
+    rejectReasonPromptValue = '';
+    rejectReasonPromptOpen = true;
+    return new Promise((resolve) => {
+      rejectReasonPromptResolve = resolve;
+    });
+  }
+
+  function submitRejectReasonPrompt(): void {
+    rejectReasonPromptOpen = false;
+    rejectReasonPromptResolve?.(rejectReasonPromptValue.trim() || null);
+    rejectReasonPromptResolve = null;
+  }
+
+  function cancelRejectReasonPrompt(): void {
+    rejectReasonPromptOpen = false;
+    rejectReasonPromptResolve?.(null);
+    rejectReasonPromptResolve = null;
+  }
   // Status values an operator is allowed to write, for the ACTIVE slot —
   // closes Finding D (the panel used to render licensePlateSlot's own
   // vocabulary regardless of which slot tab was active). Order matches
@@ -999,6 +1067,11 @@
   // read-only scan mode regardless of where we left the previous one.
   $effect(() => {
     void current?.id;
+    // DQ-M5: drop the previous crop's natural size immediately so its cap
+    // never briefly applies to the next crop's <img> before it loads and
+    // rebinds naturalWidth/naturalHeight.
+    cropNaturalWidth = 0;
+    cropNaturalHeight = 0;
     _seedSlotFromCurrent();
     // Freeze the zoom viewport on the just-seeded bbox. Wrapped in
     // untrack() so the read of `editedSlotBox` inside _seedViewBox
@@ -1224,10 +1297,7 @@
       rejectStatus &&
       statusWantsRejectionReason(activeSlot, rejectStatus, regionStatusesStore.list)
     ) {
-      const typed = window.prompt(
-        `Reason for rejecting this ${activeSlot.label.singular} (optional):`,
-      );
-      reason = typed?.trim() || null;
+      reason = await promptForRejectionReason();
     }
     const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: null };
     _pushSlotUndo(undoEntry);
@@ -1306,6 +1376,13 @@
   //   - edit:      arrows nudge the bbox, Enter saves+exits edit mode,
   //     Esc cancels edit, the bbox canvas owns the keystroke flow.
   $effect(() => {
+    // DQ-M7: register nothing while a `?crop_id=` deep link is still
+    // resolving — otherwise a keypress during that window (previously
+    // ~4s, paging through the whole queue up to the target page) acts on
+    // whatever item #1 of the just-loaded first page happens to be, not
+    // the crop the operator followed the link to review.
+    if (awaitingDeepLink) return;
+
     const offs: Array<() => void> = [];
     const reg = (combo: string, fn: () => void | Promise<void>, desc: string) =>
       offs.push(keyboardStore.register(combo, () => void fn(), 'review', desc));
@@ -1400,6 +1477,7 @@
           onclick={() => {
             tab = t.id;
             pendingCropId = null;
+            awaitingDeepLink = false;
             const url = new URL(page.url);
             url.searchParams.set('tab', t.urlId);
             url.searchParams.delete('crop_id');
@@ -1686,6 +1764,11 @@
   <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
     {#if queue.loading && queue.items.length === 0}
       <p class="col-span-full text-sm text-zinc-500">Loading...</p>
+    {:else if awaitingDeepLink}
+      <!-- DQ-M7: page 1 (item #1) may already be loaded underneath this —
+           don't render it, or the operator briefly sees and could act on
+           the wrong crop while the target page is still being located. -->
+      <p class="col-span-full text-sm text-zinc-500">Locating crop…</p>
     {:else if queue.error}
       <p class="col-span-full text-sm text-red-300">API unavailable: {queue.error}</p>
     {:else if !current}
@@ -1732,8 +1815,17 @@
              column's fixed height — that content scrolls in its own
              region instead of squeezing the image. The floor is tall
              enough that a plate sub-box stays legible at 1280×720,
-             where this column is at its tightest. -->
-        <div class="flex min-h-[300px] shrink-0 items-center justify-center bg-zinc-950">
+             where this column is at its tightest.
+             DQ-M5: `max-h-[46%]` is the other half of the fix — a ceiling
+             on top of that floor, so a tall/tiny crop's `h-full` fill (the
+             phase-A p9 "upscale to fit" behavior) can no longer consume
+             the whole panel and push Reason/Proposed/Confirm-Skip-Discard
+             (rendered below, in the sibling scroll region) off-screen.
+             Verified at 1280×720, 1600×1000 and 1920×1080 — see
+             artifacts_local/cw-live/phase-b-fixes/. -->
+        <div
+          class="flex min-h-[220px] max-h-[46%] shrink-0 items-center justify-center bg-zinc-950"
+        >
           {#if activeSlot?.capabilities.subBox && editMode}
             <!-- Edit mode — drag/resize the proposal directly, then hit
                  Enter to save. Square aspect keeps the canvas math
@@ -1767,14 +1859,30 @@
                  container (common at 1920, where this panel stretches
                  to ~900px tall but the served thumb is a few hundred px)
                  rendered at its tiny natural size instead of upscaling
-                 to fill the space. `h-full w-full` + object-contain
-                 fills the container either direction, still preserving
-                 aspect ratio. -->
+                 to fill the space. `h-full w-full` + object-contain fills
+                 the container either direction, still preserving aspect
+                 ratio.
+                 DQ-M5: unbounded, that fill upscaled a 98×106 crop to
+                 598-918px tall depending on viewport, pushing the actions
+                 below it off-screen — this is a regression from p9, which
+                 fit width but not height. The container above is now
+                 height-capped (`max-h-[46%]`); `cropDisplayStyle` (inline,
+                 from capCropDisplayStyle()) is the second half — it bounds
+                 the *rendered* size to at most CROP_UPSCALE_CAP× the
+                 crop's own natural pixels, read back via
+                 bind:naturalWidth/naturalHeight, so a tiny crop no longer
+                 blows up to fill whatever room the container has even
+                 when that room is generous. Empty until the image has
+                 loaded (natural size unknown), during which `h-full
+                 w-full` still applies as the pre-p9 fallback. -->
             <img
               src={getThumbUrl(current.id, 384)}
               alt="crop"
               loading="lazy"
               decoding="async"
+              bind:naturalWidth={cropNaturalWidth}
+              bind:naturalHeight={cropNaturalHeight}
+              style={cropDisplayStyle}
               class="h-full w-full object-contain"
             />
           {/if}
@@ -1847,12 +1955,30 @@
               </dd>
             {/if}
 
-            <dt class="text-zinc-500">Confidence</dt>
+            <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md):
+                 `label_confidence` (wire `confidence`) is the vehicle-
+                 detector/v6 score on every row, including VLM-sourced
+                 ones — the repro was exactly this panel, "Current label
+                 dumptruck (vlm)" directly above "Confidence 94.6%", which
+                 reads as the VLM's own certainty. Label it for what it is
+                 whenever the current label came from the VLM (served
+                 role, not a hardcoded string match), and show the VLM's
+                 own categorical confidence (`vlm_confidence`, served
+                 separately) as its own row when there's a real number to
+                 contrast it with. -->
+            <dt class="text-zinc-500">
+              {isCurrentLabelVlmSourced ? 'Detector score' : 'Confidence'}
+            </dt>
             <dd class="font-mono">
               {current.label_confidence != null
                 ? `${(current.label_confidence * 100).toFixed(1)}%`
                 : '—'}
             </dd>
+
+            {#if current.vlm_confidence}
+              <dt class="text-zinc-500">VLM confidence</dt>
+              <dd class="font-mono text-zinc-200">{current.vlm_confidence}</dd>
+            {/if}
 
             {#if current.proposal_name}
               <dt class="text-zinc-500">Proposal hint</dt>
@@ -2092,8 +2218,14 @@
               {/if}
             </div>
             {#if slotUndoStack.length > 0}
+              <!-- DQ-m6 (docs/design/data-quality-pass-2026-09-24.md):
+                   this stack holds confirm, reject AND false-positive
+                   entries (saved: null covers both reject and FP) — the
+                   footer said "confirmed" unconditionally, so a reject
+                   read as "1 confirmed in this session". "Actioned" is
+                   accurate for all three. -->
               <p class="mt-1 text-[10px] text-zinc-500">
-                {slotUndoStack.length} confirmed in this session — press ← to step back.
+                {slotUndoStack.length} actioned in this session — press ← to step back.
               </p>
             {/if}
           {:else}
@@ -2260,6 +2392,54 @@
           </li>
         {/each}
       </ul>
+    </div>
+  </div>
+{/if}
+
+{#if rejectReasonPromptOpen}
+  <!-- DQ-m6: in-app replacement for the old window.prompt() — see
+       promptForRejectionReason()'s doc comment for why. Backdrop click
+       and Esc both cancel (reason stays null, matching the old
+       "Cancel" prompt() behavior); Enter submits. -->
+  <div
+    class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
+    onclick={cancelRejectReasonPrompt}
+    role="presentation"
+  >
+    <div
+      class="w-full max-w-sm overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 p-3 shadow-xl"
+      onclick={(e) => e.stopPropagation()}
+      role="presentation"
+      use:trapFocus={{ onEscape: cancelRejectReasonPrompt }}
+    >
+      <label class="mb-2 block text-sm text-zinc-300" for="reject-reason-input">
+        Reason for rejecting this {activeSlot?.label.singular ?? 'item'} (optional):
+      </label>
+      <input
+        id="reject-reason-input"
+        type="text"
+        use:focusOnMount
+        bind:value={rejectReasonPromptValue}
+        onkeydown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitRejectReasonPrompt();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelRejectReasonPrompt();
+          }
+        }}
+        class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        placeholder="e.g. blurry, wrong angle, not a plate…"
+      />
+      <div class="mt-3 flex justify-end gap-2">
+        <button type="button" class="btn" onclick={cancelRejectReasonPrompt}>
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" onclick={submitRejectReasonPrompt}>
+          Reject
+        </button>
+      </div>
     </div>
   </div>
 {/if}

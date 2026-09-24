@@ -48,8 +48,11 @@ describe('M1: Dismissed panel sends a sort the backend accepts and reports failu
 
 describe('M2/M12: the crop/plate image never collapses to 0px when Details opens', () => {
   it('the image wrapper is shrink-0 with a floor min-height, not flex-1', () => {
+    // DQ-M5 (2026-09-24 data-quality pass) added a `max-h-[46%]` ceiling
+    // alongside the floor — the wrapper is still shrink-0 with min-height,
+    // just no longer unbounded above.
     expect(src).toMatch(
-      /flex min-h-\[\d+px\] shrink-0 items-center justify-center bg-zinc-950/,
+      /flex min-h-\[\d+px\] max-h-\[\d+%\] shrink-0 items-center justify-center bg-zinc-950/,
     );
   });
 
@@ -140,12 +143,19 @@ describe('m5 (2026-09-24 interactive pass): reject asks for a reason up front wh
 
   it('prompts before the optimistic queue removal / setSlotBox write, not after', () => {
     expect(fn).toBeDefined();
-    const promptIdx = fn!.indexOf('window.prompt(');
+    // DQ-m6 (2026-09-24 data-quality pass): window.prompt() replaced with
+    // an in-app modal (promptForRejectionReason) — a native dialog
+    // blocks the JS thread and renders outside the page's DOM/CDP
+    // surface, which is why a screenshot/automation pass saw no prompt
+    // at all. See dqM6RejectReasonPrompt.test.ts for the modal's own
+    // coverage.
+    const promptIdx = fn!.indexOf('await promptForRejectionReason()');
     const removeIdx = fn!.indexOf('_removeFromQueue(item)');
     const setBoxIdx = fn!.indexOf('setSlotBox(activeSlot, item.id, null)');
     expect(promptIdx).toBeGreaterThan(-1);
     expect(promptIdx).toBeLessThan(removeIdx);
     expect(promptIdx).toBeLessThan(setBoxIdx);
+    expect(fn).not.toMatch(/window\.prompt\(/);
   });
 
   it('sends the reject status and the reason in ONE region write, so one Z undoes it', () => {
