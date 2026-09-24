@@ -63,7 +63,13 @@ describe('DQ-M4: representatives are windowed over gridItems (display order), no
     ).toBeGreaterThan(-1);
     const slice = src.slice(idx, idx + 200);
     expect(slice).toMatch(/dispOffset = 0;/);
-    expect(slice).toMatch(/void loadMoreRepresentatives\(\);/);
+    // untrack()-wrapped: loadMoreRepresentatives() reads gridItems and
+    // writes clusterPager.items — read synchronously inside this effect
+    // instead, that would re-fire the same effect in a loop (see the
+    // effect's own doc comment / e2e/stubbed/test_labeling_flow.py's
+    // "every route mounts" check, which caught the resulting
+    // effect_update_depth_exceeded on /clusters).
+    expect(slice).toMatch(/untrack\(\(\) => void loadMoreRepresentatives\(\)\);/);
     expect(slice).not.toMatch(/loadFirst\(\)/);
   });
 });

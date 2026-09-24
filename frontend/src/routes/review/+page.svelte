@@ -1813,18 +1813,22 @@
              height so this panel never collapses toward 0px when the
              content below it (Details, slot fields) grows past the
              column's fixed height — that content scrolls in its own
-             region instead of squeezing the image. The floor is tall
-             enough that a plate sub-box stays legible at 1280×720,
-             where this column is at its tightest.
-             DQ-M5: `max-h-[46%]` is the other half of the fix — a ceiling
+             region instead of squeezing the image.
+             DQ-M5: `max-h-[40%]` is the other half of the fix — a ceiling
              on top of that floor, so a tall/tiny crop's `h-full` fill (the
              phase-A p9 "upscale to fit" behavior) can no longer consume
              the whole panel and push Reason/Proposed/Confirm-Skip-Discard
-             (rendered below, in the sibling scroll region) off-screen.
+             off-screen. The floor itself came down from M2/M12's original
+             300px to 210px in the same pass: at a real 1280×720 viewport
+             the 300px floor alone (before any tall crop even enters the
+             picture) already pushed the action buttons 3px past the
+             bottom edge — e2e/stubbed/test_review_crop_viewport.py
+             pins this exact budget. 210px keeps a plate sub-box legible
+             (BboxCanvas is still square-aspect within it) while fitting.
              Verified at 1280×720, 1600×1000 and 1920×1080 — see
              artifacts_local/cw-live/phase-b-fixes/. -->
         <div
-          class="flex min-h-[220px] max-h-[46%] shrink-0 items-center justify-center bg-zinc-950"
+          class="flex min-h-[210px] max-h-[40%] shrink-0 items-center justify-center bg-zinc-950"
         >
           {#if activeSlot?.capabilities.subBox && editMode}
             <!-- Edit mode — drag/resize the proposal directly, then hit
@@ -1866,7 +1870,7 @@
                  598-918px tall depending on viewport, pushing the actions
                  below it off-screen — this is a regression from p9, which
                  fit width but not height. The container above is now
-                 height-capped (`max-h-[46%]`); `cropDisplayStyle` (inline,
+                 height-capped (`max-h-[40%]`); `cropDisplayStyle` (inline,
                  from capCropDisplayStyle()) is the second half — it bounds
                  the *rendered* size to at most CROP_UPSCALE_CAP× the
                  crop's own natural pixels, read back via

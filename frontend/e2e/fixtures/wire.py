@@ -61,6 +61,10 @@ _EXPLICIT: dict[str, Any] = {
     "class_labeled_at": "2026-01-02T03:04:05Z",
     "class_labeler": "user@example.com",
     "vlm_confidence": "high",
+    # Backend main 6a1f350 (VLM class-answer fix): when did the VLM last
+    # attempt a class answer, and why it came back empty if it did.
+    "vlm_class_attempted_at": "2026-01-02T03:03:00Z",
+    "vlm_class_empty_reason": "no_visible_vehicle",
     "vlm_proposed_class_id": 99,
     "vlm_proposed_class_name": "pickup_truck",
     "proposed_class_id": 101,

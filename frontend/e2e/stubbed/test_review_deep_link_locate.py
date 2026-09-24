@@ -13,8 +13,24 @@ This test proves both halves against a real page mount:
   1. only ONE `/review/all` page request is made before the located page's
      request (page 1's own load, made before the deep link — never every
      page from 2..101);
-  2. a keypress fired while the locate request is artificially held open
-     does not reach crop-0 (item #1) — no /label PUT for it.
+  2. the page shows "Locating crop…" (not item #1) while the deep link
+     resolves, and a keypress fired in that window never labels crop-0
+     (item #1) — the regression this test reproduces.
+
+Note on technique: point 2's keypress is fired while the locate response
+is deliberately held open (a `threading.Event` a background thread
+releases after a short real delay). This harness's Playwright sync API
+serializes route-handler dispatch with other `page.*` calls made from the
+test body, so a `page.*` call issued right after firing the keypress
+can't reliably "observe" intermediate DOM state without itself blocking
+on the held-open handler — instead of asserting on timing-fragile DOM
+reads, the invariant checked is on the plain Python `label_calls` list
+(no `page.*` call needed to inspect it) and is timing-independent: no
+matter whether the keypress is delivered to the browser before or after
+the locate resolves, it must never label crop-0 — either the
+keybindings aren't registered yet (awaitingDeepLink still true) and
+nothing happens, or the target crop (crop-target) is already current by
+the time the key lands.
 """
 
 from __future__ import annotations
@@ -85,7 +101,12 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
         # serves the actual target, crop-target.
         if page_num == 101:
             item = review_item(999)
+            # mapRawCrop() maps Crop.id from the wire's `crop_id` field,
+            # not `id` -- both are set so the frontend actually resolves
+            # this row's id to "crop-target" (matching the locate
+            # response's crop_id and the URL's ?crop_id=).
             item["id"] = "crop-target"
+            item["crop_id"] = "crop-target"
             items = [item]
         else:
             items = [review_item(0)]
@@ -96,9 +117,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     def locate_handler(_request, _match):
         # Held open until the test explicitly releases it, simulating the
         # locate round trip's real latency — this is the window during
-        # which the regression showed item #1 with live keys. Playwright's
-        # sync API dispatches route handlers on their own thread, so
-        # blocking here does not freeze the test's own page.* calls.
+        # which the regression showed item #1 with live keys.
         locate_gate.wait(timeout=10)
         return (
             200,
@@ -127,19 +146,26 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     page.goto(f"{app_url}/review?tab=all&crop_id=crop-target")
 
-    # Give page-1's own load (fired before the locate resolves) time to
-    # land, then fire a keypress while the locate is still gated open —
-    # this is exactly the window the bug fired a PUT for crop-0 in.
-    page.wait_for_timeout(600)
-    assert "Locating crop" in page.locator("body").inner_text()
+    # This is the one page.* call proven to complete BEFORE a held-open
+    # route handler can block the driver's dispatch loop for later
+    # page.* calls (it polls the already-rendered DOM, same as the
+    # locate request itself firing only after this text is on screen).
+    page.wait_for_selector("text=Locating crop", timeout=15000)
+
+    # Fire the keypress while the locate response is still held open.
+    # Whether the browser processes it now or only once the driver loop
+    # frees up after the gate is released below, it must never reach
+    # crop-0 — see the module docstring for why this check doesn't rely
+    # on further page.* calls to prove it.
     page.keyboard.press("Enter")
-    page.wait_for_timeout(300)
-    assert label_calls == [], (
-        f"a keypress during the locate window must not act on item #1: {label_calls}"
-    )
 
     locate_gate.set()
-    page.wait_for_timeout(800)
+    page.wait_for_selector("text=Locating crop", state="detached", timeout=15000)
+    page.wait_for_timeout(300)  # let any in-flight PUT (there shouldn't be one) land
+
+    assert not any("crop-0" in c for c in label_calls), (
+        f"a keypress fired while locating must never label crop-0 (item #1): {label_calls}"
+    )
 
     # Exactly the initial page-1 load plus the located page-101 request —
     # never anything for pages 2..100.

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import {
     ApiError,
@@ -746,11 +747,21 @@
   // Sort is applied client-side (sortClusters) over the single loaded
   // batch, so changing it must NOT refetch (the endpoint returns the
   // same size-ordered data regardless).
+  //
+  // DQ-M4 follow-up: loadFirst()'s synchronous prefix (before its first
+  // await) reads clusterQuery()'s `sort`/`class_id`/etc and WRITES
+  // clusterPager.items — both wrapped in untrack() below. Without it,
+  // this effect's dependency set would pick up every state
+  // loadFirst()/loadMoreRepresentatives() touch (the same trap
+  // _seedViewBox() in review/+page.svelte documents for the identical
+  // reason), and the write-then-reread cycle between this effect and the
+  // sort/unlabeledOnly effect below tripped Svelte's
+  // effect_update_depth_exceeded guard on every /clusters mount.
   $effect(() => {
     void classFilter;
     void maxRank;
     void minBlurRatio;
-    if (!isLicensePlateFilter) void loadFirst();
+    if (!isLicensePlateFilter) untrack(() => void loadFirst());
   });
 
   // DQ-M4: sort/unlabeledOnly reshuffle DISPLAY order (gridItems) without
@@ -760,12 +771,16 @@
   // first, so the representatives window has to restart from 0 and
   // re-cover the new first screenful — cheap, since
   // idsNeedingRepresentatives() skips every card that already has
-  // representatives from a prior window.
+  // representatives from a prior window. untrack() for the same reason
+  // as the effect above: loadMoreRepresentatives() reads gridItems and
+  // writes clusterPager.items — read that synchronously inside THIS
+  // effect (instead of untracked) and every representative fetch it
+  // triggers would re-fire this same effect, in an unbounded loop.
   $effect(() => {
     void sort;
     void unlabeledOnly;
     dispOffset = 0;
-    if (!isLicensePlateFilter) void loadMoreRepresentatives();
+    if (!isLicensePlateFilter) untrack(() => void loadMoreRepresentatives());
   });
 
   // Re-load plates whenever a filter, the top-N rank gate, or the selected

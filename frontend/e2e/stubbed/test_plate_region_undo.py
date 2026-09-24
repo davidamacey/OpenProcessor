@@ -72,9 +72,14 @@ def test_plate_reject_then_z_calls_region_undo(stub, page, app_url):
     counter.first.wait_for(timeout=15000)
     page.wait_for_timeout(500)
 
-    # D = reject on the Plates tab -> ONE PATCH region_meta carrying the
-    # served reject status (the backend clears the box), so one Z undoes it.
+    # D = reject on the Plates tab -> the no_region_visible reject status
+    # wants a reason (DQ-m6: now an in-app modal, not window.prompt()), so
+    # confirm it empty via Enter before the write fires -> ONE PATCH
+    # region_meta carrying the served reject status (the backend clears
+    # the box), so one Z undoes it.
     page.keyboard.press("d")
+    page.get_by_label("Reason for rejecting").wait_for(timeout=5000)
+    page.keyboard.press("Enter")
     page.wait_for_timeout(400)
 
     assert len(meta_calls) == 1, f"D should PATCH region_meta exactly once: {meta_calls}"
