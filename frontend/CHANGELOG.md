@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The single-class plate dataset export now runs on OpenProcessor's generic
+  narrowed export (`POST /export/single_class`,
+  `GET /export/single_class/status?profile_name=`) instead of the
+  never-ported `/export/lpr`, which had kept the `/train` panel hidden on
+  `main`.
+  - A slot's `extras.datasetExport` now declares its wire identity:
+    `profileName`, `boxSource` (`item`|`region`), optional
+    `regionClassName`, and `classIds`. `datasetExportForSlot` validates
+    them, including the backend's rule that `item` needs `classIds`.
+  - `exportSingleClass`/`exportSingleClassStatus` post to the spec's own
+    paths, so the `api.ts`/profile drift-ratchet test is gone. There's
+    only one copy of each path now.
+  - The `vehicle_crop` image mode is now `item_crop`.
+  - `/train`'s dataset picker filters `/export/datasets` rows on `kind`
+    (`yolo` | `single_class`) plus `profile_name`, per the contract agreed
+    with the backend owner. The multi-class toggle is no longer labeled
+    "vehicles".
+
 ### Removed
 
 - The dashboard's "Snapshot op\_\* indexes" button. It was a placeholder that

@@ -1,26 +1,25 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { datasetExportForSlot } from './datasetExport';
 import { licensePlateSlot } from './profiles/licensePlate';
 import { defectCodeSlot } from './profiles/defectCode';
 import type { SlotSpec } from './types';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-
 describe('datasetExportForSlot', () => {
   it("reads the license_plate profile's declared export", () => {
     const spec = datasetExportForSlot(licensePlateSlot);
     expect(spec).toEqual({
-      kind: 'lpr',
+      kind: 'single_class',
       label: 'LPR plate dataset',
-      buildPath: '/export/lpr',
-      statusPath: '/export/lpr/status',
-      datasetKind: 'lpr',
+      buildPath: '/export/single_class',
+      statusPath: '/export/single_class/status',
+      datasetKind: 'license_plate',
       singleClass: true,
       blurb:
         'Single-class plate dataset (positives + human FP hard-negatives + a sample of plate-free backgrounds).',
+      profileName: 'license_plate',
+      boxSource: 'region',
+      regionClassName: 'license_plate',
+      classIds: [],
     });
   });
 
@@ -108,16 +107,43 @@ describe('datasetExportForSlot', () => {
     }
   });
 
-  // The drift ratchet (Phase C plan §3.6h): api.ts's exportLpr/
-  // exportLprStatus keep their own hardcoded '/export/lpr' /
-  // '/export/lpr/status' literals rather than threading spec.buildPath
-  // through them (a deliberate deferral — see the plan). This test pins
-  // the two independently-declared copies together so they cannot
-  // silently diverge.
-  it("the profile's declared paths match api.ts's exportLpr/exportLprStatus literals", () => {
-    const spec = datasetExportForSlot(licensePlateSlot)!;
-    const apiSrc = readFileSync(path.resolve(here, '../api.ts'), 'utf-8');
-    expect(apiSrc).toContain(`\${API_PREFIX}${spec.buildPath}\``);
-    expect(apiSrc).toContain(`\${API_PREFIX}${spec.statusPath}\``);
+  it('returns undefined when profileName is missing', () => {
+    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const { profileName: _p, ...rest } = base;
+    const slot: SlotSpec = { ...licensePlateSlot, extras: { datasetExport: rest } };
+    expect(datasetExportForSlot(slot)).toBeUndefined();
+  });
+
+  it('returns undefined for an unknown boxSource', () => {
+    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    for (const boxSource of [undefined, 'plate', 1]) {
+      const slot: SlotSpec = {
+        ...licensePlateSlot,
+        extras: { datasetExport: { ...base, boxSource } },
+      };
+      expect(datasetExportForSlot(slot)).toBeUndefined();
+    }
+  });
+
+  it('rejects non-integer or negative classIds', () => {
+    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    for (const classIds of ['0', [1.5], [-1], [0, 'x']]) {
+      const slot: SlotSpec = {
+        ...licensePlateSlot,
+        extras: { datasetExport: { ...base, classIds } },
+      };
+      expect(datasetExportForSlot(slot)).toBeUndefined();
+    }
+  });
+
+  // Mirrors the backend's 422: an item-box export needs its vocabulary.
+  it("rejects boxSource 'item' with no classIds, accepts it with some", () => {
+    const base = licensePlateSlot.extras!.datasetExport as Record<string, unknown>;
+    const withIds = (classIds: number[]): SlotSpec => ({
+      ...licensePlateSlot,
+      extras: { datasetExport: { ...base, boxSource: 'item', classIds } },
+    });
+    expect(datasetExportForSlot(withIds([]))).toBeUndefined();
+    expect(datasetExportForSlot(withIds([3, 7]))?.classIds).toEqual([3, 7]);
   });
 });

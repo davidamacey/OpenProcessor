@@ -247,20 +247,22 @@ export const licensePlateSlot: SlotSpec = {
     },
   },
 
-  // P2.13 / §9.6: the LPR export panel's strings, moved here per §3.9's
-  // (never-implemented-until-now) prescription. Distinct from cohorts —
-  // export is a genuine non-goal (openprocessor classifies
-  // legacy_lpr_export.py Bucket B, never ported), so this stays a
-  // profile-private escape hatch, not a generalized capability. Consumed
-  // by /train's capability gate (P2.15); options[] is still rendered as
-  // bound controls rather than a generic form — follow-up.
+  // The single-class plate dataset, built by OpenProcessor's generic
+  // narrowed export from each crop's region sub-box. `kind` is the
+  // `/methods` export-axis id that gates the panel. Consumed by /train's
+  // capability gate (P2.15); options[] is still rendered as bound
+  // controls rather than a generic form — follow-up.
   extras: {
     datasetExport: {
-      kind: 'lpr',
+      kind: 'single_class',
       label: 'LPR plate dataset',
-      buildPath: '/export/lpr',
-      statusPath: '/export/lpr/status',
-      datasetKind: 'lpr',
+      buildPath: '/export/single_class',
+      statusPath: '/export/single_class/status',
+      datasetKind: 'license_plate',
+      profileName: 'license_plate',
+      boxSource: 'region',
+      regionClassName: 'license_plate',
+      classIds: [],
       singleClass: true,
       blurb:
         'Single-class plate dataset (positives + human FP hard-negatives + a sample of plate-free backgrounds).',
@@ -269,7 +271,7 @@ export const licensePlateSlot: SlotSpec = {
           key: 'image_mode',
           label: 'image mode',
           kind: 'select',
-          choices: ['whole_frame', 'vehicle_crop'],
+          choices: ['whole_frame', 'item_crop'],
           default: 'whole_frame',
         },
         {

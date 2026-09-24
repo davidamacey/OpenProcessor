@@ -19,6 +19,7 @@ import {
 import { parseCurationSettings, type CurationSettings } from '$lib/curationSettings';
 import { mapCropSlots } from './annotations/cropSlots';
 import type { XYXY, SlotKey, SlotData, SlotSpec } from './annotations/types';
+import type { DatasetExportSpec } from './annotations/datasetExport';
 import type {
   BulkLabelResult,
   ClusterFilter,
@@ -33,8 +34,8 @@ import type {
   OpExportResult,
   OpExportStatus,
   OpHealth,
-  OpLprExportResult,
-  OpLprExportStatus,
+  OpSingleClassExportResult,
+  OpSingleClassExportStatus,
   OpModelsStatus,
   OpStats,
   OpTestHoldoutFreezeResult,
@@ -1821,47 +1822,54 @@ export function exportStatus(signal?: AbortSignal): Promise<OpExportStatus> {
   return apiFetch<OpExportStatus>(`${API_PREFIX}/export/status`, {}, signal);
 }
 
+/** Options an operator picks per single-class export build. */
+export interface SingleClassExportOptions {
+  version_tag?: string;
+  empty_bg_ratio?: number;
+  max_positive_images?: number;
+  skip_test_split?: boolean;
+  dedup_threshold?: number | null;
+  image_mode?: 'whole_frame' | 'item_crop';
+  img_max_side?: 640 | 1280;
+}
+
 /**
- * Build a standalone single-class LPR (license-plate) YOLO dataset.
- * Synchronous on the server; returns the export dir + counts when done.
- * Only ever called behind `isDatasetExportAvailable(…, 'lpr')` — see
- * `/train`'s `datasetExportAvailable` gate.
+ * Build a narrowed single-class dataset from a slot's declared export
+ * (`DatasetExportSpec`). Synchronous on the server; returns the export
+ * dir + counts when done. Only ever called behind
+ * `isDatasetExportAvailable(…, spec.kind)` — see `/train`'s gate.
  */
-export function exportLpr(
-  opts: {
-    version_tag?: string;
-    empty_bg_ratio?: number;
-    max_positive_images?: number;
-    skip_test_split?: boolean;
-    dedup_threshold?: number | null;
-    image_mode?: 'whole_frame' | 'vehicle_crop';
-    img_max_side?: 640 | 1280;
-  } = {},
+export function exportSingleClass(
+  spec: DatasetExportSpec,
+  opts: SingleClassExportOptions = {},
   signal?: AbortSignal,
-): Promise<OpLprExportResult> {
-  const body: Record<string, unknown> = {};
-  if (opts.version_tag) body.version_tag = opts.version_tag;
-  if (opts.empty_bg_ratio !== undefined) body.empty_bg_ratio = opts.empty_bg_ratio;
-  if (opts.max_positive_images !== undefined)
-    body.max_positive_images = opts.max_positive_images;
-  if (opts.skip_test_split !== undefined) body.skip_test_split = opts.skip_test_split;
-  if (opts.dedup_threshold !== undefined) body.dedup_threshold = opts.dedup_threshold;
-  if (opts.image_mode !== undefined) body.image_mode = opts.image_mode;
-  if (opts.img_max_side !== undefined) body.img_max_side = opts.img_max_side;
-  return apiFetch<OpLprExportResult>(
-    `${API_PREFIX}/export/lpr`,
+): Promise<OpSingleClassExportResult> {
+  const body: Record<string, unknown> = {
+    profile_name: spec.profileName,
+    box_source: spec.boxSource,
+    class_ids: spec.classIds,
+  };
+  if (spec.regionClassName) body.region_class_name = spec.regionClassName;
+  for (const [k, v] of Object.entries(opts)) {
+    if (v !== undefined) body[k] = v;
+  }
+  return apiFetch<OpSingleClassExportResult>(
+    `${API_PREFIX}${spec.buildPath}`,
     { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
 }
 
-/**
- * Last LPR-export status (reads the LPR `current` symlink + manifest).
- * Only ever called behind `isDatasetExportAvailable(…, 'lpr')` — see
- * `/train`'s `datasetExportAvailable` gate.
- */
-export function exportLprStatus(signal?: AbortSignal): Promise<OpLprExportStatus> {
-  return apiFetch<OpLprExportStatus>(`${API_PREFIX}/export/lpr/status`, {}, signal);
+/** Last build of a slot's single-class export (its own `current` symlink). */
+export function exportSingleClassStatus(
+  spec: DatasetExportSpec,
+  signal?: AbortSignal,
+): Promise<OpSingleClassExportStatus> {
+  return apiFetch<OpSingleClassExportStatus>(
+    `${API_PREFIX}${spec.statusPath}${qs({ profile_name: spec.profileName })}`,
+    {},
+    signal,
+  );
 }
 
 /**
@@ -1870,11 +1878,14 @@ export function exportLprStatus(signal?: AbortSignal): Promise<OpLprExportStatus
  * the full set — for consistent data re-use across model-size upgrades.
  */
 export function listDatasets(
-  kind?: 'lpr' | 'vehicles',
+  filter: { kind?: string; profile_name?: string } = {},
   signal?: AbortSignal,
 ): Promise<OpDatasetList> {
-  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
-  return apiFetch<OpDatasetList>(`${API_PREFIX}/export/datasets${qs}`, {}, signal);
+  return apiFetch<OpDatasetList>(
+    `${API_PREFIX}/export/datasets${qs(filter)}`,
+    {},
+    signal,
+  );
 }
 
 // -- classes mutators ----------------------------------------------------

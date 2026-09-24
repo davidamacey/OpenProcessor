@@ -89,42 +89,52 @@ export interface OpExportResult {
   message?: string | null;
 }
 
-/** Server response from `POST /curation/export/lpr` (single-class plate dataset). */
-export interface OpLprExportResult {
+/** Server response from `POST {API_PREFIX}/export/single_class`. */
+export interface OpSingleClassExportResult {
   status: string;
   export_dir: string;
+  version_tag?: string | null;
   manifest_path: string;
   data_yaml_path: string;
   dataset_sha: string;
+  frozen_test_sha?: string | null;
   split_counts: Record<string, number>;
   image_count: number;
+  class_count?: number | null;
   positive_images?: number | null;
   background_images?: number | null;
-  false_positive_background_images?: number | null;
   positives_zero_warning?: boolean | null;
-  dedup?: Record<string, unknown> | null;
-  image_mode?: 'whole_frame' | 'vehicle_crop' | null;
-  img_max_side?: number | null;
   current_symlink?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
 }
 
-/** Server response from `GET /curation/export/lpr/status`. */
-export interface OpLprExportStatus {
-  status: string;
+/** Server response from `GET {API_PREFIX}/export/single_class/status`. */
+export interface OpSingleClassExportStatus {
+  status: 'idle' | 'unknown' | 'success' | string;
+  profile_name: string;
   last_run: string | null;
   export_dir?: string | null;
+  dataset_kind?: string | null;
   dataset_sha?: string | null;
+  frozen_test_sha?: string | null;
+  class_count?: number | null;
+  class_names?: string[] | null;
+  image_count?: number | null;
   positive_images?: number | null;
   background_images?: number | null;
   false_positive_background_images?: number | null;
+  positives_zero_warning?: boolean | null;
   split_counts?: Record<string, number> | null;
 }
 
 /** One materialized dataset version from `GET /curation/export/datasets`. */
 export interface OpDataset {
-  kind: 'lpr' | 'vehicles';
+  /** The `/methods` export-axis id that produced it: `yolo` (multi-class)
+   *  or `single_class`. */
+  kind: string;
+  /** Narrowed exports only — which single-class profile wrote it. */
+  profile_name?: string | null;
   export_dir: string;
   version_tag: string;
   image_count?: number | null;

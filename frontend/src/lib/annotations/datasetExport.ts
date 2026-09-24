@@ -12,12 +12,11 @@
  * simply does not render — never a half-built form pointing at a
  * half-built path.
  *
- * Dataset export stays profile-private on purpose: OpenProcessor
- * classifies `legacy_lpr_export.py` Bucket B and never ported it, so
- * this is one deployment's proprietary overlay, not a generalized
- * capability. Whether the panel renders at all is a separate,
- * server-side question — see `isDatasetExportAvailable` in
- * `$lib/strategies`.
+ * The backend side is OpenProcessor's generic narrowed export
+ * (`POST /export/single_class`): the slot supplies the profile name, box
+ * source and class vocabulary; the backend owns the rest. Whether the
+ * panel renders at all is a separate, server-side question — see
+ * `isDatasetExportAvailable` in `$lib/strategies`.
  */
 
 import type { SlotSpec } from './types';
@@ -31,11 +30,21 @@ export interface DatasetExportSpec {
   /** Relative to `API_PREFIX`, never absolute (cohorts.ts §2.5's rule). */
   buildPath: string;
   statusPath: string;
-  /** `OpDataset.kind` this export materializes, for the dataset picker. */
+  /** `/train`'s dataset-picker key for this export. */
   datasetKind: string;
   /** Trains with `single_cls: true` and `include_classes: null`. */
   singleClass: boolean;
   blurb: string;
+  /** Wire `profile_name`: the export's own output root, `current`
+   *  symlink and `/export/datasets` `profile_name`. */
+  profileName: string;
+  /** Wire `box_source`: the item's own box, or its region sub-box. */
+  boxSource: 'item' | 'region';
+  /** Wire `region_class_name`: the data.yaml name in region mode. */
+  regionClassName?: string;
+  /** Wire `class_ids`, in label-id order. Required for `boxSource:
+   *  'item'`; an optional parent-class filter for `'region'`. */
+  classIds: number[];
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -66,9 +75,29 @@ export function datasetExportForSlot(slot: SlotSpec): DatasetExportSpec | undefi
   const statusPath = nonEmptyString(raw.statusPath);
   const datasetKind = nonEmptyString(raw.datasetKind);
   const blurb = nonEmptyString(raw.blurb);
-  if (!kind || !label || !buildPath || !statusPath || !datasetKind || !blurb) {
+  const profileName = nonEmptyString(raw.profileName);
+  if (
+    !kind ||
+    !label ||
+    !buildPath ||
+    !statusPath ||
+    !datasetKind ||
+    !blurb ||
+    !profileName
+  ) {
     return undefined;
   }
+  if (raw.boxSource !== 'item' && raw.boxSource !== 'region') return undefined;
+  const classIds = raw.classIds ?? [];
+  if (!Array.isArray(classIds) || !classIds.every((c) => Number.isInteger(c) && c >= 0)) {
+    return undefined;
+  }
+  // Mirrors the backend's own rule, so a bad profile fails here instead of
+  // as a 422 after the operator clicks Build.
+  if (raw.boxSource === 'item' && classIds.length === 0) return undefined;
+  const regionClassName =
+    raw.regionClassName === undefined ? undefined : nonEmptyString(raw.regionClassName);
+  if (raw.regionClassName !== undefined && !regionClassName) return undefined;
   // Prefix-relative only. An absolute URL here would bypass apiBase and
   // API_PREFIX both, which is the bug class plateThumbUrl.test.ts exists
   // to prevent on the image side.
@@ -82,5 +111,9 @@ export function datasetExportForSlot(slot: SlotSpec): DatasetExportSpec | undefi
     datasetKind,
     singleClass: raw.singleClass === true,
     blurb,
+    profileName,
+    boxSource: raw.boxSource,
+    ...(regionClassName ? { regionClassName } : {}),
+    classIds: classIds as number[],
   };
 }

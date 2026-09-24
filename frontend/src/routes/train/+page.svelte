@@ -21,8 +21,8 @@
     ApiError,
     cancelTrainCampaign,
     cancelTrainJob,
-    exportLpr,
-    exportLprStatus,
+    exportSingleClass,
+    exportSingleClassStatus,
     exportStatus,
     getCrops,
     getReviewQueue,
@@ -126,13 +126,14 @@
       ),
   );
 
-  // Which frozen export the training run targets: the multi-class vehicle
-  // dataset (current) or the registered slot's single-class dataset (today,
-  // license_plate's `lpr_current`). `datasetKind` is `'vehicles'` or
-  // whatever string the active slot's `extras.datasetExport.datasetKind`
-  // declares — never a hardcoded second literal, so a second registered
-  // slot with its own dataset export needs no change here.
-  let datasetKind = $state<string>('vehicles');
+  // Which frozen export the training run targets: the multi-class dataset
+  // (`MULTI_CLASS`, the `yolo` export's `current`) or the registered slot's
+  // single-class dataset. `datasetKind` is `MULTI_CLASS` or whatever
+  // string the active slot's `extras.datasetExport.datasetKind` declares
+  // — never a hardcoded second literal, so a second registered slot with
+  // its own dataset export needs no change here.
+  const MULTI_CLASS = 'yolo';
+  let datasetKind = $state<string>(MULTI_CLASS);
   let vehiclesDir = $state<string>('');
   let singleClassExportDir = $state<string>('');
   // All materialized dataset versions on disk (both kinds), newest first.
@@ -142,7 +143,16 @@
   // unchanged. Picking any past export lets us reuse the exact same data when
   // upsizing nano -> small, etc.
   let selectedExportDir = $state<string>('');
-  const kindDatasets = $derived(datasets.filter((d) => d.kind === datasetKind));
+  // Multi-class rows are `kind: 'yolo'`; a slot's rows are `single_class`
+  // rows written under its own `profile_name`.
+  const kindDatasets = $derived(
+    datasets.filter((d) =>
+      datasetExportSpec && datasetKind === datasetExportSpec.datasetKind
+        ? d.kind === datasetExportSpec.kind &&
+          d.profile_name === datasetExportSpec.profileName
+        : d.kind === MULTI_CLASS,
+    ),
+  );
   let datasetExportDir = $derived(
     selectedExportDir ||
       (datasetKind === datasetExportSpec?.datasetKind
@@ -157,14 +167,14 @@
     selectedExportDir = ''; // reset to the current export of the new kind
   }
 
-  // `/methods` resolves after mount, so the LPR toggle can disappear
-  // while its kind is selected. Fall back to the always-present vehicles
-  // dataset rather than leaving the picker pointed at a kind with no UI
+  // `/methods` resolves after mount, so the single-class toggle can
+  // disappear while its kind is selected. Fall back to the always-present
+  // multi-class dataset rather than leaving the picker pointed at a kind with no UI
   // behind it — same "force the stale selection off" pattern
   // /clusters uses for the embedding-plot toggle.
   $effect(() => {
-    if (!datasetExportAvailable && datasetKind !== 'vehicles') {
-      selectDatasetKind('vehicles');
+    if (!datasetExportAvailable && datasetKind !== MULTI_CLASS) {
+      selectDatasetKind(MULTI_CLASS);
     }
   });
 
@@ -197,22 +207,20 @@
     return `${dir} (${n} imgs${samp}${tag}${cur}) ${when}`.trim();
   }
 
-  // ---- Single-class dataset export (today: license_plate's LPR export) --
-  // Built on demand via the active slot's `extras.datasetExport` spec.
-  // Backend is synchronous, so we just await it and surface the resulting
-  // dir + counts. Only api.ts's wire path (`exportLpr`/`exportLprStatus`,
-  // `/export/lpr`) and the four typed option controls below remain
-  // LPR-shaped — deliberately: see
-  // docs/design/bakeoff-train-genericization-plan-2026-09-21.md §3.3/§3.4
-  // for why generalizing them would produce a form builder with exactly
-  // one form to build. Every other string in this section now reads from
-  // the active slot's declared `datasetExportSpec`.
+  // ---- Single-class dataset export (today: license_plate) ---------------
+  // Built on demand via the active slot's `extras.datasetExport` spec,
+  // through OpenProcessor's generic `POST /export/single_class`. Backend
+  // is synchronous, so we just await it and surface the resulting dir +
+  // counts. Only the four typed option controls below stay hand-written —
+  // see docs/design/bakeoff-train-genericization-plan-2026-09-21.md
+  // §3.3/§3.4 for why generalizing them would produce a form builder with
+  // exactly one form to build.
   let singleClassExporting = $state<boolean>(false);
   let singleClassExportMessage = $state<string | null>(null);
   // Export options. whole_frame = full source frame (deployment distribution);
-  // vehicle_crop = parent vehicle crop with the plate re-projected. 640 for a
+  // item_crop = parent item crop with the region re-projected. 640 for a
   // fast pass, 1280 for the full run. dedup collapses >=0.98 near-dup frames.
-  let singleClassImageMode = $state<'whole_frame' | 'vehicle_crop'>('whole_frame');
+  let singleClassImageMode = $state<'whole_frame' | 'item_crop'>('whole_frame');
   let singleClassImgSize = $state<640 | 1280>(1280);
   let singleClassDedup = $state<boolean>(true);
   // Optional N: sample at most this many positive (plate-bearing) frames,
@@ -222,7 +230,8 @@
 
   async function refreshSingleClassExportStatus(): Promise<void> {
     try {
-      const s = await exportLprStatus();
+      if (!datasetExportSpec) return;
+      const s = await exportSingleClassStatus(datasetExportSpec);
       singleClassExportDir = s.export_dir ?? '';
     } catch {
       // Non-fatal — the export just hasn't run yet.
@@ -230,11 +239,10 @@
   }
 
   // Only ask for export status once the capability gate says the route
-  // exists. Firing it unconditionally on mount is precisely the "never
-  // 404" violation this task removes: on OpenProcessor,
-  // `GET {API_PREFIX}/export/lpr/status` is not a registered route, and
-  // refreshSingleClassExportStatus()'s bare `catch {}` made that invisible
-  // outside the network tab. Plain `let`, not `$state` — writing it must
+  // exists. Firing it unconditionally on mount would 404 on a backend
+  // that doesn't advertise this export kind, and
+  // refreshSingleClassExportStatus()'s bare `catch {}` would make that
+  // invisible outside the network tab. Plain `let`, not `$state` — writing it must
   // not re-trigger this effect.
   let singleClassStatusRequested = false;
   $effect(() => {
@@ -251,7 +259,7 @@
     singleClassExporting = true;
     singleClassExportMessage = null;
     try {
-      const r = await exportLpr({
+      const r = await exportSingleClass(spec, {
         image_mode: singleClassImageMode,
         img_max_side: singleClassImgSize,
         dedup_threshold: singleClassDedup ? 0.98 : null,
@@ -264,10 +272,8 @@
       // Refresh the picker so the new version shows up immediately.
       void refreshDataset();
       const pos = r.positive_images ?? '?';
-      const fp = r.false_positive_background_images ?? '?';
-      const mode = r.image_mode ?? singleClassImageMode;
-      const size = r.img_max_side ?? singleClassImgSize;
-      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${fp} FP-negatives), ${mode} @ ${size}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
+      const bg = r.background_images ?? '?';
+      singleClassExportMessage = `${spec.label} done — ${r.image_count} images (${pos} positives, ${bg} backgrounds), ${singleClassImageMode} @ ${singleClassImgSize}px${singleClassDedup ? ', dedup 0.98' : ''}. dataset_sha ${r.dataset_sha.slice(0, 12)}`;
       if (r.positives_zero_warning) {
         singleClassExportMessage += ' ⚠ zero positives — check labeling for this slot.';
       }
@@ -842,12 +848,12 @@
       <div class="flex gap-1 text-xs">
         <button
           type="button"
-          class="rounded border px-2 py-0.5 {datasetKind === 'vehicles'
+          class="rounded border px-2 py-0.5 {datasetKind === MULTI_CLASS
             ? 'border-blue-500 bg-blue-950 text-blue-200'
             : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:bg-zinc-800'}"
-          onclick={() => selectDatasetKind('vehicles')}
+          onclick={() => selectDatasetKind(MULTI_CLASS)}
         >
-          Multi-class vehicles
+          Multi-class
         </button>
         {#if datasetExportAvailable}
           <button
@@ -877,7 +883,7 @@
         >
           <option value="">
             current ({datasetKind === datasetExportSpec?.datasetKind
-              ? `${datasetExportSpec.kind}_current`
+              ? `${datasetExportSpec.profileName} current`
               : 'current'} symlink — latest)
           </option>
           {#each kindDatasets as d (d.export_dir)}
@@ -940,7 +946,7 @@
             class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
           >
             <option value="whole_frame">whole frame</option>
-            <option value="vehicle_crop">vehicle crop</option>
+            <option value="item_crop">parent crop</option>
           </select>
         </label>
         <label class="block">
