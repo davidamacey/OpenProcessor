@@ -24,6 +24,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   restoring the item, and skip no longer advancing the cursor — with a
   98.63% Stryker mutation score on the new controller (the one
   remaining survivor is a documented equivalent mutant).
+- `src/lib/clusters/clusterController.svelte.ts`: the same extraction for
+  `/clusters/[id]`, the other labeling hot path — assignClassToSelected,
+  the drop-on-class handler, accept/reject-VLM, accept-all-VLM-on-page,
+  discard (D), undoLast (Z), ignore/undoIgnore (X/U), and moveCropIds,
+  plus the `excludedCropIds` stale-fetch-race guard (now `ExclusionGuard`,
+  via `createExclusionGuard()`) all move out of `+page.svelte`, which is
+  now wiring and markup only. Closes the surviving `if (false)` mutant in
+  the old undo path (docs/design/test-audit-2026-09-24.md §2.2, old
+  `+page.svelte:634`) — both the in-place-replace and prepend branches of
+  `undoLast`'s `if (cropPager.items.some(...))` are now exercised
+  directly — with a 98.70% Stryker mutation score on the new controller
+  (three documented equivalent-mutant survivors, same convention as
+  `reviewController.svelte.ts`'s).
 - `src/lib/testing/sourceScan.ts`: whitespace-insensitive,
   brace-balanced helpers (`normalize`, `extractFunction`,
   `extractBalanced`) for the remaining source-scan tests that guard
@@ -171,6 +184,20 @@ undo_batch` restores each crop to its prior `vlm_new_class_pending`
 
 ### Changed
 
+- `clusterMoveRace.test.ts`'s `describe('wiring: ... actually uses the
+exclusion set', ...)` block (6 source-scan tests regexing
+  `excludedCropIds.add`/`.delete` call sites across
+  `+page.svelte`) is deleted — that logic moved into
+  `clusterController.svelte.ts`'s `ExclusionGuard`/`handleClassDrop`/
+  `moveCropIds`/`ignoreSelected`/`undoIgnore`/`discardSelected`/
+  `undoLast`, now covered behaviorally by `clusterController.test.ts`
+  (see that file's `describe` blocks for the 1:1 replacement mapping,
+  documented inline in `clusterMoveRace.test.ts`). `logicMovesW1.test.ts`
+  (3 more source-scan tests, over the same discard/reject-VLM/
+  bulk-label-undo logic that also moved into the controller) is deleted
+  outright for the same reason. `clusterMoveRace.test.ts`'s other block
+  (`gridGroups`/`onGroupFinalize` derivation, unrelated to this
+  extraction) is untouched.
 - Trimmed/deleted several source-scan tests now superseded by real
   mount or controller tests, or that never failed for an actual
   regression (test-audit-2026-09-24.md T2/P2-2): the

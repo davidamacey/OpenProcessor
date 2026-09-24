@@ -628,6 +628,20 @@ controller by reference/accessor, following the existing
 new queue-action behavior against the controller directly
 (`reviewController.test.ts`), not by mounting the whole page.
 
+`/clusters/[id]`'s equivalent actions (assign / drop-on-class / accept-
+reject-VLM / accept-all-VLM-on-page / discard / undo / ignore-unignore /
+move) live in `src/lib/clusters/clusterController.svelte.ts`, same
+convention — the page owns `cropPager`/`sel`/`dragIds`/the grid's
+drag-local override and hands them to the controller by
+reference/accessor. The stale-fetch-race guard (`excludedCropIds`) is
+its own factory, `createExclusionGuard()`, exported alongside the
+controller: the page creates it first and wires `cropPager`'s `accept`
+option to it before the rest of the controller exists (which itself
+needs `cropPager` as an input) — this sidesteps a forward-declared
+`let controller` that `svelte-check` would flag as a non-reactive
+`$state` update. Test new cluster-action behavior against the
+controller directly (`clusterController.test.ts`).
+
 Every new test in either category should be verified to fail against a
 mutated copy of the code it covers (edit a scratch copy, confirm red,
 restore byte-for-byte — never `git checkout`/`stash`/`restore`) before
