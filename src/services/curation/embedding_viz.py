@@ -3,64 +3,52 @@
 
 Non-negotiable design rules (plan §2.7 / §8 non-goal #4):
 
-1. **Own persisted state slot.** This module never touches
+1. **Own persisted state slot.** Never touches
    ``embedding_reduce.UMAP_STATE_JOBLIB_PATH{,_CUML}`` or the
-   ``op_umap_state`` OpenSearch index — those belong to the *retired*
-   clustering reducer (``docs/design/clustering_methods.md`` §2.1: UMAP
-   collapsed the large majority of the residual pool into one
-   mega-cluster and was retired for clustering). This module's state
-   lives at ``umap_viz_state.joblib`` (disk) and the ``op_umap_viz_state``
-   index (OpenSearch) — deliberately distinct names, never imported by
-   or imported from ``embedding_reduce.py`` / ``curation_umap.py`` /
-   ``clustering/orchestrator.py`` / ``clustering/methods/``.
+   ``op_umap_state`` index — those belong to the *retired* clustering
+   reducer (``docs/design/clustering_methods.md`` §2.1: UMAP collapsed
+   most of the residual pool into one mega-cluster and was retired for
+   clustering). This module's state lives at ``umap_viz_state.joblib``
+   (disk) and the ``op_umap_viz_state`` index — deliberately distinct
+   names, never imported by/from ``embedding_reduce.py`` /
+   ``curation_umap.py`` / ``clustering/orchestrator.py`` /
+   ``clustering/methods/``.
 2. **Never fits on a request path.** ``fit_projection`` (the only
-   function that imports ``umap`` / calls ``.fit_transform``) is reachable
-   solely from :func:`run_projection_job`, itself only ever scheduled by
-   :func:`start_job` (the ``POST /curation/viz/projection/rebuild`` handler
-   in ``src/routers/curation/viz.py``). ``GET /curation/viz/projection``
-   calls only :func:`get_cached_projection`, which does a plain
-   OpenSearch ``search`` over already-written ``viz_x``/``viz_y`` fields
-   and imports nothing UMAP-related — enforced by
-   ``tests/curation/test_embedding_viz.py::test_get_cached_projection_never_triggers_a_fit``
-   (monkeypatches :func:`fit_projection` to raise, then proves
-   the GET-only path never calls it).
+   function importing ``umap`` / calling ``.fit_transform``) is reachable
+   solely from :func:`run_projection_job`, scheduled only by
+   :func:`start_job` (``POST /curation/viz/projection/rebuild``).
+   ``GET /curation/viz/projection`` calls only
+   :func:`get_cached_projection`, a plain OpenSearch ``search`` over
+   already-written ``viz_x``/``viz_y`` fields — enforced by
+   ``tests/curation/test_embedding_viz.py::test_get_cached_projection_never_triggers_a_fit``.
 3. **Color comes from the real ``cluster_id`` field, computed by FAISS
-   IVF elsewhere** — this module doesn't invent a second cluster concept.
-   Every cached point row includes the crop's current ``cluster_id`` (read
-   verbatim off the crop doc, not derived here) purely so a consumer can
-   color-by-cluster; this module never assigns or writes ``cluster_id``.
-4. **Only writes ``viz_x`` / ``viz_y`` / ``viz_projection_version``** —
-   the three fields declared by
-   :func:`src.clients.curation_opensearch.ensure_items_viz_fields`.
+   IVF elsewhere** — this module doesn't invent a second cluster concept
+   and never assigns or writes ``cluster_id``; it only reads it verbatim
+   off the crop doc for the consumer to color by.
+4. **Only writes ``viz_x`` / ``viz_y`` / ``viz_projection_version``**
+   (the three fields declared by
+   :func:`src.clients.curation_opensearch.ensure_items_viz_fields`).
    Never ``cluster_id`` / ``cluster_subid`` / ``cluster_distance`` (plan §8
    non-goal #3, guarded by
    ``tests/curation/test_embedding_viz.py::test_writes_never_include_cluster_fields``).
 
-Embedding fetch reuses the two existing helpers rather than writing a
-third scroll/PIT-fetch implementation (plan §3.5 note): ``scope='residual'``
+Embedding fetch reuses the two existing helpers rather than a third
+scroll/PIT-fetch implementation (plan §3.5 note): ``scope='residual'``
 delegates to
 :func:`src.services.curation.clustering.embedding_reduce.fetch_residual_v6_embeddings_parallel`
-(same pool + same ``CONFIDENT_CLASS_SOURCES``/``class_excluded`` gate
-``item_scores.job`` already uses); ``scope='cluster'`` delegates to
+(same pool + ``CONFIDENT_CLASS_SOURCES``/``class_excluded`` gate
+``item_scores.job`` uses); ``scope='cluster'`` delegates to
 :func:`src.services.curation.selection.pool_fetch.fetch_pool_embeddings`
-with a ``cluster_id`` term filter (the same building block the select
-router uses for its own cluster-scoped queries; both this function and
-that router land in a later curation wave — see the lazy import below).
-Both paths already exclude ``test_holdout=true`` crops.
+with a ``cluster_id`` term filter (same building block the select router
+uses). Both paths already exclude ``test_holdout=true`` crops.
 
-Job-runner pattern: mirrors
-:mod:`src.services.curation.item_scores.job`'s singleton
-state.json/heartbeat/cancel.flag file-backed conventions rather than
-:mod:`src.services.curation.selection.job`'s — this job, like
-``item_scores.job`` (and unlike the 100%-read-only ``selection.job``),
-*writes* fields back to OpenSearch (``viz_x``/``viz_y``/
-``viz_projection_version``) via a bulk update, so ``item_scores.job`` is
-the closer-fitting precedent. Unlike the retired clustering reducer, this
-job never needs a ``mode='transform'`` path — every rebuild does one full
-fresh ``fit_transform`` over the chosen scope and writes coordinates; nothing
-ever re-loads the pickled reducer to project new points against an old
-manifold, so persisting the fitted reducer object is for provenance only
-(a future rebuild could load it to compare), not a functional requirement.
+Job-runner pattern mirrors :mod:`src.services.curation.item_scores.job`'s
+singleton state.json/heartbeat/cancel.flag conventions rather than
+:mod:`src.services.curation.selection.job`'s, since (like
+``item_scores.job``, unlike the read-only ``selection.job``) this job
+*writes* fields back via a bulk update. Every rebuild does one full fresh
+``fit_transform`` and writes coordinates; persisting the fitted reducer
+is for provenance only, not a functional requirement.
 """
 
 from __future__ import annotations
@@ -118,11 +106,13 @@ VIZ_PROJECTION_VERSION = 'umap_viz_v1'
 
 EMBEDDING_FIELD = 'pe_embedding'
 
-# Job pool caps. Residual-scope fetch has no built-in cap (unlike
+# max_result_window is 10000; get_cached_projection() pages with search_after
+# in chunks of this size instead of a single oversized `size: max_points` (F-2).
+_VIZ_PROJECTION_PAGE_SIZE = 5000
+
+# Job pool cap. Residual-scope fetch has no built-in cap (unlike
 # selection.pool_fetch's `cap` kwarg), so this module samples down to
-# max_n *after* the fetch, deterministically (seeded), rather than
-# truncating the scroll early -- a truncated-early sample would bias
-# toward whichever shard happens to sort first.
+# max_n *after* the fetch, deterministically (seeded) to avoid shard bias.
 DEFAULT_MAX_N = 20_000
 
 _HEARTBEAT_STALE_S = 30.0
@@ -592,6 +582,18 @@ async def run_projection_job(
             await ticker
 
 
+def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:
+    src = h.get('_source') or {}
+    return {
+        'crop_id': h['_id'],
+        'x': src.get('viz_x'),
+        'y': src.get('viz_y'),
+        'cluster_id': src.get('cluster_id'),
+        'class_name': src.get('class_name'),
+        'class_source': src.get('class_source'),
+    }
+
+
 async def get_cached_projection(
     opensearch: AsyncOpenSearch,
     *,
@@ -625,30 +627,31 @@ async def get_cached_projection(
 
     points_query = {
         'bool': {
-            'must': [*scope_must, {'exists': {'field': 'viz_x'}}],
+            'filter': [*scope_must, {'exists': {'field': 'viz_x'}}],
             'must_not': scope_must_not,
         }
     }
-    resp = await opensearch.search(
-        index=ITEMS_INDEX,
-        body={
-            'size': max_points,
+    points: list[dict[str, Any]] = []
+    search_after: list[Any] | None = None
+    while len(points) < max_points:
+        page_size = min(_VIZ_PROJECTION_PAGE_SIZE, max_points - len(points))
+        body: dict[str, Any] = {
+            'size': page_size,
             'query': points_query,
             '_source': ['viz_x', 'viz_y', 'cluster_id', 'class_name', 'class_source'],
-        },
-    )
-    hits = resp.get('hits', {}).get('hits') or []
-    points = [
-        {
-            'crop_id': h['_id'],
-            'x': (h.get('_source') or {}).get('viz_x'),
-            'y': (h.get('_source') or {}).get('viz_y'),
-            'cluster_id': (h.get('_source') or {}).get('cluster_id'),
-            'class_name': (h.get('_source') or {}).get('class_name'),
-            'class_source': (h.get('_source') or {}).get('class_source'),
+            'sort': [{'crop_id': 'asc'}],
+            'track_total_hits': False,
         }
-        for h in hits
-    ]
+        if search_after is not None:
+            body['search_after'] = search_after
+        resp = await opensearch.search(index=ITEMS_INDEX, body=body)
+        hits = resp.get('hits', {}).get('hits') or []
+        if not hits:
+            break
+        points.extend(_point_from_hit(h) for h in hits)
+        if len(hits) < page_size:
+            break
+        search_after = hits[-1]['sort']
 
     stale = False
     try:

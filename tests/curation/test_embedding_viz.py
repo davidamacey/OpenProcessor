@@ -339,10 +339,68 @@ async def test_get_cached_projection_applies_cluster_and_class_filters(
     await embedding_viz.get_cached_projection(fake_os, cluster_id=10173, class_id=7, max_points=5)
 
     search_kwargs = fake_os.search.call_args.kwargs
-    must_clauses = search_kwargs['body']['query']['bool']['must']
-    assert {'term': {'cluster_id': 10173}} in must_clauses
-    assert {'term': {'class_id': 7}} in must_clauses
+    filter_clauses = search_kwargs['body']['query']['bool']['filter']
+    assert {'term': {'cluster_id': 10173}} in filter_clauses
+    assert {'term': {'class_id': 7}} in filter_clauses
     assert search_kwargs['body']['size'] == 5
+
+
+@pytest.mark.asyncio
+async def test_get_cached_projection_pages_with_search_after_no_oversized_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-2 regression: OpenSearch's index.max_result_window is 10000, so a
+    single `size: max_points` request always 400s once max_points exceeds
+    it. get_cached_projection() must page with search_after in bounded
+    chunks instead -- no single search request may ask for size > 10000,
+    even when max_points is the router's full 200_000 cap.
+    """
+    from src.services.curation import embedding_viz
+
+    fake_os = AsyncMock()
+    fake_os.get = AsyncMock(
+        return_value={'_source': {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}}
+    )
+    fake_os.count = AsyncMock(return_value={'count': 0})
+
+    page_size = embedding_viz._VIZ_PROJECTION_PAGE_SIZE
+
+    def _page(crop_id: str) -> dict[str, Any]:
+        return {
+            '_id': crop_id,
+            '_source': {
+                'viz_x': 1.0,
+                'viz_y': 2.0,
+                'cluster_id': 1,
+                'class_name': 'x',
+                'class_source': 'vlm',
+            },
+            'sort': [crop_id],
+        }
+
+    # Two full pages, then a short (final) page -> loop must stop there.
+    responses = [
+        {'hits': {'hits': [_page(f'a-{i}') for i in range(page_size)]}},
+        {'hits': {'hits': [_page(f'b-{i}') for i in range(page_size)]}},
+        {'hits': {'hits': [_page('c-0')]}},
+    ]
+    fake_os.search = AsyncMock(side_effect=responses)
+
+    result = await embedding_viz.get_cached_projection(fake_os, max_points=200_000)
+
+    assert fake_os.search.await_count == 3
+    for call in fake_os.search.await_args_list:
+        assert call.kwargs['body']['size'] <= 10_000
+        assert call.kwargs['body']['sort'] == [{'crop_id': 'asc'}]
+        assert call.kwargs['body']['track_total_hits'] is False
+    # second and third calls carry search_after from the previous page's last hit
+    assert fake_os.search.await_args_list[1].kwargs['body']['search_after'] == [
+        f'a-{page_size - 1}'
+    ]
+    assert fake_os.search.await_args_list[2].kwargs['body']['search_after'] == [
+        f'b-{page_size - 1}'
+    ]
+    assert len(result['points']) == 2 * page_size + 1
 
 
 # =============================================================================
