@@ -97,11 +97,16 @@ def _warn_classifier_sources_empty_once() -> None:
         )
 
 
-def _build_pending_query(v6_skip_conf: float) -> dict:
+def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = None) -> dict:
     """Crops that need the VLM right now.
 
     Mirrors the ``must_not`` clauses in pipeline_auto_label so the same
     crops the on-demand pipeline would process are picked up by the worker.
+
+    F-20: ``exclude_ids`` pushes the producer's in-flight set into the
+    query server-side (``must_not: {ids: ...}``) instead of over-fetching
+    ``batch_size + len(in_flight)`` docs and filtering in-flight ids out
+    in Python.
     """
     # Lazy: keeps the module import light; src.config is all this pulls in.
     from src.services.curation.ingest_class_sources import classifier_class_sources
@@ -126,21 +131,30 @@ def _build_pending_query(v6_skip_conf: float) -> dict:
         # only emit it when there's something to exclude, and log once
         # so operators know this guard rail is inactive in this env.
         _warn_classifier_sources_empty_once()
-    must_not.extend(
-        [
-            # Plan §1.5: prototype + ensemble_proto_rescue + ensemble_consensus
-            # class_source values are gone. Surviving auto-validation
-            # path is class_source='classifier_vlm_agreement' (A-PR2 ensemble
-            # writer; this query excludes already-labeled rows).
-            # Gemma already labeled successfully
-            {'term': {'class_source': 'vlm'}},
-            {'term': {'class_source': 'classifier_vlm_agreement'}},
-            {'term': {'class_source': 'cluster_majority_agreement'}},
-            # Gemma already failed once — won't help to retry
-            {'term': {'class_source': 'vlm_unmatched'}},
-            {'term': {'class_source': 'vlm_new_class_pending'}},
-        ]
+    # F-20: one `terms` clause instead of 5 separate `term` clauses on the
+    # same field — same match semantics, one less clause for OS to eval.
+    must_not.append(
+        {
+            'terms': {
+                'class_source': [
+                    # Plan §1.5: prototype + ensemble_proto_rescue +
+                    # ensemble_consensus class_source values are gone.
+                    # Surviving auto-validation path is
+                    # 'classifier_vlm_agreement' (A-PR2 ensemble writer;
+                    # this query excludes already-labeled rows).
+                    # Gemma already labeled successfully:
+                    'vlm',
+                    'classifier_vlm_agreement',
+                    'cluster_majority_agreement',
+                    # Gemma already failed once — won't help to retry:
+                    'vlm_unmatched',
+                    'vlm_new_class_pending',
+                ],
+            },
+        },
     )
+    if exclude_ids:
+        must_not.append({'ids': {'values': exclude_ids}})
     return {
         'bool': {
             'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
@@ -175,16 +189,28 @@ async def fetch_pending_ids(
     opensearch_url: str,
     batch_size: int,
     v6_skip_conf: float,
+    exclude_ids: list[str] | None = None,
 ) -> list[str]:
-    """Pull up to ``batch_size`` crop IDs that need Gemma."""
+    """Pull up to ``batch_size`` crop IDs that need Gemma.
+
+    F-20: ``stored_fields: '_none_'`` skips loading the stored document
+    entirely (only ``_id``, always free metadata, is returned) — cheaper
+    than the previous ``_source: False`` for the same "ids only" result.
+    ``track_total_hits: False`` skips the exact-count pass this producer
+    never reads. ``exclude_ids`` (the caller's in-flight set) is pushed
+    into the query itself instead of being filtered out in Python after
+    over-fetching ``batch_size + len(in_flight)`` docs.
+    """
     body = {
         'size': batch_size,
-        '_source': False,
-        'query': _build_pending_query(v6_skip_conf),
+        'stored_fields': '_none_',
+        'track_total_hits': False,
+        'query': _build_pending_query(v6_skip_conf, exclude_ids=exclude_ids),
         # Oldest pending first — fairness across crops added across the
         # run; also avoids head-of-line starvation when new crops keep
-        # arriving from ingest.
-        'sort': [{'created_at': 'asc'}],
+        # arriving from ingest. crop_id tiebreaker keeps paging stable
+        # for same-timestamp crops.
+        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     r = await client.post(
         f'{opensearch_url}/{ITEMS_INDEX}/_search',
@@ -294,21 +320,23 @@ async def run(args: argparse.Namespace) -> int:
                 await asyncio.sleep(0.05)
                 continue
             try:
-                # Fetch enough to refill the queue PLUS skip past the
-                # in-flight window. With concurrency=24 and many chunks
-                # in flight at once, the in_flight set can easily hold
-                # 1000+ ids; without this we re-fetch them as oldest
-                # every poll and queue 0 fresh.
-                async with in_flight_lock:
-                    in_flight_count = len(in_flight)
-                fetch_n = (args.vlm_batch_size * args.concurrency * 2) + in_flight_count
-                fetch_n = min(fetch_n, 9000)  # OS hits cap
+                # F-20: in-flight ids are excluded server-side (must_not
+                # ids) now, so the fetch only needs to refill the queue —
+                # no more "+ in_flight_count" over-fetch-then-filter. The
+                # 1000+ in-flight ids at concurrency=24 still ride along
+                # as a must_not clause, which OS evaluates as a cheap
+                # docvalue lookup rather than as extra hits to transfer
+                # and discard.
+                fetch_n = min(args.vlm_batch_size * args.concurrency * 2, 9000)  # OS hits cap
                 fetch_started = time.monotonic()
+                async with in_flight_lock:
+                    exclude_ids = list(in_flight)
                 ids = await fetch_pending_ids(
                     client,
                     opensearch_url=args.opensearch,
                     batch_size=fetch_n,
                     v6_skip_conf=args.v6_conf_skip,
+                    exclude_ids=exclude_ids,
                 )
             except httpx.HTTPError as exc:
                 print(f'[vlm-worker] producer fetch error: {exc}')

@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from src.services.labeling.vlm_labeler import VlmLabeler
 
 
-def _build_pending_query() -> dict[str, Any]:
+def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]:
     """Crops needing the worker's attention — pending or pending_verify.
 
     Skips crops whose region status is already terminal so we never
@@ -71,11 +71,17 @@ def _build_pending_query() -> dict[str, Any]:
     region-fields-stay-unconditional rule. The test_holdout guard for
     this worker is scoped to the class-field write path only — see
     ``runner.py:_should_classify`` (checks ``task.test_holdout``).
+
+    F-20: none of these clauses score, so they belong in filter context
+    (cacheable, no scoring pass) rather than ``must``. ``exclude_ids`` —
+    the caller's in-flight set — is pushed server-side via
+    ``must_not: {ids: ...}`` instead of being filtered out in Python
+    after over-fetching ``batch_size + len(in_flight)`` docs.
     """
     F = get_region_fields()
-    return {
+    query: dict[str, Any] = {
         'bool': {
-            'must': [
+            'filter': [
                 {'exists': {'field': 'image_path'}},
                 {'exists': {'field': 'bbox_norm'}},
                 # Pull both legacy short names AND the renamed forms
@@ -95,10 +101,25 @@ def _build_pending_query() -> dict[str, Any]:
             ],
         },
     }
+    if exclude_ids:
+        query['bool']['must_not'] = [{'ids': {'values': exclude_ids}}]
+    return query
 
 
-async def _fetch_pending(opensearch: AsyncOpenSearch, *, batch_size: int) -> list[_ItemTask]:
-    """Pull up to ``batch_size`` pending crops, oldest first."""
+async def _fetch_pending(
+    opensearch: AsyncOpenSearch,
+    *,
+    batch_size: int,
+    exclude_ids: list[str] | None = None,
+) -> list[_ItemTask]:
+    """Pull up to ``batch_size`` pending crops, oldest first.
+
+    F-20: ``track_total_hits: False`` (the exact match count is never
+    read here) and a ``crop_id`` sort tiebreaker for stable ordering
+    among same-``created_at`` crops. ``_source`` stays an explicit
+    includes list (unlike the VLM worker's ids-only fetch) — this
+    worker needs bbox/class fields for every task it dispatches.
+    """
     F = get_region_fields()
     body = {
         'size': batch_size,
@@ -116,8 +137,9 @@ async def _fetch_pending(opensearch: AsyncOpenSearch, *, batch_size: int) -> lis
             'request_id',
             'test_holdout',
         ],
-        'query': _build_pending_query(),
-        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}],
+        'track_total_hits': False,
+        'query': _build_pending_query(exclude_ids=exclude_ids),
+        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
     hits = (resp.get('hits') or {}).get('hits') or []
