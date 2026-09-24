@@ -42,7 +42,7 @@
   interface Props {
     crop: PlateBrowseItem;
     /** Which slot's capabilities to render this card with. Defaults to
-     *  the legacy license_plate profile — the only configured
+     *  the built-in license_plate profile — the only configured
      *  instance today — but any `SlotSpec` whose wire field names
      *  match this crop's properties works unchanged. */
     slot?: SlotSpec;

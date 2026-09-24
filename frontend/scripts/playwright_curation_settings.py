@@ -39,13 +39,15 @@ HEADED = "--headed" in args
 args = [a for a in args if a != "--headed"]
 BASE = args[0] if args else "http://localhost:5173"
 
-# Today's real /curation/methods shape — no assist axes, one shadow sort to
+# Today's real /curation/methods shape (with the server's per-entry
+# `settable` flag) — no assist axes, one shadow sort to
 # prove the status filter, no synthetic 'default' sentinel.
 METHODS_TODAY = {
     "strategies": [
         {
             "id": "ivf",
             "axis": "cluster",
+            "settable": True,
             "label": "FAISS IVF-512 (production)",
             "status": "stable",
             "default": True,
@@ -53,6 +55,7 @@ METHODS_TODAY = {
         {
             "id": "recent",
             "axis": "sort",
+            "settable": True,
             "label": "Recent first",
             "status": "stable",
             "default": True,
@@ -60,12 +63,14 @@ METHODS_TODAY = {
         {
             "id": "uncertainty_entropy",
             "axis": "sort",
+            "settable": True,
             "label": "Uncertainty margin",
             "status": "experimental",
         },
         {
             "id": "hdbscan_probe",
             "axis": "sort",
+            "settable": True,
             "label": "HDBSCAN probe sort",
             "status": "shadow",
         },
@@ -81,6 +86,7 @@ METHODS_WITH_ASSIST_AXES = {
         {
             "id": "grounding_v2",
             "axis": "detection_profile",
+            "settable": False,
             "label": "grounding_v2",
             "status": "stable",
             "default": True,
@@ -88,6 +94,7 @@ METHODS_WITH_ASSIST_AXES = {
         {
             "id": "warehouse_v1",
             "axis": "prompt_pack",
+            "settable": True,
             "label": "warehouse_v1",
             "status": "stable",
             "default": True,
@@ -232,8 +239,8 @@ def main() -> int:
             str(options_text),
         )
         check(
-            "the 'Advertised but not yet wired' heading is absent",
-            page.get_by_text("Advertised but not yet wired").count() == 0,
+            "the read-only startup-config heading is absent",
+            page.get_by_text("Set by the backend's startup config").count() == 0,
         )
 
         # Select the sort axis's non-default option, then Save.
@@ -252,9 +259,9 @@ def main() -> int:
             dialog.get_by_text("Review queue sort").count() > 0,
         )
         check(
-            "dialog contains the irreversibility warning text",
+            "dialog carries no irreversibility warning (the sort pin is clearable now)",
             dialog.get_by_text(re.compile(r"no way to clear a shared sort default")).count()
-            > 0,
+            == 0,
         )
 
         stub2.put_calls.clear()
@@ -283,9 +290,9 @@ def main() -> int:
         page.unroute("**/curation/**")
 
         # ================================================================
-        # Pass 3 — advisory axes visible but inert.
+        # Pass 3 — non-settable axis visible but inert.
         # ================================================================
-        print("\nPass 3 — advisory axes visible but inert")
+        print("\nPass 3 — non-settable axis visible but inert")
         stub3 = Stub(METHODS_WITH_ASSIST_AXES, SETTINGS_EMPTY)
         page.route("**/curation/**", stub3.handle)
 
@@ -294,21 +301,22 @@ def main() -> int:
         page.wait_for_timeout(500)
 
         check(
-            "the 'Advertised but not yet wired' section is present",
-            page.get_by_text("Advertised but not yet wired").count() > 0,
+            "the read-only startup-config section is present",
+            page.get_by_text("Set by the backend's startup config").count() > 0,
         )
         check("names grounding_v2", page.get_by_text("grounding_v2").count() > 0)
         check("names warehouse_v1", page.get_by_text("warehouse_v1").count() > 0)
         check(
-            "the <select> count is still exactly 2 — advisory axes add no control",
-            page.locator("select").count() == 2,
+            "exactly 3 <select>s (cluster, sort, settable prompt_pack) — the"
+            " non-settable detection_profile adds no control",
+            page.locator("select").count() == 3,
             str(page.locator("select").count()),
         )
         check(
-            "'does not yet' wording is on screen",
-            page.get_by_text(re.compile(r"does not yet")).count() > 0,
+            "startup-config wording is on screen",
+            page.get_by_text(re.compile(r"chosen by the backend's startup config")).count() > 0,
         )
-        advisory_heading = page.get_by_text("Advertised but not yet wired")
+        advisory_heading = page.get_by_text("Set by the backend's startup config")
         advisory_section = advisory_heading.locator("xpath=ancestor::section[1]")
         check(
             "no Save button exists inside the advisory section",

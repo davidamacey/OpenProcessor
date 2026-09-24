@@ -6,7 +6,7 @@ SvelteKit + TypeScript image-crop annotation web app (product name
 capability-model / annotation-slot mechanism (see
 `docs/genericization-plan-2026-09-13.md`) so it is no longer
 hardcoded to vehicles or license plates — this deployment is
-currently configured for legacy v7 vehicle dataset construction via
+currently configured for a vehicle + license-plate dataset construction via
 `src/lib/annotations/registeredSlots.ts` and `profiles/licensePlate.ts`,
 but a new domain is added by registering a new slot profile, not by
 editing app code. Sister project to `legacy_sorter` (v2 Tauri app for
@@ -49,7 +49,7 @@ gone — every route in this table exists and works; nothing here is a stub.
 | `/export`                    | Trigger YOLO export, view balance gap, freeze test holdout, download the frozen export's `class_registry.json`/`data.yaml`/`manifest.json` (via `{API_PREFIX}/export/registry/{artifact}`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `/models`                    | Triton model registry browser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `/train`                     | Training cockpit — preflight, launch, live progress, log tail, past runs, **Promote**, **Reproduce**, **Training cohorts picker** (class-agnostic `CORE_COHORTS` for every class + `license_plate`'s 5 hand-tuned server-side modes — see "Training cohorts" below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `/bakeoff`                   | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `legacy-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded). Gated on backend availability via a one-shot probe of `GET {API_PREFIX}/bakeoff/runs` (`src/lib/bakeoffAvailability.svelte.ts`) — absent, not disabled: the nav link and page body don't render at all when the backend's `{API_PREFIX}/bakeoff/*` router isn't mounted, and no discovery request fires unconditionally on mount. Provisional until the backend ships an `evaluation` axis on `/methods`.                                                                                                                                                                                                                   |
+| `/bakeoff`                   | LPR model × frozen-dataset bake-off cockpit — scores every selected model against every selected dataset in the on-demand `curation-evaluator` container, renders a model × dataset matrix (best cell per dataset bolded). Gated on backend availability via a one-shot probe of `GET {API_PREFIX}/bakeoff/runs` (`src/lib/bakeoffAvailability.svelte.ts`) — absent, not disabled: the nav link and page body don't render at all when the backend's `{API_PREFIX}/bakeoff/*` router isn't mounted, and no discovery request fires unconditionally on mount. Provisional until the backend ships an `evaluation` axis on `/methods`.                                                                                                                                                                                                                  |
 | `/settings`                  | Deployment-defaults admin page for the shared curation-strategy defaults (`GET,PUT {API_PREFIX}/settings`) — one place to pin the deployment's clustering method, review-queue sort and VLM prompt pack (the latter honored by the always-on VLM labeler and by auto-label runs that don't pick their own), plus a read-only "Set by the backend's startup config" section for `detection_profile` (the backend picks it from startup config; nothing that runs reads a shared or per-run selection). Which axes get a control is decided solely by the server's per-entry `settable` flag on `/methods` (`settableAxes` in `src/lib/curationSettings.ts`). Deployment-wide — see `docs/design/curation-settings-ui-plan-2026-09-21.md` — so it is its own route rather than a `StrategyBar` chip, with an explicit confirm dialog before every save. |
 
 ## `/review` tab consolidation (2026-09)
@@ -161,7 +161,7 @@ breaks page load. Flags are OpenProcessor env vars
 `OP_VIZ_PROJECTION_ENABLED`, `OP_SEMANTIC_SEARCH_ENABLED`), all default
 off.
 
-## Training UI — `/train` (Phase 2 of legacy_train_pipeline)
+## Training UI — `/train` (Phase 2 of the training pipeline)
 
 Full cockpit for the training pipeline. The form auto-runs `{API_PREFIX}/train/preflight`
 on a 350ms debounce and renders the report inline. Status polls every 5s,
@@ -434,7 +434,7 @@ repo's `docker-compose.yml` (`docker compose up -d --build`), host port
 
 ## Connecting to OpenProcessor
 
-The backend is OpenProcessor's public `main` (the private legacy stack
+The backend is OpenProcessor's public `main` (the pre-cutover private stack
 serving `{API_PREFIX}/*` is retired). Three runtime env vars, all substituted at
 container start by `docker-entrypoint.sh`, so one image fits any deployment:
 

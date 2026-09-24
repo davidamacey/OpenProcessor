@@ -1,12 +1,12 @@
 /**
- * The legacy deployment's detector registry — verbatim reproduction of
+ * The built-in detector registry for this deployment's models — verbatim reproduction of
  * `DetectorChip.svelte`'s `labelFor`/`paletteFor`, so a future migration
  * to `ProvenanceChip.svelte` (§3.2 of the plan) renders pixel-identically.
  */
 
 import type { DetectorRegistry } from '../detectorRegistry';
 
-export const legacyDetectorRegistry: DetectorRegistry = {
+export const builtinDetectorRegistry: DetectorRegistry = {
   labels: {
     lpr_nanov11_640: 'LPR',
     sam3: 'SAM3',
@@ -21,10 +21,8 @@ export const legacyDetectorRegistry: DetectorRegistry = {
     gemma_propose: 'Gemma',
     gemma_prefilter: 'Gemma prefilter',
     vlm: 'VLM',
-    legacy_vehicle_v6_trt: 'v6',
     yolov11_small_trt_end2end: 'YOLO11',
     coco_yolo11_proposal: 'YOLO11',
-    ingest_v6: 'Ingest v6',
     onnxruntime: 'ORT',
     'ort-cuda': 'ORT·CUDA',
     'ort-trt': 'ORT·TRT',
@@ -35,8 +33,6 @@ export const legacyDetectorRegistry: DetectorRegistry = {
   // if-chain that are NOT prefix tests and must not be shadowed by one.
   palettes: {
     human: 'emerald',
-    legacy_vehicle_v6_trt: 'rose',
-    ingest_v6: 'rose',
     coco_yolo11_proposal: 'sky',
     onnxruntime: 'indigo',
   },

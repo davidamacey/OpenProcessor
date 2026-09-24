@@ -15,7 +15,7 @@ Include:
 
 ## Scope notes
 
-- `legacy-labeler` is a pure frontend SPA with **no local database and
+- Cropwright is a pure frontend SPA with **no local database and
   no authentication of its own** — see `README.md`'s "Limits" section.
   It is designed to be deployed behind a trusted network boundary (LAN)
   or fronted by an auth proxy (oauth2-proxy, nginx basic auth) before
@@ -23,9 +23,9 @@ Include:
   rights" is documented, expected behavior, not a vulnerability to
   report on its own — but a way to bypass an operator's chosen auth
   front-end would be.
-- The actual data/model backend is `openprocessor` (separate repo) — most
-  security-relevant surface (auth, data validation, injection risks)
-  lives there, not in this frontend.
+- The actual data/model backend is the OpenProcessor API (separate repo)
+  — most security-relevant surface (auth, data validation, injection
+  risks) lives there, not in this frontend.
 
 ## Supported versions
 

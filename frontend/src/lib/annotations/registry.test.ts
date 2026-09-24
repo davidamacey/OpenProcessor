@@ -4,7 +4,7 @@ import { licensePlateSlot } from './profiles/licensePlate';
 import type { SlotSpec } from './types';
 
 describe('resolveSlotRegistry', () => {
-  it('resolves the legacy built-in with no deployment override', () => {
+  it('resolves the built-in slot with no deployment override', () => {
     const { registry, warnings } = resolveSlotRegistry({ builtins: [licensePlateSlot] });
     expect(warnings).toEqual([]);
     expect(registry.all).toHaveLength(1);

@@ -14,9 +14,9 @@ cp .env.example .env   # point PUBLIC_TRITON_API_URL at your backend
 npm run dev             # http://localhost:5173
 ```
 
-You need a running `openprocessor` backend (OpenSearch + the `/curation/*` API)
-for the app to do anything useful — see that repo's README. There is
-no local database or mock-data mode.
+You need a running OpenProcessor backend (OpenSearch + the curation API,
+served under `PUBLIC_API_PREFIX`) for the app to do anything useful — see
+that repo's README. There is no local database or mock-data mode.
 
 ## Before opening a PR
 

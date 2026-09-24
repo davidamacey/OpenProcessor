@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Headed Playwright smoke test for the legacy-labeler.
+"""Headed Playwright smoke test for Cropwright.
 
 Run via the openprocessor .venv (it ships with playwright):
 
     DISPLAY=:11 source /data/repos/openprocessor/.venv/bin/activate
-    python /data/repos/legacy-labeler/scripts/playwright_smoke.py [--url URL] [--out DIR]
+    python scripts/playwright_smoke.py [--url URL] [--out DIR]
 
 Captures network requests, console messages, and image render status for
 each page in PAGES, then writes screenshots + a JSON summary to OUT.
@@ -134,12 +134,12 @@ def main() -> int:
             print(f"[smoke] visiting {name} {path}", flush=True)
             results.append(visit(page, name, args.url, path, out_dir))
 
-        # Try a cluster detail page: pull a cluster_id from /clusters/stats
+        # Try a cluster detail page: pull a cluster_id from the clusters list
         try:
             import urllib.request
-            with urllib.request.urlopen(f"{args.url}/clusters/stats/op_vehicles", timeout=10) as r:
+            with urllib.request.urlopen(f"{args.url}/curation/clusters?per_cluster=1&max_clusters=5", timeout=10) as r:
                 stats = json.load(r)
-            ids = [c["cluster_id"] for c in stats.get("opensearch_clusters", [])]
+            ids = [c["cluster_id"] for c in stats.get("items", [])]
             if ids:
                 results.append(visit(page, "cluster_detail", args.url, f"/clusters/{ids[0]}", out_dir))
         except Exception as e:  # noqa: BLE001

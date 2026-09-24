@@ -573,15 +573,15 @@ class Stub:
         if path.startswith("/curation/review/"):
             tab = path.split("/curation/review/")[-1].split("?")[0]
             return ok(review_items(tab))
-        if path.startswith("/curation/plates/training_candidates"):
+        if path.startswith("/curation/regions/training_candidates"):
             return ok({"items": [], "total": 0, "page": 1, "page_size": 30})
-        if path.startswith("/curation/plates"):
+        if path.startswith("/curation/regions"):
             return ok(review_items("plates"))
         if path.startswith("/curation/export/status"):
             return ok(EXPORT_STATUS)
         if path.startswith("/curation/export/datasets"):
             return ok(EXPORT_DATASETS)
-        if path.startswith("/curation/export/lpr/status"):
+        if path.startswith("/curation/export/single_class/status"):
             return ok({"status": "idle", "last_run": None})
         if path.startswith("/curation/export/registry/"):
             return ok({})

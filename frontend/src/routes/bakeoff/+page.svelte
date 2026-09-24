@@ -3,7 +3,7 @@
    * /bakeoff — Model x dataset bake-off cockpit.
    *
    * Scores every selected model on every selected frozen dataset (matrix) in
-   * the on-demand legacy-evaluator container, then renders a model x dataset
+   * the on-demand curation-evaluator container, then renders a model x dataset
    * matrix with the best cell per dataset bolded. Datasets + baseline models are
    * discovered from the backend (auto-discovered frozen dirs + an editable
    * registry) and our trained runs are selectable directly — so adding a model
@@ -293,7 +293,7 @@
   <h1 class="mb-1 text-2xl font-semibold">Model × Dataset Bake-off</h1>
   <p class="mb-6 text-sm text-zinc-400">
     Every selected model scored on every selected frozen dataset with one IoU metric
-    (pycocotools), in the on-demand <code>legacy-evaluator</code>. Best per dataset is
+    (pycocotools), in the on-demand <code>curation-evaluator</code>. Best per dataset is
     <strong>bold</strong>.
   </p>
 

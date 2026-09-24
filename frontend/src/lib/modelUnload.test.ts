@@ -103,8 +103,8 @@ describe('unloadConfirmMessage', () => {
 
 describe('unloadForceConfirmMessage', () => {
   it('names the model in the second confirmation', () => {
-    expect(unloadForceConfirmMessage({ name: 'legacy_vehicle_v6_trt' })).toMatch(
-      /legacy_vehicle_v6_trt/,
+    expect(unloadForceConfirmMessage({ name: 'vehicle_classifier_trt' })).toMatch(
+      /vehicle_classifier_trt/,
     );
   });
 });

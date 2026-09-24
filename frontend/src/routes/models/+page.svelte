@@ -123,8 +123,8 @@
     <div>
       <h1 class="text-xl font-semibold tracking-tight">Models</h1>
       <p class="mt-1 text-sm text-zinc-400">
-        Inference services that drive the legacy labeling pipeline. Triton models live on
-        the GPU box; the VLM is an external vLLM service. Auto-refreshes every 15 seconds.
+        Inference services that drive the labeling pipeline. Triton models live on the GPU
+        box; the VLM is an external vLLM service. Auto-refreshes every 15 seconds.
       </p>
     </div>
     <div class="flex items-center gap-3 text-xs text-zinc-500">

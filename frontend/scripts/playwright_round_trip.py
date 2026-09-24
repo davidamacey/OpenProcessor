@@ -36,7 +36,7 @@ from typing import Any
 
 from playwright.sync_api import sync_playwright
 
-TRANSITIONAL_DEFAULT = "/curation"  # mirrors src/lib/api.ts:107 (normalizeApiPrefix); flips at T-E2
+TRANSITIONAL_DEFAULT = "/curation"  # mirrors normalizeApiPrefix() in src/lib/api.ts
 
 
 def normalize_api_prefix(raw: str) -> str:
@@ -76,7 +76,7 @@ def pick_target(api_base: str, prefix: str) -> tuple[int, dict[str, Any]]:
 
     NOT /clusters/stats/{index}: that is a legacy un-prefixed router
     whose only valid index values are global|vehicles|people|faces
-    (backend src/routers/clusters.py:163-171) -- 'op_vehicles' 400s --
+    (backend src/routers/clusters.py:163-171) -- a curation index name 400s --
     and the labeler's nginx stopped proxying it once T-B3 dropped the
     dead location block. Use GET {prefix}/clusters instead, which is
     what /clusters itself calls (src/lib/api.ts:947-963). Only the

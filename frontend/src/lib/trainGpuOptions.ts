@@ -14,8 +14,8 @@
  * for which host GPUs are ever offered.
  *
  * This host has 3 GPUs: slot 0 and slot 2 are A6000s (the only ones the
- * legacy-trainer container is ever attached to — see
- * `docker-compose.legacy.yml`'s `device_ids: ["0", "2"]`); slot 1 is a
+ * curation-trainer container is ever attached to — see
+ * the backend compose file's `device_ids: ["0", "2"]`); slot 1 is a
  * 3080 Ti dedicated to an unrelated app and must NEVER be offered here,
  * full stop — extracted into its own array (rather than left inline in
  * `TrainForm.svelte`) specifically so this exhaustive list is directly
@@ -35,7 +35,7 @@ export interface GpuOption {
  * The only 3 selectable GPU claims. This array is the exhaustive
  * allowlist — the host GPU ids referenced across every entry's `value`
  * must never include `1` (3080 Ti). Keep in sync with the backend's
- * allowlist (`src/services/legacy/train_jobs.py`'s
+ * allowlist (`src/services/training/jobs.py`'s
  * `_ALLOWED_TRAIN_GPU_IDS = {0, 2}` in openprocessor), which independently
  * enforces the same constraint server-side as defense in depth.
  */

@@ -50,7 +50,7 @@ export type WireField = string;
  * Which coordinate frame a stored sub-bbox is expressed in.
  *
  * - `'source'`  — normalized to the full source image (what every current
- *                 legacy write produces).
+ *                 built-in write produces).
  * - `'parent'`  — normalized to the parent crop's box ([0,1]^4 inside it).
  */
 export type SlotFrame = 'source' | 'parent';

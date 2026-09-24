@@ -2,8 +2,8 @@
  * Config-driven detector label/palette resolution.
  *
  * `DetectorChip.svelte`'s `labelFor()`/`paletteFor()` are a hand-written
- * switch/if-chain over legacy's specific detector ids. This module is
- * the generalized, data-driven replacement: `legacyDetectors.ts` (the
+ * switch/if-chain over one deployment's specific detector ids. This module is
+ * the generalized, data-driven replacement: `builtinDetectors.ts` (the
  * profile) reproduces those two functions' exact resolution — including
  * palette-lookup order, since it's semantically load-bearing (an exact
  * match must be checked before prefix rules) — as data, and a future
@@ -13,7 +13,7 @@
  * docs/genericization-plan-2026-09-13.md §3.2 / P2.2 for that migration
  * (ships with a 21-id-plus-unknown-plus-null equivalence snapshot test
  * proving the swap is pixel-identical). This module and its equivalence
- * test (`legacyDetectors.test.ts`) are that migration's prerequisite.
+ * test (`builtinDetectors.test.ts`) are that migration's prerequisite.
  */
 
 import type { Palette } from './types';

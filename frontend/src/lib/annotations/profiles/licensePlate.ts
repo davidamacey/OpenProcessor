@@ -1,5 +1,5 @@
 /**
- * The legacy license_plate slot — the one fully-working configured
+ * The built-in license_plate slot — the one fully-working configured
  * instance of the annotation-slot mechanism. Decomposes the ~30
  * `plate_*` fields currently hardcoded across api.ts / SlotCard.svelte /
  * PlateEditor.svelte / review/+page.svelte / clusters/+page.svelte into
@@ -7,7 +7,7 @@
  *
  * Mirrors openprocessor's `PlateStatus` (src/config/plate_state.py, all 8
  * values) and `HUMAN_PLATE_STATUS_VALUES`
- * (src/routers/legacy/_common.py:324, the 4 human-writable ones).
+ * (OpenProcessor src/config/region_state.py, the 4 human-writable ones).
  *
  * Not yet bound to any route — this is Phase 1's additive foundation.
  */

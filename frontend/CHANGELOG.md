@@ -8,6 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Removed the remaining `legacy`/`op` names from code, scripts and docs.
+  - `legacyDetectors.ts` is now `builtinDetectors.ts`
+    (`builtinDetectorRegistry`). Its entries for `legacy_vehicle_v6_trt`
+    and `ingest_v6` are gone, since OpenProcessor no longer emits those
+    detector ids.
+  - The nginx upstream variable `$kbapi` is now `$api_upstream`.
+    `.env.example` documents the `/curation` default.
+  - Comments and page copy name OpenProcessor's current files and its
+    `curation-trainer`/`curation-evaluator` containers.
+  - README, CONTRIBUTING, SECURITY, RUBRIC and CLAUDE.md describe the
+    OpenProcessor deployment. README no longer covers the retired compose
+    overlay or the GPU-sharing make targets.
+
+### Fixed
+
+- The stubbed Playwright scripts intercepted `/curation/**`. The app calls
+  `/curation/**`, so their stubs never matched. They now stub `/curation`.
+  `playwright_curation_settings.py` also expects the server's `settable`
+  flag and the current `/settings` copy, and it passes against the built
+  container. `playwright_smoke.py` finds a cluster through
+  `/curation/clusters`; the `/clusters/stats/op_vehicles` route it used
+  was removed.
+
+### Changed
+
 - The frontend now uses the backend's `class_source` catalog
   (`GET /class_sources`, loaded once in the layout) instead of its own
   copies of backend rules.

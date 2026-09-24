@@ -194,7 +194,7 @@ def main() -> int:
         print("\n/clusters/1")
         page.goto(f"{BASE}/clusters/1", wait_until="networkidle")
         page.wait_for_timeout(600)
-        cards = page.locator("[data-crop-card], .op-crop-card, img[alt='crop']")
+        cards = page.locator("[data-crop-card], img[alt='crop']")
         check("grid rendered 3 crop cards", page.locator("article, li, div").count() > 0)
 
         # 1.1 — with nothing ever dragged, a class letter must label the selection.

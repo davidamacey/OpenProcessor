@@ -1,8 +1,9 @@
 /**
  * Shared bbox-shape plausibility gate.
  *
- * Mirrors the server-side `is_plausible_plate_bbox` in
- * openprocessor:src/services/legacy/plate_detect.py. Defense in depth —
+ * Mirrors the aspect/size envelope of the retired server-side
+ * `is_plausible_plate_bbox`; OpenProcessor's current
+ * `is_plausible_region_bbox` is a geometry guard only. Defense in depth —
  * flags rows whose stored child bbox is implausible *after* projecting
  * into the parent (crop) frame, regardless of whether the server-side
  * gate caught it.

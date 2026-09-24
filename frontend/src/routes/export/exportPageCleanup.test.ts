@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 /**
  * Regression test for the stale /export page cleanup (2026-09): the page
  * used to render a "Training command" panel telling the operator to run
- * `bash /data/legacy_train_dataset_v7/scripts/train_medium.sh` — a script
+ * a `train_medium.sh` shell script — a script
  * path that no longer exists, predating the real `/train` cockpit that now
  * fully replaces this workflow. This is a static source-scan (no
  * @testing-library/svelte in this repo — see clusterMoveRace.test.ts /
@@ -20,10 +20,6 @@ const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
 describe('export page: stale training-command panel removed', () => {
   it('no longer references the dead train_medium.sh script path', () => {
     expect(src).not.toMatch(/train_medium\.sh/);
-  });
-
-  it('no longer references legacy_train_dataset_v7', () => {
-    expect(src).not.toMatch(/legacy_train_dataset_v7/);
   });
 
   it('has no leftover "Training command" heading', () => {

@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * /train — model training cockpit (Phase 2 of the legacy_train_pipeline
+   * /train — model training cockpit (Phase 2 of the training pipeline
    * design doc).
    *
    * Owns:
@@ -826,7 +826,7 @@
       <h1 class="text-xl font-semibold tracking-tight">Train model</h1>
       <p class="mt-1 text-sm text-zinc-400">
         YOLO26 detector training over the frozen export. Submits a job to the
-        legacy-trainer container and tails progress until it finishes.
+        curation-trainer container and tails progress until it finishes.
       </p>
       <div class="mt-2">
         <MonitoringLinks />

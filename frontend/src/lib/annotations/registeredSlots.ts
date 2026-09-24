@@ -20,7 +20,7 @@
  * profiles/defectCode.ts) are deliberately NOT in this list — they exist
  * only to prove the capability model is generic
  * (profiles.falsification.test.ts), not to actually ship as live
- * legacy-labeler features. Enabling either for real would also require
+ * Cropwright features. Enabling either for real would also require
  * backend support (wire fields, endpoints) this deployment doesn't have.
  */
 

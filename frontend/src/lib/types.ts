@@ -229,7 +229,7 @@ export interface Crop {
   crop_rank_in_image?: number | null;
   /** Normalized bbox area (w*h in [0,1]). */
   crop_area_norm?: number | null;
-  /** legacy_sorter v1.1.9 crop/full Laplacian ratio (higher = clearer).
+  /** Crop/full Laplacian ratio (higher = clearer).
    *  Drives the clarity slider. */
   blur_lap_ratio?: number | null;
   /** Raw v6 detection confidence (recorded even below the 0.75 floor). */

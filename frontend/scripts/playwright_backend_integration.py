@@ -62,7 +62,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-TRANSITIONAL_DEFAULT = "/curation"  # mirrors src/lib/api.ts:107 (normalizeApiPrefix); flips at T-E2
+TRANSITIONAL_DEFAULT = "/curation"  # mirrors normalizeApiPrefix() in src/lib/api.ts
+RETIRED_PREFIX = "/curation"  # the backend's pre-cutover prefix; any request to it is a leak
 
 
 def normalize_api_prefix(raw: str) -> str:
@@ -175,7 +176,7 @@ def pick_cluster(api: Api) -> int:
     (backend src/routers/clusters.py:163-171), and the labeler's nginx
     stopped proxying it once T-B3 dropped the dead location block --
     only a direct --api origin call would even reach it, and it 400s
-    on any legacy-shaped index name regardless.
+    on any curation index name regardless.
     """
     page = http_get(api.url("/clusters?per_cluster=1&max_clusters=50"))
     for item in page.get("items", []):
@@ -216,11 +217,11 @@ def step0_prefix_purity(api: Api, observed: list[dict[str, Any]]) -> bool:
     """Cross-cutting assertion, independent of the 12 steps -- the
     runtime counterpart to T-D3's static ratchet. Any request to the
     API origin whose path does not start with the configured prefix
-    (and does not start with the OTHER known prefix either -- both are
-    offenses) is a threading bug: a call site that escaped API_PREFIX.
+    and instead starts with the retired pre-cutover prefix is a
+    threading bug: a call site that escaped API_PREFIX.
     """
     offenders = []
-    other = "/curation" if api.prefix == "/curation" else "/curation"
+    other = RETIRED_PREFIX
     for r in observed:
         url = r.get("url", "")
         if not url.startswith(api.origin):
@@ -875,7 +876,7 @@ def build_argparser() -> argparse.ArgumentParser:
         "--out",
         default=None,
         help="Output dir. Defaults to /tmp/cropwright_integration_<prefix-slug>, "
-        "so a /curation run and a /curation run never overwrite each other.",
+        "so runs against different prefixes never overwrite each other.",
     )
     p.add_argument("--headless", action="store_true")
     p.add_argument(

@@ -21,16 +21,16 @@
    * Label/palette resolution is config-driven (P2.2,
    * docs/genericization-plan-2026-09-13.md §3.2): this component used
    * to hand-code a 20-arm label switch and a 10-branch palette
-   * if-chain; both are now data (`legacyDetectorRegistry`), proven
+   * if-chain; both are now data (`builtinDetectorRegistry`), proven
    * equivalent to the old functions by a 23-case snapshot test
-   * (`annotations/legacyDetectors.test.ts`) before they were deleted.
+   * (`annotations/builtinDetectors.test.ts`) before they were deleted.
    */
   import {
     labelForDetector,
     paletteForDetector,
     isMutedTag as isMutedTagFor,
   } from '$lib/annotations/detectorRegistry';
-  import { legacyDetectorRegistry } from '$lib/annotations/profiles/legacyDetectors';
+  import { builtinDetectorRegistry } from '$lib/annotations/profiles/builtinDetectors';
 
   interface Props {
     /** The detector that produced the stored bbox. Maps to a color family. */
@@ -59,8 +59,8 @@
     return { detector: detector ?? null, tag: tag ?? null };
   });
 
-  const palette = $derived(paletteForDetector(legacyDetectorRegistry, parsed.detector));
-  const muted = $derived(isMutedTagFor(legacyDetectorRegistry, parsed.tag));
+  const palette = $derived(paletteForDetector(builtinDetectorRegistry, parsed.detector));
+  const muted = $derived(isMutedTagFor(builtinDetectorRegistry, parsed.tag));
   const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
 </script>
 
@@ -70,7 +70,7 @@
     : ''}"
   title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}
 >
-  <span>{labelForDetector(legacyDetectorRegistry, parsed.detector)}</span>
+  <span>{labelForDetector(builtinDetectorRegistry, parsed.detector)}</span>
   {#if parsed.tag}
     <span class="text-[9px] uppercase tracking-wide opacity-80">{parsed.tag}</span>
   {/if}
