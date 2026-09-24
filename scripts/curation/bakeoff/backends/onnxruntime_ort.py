@@ -34,7 +34,7 @@ _EP_RUNTIME = {
 
 
 class OnnxRuntimeDetector:
-    """Run a single-class YOLO plate ONNX (no embedded NMS) via ONNX Runtime."""
+    """Run a single-class YOLO ONNX (no embedded NMS) via ONNX Runtime."""
 
     def __init__(
         self,

@@ -1,45 +1,6 @@
 {
-  "_comment": "Public/commercial baseline detectors + our quantization variants for the bake-off. To add a model, append an entry here (no code change). 'weights' paths are placeholders -- CHANGE THEM to wherever you actually keep these checkpoints (relative to the bake-off evaluator container's working directory, or an absolute path of your own; they must be readable by that container, which mounts your dataset root, a scratch/output dir, /runs, and the training-data root incl. the quant/ output dir). This file previously shipped with the maintainers' own private absolute filesystem paths baked in -- never copy those back in; use your own. 'mode' may be full|crop|both. The ours_*_onnx variants are produced by export/quantize.py; FP16 ONNX is the primary NVIDIA deliverable, INT8 QDQ ONNX is the lighter/faster edge+paper datapoint.",
+  "_comment": "Baseline-model registry for the bake-off UI picker (GET /curation/bakeoff/baseline_models). Domain-neutral: only the quantized ONNX variants of your own trained model (produced by the bake-off job's quantize step). Domain baselines belong to a profile -- see examples/<name>/baselines.json and BakeoffProfile.baselines_path, or point OP_BAKEOFF_BASELINES_PATH at your own file. Add a model = append an entry (no code change). 'weights' paths are placeholders relative to the evaluator container's working directory; replace them with your own. 'mode' may be full|crop|both.",
   "baselines": [
-    {
-      "name": "lpr_nanov11_640",
-      "backend": "ultralytics",
-      "weights": "./weights/lpr_nanov11_640.pt",
-      "imgsz": 640,
-      "device": "cuda",
-      "training_data": "andrewmvd Kaggle"
-    },
-    {
-      "name": "open-image-models-yolov9t",
-      "backend": "open-image-models",
-      "imgsz": 1280,
-      "device": "cuda",
-      "training_data": "open plate datasets"
-    },
-    {
-      "name": "ml-debi-yolov8",
-      "backend": "ultralytics",
-      "weights": "./weights/ml-debi_yolov8_lpd/best.onnx",
-      "imgsz": 640,
-      "device": "cuda",
-      "training_data": "undocumented"
-    },
-    {
-      "name": "morsetechlab-yolo11s",
-      "backend": "ultralytics",
-      "weights": "./weights/morsetechlab_yolov11_lpd/license-plate-finetune-v1s.pt",
-      "imgsz": 640,
-      "device": "cuda",
-      "training_data": "Roboflow ALPR"
-    },
-    {
-      "name": "lpdnet-usa",
-      "backend": "lpdnet",
-      "weights": "./weights/lpdnet_pruned_v2.2.1/LPDNet_usa_pruned_tao5.onnx",
-      "lpdnet_variant": "usa",
-      "device": "cuda",
-      "training_data": "NVIDIA TAO (US)"
-    },
     {
       "name": "ours_fp32_onnx",
       "backend": "onnxruntime",
@@ -58,7 +19,7 @@
       "device": "cuda",
       "coords_normalized": false,
       "ort_providers": "CUDAExecutionProvider,CPUExecutionProvider",
-      "training_data": "curated YOLO26 (FP16 ONNX — primary NVIDIA deliverable)"
+      "training_data": "curated YOLO26 (FP16 ONNX)"
     },
     {
       "name": "ours_int8_onnx",
@@ -68,7 +29,7 @@
       "device": "cuda",
       "coords_normalized": false,
       "ort_providers": "TensorrtExecutionProvider,CUDAExecutionProvider,CPUExecutionProvider",
-      "training_data": "curated YOLO26 (INT8 QDQ ONNX — lighter/faster)"
+      "training_data": "curated YOLO26 (INT8 QDQ ONNX)"
     }
   ]
 }

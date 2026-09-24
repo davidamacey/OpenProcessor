@@ -12,10 +12,14 @@ Modes:
     --job <file>         run one job spec and exit
 
 Job spec (JSON) --- ``datasets`` is the matrix form; ``dataset`` (singular) is
-still accepted for back-compat::
+still accepted for back-compat. ``profile`` (optional) names the
+:class:`~scripts.curation.bakeoff.profile.BakeoffProfile` every model is scored
+under unless a model sets its own ``profile``; it also picks the metric the
+per-dataset comparison is ranked by::
 
     {
         'job_id': '2026-05-25T10-00',
+        'profile': 'generic',
         'datasets': [
             {'name': 'curated', 'path': '/data/exports/<run>'},
             {'name': 'public_set', 'path': './data/bakeoff_eval/public/<dataset>'},
@@ -53,6 +57,7 @@ from typing import Any
 
 from .compare import build_comparison, to_markdown
 from .freeze import verify
+from .profile import resolve_profile
 
 
 # GPU pool + concurrency for parallel scoring. The detectors are tiny (hundreds
@@ -67,6 +72,7 @@ _CONCURRENCY: int = max(1, int(os.environ.get('OP_BAKEOFF_CONCURRENCY', '4')))
 
 
 _OPT_FLAGS = {
+    'profile': '--profile',
     'weights': '--weights',
     'imgsz': '--imgsz',
     'device': '--device',
@@ -249,7 +255,7 @@ def _run_throughput_sweep(
 def _run_coreml_mac_leg(quant: dict[str, Any], out_dir: Path) -> None:
     """Drive the Mac Studio CoreML export+bench over SSH (best-effort, opt-in).
 
-    Gated by the ``OP_COREML_HOST`` env var (e.g. ``user@host.local``)
+    Gated by the ``OP_COREML_HOST`` env var (e.g. ``user@mac-host.local``)
     so it's a safe no-op until the evaluator is provisioned with ssh/rsync + a key
     that can reach the Mac on the LAN. Exports FP16/INT8 CoreML on the Mac, benchmarks
     ANE+CPU, and pulls the .mlpackage + throughput JSON back.
@@ -420,6 +426,19 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     job_id = spec.get('job_id', datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ'))
     out_dir = Path(spec.get('out_dir', f'/data/bakeoff/{job_id}'))
     datasets = _dataset_specs(spec)
+    job_profile = spec.get('profile')
+    try:
+        profile = resolve_profile(job_profile)
+    except ValueError as exc:
+        status_err: dict[str, Any] = {
+            'job_id': job_id,
+            'state': 'error',
+            'error': str(exc),
+            'started_at': datetime.now(UTC).isoformat(),
+            'models': [],
+        }
+        _write_status(out_dir, status_err)
+        return status_err
     raw_models = list(spec.get('models', []))
     # Optional: export the trained model to portable ONNX first, then score those
     # quantized variants in this same job (seamless export -> benchmark -> matrix).
@@ -428,6 +447,8 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
             raw_models += _quantize_and_variant_models(spec['quantize'], datasets)
         except Exception as exc:  # don't abort the whole job if export fails
             print(f'[bakeoff] quantize step failed: {exc}', flush=True)
+    if job_profile:
+        raw_models = [{'profile': job_profile, **m} for m in raw_models]
     models = _expand_modes(raw_models)
     verify_frozen = spec.get('verify_frozen', True)
     model_names = [m.get('name', m['backend']) for m in models]
@@ -435,6 +456,7 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     status: dict[str, Any] = {
         'job_id': job_id,
         'state': 'running',
+        'profile': profile.name,
         'datasets': [d['name'] for d in datasets],
         'dataset': datasets[0]['path'] if datasets else None,  # legacy field
         'started_at': datetime.now(UTC).isoformat(),
@@ -500,7 +522,7 @@ def run_job(spec: dict[str, Any]) -> dict[str, Any]:
     # Aggregate each dataset's per-model JSON into its comparison.
     per_dataset: dict[str, dict[str, Any]] = {}
     for ds_name, _ds_path, ds_out in valid:
-        comp = build_comparison(ds_out)
+        comp = build_comparison(ds_out, rank_by=profile.rank_metric)
         (ds_out / 'comparison.json').write_text(json.dumps(comp, indent=2), encoding='utf-8')
         (ds_out / 'comparison.md').write_text(to_markdown(comp), encoding='utf-8')
         per_dataset[ds_name] = comp

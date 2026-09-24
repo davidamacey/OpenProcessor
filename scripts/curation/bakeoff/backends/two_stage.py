@@ -1,12 +1,12 @@
 """Generic two-stage pipeline: coarse detect -> crop -> fine detect -> map back.
 
 A fine-grained model often runs on a coarse-detector's crop, where its
-target is large in-frame (e.g. a plate detector on a vehicle crop). To
+target is large in-frame (a small part detected on its parent object's crop). To
 score it on the SAME full-frame benchmark as single-pass detectors, this
 wraps the real pipeline: detect coarse regions, crop each (with padding),
 run the fine-grained detector on the crop, and project its boxes back to
-full-frame coordinates, then NMS. Originated for a vehicle->plate
-cascade; the two detectors and their classes are entirely caller-supplied.
+full-frame coordinates, then NMS. The two detectors and the coarse
+stage's kept classes (a profile's ``context_class_ids``) are caller-supplied.
 """
 
 from __future__ import annotations
