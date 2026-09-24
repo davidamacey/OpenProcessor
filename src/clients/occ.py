@@ -420,6 +420,7 @@ async def occ_upsert_bulk(
     writer_id: str = 'ingest',
     id_field: str = 'crop_id',
     refresh: bool | str = False,
+    created_ids: list[str] | None = None,
 ) -> dict[str, int]:
     """Upsert a batch of docs with OCC + human-label preservation.
 
@@ -455,6 +456,10 @@ async def occ_upsert_bulk(
         writer_id: Provenance tag for structured logs / metrics.
         id_field: Doc id field name (default ``crop_id``).
         refresh: OS refresh policy on the writes.
+        created_ids: Optional out-list; the id of every doc this call
+            newly created (bulk ``create`` acknowledged 200/201) is
+            appended. Docs that already existed — including a create
+            that lost a race and fell back to the update path — are not.
 
     Returns:
         ``{'created': N, 'updated': M, 'preserved_human': P,
@@ -502,6 +507,8 @@ async def occ_upsert_bulk(
             doc_id = create_item.get('_id')
             if status in (200, 201):
                 result['created'] += 1
+                if created_ids is not None and doc_id:
+                    created_ids.append(doc_id)
             elif status == 409 and doc_id:
                 # A parallel writer created the doc between our mget and
                 # our bulk create. Fall back to the OCC update path with

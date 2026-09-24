@@ -649,3 +649,125 @@ class TestBatchLabelImport:
         svc, _, _ = _make_service()
         with pytest.raises(ValueError, match='label_paths'):
             await svc.ingest_batch([b'x', b'y'], ['/a.jpg', '/b.jpg'], label_paths=[None])
+
+
+class TestCropCreatedEvents:
+    """N2 — ingest publishes ``crop.created`` for every item doc it newly
+    writes, only after the write succeeded, and a publish failure can
+    never fail the ingest."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh_hub(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from src.services.curation import event_hub
+
+        monkeypatch.setattr(event_hub, '_HUB', None)
+
+    @staticmethod
+    async def _subscribe() -> Any:
+        from src.services.curation.event_hub import get_event_hub
+
+        return await get_event_hub().subscribe()
+
+    @staticmethod
+    def _drain(sub: Any) -> list[dict[str, Any]]:
+        events = []
+        while not sub.queue.empty():
+            events.append(sub.queue.get_nowait())
+        return events
+
+    @pytest.mark.asyncio
+    async def test_ingest_one_publishes_crop_created_per_new_item(self) -> None:
+        sub = await self._subscribe()
+        svc, os_fake, _ = _make_service(
+            detections=[(0.05, 0.05, 0.4, 0.4, 0.9, 1), (0.5, 0.5, 0.9, 0.9, 0.9, 1)]
+        )
+        result = await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
+        assert result.crops_created == 2
+
+        events = self._drain(sub)
+        assert sorted(e['crop_id'] for e in events) == sorted(os_fake.items)
+        for event in events:
+            assert event['type'] == 'crop.created'
+            assert event['topic'] == 'crop'
+            assert event['image_path'] == '/tmp/photo.jpg'
+            assert isinstance(event['ts'], float)
+
+    @pytest.mark.asyncio
+    async def test_reingest_update_is_not_announced_as_created(self) -> None:
+        data = _jpeg_bytes()
+        svc, os_fake, _ = _make_service()
+        await svc.ingest_one(data, '/tmp/photo.jpg')
+        os_fake.images.clear()
+
+        sub = await self._subscribe()
+        result = await svc.ingest_one(data, '/tmp/photo.jpg')
+        assert result.crops_updated == 1
+        assert self._drain(sub) == []
+
+    @pytest.mark.asyncio
+    async def test_failed_write_publishes_nothing(self) -> None:
+        sub = await self._subscribe()
+        svc, os_fake, _ = _make_service()
+
+        async def _broken_mget(*, body: Any, index: str) -> Any:
+            raise RuntimeError('opensearch down')
+
+        os_fake.mget = _broken_mget  # type: ignore[method-assign]
+        result = await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
+        assert result.status == 'failed'
+        assert self._drain(sub) == []
+
+    @pytest.mark.asyncio
+    async def test_rejected_create_is_not_published(self) -> None:
+        sub = await self._subscribe()
+        svc, os_fake, _ = _make_service(
+            detections=[(0.05, 0.05, 0.4, 0.4, 0.9, 1), (0.5, 0.5, 0.9, 0.9, 0.9, 1)]
+        )
+        real_bulk = os_fake.bulk
+        rejected: list[str] = []
+
+        async def _bulk_rejecting_first_create(*, body: Any, refresh: Any = False) -> Any:
+            resp = await real_bulk(body=body, refresh=refresh)
+            for item in resp['items']:
+                if 'create' in item and not rejected:
+                    rejected.append(item['create']['_id'])
+                    item['create']['status'] = 400
+                    os_fake.items.pop(item['create']['_id'])
+            return resp
+
+        os_fake.bulk = _bulk_rejecting_first_create  # type: ignore[method-assign]
+        await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
+
+        published = [e['crop_id'] for e in self._drain(sub)]
+        assert rejected
+        assert rejected[0] not in published
+        assert published == list(os_fake.items)
+
+    @pytest.mark.asyncio
+    async def test_publish_failure_never_fails_ingest(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.services.curation import event_hub
+
+        def _boom(*_a: Any, **_k: Any) -> None:
+            raise RuntimeError('hub exploded')
+
+        monkeypatch.setattr(event_hub.EventHub, 'publish', _boom)
+        svc, os_fake, _ = _make_service()
+        result = await svc.ingest_one(_jpeg_bytes(), '/tmp/photo.jpg')
+        assert result.status == 'success'
+        assert result.crops_created == 1
+        assert len(os_fake.items) == 1
+
+    @pytest.mark.asyncio
+    async def test_batch_ingest_publishes_for_every_image(self) -> None:
+        sub = await self._subscribe()
+        svc, os_fake, _ = _make_service()
+        images = [_jpeg_bytes(seed=700 + s) for s in range(3)]
+        paths = [f'/tmp/ev{s}.jpg' for s in range(3)]
+        result = await svc.ingest_batch(images, paths)
+        assert result.summary.successful == 3
+
+        events = self._drain(sub)
+        assert sorted(e['crop_id'] for e in events) == sorted(os_fake.items)
+        assert sorted(e['image_path'] for e in events) == sorted(paths)

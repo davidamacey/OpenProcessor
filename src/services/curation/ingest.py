@@ -35,6 +35,9 @@ Pipeline, per image:
    that index); items docs go through
    :func:`~src.clients.occ.occ_upsert_bulk` with human-field guards so a
    re-ingest never clobbers a human-applied label.
+8. After a successful write, one advisory ``crop.created`` event per
+   newly created item on the in-process event hub
+   (:func:`~src.services.curation.event_hub.publish_crop_created`).
 
 Sibling modules, split out of this one to keep each to one concern:
 
@@ -64,6 +67,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from src.config import get_curation_config
 from src.core.logging import get_logger, get_request_id
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
+from src.services.curation.event_hub import publish_crop_created
 from src.services.curation.ingest_detect import SECONDARY_IOU_MATCH, WholeImageDetector
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.item_doc import DetectedItem, build_image_doc, build_item_doc
@@ -243,8 +247,13 @@ class CurationIngestService:
         self,
         image_doc: dict[str, Any] | None,
         crop_docs: list[dict[str, Any]],
+        created_ids: list[str] | None = None,
     ) -> dict[str, int]:
-        """Index 1 images doc (blind) + N items docs (OCC upsert)."""
+        """Index 1 images doc (blind) + N items docs (OCC upsert).
+
+        ``created_ids`` (optional out-list) receives the crop_id of every
+        items doc this call newly created.
+        """
         from src.clients.occ import occ_upsert_bulk
 
         result = {
@@ -273,6 +282,7 @@ class CurationIngestService:
                 index=self.config.items_index,
                 human_field_guards=list(self._CROP_HUMAN_FIELD_GUARDS),
                 writer_id='ingest',
+                created_ids=created_ids,
             )
             result['crops_created'] = upsert['created']
             result['crops_updated'] = upsert['updated']
@@ -474,8 +484,9 @@ class CurationIngestService:
                 )
             )
 
+        created_ids: list[str] = []
         try:
-            bulk_result = await self._bulk_index(image_doc, crop_docs)
+            bulk_result = await self._bulk_index(image_doc, crop_docs, created_ids)
         except Exception as exc:
             logger.error('ingest_bulk_index_failed', path=image_path, error=str(exc))
             return IngestResult(
@@ -485,6 +496,7 @@ class CurationIngestService:
                 error=str(exc),
                 error_kind='bulk_index',
             )
+        self._publish_created(created_ids, image_path)
 
         return IngestResult(
             status='success',
@@ -497,6 +509,22 @@ class CurationIngestService:
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),
             crops_final_conflicts=bulk_result.get('crops_final_conflicts', 0),
         )
+
+    @staticmethod
+    def _publish_created(crop_ids: list[str], image_path: str) -> None:
+        """Announce newly written items on the live-update event hub.
+
+        Only ids ``occ_upsert_bulk`` confirmed as created are published —
+        a re-ingest update or a rejected create is not a new crop. Events
+        are advisory (the hub never blocks: bounded per-subscriber queues,
+        drop-oldest), so a publish error is logged and swallowed rather
+        than failing an ingest whose writes already succeeded.
+        """
+        for crop_id in crop_ids:
+            try:
+                publish_crop_created(crop_id, image_path)
+            except Exception as exc:
+                logger.warning('ingest_event_publish_failed', crop_id=crop_id, error=str(exc))
 
     @staticmethod
     def _crop_pil(img: Image.Image, bbox_pixel: tuple[float, float, float, float]) -> Image.Image:
