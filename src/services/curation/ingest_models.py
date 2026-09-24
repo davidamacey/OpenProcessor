@@ -35,6 +35,9 @@ class IngestResult(BaseModel):
     crops_updated: int = 0
     crops_preserved_human: int = 0
     crops_final_conflicts: int = 0
+    # Items this ingest seeded ``pending_detection`` for the region worker
+    # (0 when no region profile is active).
+    n_region_queued: int = 0
     error: str | None = None
     error_kind: str | None = None
 

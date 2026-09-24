@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config, get_region_fields
@@ -421,6 +421,7 @@ async def occ_upsert_bulk(
     id_field: str = 'crop_id',
     refresh: bool | str = False,
     created_ids: list[str] | None = None,
+    fill_if_absent: Collection[str] = (),
 ) -> dict[str, int]:
     """Upsert a batch of docs with OCC + human-label preservation.
 
@@ -446,6 +447,11 @@ async def occ_upsert_bulk(
        the new value. Increments ``LEGACY_INGEST_PRESERVED_HUMAN_LABEL``
        (labelled by which guard field fired) per preserved field — the
        Grafana proof-of-fix metric.
+    5. Independently of 2-4, every ``fill_if_absent`` field is only a
+       default for the *create*: on the update path it is applied only
+       when the existing doc has no value for it, and otherwise dropped
+       from the update so the existing value stands (e.g. a region
+       status another writer already advanced).
 
     Args:
         client: AsyncOpenSearch instance.
@@ -460,10 +466,14 @@ async def occ_upsert_bulk(
             newly created (bulk ``create`` acknowledged 200/201) is
             appended. Docs that already existed — including a create
             that lost a race and fell back to the update path — are not.
+        fill_if_absent: Fields written on update only when the existing
+            doc lacks them (see step 5).
 
     Returns:
         ``{'created': N, 'updated': M, 'preserved_human': P,
-        'final_conflicts': C}``.
+        'final_conflicts': C, 'filled_absent': F}`` — ``filled_absent``
+        counts updated docs that received at least one
+        ``fill_if_absent`` field.
     """
     # Local import: metrics module imports prometheus_client at top
     # level and we keep occ.py prometheus-free for unit-test ergonomics.
@@ -472,7 +482,13 @@ async def occ_upsert_bulk(
         LEGACY_INGEST_PRESERVED_HUMAN_LABEL,
     )
 
-    result = {'created': 0, 'updated': 0, 'preserved_human': 0, 'final_conflicts': 0}
+    result = {
+        'created': 0,
+        'updated': 0,
+        'preserved_human': 0,
+        'final_conflicts': 0,
+        'filled_absent': 0,
+    }
     if not docs:
         return result
 
@@ -547,6 +563,7 @@ async def occ_upsert_bulk(
             existing=source,
             human_field_guards=human_field_guards,
         )
+        filled = _apply_fill_if_absent(merged, source, fill_if_absent)
 
         attempt = 0
         max_retries = 1
@@ -567,6 +584,8 @@ async def occ_upsert_bulk(
                     # class_source) so operators see the fix in action.
                     LEGACY_INGEST_PRESERVED_HUMAN_LABEL.labels(field=field).inc()
                 result['preserved_human'] += len(preserved_fields)
+                if filled:
+                    result['filled_absent'] += 1
                 break
             except Exception as exc:
                 err_type = type(exc).__name__
@@ -608,8 +627,28 @@ async def occ_upsert_bulk(
                     existing=source,
                     human_field_guards=human_field_guards,
                 )
+                filled = _apply_fill_if_absent(merged, source, fill_if_absent)
 
     return result
+
+
+def _apply_fill_if_absent(
+    merged: dict[str, Any],
+    existing: dict[str, Any],
+    fill_if_absent: Collection[str],
+) -> bool:
+    """Drop (in place) every ``fill_if_absent`` field the existing doc
+    already has a value for. Returns whether any such field is still
+    being written."""
+    filled = False
+    for field in fill_if_absent:
+        if field not in merged:
+            continue
+        if existing.get(field) not in (None, ''):
+            merged.pop(field)
+        else:
+            filled = True
+    return filled
 
 
 def _merge_preserving_human(

@@ -42,9 +42,10 @@ import hashlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config import get_curation_config
+from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.history import record_class_history
+from src.services.curation.item_doc import region_seed_status
 from src.services.detection.cascade_detect import class_provenance
 from src.services.detection.geometry import crop_id as _geometry_crop_id, iou as _iou
 
@@ -311,6 +312,11 @@ async def import_yolo_labels(
     # The label file, not a detector, produced these classes — overwrite
     # any detector provenance ingest stamped on an IoU-matched item.
     label_prov = class_provenance(label_source, '1', labeler='label_import', labeled_at=now)
+    # Items this import creates (labels the detector missed) need region
+    # detection like any ingest-created item; IoU-matched updates leave the
+    # existing region status alone.
+    seed = region_seed_status()
+    region_seed = {get_region_fields().status: seed.value} if seed is not None else {}
 
     bulk_body: list[dict[str, Any]] = []
     disagreements: list[dict[str, Any]] = []
@@ -411,6 +417,7 @@ async def import_yolo_labels(
                     'class_validated': True,
                     'label_source': label_source,
                     **label_prov,
+                    **region_seed,
                     'test_holdout': False,
                     'created_at': now,
                     'updated_at': now,
