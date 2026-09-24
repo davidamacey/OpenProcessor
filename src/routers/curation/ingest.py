@@ -420,30 +420,26 @@ async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
     }
 
 
-@router.get('/ingest/sam_drain')
-async def ingest_sam_drain(opensearch: OpenSearchDep) -> dict[str, int]:
+@router.get('/ingest/region_drain')
+async def ingest_region_drain(opensearch: OpenSearchDep) -> dict[str, int]:
     """Region-detection worklog: how many items are still waiting for the
     detection worker.
 
     Used by an ingest walker to decide when the asynchronous
     detect-then-verify chain has caught up after a folder finishes, before
     triggering ``/curation/pipeline/auto_label``. The walker polls this
-    endpoint every ~10s and proceeds when ``pending`` reaches 0 (with a
-    stability window).
+    endpoint every ~10s and proceeds when ``total_unfinished`` reaches 0
+    (with a stability window).
 
-    Returns a dict with five keys (transitional legacy-name rollup):
-
+    Returns:
     * ``pending_detection``    — items the detection worker hasn't reached
                                   yet (region status == 'pending_detection').
-                                  Legacy ``'pending'`` rows roll up here
-                                  too during the migration window.
     * ``pending_verification`` — items where the detector found a
                                   candidate and the verify step is queued.
-                                  Legacy ``'pending_verify'`` rows included.
-    * ``pending``              — legacy alias, sum of any rows still on
-                                  the old short name (transitional).
-    * ``pending_verify``       — legacy alias for the same reason.
-    * ``total_unfinished``     — sum of all four; what the walker polls.
+    * ``total_unfinished``     — sum of the two; what the walker polls.
+
+    Re-ingested data can never carry the retired ``'pending'`` /
+    ``'pending_verify'`` short names (S5), so there is no legacy rollup.
     """
     await _ensure_indexes(opensearch)
     fields = get_region_fields()
@@ -464,16 +460,12 @@ async def ingest_sam_drain(opensearch: OpenSearchDep) -> dict[str, int]:
     raw: dict[str, int] = {}
     for bucket in (resp.get('aggregations') or {}).get('by_status', {}).get('buckets', []):
         raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))
-    pending_legacy = raw.get('pending', 0)
-    pending_new = raw.get(RegionStatus.PENDING_DETECTION, 0)
-    verify_legacy = raw.get('pending_verify', 0)
-    verify_new = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
+    pending_detection = raw.get(RegionStatus.PENDING_DETECTION, 0)
+    pending_verification = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
     return {
-        'pending': pending_legacy,
-        'pending_detection': pending_new + pending_legacy,
-        'pending_verify': verify_legacy,
-        'pending_verification': verify_new + verify_legacy,
-        'total_unfinished': pending_legacy + pending_new + verify_legacy + verify_new,
+        'pending_detection': pending_detection,
+        'pending_verification': pending_verification,
+        'total_unfinished': pending_detection + pending_verification,
     }
 
 

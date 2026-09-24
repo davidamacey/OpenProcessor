@@ -1,7 +1,7 @@
 """Read endpoints fail closed: an OpenSearch outage is a 503, never an
 empty/zero answer that looks like real data.
 
-``GET /ingest/sam_drain`` used to answer ``total_unfinished: 0`` on an
+``GET /ingest/region_drain`` used to answer ``total_unfinished: 0`` on an
 outage — exactly the "worker has caught up" signal an ingest walker
 waits for. Same shape of bug on ``/ingest/status``, ``/classes`` (counts)
 and ``/stats/classes`` (registry join). Single-item reads tell a missing
@@ -39,7 +39,7 @@ def _down() -> AsyncMock:
 @pytest.mark.parametrize(
     'path',
     [
-        '/curation/ingest/sam_drain',
+        '/curation/ingest/region_drain',
         '/curation/ingest/status',
         '/curation/classes',
         '/curation/review/regions/locate?crop_id=c1',

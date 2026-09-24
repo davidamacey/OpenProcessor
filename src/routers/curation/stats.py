@@ -355,8 +355,8 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
       region-validated flags.
     - ``unlabeled.{pending_detection, pending_verification, no_label_source}`` —
       the region-status field plus crops with no ``class_id``.
-    - ``in_progress.sam_drain_total_unfinished`` — matches the value
-      returned by ``/curation/ingest/sam_drain``.
+    - ``in_progress.region_drain_total_unfinished`` — matches the value
+      returned by ``/curation/ingest/region_drain``.
     - ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —
       sourced from the persisted ``auto_label_job`` state when present;
       ``cluster_count`` falls back to live ``cluster_id`` cardinality.
@@ -412,13 +412,9 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     for b in (aggs.get('region_status') or {}).get('buckets') or []:
         region_status_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
 
-    pending_detection = region_status_buckets.get(
-        RegionStatus.PENDING_DETECTION, 0
-    ) + region_status_buckets.get('pending', 0)
-    pending_verification = region_status_buckets.get(
-        RegionStatus.PENDING_VERIFICATION, 0
-    ) + region_status_buckets.get('pending_verify', 0)
-    sam_drain_total_unfinished = pending_detection + pending_verification
+    pending_detection = region_status_buckets.get(RegionStatus.PENDING_DETECTION, 0)
+    pending_verification = region_status_buckets.get(RegionStatus.PENDING_VERIFICATION, 0)
+    region_drain_total_unfinished = pending_detection + pending_verification
 
     no_label_source = int((aggs.get('no_label_source') or {}).get('doc_count', 0))
 
@@ -481,7 +477,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
             'no_label_source': no_label_source,
         },
         'in_progress': {
-            'sam_drain_total_unfinished': sam_drain_total_unfinished,
+            'region_drain_total_unfinished': region_drain_total_unfinished,
         },
         'clusters': cluster_meta,
     }
