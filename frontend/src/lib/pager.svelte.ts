@@ -29,6 +29,16 @@ export interface Pager<T> {
   loadFirst(): Promise<void>;
   /** Append the next page; no-op while a fetch is in flight or at the end. */
   loadMore(): Promise<void>;
+  /**
+   * Reset the buffer and fetch exactly `page`, skipping every page before
+   * it. For a deep link that resolves to a page deep into a large queue
+   * (DQ-M7: rank 3000 was page 101), `loadMore()` in a 1..page loop means
+   * one request per intervening page — 103 requests and 5.7s to land, with
+   * the stale page-1 buffer rendered and keyed the whole time. This issues
+   * one request. `loadedPages` is set to `page` afterward so a subsequent
+   * `loadMore()` continues forward from `page + 1`, not from 2.
+   */
+  loadPage(page: number): Promise<void>;
 }
 
 export interface PagerOptions<T> {
@@ -152,6 +162,30 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         // discarded stale loadMore() would leave loadingMore stuck `true`
         // and permanently block future loadMore() calls.
         loadingMore = false;
+      }
+    },
+
+    async loadPage(page: number): Promise<void> {
+      const myEpoch = ++epoch;
+      loading = true;
+      error = null;
+      items = [];
+      total = 0;
+      loadedPages = 0;
+      opts.onReset?.();
+      try {
+        const res = await opts.fetchPage(page);
+        if (myEpoch !== epoch) return;
+        const fresh = (res?.items ?? []).filter((i) => opts.accept?.(i) ?? true);
+        items = fresh;
+        total = res?.total ?? fresh.length;
+        loadedPages = page;
+      } catch (e) {
+        if (myEpoch !== epoch) return;
+        error = (e as Error).message;
+        opts.onLoadFirstError?.();
+      } finally {
+        if (myEpoch === epoch) loading = false;
       }
     },
   };

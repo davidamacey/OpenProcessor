@@ -152,6 +152,78 @@ describe('createPager', () => {
     expect(pager.loadingMore).toBe(false);
   });
 
+  it('loadPage fetches only the requested page, skipping every page before it (DQ-M7)', async () => {
+    const seen: number[] = [];
+    const pager = createPager<Row>({
+      fetchPage: async (page) => {
+        seen.push(page);
+        return { items: rows(`p${page}a`, `p${page}b`), total: 200 };
+      },
+      keyOf: (r) => r.id,
+    });
+    await pager.loadPage(101);
+    expect(seen).toEqual([101]);
+    expect(pager.items.map((r) => r.id)).toEqual(['p101a', 'p101b']);
+    expect(pager.total).toBe(200);
+    expect(pager.loadedPages).toBe(101);
+  });
+
+  it('loadPage discards the buffer from any prior loadFirst/loadMore', async () => {
+    let call = 0;
+    const pager = createPager<Row>({
+      fetchPage: async () => {
+        call++;
+        if (call === 1) return { items: rows('a', 'b'), total: 50 };
+        return { items: rows('z1', 'z2'), total: 50 };
+      },
+      keyOf: (r) => r.id,
+    });
+    await pager.loadFirst();
+    expect(pager.items.map((r) => r.id)).toEqual(['a', 'b']);
+    await pager.loadPage(20);
+    expect(pager.items.map((r) => r.id)).toEqual(['z1', 'z2']);
+    expect(pager.loadedPages).toBe(20);
+  });
+
+  it('loadPage lets a subsequent loadMore() continue forward from page + 1, not page 2', async () => {
+    const seen: number[] = [];
+    const pager = createPager<Row>({
+      fetchPage: async (page) => {
+        seen.push(page);
+        return { items: rows(`p${page}`), total: 500 };
+      },
+      keyOf: (r) => r.id,
+    });
+    await pager.loadPage(101);
+    await pager.loadMore();
+    expect(seen).toEqual([101, 102]);
+  });
+
+  it('a loadPage() in flight beats a slower stale loadFirst() (epoch race)', async () => {
+    let resolveFirst: (v: { items: Row[]; total: number }) => void;
+    const firstPromise = new Promise<{ items: Row[]; total: number }>((res) => {
+      resolveFirst = res;
+    });
+    let call = 0;
+    const pager = createPager<Row>({
+      fetchPage: async () => {
+        call++;
+        if (call === 1) return firstPromise; // stale loadFirst(), held open
+        return { items: rows('located'), total: 500 }; // loadPage(), resolves first
+      },
+      keyOf: (r) => r.id,
+    });
+    const staleLoadFirst = pager.loadFirst();
+    await pager.loadPage(101);
+    expect(pager.items.map((r) => r.id)).toEqual(['located']);
+    resolveFirst!({ items: rows('stale'), total: 3 });
+    await staleLoadFirst;
+    // The stale loadFirst() resolved after loadPage() won the epoch race —
+    // its result must not clobber the located page.
+    expect(pager.items.map((r) => r.id)).toEqual(['located']);
+    expect(pager.loadedPages).toBe(101);
+  });
+
   it('items and total stay writable for optimistic mutations', async () => {
     const pager = createPager<Row>({
       fetchPage: async () => ({ items: rows('a', 'b'), total: 2 }),
