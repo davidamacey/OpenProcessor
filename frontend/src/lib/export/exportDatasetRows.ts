@@ -6,9 +6,16 @@
  * logic-moves-adoption-plan-2026-09-24.md` §1.7) — this module never
  * clamps or derives them from `validated_count`. Likewise `testDeficient`
  * prefers the server's per-bucket `deficient` flag
- * (`GET {API_PREFIX}/test_holdout/stats`). A class with no holdout bucket
- * has zero test crops, which is compared against the served
- * `min_test_per_class`. With no holdout stats at all nothing is flagged.
+ * (`GET {API_PREFIX}/test_holdout/stats`), falling back to a local
+ * count-vs-`min_test_per_class` comparison only when a bucket exists but
+ * omits the flag (an older backend). A class with NO holdout bucket at
+ * all (e.g. 0 validated crops — never sampled into the holdout in the
+ * first place) is never flagged deficient by this module: the server's
+ * `by_class` list only ever covers classes it actually considered, and
+ * live evidence (`test_holdout/stats` on a 84-class deployment with only
+ * 5 classes validated) shows the other 79 simply absent, not flagged —
+ * treating "absent" as "deficient" was the bug (every un-validated class
+ * showed a red "below N test crops" badge on `/export`).
  */
 import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
 
@@ -48,7 +55,9 @@ export function buildExportRows(
       aug_target: target,
       gap: c.aug_gap ?? null,
       test_count: test?.count ?? 0,
-      testDeficient: test?.deficient ?? (minTest != null && (test?.count ?? 0) < minTest),
+      testDeficient: test
+        ? (test.deficient ?? (minTest != null && test.count < minTest))
+        : false,
       adequacy: c.adequacy ?? null,
     };
   });
