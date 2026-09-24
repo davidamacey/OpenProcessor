@@ -337,3 +337,75 @@ class TestDiscovery:
         assert len(picked) == 10
         assert sum(1 for s in picked if s.positive) == 8
         assert picked == mod.stratified_sample(samples, 10, seed=1)
+
+
+# =============================================================================
+# --images-only (region ground truth: ingest images, never their labels)
+# =============================================================================
+
+
+def _ingested(state: Path, split: str) -> list[dict[str, Any]]:
+    text = (state / 'ingested' / f'{split}.jsonl').read_text()
+    return [json.loads(line) for line in text.splitlines()]
+
+
+def test_images_only_ingests_without_labels_or_class_check(
+    client: TestClient, fake_opensearch: FakeOpenSearch, tmp_path: Path
+) -> None:
+    # The labels are a region taxonomy the item registry has never heard of.
+    data = _dataset(tmp_path / 'ds', names='{0: license_plate}')
+    state = tmp_path / 'state'
+    summary = _run(client, data, state, images_only=True)
+
+    total = summary['total']
+    assert (total['successful'], total['failed']) == (8, 0)
+    assert (total['positives'], total['backgrounds']) == (5, 3)
+    assert total['labels_imported'] == 0
+    assert total['label_rows_on_ingested'] == 0
+    assert total['label_match_rate'] is None
+    assert fake_opensearch.labels == {}
+    assert not (state / 'disagreements.jsonl').exists()
+
+    train = _ingested(state, 'train')
+    assert len(train) == 6
+    assert {r['status'] for r in train} == {'success'}
+    assert sum(r['positive'] for r in train) == 4
+    image_ids = {d['image_id'] for d in fake_opensearch.images.values()}
+    assert {r['image_id'] for r in train} <= image_ids
+    assert all(r['server_path'] == r['image'] for r in train)
+    val = _ingested(state, 'val')
+    assert {Path(r['image']).name for r in val} == {'pos0.jpg', 'bg_nolabel.jpg'}
+
+
+def test_images_only_cohort_survives_resume_and_records_duplicate_ids(
+    client: TestClient, fake_opensearch: FakeOpenSearch, tmp_path: Path
+) -> None:
+    data = _dataset(tmp_path / 'ds')
+    state = tmp_path / 'state'
+    _run(client, data, state, images_only=True)
+    first = _ingested(state, 'train')
+
+    # Checkpointed split: the list is rebuilt from progress, not lost.
+    (state / 'ingested' / 'train.jsonl').unlink()
+    _run(client, data, state, images_only=True)
+    assert _ingested(state, 'train') == first
+
+    # A second import of the same bytes lands as duplicates; each keeps the
+    # original's image_id, which is what the region evaluator joins on.
+    asyncio.run(fake_opensearch.indices.refresh('all'))
+    again = tmp_path / 'state2'
+    summary = _run(client, data, again, images_only=True)
+    assert summary['total']['duplicates'] == 8
+    dup = _ingested(again, 'train')
+    assert {r['status'] for r in dup} == {'duplicate'}
+    by_name = {Path(r['image']).name: r['image_id'] for r in first}
+    assert {Path(r['image']).name: r['image_id'] for r in dup} == by_name
+
+
+def test_images_only_cli_guards(tmp_path: Path) -> None:
+    mod = _mod()
+    data = _dataset(tmp_path / 'ds', names='{0: license_plate}')
+    base = ['--dataset', str(data), '--state-dir', str(tmp_path / 'state'), '--images-only']
+    # Dry run skips the registry check entirely (no server is reachable here).
+    assert mod.main([*base, '--dry-run', '--api-base', 'http://127.0.0.1:9']) == 0
+    assert mod.main([*base, '--relabel-duplicates']) == 1
