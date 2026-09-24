@@ -15,6 +15,7 @@
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
   import Toast from '$components/Toast.svelte';
   import { classesStore } from '$stores/classes.svelte';
+  import { classSourcesStore } from '$stores/classSources.svelte';
   import { healthStore } from '$stores/health.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
@@ -36,6 +37,7 @@
   $effect(() => {
     const releaseHealth = healthStore.acquire();
     const releaseClasses = classesStore.acquire();
+    void classSourcesStore.init();
     return () => {
       releaseHealth();
       releaseClasses();

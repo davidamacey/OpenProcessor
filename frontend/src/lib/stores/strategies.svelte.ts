@@ -56,7 +56,8 @@ class StrategiesStore {
       } catch (e) {
         if ((e as Error)?.name === 'AbortError') return;
         this.methods = FALLBACK_METHODS;
-        this.error = (e as Error)?.message ?? 'failed to load {API_PREFIX}/methods';
+        this.error =
+          (e as Error)?.message ?? 'failed to load the /methods capability list';
       } finally {
         this.loading = false;
         this.loaded = true;

@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The frontend now uses the backend's `class_source` catalog
+  (`GET /class_sources`, loaded once in the layout) instead of its own
+  copies of backend rules.
+  - The `/clusters/[id]` source filter is a dropdown of the deployment's
+    catalog, including the config-derived ingest sources, and is absent
+    without one.
+  - The crop card's badge takes its text from the catalog label and its
+    color from the catalog role. An unknown id renders verbatim and
+    neutral, never inferred from its name.
+  - `Enter`/Confirm uses the backend's `proposed_class_id` as-is. The
+    client-side fallback to `class_id` was a second copy of review.py's
+    rule.
+  - The card shows a VLM new-class proposal
+    (`vlm_proposed_class_name` with no id) read-only.
+
+### Changed
+
 - Removed the `op` (legacy) naming from the frontend.
   - The `Kb`-prefixed types lose the prefix, or get a descriptive name
     where a bare one would clash or read vaguely: `Crop`, `RegistryClass`

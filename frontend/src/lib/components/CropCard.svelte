@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { sourceBadge } from '$lib/sourceBadge';
+  import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
-  import type { BBoxNorm, Crop, LabelSource } from '$lib/types';
+  import type { BBoxNorm, Crop } from '$lib/types';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
@@ -140,34 +142,14 @@
   // most crops in the ensemble pipeline are auto-validated by Gemma,
   // ensemble consensus, or cluster propagation; only true human labels
   // (label_source='human') get the green chip.
-  const labelBadgeClass = (
-    src: LabelSource | null | undefined,
-    validated: boolean,
-  ): string => {
-    if (src?.startsWith('vlm'))
-      return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
-    if (!validated) return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
-    if (src?.startsWith('human')) {
-      return 'bg-green-500/20 text-green-200 border-green-500/40';
-    }
-    if (src === 'cluster_majority_agreement')
-      return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
-    return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
-  };
-
-  const labelBadgeText = (
-    src: LabelSource | null | undefined,
-    validated: boolean,
-  ): string => {
-    if (!validated) {
-      if (src?.startsWith('vlm')) return 'vlm?';
-      return src && src !== 'unknown' ? src : 'unlabeled';
-    }
-    if (src?.startsWith('human')) return 'human';
-    if (src?.startsWith('vlm')) return 'vlm';
-    if (src === 'cluster_majority_agreement') return 'cluster';
-    return src && src !== 'unknown' ? src : 'auto';
-  };
+  const badge = $derived(
+    sourceBadge(
+      crop.label_source,
+      crop.label_validated,
+      classSourcesStore.roleFor(crop.label_source),
+      classSourcesStore.labelFor(crop.label_source),
+    ),
+  );
 
   const conf = $derived(
     crop.label_confidence != null ? `${(crop.label_confidence * 100).toFixed(0)}%` : null,
@@ -308,13 +290,10 @@
 
   <div class="flex items-center gap-1 px-2 py-1.5">
     <span
-      class="truncate rounded-sm border px-1 py-0.5 text-[10px] font-medium {labelBadgeClass(
-        crop.label_source,
-        crop.label_validated,
-      )}"
+      class="truncate rounded-sm border px-1 py-0.5 text-[10px] font-medium {badge.cls}"
       title={crop.class_name ?? 'unlabeled'}
     >
-      {labelBadgeText(crop.label_source, crop.label_validated)}
+      {badge.text}
     </span>
     <span class="grow truncate text-xs text-zinc-300" title={crop.class_name ?? ''}>
       {crop.class_name ?? '—'}
@@ -356,6 +335,13 @@
       >
         ×
       </button>
+    </div>
+  {:else if crop.vlm_suggested_class_name && !crop.label_validated}
+    <div
+      class="border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs text-yellow-200"
+      title="The VLM proposed a class that isn't in the registry yet"
+    >
+      VLM suggests new class: {crop.vlm_suggested_class_name}
     </div>
   {/if}
 </div>

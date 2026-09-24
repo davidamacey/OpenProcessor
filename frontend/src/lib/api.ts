@@ -1977,6 +1977,42 @@ export function mergeClasses(
   );
 }
 
+/** What kind of writer a `class_source` value names. */
+export type ClassSourceRole =
+  | 'proposal'
+  | 'low_conf'
+  | 'model'
+  | 'vlm'
+  | 'vlm_unmatched'
+  | 'vlm_new_class_pending'
+  | 'vlm_reclassified'
+  | 'cluster'
+  | 'human'
+  | 'merge'
+  | 'label_import'
+  | (string & {});
+
+/** One `class_source` value this deployment can write. */
+export interface ClassSource {
+  id: string;
+  label: string;
+  role: ClassSourceRole;
+}
+
+/** `GET {API_PREFIX}/class_sources` — every `class_source` value this
+ *  deployment can write, including the ingest detectors' config-derived
+ *  ones (`{primary}_proposal`, …). */
+export async function getClassSources(signal?: AbortSignal): Promise<ClassSource[]> {
+  const res = await apiFetch<{ class_sources?: ClassSource[] }>(
+    `${API_PREFIX}/class_sources`,
+    {},
+    signal,
+  );
+  return (res.class_sources ?? []).filter(
+    (c) => typeof c?.id === 'string' && c.id.length > 0 && typeof c.label === 'string',
+  );
+}
+
 export function syncClassesToOpensearch(
   signal?: AbortSignal,
 ): Promise<{ upserted: number; n_classes: number }> {

@@ -94,43 +94,17 @@ describe('searchClasses — license_plate is a normal assignable class', () => {
   });
 });
 
+// The backend (review.py) already resolves proposed_class_id: the VLM's
+// proposal, else the item's class, or null when nothing is confirmable.
+// The frontend uses it as-is and never second-guesses it.
 describe('resolveConfirmClassId', () => {
-  it('prefers proposed_class_id over the current class_id', () => {
-    expect(resolveConfirmClassId({ proposed_class_id: 5, class_id: 1 })).toBe(5);
+  it("returns the backend's proposed_class_id", () => {
+    expect(resolveConfirmClassId({ proposed_class_id: 5 })).toBe(5);
   });
 
-  it('falls back to class_id when there is no proposal', () => {
-    expect(resolveConfirmClassId({ proposed_class_id: null, class_id: 1 })).toBe(1);
-  });
-
-  it('returns null when both are absent — the P1-5 "blank proposal" case', () => {
-    expect(resolveConfirmClassId({ proposed_class_id: null, class_id: null })).toBeNull();
-  });
-
-  it('returns null for a null/undefined item', () => {
+  it('returns null when the backend says nothing is confirmable', () => {
+    expect(resolveConfirmClassId({ proposed_class_id: null })).toBeNull();
     expect(resolveConfirmClassId(null)).toBeNull();
     expect(resolveConfirmClassId(undefined)).toBeNull();
-  });
-});
-
-describe('resolveConfirmClassId — VLM new-class proposals', () => {
-  it('never falls back to the unrelated current class for vlm_new_class_pending', () => {
-    expect(
-      resolveConfirmClassId({
-        proposed_class_id: null,
-        class_id: 7,
-        class_source: 'vlm_new_class_pending',
-      }),
-    ).toBeNull();
-  });
-
-  it('still falls back to the current class for other sources', () => {
-    expect(
-      resolveConfirmClassId({
-        proposed_class_id: null,
-        class_id: 7,
-        class_source: 'vlm',
-      }),
-    ).toBe(7);
   });
 });

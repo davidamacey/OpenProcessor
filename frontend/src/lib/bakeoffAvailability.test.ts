@@ -71,7 +71,7 @@ describe('bakeoffAvailability', () => {
 
   it('sets available = false on a 404 (router not mounted)', async () => {
     const store = await loadStoreThrowing(
-      (ApiError) => new ApiError(404, '{API_PREFIX}/bakeoff/runs', null),
+      (ApiError) => new ApiError(404, '/curation/bakeoff/runs', null),
     );
     await store.init();
     expect(store.available).toBe(false);
@@ -79,7 +79,7 @@ describe('bakeoffAvailability', () => {
 
   it('sets available = false on a 501 (not implemented)', async () => {
     const store = await loadStoreThrowing(
-      (ApiError) => new ApiError(501, '{API_PREFIX}/bakeoff/runs', null),
+      (ApiError) => new ApiError(501, '/curation/bakeoff/runs', null),
     );
     await store.init();
     expect(store.available).toBe(false);
@@ -96,7 +96,7 @@ describe('bakeoffAvailability', () => {
 
   it('leaves available at its optimistic value (not false) on a 500', async () => {
     const store = await loadStoreThrowing(
-      (ApiError) => new ApiError(500, '{API_PREFIX}/bakeoff/runs', null),
+      (ApiError) => new ApiError(500, '/curation/bakeoff/runs', null),
     );
     await store.init();
     expect(store.available).not.toBe(false);

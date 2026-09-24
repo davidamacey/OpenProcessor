@@ -44,6 +44,7 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import { classSourcesStore } from '$stores/classSources.svelte';
   import { undoStore } from '$stores/undo.svelte';
   import { subscribeCurationEvents, type CurationEventSubscription } from '$lib/sse';
 
@@ -138,27 +139,9 @@
   // the header are NOT recomputed by this filter — the operator sees
   // the filter against the whole-cluster totals on purpose.
   let classSourceFilter = $state<string | null>(null);
-  // The backend's fixed writer values (curation_api_contract.md
-  // "class_source values"). The ingest detectors' values
-  // (`{primary}_proposal`, `{secondary}_model`, …) are named from each
-  // deployment's config and need a discovery source before they can be
-  // offered here (docs/design/b3-wire-rename-frontend-plan-2026-09-23.md G2).
-  const CLASS_SOURCE_OPTIONS: { value: string | null; label: string; hint: string }[] = [
-    { value: null, label: 'All', hint: 'Every source' },
-    { value: 'human', label: 'Human', hint: 'Human-validated' },
-    { value: 'vlm', label: 'VLM', hint: 'VLM matched a registry class' },
-    { value: 'vlm_unmatched', label: 'VLM ?', hint: 'VLM answer not in the registry' },
-    {
-      value: 'vlm_new_class_pending',
-      label: 'New cls',
-      hint: 'VLM proposed a new class',
-    },
-    {
-      value: 'classifier_vlm_agreement',
-      label: 'Agree',
-      hint: 'Classifier and VLM agreed',
-    },
-  ];
+  // Every class_source this deployment can write — the backend's catalog
+  // (GET /class_sources). No catalog, no source filter.
+  const classSourceOptions = $derived(classSourcesStore.list);
 
   // Primary-subject scope: 0 = all crops, 1 = largest only, 2 = largest + 2nd.
   // Maps to the {API_PREFIX}/crops?max_rank= filter (the "biggest vehicle in frame" the
@@ -1336,21 +1319,27 @@
     class="flex flex-wrap items-center gap-1.5 border-b border-zinc-800 px-4 py-1.5 text-xs"
   >
     <span class="text-zinc-500">source:</span>
-    {#each CLASS_SOURCE_OPTIONS as opt (opt.value ?? '__all__')}
-      <button
-        type="button"
-        title={opt.hint}
-        class="chip {classSourceFilter === opt.value
-          ? 'bg-blue-600 text-white'
-          : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-        onclick={() => (classSourceFilter = opt.value)}
+    <label class="flex items-center gap-1.5">
+      <span class="text-zinc-500">source</span>
+      <select
+        class="select-sm"
+        value={classSourceFilter ?? ''}
+        onchange={(e) => {
+          const v = (e.currentTarget as HTMLSelectElement).value;
+          classSourceFilter = v === '' ? null : v;
+        }}
       >
-        {opt.label}
-      </button>
-    {/each}
+        <option value="">All sources</option>
+        {#each classSourceOptions as opt (opt.id)}
+          <option value={opt.id}>{opt.label}</option>
+        {/each}
+      </select>
+    </label>
     {#if classSourceFilter !== null}
       <span class="ml-auto text-zinc-500">
-        showing {cropPager.total.toLocaleString()} from {classSourceFilter}
+        showing {cropPager.total.toLocaleString()} from {classSourcesStore.labelFor(
+          classSourceFilter,
+        )}
       </span>
     {/if}
   </div>
