@@ -31,7 +31,7 @@ from src.services.curation.class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
 )
-from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
+from src.services.detection.profile_registry import region_profile_or_neutral
 
 
 @router.get('/stats/classes')
@@ -372,7 +372,7 @@ async def stats_dataset(opensearch: OpenSearchDep) -> dict[str, Any]:
     # by_detector counts crops where the profile's primary region detector
     # found the region; by_segmenter where its secondary segmenter did.
     # region_total is the denominator for "% of crops with a region detection".
-    profile = REFERENCE_LICENSE_PLATE_PROFILE
+    profile = region_profile_or_neutral()
     region_detector_buckets: dict[str, int] = {}
     for b in (aggs.get('region_detectors') or {}).get('buckets') or []:
         region_detector_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))

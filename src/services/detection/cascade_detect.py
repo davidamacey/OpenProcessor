@@ -12,13 +12,16 @@ Every heuristic that used to be a hardcoded module constant (detector
 identity, confidence floors, aspect bands, OCR wiring) now lives on a
 :class:`~src.config.DetectionProfile` instance, so a deployment can
 describe a different region type (a box, a tractor's ID plate, …)
-without forking this module. ``REFERENCE_LICENSE_PLATE_PROFILE``
+without forking this module. ``REFERENCE_LICENSE_PLATE_PROFILE`` (defined
+in :mod:`src.services.detection.reference_profiles`, re-exported here)
 reproduces the reference license-plate constants — it is an *example*
-profile, not a domain-neutral one, and its name says so since work item
-B2. It is nevertheless still the profile registered with
-``default=True`` and still the fallback for call sites that don't pass
-a profile, because no neutral default has been built yet; see the
-FOLLOW-UP note next to ``register_profile`` below.
+profile. It is **not** registered or active unless a deployment selects
+it (``OP_REGION_PROFILE=license_plate``); see
+:mod:`src.services.detection.profile_registry` for how the active region
+profile is resolved. The class/function parameter defaults below still
+name it, so library callers that construct a detector without a profile
+get a working example configuration — production callers (the detection
+worker) always pass the active profile explicitly.
 """
 
 from __future__ import annotations
@@ -37,7 +40,8 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 
 from src.config import DetectionProfile, get_region_fields
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox
-from src.services.detection.profile_registry import register_profile
+from src.services.detection.profile_registry import ensure_env_region_profile
+from src.services.detection.reference_profiles import REFERENCE_LICENSE_PLATE_PROFILE
 
 
 if TYPE_CHECKING:
@@ -47,57 +51,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Reference profile — reproduces the reference license-plate constants.
-# Still the *registered* default (see register_profile below) because no
-# domain-neutral profile exists yet.
-# =============================================================================
-
-
-REFERENCE_LICENSE_PLATE_PROFILE = DetectionProfile(
-    name='license_plate',
-    detector_model='lpr_nanov11_640',
-    detector_version='1',
-    input_size=640,
-    confidence_floor=0.4,
-    batch_limit=16,
-    letterbox_fill=(114, 114, 114),
-    aspect_min=1.2,
-    aspect_max=8.0,
-    text_hint_aspect_min=1.5,
-    text_hint_aspect_max=7.0,
-    text_hint_rec_floor=0.70,
-    text_hint_len_min=4,
-    text_hint_len_max=10,
-    segmenter_name='sam3',
-    segmenter_version='1',
-    human_detector_name='human',
-    human_detector_version='1',
-    ocr_det_model='paddleocr_det_trt',
-    ocr_det_version='1',
-    ocr_det_input_size=640,
-    ocr_det_prob_floor=0.30,
-    ocr_rec_model='paddleocr_rec_trt',
-    ocr_rec_version='1',
-    ocr_pipeline_model='ocr_pipeline',
-    # Crop classes routed straight to the secondary segmenter, skipping
-    # the primary detector — the reference LPR model is known weak on
-    # motorcycle plates (near-square, off-axis mounting).
-    secondary_shape_groups=frozenset({'sportbikes', 'cruisers', 'dirtbikes'}),
-)
-
-# Register as the default so GET /curation/methods' detection_profile axis
-# (src.services.curation.strategy_registry) and any future multi-profile
-# deployment have a real registry to read from — see
-# src.services.detection.profile_registry.
-#
-# FOLLOW-UP (B2): the rename above says what this profile *is* — a
-# license-plate reference example, not a domain-neutral default — but it is
-# still what `default=True` registers, because no neutral detection profile
-# has been built yet. Building one (and demoting this to a plain registered
-# example) is deliberately out of scope for B2; until then the runtime
-# behaviour here is unchanged from before the rename.
-register_profile(REFERENCE_LICENSE_PLATE_PROFILE, default=True)
+# Resolve (and register) the deployment's region profile from the
+# environment at import time, so a bad OP_REGION_PROFILE name fails loudly
+# at startup instead of on the first detection request. Unconfigured is
+# valid: no profile is registered and region detection stays off.
+ensure_env_region_profile()
 
 # The lpr_nanov11_640-shaped TRT engine is exported with a fixed
 # [1, 3, N, N] input — Triton's dynamic batching layers multiple

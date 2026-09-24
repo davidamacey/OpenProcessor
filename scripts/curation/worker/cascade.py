@@ -17,7 +17,6 @@ from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.detection.cascade_detect import (
-    REFERENCE_LICENSE_PLATE_PROFILE,
     PaddleOcrTextRecognizer,
     RegionCandidate,
     RegionDetector,
@@ -42,6 +41,7 @@ from scripts.curation.worker.state import (
     JPEG_QUALITY,
     _is_secondary_shape,
     _ItemTask,
+    region_profile,
 )
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
@@ -307,11 +307,11 @@ async def _process_crop(
 
     is_secondary = _is_secondary_shape(task)
     sam_candidate: RegionCandidate | None = None
-    det_model = REFERENCE_LICENSE_PLATE_PROFILE.detector_model
-    det_version = REFERENCE_LICENSE_PLATE_PROFILE.detector_version
-    seg_name = REFERENCE_LICENSE_PLATE_PROFILE.segmenter_name
-    seg_version = REFERENCE_LICENSE_PLATE_PROFILE.segmenter_version
-    ocr_det_model = REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model
+    det_model = region_profile().detector_model
+    det_version = region_profile().detector_version
+    seg_name = region_profile().segmenter_name
+    seg_version = region_profile().segmenter_version
+    ocr_det_model = region_profile().ocr_rec_model
 
     # ---- Step 0: B-PR5 combined class+region for low-confidence-class cohort. ----
     # Cohort (Phase C broadened) = ``class_source='coco_yolo11_proposal'``

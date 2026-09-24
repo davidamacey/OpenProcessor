@@ -67,9 +67,32 @@ def confidence_band(conf_min: float | None, conf_max: float | None) -> dict[str,
     return {'range': {'confidence': rng}}
 
 
+def crops_page(
+    *,
+    total: int,
+    page: int,
+    page_size: int,
+    crops: list[dict[str, Any]],
+    method: str | None = None,
+    version: str | None = None,
+    n_pool: int | None = None,
+) -> dict[str, Any]:
+    """``CropsPageResponse``-shaped envelope around serialized items."""
+    return {
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'crops': crops,
+        'method': method,
+        'version': version,
+        'n_pool': n_pool,
+    }
+
+
 __all__ = [
     'CROP_SORT_FIELDS',
     'DEFAULT_CROP_SORT',
     'confidence_band',
+    'crops_page',
     'parse_crop_sort',
 ]

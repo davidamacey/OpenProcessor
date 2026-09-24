@@ -26,16 +26,19 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.services.curation.crop_browse import confidence_band, parse_crop_sort
+from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE, class_provenance
+from src.services.detection.cascade_detect import class_provenance
 
 
 def _human_class_provenance() -> dict[str, Any]:
     """Class provenance for every human class write in this module."""
+    from src.services.detection.profile_registry import region_profile_or_neutral
+
+    human = region_profile_or_neutral()
     return class_provenance(
-        detector=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_name,
-        detector_version=REFERENCE_LICENSE_PLATE_PROFILE.human_detector_version,
+        detector=human.human_detector_name,
+        detector_version=human.human_detector_version,
         labeler='human',
     )
 
@@ -205,7 +208,7 @@ async def list_crops(
         if ordered_ids is not None:
             page_ids = ordered_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
             crops = await _crops_by_ids(opensearch, page_ids)
-            return _crops_page(
+            return crops_page(
                 total=len(ordered_ids),
                 page=page,
                 page_size=page_size,
@@ -227,7 +230,7 @@ async def list_crops(
         if diverse_ids is not None:
             page_ids = diverse_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
             crops = await _crops_by_ids(opensearch, page_ids)
-            return _crops_page(
+            return crops_page(
                 total=len(diverse_ids),
                 page=page,
                 page_size=page_size,
@@ -238,29 +241,7 @@ async def list_crops(
 
     hits = (resp.get('hits') or {}).get('hits') or []
     crops = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
-    return _crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
-
-
-def _crops_page(
-    *,
-    total: int,
-    page: int,
-    page_size: int,
-    crops: list[dict[str, Any]],
-    method: str | None = None,
-    version: str | None = None,
-    n_pool: int | None = None,
-) -> dict[str, Any]:
-    """``CropsPageResponse``-shaped envelope around serialized items."""
-    return {
-        'total': total,
-        'page': page,
-        'page_size': page_size,
-        'crops': crops,
-        'method': method,
-        'version': version,
-        'n_pool': n_pool,
-    }
+    return crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
 
 
 async def _crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]:

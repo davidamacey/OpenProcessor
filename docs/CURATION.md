@@ -38,16 +38,17 @@ All curation routes are mounted under a single configurable prefix
 A new deployment configures the subsystem for its own domain through
 four dataclasses instead of forking code. All four support
 `from_env()` so most of a deployment can be configured purely through
-environment variables (see the env var table below); `DetectionProfile`
-is the one place you will likely also want to construct an explicit
-instance for a genuinely new region type, since its shipped defaults
-describe the reference license-plate domain.
+environment variables (see the env var table below), including the
+region `DetectionProfile` (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`).
+The `DetectionProfile` dataclass field defaults still describe the
+reference license-plate domain's OCR/segmenter wiring, so review them for
+a genuinely new region type.
 
 | Dataclass | File | What it configures |
 |---|---|---|
 | `CurationConfig` | `src/config/curation.py` | OpenSearch index names (via `IndexRole` + `index_name()`), filesystem roots (class registry, exported datasets, crop cache, state dir), the API mount prefix, embedding-dimension/HNSW tuning. |
 | `RegionFields` | `src/config/region_fields.py` | Per-attribute OpenSearch field-name overrides for the region-of-interest sub-annotation (e.g. store `region_status` under a different name if your existing data already uses one) — storage names may diverge from the fixed `region_*` HTTP wire names with zero reindex; the wire never changes. |
-| `DetectionProfile` | `src/config/detection_profile.py` | One detectable region-of-interest type as data: aspect-ratio/area heuristics, text-hint pattern and length range, which Triton models back detection/segmentation/OCR for it, their input sizes and confidence floors. Exactly one profile (and one VLM `PromptPack`) is active per process today — there's no per-request selection among several registered profiles yet. |
+| `DetectionProfile` | `src/config/detection_profile.py` | One detectable region-of-interest type as data: aspect-ratio/area heuristics, text-hint pattern and length range, which Triton models back detection/segmentation/OCR for it, their input sizes and confidence floors. One region profile is active per process (`OP_REGION_PROFILE` / `OP_REGION_DETECTION_*`; none by default). |
 | `RegionStatus` | `src/config/region_state.py` | The canonical region-status state-machine enum (`pending_detection` → `detected`/`verify_rejected`/`no_region_box`; `pending_verification` → `detected`/`no_region_visible`; any path → `detection_failed`; plus a human-settable `false_positive` that preserves the box for hard-negative training). |
 
 ## Known gaps (read this before you rely on it)
@@ -62,9 +63,11 @@ Stated up front, honestly, rather than discovered in production:
   policy, class allowlist, or region-status assignment heuristic tuned
   to one domain — you supply that via `DetectionProfile` and your own
   detector model(s).
-- **Single active `DetectionProfile` / `PromptPack` per process.** You
-  cannot serve two region-of-interest types from one running API
-  process today.
+- **One active region `DetectionProfile` per process.** You cannot run
+  the region cascade for two region-of-interest types from one worker
+  today. Prompt packs are selectable (several can be configured via
+  `OP_PROMPT_PACK_PATHS` and chosen per auto-label run or via the
+  settings default).
 - **No authentication of any kind on the API.** See
   [`SECURITY.md`](../SECURITY.md) — do not expose this service directly
   to the internet.
@@ -104,29 +107,30 @@ trainer. A deployment supplies:
   Swapping in a different embedding model means keeping that same Triton
   model name and tensor contract, and matching the preprocessing in
   `src/services/detection/pe_preprocess.py`.
-- **A region-of-interest detector** — any Triton model whose name you
-  set as `DetectionProfile.detector_model` (via `OP_DETECTION_*` env
-  vars or a constructed instance). Ingest returns `503` until one is
-  configured and loaded. **Note:** `GET /methods` advertises exactly
-  one built-in `detection_profile` out of the box, named
-  `license_plate` with `detector_model=lpr_nanov11_640` — this is
-  `cascade_detect.py`'s `REFERENCE_LICENSE_PLATE_PROFILE` (named for what
-  it is since work item B2, though it is still the profile registered
-  with `default=True` until a domain-neutral default exists), kept
-  byte-identical to the original reference deployment's constants so that
-  deployment's
-  existing call sites (which never pass a profile explicitly) keep
-  working unchanged across this genericization. It is **not** a
-  suggested starting point for a new, non-LPR deployment. Setting your
-  own `OP_DETECTION_*` env vars configures the profile ingest actually
-  uses (`_get_detection_profile()` in `routers/curation/ingest.py`),
-  but does **not** by itself make it appear on `GET /methods` — that
-  registry is populated only by explicit
-  `src.services.detection.profile_registry.register_profile()` calls
-  (see that module's docstring); there is no config-driven
-  auto-registration yet. A deployment that wants its own profile
-  advertised alongside (or instead of) `license_plate` needs a small
-  amount of startup code calling `register_profile()`.
+- **An item detector for ingest** — an end2end Triton model set via
+  `OP_INGEST_PRIMARY_DETECTOR_MODEL` (plus any other
+  `OP_INGEST_PRIMARY_<FIELD>`, read by `_get_detection_profile()` in
+  `routers/curation/ingest.py`). It proposes the item crops in each
+  image; `OP_INGEST_PRIMARY_CLASS_IDS` narrows which of its classes
+  become items (unset = all). Ingest returns `503` until one is
+  configured and loaded. An optional raw-output secondary detector
+  (`OP_INGEST_SECONDARY_DETECTOR_MODEL` + `OP_INGEST_SECONDARY_<FIELD>`)
+  overrides the primary's class on IoU-matched boxes. The retired
+  `OP_DETECTION_*` prefix is rejected at startup with a rename message.
+- **Optionally, a region-of-interest profile** — the sub-region the
+  detection worker's cascade looks for *inside* each item crop.
+  **Neutral by default:** with nothing configured no region profile is
+  active, `GET /methods` advertises an empty `detection_profile` axis,
+  and the worker idles instead of running the cascade. Select one with
+  `OP_REGION_PROFILE=<name>` (a profile your startup code registered via
+  `src.services.detection.profile_registry.register_profile()`, or a
+  built-in reference profile — today `license_plate`, which reproduces
+  the original reference deployment's constants and is an example, not a
+  suggested starting point), and/or override individual fields with
+  `OP_REGION_DETECTION_<FIELD>` (e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`,
+  `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`). The resolved profile is
+  registered automatically, so it is exactly what `GET /methods`
+  advertises. An unknown `OP_REGION_PROFILE` name fails at startup.
 - **A dual-head detector, if you want the backbone embedding**
   (`v6_embedding`). Residual clustering, the embedding visualization,
   item scores and the OCC conflict handler all read that field, and it
@@ -283,8 +287,8 @@ the segmenter leg is skipped entirely — no HTTP call, no failure.
    [`export/README.md`](../export/README.md#pe-core-image-encoder-curation-embeddings).
    Ingest writes no `pe_embedding` without it, and semantic search /
    near-dup / clustering then have nothing to operate on.
-4. Configure at least a detector model in `DetectionProfile` (env or
-   constructed instance) — ingest 503s until one is set.
+4. Configure at least an ingest detector model
+   (`OP_INGEST_PRIMARY_DETECTOR_MODEL`) — ingest 503s until one is set.
 5. Ingest images: `POST /curation/ingest/image` for one image at a
    time, or `scripts/curation/ingest_walker.py` for a bulk directory
    walk with a resumable progress file. If the images are not on storage
@@ -331,22 +335,24 @@ be changed at runtime once the app has started.
 | Area | Vars |
 |---|---|
 | OpenSearch index names | `OP_IMAGES_INDEX`, `OP_ITEMS_INDEX`, `OP_LABELS_CONFIRMED_INDEX`, `OP_CLASSES_INDEX`, `OP_CLUSTERS_INDEX`, `OP_SETTINGS_INDEX`, `OP_UMAP_STATE_INDEX`, `OP_UMAP_VIZ_STATE_INDEX` |
-| Filesystem roots | `OP_REGISTRY_PATH`, `OP_SOURCE_ROOT`, `OP_EXPORT_ROOT`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
-| VLM prompt pack | `OP_PROMPT_PACK_PATH` |
+| Filesystem roots | `OP_REGISTRY_PATH`, `OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES` (JSON object or `alias=path,...`), `OP_EXPORT_ROOT`, `OP_STATE_DIR`, `OP_CROP_CACHE_DIR` |
+| VLM prompt pack | `OP_PROMPT_PACK_PATH` (default pack), `OP_PROMPT_PACK_PATHS` (extra selectable packs, comma-separated) |
 | API surface | `OP_API_PREFIX`, `OP_API_TAG` |
 | Embedding / HNSW tuning | `OP_EMBEDDING_DIM`, `OP_ENCODER_EMBEDDING_DIM`, `OP_BACKBONE_EMBEDDING_DIM`, `OP_HNSW_EF_CONSTRUCTION`, `OP_HNSW_M` |
 | Region field-name overrides | `OP_REGION_FIELD_<ATTR>` (e.g. `OP_REGION_FIELD_STATUS`, `OP_REGION_FIELD_BBOX_NORM`) — see `RegionFields` for the full attribute list |
-| Detection profile | `OP_DETECTION_<FIELD>` (e.g. `OP_DETECTION_NAME`, `OP_DETECTION_ASPECT_MIN`, `OP_DETECTION_OCR_REC_MODEL`, `OP_DETECTION_DETECTOR_MODEL`) — tuple/frozenset fields take a comma-separated value |
+| Ingest item detectors | `OP_INGEST_PRIMARY_<FIELD>` (e.g. `OP_INGEST_PRIMARY_DETECTOR_MODEL`, `OP_INGEST_PRIMARY_INPUT_SIZE`, `OP_INGEST_PRIMARY_CLASS_IDS`), optional secondary `OP_INGEST_SECONDARY_<FIELD>` (e.g. `OP_INGEST_SECONDARY_DETECTOR_MODEL`, `OP_INGEST_SECONDARY_NAME`) — tuple/frozenset fields take a comma-separated value. Replaces the retired `OP_DETECTION_*` |
+| Region detection profile (off by default) | `OP_REGION_PROFILE` (select by name, e.g. `license_plate`), `OP_REGION_DETECTION_<FIELD>` (per-field overrides, e.g. `OP_REGION_DETECTION_SAM_TEXT_PROMPT`, `OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS`) |
 | Ingest | `OP_MAX_INGEST_CONCURRENCY` |
 | Feature flags (off by default) | `OP_SEMANTIC_SEARCH_ENABLED`, `OP_VIZ_PROJECTION_ENABLED`, `OP_SELECT_DIVERSE_ENABLED`, `OP_SCORES_ENABLED`, `OP_SCORES_SHADOW` |
 | Item-scores tuning | `OP_SCORES_KNN_K`, `OP_SCORES_NPROBE`, `OP_SCORES_STATE_DIR`, `OP_CROP_DUP_THRESHOLD`, `OP_FIELD_COVERAGE_TTL_S` |
 | Diverse-selection tuning | `OP_SELECT_JOBS_DIR`, `OP_SELECT_JOB_MAX_N`, `OP_SELECT_MAX_N`, `OP_SELECT_SYNC_MAX_OPS`, `OP_SELECT_CACHE_TTL_S` |
 | Clustering / IVF tuning | `OP_IVF_RETRAIN_CHECK_S`, `OP_IVF_RETRAIN_GROWTH`, `OP_IVF_RETRAIN_MIN_INTERVAL_S`, `OP_MAX_REFINE_MEMBERS`, `OP_OUTLIER_CACHE_TTL_S`, `OP_OUTLIER_MAX_MEMBERS`, `OP_RESIDUAL_EMBEDDING_FIELD`, `OP_REGION_CLUSTER_JOB_FILE`, `OP_REGION_FP_JOB_FILE`, `OP_REGION_PARTITION_MARKER`, `OP_REGION_REFINE_MARKER` |
 | Training pipeline | `OP_TRAIN_JOBS_DIR`, `OP_TRAIN_RUNS_ROOT`, `OP_TRAIN_STAGING`, `OP_PREFLIGHT_SCAN_CAP` |
+| GPU arbiter (`GpuArbiterConfig.from_env()`) | `OP_GPU_ALLOWED_IDS` (comma list; empty = unrestricted), `OP_GPU_ARBITER_CONTAINERS`, `OP_GPU_ARBITER_TRAINER_CONTAINER`, plus `OP_BAKEOFF_JOBS_DIR` |
 | Export | `OP_BUILD_SHA` |
 | Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_BAKEOFF_BASELINES_PATH`, `OP_BAKEOFF_PROFILE`, `OP_BAKEOFF_PROFILE_<FIELD>` |
 | Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
-| VLM connection | `OPENWEBUI_BASE_URL`, `OPENWEBUI_MODEL`, `OPENWEBUI_API_KEY`, `GEMMA_IMAGES_PER_CALL`, `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
+| VLM connection | `OPENWEBUI_BASE_URL`, `OPENWEBUI_MODEL`, `OPENWEBUI_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `GEMMA_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
 | Segmenter connection | `SAM3_URL`, `SAM3_URLS`, `SAM3_HTTPX_MAX_CONNECTIONS`, `SAM3_HTTPX_KEEPALIVE` |
 
 ## Naming you'll notice

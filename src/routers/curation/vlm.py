@@ -52,22 +52,37 @@ ITEMS_INDEX = CURATION_ITEMS_INDEX
 _F = get_region_fields()
 
 
-def _get_vlm_labeler() -> Any:
-    """Lazy VlmLabeler singleton — imported so VLM routes don't pull
-    httpx for the whole router on cold start.
+def _get_vlm_labeler(pack_name: str | None = None) -> Any:
+    """Lazy per-pack ``VlmLabeler`` cache — imported so VLM routes don't
+    pull httpx for the whole router on cold start.
 
-    The pack is resolved once, at singleton construction, via
-    :func:`~src.services.labeling.vlm_prompts.resolve_prompt_pack` — a
-    deployment-supplied ``OP_PROMPT_PACK_PATH`` pack, or the built-in
-    generic pack when unset/missing (see
-    ``docs/design/curation_design_rationale.md``).
+    ``pack_name=None`` uses the process default pack
+    (:func:`~src.services.labeling.vlm_prompts.resolve_prompt_pack` — the
+    ``OP_PROMPT_PACK_PATH`` pack, or the built-in generic pack). A name
+    selects any pack :func:`~src.services.labeling.vlm_prompts.
+    available_prompt_packs` advertises; an unknown name raises
+    ``ValueError``. One labeler instance is cached per pack name.
     """
     from src.services.labeling.vlm_labeler import VlmLabeler
-    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+    from src.services.labeling.vlm_prompts import get_prompt_pack, resolve_prompt_pack
 
-    if not hasattr(_get_vlm_labeler, '_inst'):
-        _get_vlm_labeler._inst = VlmLabeler(pack=resolve_prompt_pack())  # type: ignore[attr-defined]
-    return _get_vlm_labeler._inst  # type: ignore[attr-defined]
+    pack = resolve_prompt_pack() if pack_name is None else get_prompt_pack(pack_name)
+    if pack is None:
+        msg = f'unknown prompt pack {pack_name!r}'
+        raise ValueError(msg)
+    cache: dict[str, Any] = _get_vlm_labeler.__dict__.setdefault('_insts', {})
+    inst = cache.get(pack.name)
+    if inst is None or inst._pack != pack:
+        inst = cache[pack.name] = VlmLabeler(pack=pack)
+    return inst
+
+
+async def _default_pack_name(opensearch: Any) -> str | None:
+    """The ``prompt_pack`` axis's effective default (settings-doc override
+    when set and advertised, else the process default pack)."""
+    from src.services.curation.strategy_defaults import resolve_effective_default
+
+    return await resolve_effective_default('prompt_pack', opensearch)
 
 
 def _class_provenance(
@@ -266,7 +281,7 @@ async def vlm_label_batch(
 
     from src.services.labeling.vlm_labeler import resolve_class_name as _resolve_class_name_fn
 
-    labeler = _get_vlm_labeler()
+    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     # Use the open-vocabulary path so the VLM can flag genuinely-unknown
     # items instead of silently snapping them to the wrong class.
     predictions = await labeler.label_or_propose_batch(crops, class_names)
@@ -403,7 +418,7 @@ async def vlm_verify_regions(
 
     from src.services.labeling.vlm_labeler import RegionCrop
 
-    labeler = _get_vlm_labeler()
+    labeler = _get_vlm_labeler(await _default_pack_name(opensearch))
     n_verified = 0
     bulk: list[dict[str, Any]] = []
     now = _now_iso()

@@ -116,7 +116,7 @@ class Sam3Client:
         client: httpx.AsyncClient | None = None,
         timeout_s: float = 30.0,
         max_candidates: int = 4,
-        text_prompt: str = 'license plate, registration plate, number plate',
+        text_prompt: str = '',
     ) -> None:
         urls = [u.strip().rstrip('/') for u in (base_url or '').split(',') if u.strip()]
         # D5: no segmenter configured is a supported deployment shape, not

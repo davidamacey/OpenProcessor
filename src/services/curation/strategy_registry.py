@@ -427,17 +427,16 @@ def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]
     Reads :mod:`src.services.detection.profile_registry` -- a real,
     process-lifetime registry a deployment can add more than one profile
     to (e.g. a license-plate profile AND a shipping-label profile) --
-    rather than hardcoding the single ``REFERENCE_LICENSE_PLATE_PROFILE`` here. Today
-    exactly one profile is ever registered (importing
-    ``src.services.detection.cascade_detect`` registers its own
-    ``REFERENCE_LICENSE_PLATE_PROFILE`` as the default), so this axis lists exactly one
-    entry, but the mechanism is not limited to one.
+    rather than hardcoding any one profile here. Neutral by default: an
+    unconfigured deployment registers nothing, so this axis is empty; the
+    env-selected profile (``OP_REGION_PROFILE`` / ``OP_REGION_DETECTION_*``)
+    plus anything startup code registers is listed.
 
     ``default_id`` is :func:`resolve_effective_default`'s answer for the
     ``'detection_profile'`` axis (falls back to
     ``get_default_profile_name()`` with no shared-settings override)."""
-    # Import triggers cascade_detect's module-level `register_profile`
-    # call if it hasn't run yet in this process.
+    # Import triggers cascade_detect's module-level env resolution if it
+    # hasn't run yet in this process.
     from src.services.detection import cascade_detect  # noqa: F401
     from src.services.detection.profile_registry import get_profiles
 
@@ -454,31 +453,29 @@ def _detection_profile_strategies(default_id: str | None) -> list[dict[str, Any]
 
 
 def _prompt_pack_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Configured VLM ``PromptPack`` axis (labeling-assist plan task (c)).
+    """Selectable VLM ``PromptPack`` axis (labeling-assist plan task (c)).
 
-    Lists whatever pack :func:`~src.services.labeling.vlm_prompts.
-    resolve_prompt_pack` actually resolves for this process -- a
-    deployment-supplied pack via ``OP_PROMPT_PACK_PATH``, or the built-in
-    generic pack when unset/missing. Always exactly one entry (there is
-    only ever one active pack per process). ``default_id`` is
+    Lists every pack :func:`~src.services.labeling.vlm_prompts.
+    available_prompt_packs` can load, keyed by pack ``name``: the built-in
+    generic pack, each ``OP_PROMPT_PACK_PATHS`` pack, and the
+    ``OP_PROMPT_PACK_PATH`` pack (the process default). ``default_id`` is
     :func:`resolve_effective_default`'s answer for the ``'prompt_pack'``
-    axis; since a shared-settings override is only ever honored when it
-    names a currently-advertised id (:func:`_advertised_ids_for_axis`
-    returns exactly ``{pack.name}`` here), this entry's ``default`` is
-    always ``True`` in practice -- there is nothing else it could resolve
-    to today.
+    axis -- the settings-doc override when it names a listed pack, else
+    the ``OP_PROMPT_PACK_PATH`` pack (or the generic pack when unset). A
+    run selects among these by name (e.g. ``POST
+    /pipeline/auto_label/start?prompt_pack=``).
     """
-    from src.services.labeling.vlm_prompts import resolve_prompt_pack
+    from src.services.labeling.vlm_prompts import available_prompt_packs
 
-    pack = resolve_prompt_pack()
     return [
         {
-            'id': pack.name,
+            'id': name,
             'axis': 'prompt_pack',
-            'label': pack.name,
+            'label': name,
             'status': 'stable',
-            'default': pack.name == default_id,
+            'default': name == default_id,
         }
+        for name in available_prompt_packs()
     ]
 
 

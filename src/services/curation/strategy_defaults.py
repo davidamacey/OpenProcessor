@@ -87,9 +87,9 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 
         return frozenset(get_profiles())
     if axis == 'prompt_pack':
-        from src.services.labeling.vlm_prompts import resolve_prompt_pack
+        from src.services.labeling.vlm_prompts import available_prompt_packs
 
-        return frozenset({resolve_prompt_pack().name})
+        return frozenset(available_prompt_packs())
     return frozenset()
 
 
@@ -160,7 +160,35 @@ async def resolve_effective_default(
     return hardcoded
 
 
+class UnknownStrategyError(ValueError):
+    """A per-call strategy override named an id this axis doesn't advertise."""
+
+    def __init__(self, axis: str, requested: str, valid: frozenset[str]) -> None:
+        self.axis = axis
+        self.requested = requested
+        self.valid = sorted(valid)
+        super().__init__(f'unknown {axis} {requested!r}; valid ids: {self.valid}')
+
+
+async def resolve_strategy_selection(
+    axis: str, requested: str | None, opensearch: Any | None = None
+) -> str | None:
+    """Per-call selection for ``axis``: an explicit ``requested`` id wins
+    for this call only (never written to the settings doc) but must be a
+    currently-advertised id -- otherwise :class:`UnknownStrategyError`,
+    never a silent fallback. ``None`` resolves exactly like an omitted
+    param always has: :func:`resolve_effective_default`."""
+    if requested is None:
+        return await resolve_effective_default(axis, opensearch)
+    valid = _advertised_ids_for_axis(axis)
+    if requested not in valid:
+        raise UnknownStrategyError(axis, requested, valid)
+    return requested
+
+
 __all__ = [
     'SETTABLE_DEFAULT_AXES',
+    'UnknownStrategyError',
     'resolve_effective_default',
+    'resolve_strategy_selection',
 ]

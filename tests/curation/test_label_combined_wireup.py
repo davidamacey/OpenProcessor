@@ -46,6 +46,10 @@ from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.vlm_labeler import VlmCombinedReply, VlmRegionVerdict
 
 
+# The cascade needs an active region profile; the default is none.
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 F = get_region_fields()
 
 

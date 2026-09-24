@@ -34,6 +34,10 @@ from src.services.detection.cascade_detect import RegionCandidate, crop_norm_to_
 from src.services.labeling.vlm_labeler import VlmRegionVerdict
 
 
+# The cascade needs an active region profile; the default is none.
+pytestmark = pytest.mark.usefixtures('reference_region_profile')
+
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -629,7 +633,7 @@ class TestSignalHandling:
 
 class TestIsSecondaryShape:
     def test_explicit_groups(self) -> None:
-        for grp in worker.SECONDARY_SHAPE_GROUPS:
+        for grp in worker.region_profile().secondary_shape_groups:
             assert worker._is_secondary_shape(_make_task(group=grp))
 
     def test_non_secondary_groups(self) -> None:

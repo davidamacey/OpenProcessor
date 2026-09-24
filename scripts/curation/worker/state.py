@@ -11,13 +11,17 @@ import io
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import TERMINAL_STATUSES, RegionStatus, get_curation_config
 from src.core.logging import get_logger
-from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
+from src.services.detection.profile_registry import get_active_region_profile
+
+
+if TYPE_CHECKING:
+    from src.config import DetectionProfile
 
 
 logger = get_logger('curation_worker')
@@ -46,15 +50,28 @@ DEFAULT_PAUSE_SENTINEL = Path(
 )
 JPEG_QUALITY = 90
 
-# Crop classes to skip the primary-detector retry on. Source of truth is
-# the class registry (see ``CurationConfig.class_registry_path``, group
-# field). The accessor surface doesn't expose a dedicated groups helper,
-# so the profile pins the set directly (see
-# DetectionProfile.secondary_shape_groups on the reference license-plate
-# profile) — update there when the registry adds / renames a group.
-# The reference detector is known weak on this shape class; the
-# secondary segmenter is the better bet.
-SECONDARY_SHAPE_GROUPS: frozenset[str] = REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups
+
+class RegionProfileNotConfiguredError(RuntimeError):
+    """The worker's region cascade ran with no active region profile."""
+
+
+def region_profile() -> DetectionProfile:
+    """The deployment's active region :class:`DetectionProfile`.
+
+    Resolved from ``OP_REGION_PROFILE`` / ``OP_REGION_DETECTION_*`` (see
+    :mod:`src.services.detection.profile_registry`). :func:`run` refuses to
+    start the cascade without one, so reaching this with none configured
+    is a programming error, not a deployment state.
+    """
+    profile = get_active_region_profile()
+    if profile is None:
+        msg = (
+            'no region profile configured -- set OP_REGION_PROFILE (e.g. to a built-in '
+            'reference profile) or OP_REGION_DETECTION_* to enable region detection'
+        )
+        raise RegionProfileNotConfiguredError(msg)
+    return profile
+
 
 # Status names (task #7 rename — see plan / task #7 description).
 # Worker emits the new long-form names everywhere; reads accept both
@@ -230,10 +247,16 @@ def _crop_jpeg_for_task(
 def _is_secondary_shape(task: _ItemTask) -> bool:
     """True if the crop's class belongs to a secondary-shape group.
 
-    See :data:`SECONDARY_SHAPE_GROUPS` for the source-of-truth comment.
+    Groups come from the active profile's ``secondary_shape_groups``
+    (``OP_REGION_DETECTION_SECONDARY_SHAPE_GROUPS``), which must match the
+    class registry's ``group`` values. A profile with no groups routes
+    nothing to the secondary-shape path.
     """
+    groups = region_profile().secondary_shape_groups
+    if not groups:
+        return False
     if task.group:
-        return task.group in SECONDARY_SHAPE_GROUPS
+        return task.group in groups
     # Some old crops have no ``group`` field stored. Best-effort fallback:
     # a name suffix of ``bike`` is a strong signal under the reference
     # naming convention (cruiserbike, sportbike, dirtbike, etc.). Keep

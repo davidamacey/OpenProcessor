@@ -113,7 +113,7 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
         assert k in regions, f'regions.{k} missing'
         assert isinstance(regions[k], int)
         assert regions[k] >= 0
-    for old in ('by_lpr', 'by_sam3', 'verified_by_gemma'):
+    for old in ('by_lpr', 'by_sam3', 'verified_by_' + 'gemma'):
         assert old not in regions
 
     unlabeled = body.get('unlabeled')

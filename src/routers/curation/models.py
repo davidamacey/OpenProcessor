@@ -39,7 +39,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation.vlm import _get_vlm_labeler
-from src.services.detection.cascade_detect import REFERENCE_LICENSE_PLATE_PROFILE
+from src.services.detection.profile_registry import get_active_region_profile
 from src.services.training.triton_promote import (
     DEFAULT_TRITON_MODELS_DIR,
     ModelNotPromotedError,
@@ -142,29 +142,30 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
     always-present CLIP + PE encoder entries.
     """
     entries: list[tuple[str, str, str, str]] = []
-    if REFERENCE_LICENSE_PLATE_PROFILE.detector_model:
+    region = get_active_region_profile()
+    if region is not None and region.detector_model:
         entries.append(
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
+                region.detector_model,
                 'Region Detector',
                 'Finds the configured region-of-interest (see DetectionProfile) '
                 'inside each item crop.',
                 'TensorRT detection',
             )
         )
-    if REFERENCE_LICENSE_PLATE_PROFILE.ocr_det_model:
+    if region is not None and region.ocr_det_model:
         entries.append(
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.ocr_det_model,
+                region.ocr_det_model,
                 'OCR Text Detector',
                 'Locates text regions inside a crop to seed a re-detection pass.',
                 'TensorRT detection',
             )
         )
-    if REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model:
+    if region is not None and region.ocr_rec_model:
         entries.append(
             (
-                REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model,
+                region.ocr_rec_model,
                 'OCR Text Recognizer',
                 'Reads text out of a located text region.',
                 'TensorRT recognition',
@@ -208,12 +209,16 @@ _REGION_PROTECTED_PREFIXES = ('lpr_', 'paddleocr_')
 
 
 def _region_protected_models() -> frozenset[str]:
+    region = get_active_region_profile()
+    region_models = (
+        (region.detector_model, region.ocr_det_model, region.ocr_rec_model)
+        if region is not None
+        else ()
+    )
     names = {
         name
         for name in (
-            REFERENCE_LICENSE_PLATE_PROFILE.detector_model,
-            REFERENCE_LICENSE_PLATE_PROFILE.ocr_det_model,
-            REFERENCE_LICENSE_PLATE_PROFILE.ocr_rec_model,
+            *region_models,
             TritonModelConfig.OCR_DET_MODEL,
             TritonModelConfig.OCR_REC_MODEL,
         )

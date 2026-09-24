@@ -16,30 +16,18 @@ from src.routers.curation._common import (
     logger,
     router,
 )
+from src.routers.curation.pipeline_params import (
+    AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
+    CLASS_ID_DESC as _CLASS_ID_DESC,
+    DETECTION_PROFILE_DESC as _DETECTION_PROFILE_DESC,
+    PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
+    REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
+    RUN_VLM_DESC as _RUN_VLM_DESC,
+    resolve_run_selection,
+)
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.curation.class_sources import CLASSIFIER_CLASS_SOURCE
 from src.services.curation.event_hub import publish_crop_classified
-
-
-# Shared description for the run_auto_promote query param so both
-# /start and /pipeline_auto_label entry points say the same thing
-# without bloating the file past the 700-LOC hook ceiling.
-_AUTO_PROMOTE_DESC = (
-    'Run the auto-promote stage (classifier + cluster-majority agreement). '
-    'Defaults False: the rule had no classifier confidence floor and was '
-    'auto-validating low-confidence classifier predictions into class clusters. '
-    'Opt-in only after a confidence-gated rewrite.'
-)
-
-# Same "shared description, same reason" precedent as _AUTO_PROMOTE_DESC.
-_REASSIGN_ONLY_DESC = 'IVF: stream-assign residuals vs persisted centroids; skip retrain.'
-
-# Labeling-assist item selection (task d): scope a run to one registry class.
-_CLASS_ID_DESC = (
-    'Scope this run to a single registry class (labeling-assist item '
-    'selection). Unset runs the full unvalidated cohort, unchanged from '
-    'before this parameter existed.'
-)
 
 
 @router.post('/pipeline/auto_label/start')
@@ -53,15 +41,7 @@ async def pipeline_auto_label_start(
     max_vlm_crops: int = Query(0, ge=0, le=100000),
     classifier_confidence_skip_vlm: float = Query(0.80, ge=0.0, le=1.0),
     clustering_method: str | None = Query(None),
-    run_vlm: bool = Query(
-        False,
-        description=(
-            'Run the VLM labeling stage. Defaults to False — the '
-            'detection worker now labels crops on the drain path; this '
-            'stage just duplicates that work. Opt-in for a one-off '
-            'no-region-cohort backfill.'
-        ),
-    ),
+    run_vlm: bool = Query(False, description=_RUN_VLM_DESC),
     recluster_unvalidated: bool = Query(False, description='Merge candidate clusters mode.'),
     run_auto_promote: bool = Query(False, description=_AUTO_PROMOTE_DESC),
     reassign_only: bool = Query(False, description=_REASSIGN_ONLY_DESC),
@@ -70,6 +50,8 @@ async def pipeline_auto_label_start(
     gate_min_blur_ratio: float | None = Query(None, ge=0.0),
     n_clusters: int | None = Query(None, ge=2, le=4096),
     class_id: int | None = Query(None, description=_CLASS_ID_DESC),
+    detection_profile: str | None = Query(None, description=_DETECTION_PROFILE_DESC),
+    prompt_pack: str | None = Query(None, description=_PROMPT_PACK_DESC),
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -79,6 +61,10 @@ async def pipeline_auto_label_start(
     """
     from src.services.curation.autolabel import job as auto_label_job
 
+    # Resolved here (422 before queueing) so the job args echo what runs.
+    detection_profile, prompt_pack = await resolve_run_selection(
+        opensearch, detection_profile, prompt_pack
+    )
     try:
         return auto_label_job.start_job(
             pipeline_auto_label,
@@ -100,6 +86,8 @@ async def pipeline_auto_label_start(
                 'gate_min_blur_ratio': gate_min_blur_ratio,
                 'n_clusters': n_clusters,
                 'class_id': class_id,
+                'detection_profile': detection_profile,
+                'prompt_pack': prompt_pack,
             },
         )
     except RuntimeError as exc:
@@ -146,6 +134,8 @@ async def pipeline_auto_label(
     gate_min_blur_ratio: float | None = Query(None, ge=0.0),
     n_clusters: int | None = Query(None, ge=2, le=4096),
     class_id: int | None = Query(None, description=_CLASS_ID_DESC),
+    detection_profile: str | None = Query(None, description=_DETECTION_PROFILE_DESC),
+    prompt_pack: str | None = Query(None, description=_PROMPT_PACK_DESC),
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -167,7 +157,17 @@ async def pipeline_auto_label(
     from src.services.curation.image_serving import THUMBNAIL_CACHE
     from src.services.labeling.vlm_labeler import ItemCrop
 
-    summary: dict[str, Any] = {'stages': {}, 'class_id': class_id}
+    # detection_profile is validated + recorded; no stage here runs region
+    # detection (that is the detection worker's cascade).
+    detection_profile, prompt_pack = await resolve_run_selection(
+        opensearch, detection_profile, prompt_pack
+    )
+    summary: dict[str, Any] = {
+        'stages': {},
+        'class_id': class_id,
+        'detection_profile': detection_profile,
+        'prompt_pack': prompt_pack,
+    }
 
     # Snapshot counts at entry for a real before/after.
     summary['baseline'] = await pipeline_health_snapshot(opensearch)
@@ -394,7 +394,6 @@ async def pipeline_auto_label(
         format_class_catalog,
         resolve_class_name as _resolve_class_name_fn,
     )
-    from src.services.labeling.vlm_prompts import resolve_prompt_pack
 
     reg = get_class_registry().load()
     class_names = [c.class_name for c in reg.classes if not c.deprecated]
@@ -408,7 +407,9 @@ async def pipeline_auto_label(
         for c in reg.classes
         if not c.deprecated
     ]
-    class_catalog = format_class_catalog(class_dicts, resolve_prompt_pack())
+    # The run's selected pack (resolve_prompt_pack() default when unset).
+    labeler = _get_vlm_labeler(prompt_pack)
+    class_catalog = format_class_catalog(class_dicts, labeler._pack)
 
     # Count how many crops bypass the synonym/fuzzy force-fit because the
     # VLM's confidence is low — those route straight to the raw-label
@@ -426,8 +427,6 @@ async def pipeline_auto_label(
         else:
             _force_fit_bypass['attempted'] += 1
         return _resolve_class_name_fn(raw, name_to_id, confidence=confidence)  # type: ignore[arg-type]
-
-    labeler = _get_vlm_labeler()
 
     # Prototype-rescue paths are deleted: CLIP-prototype labeling
     # mis-labeled a large fraction of rows in an earlier phase. The

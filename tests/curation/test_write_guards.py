@@ -385,7 +385,7 @@ class TestVlmLabelBatchHumanGuard:
 
         fake_labeler = AsyncMock()
         fake_labeler.label_or_propose_batch = AsyncMock(return_value=[])
-        monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda: fake_labeler)
+        monkeypatch.setattr(vlm_mod, '_get_vlm_labeler', lambda *_a, **_k: fake_labeler)
 
         fake_reg = MagicMock()
         fake_reg.load = MagicMock(return_value=MagicMock(classes=[]))
