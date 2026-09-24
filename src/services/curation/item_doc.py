@@ -12,12 +12,27 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.config.curation import BACKBONE_EMBEDDING_FIELD
+from src.config.region_fields import get_region_fields
+from src.config.region_state import RegionStatus
 from src.services.detection.cascade_detect import class_provenance
+from src.services.detection.profile_registry import get_active_region_profile
 
 
 # ``class_labeler`` recorded on every ingest-written items doc — the same
 # id ``occ_upsert_bulk`` logs ingest writes under.
 INGEST_CLASS_LABELER = 'ingest'
+
+
+def region_seed_status() -> RegionStatus | None:
+    """Region status a newly created item starts in, or ``None``.
+
+    The region-detection worker only selects items already carrying a
+    pending status (``scripts/curation/worker/cascade.py``), so with a
+    region profile active every new item is seeded ``pending_detection``
+    — otherwise nothing ever reaches the cascade. With no profile (the
+    neutral default) the worker idles and nothing is written.
+    """
+    return RegionStatus.PENDING_DETECTION if get_active_region_profile() is not None else None
 
 
 @dataclass
@@ -85,6 +100,7 @@ def build_item_doc(
     blur_full_var: float | None,
     blur_lap_var: float | None,
     blur_lap_ratio: float | None,
+    region_status: RegionStatus | None = None,
 ) -> dict[str, Any]:
     """Build one items-index document for a single detected object.
 
@@ -98,6 +114,10 @@ def build_item_doc(
     fields (``class_detector``, ``class_detector_version``,
     ``class_labeler='ingest'``, ``class_labeled_at=now``) are stamped
     with the same shape every other class writer uses.
+
+    ``region_status`` (see :func:`region_seed_status`) is written under
+    ``RegionFields.status`` when given; the ingest upsert only applies it
+    to an existing doc that has no status yet.
     """
     doc: dict[str, Any] = {
         'crop_id': crop_id,
@@ -148,7 +168,15 @@ def build_item_doc(
                 labeled_at=now,
             )
         )
+    if region_status is not None:
+        doc[get_region_fields().status] = region_status.value
     return doc
 
 
-__all__ = ['INGEST_CLASS_LABELER', 'DetectedItem', 'build_image_doc', 'build_item_doc']
+__all__ = [
+    'INGEST_CLASS_LABELER',
+    'DetectedItem',
+    'build_image_doc',
+    'build_item_doc',
+    'region_seed_status',
+]

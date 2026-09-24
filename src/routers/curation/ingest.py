@@ -147,6 +147,7 @@ async def curation_ingest_image(
         image_path=result.image_path,
         imohash=result.imohash,
         n_crops=result.n_crops,
+        n_plates=result.n_region_queued,
         error=result.error,
     )
 
@@ -218,6 +219,7 @@ def _batch_response(
                 image_path=r.image_path,
                 imohash=r.imohash,
                 n_crops=r.n_crops,
+                n_plates=r.n_region_queued,
                 error=r.error,
             )
             for r in batch_result.results

@@ -284,3 +284,71 @@ def test_cli_status_choices_exclude_human_and_success_states(monkeypatch):
     for status in ('detected', 'false_positive'):
         with pytest.raises(SystemExit):
             _run_cli(monkeypatch, ['--status', status], _fake())
+
+
+# ------------------------------------------------------------- unseeded backfill
+
+
+def _unseeded_corpus() -> dict[str, dict[str, Any]]:
+    """Items ingested before ingest seeded a region status, plus two that
+    must never be touched: one already queued, one human-validated."""
+    docs: dict[str, dict[str, Any]] = {
+        f'u{i}': {'crop_id': f'u{i}', 'image_path': f'u{i}.jpg', 'bbox_norm': [0.1, 0.1, 0.9, 0.9]}
+        for i in range(3)
+    }
+    docs['q1'] = _item('q1', RegionStatus.PENDING_DETECTION)
+    docs['h1'] = {
+        'crop_id': 'h1',
+        'image_path': 'h1.jpg',
+        'bbox_norm': [0.1, 0.1, 0.9, 0.9],
+        F.validated: True,
+    }
+    return docs
+
+
+@pytest.mark.asyncio
+async def test_unseeded_selection_breakdown_counts_items_without_status():
+    fake = QueryFakeOpenSearch({ITEMS: _unseeded_corpus()})
+    report = await requeue_breakdown(fake, RequeueSelection(None), config=CFG)
+    assert report['total'] == 3
+    assert report['status'] == NONE_BUCKET
+
+
+@pytest.mark.asyncio
+async def test_unseeded_backfill_seeds_pending_detection_into_worker_queue():
+    from scripts.curation.worker.cascade import _build_pending_query
+
+    fake = QueryFakeOpenSearch({ITEMS: _unseeded_corpus()})
+    before = copy.deepcopy(fake.docs(ITEMS))
+    totals = await apply_requeue(fake, RequeueSelection(None), config=CFG)
+
+    assert totals == {'updated': 3, 'skipped': 0, 'errors': 0}
+    after = fake.docs(ITEMS)
+    assert {i for i, d in after.items() if d != before[i]} == {'u0', 'u1', 'u2'}
+    worker_query = _build_pending_query()
+    for i in ('u0', 'u1', 'u2'):
+        assert after[i][F.status] == RegionStatus.PENDING_DETECTION
+        # No prior status existed, so there is nothing to stash or clear.
+        assert F.status_legacy not in after[i]
+        assert F.rejection_reason not in after[i]
+        assert matches(after[i], worker_query)
+
+    again = await apply_requeue(fake, RequeueSelection(None), config=CFG)
+    assert again['updated'] == 0
+
+
+def test_cli_missing_status_dry_run_then_apply(monkeypatch, capsys):
+    fake = QueryFakeOpenSearch({ITEMS: _unseeded_corpus()})
+    assert _run_cli(monkeypatch, ['--missing-status'], fake) == 0
+    assert '3 regions selected' in capsys.readouterr().out
+    assert F.status not in fake.docs(ITEMS)['u0']
+
+    assert _run_cli(monkeypatch, ['--missing-status', '--apply'], fake) == 0
+    assert fake.docs(ITEMS)['u0'][F.status] == RegionStatus.PENDING_DETECTION
+
+
+def test_cli_requires_exactly_one_of_status_or_missing_status(monkeypatch):
+    with pytest.raises(SystemExit):
+        _run_cli(monkeypatch, [], _fake())
+    with pytest.raises(SystemExit):
+        _run_cli(monkeypatch, ['--status', 'detection_failed', '--missing-status'], _fake())

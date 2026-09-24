@@ -157,6 +157,67 @@ class TestImportYoloLabels:
         assert item['class_labeler'] == 'label_import'
 
     @pytest.mark.asyncio
+    @pytest.mark.usefixtures('reference_region_profile')
+    async def test_created_item_is_seeded_pending_region_detection(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        from src.config import RegionStatus
+        from src.config.region_fields import get_region_fields
+
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'}}
+        )
+        txt = tmp_path / 'a.txt'
+        txt.write_text('0 0.5 0.5 0.2 0.2\n')
+        await import_yolo_labels(Path('/tmp/a.jpg'), txt, registry, os_fake)
+        [item] = list(os_fake.items.values())
+        assert item[get_region_fields().status] == RegionStatus.PENDING_DETECTION.value
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures('reference_region_profile')
+    async def test_iou_match_never_touches_region_status(
+        self, tmp_path: Path, registry: ClassRegistry
+    ) -> None:
+        from src.config import RegionStatus
+        from src.config.region_fields import get_region_fields
+
+        status = get_region_fields().status
+        existing_crop_id = _crop_id_for('img1', [0.41, 0.41, 0.59, 0.59])
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'}},
+            items={
+                existing_crop_id: {
+                    'crop_id': existing_crop_id,
+                    'image_id': 'img1',
+                    'bbox_norm': [0.41, 0.41, 0.59, 0.59],
+                    status: RegionStatus.DETECTED.value,
+                }
+            },
+        )
+        txt = tmp_path / 'a.txt'
+        txt.write_text('1 0.5 0.5 0.2 0.2\n')
+        await import_yolo_labels(Path('/tmp/a.jpg'), txt, registry, os_fake)
+        assert os_fake.items[existing_crop_id][status] == RegionStatus.DETECTED.value
+
+    @pytest.mark.asyncio
+    async def test_created_item_has_no_region_status_without_a_profile(
+        self, tmp_path: Path, registry: ClassRegistry, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.config.region_fields import get_region_fields
+        from src.services.detection import profile_registry
+
+        monkeypatch.delenv('OP_REGION_PROFILE', raising=False)
+        profile_registry._reset_registry_for_tests()
+        os_fake = FakeLabelOpenSearch(
+            images={'img1': {'image_id': 'img1', 'image_path': '/tmp/a.jpg'}}
+        )
+        txt = tmp_path / 'a.txt'
+        txt.write_text('0 0.5 0.5 0.2 0.2\n')
+        await import_yolo_labels(Path('/tmp/a.jpg'), txt, registry, os_fake)
+        [item] = list(os_fake.items.values())
+        assert get_region_fields().status not in item
+
+    @pytest.mark.asyncio
     async def test_iou_match_flips_existing_item_validated(
         self, tmp_path: Path, registry: ClassRegistry
     ) -> None:

@@ -34,7 +34,10 @@ Pipeline, per image:
 7. Bulk index: the images doc is a blind upsert (nothing else writes
    that index); items docs go through
    :func:`~src.clients.occ.occ_upsert_bulk` with human-field guards so a
-   re-ingest never clobbers a human-applied label.
+   re-ingest never clobbers a human-applied label. With a region profile
+   active, new items are seeded ``pending_detection`` (never overwriting
+   an existing region status) so the region-detection worker picks them
+   up — see :func:`~src.services.curation.item_doc.region_seed_status`.
 8. After a successful write, one advisory ``crop.created`` event per
    newly created item on the in-process event hub
    (:func:`~src.services.curation.event_hub.publish_crop_created`).
@@ -64,7 +67,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from src.config import get_curation_config
+from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger, get_request_id
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.event_hub import publish_crop_created
@@ -74,7 +77,12 @@ from src.services.curation.ingest_detect import (
     WholeImageDetector,
 )
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
-from src.services.curation.item_doc import DetectedItem, build_image_doc, build_item_doc
+from src.services.curation.item_doc import (
+    DetectedItem,
+    build_image_doc,
+    build_item_doc,
+    region_seed_status,
+)
 from src.services.curation.source_image_cache import write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import (
@@ -193,6 +201,7 @@ class CurationIngestService:
             secondary_profile=secondary_profile,
             backbone_embedding_dim=self.config.backbone_embedding_dim,
         )
+        self.region_seed_status = region_seed_status()
 
     # ------------------------------------------------------------------
     # Dedup
@@ -267,6 +276,7 @@ class CurationIngestService:
             'crops_updated': 0,
             'crops_preserved_human': 0,
             'crops_final_conflicts': 0,
+            'region_queued': 0,
         }
 
         if image_doc:
@@ -288,11 +298,16 @@ class CurationIngestService:
                 human_field_guards=list(self._CROP_HUMAN_FIELD_GUARDS),
                 writer_id='ingest',
                 created_ids=created_ids,
+                fill_if_absent=(
+                    (get_region_fields().status,) if self.region_seed_status is not None else ()
+                ),
             )
             result['crops_created'] = upsert['created']
             result['crops_updated'] = upsert['updated']
             result['crops_preserved_human'] = upsert['preserved_human']
             result['crops_final_conflicts'] = upsert['final_conflicts']
+            if self.region_seed_status is not None:
+                result['region_queued'] = upsert['created'] + upsert['filled_absent']
 
         return result
 
@@ -511,6 +526,7 @@ class CurationIngestService:
                     blur_full_var=full_var,
                     blur_lap_var=box_var,
                     blur_lap_ratio=ratio,
+                    region_status=self.region_seed_status,
                 )
             )
 
@@ -538,6 +554,7 @@ class CurationIngestService:
             crops_updated=bulk_result.get('crops_updated', 0),
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),
             crops_final_conflicts=bulk_result.get('crops_final_conflicts', 0),
+            n_region_queued=bulk_result.get('region_queued', 0),
         )
 
     @staticmethod
