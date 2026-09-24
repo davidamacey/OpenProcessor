@@ -328,7 +328,7 @@ be changed at runtime once the app has started.
 | Export | `OP_BUILD_SHA` |
 | Bake-off harness | `OP_BAKEOFF_JOBS_DIR`, `OP_BAKEOFF_OUT_DIR`, `OP_BAKEOFF_EVAL_ROOT`, `OP_BAKEOFF_CONCURRENCY`, `OP_BAKEOFF_GPUS`, `OP_COREML_HOST` |
 | Worker / pipeline flags | `OP_API`, `OP_AUTO_LABEL_STATE_DIR`, `OP_EVENT_API_URL`, `OP_ITEMS_INDEX_OVERRIDE`, `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL`, `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` |
-| VLM connection | `OPENWEBUI_BASE_URL`, `OPENWEBUI_MODEL`, `OPENWEBUI_API_KEY`, `GEMMA_IMAGES_PER_CALL`, `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
+| VLM connection | `OPENWEBUI_BASE_URL`, `OPENWEBUI_MODEL`, `OPENWEBUI_API_KEY`, `OP_VLM_MAX_IMAGES_PER_CALL` (per-request image cap, default 8 — keep <= the engine's per-prompt image limit), `GEMMA_IMAGES_PER_CALL` (open-vocab chunk only, default 3), `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE` |
 | Segmenter connection | `SAM3_URL`, `SAM3_URLS`, `SAM3_HTTPX_MAX_CONNECTIONS`, `SAM3_HTTPX_KEEPALIVE` |
 
 ## Naming you'll notice

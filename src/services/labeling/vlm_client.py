@@ -46,16 +46,39 @@ DEFAULT_BASE_URL = os.environ.get('OPENWEBUI_BASE_URL', 'http://host.docker.inte
 DEFAULT_MODEL = os.environ.get('OPENWEBUI_MODEL', 'gemma-4-e4b')
 DEFAULT_API_KEY = os.environ.get('OPENWEBUI_API_KEY', 'EMPTY')
 
-# The reference deployment (vllm-gemma4-e4b) is started with
-# --limit-mm-per-prompt '{"image":8}', so 8 is the upstream hard cap;
-# do not bump without re-checking that flag on your own deployment.
-DEFAULT_MAX_IMAGES_PER_CALL = 8
+
+def _env_max_images_per_call(default: int = 8) -> int:
+    """Per-request image cap for every VLM call (``OP_VLM_MAX_IMAGES_PER_CALL``).
+
+    Must be <= the serving engine's own per-prompt image limit (for vLLM,
+    ``--limit-mm-per-prompt '{"image": N}'``) — a request carrying more
+    images than that is rejected upstream with a 400. Also acts as the
+    hard clamp :class:`VlmLabeler` applies to any explicit
+    ``max_images_per_call``. A malformed value raises rather than falling
+    back, since a silently-too-high cap turns into upstream 400s.
+    """
+    raw = os.environ.get('OP_VLM_MAX_IMAGES_PER_CALL', '').strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        msg = f'OP_VLM_MAX_IMAGES_PER_CALL must be a positive integer, got {raw!r}'
+        raise ValueError(msg) from exc
+    if value < 1:
+        msg = f'OP_VLM_MAX_IMAGES_PER_CALL must be >= 1, got {value}'
+        raise ValueError(msg)
+    return value
+
+
+DEFAULT_MAX_IMAGES_PER_CALL = _env_max_images_per_call()
 
 
 # Open-vocab labeling chunk size (label_or_propose_batch). The open-vocab
 # prompt is denser than closed-vocab so a smaller default chunk avoids
 # empty responses from smaller VLMs. Tunable via the GEMMA_IMAGES_PER_CALL
-# env var (clamped to max_images_per_call and the upstream hard cap).
+# env var (default 3; clamped to the labeler's max_images_per_call, i.e.
+# OP_VLM_MAX_IMAGES_PER_CALL). Governs ONLY the open-vocab chunk size.
 def _env_open_images_per_call(default: int = 3) -> int:
     try:
         v = int(os.environ.get('GEMMA_IMAGES_PER_CALL', str(default)))
