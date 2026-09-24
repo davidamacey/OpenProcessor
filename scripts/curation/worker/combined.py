@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from scripts.curation.worker.no_verdict import cascade_no_verdict
 from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
     _PENDING_VERIFICATION_ALIASES,
@@ -31,6 +32,11 @@ from scripts.curation.worker.verify import (
     _combined_write_doc,
 )
 from src.config import get_region_fields
+from src.config.region_source import (
+    CANDIDATE_DETECTOR,
+    CANDIDATE_DETECTOR_EXISTING,
+    CANDIDATE_SEGMENTER,
+)
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.services.curation.ingest_class_sources import (
@@ -104,6 +110,7 @@ async def _try_combined_class_region(
     detector_version: str,
     detector_chain_tag: str,
     gemma: VlmLabeler,
+    candidate_source: str = CANDIDATE_DETECTOR,
 ) -> bool:
     """Run the primary-detector-missed combined VLM call. Returns True on success.
 
@@ -112,7 +119,8 @@ async def _try_combined_class_region(
     know class+region were resolved in one round-trip. On parse failure
     returns False and the caller falls back to the legacy two-call path.
     A reply with no verdict on the box also returns True, with an empty
-    ``update_doc``: nothing is written and the item stays pending.
+    ``update_doc``: nothing is written and the item stays pending -- until
+    the no-verdict cap, when the candidate is parked for review instead.
     """
     class_names = getattr(gemma, 'class_names', None) or []
     name_to_id = getattr(gemma, 'name_to_id', None) or {}
@@ -140,7 +148,16 @@ async def _try_combined_class_region(
         # reject. Resolve the crop with no write so it stays pending and the
         # next pass retries it.
         task.detection_trace.append(f'{detector_chain_tag}:combined_no_verdict')
-        task.update_doc = {}
+        cascade_no_verdict(
+            task,
+            actor=detector,
+            detector_version=detector_version,
+            candidate_in_source=candidate_in_source,
+            candidate_score=candidate_score,
+            candidate_source=candidate_source,
+            event='combined_verify_reject',
+            class_update=task.combined_class_update,
+        )
         return True
 
     if reply.plate_bbox_correct and reply.plate_visible:
@@ -205,6 +222,7 @@ async def _try_combined_on_sam3(
         detector_version=region_profile().segmenter_version,
         detector_chain_tag=region_profile().segmenter_name,
         gemma=gemma,
+        candidate_source=CANDIDATE_SEGMENTER,
     )
     if ok:
         return True
@@ -245,6 +263,7 @@ async def _run_combined_cohort_path(
             detector_version=region_profile().detector_version,
             detector_chain_tag=region_profile().detector_model,
             gemma=gemma,
+            candidate_source=CANDIDATE_DETECTOR_EXISTING,
         )
 
     if task.plate_status in _PENDING_DETECTION_ALIASES and not is_secondary:
@@ -288,6 +307,7 @@ async def _run_combined_pending_detection(
         detector_version=region_profile().detector_version,
         detector_chain_tag=region_profile().detector_model,
         gemma=gemma,
+        candidate_source=CANDIDATE_DETECTOR,
     )
     if ok:
         return True

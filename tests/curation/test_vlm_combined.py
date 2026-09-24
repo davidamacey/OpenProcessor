@@ -26,6 +26,7 @@ from PIL import Image
 from src.services.labeling.vlm_labeler import (
     CombinedCrop,
     CombinedParseFailure,
+    CombinedTransportError,
     VlmCombinedReply,
     VlmLabeler,
     _draw_bbox_overlay,
@@ -287,15 +288,17 @@ class TestLabelCombinedBatch:
         assert out == {'c1': None, 'c2': None, 'c3': None}
 
     @pytest.mark.asyncio
-    async def test_http_failure_returns_none_for_all_crops(self) -> None:
+    async def test_http_failure_raises_transport_failure(self) -> None:
+        # No reply at all is not a reply without a verdict: the caller
+        # retries an outage but caps no-verdict replies.
         labeler = _make_labeler({})
         labeler._client.post = AsyncMock(side_effect=httpx.ConnectError('boom'))
         crops = [
             CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None),
             CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None),
         ]
-        out = await labeler.label_combined_batch(crops, class_names=['widget'])
-        assert out == {'c1': None, 'c2': None}
+        with pytest.raises(CombinedTransportError):
+            await labeler.label_combined_batch(crops, class_names=['widget'])
 
     @pytest.mark.asyncio
     async def test_single_crop_chunk_delegates_to_label_combined(self) -> None:

@@ -81,6 +81,8 @@ class TestStreamingWorker:
     async def test_null_bbox_verdict_leaves_the_item_pending(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Below the no-verdict cap (test_region_no_verdict_cap.py covers it).
+        monkeypatch.setenv('OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS', '100000')
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         mocks = await _drive_worker(
             tmp_path,

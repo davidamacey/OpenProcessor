@@ -416,10 +416,18 @@ async def _drive_worker(
     segmenter: RegionCandidate | None,
     reply: VlmCombinedReply,
     visible: bool | None = True,
+    combined_side_effect: Any = None,
+    visible_side_effect: Any = None,
+    until_writes: int = 1,
+    on_write: Any = None,
 ) -> dict[str, Any]:
     """Run the streaming worker in continuous mode until the item is
     written plus several more polls, then stop it. Returns the mocks.
-    ``visible=None``: the visibility pre-filter gives no verdict at all."""
+    ``visible=None``: the visibility pre-filter gives no verdict at all.
+    ``combined_side_effect`` / ``visible_side_effect`` replace the VLM
+    mocks' fixed answers (called with the crop list). The run stops once
+    ``until_writes`` writes landed (or a timeout); ``on_write(n)`` is
+    called as the n-th write is seen."""
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('SAM_WORKER_METRICS_PORT', '0')
 
@@ -443,12 +451,11 @@ async def _drive_worker(
     vlm = MagicMock(aclose=AsyncMock())
     vlm.class_names = []
     vlm.label_combined_batch = AsyncMock(
-        side_effect=lambda crops, **_kw: {c.crop_id: reply for c in crops}
+        side_effect=combined_side_effect or (lambda crops, **_kw: {c.crop_id: reply for c in crops})
     )
     vlm.plate_visible_batch = AsyncMock(
-        side_effect=lambda crops, **_kw: (
-            {} if visible is None else {c.crop_id: visible for c in crops}
-        )
+        side_effect=visible_side_effect
+        or (lambda crops, **_kw: {} if visible is None else {c.crop_id: visible for c in crops})
     )
     vlm_cls = MagicMock(return_value=vlm)
     monkeypatch.setattr(worker, 'VlmLabeler', vlm_cls)
@@ -477,9 +484,14 @@ async def _drive_worker(
     )
 
     async def _stopper() -> None:
+        seen = 0
         for _ in range(500):
             await asyncio.sleep(0.01)
-            if fake_os.writes:
+            while seen < len(fake_os.writes):
+                seen += 1
+                if on_write is not None:
+                    on_write(seen)
+            if seen >= until_writes:
                 break
         # Keep polling well past the write so a lagged re-fetch would show.
         await asyncio.sleep(0.6)

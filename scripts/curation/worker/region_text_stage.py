@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 from scripts.curation.worker.cascade import _crop_region_jpeg, _expand_bbox
 from scripts.curation.worker.verify import _region_reject_doc, _region_write_doc
 from src.config import get_region_fields
+from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
     CANDIDATE_DETECTOR_EXISTING,
@@ -201,7 +202,10 @@ async def accept_without_vlm(
     if not gate_ok:
         t.detection_trace.append(f'{actor}:sanity_reject:{gate_reason}')
         t.update_doc = _region_reject_doc(
-            detector=actor, detector_version=version, reason=gate_reason, chain=t.detection_trace
+            detector=actor,
+            detector_version=version,
+            reason=f'{REJECT_REASON_SANITY_PREFIX}{gate_reason}',
+            chain=t.detection_trace,
         )
         return
     t.detection_trace.append(f'{actor}:{ACCEPTED_UNVERIFIED}')

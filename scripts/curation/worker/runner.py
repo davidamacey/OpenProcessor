@@ -54,6 +54,11 @@ from scripts.curation.worker.cascade import (
     _resegment_from_text_hint,
     _source_to_crop,
 )
+from scripts.curation.worker.no_verdict import (
+    NoVerdictCounter,
+    max_no_verdict_attempts,
+    no_verdict_reject_doc,
+)
 from scripts.curation.worker.region_text_stage import (
     accept_without_vlm,
     apply_region_text,
@@ -75,8 +80,6 @@ from scripts.curation.worker.state import (
 )
 from scripts.curation.worker.verify import (
     _SKIP_VLM_VERIFY_SECONDARY_SCORE,
-    REJECT_REASON_SANITY_PREFIX,
-    REJECT_REASON_VERIFIER,
     _auto_confirm_or_pending,
     _bbox_shape_is_plausible,
     _combined_class_update,
@@ -84,6 +87,7 @@ from scripts.curation.worker.verify import (
     _region_write_doc,
     candidate_reject_doc,
 )
+from src.config.region_rejection import REJECT_REASON_SANITY_PREFIX, REJECT_REASON_VERIFIER
 from src.config.region_source import (
     CANDIDATE_DETECTOR,
     CANDIDATE_DETECTOR_EXISTING,
@@ -412,8 +416,12 @@ async def run(args: argparse.Namespace) -> int:
         # us compute the filter's skip rate at a glance.
         'gemma_visible_kept': 0,
         # visible_no_verdict: crops the visibility VLM call answered with
-        # nothing (empty reply). Left pending for a retry.
+        # nothing (empty reply). Left pending for a retry, up to the
+        # no-verdict cap.
         'visible_no_verdict': 0,
+        # visible_no_verdict_cap_hits: crops that reached the cap there and
+        # were sent on to detection (fail open).
+        'visible_no_verdict_cap_hits': 0,
         # combined_bbox_wrong: the VLM said the region IS visible but
         # the proposed bbox was wrong. We write verify_rejected and do
         # NOT re-loop the segmenter (avoids re-introducing a 2nd VLM
@@ -422,17 +430,26 @@ async def run(args: argparse.Namespace) -> int:
         'combined_bbox_wrong': 0,
         # combined_parse_failure: per-crop entry missing or unparseable
         # in the batched response. Crop is dropped from in_flight so
-        # the next producer poll re-fetches it (no terminal status
-        # stamped).
+        # the next producer poll re-fetches it, up to the no-verdict cap.
         'combined_parse_failure': 0,
         # combined_no_bbox_verdict: the VLM said a region is visible but
         # answered null / nothing on the candidate box. Left pending (no
-        # write) for a retry, never counted as a reject.
+        # write) for a retry, up to the no-verdict cap.
         'combined_no_bbox_verdict': 0,
+        # combined_no_verdict_cap_hits: crops whose combined replies gave no
+        # verdict (either kind above) on every allowed attempt; written
+        # verify_rejected / verifier_no_verdict for human review.
+        'combined_no_verdict_cap_hits': 0,
         # combined_no_plate_visible: the VLM confirmed no region is
         # visible at all. Terminal write.
         'combined_no_plate_visible': 0,
     }
+
+    # A no-verdict reply (see no_verdict.py) is retried at most this many
+    # times per item and stage; transport failures are never counted.
+    no_verdict_cap = max_no_verdict_attempts()
+    visible_no_verdict = NoVerdictCounter(no_verdict_cap)
+    combined_no_verdict = NoVerdictCounter(no_verdict_cap)
 
     logger.info(
         'sam_worker_start_streaming',
@@ -443,6 +460,7 @@ async def run(args: argparse.Namespace) -> int:
         concurrency=args.concurrency,
         continuous=args.continuous,
         max_iterations=args.max_iterations,
+        max_no_verdict_attempts=no_verdict_cap,
     )
 
     async def producer() -> None:
@@ -721,7 +739,8 @@ async def run(args: argparse.Namespace) -> int:
         a real region when the VLM is flaky. The cost is one extra
         segmenter round-trip on those crops — the existing pipeline is
         the safety net. An empty response is no verdict: those crops are
-        left pending and retried (never stamped "no region visible").
+        left pending and retried (never stamped "no region visible"), up
+        to the no-verdict cap; at the cap they fail open to ``sam_q``.
         """
 
         while True:
@@ -779,11 +798,25 @@ async def run(args: argparse.Namespace) -> int:
                             # No verdict (the VLM answered the chunk with
                             # nothing): not a "no region visible". Leave the
                             # item pending -- drop it from in_flight so the
-                            # next producer poll retries it.
+                            # next producer poll retries it -- until the cap.
                             metrics['visible_no_verdict'] += 1
-                            async with in_flight_lock:
-                                in_flight.discard(t.crop_id)
+                            if not visible_no_verdict.record(t.crop_id):
+                                async with in_flight_lock:
+                                    in_flight.discard(t.crop_id)
+                                continue
+                            # Cap reached: fail open, like the stage's other
+                            # no-answer paths -- detection decides.
+                            metrics['visible_no_verdict_cap_hits'] += 1
+                            logger.warning(
+                                'region_worker_no_verdict_cap',
+                                stage='visibility',
+                                crop_id=t.crop_id,
+                                attempts=no_verdict_cap,
+                            )
+                            t.detection_trace.append('vlm_visible:no_verdict')
+                            await sam_q.put(t)
                             continue
+                        visible_no_verdict.clear(t.crop_id)
                         if is_visible:
                             metrics['gemma_visible_kept'] += 1
                             t.detection_trace.append('vlm_visible:yes')
@@ -1008,7 +1041,9 @@ async def run(args: argparse.Namespace) -> int:
             sanity gate) -> write 'detected' with full region + class
             fields via :func:`_combined_write_doc`.
           - plate_visible=True, plate_bbox_correct=None (null / absent)
-            -> no verdict: no write, the item stays pending for a retry.
+            -> no verdict: no write, the item stays pending for a retry,
+            up to the no-verdict cap; then 'verify_rejected' with reason
+            ``verifier_no_verdict`` (candidate kept, bbox verdict null).
           - plate_visible=True but plate_bbox_correct=False (or sanity
             gate fails) -> write 'verify_rejected' + class fields. Do
             NOT re-loop the secondary segmenter (would re-introduce 2
@@ -1016,7 +1051,10 @@ async def run(args: argparse.Namespace) -> int:
             cohort.
           - plate_visible=False -> write 'no_region_visible' + class fields.
           - reply missing / parse failure -> drop from in_flight, leave
-            plate_status unchanged so the next producer poll re-fetches.
+            plate_status unchanged so the next producer poll re-fetches;
+            counts toward the same no-verdict cap.
+          - the call itself failed (transport) -> every crop in the chunk
+            is retried, never counted toward the cap.
         """
 
         F = get_region_fields()
@@ -1087,9 +1125,12 @@ async def run(args: argparse.Namespace) -> int:
                             request_ids=batch_request_ids,
                             error=str(exc),
                         )
-                        # Drop everyone in this chunk from in_flight so
-                        # the producer re-fetches; don't write any
-                        # update_doc so OS state stays unchanged.
+                        # Transport failure (no reply at all): drop everyone
+                        # in this chunk from in_flight so the producer
+                        # re-fetches; don't write any update_doc so OS
+                        # state stays unchanged. Never counted toward the
+                        # no-verdict cap -- an outage must not turn into
+                        # terminal writes.
                         async with in_flight_lock:
                             for t in chunk:
                                 in_flight.discard(t.crop_id)
@@ -1106,19 +1147,6 @@ async def run(args: argparse.Namespace) -> int:
                             await out_q.put(t)
                             continue
                         reply = replies_by_id.get(t.crop_id)
-                        if reply is None:
-                            # Per-crop parse failure / missing entry. Leave
-                            # in pending — drop from in_flight so the next
-                            # producer poll re-fetches.
-                            metrics['combined_parse_failure'] += 1
-                            logger.warning(
-                                'stage_b_combined_parse_failure',
-                                crop_id=t.crop_id,
-                                request_id=t.request_id,
-                            )
-                            async with in_flight_lock:
-                                in_flight.discard(t.crop_id)
-                            continue
 
                         # Decide per-crop class-field side: only honor
                         # the VLM's class when we asked it to classify.
@@ -1136,6 +1164,59 @@ async def run(args: argparse.Namespace) -> int:
                         # ingest-time box awaiting verification has none).
                         if f'{actor}:hit' not in t.detection_trace:
                             t.detection_trace.append(f'{actor}:hit')
+
+                        if reply is None or (
+                            reply.plate_visible and reply.plate_bbox_correct is None
+                        ):
+                            # No verdict: the entry is missing/unparseable,
+                            # or the VLM sees a region but answered null /
+                            # nothing on the candidate box. Not a reject:
+                            # leave the item pending -- drop it from
+                            # in_flight so the next producer poll retries
+                            # it -- until the no-verdict cap.
+                            if reply is None:
+                                metrics['combined_parse_failure'] += 1
+                                logger.warning(
+                                    'stage_b_combined_parse_failure',
+                                    crop_id=t.crop_id,
+                                    request_id=t.request_id,
+                                )
+                            else:
+                                metrics['combined_no_bbox_verdict'] += 1
+                                logger.info(
+                                    'stage_b_combined_no_bbox_verdict',
+                                    crop_id=t.crop_id,
+                                    request_id=t.request_id,
+                                )
+                            if not combined_no_verdict.record(t.crop_id):
+                                async with in_flight_lock:
+                                    in_flight.discard(t.crop_id)
+                                continue
+                            # Cap reached: park it as a rejected candidate a
+                            # human can confirm or requeue by reason.
+                            metrics['combined_no_verdict_cap_hits'] += 1
+                            logger.warning(
+                                'region_worker_no_verdict_cap',
+                                stage='combined',
+                                crop_id=t.crop_id,
+                                request_id=t.request_id,
+                                attempts=no_verdict_cap,
+                            )
+                            t.update_doc = no_verdict_reject_doc(
+                                t,
+                                actor=actor,
+                                detector_version=_det[1],
+                                class_update=(
+                                    None
+                                    if reply is None
+                                    else _combined_class_update(
+                                        reply, effective_class_names, name_to_id=name_to_id
+                                    )
+                                ),
+                            )
+                            await out_q.put(t)
+                            continue
+                        combined_no_verdict.clear(t.crop_id)
 
                         if (
                             reply.plate_bbox_correct
@@ -1211,21 +1292,6 @@ async def run(args: argparse.Namespace) -> int:
                                 profile=profile,
                                 rules=text_rules,
                             )
-                        elif reply.plate_visible and reply.plate_bbox_correct is None:
-                            # The VLM sees a region but gave no verdict on
-                            # the candidate box (null / absent). No verdict
-                            # is not a reject: leave the item pending --
-                            # drop it from in_flight so the next producer
-                            # poll retries it, same as a parse failure.
-                            metrics['combined_no_bbox_verdict'] += 1
-                            logger.info(
-                                'stage_b_combined_no_bbox_verdict',
-                                crop_id=t.crop_id,
-                                request_id=t.request_id,
-                            )
-                            async with in_flight_lock:
-                                in_flight.discard(t.crop_id)
-                            continue
                         elif reply.plate_visible:
                             # plate_bbox_correct is False but the VLM says
                             # a region IS visible. Write verify_rejected +
@@ -1326,6 +1392,8 @@ async def run(args: argparse.Namespace) -> int:
                 for t in pending:
                     in_flight.discard(t.crop_id)
                     released_at[t.crop_id] = released
+                    visible_no_verdict.clear(t.crop_id)
+                    combined_no_verdict.clear(t.crop_id)
             pending.clear()
             last_flush = time.monotonic()
 
@@ -1396,10 +1464,13 @@ async def run(args: argparse.Namespace) -> int:
                 gemma_visible_skipped=metrics['gemma_visible_skipped'],
                 gemma_visible_skip_rate=round(vis_skip_rate, 3),
                 visible_no_verdict=metrics['visible_no_verdict'],
+                visible_no_verdict_cap_hits=metrics['visible_no_verdict_cap_hits'],
                 combined_bbox_wrong=metrics['combined_bbox_wrong'],
                 combined_no_plate_visible=metrics['combined_no_plate_visible'],
                 combined_parse_failure=metrics['combined_parse_failure'],
                 combined_no_bbox_verdict=metrics['combined_no_bbox_verdict'],
+                combined_no_verdict_cap_hits=metrics['combined_no_verdict_cap_hits'],
+                no_verdict_tracked=len(visible_no_verdict) + len(combined_no_verdict),
             )
             last_processed = metrics['total_processed']
             last_t = now

@@ -18,6 +18,7 @@ import os
 from typing import Any
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
+from src.config.region_rejection import rejection_reason_catalog
 from src.config.region_source import CANDIDATE_SOURCES
 from src.services.detection.profile_registry import get_active_region_profile
 
@@ -119,10 +120,13 @@ def _text_rules() -> dict[str, Any] | None:
 
 def region_vocabulary_catalog() -> dict[str, Any]:
     """``{detectors, region_sources, chain_actors, text_rules,
-    text_choices}`` for the active deployment config. Never hardcodes a
-    private model id. ``text_rules`` says which readings count as region
-    text (``null`` without a region profile); ``text_choices`` lists the
-    ``region_text_choice`` values."""
+    text_choices, rejection_reasons}`` for the active deployment config.
+    Never hardcodes a private model id. ``text_rules`` says which readings
+    count as region text (``null`` without a region profile);
+    ``text_choices`` lists the ``region_text_choice`` values;
+    ``rejection_reasons`` the pipeline-written ``region_rejection_reason``
+    values (``[{id, label, kind, match, label_template}]``, see
+    :mod:`src.config.region_rejection`)."""
     from src.services.detection.region_text import TEXT_CHOICES
 
     vlm_model = os.environ.get('OP_VLM_MODEL', '')
@@ -139,6 +143,7 @@ def region_vocabulary_catalog() -> dict[str, Any]:
         'chain_actors': chain_actors,
         'text_rules': _text_rules(),
         'text_choices': list(TEXT_CHOICES),
+        'rejection_reasons': rejection_reason_catalog(),
     }
 
 

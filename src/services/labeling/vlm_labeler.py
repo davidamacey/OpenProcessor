@@ -261,6 +261,23 @@ class CombinedParseFailure(Exception):  # noqa: N818 - documented public symbol
     """
 
 
+class VlmTransportError(Exception):
+    """An upstream VLM call failed (HTTP / transport): no reply at all.
+
+    Distinct from a reply without a verdict (empty, unparseable, null): a
+    caller that bounds retries of no-verdict replies must keep retrying
+    these -- the VLM may just be down.
+    """
+
+
+class CombinedTransportError(CombinedParseFailure, VlmTransportError):
+    """The combined call itself failed (HTTP / transport): no reply at all.
+
+    Subclasses :class:`CombinedParseFailure` so callers that only fall
+    back on any failure keep working unchanged.
+    """
+
+
 class VlmHealth(BaseModel):
     """Health-probe response."""
 
@@ -1169,7 +1186,9 @@ class VlmLabeler:
             return _request_failed(chunk)
         return self._parse_class_reply(response, chunk)
 
-    async def verify_plate(self, crop: RegionCrop) -> VlmRegionVerdict | None:
+    async def verify_plate(
+        self, crop: RegionCrop, *, raise_on_transport: bool = False
+    ) -> VlmRegionVerdict | None:
         """Verify whether a single sub-region crop is real.
 
         Returns ``None`` when the VLM gave no usable answer at all --
@@ -1178,6 +1197,10 @@ class VlmLabeler:
         evidence the region is fake; the caller must leave the crop
         pending for a retry rather than recording a rejection the VLM
         never gave.
+
+        ``raise_on_transport=True`` raises :class:`VlmTransportError` on an
+        upstream HTTP failure instead, for a caller that must tell an
+        outage (retry) from a reply with no verdict (bounded retries).
         """
 
         b64 = _b64_jpeg(crop.jpeg_bytes)
@@ -1213,6 +1236,9 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
+            if raise_on_transport:
+                msg = f'http error: {exc}'
+                raise VlmTransportError(msg) from exc
             return None
 
         raw = _strip_markdown_fences(extract_message_content(response))
@@ -1431,7 +1457,7 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            raise CombinedParseFailure(f'http error: {exc}') from exc
+            raise CombinedTransportError(f'http error: {exc}') from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))
         if not raw:
@@ -1480,10 +1506,12 @@ class VlmLabeler:
         before encoding so the VLM can reason about it visually.
 
         Returns ``{crop_id: VlmCombinedReply | None}``. A ``None`` value
-        means the per-crop entry could not be parsed (missing in
-        response, bad JSON, or whole-chunk HTTP failure) — the caller
-        should leave such crops in pending rather than write a terminal
-        status.
+        means the VLM answered but the per-crop entry could not be parsed
+        (missing in response, bad JSON) — a reply without a verdict.
+
+        Raises:
+            CombinedTransportError: an upstream call failed (HTTP /
+                transport) -- no reply at all, for the whole batch.
         """
 
         if not crops:
@@ -1534,6 +1562,8 @@ class VlmLabeler:
                     draw_overlay=draw_overlay,
                 )
                 return {crop.crop_id: reply}
+            except CombinedTransportError:
+                raise
             except CombinedParseFailure:
                 return {crop.crop_id: None}
 
@@ -1615,9 +1645,10 @@ class VlmLabeler:
                 error=str(exc),
                 error_type=type(exc).__name__,
             )
-            # Whole-chunk HTTP failure → per-crop None so the caller can
-            # leave each crop in pending for a future retry.
-            return {c.crop_id: None for c in chunk}
+            # No reply at all: raise, so the caller can tell an outage
+            # (keep retrying) from a reply that gave no verdict.
+            msg = f'http error: {exc}'
+            raise CombinedTransportError(msg) from exc
 
         raw = _strip_markdown_fences(extract_message_content(response))
         finish_reason = ''
@@ -2142,6 +2173,7 @@ __all__ = [
     'DEFAULT_REQUESTS_PER_SECOND',
     'CombinedCrop',
     'CombinedParseFailure',
+    'CombinedTransportError',
     'ItemCrop',
     'RegionCrop',
     'VlmClassPrediction',
@@ -2149,6 +2181,7 @@ __all__ = [
     'VlmHealth',
     'VlmLabeler',
     'VlmRegionVerdict',
+    'VlmTransportError',
     'format_class_catalog',
     'resolve_class_name',
 ]

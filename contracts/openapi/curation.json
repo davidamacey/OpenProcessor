@@ -3012,6 +3012,120 @@
         "title": "PromoteResponse",
         "type": "object"
       },
+      "RegionVocabularyResponse": {
+        "properties": {
+          "chain_actors": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyEntry"
+            },
+            "title": "Chain Actors",
+            "type": "array"
+          },
+          "detectors": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyDetector"
+            },
+            "title": "Detectors",
+            "type": "array"
+          },
+          "region_sources": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyEntry"
+            },
+            "title": "Region Sources",
+            "type": "array"
+          },
+          "rejection_reasons": {
+            "items": {
+              "$ref": "#/components/schemas/RejectionReasonEntry"
+            },
+            "title": "Rejection Reasons",
+            "type": "array"
+          },
+          "text_choices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Text Choices",
+            "type": "array"
+          },
+          "text_rules": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which readings count as region text; null without a region profile.",
+            "title": "Text Rules"
+          }
+        },
+        "required": [
+          "detectors",
+          "region_sources",
+          "chain_actors",
+          "text_rules",
+          "text_choices",
+          "rejection_reasons"
+        ],
+        "title": "RegionVocabularyResponse",
+        "type": "object"
+      },
+      "RejectionReasonEntry": {
+        "description": "One pipeline-written ``region_rejection_reason`` value.",
+        "properties": {
+          "id": {
+            "description": "The stored value (match=exact) or its prefix (match=prefix).",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "description": "model_verdict: the verifier judged the box wrong; automatic: a geometry check rejected it; needs_human: no verdict was given.",
+            "enum": [
+              "model_verdict",
+              "automatic",
+              "needs_human"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "label_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For match=prefix: label with {detail} = the rest of the stored value.",
+            "title": "Label Template"
+          },
+          "match": {
+            "enum": [
+              "exact",
+              "prefix"
+            ],
+            "title": "Match",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "match"
+        ],
+        "title": "RejectionReasonEntry",
+        "type": "object"
+      },
       "ResolveConflict": {
         "properties": {
           "crop_id": {
@@ -4229,6 +4343,58 @@
           "crop_ids"
         ],
         "title": "VlmVerifyRegionsRequest",
+        "type": "object"
+      },
+      "VocabularyDetector": {
+        "properties": {
+          "filterable": {
+            "description": "True for values that can appear in stored region_detector.",
+            "title": "Filterable",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "role",
+          "filterable"
+        ],
+        "title": "VocabularyDetector",
+        "type": "object"
+      },
+      "VocabularyEntry": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "role"
+        ],
+        "title": "VocabularyEntry",
         "type": "object"
       },
       "_PathLookupRequest": {
@@ -9673,16 +9839,14 @@
     },
     "/curation/regions/vocabulary": {
       "get": {
-        "description": "The deployment-configured detector/segmenter/verifier vocabulary\n(W0: naming sweep finding m9).\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}]}``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
+        "description": "The deployment-configured detector/segmenter/verifier vocabulary\n(W0: naming sweep finding m9).\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}], text_rules,\ntext_choices, rejection_reasons: [{id, label, kind, match,\nlabel_template}]}``. ``kind`` is ``model_verdict`` / ``automatic`` /\n``needs_human``; ``match`` is ``exact`` or ``prefix``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
         "operationId": "regions_vocabulary_curation_regions_vocabulary_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Regions Vocabulary Curation Regions Vocabulary Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionVocabularyResponse"
                 }
               }
             },

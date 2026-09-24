@@ -106,6 +106,8 @@ class TestVisibilityNoVerdict:
     async def test_worker_retries_an_item_without_a_visibility_verdict(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Below the no-verdict cap (test_region_no_verdict_cap.py covers it).
+        monkeypatch.setenv('OP_REGION_WORKER_MAX_NO_VERDICT_ATTEMPTS', '100000')
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
         mocks: dict[str, Any] = await _drive_worker(
             tmp_path,
