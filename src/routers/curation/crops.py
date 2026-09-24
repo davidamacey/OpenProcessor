@@ -27,6 +27,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
+from src.services.curation.item_text import item_text_query
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.detection.cascade_detect import class_provenance
 
@@ -77,6 +78,16 @@ async def list_crops(
     classifier_conf_lt: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
     conf_min: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
     conf_max: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
+    item_text: Annotated[
+        str | None,
+        Query(
+            max_length=200,
+            description=(
+                'Text read on the item crop: every word must be a case-insensitive '
+                'prefix of a stored item text token.'
+            ),
+        ),
+    ] = None,
     order: Annotated[
         str,
         Query(
@@ -121,6 +132,11 @@ async def list_crops(
     filt: list[dict[str, Any]] = []
     if conf_clause is not None:
         filt.append(conf_clause)
+    if item_text is not None:
+        text_clause = item_text_query(item_text)
+        if text_clause is None:
+            raise HTTPException(status_code=400, detail='item_text must contain a letter or digit')
+        filt.append(text_clause)
     if class_id is not None:
         must.append({'term': {'class_id': class_id}})
     if cluster_id is not None:

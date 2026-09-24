@@ -64,6 +64,38 @@ class DetectionProfile:
     ocr_rec_model: str = 'paddleocr_rec_trt'
     ocr_rec_version: str = '1'
     ocr_pipeline_model: str = 'ocr_pipeline'
+    # Region-text reader (src/services/detection/region_text.py). Which
+    # reader fills ``region_text``: 'vlm' (the verify call's reading),
+    # 'ocr' (the OCR pipeline on the region crop), 'vlm_then_ocr' (OCR
+    # when the VLM read nothing), 'both' (store both readings and flag a
+    # disagreement). With no VLM configured every mode reads via OCR.
+    text_reader: str = 'vlm_then_ocr'
+    # Region crop fed to the OCR reader: the region box grown by this
+    # fraction of its width/height on each side, clipped to the item crop.
+    text_crop_margin: float = 0.05
+    # Region crops shorter than this are upscaled to it (and centered on
+    # a detector-sized canvas) before OCR; small text otherwise blurs past
+    # what the text detector finds.
+    text_crop_min_height: int = 56
+    # Dominant-text selection: keep lines at least this fraction of the
+    # tallest line's height; drop lines centered in this outer band of
+    # the crop.
+    text_min_height_ratio: float = 0.6
+    text_border_margin: float = 0.08
+    # Normalization: uppercase, then keep only characters matching the
+    # one-character regex ``text_charset`` ('' keeps every non-space
+    # character); kept pieces are joined with ``text_join``.
+    text_uppercase: bool = False
+    text_charset: str = ''
+    text_join: str = ' '
+    # Accepted reading length (after normalization, spaces not counted);
+    # text_len_max=0 means unbounded.
+    text_len_min: int = 1
+    text_len_max: int = 0
+    # Words dropped from every line before selection (compared normalized).
+    text_stopwords: frozenset[str] = field(default_factory=frozenset)
+    # Minimum recognition score of the weakest kept line.
+    text_min_confidence: float = 0.0
     sam_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
     # Item (ingest) detectors only: the model class ids whose detections

@@ -126,6 +126,14 @@ class CurationConfig:
     # source_root/export_root instead.
     bakeoff_eval_root: Path = Path('./data/bakeoff_eval')
 
+    # Searchable per-item text (src/services/curation/item_text.py): the
+    # region worker stores every OCR line read on the item crop. Effective
+    # only when the active region profile names an OCR pipeline model.
+    item_text_enabled: bool = True
+    # Lines below this recognition score are not stored. 0.5 is PaddleOCR's
+    # own ``drop_score`` default for its end-to-end system.
+    item_text_min_confidence: float = 0.5
+
     @classmethod
     def from_env(cls, prefix: str = 'OP_') -> CurationConfig:
         """Build a :class:`CurationConfig` from ``{prefix}*`` env vars.
@@ -152,6 +160,16 @@ class CurationConfig:
         def _int(name: str, default: int) -> int:
             value = os.environ.get(f'{prefix}{name}')
             return int(value) if value else default
+
+        def _float(name: str, default: float) -> float:
+            value = os.environ.get(f'{prefix}{name}')
+            return float(value) if value else default
+
+        def _bool(name: str, default: bool) -> bool:
+            value = os.environ.get(f'{prefix}{name}')
+            if value is None or not value.strip():
+                return default
+            return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
         return cls(
             images_index=_str('IMAGES_INDEX', defaults.images_index),
@@ -185,6 +203,10 @@ class CurationConfig:
             backbone_embedding_dim=_int('BACKBONE_EMBEDDING_DIM', defaults.backbone_embedding_dim),
             hnsw_ef_construction=_int('HNSW_EF_CONSTRUCTION', defaults.hnsw_ef_construction),
             hnsw_m=_int('HNSW_M', defaults.hnsw_m),
+            item_text_enabled=_bool('ITEM_TEXT_ENABLED', defaults.item_text_enabled),
+            item_text_min_confidence=_float(
+                'ITEM_TEXT_MIN_CONFIDENCE', defaults.item_text_min_confidence
+            ),
         )
 
 

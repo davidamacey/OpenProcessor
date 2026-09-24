@@ -45,6 +45,86 @@ REFERENCE_LICENSE_PLATE_PROFILE = DetectionProfile(
     ocr_rec_model='paddleocr_rec_trt',
     ocr_rec_version='1',
     ocr_pipeline_model='ocr_pipeline',
+    # Region-text reader. 'both' stores the VLM and OCR readings side by
+    # side and flags disagreement: the OCR read costs ~50 ms per region
+    # (one OCR-pipeline call) against a multi-second VLM call, and the
+    # cross-check is the cheapest source of text-review candidates.
+    text_reader='both',
+    # Calibrated on 207 reference region crops (median 39x25 px): no extra
+    # margin reads best -- detector boxes already include the frame, and
+    # a margin pulls in neighboring text. Crops are framed at 56 px tall
+    # for the OCR detector (see PaddleOcrTextRecognizer.read_region_lines).
+    text_crop_margin=0.0,
+    text_crop_min_height=56,
+    text_min_height_ratio=0.6,
+    text_border_margin=0.08,
+    text_uppercase=True,
+    text_charset='[A-Z0-9]',
+    text_join='',
+    text_len_min=2,
+    text_len_max=10,
+    # On the calibration set every reading whose weakest line scored
+    # below 0.6 disagreed with the reference reading (37 of 151 readings,
+    # none an exact or near match); at >= 0.6, 78 of 114 were exact or
+    # within one edit-distance-ish of it (similarity >= 0.8).
+    text_min_confidence=0.6,
+    # Issuer names printed on the region; dropped as whole lines (or as
+    # single words inside a line) before the dominant line is chosen.
+    text_stopwords=frozenset(
+        {
+            'USA',
+            'ALABAMA',
+            'ALASKA',
+            'ARIZONA',
+            'ARKANSAS',
+            'CALIFORNIA',
+            'COLORADO',
+            'CONNECTICUT',
+            'DELAWARE',
+            'FLORIDA',
+            'GEORGIA',
+            'HAWAII',
+            'IDAHO',
+            'ILLINOIS',
+            'INDIANA',
+            'IOWA',
+            'KANSAS',
+            'KENTUCKY',
+            'LOUISIANA',
+            'MAINE',
+            'MARYLAND',
+            'MASSACHUSETTS',
+            'MICHIGAN',
+            'MINNESOTA',
+            'MISSISSIPPI',
+            'MISSOURI',
+            'MONTANA',
+            'NEBRASKA',
+            'NEVADA',
+            'NEW HAMPSHIRE',
+            'NEW JERSEY',
+            'NEW MEXICO',
+            'NEW YORK',
+            'NORTH CAROLINA',
+            'NORTH DAKOTA',
+            'OHIO',
+            'OKLAHOMA',
+            'OREGON',
+            'PENNSYLVANIA',
+            'RHODE ISLAND',
+            'SOUTH CAROLINA',
+            'SOUTH DAKOTA',
+            'TENNESSEE',
+            'TEXAS',
+            'UTAH',
+            'VERMONT',
+            'VIRGINIA',
+            'WASHINGTON',
+            'WEST VIRGINIA',
+            'WISCONSIN',
+            'WYOMING',
+        }
+    ),
     sam_text_prompt='license plate, registration plate, number plate',
     # Crop-class groups routed straight to the secondary segmenter, skipping
     # the primary detector — the reference detector is known weak on
