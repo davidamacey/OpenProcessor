@@ -1933,6 +1933,21 @@
             <dd class="text-zinc-200">
               {current.class_name ?? '—'}
               <span class="ml-1 text-zinc-500">({current.label_source})</span>
+              <!-- dq-queues cutover (2026-09-24): vlm_raw_class/
+                   vlm_class_empty_reason fold into this row rather than
+                   their own — the review panel is height-budgeted
+                   (DQ-M5, max-h-[46%] crop cap so the action buttons
+                   stay visible without scrolling at 1280x720), and every
+                   extra dt/dd row eats into that budget. -->
+              {#if current.vlm_raw_class}
+                <span class="ml-1 text-[11px] text-zinc-500"
+                  >— VLM said: {current.vlm_raw_class}</span
+                >
+              {:else if current.vlm_class_empty_reason}
+                <span class="ml-1 text-[11px] text-orange-300"
+                  >— VLM empty: {current.vlm_class_empty_reason}</span
+                >
+              {/if}
             </dd>
 
             <!-- m1 (2026-09-24 interactive pass): a name-only proposal
@@ -2006,38 +2021,36 @@
               {current.label_confidence != null
                 ? `${(current.label_confidence * 100).toFixed(1)}%`
                 : '—'}
+              <!-- dq-queues cutover (2026-09-24): class_confidence (the
+                   confidence of whoever set the CLASS label — distinct
+                   from label_confidence above, always the detector
+                   score) folds in here rather than its own row, only
+                   when there's no VLM-confidence row below to carry it
+                   instead — see that row's comment for why (DQ-M5
+                   height budget). -->
+              {#if current.class_confidence != null && !current.vlm_confidence}
+                <span class="ml-1 text-[11px] text-zinc-500">
+                  · label: {current.class_confidence_source === 'model' ? 'Model ' : ''}{(
+                    current.class_confidence * 100
+                  ).toFixed(0)}%
+                </span>
+              {/if}
             </dd>
 
             {#if current.vlm_confidence}
               <dt class="text-zinc-500">VLM confidence</dt>
-              <dd class="font-mono text-zinc-200">{current.vlm_confidence}</dd>
-            {/if}
-
-            <!-- dq-queues cutover (2026-09-24): `class_confidence` is the
-                 confidence of whoever set the CLASS label (VLM categorical
-                 mapped to a number, or the classifier's own score) — null
-                 for human labels, so this row is omitted then. Distinct
-                 from `label_confidence` above (always the detector score). -->
-            {#if current.class_confidence != null}
-              <dt class="text-zinc-500">Label confidence</dt>
               <dd class="font-mono text-zinc-200">
-                {current.class_confidence_source === 'vlm'
-                  ? 'VLM'
-                  : current.class_confidence_source === 'model'
-                    ? 'Model'
-                    : ''}
-                {(current.class_confidence * 100).toFixed(1)}%
+                {current.vlm_confidence}
+                <!-- class_confidence is the numeric mapping of this same
+                     categorical value when VLM-sourced — shown inline
+                     rather than its own row (DQ-M5 height budget, see
+                     the Detector score/Confidence row's comment above). -->
+                {#if current.class_confidence != null}
+                  <span class="text-[11px] text-zinc-500"
+                    >({(current.class_confidence * 100).toFixed(0)}%)</span
+                  >
+                {/if}
               </dd>
-            {/if}
-
-            {#if current.vlm_raw_class}
-              <dt class="text-zinc-500">VLM said</dt>
-              <dd class="text-zinc-300">{current.vlm_raw_class}</dd>
-            {/if}
-
-            {#if current.vlm_class_empty_reason}
-              <dt class="text-zinc-500">VLM empty reason</dt>
-              <dd class="text-orange-300">{current.vlm_class_empty_reason}</dd>
             {/if}
 
             {#if current.proposal_name}
