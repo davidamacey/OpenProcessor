@@ -1,0 +1,899 @@
+{
+  "extra_keys": {
+    "review": [
+      "proposed_class_id",
+      "proposed_class_name",
+      "reason"
+    ],
+    "search": [
+      "semantic_score"
+    ],
+    "training_candidate": [
+      "selection_reason"
+    ]
+  },
+  "generated_by": "scripts/codegen/export_api_contracts.py",
+  "item_keys": [
+    "id",
+    "crop_id",
+    "image_id",
+    "image_path",
+    "source_image_path",
+    "bbox_norm",
+    "class_id",
+    "class_name",
+    "class_source",
+    "confidence",
+    "classifier_raw_confidence",
+    "label_source",
+    "label_validated",
+    "class_validated",
+    "class_detector",
+    "class_detector_version",
+    "class_labeled_at",
+    "class_labeler",
+    "vlm_confidence",
+    "vlm_proposed_class_id",
+    "vlm_proposed_class_name",
+    "cluster_id",
+    "cluster_distance",
+    "cluster_subid",
+    "test_holdout",
+    "crop_rank_in_image",
+    "crop_area_norm",
+    "blur_lap_ratio",
+    "proposal_name",
+    "probe_pred_class",
+    "probe_pred_entropy",
+    "mistakenness_score",
+    "mistakenness_method",
+    "mistakenness_version",
+    "mistakenness_scored_at",
+    "uniqueness_score",
+    "dup_group_id",
+    "dup_group_size",
+    "dup_is_representative",
+    "updated_at",
+    "thumbnail_url",
+    "region_thumbnail_url",
+    "region_bbox_norm",
+    "region_bbox_frame",
+    "region_bbox_correct",
+    "region_status",
+    "region_score",
+    "region_confidence",
+    "region_reason",
+    "region_rejection_reason",
+    "region_text",
+    "region_text_raw",
+    "region_text_confidence",
+    "region_text_source",
+    "region_text_engine_version",
+    "region_validated",
+    "region_verified",
+    "region_verified_at",
+    "region_verifier",
+    "region_verifier_version",
+    "region_visible",
+    "region_detector",
+    "region_detector_version",
+    "region_detector_chain",
+    "region_detected_at",
+    "region_cluster_id",
+    "region_cluster_subid",
+    "region_cluster_distance",
+    "region_class_id",
+    "region_label_source",
+    "region_source",
+    "region_pairing",
+    "region_skip_verify"
+  ],
+  "json_schema": {
+    "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
+    "properties": {
+      "bbox_norm": {
+        "items": {
+          "type": "number"
+        },
+        "title": "Bbox Norm",
+        "type": "array"
+      },
+      "blur_lap_ratio": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Blur Lap Ratio"
+      },
+      "class_detector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Detector"
+      },
+      "class_detector_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Detector Version"
+      },
+      "class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Id"
+      },
+      "class_labeled_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Labeled At"
+      },
+      "class_labeler": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Class Labeler"
+      },
+      "class_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "title": "Class Name"
+      },
+      "class_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "title": "Class Source"
+      },
+      "class_validated": {
+        "default": false,
+        "title": "Class Validated",
+        "type": "boolean"
+      },
+      "classifier_raw_confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Classifier Raw Confidence"
+      },
+      "cluster_distance": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Distance"
+      },
+      "cluster_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Id"
+      },
+      "cluster_subid": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Subid"
+      },
+      "confidence": {
+        "default": 0.0,
+        "title": "Confidence",
+        "type": "number"
+      },
+      "crop_area_norm": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Crop Area Norm"
+      },
+      "crop_id": {
+        "title": "Crop Id",
+        "type": "string"
+      },
+      "crop_rank_in_image": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Crop Rank In Image"
+      },
+      "dup_group_id": {
+        "default": null,
+        "title": "Dup Group Id"
+      },
+      "dup_group_size": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dup Group Size"
+      },
+      "dup_is_representative": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dup Is Representative"
+      },
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "image_id": {
+        "default": "",
+        "title": "Image Id",
+        "type": "string"
+      },
+      "image_path": {
+        "default": "",
+        "title": "Image Path",
+        "type": "string"
+      },
+      "label_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": "",
+        "title": "Label Source"
+      },
+      "label_validated": {
+        "default": false,
+        "title": "Label Validated",
+        "type": "boolean"
+      },
+      "mistakenness_method": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Method"
+      },
+      "mistakenness_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Score"
+      },
+      "mistakenness_scored_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Scored At"
+      },
+      "mistakenness_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Mistakenness Version"
+      },
+      "probe_pred_class": {
+        "default": null,
+        "title": "Probe Pred Class"
+      },
+      "probe_pred_entropy": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Pred Entropy"
+      },
+      "proposal_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposal Name"
+      },
+      "region_bbox_correct": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Bbox Correct"
+      },
+      "region_bbox_frame": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Bbox Frame"
+      },
+      "region_bbox_norm": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Bbox Norm"
+      },
+      "region_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Class Id"
+      },
+      "region_cluster_distance": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Cluster Distance"
+      },
+      "region_cluster_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Cluster Id"
+      },
+      "region_cluster_subid": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Cluster Subid"
+      },
+      "region_confidence": {
+        "default": null,
+        "title": "Region Confidence"
+      },
+      "region_detected_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Detected At"
+      },
+      "region_detector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Detector"
+      },
+      "region_detector_chain": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Detector Chain"
+      },
+      "region_detector_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Detector Version"
+      },
+      "region_label_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Label Source"
+      },
+      "region_pairing": {
+        "default": null,
+        "title": "Region Pairing"
+      },
+      "region_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Reason"
+      },
+      "region_rejection_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Rejection Reason"
+      },
+      "region_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Score"
+      },
+      "region_skip_verify": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Skip Verify"
+      },
+      "region_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Source"
+      },
+      "region_status": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Status"
+      },
+      "region_text": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text"
+      },
+      "region_text_confidence": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Confidence"
+      },
+      "region_text_engine_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Engine Version"
+      },
+      "region_text_raw": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Raw"
+      },
+      "region_text_source": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Text Source"
+      },
+      "region_thumbnail_url": {
+        "default": "",
+        "title": "Region Thumbnail Url",
+        "type": "string"
+      },
+      "region_validated": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Validated"
+      },
+      "region_verified": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verified"
+      },
+      "region_verified_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verified At"
+      },
+      "region_verifier": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verifier"
+      },
+      "region_verifier_version": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Verifier Version"
+      },
+      "region_visible": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Visible"
+      },
+      "source_image_path": {
+        "default": "",
+        "title": "Source Image Path",
+        "type": "string"
+      },
+      "test_holdout": {
+        "default": false,
+        "title": "Test Holdout",
+        "type": "boolean"
+      },
+      "thumbnail_url": {
+        "default": "",
+        "title": "Thumbnail Url",
+        "type": "string"
+      },
+      "uniqueness_score": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Uniqueness Score"
+      },
+      "updated_at": {
+        "default": "",
+        "title": "Updated At",
+        "type": "string"
+      },
+      "vlm_confidence": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Confidence"
+      },
+      "vlm_proposed_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Proposed Class Id"
+      },
+      "vlm_proposed_class_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Proposed Class Name"
+      }
+    },
+    "required": [
+      "id",
+      "crop_id"
+    ],
+    "title": "ItemDoc",
+    "type": "object"
+  },
+  "notes": "Every item-returning endpoint emits exactly item_keys (all always present; nullable per json_schema), plus that endpoint's extra_keys. region_keys is the region-of-interest subset; region_thumbnail_url is a server-built URL, not a region attribute.",
+  "region_keys": [
+    "region_bbox_norm",
+    "region_bbox_frame",
+    "region_bbox_correct",
+    "region_status",
+    "region_score",
+    "region_confidence",
+    "region_reason",
+    "region_rejection_reason",
+    "region_text",
+    "region_text_raw",
+    "region_text_confidence",
+    "region_text_source",
+    "region_text_engine_version",
+    "region_validated",
+    "region_verified",
+    "region_verified_at",
+    "region_verifier",
+    "region_verifier_version",
+    "region_visible",
+    "region_detector",
+    "region_detector_version",
+    "region_detector_chain",
+    "region_detected_at",
+    "region_cluster_id",
+    "region_cluster_subid",
+    "region_cluster_distance",
+    "region_class_id",
+    "region_label_source",
+    "region_source",
+    "region_pairing",
+    "region_skip_verify"
+  ],
+  "source": {
+    "model": "src/routers/curation/_common.py:ItemDoc",
+    "serializer": "src/services/curation/wire.py:serialize_item"
+  }
+}

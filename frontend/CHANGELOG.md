@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Vendored, refreshable API contract snapshot from OpenProcessor
+  (`contracts/openprocessor/`: item wire keys, region wire keys, region
+  statuses, class-source roles, and the curation OpenAPI spec), plus
+  `scripts/contract-sync.mjs` (`npm run contract:sync` / `contract:check`)
+  to sync and drift-check it against a local OpenProcessor checkout
+  (`OPENPROCESSOR_REPO`, default `../openprocessor`).
+- New contract tests under `src/lib/contract/` read the vendored snapshot
+  instead of hand-copied facts, so a backend rename fails a frontend test
+  instead of silently rotting:
+  - `wireKeys.test.ts` — `RawCrop`'s declared keys (`api.ts`'s new
+    `RAW_CROP_KEYS`, compile-time-checked exhaustive against `RawCrop`)
+    and every built-in slot's `*Field` wire references vs the backend's
+    item/region wire keys.
+  - `regionStatus.test.ts` — built-in slot lifecycle states vs the
+    backend's `RegionStatus` enum and human-writable statuses.
+  - `classSources.test.ts` — `sourceBadge` renders every backend
+    `class_source` role without throwing.
+  - `endpointCatalog.test.ts` — every `${API_PREFIX}/...` call site in
+    `api.ts`, `sse.ts`, `SlotCard.svelte` and `export/+page.svelte`
+    (mechanically extracted by `src/lib/contract/apiCallScanner.ts`,
+    not hand-listed) resolves to a real path+method in the vendored
+    OpenAPI spec, with every mechanically-resolvable query param checked
+    against that operation's declared parameters.
+- `npm run contract:check` added to CI's `check` job (harmless no-op
+  there — the backend repo isn't checked out) and to a new local
+  pre-commit hook gated on `contracts/` or `src/lib/api.ts` changing.
+
+### Removed
+
+- `src/lib/annotations/regionWireContract.test.ts` — superseded by
+  `src/lib/contract/wireKeys.test.ts`, which checks the same thing
+  against the vendored snapshot instead of a hand-copied 31-key literal.
+
 ### Fixed
 
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md

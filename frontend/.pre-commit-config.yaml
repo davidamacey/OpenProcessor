@@ -53,6 +53,20 @@ repos:
         language: system
         types_or: [javascript, ts, svelte]
 
+  # Contract drift — only when a commit could plausibly introduce drift
+  # (the vendored snapshot itself, or the one file that composes every
+  # backend URL). Skips harmlessly when ../openprocessor isn't checked out
+  # (see scripts/contract-sync.mjs); a real backend rename that the
+  # snapshot wasn't refreshed for fails loudly instead.
+  - repo: local
+    hooks:
+      - id: contract-check
+        name: contract:check (frontend vs vendored OpenProcessor contracts)
+        entry: npm run contract:check
+        language: system
+        pass_filenames: false
+        files: ^(contracts/|src/lib/api\.ts$)
+
   # Secret detection
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.1

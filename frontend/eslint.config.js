@@ -23,6 +23,9 @@ export default ts.config(
       'diagnostics/',
       'static/',
       'scripts/',
+      // Vendored, generated verbatim from OpenProcessor's contracts/ — see
+      // contracts/openprocessor/SOURCE.md. Not ours to lint or format.
+      'contracts/openprocessor/',
     ],
   },
   js.configs.recommended,

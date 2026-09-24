@@ -29,6 +29,12 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # Harmless in CI: the OpenProcessor checkout this compares against
+      # (../openprocessor by default) isn't present here, so contract-sync.mjs
+      # prints a skip message and exits 0 — see contracts/openprocessor/SOURCE.md.
+      - name: Contract drift check (local-only; skips when the backend repo is absent)
+        run: npm run contract:check
+
       - name: Build
         run: npm run build
 

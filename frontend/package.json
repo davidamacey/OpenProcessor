@@ -19,7 +19,9 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "contract:sync": "node scripts/contract-sync.mjs",
+    "contract:check": "node scripts/contract-sync.mjs --check"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

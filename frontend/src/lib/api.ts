@@ -1186,6 +1186,61 @@ type RawCrop = {
   updated_at?: string;
 };
 
+/**
+ * Every key `RawCrop` declares, as a runtime value — for
+ * `src/lib/contract/wireKeys.test.ts` to check against the backend's
+ * vendored item-wire key list (`contracts/openprocessor/json/item_wire.json`).
+ * The `satisfies` + `Exclude<...>` pair below is a compile-time
+ * exhaustiveness check: forgetting to add a new `RawCrop` field here (or
+ * typo-ing an existing one) is a type error, not a silently-incomplete
+ * runtime list.
+ */
+export const RAW_CROP_KEYS = [
+  'crop_id',
+  'image_id',
+  'image_path',
+  'bbox_norm',
+  'class_id',
+  'class_name',
+  'class_source',
+  'confidence',
+  'cluster_id',
+  'cluster_distance',
+  'cluster_subid',
+  'label_validated',
+  'class_validated',
+  'label_source',
+  'class_detector',
+  'class_detector_version',
+  'class_labeled_at',
+  'class_labeler',
+  'test_holdout',
+  'crop_rank_in_image',
+  'crop_area_norm',
+  'blur_lap_ratio',
+  'classifier_raw_confidence',
+  'proposal_name',
+  'vlm_confidence',
+  'vlm_proposed_class_id',
+  'vlm_proposed_class_name',
+  'mistakenness_score',
+  'mistakenness_method',
+  'mistakenness_version',
+  'mistakenness_scored_at',
+  'thumbnail_url',
+  'updated_at',
+] as const satisfies readonly (keyof RawCrop)[];
+
+// Compile-time-only: if `RawCrop` grows a field not listed in
+// RAW_CROP_KEYS, this alias's type becomes `never` in one direction but
+// a real key in the other, and the assignment below fails to compile.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _RawCropKeysExhaustive = Exclude<keyof RawCrop, (typeof RAW_CROP_KEYS)[number]>;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _rawCropKeysExhaustiveCheck: [_RawCropKeysExhaustive] extends [never]
+  ? true
+  : never = true;
+
 function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
   const out: Crop = {
