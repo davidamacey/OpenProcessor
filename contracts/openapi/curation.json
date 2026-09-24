@@ -9680,7 +9680,7 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) — the frontend renders this instead of hardcoding\ntab labels. Must be registered before ``GET /review/{tab}`` so it\nisn't shadowed as ``tab='tabs'``.",
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\nand ``filter_defaults`` (values it applies when one is omitted) — the\nfrontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
@@ -9689,9 +9689,7 @@
                 "schema": {
                   "additionalProperties": {
                     "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
+                      "additionalProperties": true,
                       "type": "object"
                     },
                     "type": "array"
@@ -9826,7 +9824,7 @@
             }
           },
           {
-            "description": "Keep crop_rank_in_image <= this.",
+            "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
             "in": "query",
             "name": "max_rank",
             "required": false,
@@ -9840,7 +9838,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Keep crop_rank_in_image <= this.",
+              "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
               "title": "Max Rank"
             }
           },
@@ -10087,7 +10085,7 @@
             }
           },
           {
-            "description": "Keep crop_rank_in_image <= this.",
+            "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
             "in": "query",
             "name": "max_rank",
             "required": false,
@@ -10101,7 +10099,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Keep crop_rank_in_image <= this.",
+              "description": "Keep crop_rank_in_image <= this (every tab). Omitted: no limit, except a tab's served filter_defaults (GET /review/tabs).",
               "title": "Max Rank"
             }
           },

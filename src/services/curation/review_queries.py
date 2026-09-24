@@ -70,15 +70,56 @@ TAB_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
-def review_tab_catalog() -> list[dict[str, str]]:
-    """``[{id, label, description}, ...]`` for every ``KNOWN_TABS`` entry.
+# Query filters every tab honours (``GET /review/{tab}`` and its locate
+# twin). ``build_tab_query`` / ``build_review_request`` read this same
+# table, so the served catalog can never advertise a filter a tab ignores.
+COMMON_FILTERS: tuple[str, ...] = (
+    'include_test',
+    'max_rank',
+    'min_blur_ratio',
+    'min_mistakenness',
+    'hide_near_duplicates',
+    'class_id',
+    'source',
+    'conf_min',
+    'conf_max',
+)
+# Tab-only filters, on top of COMMON_FILTERS.
+TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text',)}
+# A filter value a tab applies when the client omits it (DQ-M6: the two
+# "primary subject" tabs are rank-limited by definition).
+PRIMARY_SUBJECT_MAX_RANK = 2
+TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
+    'primary_low_conf': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
+    'coco_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
+}
+
+
+def tab_filters(tab: str) -> tuple[str, ...]:
+    """Query filters ``tab`` applies, in a stable order."""
+    return (*COMMON_FILTERS, *TAB_EXTRA_FILTERS.get(tab, ()))
+
+
+def review_tab_catalog() -> list[dict[str, Any]]:
+    """``[{id, label, description, filters, filter_defaults}, ...]`` for
+    every ``KNOWN_TABS`` entry.
+
+    ``filters`` lists the query parameters the tab honours (anything else
+    is accepted but ignored); ``filter_defaults`` the value a tab applies
+    when that parameter is omitted (``{}`` for none).
 
     Fails loudly (``KeyError``) if a tab is added to ``KNOWN_TABS`` without
     a matching ``TAB_LABELS`` entry -- the same "one source of truth"
     contract ``test_class_sources.py`` enforces for ``class_source``.
     """
     return [
-        {'id': tab, 'label': TAB_LABELS[tab][0], 'description': TAB_LABELS[tab][1]}
+        {
+            'id': tab,
+            'label': TAB_LABELS[tab][0],
+            'description': TAB_LABELS[tab][1],
+            'filters': list(tab_filters(tab)),
+            'filter_defaults': dict(TAB_FILTER_DEFAULTS.get(tab, {})),
+        }
         for tab in KNOWN_TABS
     ]
 
@@ -226,7 +267,7 @@ def build_tab_query(
         # Substring search on region text, case-insensitive: stored case
         # depends on whichever writer set the text, so don't assume an
         # uppercase canonical form.
-        if text:
+        if text and 'text' in tab_filters(tab):
             must.append(region_text_clause(fields.text, text))
         # Default sort: region score desc, so the high-confidence detections
         # are reviewed first (likely accept), low-score later (more
@@ -289,7 +330,6 @@ def build_tab_query(
         # band, not a floor: target everything below the 0.75 ingest floor
         # (or no classifier box at all) and let rank + the clarity slider strip the
         # junk, so a large clear crop the classifier whiffed on at 0.05 still surfaces.
-        must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
         # D-1 (F-6): classifier_raw_confidence is never written in
         # production -- point the "unsure" branch at the stored
         # `confidence` field, restricted to items a classifier actually
@@ -321,7 +361,6 @@ def build_tab_query(
         # signal: an ingest proposal nothing classified. The stored
         # proposal score lives in ``confidence``.
         must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
-        must.append({'range': {'crop_rank_in_image': {'lte': max_rank or 2}}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
     elif tab == 'new_class_proposals':
@@ -345,7 +384,24 @@ def build_tab_query(
             detail=f'unknown review tab: {tab}. Must be one of: {", ".join(KNOWN_TABS)}',
         )
 
+    # DQ-M6: subject-size limit, applied once here for every tab that
+    # serves it (it used to be honoured only by the two primary tabs).
+    rank_limit = (
+        max_rank if max_rank is not None else TAB_FILTER_DEFAULTS.get(tab, {}).get('max_rank')
+    )
+    if rank_limit is not None and 'max_rank' in tab_filters(tab):
+        must.append({'range': {'crop_rank_in_image': {'lte': rank_limit}}})
+
     return must, must_not, reason
 
 
-__all__ = ['KNOWN_TABS', 'TAB_LABELS', 'build_tab_query', 'review_tab_catalog']
+__all__ = [
+    'COMMON_FILTERS',
+    'KNOWN_TABS',
+    'TAB_EXTRA_FILTERS',
+    'TAB_FILTER_DEFAULTS',
+    'TAB_LABELS',
+    'build_tab_query',
+    'review_tab_catalog',
+    'tab_filters',
+]

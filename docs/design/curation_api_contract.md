@@ -508,10 +508,20 @@ auto-label params and the stats keys (see B3).
 `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`,
 `coco_blind_spots`, **`new_class_proposals`** (items flagged
 `needs_new_class` by a human, or `class_source: vlm_new_class_pending`).
-Filters (every tab): `include_test`, `text` (regions tab), `max_rank`,
-`min_blur_ratio`, `min_mistakenness`, `hide_near_duplicates`, **`class_id`**,
-**`source`**, **`conf_min` / `conf_max`** (inclusive band on `confidence`,
-`400` if min > max), `sort`. Response: `total`, `page`, `page_size`,
+Filters (every tab): `include_test`, `max_rank` (`crop_rank_in_image <=
+max_rank`; omitted = no limit, except `primary_low_conf` /
+`coco_blind_spots`, which default to `2`), `min_blur_ratio`,
+`min_mistakenness`, `hide_near_duplicates`, **`class_id`**, **`source`**,
+**`conf_min` / `conf_max`** (inclusive band on `confidence`, `400` if
+min > max), `sort`; `text` on the `regions` tab only (ignored elsewhere).
+
+`GET /review/tabs` → `{tabs: [{id, label, description, filters,
+filter_defaults}]}`: `filters` is the list of query parameters the tab
+honours (a parameter not listed is accepted and ignored), `filter_defaults`
+the values it applies when one is omitted (`{"max_rank": 2}` for the two
+primary-subject tabs, else `{}`). The queue query reads the same table, so
+the catalog can't advertise a filter a tab ignores (DQ-M6: `max_rank` used
+to be honoured only by the two primary tabs). Response: `total`, `page`, `page_size`,
 `items` (item + `reason`), `sort_applied` (the sort id that actually ran),
 `sort_fallback_reason` (`null`, or a human-readable string when the
 resolved default was replaced — see below).

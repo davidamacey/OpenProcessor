@@ -255,7 +255,16 @@ TextQ = Annotated[
     str | None,
     Query(description='Regions tab only: case-insensitive substring search on region_text.'),
 ]
-MaxRankQ = Annotated[int | None, Query(ge=1, description='Keep crop_rank_in_image <= this.')]
+MaxRankQ = Annotated[
+    int | None,
+    Query(
+        ge=1,
+        description=(
+            'Keep crop_rank_in_image <= this (every tab). Omitted: no limit, '
+            "except a tab's served filter_defaults (GET /review/tabs)."
+        ),
+    ),
+]
 BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
 MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]
 NearDupQ = Annotated[bool, Query(description='Hide non-representative near-duplicates.')]
@@ -281,11 +290,13 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
 
 
 @router.get('/review/tabs')
-async def review_tabs() -> dict[str, list[dict[str, str]]]:
+async def review_tabs() -> dict[str, list[dict[str, Any]]]:
     """Every review tab's ``id``/``label``/``description`` (W0: naming
-    sweep finding m9) — the frontend renders this instead of hardcoding
-    tab labels. Must be registered before ``GET /review/{tab}`` so it
-    isn't shadowed as ``tab='tabs'``."""
+    sweep finding m9) plus ``filters`` (the query parameters it honours)
+    and ``filter_defaults`` (values it applies when one is omitted) — the
+    frontend renders this instead of hardcoding tab labels or assuming a
+    filter works everywhere. Must be registered before ``GET /review/{tab}``
+    so it isn't shadowed as ``tab='tabs'``."""
     return {'tabs': review_queries.review_tab_catalog()}
 
 
