@@ -128,6 +128,40 @@ async def _raw_opensearch_dep() -> Any:
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
 
 
+async def warm_knn_indexes(opensearch: Any) -> None:
+    """Warm the kNN native-engine graph cache for the items + images indexes.
+
+    F-24: without this, the first semantic-search / kNN query after a
+    restart (or after a shard relocation) pays the cost of loading the
+    faiss/HNSW graph off disk cold. The warmup endpoint forces that load
+    to happen once, up front, off the request path.
+
+    Callers should fire this via ``asyncio.create_task`` at startup — it
+    must never block app boot, and a failure (endpoint unavailable,
+    OpenSearch not up yet, plugin disabled) is logged and swallowed
+    rather than raised.
+    """
+    import time as _time
+
+    indexes = f'{CURATION_ITEMS_INDEX},{CURATION_IMAGES_INDEX}'
+    started = _time.monotonic()
+    try:
+        await opensearch.transport.perform_request('GET', f'/_plugins/_knn/warmup/{indexes}')
+    except Exception as exc:
+        logger.warning(
+            'curation_knn_warmup_failed',
+            indexes=indexes,
+            duration_s=round(_time.monotonic() - started, 2),
+            error=str(exc),
+        )
+        return
+    logger.info(
+        'curation_knn_warmup_done',
+        indexes=indexes,
+        duration_s=round(_time.monotonic() - started, 2),
+    )
+
+
 async def _ensure_indexes(opensearch: Any) -> None:
     """Create curation indexes on first request (idempotent)."""
     global _INDEXES_BOOTSTRAPPED  # noqa: PLW0603 - one-time boot flag

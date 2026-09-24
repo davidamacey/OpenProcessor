@@ -85,6 +85,7 @@ class AppResources:
     shared_executor: ThreadPoolExecutor | None = None
     async_triton_pool: AsyncTritonPool | None = None
     arbiter_task: asyncio.Task[None] | None = None
+    curation_knn_warmup_task: asyncio.Task[None] | None = None
 
 
 def get_shared_executor() -> ThreadPoolExecutor:
@@ -189,6 +190,14 @@ async def lifespan(app: FastAPI):
         os_client = await OpenSearchClientFactory.get_client()
         await create_curation_indexes(os_client.client, force_recreate=False)
         logger.info('curation_indexes_bootstrapped')
+
+        # F-24: warm the kNN graph cache in the background — fire-and-
+        # forget, never blocks startup, failure is logged and swallowed.
+        from src.routers.curation._common import warm_knn_indexes
+
+        AppResources.curation_knn_warmup_task = asyncio.create_task(
+            warm_knn_indexes(os_client.client)
+        )
     except Exception as exc:
         logger.warning('curation_indexes_bootstrap_skipped', error=str(exc))
 

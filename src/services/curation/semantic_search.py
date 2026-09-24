@@ -224,27 +224,35 @@ async def semantic_text_search(
         include_test=include_test,
     )
 
-    # Over-fetch through the end of the requested page (kNN doesn't support
-    # from/size pagination server-side — it returns the top-k globally).
+    # F-24: `k` is the ANN candidate depth (how many nearest neighbors the
+    # kNN plugin considers) — it must cover through the end of the
+    # requested page, so it stays `page * page_size` (capped at _MAX_K).
+    # `from`/`size` are a *separate* concern: which slice of those k
+    # candidates the response actually carries. The old code conflated
+    # them — it asked OpenSearch for all k hits (up to 2000) and sliced
+    # to one page in Python, paying the network/JSON cost for every
+    # candidate on every page request. `from`/`size` let OpenSearch do
+    # that slicing server-side; only `page_size` hits cross the wire.
     k = min(_MAX_K, page * page_size)
     knn_query = build_knn_query(vector, k=k, filter_clause=filter_clause)
 
-    body = {
-        'size': k,
+    body: dict[str, Any] = {
+        'size': page_size,
+        'from': (page - 1) * page_size,
         'query': knn_query,
         '_source': {'excludes': _source_excludes(region_fields)},
     }
+    if min_score is not None:
+        # Top-level min_score is a generic post-scoring filter — applies
+        # the same way regardless of query type, so this replaces the
+        # old client-side hit filtering without changing semantics.
+        body['min_score'] = min_score
 
     resp = await opensearch.search(index=cfg.items_index, body=body)
     hits = (resp.get('hits') or {}).get('hits') or []
+    total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
 
-    if min_score is not None:
-        hits = [h for h in hits if (h.get('_score') is None or h.get('_score', 0.0) >= min_score)]
-
-    total = len(hits)
-    start = (page - 1) * page_size
-    page_hits = hits[start : start + page_size]
-    items = [_hydrate_item(h, region_fields, cfg.api_prefix) for h in page_hits]
+    items = [_hydrate_item(h, region_fields, cfg.api_prefix) for h in hits]
 
     return {'items': items, 'total': total, 'page': page, 'page_size': page_size}
 
