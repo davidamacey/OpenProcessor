@@ -145,7 +145,10 @@
   const badge = $derived(
     sourceBadge(
       crop.label_source,
-      crop.label_validated,
+      // G2: class_validated, not label_validated — this badge is about
+      // the class label, and label_validated also flips true on a
+      // region-only validation.
+      crop.class_validated,
       classSourcesStore.roleFor(crop.label_source),
       classSourcesStore.labelFor(crop.label_source),
     ),
@@ -300,7 +303,7 @@
     </span>
   </div>
 
-  {#if crop.vlm_suggested_class_id != null && !crop.label_validated}
+  {#if crop.vlm_suggested_class_id != null && !crop.class_validated}
     <div
       class="flex items-center gap-1 border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs"
     >
@@ -336,7 +339,7 @@
         ×
       </button>
     </div>
-  {:else if crop.vlm_suggested_class_name && !crop.label_validated}
+  {:else if crop.vlm_suggested_class_name && !crop.class_validated}
     <div
       class="border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs text-yellow-200"
       title="The VLM proposed a class that isn't in the registry yet"

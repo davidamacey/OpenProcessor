@@ -437,6 +437,7 @@
             class_id: classId,
             class_name: className,
             label_validated: true,
+            class_validated: true,
             label_source: 'human_confirmed',
           }
         : c,
@@ -507,7 +508,9 @@
 
   async function acceptAllVlmOnPage(): Promise<void> {
     const targets = filteredCrops.filter(
-      (c) => c.vlm_suggested_class_id != null && !c.label_validated,
+      // G2: class_validated, not label_validated (which also flips true on
+      // a region-only validation and would wrongly hide the accept chip).
+      (c) => c.vlm_suggested_class_id != null && !c.class_validated,
     );
     if (targets.length === 0) {
       toastStore.info('No VLM suggestions on this page.');
@@ -688,13 +691,13 @@
   async function advance(): Promise<void> {
     // Advance: jump to next unvalidated crop. If we're at the end of what's
     // loaded but more pages exist, fetch them; otherwise tell the user.
-    const next = filteredCrops.find((c) => !c.label_validated && !sel.has(c.id));
+    const next = filteredCrops.find((c) => !c.class_validated && !sel.has(c.id));
     if (next) {
       sel.ids = new Set([next.id]);
     } else if (cropPager.hasMore) {
       await loadMore();
       const nextAfterLoad = filteredCrops.find(
-        (c) => !c.label_validated && !sel.has(c.id),
+        (c) => !c.class_validated && !sel.has(c.id),
       );
       if (nextAfterLoad) sel.ids = new Set([nextAfterLoad.id]);
     } else {

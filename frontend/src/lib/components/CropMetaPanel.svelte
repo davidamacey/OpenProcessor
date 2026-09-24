@@ -44,7 +44,7 @@
   <dt class="text-zinc-500">Label source</dt>
   <dd class="text-zinc-200">
     {crop.label_source ?? '—'}
-    {#if crop.label_validated}
+    {#if crop.class_validated}
       <span
         class="ml-1 rounded border border-green-500/40 bg-green-500/15 px-1 text-[10px] text-green-200"
       >

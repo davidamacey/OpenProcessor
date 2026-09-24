@@ -973,17 +973,25 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       validated_count?: number;
     }>;
   };
-  const [ds, cls] = await Promise.all([
+  // allSettled, not Promise.all: /stats/dataset can 503 (G1 — the live
+  // op_items region_status mapping isn't aggregatable) while
+  // /stats/classes is healthy. A dataset failure must still let
+  // /export render its class table from per_class, so a rejection here
+  // falls back to an empty RawDataset rather than sinking both calls.
+  const [dsResult, clsResult] = await Promise.allSettled([
     apiFetch<RawDataset>(`${API_PREFIX}/stats/dataset`, {}, signal),
-    apiFetch<RawClasses>(`${API_PREFIX}/stats/classes`, {}, signal).catch(() => ({
-      classes: [],
-    })),
+    apiFetch<RawClasses>(`${API_PREFIX}/stats/classes`, {}, signal),
   ]);
+  const ds: RawDataset = dsResult.status === 'fulfilled' ? dsResult.value : {};
+  const cls: RawClasses =
+    clsResult.status === 'fulfilled' ? clsResult.value : { classes: [] };
   const totalImages = (ds.by_source ?? []).reduce(
     (acc, b) => acc + (b.doc_count || 0),
     0,
   );
   return {
+    dataset_error:
+      dsResult.status === 'rejected' ? (dsResult.reason as Error).message : null,
     total_crops: ds.total_crops ?? 0,
     validated_crops: ds.validated ?? 0,
     test_holdout_crops: ds.test_holdout ?? 0,
@@ -1150,6 +1158,10 @@ type RawCrop = {
   cluster_distance?: number | null;
   cluster_subid?: string | null;
   label_validated?: boolean;
+  /** G2: the class-label-specific validation flag. `label_validated` is
+   *  `class_validated OR region_validated` server-side and over-reports
+   *  a validated class. */
+  class_validated?: boolean;
   label_source?: string;
   class_detector?: string | null;
   class_detector_version?: string | null;
@@ -1185,6 +1197,7 @@ function mapRawCrop(c: RawCrop): Crop {
     class_source: c.class_source ?? null,
     label_source: c.label_source || 'unknown',
     label_validated: !!c.label_validated,
+    class_validated: !!c.class_validated,
     label_confidence: c.confidence ?? null,
     cluster_id: c.cluster_id ?? null,
     similarity_to_centroid:
@@ -2428,6 +2441,16 @@ export interface AutoLabelStartParams {
    * (`createAssistScope().toStartParams()` in `$lib/assistScope.svelte`).
    */
   prompt_pack?: string | null;
+  /**
+   * G5: `pipeline.py`'s `run_vlm: bool = Query(False)` — the VLM sweep
+   * stage is opt-in server-side and defaults off. Previously never sent
+   * at all, so a scoped run (a class or pack picked via AssistScopeBar)
+   * silently skipped the VLM stage it claimed to scope
+   * (`result.stages.vlm.skipped=true` live). Omitted/undefined keeps the
+   * request byte-identical to an unscoped run; the caller decides when
+   * to send `true`.
+   */
+  run_vlm?: boolean;
 }
 
 export type AutoLabelStatus = 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';

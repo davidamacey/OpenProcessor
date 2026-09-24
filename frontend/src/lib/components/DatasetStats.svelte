@@ -26,6 +26,7 @@
   import { type DatasetStats } from '$lib/api';
   import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
+  import { resolveStatsUpdate } from '$lib/datasetStats';
 
   // The slot whose `stats` capability titles this panel (today:
   // license_plate's 'plates'/'Plate detections'/'Plate coverage', all
@@ -59,11 +60,13 @@
   const SAMPLE_WINDOW_MS = 60_000;
 
   function applyStats(payload: Record<string, unknown>): void {
-    // The backend's {API_PREFIX}/stats/dataset response is DatasetStats-shaped.
-    // We trust the shape since the same FastAPI handler builds both
-    // the REST payload and this SSE frame.
-    stats = payload as unknown as DatasetStats;
-    error = null;
+    // The backend's {API_PREFIX}/stats/dataset response is usually
+    // DatasetStats-shaped, but can be an `{error}` envelope (G1 — see
+    // resolveStatsUpdate's doc comment). Never assign that blindly.
+    const result = resolveStatsUpdate(payload, stats);
+    stats = result.stats;
+    error = result.error;
+    if (result.error) return;
     lastUpdated = Date.now();
     const unfinished = stats?.in_progress?.sam_drain_total_unfinished ?? 0;
     const now = Date.now();
@@ -295,14 +298,18 @@
     </div>
   </header>
 
-  {#if error && !stats}
+  {#if error}
     <div
       class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
     >
       Stats unavailable: {error}
+      {#if stats}(showing the last known values){/if}
     </div>
-  {:else if !stats}
-    <p class="text-sm text-zinc-500">Loading…</p>
+  {/if}
+  {#if !stats}
+    {#if !error}
+      <p class="text-sm text-zinc-500">Loading…</p>
+    {/if}
   {:else}
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
       <!-- Headline -->

@@ -85,6 +85,10 @@
   // How far to page forward looking for a deep-linked crop before
   // saying it isn't in this queue.
   const DEEP_LINK_MAX_ITEMS = 300;
+  // G3: GET /review/{tab} doesn't support class_id/hdd_source/conf_min/
+  // conf_max yet — flip once the backend ships them (see the filter bar
+  // below and _filter()).
+  const REVIEW_SERVER_FILTERS_ENABLED = false;
   // The slot backing the current tab, if any — the single derived value
   // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
   // hangs every former `tab === 'plates'` call site off, instead of a
@@ -353,10 +357,11 @@
 
   function _filter(): Record<string, unknown> {
     const f: Record<string, unknown> = {};
-    if (hddSource) f.hdd_source = hddSource;
-    if (classFilter != null) f.class_id = classFilter;
-    if (confMin > 0) f.conf_min = confMin;
-    if (confMax < 1) f.conf_max = confMax;
+    // G3: GET /review/{tab} (review.py's review_queue()) has no
+    // class_id/hdd_source/conf_min/conf_max params — they were silently
+    // ignored (live: total unchanged across none / class_id=99999 /
+    // hdd_source=nonexistent / conf_min=0.99). Not sent, and their
+    // controls are hidden below, until the backend adds them.
     const textFilter = activeSlot?.capabilities.queue?.textFilter;
     if (textFilter && plateTextQuery) f[textFilter.param] = plateTextQuery;
     // max_rank / min_blur_ratio apply across every tab and preset — the
@@ -1416,47 +1421,58 @@
   <div
     class="flex min-w-0 flex-wrap items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2 text-xs"
   >
-    <label class="flex shrink-0 items-center gap-1.5">
-      <span class="text-zinc-400">HDD source</span>
-      <input type="text" bind:value={hddSource} placeholder="any" class="input-sm w-32" />
-    </label>
+    <!-- G3: hidden until GET /review/{tab} accepts class_id/hdd_source/
+         conf_min/conf_max (review.py has no such params today — the
+         totals didn't change when these were sent). Re-enable unchanged
+         once the backend ships them; no client-side filtering here. -->
+    {#if REVIEW_SERVER_FILTERS_ENABLED}
+      <label class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">HDD source</span>
+        <input
+          type="text"
+          bind:value={hddSource}
+          placeholder="any"
+          class="input-sm w-32"
+        />
+      </label>
 
-    <label class="flex shrink-0 items-center gap-1.5">
-      <span class="text-zinc-400">Class</span>
-      <select bind:value={classFilter} class="select-sm">
-        <option value={null}>any</option>
-        {#each filterableClasses as cls (cls.id)}
-          <option value={cls.id}>{cls.name}</option>
-        {/each}
-      </select>
-    </label>
+      <label class="flex shrink-0 items-center gap-1.5">
+        <span class="text-zinc-400">Class</span>
+        <select bind:value={classFilter} class="select-sm">
+          <option value={null}>any</option>
+          {#each filterableClasses as cls (cls.id)}
+            <option value={cls.id}>{cls.name}</option>
+          {/each}
+        </select>
+      </label>
 
-    <label
-      class="flex shrink-0 items-center gap-1.5"
-      class:opacity-40={diverseMode}
-      title={diverseMode ? 'not applied to diverse selection' : undefined}
-    >
-      <span class="text-zinc-400">Conf</span>
-      <input
-        type="number"
-        min="0"
-        max="1"
-        step="0.05"
-        bind:value={confMin}
-        disabled={diverseMode}
-        class="input-sm w-16"
-      />
-      <span class="text-zinc-500">..</span>
-      <input
-        type="number"
-        min="0"
-        max="1"
-        step="0.05"
-        bind:value={confMax}
-        disabled={diverseMode}
-        class="input-sm w-16"
-      />
-    </label>
+      <label
+        class="flex shrink-0 items-center gap-1.5"
+        class:opacity-40={diverseMode}
+        title={diverseMode ? 'not applied to diverse selection' : undefined}
+      >
+        <span class="text-zinc-400">Conf</span>
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.05"
+          bind:value={confMin}
+          disabled={diverseMode}
+          class="input-sm w-16"
+        />
+        <span class="text-zinc-500">..</span>
+        <input
+          type="number"
+          min="0"
+          max="1"
+          step="0.05"
+          bind:value={confMax}
+          disabled={diverseMode}
+          class="input-sm w-16"
+        />
+      </label>
+    {/if}
 
     {#if activeSlot?.capabilities.queue?.textFilter}
       <label
@@ -1656,6 +1672,20 @@
 
           <dt class="text-zinc-500">Proposed</dt>
           <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
+
+          {#if current.probe_pred_class}
+            <!-- G4: display only — no "accept" action here. The backend
+                 serves a class NAME (`probe_pred_class`), not an id; a
+                 name-to-id lookup belongs server-side
+                 (`probe_pred_class_id`, requested but not shipped). -->
+            <dt class="text-zinc-500">Model predicts</dt>
+            <dd class="flex flex-wrap items-center gap-1.5 text-zinc-200">
+              {current.probe_pred_class}
+              {#if current.probe_pred_entropy != null}
+                <ScoreChip label="entropy" value={current.probe_pred_entropy} size="sm" />
+              {/if}
+            </dd>
+          {/if}
 
           <dt class="text-zinc-500">Confidence</dt>
           <dd class="font-mono">

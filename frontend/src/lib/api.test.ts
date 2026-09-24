@@ -1181,6 +1181,28 @@ describe('startAutoLabel', () => {
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain(`${API_PREFIX}/pipeline/auto_label/start`);
   });
+
+  // G5: run_vlm was never sent at all before this change, so a scoped
+  // run silently skipped the VLM stage it claimed to scope.
+  it('forwards run_vlm=true when set', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ class_id: 7, run_vlm: true });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('run_vlm=true');
+  });
+
+  it('omits run_vlm entirely when unset (byte-identical to the pre-G5 request)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ train_clusters: true, vlm_concurrency: 16 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).not.toContain('run_vlm');
+  });
 });
 
 describe('API_PREFIX', () => {

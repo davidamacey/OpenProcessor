@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
+  G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
+  (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —
+  it keeps the last-known-good stats on screen and shows the existing
+  "Stats unavailable" banner instead of throwing `Cannot read properties
+of undefined (reading 'sam_drain_total_unfinished')`. The guard is a
+  new pure `resolveStatsUpdate()` (`src/lib/datasetStats.ts`).
+  - `getStats()` now uses `Promise.allSettled` for `/stats/dataset` and
+    `/stats/classes`, so a dataset-rollup failure no longer blanks
+    `per_class` — `/export`'s class table renders again.
+- "Validated" no longer conflates the class label with the region (G2):
+  added `class_validated` to `Crop`/`RawCrop` and `mapRawCrop`.
+  `CropCard`'s badge and VLM-accept chip, `CropMetaPanel`'s "validated"
+  pill, and the accept-all-VLM / advance-to-next-unvalidated logic on
+  `/clusters/[id]` now read `class_validated` instead of the OR-combined
+  `label_validated`, which previously showed a crop as validated purely
+  because its _region_ had been confirmed.
+- `/review`'s Class, HDD source and Conf filter controls are hidden and
+  no longer sent to `GET /review/{tab}` — the backend silently ignores
+  them today (totals didn't change for `class_id=99999` /
+  `hdd_source=nonexistent` / `conf_min=0.99`). Re-enable via
+  `REVIEW_SERVER_FILTERS_ENABLED` once the backend adds the params; no
+  client-side filtering was added in the meantime.
+- Scoped VLM-assist runs (`AssistScopeBar`) now actually run the VLM
+  stage: `startAutoLabel()` sends `run_vlm: true` whenever a class or
+  prompt pack is scoped, matching the toast copy that already claimed
+  "VLM labeling limited to {class}" but never sent the flag (G5). Added
+  an explicit "Run VLM labeling stage" checkbox to `AutoLabelPanel`, off
+  by default to match the backend's own default.
+
+### Added
+
+- `/review`'s item panel shows a "Model predicts" row
+  (`probe_pred_class` + an entropy `ScoreChip`) when the backend serves
+  a probe prediction — previously computed but never rendered (G4).
+  Display only: no class-name-to-id accept action, pending the backend
+  serving `probe_pred_class_id`.
+
 ### Changed
 
 - Undo (Z) on `/review`, `/clusters` and `/clusters/[id]` now calls the

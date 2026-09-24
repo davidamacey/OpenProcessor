@@ -190,7 +190,18 @@ export interface Crop {
    *  Drives the per-source filter chip in the cluster view. */
   class_source: string | null;
   label_source: LabelSource;
+  /** `class_validated OR region_validated` (wire's `label_validated`,
+   *  `wire.py:105`). "Anything on this crop was validated" — NOT the
+   *  same as the class label being trustworthy. Read `class_validated`
+   *  for any class-label display/eligibility check; keep this only for
+   *  an intentional "anything validated" meaning (G2). */
   label_validated: boolean;
+  /** Whether the *class* assignment specifically was human-validated.
+   *  Independent of region_validated — a crop can be
+   *  `label_validated=true` (region validated) while `class_validated`
+   *  is still false, e.g. a v6-model class label on a region a human
+   *  confirmed has no visible plate. */
+  class_validated: boolean;
   label_confidence: number | null;
   /** The VLM's registry-matched class for this crop when it did not
    *  auto-apply it (wire `vlm_proposed_class_id`/`_name`). Drives the
@@ -289,6 +300,9 @@ export interface Cluster {
 }
 
 export interface StatsSummary {
+  /** Set when `/stats/dataset` failed; the totals below are then zeros,
+   *  not real counts. `per_class` comes from `/stats/classes` and stays. */
+  dataset_error: string | null;
   total_crops: number;
   validated_crops: number;
   test_holdout_crops: number;

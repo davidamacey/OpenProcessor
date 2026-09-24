@@ -195,6 +195,7 @@
             class_id: classId,
             class_name: className,
             label_validated: true,
+            class_validated: true,
             label_source: 'human_confirmed',
           }
         : c,

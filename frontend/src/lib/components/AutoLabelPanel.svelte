@@ -34,6 +34,7 @@
     type AutoLabelJobState,
   } from '$lib/api';
   import { createAssistScope } from '$lib/assistScope.svelte';
+  import { resolveAutoLabelRunVlm } from '$lib/autoLabelRunVlm';
   import { isScopedAssistAvailable } from '$lib/strategies';
   import { classesStore } from '$stores/classes.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
@@ -47,6 +48,13 @@
   // into bigger ones. Off by default — most runs only want to cluster
   // unassigned + class-bucketed items.
   let mergeCandidates: boolean = $state(false);
+
+  // G5: explicit control for pipeline.py's `run_vlm` (default False
+  // server-side) — off by default here too, matching the backend. A
+  // scoped run (AssistScopeBar picked a class/pack) always implies
+  // run_vlm regardless of this checkbox, since a scoped run that skips
+  // the VLM stage it claims to scope is a no-op (see start()).
+  let runVlm: boolean = $state(false);
 
   // Cluster scope — train + assign only the largest, clear crops (what the
   // business sorts on); smaller / blurrier crops are parked until a looser
@@ -143,6 +151,7 @@
   async function start(): Promise<void> {
     busy = true;
     try {
+      const sendRunVlm = resolveAutoLabelRunVlm(scope.toStartParams(), runVlm);
       job = await startAutoLabel({
         train_clusters: true,
         vlm_concurrency: 16,
@@ -156,11 +165,17 @@
         // `{}` whenever nothing is scoped, so the composed URL stays
         // byte-identical to every request this panel has ever sent.
         ...scope.toStartParams(),
+        // Omitted (not `false`) when off, so an unscoped/unchecked run's
+        // URL stays byte-identical to every request this panel has ever
+        // sent — the backend already defaults run_vlm to False.
+        ...(sendRunVlm ? { run_vlm: true } : {}),
       });
       toastStore.success(
         scopeClassName
-          ? `Recluster started — VLM labeling limited to ${scopeClassName}.`
-          : 'Recluster started.',
+          ? `Recluster started — VLM labeling limited to ${scopeClassName} (VLM stage will run).`
+          : sendRunVlm
+            ? 'Recluster started — running the VLM labeling stage.'
+            : 'Recluster started.',
       );
       schedule();
     } catch (e) {
@@ -325,6 +340,19 @@
             disabled={busy}
           />
           Merge candidate clusters
+        </label>
+        <label
+          class="flex items-center gap-1.5 text-xs text-zinc-300"
+          title="pipeline.py's run_vlm — off by default, matching the backend. Implied automatically when a class or prompt pack is scoped above."
+        >
+          <input
+            type="checkbox"
+            class="h-3.5 w-3.5 accent-blue-500"
+            checked={runVlm || scope.classId != null || scope.promptPack != null}
+            disabled={busy || scope.classId != null || scope.promptPack != null}
+            onchange={(e) => (runVlm = (e.currentTarget as HTMLInputElement).checked)}
+          />
+          Run VLM labeling stage
         </label>
       {/if}
       {#if isRunning}
