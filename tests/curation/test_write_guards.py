@@ -38,6 +38,7 @@ from scripts.curation.worker.runner import _should_classify
 from scripts.curation.worker.state import _ItemTask
 from scripts.curation.worker.verify import _combined_class_update
 from src.config import get_region_fields
+from src.services.curation.class_write_guard import class_state_token
 from src.services.labeling.vlm_labeler import VlmCombinedReply
 
 
@@ -206,13 +207,15 @@ class TestAutomatedClassWritersExcludeTestHoldout:
         )
         captured: dict[str, Any] = {}
 
-        async def _fake_scroll_ids(_client: Any, *, index: str, query: dict[str, Any]) -> list[str]:
+        async def _fake_scroll_hits(
+            _client: Any, *, index: str, query: dict[str, Any]
+        ) -> dict[str, dict[str, Any]]:
             captured['index'] = index
             captured['query'] = query
-            return []
+            return {}
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr(auto_promote_mod, '_scroll_ids', _fake_scroll_ids)
+            mp.setattr(auto_promote_mod, '_scroll_hits', _fake_scroll_hits)
             await auto_promote_mod.auto_promote_clusters(fake_client, min_purity=0.5, min_members=1)
 
         assert captured, 'auto_promote_clusters never reached the scroll query'
@@ -499,19 +502,12 @@ class TestDetectionWorkerBulkWriterHumanGuard:
             group='cars',
         )
         t.update_doc = {'class_id': 9, 'class_source': 'vlm', 'region_status': 'detected'}
+        current = {'class_source': 'v6_model', 'class_validated': False, 'region_status': 'pending'}
+        # Fetched in the same class state it is written onto.
+        t.class_token = class_state_token(current)
 
         opensearch = AsyncMock()
-        opensearch.mget = AsyncMock(
-            return_value=make_mget_response(
-                {
-                    'crop-1': {
-                        'class_source': 'v6_model',
-                        'class_validated': False,
-                        'region_status': 'pending',
-                    }
-                }
-            )
-        )
+        opensearch.mget = AsyncMock(return_value=make_mget_response({'crop-1': current}))
         opensearch.bulk = AsyncMock(
             return_value=make_bulk_response([make_bulk_update_item('crop-1', status=200)])
         )

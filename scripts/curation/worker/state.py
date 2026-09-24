@@ -130,6 +130,9 @@ class _ItemTask:
     # ``_should_classify``, never ``_build_pending_query`` (which would
     # also starve holdout crops of region detection).
     test_holdout: bool = False
+    # Class state this task was read in (class_state_token). The writer
+    # applies class fields only if the item still has exactly this state.
+    class_token: tuple[Any, ...] | None = None
     # Existing primary-detector candidate (already in source frame) for
     # pending_verify.
     lpr_plate_in_source: tuple[float, float, float, float] | None = None

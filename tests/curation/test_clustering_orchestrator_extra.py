@@ -87,6 +87,15 @@ def _make_client(search_response: dict[str, Any], *, count: int = 0) -> MagicMoc
     return client
 
 
+_PRE_WRITE_SOURCE: dict[str, Any] = {
+    'class_id': 1,
+    'class_name': 'cruiserbike',
+    'class_source': 'v6_model',
+    'class_validated': False,
+    'test_holdout': False,
+}
+
+
 class _FakeAutoPromoteClient:
     """Fake covering the full scroll + OCC-bulk write path.
 
@@ -121,7 +130,9 @@ class _FakeAutoPromoteClient:
             int(m['term']['cluster_id']) for m in must if 'cluster_id' in m.get('term', {})
         )
         ids = self._crop_ids_by_cluster.get(cluster_id, [])
-        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': [{'_id': i} for i in ids]}}
+        # The promote scroll reads the class state the write re-checks.
+        hits = [{'_id': i, '_source': dict(_PRE_WRITE_SOURCE)} for i in ids]
+        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': hits}}
 
     async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
@@ -130,14 +141,7 @@ class _FakeAutoPromoteClient:
         return {}
 
     async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
-        source = {
-            'class_id': 1,
-            'class_name': 'cruiserbike',
-            'class_source': 'v6_model',
-            'class_validated': False,
-            'test_holdout': False,
-        }
-        found = {d['_id']: source for d in body['docs']}
+        found = {d['_id']: dict(_PRE_WRITE_SOURCE) for d in body['docs']}
         return make_mget_response(found)
 
     async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
@@ -340,7 +344,9 @@ class _FilteringAutoPromoteClient(_FakeAutoPromoteClient):
             int(m['term']['cluster_id']) for m in must if 'cluster_id' in m.get('term', {})
         )
         ids = self._crop_ids_by_cluster.get(cluster_id, [])
-        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': [{'_id': i} for i in ids]}}
+        # The promote scroll reads the class state the write re-checks.
+        hits = [{'_id': i, '_source': dict(_PRE_WRITE_SOURCE)} for i in ids]
+        return {'_scroll_id': f'scroll-{cluster_id}', 'hits': {'hits': hits}}
 
 
 @pytest.mark.asyncio

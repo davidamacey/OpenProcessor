@@ -29,16 +29,20 @@ from src.routers.curation.pipeline_params import (
 )
 from src.routers.curation.vlm import _get_vlm_labeler
 from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.event_hub import publish_crop_classified
 
 
 # Fields the VLM sweep reads per unvalidated item.
+# The class-state fields are the state the sweep decides on; the VLM
+# write lands only if it is unchanged at write time.
 VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
     'crop_id',
     'image_path',
     'bbox_norm',
     ITEM_EMBEDDING_FIELD,
+    *CLASS_GUARD_SOURCE_FIELDS,
 )
 
 
@@ -312,6 +316,7 @@ async def pipeline_auto_label(
     }
     cap = max_vlm_crops if max_vlm_crops > 0 else None
     unvalidated_ids: list[str] = []
+    guard = ClassWriteGuard('vlm_pipeline')
     scroll_id: str | None = None
     try:
         resp = await opensearch.search(
@@ -326,6 +331,7 @@ async def pipeline_auto_label(
                 cid = (h.get('_source') or {}).get('crop_id') or h.get('_id')
                 if cid:
                     unvalidated_ids.append(cid)
+                    guard.remember(cid, h.get('_source') or {})
                     if cap is not None and len(unvalidated_ids) >= cap:
                         break
             if cap is not None and len(unvalidated_ids) >= cap:
@@ -532,7 +538,9 @@ async def pipeline_auto_label(
             # on conflict; class_id_history snapshots the prior
             # assignment when this write changes class_id.
             def _merge_pipeline(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
-                if current.get('class_validated'):  # validated since the scroll
+                # Only onto the class state the sweep selected on: a human
+                # write (or validation) since the scroll wins.
+                if not guard.allows(doc_id, current):
                     return {}
                 update = dict(updates_by_id[doc_id])
                 if 'class_id' in update:

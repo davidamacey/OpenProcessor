@@ -22,8 +22,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.core.logging import get_logger
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.cluster_purity import (
     PROMOTE_MIN_MEMBERS,
@@ -54,13 +55,15 @@ logger = get_logger(__name__)
 _SCROLL_PAGE = 500
 
 
-async def _scroll_ids(
+async def _scroll_hits(
     client: AsyncOpenSearch,
     *,
     index: str,
     query: dict[str, Any],
-) -> list[str]:
-    """Return every doc id matching ``query``, scrolled in pages.
+) -> dict[str, dict[str, Any]]:
+    """Every doc matching ``query`` -> its class-state ``_source``
+    (:data:`CLASS_GUARD_SOURCE_FIELDS`), scrolled in pages. The merger
+    promotes a doc only if that state is unchanged at write time.
 
     Phase 3 (b): replaces the direct-target scroll a painless
     ``update_by_query`` script would otherwise need — we need doc ids so
@@ -69,13 +72,13 @@ async def _scroll_ids(
     have to reimplement the dedupe + cap logic in-cluster, which is the
     riskier of the two options the plan calls out).
     """
-    ids: list[str] = []
-    body = {'size': _SCROLL_PAGE, 'query': query, '_source': False}
+    found: dict[str, dict[str, Any]] = {}
+    body = {'size': _SCROLL_PAGE, 'query': query, '_source': list(CLASS_GUARD_SOURCE_FIELDS)}
     resp = await client.search(index=index, body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
     hits = resp['hits']['hits']
     while hits:
-        ids.extend(h['_id'] for h in hits)
+        found.update((h['_id'], h.get('_source') or {}) for h in hits)
         resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
         scroll_id = resp.get('_scroll_id')
         hits = resp['hits']['hits']
@@ -84,7 +87,7 @@ async def _scroll_ids(
             await client.clear_scroll(scroll_id=scroll_id)
         except Exception as exc:  # nosec B110 — advisory cleanup only
             logger.info('legacy_auto_promote_clear_scroll_failed', error=str(exc))
-    return ids
+    return found
 
 
 async def auto_promote_clusters(
@@ -232,15 +235,20 @@ async def auto_promote_clusters(
             continue
 
         try:
-            doc_ids = await _scroll_ids(client, index=ITEMS_INDEX, query=promote_query)
+            read = await _scroll_hits(client, index=ITEMS_INDEX, query=promote_query)
         except Exception as exc:
             logger.warning('legacy_auto_promote_cluster_failed', cluster_id=cluster_id, error=str(exc))
             total_skipped += members
             continue
-        if not doc_ids:
+        if not read:
             continue
+        guard = ClassWriteGuard('auto_promote')
+        for doc_id, source in read.items():
+            guard.remember(doc_id, source)
 
-        def _merge_promote(_doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
+        def _merge_promote(
+            doc_id: str, current: dict[str, Any], _guard: ClassWriteGuard = guard
+        ) -> dict[str, Any]:
             # Phase 3 (b): this used to be a bare update_by_query painless
             # script with no class_id_history append. Converting to a
             # per-doc OCC bulk pass (same shape as legacy_gemma.py's
@@ -249,13 +257,12 @@ async def auto_promote_clusters(
             # apply uniformly) and re-checks the human/holdout guards
             # against the freshest doc state at write time, not just at
             # scroll time.
-            if is_human_owned_class(current) or current.get('test_holdout'):
+            if current.get('test_holdout'):
                 return {}
-            # Query already excludes class_validated=true / class_excluded=true;
-            # re-check the freshest state too in case a concurrent writer
-            # validated or excluded this doc between the scroll fetch and
-            # this merge (CM-2).
-            if current.get('class_validated') or current.get('class_excluded'):
+            # Promote only the class state the cluster vote was taken on: a
+            # human write, validation or exclusion since the scroll read
+            # (CM-2) — even an undo back to a classifier label — wins.
+            if not _guard.allows(doc_id, current):
                 return {}
             update: dict[str, Any] = {
                 'class_validated': True,
@@ -269,7 +276,7 @@ async def auto_promote_clusters(
         try:
             result = await occ_skip_on_conflict_bulk(
                 client,
-                doc_ids=doc_ids,
+                doc_ids=list(read),
                 merger=_merge_promote,
                 index=ITEMS_INDEX,
                 refresh=True,
