@@ -234,7 +234,7 @@ export interface OpCrop {
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
   coco_proposal_name?: string | null;
   // -- Curation scores (Phase 3 review-queue strategies, 2026-09) --------
-  // Provenance quad mirroring the plate_detector/plate_detector_version
+  // Provenance quad mirroring the region_detector/region_detector_version
   // pattern (docs/curation-strategy-plan-2026-09.md §4). `mistakenness`
   // is the only curation score that cleared the full validation gate as
   // of openprocessor/docs/design/curation_scores.md — representativeness/

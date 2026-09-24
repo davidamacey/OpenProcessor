@@ -92,14 +92,14 @@
   const warn = $derived(data.subBox?.shapeWarning ?? false);
 
   const thumbCap = $derived(slot.capabilities.subBox?.thumbnail);
-  // crop.plate_thumbnail_url, when present, is a server-provided,
-  // cache-busted URL (see api.ts's plate_thumbnail_url doc comment) —
+  // crop.region_thumbnail_url, when present, is a server-provided,
+  // cache-busted URL (see api.ts's region_thumbnail_url doc comment) —
   // it wins over a freshly-built one. Otherwise build from the active
   // slot's own thumbnail.path/defaultSize; a slot with no subBox
   // capability at all falls back to the plate-shaped helper.
   const thumbUrl = $derived(
-    crop.plate_thumbnail_url
-      ? resolveApiUrl(crop.plate_thumbnail_url)
+    crop.region_thumbnail_url
+      ? resolveApiUrl(crop.region_thumbnail_url)
       : thumbCap
         ? resolveApiUrl(
             `${API_PREFIX}${thumbCap.path(crop.crop_id, thumbCap.defaultSize)}`,

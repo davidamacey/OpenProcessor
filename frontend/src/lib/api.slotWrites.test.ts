@@ -4,7 +4,7 @@
  * panel now uses instead of the deleted setCropPlate-only PlateMetaPatch
  * union. The equivalence proof: for licensePlateSlot, patchSlotMeta's
  * request body is byte-identical to what the old PlateMetaPatch produced
- * (plate_text / plate_status / plate_rejection_reason).
+ * (region_text / region_status / region_rejection_reason).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSlotBox, patchSlotMeta, API_PREFIX } from './api';
@@ -39,9 +39,9 @@ describe('patchSlotMeta', () => {
     expect(url).toBe(`${API_PREFIX}/crops/c1/region_meta`);
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({
-      plate_status: 'detected',
-      plate_text: 'ABC123',
-      plate_rejection_reason: null,
+      region_status: 'detected',
+      region_text: 'ABC123',
+      region_rejection_reason: null,
     });
   });
 
@@ -54,7 +54,7 @@ describe('patchSlotMeta', () => {
     await patchSlotMeta(licensePlateSlot, 'c1', { text: 'XYZ' });
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(JSON.parse(init.body)).toEqual({ plate_text: 'XYZ' });
+    expect(JSON.parse(init.body)).toEqual({ region_text: 'XYZ' });
   });
 
   it('a slot with no matching capability produces an empty body rather than throwing', async () => {

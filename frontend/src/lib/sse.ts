@@ -41,14 +41,14 @@ export interface OpCropClassifiedEvent extends OpBaseEvent {
 
 /**
  * A slot's "human verified this box" event. Generalized off the
- * plate-only `OpCropPlateVerifiedEvent` (which typed `plate_status`/
- * `plate_text` directly) — `type` is now any `crop.<slot.key>_verified`
+ * plate-only `OpCropPlateVerifiedEvent` (which typed `region_status`/
+ * `region_text` directly) — `type` is now any `crop.<slot.key>_verified`
  * string (or the generic `'crop.region_verified'` OpenProcessor emits for
  * every region — see `slotVerifiedEventTypes()`), and
  * the slot-specific fields are carried untyped so a handler reads them
  * off the active slot's own wire field names (`capabilities.lifecycle
  * .statusField` / `capabilities.text.valueField`) rather than a
- * hardcoded `plate_status`/`plate_text` pair.
+ * hardcoded `region_status`/`region_text` pair.
  */
 export interface OpCropSlotVerifiedEvent extends OpBaseEvent {
   type: string;

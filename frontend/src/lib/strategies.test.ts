@@ -819,14 +819,14 @@ describe('sort dropdown filtering (mirrors StrategyBar.svelte sortOptions)', () 
   it('keeps a sort whose coverage is unknown (null) rather than hiding it like a confirmed zero', () => {
     const sorts: ReviewSortInfo[] = [
       {
-        id: 'plate_score',
+        id: 'region_score',
         label: 'Plate detection score',
         status: 'stable',
-        requires_field: 'plate_score',
+        requires_field: 'region_score',
         field_coverage: null,
       },
     ];
-    expect(selectable(sorts)).toEqual(['plate_score']);
+    expect(selectable(sorts)).toEqual(['region_score']);
   });
 });
 

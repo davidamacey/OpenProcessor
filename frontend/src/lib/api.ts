@@ -204,7 +204,7 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * `representative_thumb_urls` entry rendered through a shared helper).
  *
  * The backend intentionally emits relative `/curation/...` URLs in API
- * response bodies (e.g. `plate_thumbnail_url`, `representative_thumb_urls`)
+ * response bodies (e.g. `region_thumbnail_url`, `representative_thumb_urls`)
  * so the same payload works both same-origin (production nginx proxy,
  * empty `apiBase`) and cross-origin (a remote `PUBLIC_TRITON_API_URL`).
  * Resolving those against `apiBase` is the client's job — every render
@@ -607,24 +607,24 @@ export interface PlateBrowseItem {
   id: string;
   image_path: string;
   bbox_norm: number[];
-  plate_bbox_norm: number[] | null;
-  plate_score: number | null;
-  plate_status: string | null;
-  plate_verified: boolean | null;
-  plate_validated: boolean | null;
-  plate_detector: string | null;
-  plate_detector_version: string | null;
-  plate_detector_chain: string[] | null;
-  plate_bbox_frame: string | null;
-  plate_detected_at: string | null;
-  plate_verifier: string | null;
-  plate_verifier_version: string | null;
-  plate_verified_at: string | null;
-  plate_rejection_reason: string | null;
-  plate_visible: boolean | null;
-  plate_text: string | null;
-  plate_text_source: string | null;
-  plate_text_confidence: number | null;
+  region_bbox_norm: number[] | null;
+  region_score: number | null;
+  region_status: string | null;
+  region_verified: boolean | null;
+  region_validated: boolean | null;
+  region_detector: string | null;
+  region_detector_version: string | null;
+  region_detector_chain: string[] | null;
+  region_bbox_frame: string | null;
+  region_detected_at: string | null;
+  region_verifier: string | null;
+  region_verifier_version: string | null;
+  region_verified_at: string | null;
+  region_rejection_reason: string | null;
+  region_visible: boolean | null;
+  region_text: string | null;
+  region_text_source: string | null;
+  region_text_confidence: number | null;
   class_id: number | null;
   class_name: string | null;
   cluster_id: number | null;
@@ -632,12 +632,12 @@ export interface PlateBrowseItem {
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
   /** Plate clustering assignment (independent of vehicle cluster_id). */
-  plate_cluster_id?: number | null;
-  plate_cluster_subid?: string | null;
-  plate_cluster_distance?: number | null;
+  region_cluster_id?: number | null;
+  region_cluster_subid?: string | null;
+  region_cluster_distance?: number | null;
   updated_at: string;
   thumbnail_url?: string;
-  plate_thumbnail_url?: string;
+  region_thumbnail_url?: string;
   selection_reason?: string;
   /** Per-slot capability data — see `OpCrop.slots` in types.ts. Added by
    *  `getPlates` via `mapCropSlots`; absent on any row that predates this
@@ -660,9 +660,9 @@ export interface PlatesQuery {
   class_id?: number;
   cluster_id?: number;
   /** Plate clustering bucket (independent of the vehicle cluster_id). */
-  plate_cluster_id?: number;
+  region_cluster_id?: number;
   /** AHC plate sub-cluster id (e.g. "17a"). */
-  plate_cluster_subid?: string;
+  region_cluster_subid?: string;
   /** Order a bucket's plates by sub-cluster so AHC groups come back contiguous. */
   sort_by_subid?: boolean;
   /** Only plates on the top-N largest crops (crop_rank_in_image<=N). */
@@ -744,7 +744,7 @@ export function getPlateClusterStatus(signal?: AbortSignal): Promise<PlateCluste
   return apiFetch(`${API_PREFIX}${REGION_BASE}/cluster/status`, {}, signal);
 }
 
-/** Per-bucket AHC refine over plate_pe_embedding; writes plate_cluster_subid. */
+/** Per-bucket AHC refine over plate_pe_embedding; writes region_cluster_subid. */
 export function refinePlateCluster(
   clusterId: number,
   signal?: AbortSignal,
@@ -905,12 +905,12 @@ export interface DatasetStats {
     other: number;
   };
   plates: {
-    /** Crops with a plate_bbox_norm right now — the honest "crops with a
+    /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  plate" count (matches the plate cluster view). */
     boxed?: number;
-    /** Crops Gemma confirmed are real plates (plate_status='detected'). */
+    /** Crops Gemma confirmed are real plates (region_status='detected'). */
     confirmed?: number;
-    /** Sum of plate_detector credit — includes rejected/failed attempts,
+    /** Sum of region_detector credit — includes rejected/failed attempts,
      *  so it OVERSTATES real plates. Kept for back-compat; not the headline. */
     total_detected: number;
     by_lpr: number;
@@ -1403,9 +1403,9 @@ export function reviewDismissCrop(cropId: string, signal?: AbortSignal): Promise
  *
  * - Pass an `[x1, y1, x2, y2]` tuple in **source-image normalized**
  *   coordinates to set/replace the plate box (server records
- *   `plate_status='human_confirmed'`).
+ *   `region_status='human_confirmed'`).
  * - Pass `null` to clear the plate; the backend interprets this as
- *   `plate_status='no_region_visible'`.
+ *   `region_status='no_region_visible'`.
  *
  * Mirrors `putCropLabel` in shape. Endpoint: `PUT /curation/crops/{id}/region`
  * (renamed from `/plate`, Wave 2 C14), defined by backend task #32 to
@@ -1479,8 +1479,8 @@ export function setSlotBox(
  * PATCH a slot's metadata fields (status / text / rejection reason)
  * without touching the bbox. The BODY KEYS are the spec's own wire
  * field names — for `licensePlateSlot` this produces a body
- * byte-identical to the old `PlateMetaPatch` (`plate_text` /
- * `plate_status` / `plate_rejection_reason`), pinned in api.test.ts.
+ * byte-identical to the old `PlateMetaPatch` (`region_text` /
+ * `region_status` / `region_rejection_reason`), pinned in api.test.ts.
  * Keys whose capability is absent, or whose value is `undefined`
  * (as opposed to `null`, which clears), are omitted.
  */
@@ -1517,7 +1517,7 @@ export function patchSlotMeta(
 }
 
 /**
- * Bulk-set plate_status over many crops. Backend: `POST /curation/regions/batch_status`
+ * Bulk-set region_status over many crops. Backend: `POST /curation/regions/batch_status`
  *   (renamed from `/curation/plates/batch_status`, Wave 2 C14).
  * The cluster-view triage op: select outlier plates → mark all false_positive,
  * or bulk-confirm good plates (status='detected' + plateVerified=true).
@@ -1546,8 +1546,8 @@ export function batchPlateStatus(
       method: 'POST',
       body: JSON.stringify({
         crop_ids: cropIds,
-        plate_status: plateStatus,
-        plate_verified: opts.plateVerified ?? null,
+        region_status: plateStatus,
+        region_verified: opts.plateVerified ?? null,
         label_source: opts.labelSource ?? 'human',
       }),
     },
@@ -1626,7 +1626,7 @@ export async function getReviewQueue(
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<PaginatedResponse<ReviewItem>> {
-  // The /curation/review API ships bbox_norm + plate_bbox_norm as
+  // The /curation/review API ships bbox_norm + region_bbox_norm as
   // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends OpCrop where
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
   // mapRawCrop so SlotBboxEditor + getThumbUrl + confirmSlot all see the
@@ -2132,7 +2132,7 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
  *
  * Note the deliberate asymmetry with the JSON key: `/regions` responses
  *   (renamed from `/plates`, Wave 2 C14)
- * carry a field literally named `plate_thumbnail_url` whose *value* now
+ * carry a field literally named `region_thumbnail_url` whose *value* now
  * points at `…/region_thumbnail`. The key is frozen wire contract; only
  * the path inside it is generic. Do not "fix" the key to match.
  */
@@ -2161,7 +2161,7 @@ export function getSourceImageWithBbox(
   maxDim: number = 1280,
   cacheKey?: string | null,
 ): string {
-  // The server reads plate_bbox_norm from OpenSearch and burns the
+  // The server reads region_bbox_norm from OpenSearch and burns the
   // overlay into the JPEG. The crop_id alone produces an identical URL
   // across edits, so the browser cache returns the pre-edit JPEG and
   // the left-side preview lags the right-side canvas. Pass a key that

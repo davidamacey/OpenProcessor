@@ -114,7 +114,7 @@ export function createPlateGalleryController() {
   const plateSubclusterIds = $derived.by(() => {
     const set = new Set<string>();
     for (const p of platePager.items)
-      if (p.plate_cluster_subid) set.add(p.plate_cluster_subid);
+      if (p.region_cluster_subid) set.add(p.region_cluster_subid);
     return [...set].sort();
   });
 
@@ -122,7 +122,7 @@ export function createPlateGalleryController() {
   const plateSubCounts = $derived.by(() => {
     const m = new Map<string, number>();
     for (const p of platePager.items) {
-      const k = p.plate_cluster_subid ?? '__none__';
+      const k = p.region_cluster_subid ?? '__none__';
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
@@ -147,7 +147,7 @@ export function createPlateGalleryController() {
         return [{ key: '__all__', label: '', items: platePager.items }];
       const byKey = new Map<string, PlateBrowseItem[]>();
       for (const p of platePager.items) {
-        const sub = p.plate_cluster_subid ?? '__none__';
+        const sub = p.region_cluster_subid ?? '__none__';
         let bucket = byKey.get(sub);
         if (!bucket) {
           bucket = [];
@@ -178,11 +178,11 @@ export function createPlateGalleryController() {
       min_score: plateMinScore > 0 ? plateMinScore : undefined,
       text: plateTextQuery || undefined,
       max_rank: plateMaxRank ?? undefined,
-      plate_cluster_id: selectedPlateCluster ?? undefined,
+      region_cluster_id: selectedPlateCluster ?? undefined,
       // When a single sub-cluster tab is active, filter to it; otherwise (the
       // "all" tab) ask the server to order by sub-cluster so AHC groups come
       // back contiguous across pages and we can render them with separators.
-      plate_cluster_subid: plateSubTab ?? undefined,
+      region_cluster_subid: plateSubTab ?? undefined,
       sort_by_subid:
         selectedPlateCluster != null && plateSubTab == null ? true : undefined,
     };
@@ -390,14 +390,14 @@ export function createPlateGalleryController() {
     const idSet = new Set(cropIds);
     const verified = status === PLATE_CONFIRM_STATE ? true : undefined;
     // Mirror the backend write contract (batch_set_plate_status): a human
-    // status change is terminal, so it also flips plate_validated=true. Keep
+    // status change is terminal, so it also flips region_validated=true. Keep
     // the optimistic patch identical to what OpenSearch persists so the card
     // never diverges from authoritative state.
     const patch = (p: PlateBrowseItem): PlateBrowseItem => ({
       ...p,
-      plate_status: status,
-      plate_verified: verified ?? p.plate_verified,
-      plate_validated: true,
+      region_status: status,
+      region_verified: verified ?? p.region_verified,
+      region_validated: true,
     });
     platePager.items = platePager.items.map((p) => (idSet.has(p.crop_id) ? patch(p) : p));
     plateSel.clear();
@@ -459,10 +459,10 @@ export function createPlateGalleryController() {
       p.crop_id === cropId
         ? {
             ...p,
-            plate_status: arr ? PLATE_CONFIRM_STATE : PLATE_REJECT_STATE,
-            plate_verified: arr ? true : p.plate_verified,
-            plate_bbox_norm: arr ?? null,
-            plate_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
+            region_status: arr ? PLATE_CONFIRM_STATE : PLATE_REJECT_STATE,
+            region_verified: arr ? true : p.region_verified,
+            region_bbox_norm: arr ?? null,
+            region_thumbnail_url: getRegionThumbUrl(cropId, 160, Date.now()),
           }
         : p,
     );
