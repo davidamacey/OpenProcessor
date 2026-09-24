@@ -1121,6 +1121,14 @@ async def cluster_region_residuals(
     from sklearn.cluster import MiniBatchKMeans
 
     x = np.asarray(vecs, dtype=np.float32)
+    # CM-3: re-normalize defensively. The k-means/cosine-distance math
+    # below assumes unit-norm rows, but this reads region_embedding
+    # straight off the index with no guarantee the writer's normalization
+    # survived (or that every historical row was written by a
+    # normalizing writer). A norm drift here silently breaks the
+    # "cosine-ish distance to centroid" comment two lines down.
+    norms = np.linalg.norm(x, axis=1, keepdims=True)
+    x = x / np.maximum(norms, 1e-12)
     k = max(8, round(n / REGION_TARGET_BUCKET_SIZE))
     k = min(k, n)  # never more clusters than points
 
@@ -1497,8 +1505,15 @@ async def build_region_fp_centroids(client: AsyncOpenSearch) -> dict[str, Any]:
             return c.astype(np.float32), labels, np.linalg.norm(x - c[labels], axis=1)
         km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=4096)
         labels = km.fit_predict(x)
-        dists = np.linalg.norm(x - km.cluster_centers_[labels], axis=1)
-        return km.cluster_centers_.astype(np.float32), labels, dists
+        # CM-3: k-means centroids (an arithmetic mean of unit-norm
+        # members) are not themselves unit-norm. FalsePositiveCentroidStore
+        # persists these into an IndexFlatL2 that fp_store.search() maps
+        # to cosine similarity assuming every stored vector is unit-norm
+        # -- an un-normalized centroid silently shifts that mapping.
+        centers = km.cluster_centers_
+        centers = centers / (np.linalg.norm(centers, axis=1, keepdims=True) + 1e-12)
+        dists = np.linalg.norm(x - centers[labels], axis=1)
+        return centers.astype(np.float32), labels, dists
 
     centroids, labels, dists = await asyncio.to_thread(_fit)
 
