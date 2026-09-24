@@ -146,6 +146,19 @@ _EXPLICIT: dict[str, Any] = {
     "region_pairing": "paired",
     "region_skip_verify": False,
     "item_text_lines": [],
+    # Backend main f7171cc (dq-region — a separate follow-up agent owns
+    # adopting these; not wired into any UI in this batch, same as the
+    # dq-queues fields above). Present only so make_item()'s fail-closed
+    # contract-key check passes.
+    "region_text_choice": "vlm",
+    "region_text_vlm_invalid": None,
+    "region_auto_confirmed": True,
+    "region_candidate_bbox_norm": _BBOX,
+    "region_candidate_score": 0.42,
+    "region_candidate_detector": "sam3",
+    "region_candidate_detector_version": "3.0.0",
+    "region_candidate_source": "segmenter",
+    "region_candidate_bbox_in_parent": _BBOX,
 }
 
 # Fail loudly at import time (not silently at test time) if the contract
