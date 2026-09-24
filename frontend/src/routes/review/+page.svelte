@@ -787,6 +787,7 @@
   let dismissedPanelOpen = $state<boolean>(false);
   let dismissedItems = $state<Crop[]>([]);
   let dismissedLoading = $state<boolean>(false);
+  let dismissedError = $state<string | null>(null);
 
   // -- item-detail "Details" disclosure (G7/G9/G8) -----------------------
   // Collapsed by default; CropMetaPanel only mounts (and fetches
@@ -797,11 +798,27 @@
     dismissedPanelOpen = !dismissedPanelOpen;
     if (!dismissedPanelOpen) return;
     dismissedLoading = true;
+    dismissedError = null;
     try {
-      const res = await getCrops({ review_dismissed: true, limit: 60, sort: 'recent' });
+      // M1 (2026-09-24 interactive pass): GET {API_PREFIX}/crops's `sort`
+      // is a '<field>[:asc|desc]' pair against a closed field list
+      // (contracts/openprocessor/openapi/curation.json) — 'recent' isn't
+      // one of them and 400s every time. 'updated_at:desc' is the
+      // server's own documented default and matches "most recently
+      // dismissed first".
+      const res = await getCrops({
+        review_dismissed: true,
+        limit: 60,
+        sort: 'updated_at:desc',
+      });
       dismissedItems = res.items;
     } catch (e) {
-      toastStore.error(`Load dismissed crops failed: ${(e as Error).message}`);
+      // Show the failure inline instead of falling through to "No
+      // dismissed crops" — that empty state used to render even when the
+      // request itself failed, making a real 400 look like there was
+      // simply nothing to restore.
+      dismissedError = (e as Error).message;
+      dismissedItems = [];
     } finally {
       dismissedLoading = false;
     }
@@ -829,6 +846,11 @@
   // re-derived by hand. The seeding effect re-runs whenever the cursor
   // advances to a new crop.
   let editedSlotBox = $state<BBoxNorm | null>(null);
+  // B2 (2026-09-24 interactive pass): the served box at seed time, kept
+  // alongside editedSlotBox so confirmSlot() can tell "operator didn't
+  // touch the box" from "operator edited it" — a same-box confirm must
+  // not go through the same write path as a real edit (see confirmSlot).
+  let seededSlotBox: BBoxNorm | null = null;
   let slotCanvas = $state<{ handleKey: (e: KeyboardEvent) => boolean } | null>(null);
   // Read-only by default: the canvas only becomes interactive when the
   // operator presses E (or clicks Edit bbox). Most cascade-detected
@@ -926,6 +948,14 @@
       current && activeSlot
         ? (slotOf(current, activeSlot)?.subBox?.parent ?? null)
         : null;
+    seededSlotBox = editedSlotBox;
+  }
+
+  /** Value equality on a BBoxNorm, tolerant of null on either side. */
+  function _boxesEqual(a: BBoxNorm | null, b: BBoxNorm | null): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return a.cx === b.cx && a.cy === b.cy && a.w === b.w && a.h === b.h;
   }
 
   // Slot-centered viewport for the right-side canvas. **Frozen** —
@@ -1118,8 +1148,29 @@
     const undoEntry: SlotUndoEntry = { item, insertAt: cursor, saved: tuple };
     _pushSlotUndo(undoEntry);
     const restore = _removeFromQueue(item);
+    // B2 (2026-09-24 interactive pass): PUT region with the SAME box the
+    // server already had is indistinguishable, server-side, from a human
+    // drawing a fresh box — it rewrites region_detector→"human",
+    // region_score→1.0 and stamps new detected_at/verified_at, destroying
+    // the detector's own provenance every time an operator confirms a
+    // box they didn't touch (the common case). When the box is unchanged
+    // and the deployment serves a confirm_status
+    // (GET {API_PREFIX}/regions/statuses), confirm is a status-only PATCH
+    // instead — it never rewrites the box, so provenance survives. A box
+    // that actually changed still goes through the PUT (frame: 'parent')
+    // write below, since that's a real geometry edit.
+    const boxUnchanged = _boxesEqual(editedSlotBox, seededSlotBox);
+    const confirmStatus = regionStatusesStore.confirmStatus;
     try {
-      await setSlotBox(activeSlot, item.id, tuple, 'parent');
+      if (
+        boxUnchanged &&
+        confirmStatus &&
+        activeSlot.capabilities.lifecycle?.statusField
+      ) {
+        await patchSlotMeta(activeSlot, item.id, { status: confirmStatus });
+      } else {
+        await setSlotBox(activeSlot, item.id, tuple, 'parent');
+      }
       toastStore.success(`${activeSlot.label.title} confirmed. ← to go back.`);
     } catch (e) {
       _removeSlotUndo(undoEntry);
@@ -1608,7 +1659,14 @@
           <span class="grow"></span>
           <span class="font-mono">{current.id.slice(0, 12)}…</span>
         </div>
-        <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
+        <!-- M2/M12 (2026-09-24 interactive pass): shrink-0 + a floor
+             height so this panel never collapses toward 0px when the
+             content below it (Details, slot fields) grows past the
+             column's fixed height — that content scrolls in its own
+             region instead of squeezing the image. The floor is tall
+             enough that a plate sub-box stays legible at 1280×720,
+             where this column is at its tightest. -->
+        <div class="flex min-h-[300px] shrink-0 items-center justify-center bg-zinc-950">
           {#if activeSlot?.capabilities.subBox && editMode}
             <!-- Edit mode — drag/resize the proposal directly, then hit
                  Enter to save. Square aspect keeps the canvas math
@@ -1647,389 +1705,399 @@
           {/if}
         </div>
 
-        <dl class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
-          <dt class="text-zinc-500">Reason</dt>
-          <dd class="text-zinc-200">{current.reason}</dd>
+        <!-- Everything below the image scrolls in its own region — the
+             image above keeps its floor height regardless of how much
+             metadata/Details content is open. -->
+        <div class="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+          <dl class="grid grid-cols-2 gap-y-1 text-xs">
+            <dt class="text-zinc-500">Reason</dt>
+            <dd class="text-zinc-200">{current.reason}</dd>
 
-          <dt class="text-zinc-500">Current label</dt>
-          <dd class="text-zinc-200">
-            {current.class_name ?? '—'}
-            <span class="ml-1 text-zinc-500">({current.label_source})</span>
-          </dd>
+            <dt class="text-zinc-500">Current label</dt>
+            <dd class="text-zinc-200">
+              {current.class_name ?? '—'}
+              <span class="ml-1 text-zinc-500">({current.label_source})</span>
+            </dd>
 
-          <dt class="text-zinc-500">Proposed</dt>
-          <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
+            <dt class="text-zinc-500">Proposed</dt>
+            <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
 
-          {#if current.probe_pred_class}
-            <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend
+            {#if current.probe_pred_class}
+              <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend
                  now serves `probe_pred_class_id` alongside the display
                  name, so "Accept" no longer needs a client-side
                  name→id lookup — assign() takes the served id directly. -->
-            <dt class="text-zinc-500">Model predicts</dt>
-            <dd class="flex flex-wrap items-center gap-1.5 text-zinc-200">
-              {current.probe_pred_class}
-              {#if current.probe_pred_entropy != null}
-                <ScoreChip label="entropy" value={current.probe_pred_entropy} size="sm" />
-              {/if}
-              {#if current.probe_pred_class_id != null && current.probe_pred_class_id !== current.class_id}
-                <button
-                  type="button"
-                  class="rounded border border-blue-500/60 bg-blue-500/15 px-1.5 py-0.5 text-[11px] text-blue-100 hover:bg-blue-500/25"
-                  onclick={acceptModelClass}
-                >
-                  Accept model's class
-                </button>
-              {/if}
-            </dd>
-          {/if}
+              <dt class="text-zinc-500">Model predicts</dt>
+              <dd class="flex flex-wrap items-center gap-1.5 text-zinc-200">
+                {current.probe_pred_class}
+                {#if current.probe_pred_entropy != null}
+                  <ScoreChip
+                    label="entropy"
+                    value={current.probe_pred_entropy}
+                    size="sm"
+                  />
+                {/if}
+                {#if current.probe_pred_class_id != null && current.probe_pred_class_id !== current.class_id}
+                  <button
+                    type="button"
+                    class="rounded border border-blue-500/60 bg-blue-500/15 px-1.5 py-0.5 text-[11px] text-blue-100 hover:bg-blue-500/25"
+                    onclick={acceptModelClass}
+                  >
+                    Accept model's class
+                  </button>
+                {/if}
+              </dd>
+            {/if}
 
-          {#if current.needs_new_class}
-            <dt class="text-zinc-500">Needs new class</dt>
-            <dd class="text-amber-200">
-              {current.needs_new_class_note ||
-                'flagged — no matching class in the registry'}
-            </dd>
-          {/if}
+            {#if current.needs_new_class}
+              <dt class="text-zinc-500">Needs new class</dt>
+              <dd class="text-amber-200">
+                {current.needs_new_class_note ||
+                  'flagged — no matching class in the registry'}
+              </dd>
+            {/if}
 
-          <dt class="text-zinc-500">Confidence</dt>
-          <dd class="font-mono">
-            {current.label_confidence != null
-              ? `${(current.label_confidence * 100).toFixed(1)}%`
-              : '—'}
-          </dd>
-
-          {#if current.proposal_name}
-            <dt class="text-zinc-500">Proposal hint</dt>
-            <dd>
-              <span
-                class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"
-                title="COCO YOLO11 detected a vehicle here that v6 missed. Coarse class — pick the make below (bicycle/motorcycle/boat may be near one-click)."
-              >
-                {current.proposal_name}
-              </span>
-            </dd>
-          {/if}
-
-          {#if current.crop_rank_in_image != null || current.blur_lap_ratio != null}
-            <dt class="text-zinc-500">Rank · clarity</dt>
-            <dd class="font-mono text-zinc-300">
-              {current.crop_rank_in_image != null
-                ? current.crop_rank_in_image === 1
-                  ? '★1 largest'
-                  : `#${current.crop_rank_in_image}`
+            <dt class="text-zinc-500">Confidence</dt>
+            <dd class="font-mono">
+              {current.label_confidence != null
+                ? `${(current.label_confidence * 100).toFixed(1)}%`
                 : '—'}
-              {#if current.blur_lap_ratio != null}
-                · b{current.blur_lap_ratio.toFixed(2)}
-              {/if}
             </dd>
-          {/if}
 
-          {#if current.mistakenness_score != null || (current && searchScores.has(current.id))}
-            <dt class="text-zinc-500">Scores</dt>
-            <dd class="flex flex-wrap items-center gap-1.5">
-              {#if current.mistakenness_score != null}
-                <ScoreChip
-                  label="mistakenness"
-                  value={current.mistakenness_score}
-                  method={current.mistakenness_method}
-                  version={current.mistakenness_version}
-                  size="sm"
-                />
-              {/if}
-              {#if current && searchScores.has(current.id)}
-                <ScoreChip
-                  label="match"
-                  value={searchScores.get(current.id) ?? 0}
-                  size="sm"
-                />
-              {/if}
-            </dd>
-          {/if}
-        </dl>
+            {#if current.proposal_name}
+              <dt class="text-zinc-500">Proposal hint</dt>
+              <dd>
+                <span
+                  class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"
+                  title="COCO YOLO11 detected a vehicle here that v6 missed. Coarse class — pick the make below (bicycle/motorcycle/boat may be near one-click)."
+                >
+                  {current.proposal_name}
+                </span>
+              </dd>
+            {/if}
 
-        {#if activeSlot && slotLabels}
-          {@const slotData = slotOf(current, activeSlot)}
-          <!-- Slot inline review. The canvas above is live — drag/resize
+            {#if current.crop_rank_in_image != null || current.blur_lap_ratio != null}
+              <dt class="text-zinc-500">Rank · clarity</dt>
+              <dd class="font-mono text-zinc-300">
+                {current.crop_rank_in_image != null
+                  ? current.crop_rank_in_image === 1
+                    ? '★1 largest'
+                    : `#${current.crop_rank_in_image}`
+                  : '—'}
+                {#if current.blur_lap_ratio != null}
+                  · b{current.blur_lap_ratio.toFixed(2)}
+                {/if}
+              </dd>
+            {/if}
+
+            {#if current.mistakenness_score != null || (current && searchScores.has(current.id))}
+              <dt class="text-zinc-500">Scores</dt>
+              <dd class="flex flex-wrap items-center gap-1.5">
+                {#if current.mistakenness_score != null}
+                  <ScoreChip
+                    label="mistakenness"
+                    value={current.mistakenness_score}
+                    method={current.mistakenness_method}
+                    version={current.mistakenness_version}
+                    size="sm"
+                  />
+                {/if}
+                {#if current && searchScores.has(current.id)}
+                  <ScoreChip
+                    label="match"
+                    value={searchScores.get(current.id) ?? 0}
+                    size="sm"
+                  />
+                {/if}
+              </dd>
+            {/if}
+          </dl>
+
+          {#if activeSlot && slotLabels}
+            {@const slotData = slotOf(current, activeSlot)}
+            <!-- Slot inline review. The canvas above is live — drag/resize
                the proposal in place and hit Enter to confirm. The Reject
                button (or D) marks the slot's rejectState. The whole flow
                is two keystrokes per crop on average: minor twitch with
                arrows / handles, then Enter. -->
-          <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
-            <span class="text-zinc-500">{slotLabels.scoreLabel}</span>
-            <span class="font-mono text-zinc-200">
-              {slotData?.subBox?.score != null
-                ? `${(slotData.subBox.score * 100).toFixed(1)}%`
-                : '—'}
-            </span>
-            <span class="text-zinc-500">{slotLabels.statusLabel}</span>
-            <span>
-              <select
-                bind:value={editedSlotStatus}
-                onchange={() => void commitSlotStatus()}
-                class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">—</option>
-                {#each slotStatusOptions as opt (opt.value)}
-                  <option value={opt.value}>{opt.label}</option>
-                {/each}
-              </select>
-            </span>
-            <span class="text-zinc-500">Detector</span>
-            <span class="flex flex-wrap items-center gap-1.5">
-              {#if slotData?.provenance?.detector}
-                <ProvenanceChip
-                  detector={slotData.provenance.detector}
-                  version={slotData.provenance.detectorVersion}
-                />
-                {#if slotData.provenance.verifier}
+            <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
+              <span class="text-zinc-500">{slotLabels.scoreLabel}</span>
+              <span class="font-mono text-zinc-200">
+                {slotData?.subBox?.score != null
+                  ? `${(slotData.subBox.score * 100).toFixed(1)}%`
+                  : '—'}
+              </span>
+              <span class="text-zinc-500">{slotLabels.statusLabel}</span>
+              <span>
+                <select
+                  bind:value={editedSlotStatus}
+                  onchange={() => void commitSlotStatus()}
+                  class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">—</option>
+                  {#each slotStatusOptions as opt (opt.value)}
+                    <option value={opt.value}>{opt.label}</option>
+                  {/each}
+                </select>
+              </span>
+              <span class="text-zinc-500">Detector</span>
+              <span class="flex flex-wrap items-center gap-1.5">
+                {#if slotData?.provenance?.detector}
                   <ProvenanceChip
-                    detector={slotData.provenance.verifier}
-                    tag="verify"
-                    version={slotData.provenance.verifierVersion}
+                    detector={slotData.provenance.detector}
+                    version={slotData.provenance.detectorVersion}
+                  />
+                  {#if slotData.provenance.verifier}
+                    <ProvenanceChip
+                      detector={slotData.provenance.verifier}
+                      tag="verify"
+                      version={slotData.provenance.verifierVersion}
+                      size="sm"
+                    />
+                  {/if}
+                {:else}
+                  <span class="text-zinc-500">—</span>
+                {/if}
+                {#if current.mistakenness_score != null}
+                  <ScoreChip
+                    label="mistakenness"
+                    value={current.mistakenness_score}
+                    method={current.mistakenness_method}
+                    version={current.mistakenness_version}
                     size="sm"
                   />
                 {/if}
-              {:else}
-                <span class="text-zinc-500">—</span>
-              {/if}
-              {#if current.mistakenness_score != null}
-                <ScoreChip
-                  label="mistakenness"
-                  value={current.mistakenness_score}
-                  method={current.mistakenness_method}
-                  version={current.mistakenness_version}
-                  size="sm"
-                />
-              {/if}
-              {#if !editedSlotBox && !editMode}
-                <span
-                  class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
-                  title={slotLabels.noBoxHint}
-                >
-                  no bbox · press E to draw
-                </span>
-              {/if}
-            </span>
-            {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
-              <span class="text-zinc-500">Cascade</span>
-              <span class="flex flex-wrap items-center gap-1">
-                {#each slotData.provenance.chain as entry (entry)}
-                  <ProvenanceChip raw={entry} size="sm" />
-                {/each}
+                {#if !editedSlotBox && !editMode}
+                  <span
+                    class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                    title={slotLabels.noBoxHint}
+                  >
+                    no bbox · press E to draw
+                  </span>
+                {/if}
               </span>
-            {/if}
-            <span class="text-zinc-500">{slotLabels.textLabel}</span>
-            <span class="flex items-center gap-1.5">
-              <input
-                type="text"
-                bind:value={editedSlotText}
-                onblur={() => void commitSlotText()}
-                onkeydown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }
-                }}
-                placeholder={slotLabels.textPlaceholder}
-                spellcheck="false"
-                autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
-                  ? 'characters'
-                  : 'off'}
-                class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none {activeSlot
-                  .capabilities.text?.monospace
-                  ? 'font-mono'
-                  : ''}"
-              />
-              {#if slotData?.text?.source}
-                <ProvenanceChip detector={slotData.text.source} size="sm" />
-              {/if}
-              {#if slotData?.text?.confidence != null}
-                <span class="text-[10px] text-zinc-500">
-                  {(slotData.text.confidence * 100).toFixed(0)}%
+              {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
+                <span class="text-zinc-500">Cascade</span>
+                <span class="flex flex-wrap items-center gap-1">
+                  {#each slotData.provenance.chain as entry (entry)}
+                    <ProvenanceChip raw={entry} size="sm" />
+                  {/each}
                 </span>
               {/if}
-              {#if slotData?.text?.disagreement}
-                <span
-                  class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
-                  title="vlm: {slotData.text.vlmValue ?? '∅'} · ocr: {slotData.text
-                    .ocrValue ?? '∅'}"
-                >
-                  readers disagree
-                </span>
-              {/if}
-            </span>
-            {#if statusWantsRejectionReason(activeSlot, editedSlotStatus, regionStatusesStore.list)}
-              <span class="text-zinc-500">Rejection reason</span>
-              <span>
+              <span class="text-zinc-500">{slotLabels.textLabel}</span>
+              <span class="flex items-center gap-1.5">
                 <input
                   type="text"
-                  bind:value={editedRejectionReason}
-                  onblur={() => void commitRejectionReason()}
+                  bind:value={editedSlotText}
+                  onblur={() => void commitSlotText()}
                   onkeydown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       (e.currentTarget as HTMLInputElement).blur();
                     }
                   }}
-                  placeholder="e.g. blurred, occluded, glare"
-                  class="w-44 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                  placeholder={slotLabels.textPlaceholder}
+                  spellcheck="false"
+                  autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
+                    ? 'characters'
+                    : 'off'}
+                  class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none {activeSlot
+                    .capabilities.text?.monospace
+                    ? 'font-mono'
+                    : ''}"
                 />
+                {#if slotData?.text?.source}
+                  <ProvenanceChip detector={slotData.text.source} size="sm" />
+                {/if}
+                {#if slotData?.text?.confidence != null}
+                  <span class="text-[10px] text-zinc-500">
+                    {(slotData.text.confidence * 100).toFixed(0)}%
+                  </span>
+                {/if}
+                {#if slotData?.text?.disagreement}
+                  <span
+                    class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                    title="vlm: {slotData.text.vlmValue ?? '∅'} · ocr: {slotData.text
+                      .ocrValue ?? '∅'}"
+                  >
+                    readers disagree
+                  </span>
+                {/if}
               </span>
-            {/if}
-          </div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            {#if editMode}
-              <button
-                class="btn btn-primary"
-                type="button"
-                onclick={saveBboxAndExit}
-                disabled={slotSaving}
-              >
-                Save bbox
-              </button>
-              <button
-                class="btn"
-                type="button"
-                onclick={toggleEdit}
-                disabled={slotSaving}
-              >
-                Cancel
-              </button>
-            {:else}
-              <button class="btn btn-primary" type="button" onclick={confirmSlot}>
-                {slotLabels.confirmLabel}
-              </button>
-              <button class="btn btn-danger" type="button" onclick={rejectSlot}>
-                {slotLabels.rejectLabel}
-              </button>
-              {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
+              {#if statusWantsRejectionReason(activeSlot, editedSlotStatus, regionStatusesStore.list)}
+                <span class="text-zinc-500">Rejection reason</span>
+                <span>
+                  <input
+                    type="text"
+                    bind:value={editedRejectionReason}
+                    onblur={() => void commitRejectionReason()}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }
+                    }}
+                    placeholder="e.g. blurred, occluded, glare"
+                    class="w-44 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                  />
+                </span>
+              {/if}
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              {#if editMode}
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  onclick={saveBboxAndExit}
+                  disabled={slotSaving}
+                >
+                  Save bbox
+                </button>
                 <button
                   class="btn"
                   type="button"
-                  onclick={markFalsePositive}
-                  title="Detector drew a box but it's not the {activeSlot.label
-                    .singular} — keep the box as a training hard negative (F)"
+                  onclick={toggleEdit}
+                  disabled={slotSaving}
                 >
-                  False positive
+                  Cancel
+                </button>
+              {:else}
+                <button class="btn btn-primary" type="button" onclick={confirmSlot}>
+                  {slotLabels.confirmLabel}
+                </button>
+                <button class="btn btn-danger" type="button" onclick={rejectSlot}>
+                  {slotLabels.rejectLabel}
+                </button>
+                {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
+                  <button
+                    class="btn"
+                    type="button"
+                    onclick={markFalsePositive}
+                    title="Detector drew a box but it's not the {activeSlot.label
+                      .singular} — keep the box as a training hard negative (F)"
+                  >
+                    False positive
+                  </button>
+                {/if}
+                <button class="btn" type="button" onclick={skip}>Skip</button>
+                <button
+                  class="btn"
+                  type="button"
+                  onclick={toggleEdit}
+                  aria-pressed={editMode}
+                  title="Toggle bbox edit mode (E)"
+                >
+                  Edit bbox
+                </button>
+                <button
+                  class="btn"
+                  type="button"
+                  onclick={slotBack}
+                  disabled={slotUndoStack.length === 0}
+                  title="Re-open the most-recently confirmed {activeSlot.label
+                    .singular} (←)"
+                >
+                  ← Back
                 </button>
               {/if}
-              <button class="btn" type="button" onclick={skip}>Skip</button>
-              <button
-                class="btn"
-                type="button"
-                onclick={toggleEdit}
-                aria-pressed={editMode}
-                title="Toggle bbox edit mode (E)"
-              >
-                Edit bbox
-              </button>
-              <button
-                class="btn"
-                type="button"
-                onclick={slotBack}
-                disabled={slotUndoStack.length === 0}
-                title="Re-open the most-recently confirmed {activeSlot.label
-                  .singular} (←)"
-              >
-                ← Back
-              </button>
+            </div>
+            {#if slotUndoStack.length > 0}
+              <p class="mt-1 text-[10px] text-zinc-500">
+                {slotUndoStack.length} confirmed in this session — press ← to step back.
+              </p>
             {/if}
-          </div>
-          {#if slotUndoStack.length > 0}
-            <p class="mt-1 text-[10px] text-zinc-500">
-              {slotUndoStack.length} confirmed in this session — press ← to step back.
-            </p>
+          {:else}
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                class="btn btn-primary"
+                type="button"
+                onclick={confirmAndAdvance}
+                disabled={!canConfirm}
+                title={canConfirm
+                  ? undefined
+                  : 'No proposed class on this item — press / or Enter to search.'}
+              >
+                Confirm
+              </button>
+              <button class="btn" type="button" onclick={skip}>Skip</button>
+              <button class="btn btn-danger" type="button" onclick={discard}
+                >Discard</button
+              >
+              <button class="btn" type="button" onclick={undoLast}>Undo</button>
+            </div>
           {/if}
-        {:else}
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              class="btn btn-primary"
-              type="button"
-              onclick={confirmAndAdvance}
-              disabled={!canConfirm}
-              title={canConfirm
-                ? undefined
-                : 'No proposed class on this item — press / or Enter to search.'}
-            >
-              Confirm
-            </button>
-            <button class="btn" type="button" onclick={skip}>Skip</button>
-            <button class="btn btn-danger" type="button" onclick={discard}>Discard</button
-            >
-            <button class="btn" type="button" onclick={undoLast}>Undo</button>
-          </div>
-        {/if}
 
-        <!-- Most-validated classes — click to label OR press the per-class
+          <!-- Most-validated classes — click to label OR press the per-class
              hotkey configured on /classes. Hotkey badges only show for
              classes the user has explicitly bound (otherwise the strip is
              still clickable, just no kbd hint). The class strip is hidden
              on the plates tab; class assignment isn't relevant there. -->
-        {#if !isSlotTab(tab)}
-          <div class="mt-3 flex flex-wrap gap-1.5">
-            {#each topClasses as cls (cls.id)}
-              <button
-                type="button"
-                class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
+          {#if !isSlotTab(tab)}
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              {#each topClasses as cls (cls.id)}
+                <button
+                  type="button"
+                  class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
                      hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
                      focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                title={cls.hotkey_letter
-                  ? `Assign ${cls.name} (press ${cls.hotkey_letter})`
-                  : `Assign ${cls.name}`}
-                onclick={() => assign(cls.id)}
-              >
-                {#if cls.hotkey_letter}
-                  <kbd
-                    class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
-                  >
-                    {cls.hotkey_letter}
-                  </kbd>
-                {/if}
-                {cls.name}
-              </button>
-            {/each}
-            <!-- P1-4: only the 10 most-validated classes are one click above;
+                  title={cls.hotkey_letter
+                    ? `Assign ${cls.name} (press ${cls.hotkey_letter})`
+                    : `Assign ${cls.name}`}
+                  onclick={() => assign(cls.id)}
+                >
+                  {#if cls.hotkey_letter}
+                    <kbd
+                      class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
+                    >
+                      {cls.hotkey_letter}
+                    </kbd>
+                  {/if}
+                  {cls.name}
+                </button>
+              {/each}
+              <!-- P1-4: only the 10 most-validated classes are one click above;
                  this opens the fuzzy-search picker over all non-deprecated
                  classes (same action as pressing /). -->
-            <button
-              type="button"
-              class="rounded border border-dashed border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400
+              <button
+                type="button"
+                class="rounded border border-dashed border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400
                    hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
                    focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              title="Search all classes (/)"
-              onclick={openPicker}
-            >
-              <kbd
-                class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-blue-300"
+                title="Search all classes (/)"
+                onclick={openPicker}
               >
-                /
-              </kbd>
-              search all classes…
-            </button>
-          </div>
-          <p class="mt-1.5 text-[10px] text-zinc-500">
-            Click a class, press its bound letter, or press / to search all classes (set
-            hotkeys on /classes).
-          </p>
-        {/if}
+                <kbd
+                  class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-blue-300"
+                >
+                  /
+                </kbd>
+                search all classes…
+              </button>
+            </div>
+            <p class="mt-1.5 text-[10px] text-zinc-500">
+              Click a class, press its bound letter, or press / to search all classes (set
+              hotkeys on /classes).
+            </p>
+          {/if}
 
-        <!-- G7/G9/G8: history + source image/siblings + item-text lines,
+          <!-- G7/G9/G8: history + source image/siblings + item-text lines,
              via the same CropMetaPanel used by the /clusters detail
              modal — collapsed by default so it doesn't compete with the
              confirm/reject flow above. -->
-        <div class="mt-3 border-t border-zinc-800 pt-2">
-          <button
-            type="button"
-            class="text-[10px] uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
-            onclick={() => (detailsOpen = !detailsOpen)}
-          >
-            {detailsOpen ? '▾' : '▸'} Details
-          </button>
-          {#if detailsOpen}
-            <div class="mt-2">
-              <CropMetaPanel crop={current} />
-            </div>
-          {/if}
+          <div class="mt-3 border-t border-zinc-800 pt-2">
+            <button
+              type="button"
+              class="text-[10px] uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+              onclick={() => (detailsOpen = !detailsOpen)}
+            >
+              {detailsOpen ? '▾' : '▸'} Details
+            </button>
+            {#if detailsOpen}
+              <div class="mt-2">
+                <CropMetaPanel crop={current} />
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     {/if}
@@ -2082,6 +2150,10 @@
       <ul class="max-h-96 overflow-y-auto py-1 text-sm">
         {#if dismissedLoading}
           <li class="px-3 py-2 text-zinc-500">Loading…</li>
+        {:else if dismissedError}
+          <li class="px-3 py-2 text-red-300">
+            Failed to load dismissed crops: {dismissedError}
+          </li>
         {:else if dismissedItems.length === 0}
           <li class="px-3 py-2 text-zinc-500">No dismissed crops.</li>
         {/if}
