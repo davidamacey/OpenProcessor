@@ -63,12 +63,16 @@ async def _verify_with_vlm(
     VLM couldn't read it or the verdict was rejected), which the caller
     threads into :func:`_region_write_doc`.
 
-    Returns ``None`` when the VLM gave no usable answer at all (see
+    Returns ``None`` when the VLM answered with no usable verdict (see
     :py:meth:`VlmLabeler.verify_plate`) so the cascade can leave the
     crop pending for a retry instead of treating "no answer" as a
-    rejection and falling through to the next detector.
+    rejection and falling through to the next detector. Raises
+    :class:`VlmTransportError` when the call itself failed, so an outage
+    is never counted as a no-verdict reply.
     """
-    verdict = await vlm.verify_plate(RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg))
+    verdict = await vlm.verify_plate(
+        RegionCrop(crop_id=crop_id, jpeg_bytes=region_jpeg), raise_on_transport=True
+    )
     if verdict is None:
         return None
     accepted = bool(verdict.is_region) and verdict.confidence != 'low'

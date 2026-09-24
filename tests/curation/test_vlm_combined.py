@@ -26,7 +26,7 @@ from PIL import Image
 from src.services.labeling.vlm_labeler import (
     CombinedCrop,
     CombinedParseFailure,
-    CombinedTransportFailure,
+    CombinedTransportError,
     VlmCombinedReply,
     VlmLabeler,
     _draw_bbox_overlay,
@@ -297,7 +297,7 @@ class TestLabelCombinedBatch:
             CombinedCrop(crop_id='c1', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None),
             CombinedCrop(crop_id='c2', jpeg_bytes=_make_jpeg(), plate_bbox_norm=None),
         ]
-        with pytest.raises(CombinedTransportFailure):
+        with pytest.raises(CombinedTransportError):
             await labeler.label_combined_batch(crops, class_names=['widget'])
 
     @pytest.mark.asyncio

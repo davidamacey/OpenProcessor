@@ -43,11 +43,21 @@ def reference_region_profile(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     cascade refuses to run. Tests that exercise the cascade opt in to the
     reference profile the same way a deployment does: ``OP_REGION_PROFILE``.
     """
+    import sys
+
     from src.services.detection import profile_registry
 
     monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
     profile_registry._reset_registry_for_tests()
+    # The cascade's no-verdict count is process-wide; a test must not
+    # inherit another test's count for the same crop id.
+    no_verdict = sys.modules.get('scripts.curation.worker.no_verdict')
+    if no_verdict is not None:
+        no_verdict.reset_cascade_counter()
     yield
+    no_verdict = sys.modules.get('scripts.curation.worker.no_verdict')
+    if no_verdict is not None:
+        no_verdict.reset_cascade_counter()
     # Lazy re-resolution: the next accessor call (after monkeypatch restores
     # the env) sees the unconfigured default again.
     profile_registry._reset_registry_for_tests()

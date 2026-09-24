@@ -9,7 +9,7 @@ from __future__ import annotations
 # ruff: noqa: E402
 import base64  # noqa: F401  — kept for back-compat re-export surface
 import io
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from PIL import Image
 
@@ -34,6 +34,7 @@ from scripts.curation.worker.client import (
     Sam3Client,  # noqa: TC001  # runtime back-compat re-export for shim + tests
 )
 from scripts.curation.worker.combined import _finalize_no_region, _run_combined_cohort_path
+from scripts.curation.worker.no_verdict import cascade_counter, cascade_no_verdict
 from scripts.curation.worker.state import (
     _PENDING_DETECTION_ALIASES,
     _PENDING_VERIFICATION_ALIASES,
@@ -51,6 +52,13 @@ from scripts.curation.worker.verify import (
     _region_write_doc,
     _verify_with_vlm,
 )
+from src.config.region_source import (
+    CANDIDATE_DETECTOR,
+    CANDIDATE_DETECTOR_EXISTING,
+    CANDIDATE_SEGMENTER,
+    CANDIDATE_SEGMENTER_TEXT_HINT,
+)
+from src.services.labeling.vlm_labeler import VlmTransportError
 
 
 if TYPE_CHECKING:
@@ -316,6 +324,34 @@ class _CascadeDoneError(Exception):
     """
 
 
+def _no_verdict_done(
+    task: _ItemTask,
+    *,
+    actor: str,
+    version: str,
+    box: tuple[float, float, float, float] | None,
+    score: float,
+    source: str,
+) -> NoReturn:
+    """The verifier gave no verdict on this box: stop the pass.
+
+    The item stays pending for a retry until the no-verdict cap, then is
+    parked as a reviewable rejected candidate (see ``no_verdict``).
+    """
+    if f'{actor}:hit' not in task.detection_trace:
+        task.detection_trace.append(f'{actor}:hit')
+    cascade_no_verdict(
+        task,
+        actor=actor,
+        detector_version=version,
+        candidate_in_source=box,
+        candidate_score=score,
+        candidate_source=source,
+        event='vlm_reject',
+    )
+    raise _CascadeDoneError
+
+
 async def _process_crop(
     task: _ItemTask,
     *,
@@ -370,9 +406,14 @@ async def _process_crop(
             plate_jpeg = _crop_region_jpeg(task.crop_jpeg, plate_in_crop)
             outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
             if outcome is None:
-                # No verdict at all -- leave the item pending for a retry
-                # rather than treating a transient VLM failure as a reject.
-                raise _CascadeDoneError
+                _no_verdict_done(
+                    task,
+                    actor=det_model,
+                    version=det_version,
+                    box=task.lpr_plate_in_source,
+                    score=task.lpr_score,
+                    source=CANDIDATE_DETECTOR_EXISTING,
+                )
             ok, conf = outcome.ok, outcome.confidence
             if ok:
                 # Phase A3 sanity gate. The pending_verify path's region came
@@ -428,10 +469,14 @@ async def _process_crop(
                     plate_jpeg = _crop_region_jpeg(task.crop_jpeg, cand.bbox_norm)
                     outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
                     if outcome is None:
-                        # No verdict at all -- leave the item pending for a
-                        # retry rather than treating a transient VLM failure
-                        # as a reject.
-                        raise _CascadeDoneError
+                        _no_verdict_done(
+                            task,
+                            actor=det_model,
+                            version=det_version,
+                            box=crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm),
+                            score=cand.score,
+                            source=CANDIDATE_DETECTOR,
+                        )
                     ok, conf = outcome.ok, outcome.confidence
                     if ok:
                         projected = crop_norm_to_source_norm(cand.bbox_norm, task.vehicle_bbox_norm)
@@ -502,10 +547,16 @@ async def _process_crop(
                 plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sam_candidate.bbox_norm)
                 outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
                 if outcome is None:
-                    # No verdict at all -- leave the item pending for a
-                    # retry rather than treating a transient VLM failure as
-                    # a reject.
-                    raise _CascadeDoneError
+                    _no_verdict_done(
+                        task,
+                        actor=seg_name,
+                        version=seg_version,
+                        box=crop_norm_to_source_norm(
+                            sam_candidate.bbox_norm, task.vehicle_bbox_norm
+                        ),
+                        score=sam_candidate.score,
+                        source=CANDIDATE_SEGMENTER,
+                    )
                 ok, conf = outcome.ok, outcome.confidence
                 if ok:
                     projected = crop_norm_to_source_norm(
@@ -565,10 +616,16 @@ async def _process_crop(
                     plate_jpeg = _crop_region_jpeg(task.crop_jpeg, sub_cand.bbox_norm)
                     outcome = await _verify_with_vlm(gemma, task.crop_id, plate_jpeg)
                     if outcome is None:
-                        # No verdict at all -- leave the item pending for a
-                        # retry rather than treating a transient VLM failure
-                        # as a reject.
-                        raise _CascadeDoneError
+                        _no_verdict_done(
+                            task,
+                            actor=seg_name,
+                            version=seg_version,
+                            box=crop_norm_to_source_norm(
+                                sub_cand.bbox_norm, task.vehicle_bbox_norm
+                            ),
+                            score=sub_cand.score,
+                            source=CANDIDATE_SEGMENTER_TEXT_HINT,
+                        )
                     ok, conf = outcome.ok, outcome.confidence
                     if ok:
                         projected = crop_norm_to_source_norm(
@@ -608,10 +665,17 @@ async def _process_crop(
         else:
             task.detection_trace.append(f'{ocr_det_model}:text_hint:miss')
     except _CascadeDoneError:
-        return
-
-    # ---- Step 5: All detectors missed. Queue for human review. ----
-    _finalize_no_region(task)
+        pass
+    except VlmTransportError as exc:
+        # No reply at all (the VLM is unreachable): leave the item pending
+        # and never count it toward the no-verdict cap.
+        logger.warning('cascade_vlm_transport_failed', crop_id=task.crop_id, error=str(exc))
+        task.update_doc = {}
+    else:
+        # ---- Step 5: All detectors missed. Queue for human review. ----
+        _finalize_no_region(task)
+    if task.update_doc:
+        cascade_counter().clear(task.crop_id)
 
 
 # =============================================================================

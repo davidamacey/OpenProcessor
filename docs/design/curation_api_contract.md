@@ -1007,6 +1007,7 @@ detector model, `<seg>` its segmenter, `<ocr>` its OCR recognizer model;
 | `<src>:combined_verify_reject` | VLM rejected the candidate box |
 | `<src>:combined_verify_reject:region_visible_elsewhere` | VLM sees a region and answered `region_bbox_correct=false` for the candidate box |
 | `<src>:combined_verify_reject:verifier_no_verdict` | VLM gave no box verdict on every allowed attempt (see below) |
+| `<src>:vlm_reject:verifier_no_verdict` | same, from the per-crop cascade's region-only verify call |
 | `vlm_visible:no_verdict` | visibility pre-filter gave no verdict on every allowed attempt; sent on to detection (fail open) |
 | `<src>:combined_no_region_visible` | VLM sees no region at all |
 | `<src>:sanity_reject:<reason>` | box failed the geometry gate (`<reason>` e.g. `aspect`) |
@@ -1041,9 +1042,14 @@ worker process, reset by a restart). At the cap the combined stage writes
 candidate kept in `region_candidate_*` and `region_bbox_correct=null` (no
 verdict was given), so a human can confirm it or it can be retried with
 `requeue_regions.py --status verify_rejected --reason verifier_no_verdict`;
-the visibility stage sends the item on to detection (fail open). A VLM
-transport failure (no reply at all) is not a no-verdict reply: it is
-retried and never counted.
+the visibility stage sends the item on to detection (fail open). The
+per-crop cascade (`_process_crop`: region-only `verify_plate` and its
+combined cohort path) parks its candidate the same way after the same
+number of no-verdict passes. A VLM transport failure (no reply at all) is
+not a no-verdict reply: it is retried and never counted
+(`label_combined_batch` raises `CombinedTransportError`; the worker
+calls `verify_plate(..., raise_on_transport=True)`, which raises
+`VlmTransportError`; without the flag it still returns `None`).
 
 The combined call marks the candidate box with a red rectangle drawn just
 *outside* the box (so it never covers the region's own pixels) and its

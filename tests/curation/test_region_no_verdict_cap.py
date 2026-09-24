@@ -40,7 +40,7 @@ from src.services.detection.cascade_detect import RegionCandidate
 from src.services.labeling.vlm_labeler import (
     CombinedCrop,
     CombinedParseFailure,
-    CombinedTransportFailure,
+    CombinedTransportError,
     VlmCombinedReply,
     VlmLabeler,
 )
@@ -80,7 +80,7 @@ def _scripted(*answers: Any) -> Any:
         answer.calls += 1  # type: ignore[attr-defined]
         a = answers[min(n, len(answers) - 1)]
         if a == 'transport':
-            raise CombinedTransportFailure('http error: connection refused')
+            raise CombinedTransportError('http error: connection refused')
         return {c.crop_id: None if a == 'parse' else a for c in crops}
 
     answer.calls = 0  # type: ignore[attr-defined]
@@ -308,14 +308,14 @@ class TestLabelerSeparatesTransportFromNoVerdict:
             CombinedCrop(crop_id=f'c{i}', jpeg_bytes=b'x', plate_bbox_norm=None)
             for i in range(n_crops)
         ]
-        with pytest.raises(CombinedTransportFailure):
+        with pytest.raises(CombinedTransportError):
             await self._labeler().label_combined_batch(crops, draw_overlay=False)
 
     @pytest.mark.asyncio
     async def test_single_call_transport_failure_is_still_a_parse_failure(self) -> None:
         with pytest.raises(CombinedParseFailure) as info:
             await self._labeler().label_combined('c1', b'x', draw_overlay=False)
-        assert isinstance(info.value, CombinedTransportFailure)
+        assert isinstance(info.value, CombinedTransportError)
 
     @pytest.mark.asyncio
     async def test_unparseable_reply_is_still_none(self) -> None:
