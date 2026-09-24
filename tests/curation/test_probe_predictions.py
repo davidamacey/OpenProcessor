@@ -125,6 +125,7 @@ async def test_probe_writes_all_seven_fields(
     doc = fake_os.updates[0]['doc']
     assert set(doc) == {
         'probe_pred_class',
+        'probe_pred_class_id',
         'probe_pred_confidence',
         'probe_pred_entropy',
         'probe_pred_margin',
@@ -221,3 +222,31 @@ async def test_probe_skips_test_holdout_crops(
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+@pytest.mark.asyncio
+async def test_probe_writes_the_registry_id_of_its_prediction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
+) -> None:
+    from src.services.curation import probe_predictions as pp
+
+    _install_canned_predictor(monkeypatch, ('sedan', 0.81, 1.23, 0.44))
+    monkeypatch.setattr(pp, '_resolve_image', lambda image_path, *, config: tiny_image)  # noqa: ARG005
+    docs = [{'crop_id': 'c', 'image_path': 'x.jpg', 'bbox_norm': [0, 0, 1, 1], 'class_name': 'suv'}]
+    fake_os = _FakeOpenSearch(docs)
+    await pp.run_probe_inference(
+        tmp_path / 'f.onnx',
+        fake_os,  # type: ignore[arg-type]
+        architecture='v6',
+        class_ids={'sedan': 12},
+    )
+    assert fake_os.updates[0]['doc']['probe_pred_class_id'] == 12
+
+    fake_os = _FakeOpenSearch(docs)
+    await pp.run_probe_inference(
+        tmp_path / 'f.onnx',
+        fake_os,  # type: ignore[arg-type]
+        architecture='v6',
+        class_ids={},
+    )
+    assert fake_os.updates[0]['doc']['probe_pred_class_id'] is None

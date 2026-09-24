@@ -40,7 +40,6 @@ from src.routers.curation._common import (
     _ensure_indexes,
     _PathLookupRequest,
     _PathLookupResponse,
-    logger,
     router,
 )
 from src.services.curation.ingest import CurationIngestService
@@ -401,8 +400,7 @@ async def ingest_status(opensearch: OpenSearchDep) -> dict[str, Any]:
     try:
         resp = await opensearch.search(index=CURATION_IMAGES_INDEX, body=body)
     except Exception as exc:
-        logger.warning('ingest_status_failed', error=str(exc))
-        return {'total': 0, 'by_source': [], 'by_day': []}
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     aggs = resp.get('aggregations') or {}
     return {
@@ -450,14 +448,9 @@ async def ingest_sam_drain(opensearch: OpenSearchDep) -> dict[str, int]:
     try:
         resp = await opensearch.search(index=CURATION_ITEMS_INDEX, body=body)
     except Exception as exc:
-        logger.warning('ingest_sam_drain_failed', error=str(exc))
-        return {
-            'pending': 0,
-            'pending_detection': 0,
-            'pending_verify': 0,
-            'pending_verification': 0,
-            'total_unfinished': 0,
-        }
+        # Never answer zeros on an outage: total_unfinished == 0 is the
+        # "worker caught up" signal a walker proceeds on.
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     raw: dict[str, int] = {}
     for bucket in (resp.get('aggregations') or {}).get('by_status', {}).get('buckets', []):
         raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))

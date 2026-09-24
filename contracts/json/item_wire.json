@@ -1,8 +1,6 @@
 {
   "extra_keys": {
     "review": [
-      "proposed_class_id",
-      "proposed_class_name",
       "reason"
     ],
     "search": [
@@ -35,15 +33,28 @@
     "vlm_confidence",
     "vlm_proposed_class_id",
     "vlm_proposed_class_name",
+    "proposed_class_id",
+    "proposed_class_name",
+    "needs_new_class",
+    "needs_new_class_note",
     "cluster_id",
+    "cluster_kind",
     "cluster_distance",
+    "cluster_similarity",
+    "cluster_is_core",
     "cluster_subid",
+    "class_excluded",
+    "excluded_reason",
+    "excluded_at",
+    "review_dismissed_at",
+    "source",
     "test_holdout",
     "crop_rank_in_image",
     "crop_area_norm",
     "blur_lap_ratio",
     "proposal_name",
     "probe_pred_class",
+    "probe_pred_class_id",
     "probe_pred_entropy",
     "mistakenness_score",
     "mistakenness_method",
@@ -57,6 +68,7 @@
     "thumbnail_url",
     "region_thumbnail_url",
     "region_bbox_norm",
+    "region_bbox_in_parent",
     "region_bbox_frame",
     "region_bbox_correct",
     "region_status",
@@ -198,6 +210,11 @@
         "default": null,
         "title": "Class Detector Version"
       },
+      "class_excluded": {
+        "default": false,
+        "title": "Class Excluded",
+        "type": "boolean"
+      },
       "class_id": {
         "anyOf": [
           {
@@ -299,6 +316,47 @@
         "default": null,
         "title": "Cluster Id"
       },
+      "cluster_is_core": {
+        "anyOf": [
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Is Core"
+      },
+      "cluster_kind": {
+        "anyOf": [
+          {
+            "enum": [
+              "class",
+              "candidate",
+              "unassigned"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Kind"
+      },
+      "cluster_similarity": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cluster Similarity"
+      },
       "cluster_subid": {
         "anyOf": [
           {
@@ -371,6 +429,30 @@
         ],
         "default": null,
         "title": "Dup Is Representative"
+      },
+      "excluded_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Excluded At"
+      },
+      "excluded_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Excluded Reason"
       },
       "id": {
         "title": "Id",
@@ -458,9 +540,38 @@
         "default": null,
         "title": "Mistakenness Version"
       },
+      "needs_new_class": {
+        "default": false,
+        "title": "Needs New Class",
+        "type": "boolean"
+      },
+      "needs_new_class_note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Needs New Class Note"
+      },
       "probe_pred_class": {
         "default": null,
         "title": "Probe Pred Class"
+      },
+      "probe_pred_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Probe Pred Class Id"
       },
       "probe_pred_entropy": {
         "anyOf": [
@@ -486,6 +597,23 @@
         "default": null,
         "title": "Proposal Name"
       },
+      "proposed_class_id": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Proposed Class Id"
+      },
+      "proposed_class_name": {
+        "default": "",
+        "title": "Proposed Class Name",
+        "type": "string"
+      },
       "region_bbox_correct": {
         "anyOf": [
           {
@@ -509,6 +637,21 @@
         ],
         "default": null,
         "title": "Region Bbox Frame"
+      },
+      "region_bbox_in_parent": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Region Bbox In Parent"
       },
       "region_bbox_norm": {
         "anyOf": [
@@ -889,6 +1032,23 @@
         "default": null,
         "title": "Region Visible"
       },
+      "review_dismissed_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Review Dismissed At"
+      },
+      "source": {
+        "default": "",
+        "title": "Source",
+        "type": "string"
+      },
       "source_image_path": {
         "default": "",
         "title": "Source Image Path",
@@ -1003,7 +1163,7 @@
     "region_skip_verify"
   ],
   "source": {
-    "model": "src/routers/curation/_common.py:ItemDoc",
+    "model": "src/routers/curation/_item_models.py:ItemDoc",
     "serializer": "src/services/curation/wire.py:serialize_item"
   }
 }

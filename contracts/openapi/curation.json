@@ -490,7 +490,19 @@
             "title": "Group",
             "type": "string"
           },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
           "name": {
+            "pattern": "^[a-z0-9_]+$",
             "title": "Name",
             "type": "string"
           },
@@ -508,6 +520,27 @@
       },
       "ClassEntry": {
         "properties": {
+          "added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added At"
+          },
+          "adequacy": {
+            "default": "block",
+            "enum": [
+              "ok",
+              "warn",
+              "block"
+            ],
+            "title": "Adequacy",
+            "type": "string"
+          },
           "class_id": {
             "title": "Class Id",
             "type": "integer"
@@ -568,6 +601,20 @@
             },
             "title": "Classes",
             "type": "array"
+          },
+          "reserved_hotkeys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reserved Hotkeys",
+            "type": "array"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Thresholds",
+            "type": "object"
           }
         },
         "required": [
@@ -621,6 +668,7 @@
           "name": {
             "anyOf": [
               {
+                "pattern": "^[a-z0-9_]+$",
                 "type": "string"
               },
               {
@@ -648,6 +696,10 @@
           },
           "label_source": {
             "default": "human",
+            "enum": [
+              "human",
+              "human_confirmed"
+            ],
             "title": "Label Source",
             "type": "string"
           }
@@ -661,7 +713,7 @@
       },
       "CropBatchStatusRequest": {
         "additionalProperties": false,
-        "description": "Bulk-set ``region_status`` over many items (the cluster-view triage op).\n\nLets an operator select an outlier sub-cluster and mark every region\n``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm\ngood regions (``region_status='detected'`` + ``region_verified=True``).\n``region_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.",
+        "description": "Bulk-set ``region_status`` over many items (the cluster-view triage op).\n\nLets an operator select an outlier sub-cluster and mark every region\n``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm\ngood regions (``region_status='detected'``).\n``region_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.\n``region_verified`` is accepted but ignored: the server derives it\nfrom ``region_status``.",
         "properties": {
           "crop_ids": {
             "items": {
@@ -688,6 +740,8 @@
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Ignored; derived from region_status.",
             "title": "Region Verified"
           }
         },
@@ -696,6 +750,51 @@
           "region_status"
         ],
         "title": "CropBatchStatusRequest",
+        "type": "object"
+      },
+      "CropDiscardBatchRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_class": {
+            "default": true,
+            "title": "Clear Class",
+            "type": "boolean"
+          },
+          "crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Crop Ids",
+            "type": "array"
+          },
+          "dismiss_from_review": {
+            "default": false,
+            "title": "Dismiss From Review",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "crop_ids"
+        ],
+        "title": "CropDiscardBatchRequest",
+        "type": "object"
+      },
+      "CropDiscardRequest": {
+        "additionalProperties": false,
+        "description": "Discard an item: clear its class (it doesn't belong where it is),\ndismiss it from every review queue, or both. Recorded like a label\nwrite, so ``POST /crops/{id}/label/undo`` reverses it.",
+        "properties": {
+          "clear_class": {
+            "default": true,
+            "title": "Clear Class",
+            "type": "boolean"
+          },
+          "dismiss_from_review": {
+            "default": false,
+            "title": "Dismiss From Review",
+            "type": "boolean"
+          }
+        },
+        "title": "CropDiscardRequest",
         "type": "object"
       },
       "CropExcludeRequest": {
@@ -750,6 +849,10 @@
           },
           "label_source": {
             "default": "human",
+            "enum": [
+              "human",
+              "human_confirmed"
+            ],
             "title": "Label Source",
             "type": "string"
           }
@@ -1357,6 +1460,15 @@
             "title": "Crop Ids",
             "type": "array"
           },
+          "frame": {
+            "default": "source",
+            "enum": [
+              "source",
+              "parent"
+            ],
+            "title": "Frame",
+            "type": "string"
+          },
           "region_bbox_norm": {
             "anyOf": [
               {
@@ -1439,6 +1551,11 @@
               }
             ],
             "title": "Class Detector Version"
+          },
+          "class_excluded": {
+            "default": false,
+            "title": "Class Excluded",
+            "type": "boolean"
           },
           "class_id": {
             "anyOf": [
@@ -1535,6 +1652,44 @@
             ],
             "title": "Cluster Id"
           },
+          "cluster_is_core": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Is Core"
+          },
+          "cluster_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "class",
+                  "candidate",
+                  "unassigned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Kind"
+          },
+          "cluster_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Similarity"
+          },
           "cluster_subid": {
             "anyOf": [
               {
@@ -1601,6 +1756,28 @@
               }
             ],
             "title": "Dup Is Representative"
+          },
+          "excluded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded At"
+          },
+          "excluded_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Reason"
           },
           "id": {
             "title": "Id",
@@ -1684,8 +1861,35 @@
             ],
             "title": "Mistakenness Version"
           },
+          "needs_new_class": {
+            "default": false,
+            "title": "Needs New Class",
+            "type": "boolean"
+          },
+          "needs_new_class_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs New Class Note"
+          },
           "probe_pred_class": {
             "title": "Probe Pred Class"
+          },
+          "probe_pred_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Pred Class Id"
           },
           "probe_pred_entropy": {
             "anyOf": [
@@ -1709,6 +1913,22 @@
             ],
             "title": "Proposal Name"
           },
+          "proposed_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Class Id"
+          },
+          "proposed_class_name": {
+            "default": "",
+            "title": "Proposed Class Name",
+            "type": "string"
+          },
           "region_bbox_correct": {
             "anyOf": [
               {
@@ -1730,6 +1950,20 @@
               }
             ],
             "title": "Region Bbox Frame"
+          },
+          "region_bbox_in_parent": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Bbox In Parent"
           },
           "region_bbox_norm": {
             "anyOf": [
@@ -2078,6 +2312,22 @@
             ],
             "title": "Region Visible"
           },
+          "review_dismissed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Dismissed At"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
           "source_image_path": {
             "default": "",
             "title": "Source Image Path",
@@ -2198,8 +2448,17 @@
       },
       "ItemRegionRequest": {
         "additionalProperties": false,
-        "description": "Set or clear the region-of-interest sub-bbox on a single item.\n\n``region_bbox_norm`` is in the **source-image** coordinate frame; the\nclient converts from crop-frame to source-frame before sending.\n``None`` clears the box and marks the item\n``region_status='no_region_visible'`` (a deliberate human decision,\ndistinct from \"not yet detected\").",
+        "description": "Set or clear the region-of-interest sub-bbox on a single item.\n\n``frame`` says which frame ``region_bbox_norm`` is in: ``'source'``\n(the source image, the stored frame) or ``'parent'`` (the item crop;\nthe server projects it through the item's own ``bbox_norm``).\n``None`` clears the box and marks the item\n``region_status='no_region_visible'`` (a deliberate human decision,\ndistinct from \"not yet detected\").",
         "properties": {
+          "frame": {
+            "default": "source",
+            "enum": [
+              "source",
+              "parent"
+            ],
+            "title": "Frame",
+            "type": "string"
+          },
           "region_bbox_norm": {
             "anyOf": [
               {
@@ -2374,6 +2633,13 @@
             "default": "",
             "title": "Summary",
             "type": "string"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Thresholds",
+            "type": "object"
           }
         },
         "required": [
@@ -4125,7 +4391,7 @@
         ]
       },
       "post": {
-        "description": "Append-only add.",
+        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written.",
         "operationId": "create_class_curation_classes_post",
         "requestBody": {
           "content": {
@@ -4169,8 +4435,22 @@
     },
     "/curation/classes/merge": {
       "post": {
-        "description": "Mark source deprecated; bulk-relabel matching crops + labels.",
+        "description": "Mark source deprecated; bulk-relabel matching crops + labels.\n\n``dry_run=true`` returns ``{dry_run, source_id, target_id,\nwould_relabel, would_unvalidate, holdout_blocking, blocked}`` and\nwrites nothing (a real merge 409s when ``holdout_blocking > 0``).",
         "operationId": "merge_class_curation_classes_merge_post",
+        "parameters": [
+          {
+            "description": "Report counts; change nothing.",
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Report counts; change nothing.",
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -4984,6 +5264,76 @@
             }
           },
           {
+            "description": "Ingest source tag (wire `source`).",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag (wire `source`).",
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "needs_new_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs New Class"
+            }
+          },
+          {
+            "description": "true = only items hidden from review.",
+            "in": "query",
+            "name": "review_dismissed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = only items hidden from review.",
+              "title": "Review Dismissed"
+            }
+          },
+          {
+            "description": "Comma-separated crop ids (max 500): return exactly these items in this order, missing ids dropped. Every other filter is ignored.",
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated crop ids (max 500): return exactly these items in this order, missing ids dropped. Every other filter is ignored.",
+              "title": "Ids"
+            }
+          },
+          {
             "in": "query",
             "name": "include_test",
             "required": false,
@@ -5261,7 +5611,7 @@
     },
     "/curation/crops/batch_region": {
       "put": {
-        "description": "Bulk variant of ``PUT /crops/{crop_id}/region``.\n\nMost useful for the curator's \"mark these N crops as no region\nvisible\" hotkey on the cluster page (via ``bbox_norm=null``);\nsetting the same source-frame bbox on many crops doesn't make\nsense in the typical flow but the endpoint accepts it.",
+        "description": "Bulk variant of ``PUT /crops/{crop_id}/region`` (typically\n``region_bbox_norm=null``: \"no region visible on these N crops\").\n\nReturns ``updated``, ``conflicts``, ``invalid`` and ``items`` (the\npost-write wire items of the updated crops).",
         "operationId": "batch_set_crop_region_curation_crops_batch_region_put",
         "requestBody": {
           "content": {
@@ -5342,6 +5692,50 @@
           }
         },
         "summary": "Batch Unexclude Crops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/discard_batch": {
+      "post": {
+        "description": "Batch form of ``POST /crops/{crop_id}/discard``. Returns ``items``\n(post-write wire items), ``discarded``, and ``conflicts`` /\n``not_found`` id lists. Undo with ``POST /crops/label/undo_batch``\npassing the discarded ids.",
+        "operationId": "discard_crops_curation_crops_discard_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropDiscardBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Discard Crops Curation Crops Discard Batch Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Crops",
         "tags": [
           "Curation"
         ]
@@ -5517,6 +5911,106 @@
           }
         },
         "summary": "Get Crop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/discard": {
+      "post": {
+        "description": "Discard an item, as a recorded human write.\n\n``clear_class`` (default ``true``): the item doesn't belong in its\nclass/cluster — class, provenance and validation are cleared and it\ndrops to the residual pool (``cluster_id: null``).\n``dismiss_from_review`` (default ``false``): hide it from every\n``/review`` tab (``review_dismissed_at``). The pre-write state is\nsnapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it\nexactly. Returns the post-write item. ``422`` when neither is set.",
+        "operationId": "discard_crop_curation_crops__crop_id__discard_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropDiscardRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Discard Crop Curation Crops  Crop Id  Discard Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Crop",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/history": {
+      "get": {
+        "description": "The item's class history, oldest first: ``{crop_id, entries}``.\n\nEach entry is the item's class state *before* one write\n(``class_id``, ``class_name``, ``class_source``, ``label_source``,\n``confidence``, ``class_detector*``, ``class_labeler``,\n``class_labeled_at``, ``class_validated``, ``cluster_id``,\n``cluster_subid``; ``review_dismissed_*`` on discards) plus ``writer``\n(who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and\n``at``. Keys a writer didn't record are ``null``.",
+        "operationId": "crop_history_curation_crops__crop_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Crop History Curation Crops  Crop Id  History Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crop History",
         "tags": [
           "Curation"
         ]
@@ -5728,7 +6222,7 @@
     },
     "/curation/crops/{crop_id}/region": {
       "put": {
-        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in the **source-image** coordinate frame. The\nclient converts crop-frame → source-frame before sending; the API\nnever sees crop-frame coords. ``None`` clears the box and marks the\ncrop ``region_status='no_region_visible'``.",
+        "description": "Set or clear the region sub-bbox on a single crop.\n\n``region_bbox_norm`` is in ``frame`` (``source`` default, or\n``parent`` = the item crop, projected server-side). ``None`` clears the box and marks the crop\n``region_status='no_region_visible'``. Returns ``item``, the post-write\nwire item.",
         "operationId": "set_crop_region_curation_crops__crop_id__region_put",
         "parameters": [
           {
@@ -5783,7 +6277,7 @@
     },
     "/curation/crops/{crop_id}/region_meta": {
       "patch": {
-        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``; this endpoint\nis for operator corrections of the surrounding fields. Only the\nfields explicitly present in the payload are written.",
+        "description": "Patch region metadata (text / status / rejection reason).\n\nBbox edits go through ``PUT /crops/{crop_id}/region``. Only the fields\npresent in the payload are written; a status write applies the\nlifecycle invariants (see :mod:`src.services.curation.region_writes`).\nReturns ``updated_fields`` (wire names) and ``item`` (post-write).",
         "operationId": "patch_crop_region_meta_curation_crops__crop_id__region_meta_patch",
         "parameters": [
           {
@@ -5936,6 +6430,51 @@
         ]
       }
     },
+    "/curation/crops/{crop_id}/review_undismiss": {
+      "post": {
+        "description": "Return an item hidden from review to the queues (clears\n``review_dismissed_at`` / ``review_dismissed_by``). For a dismissal made\nby ``POST /crops/{id}/discard``, ``label/undo`` does the same and also\nrestores the class. Returns the post-write item.",
+        "operationId": "review_undismiss_curation_crops__crop_id__review_undismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Review Undismiss Curation Crops  Crop Id  Review Undismiss Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Undismiss",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/crops/{crop_id}/thumbnail": {
       "get": {
         "description": "128px JPEG thumbnail of an item crop, LRU-cached.",
@@ -5988,6 +6527,51 @@
         "summary": "Crop Thumbnail",
         "tags": [
           "Curation - Crops"
+        ]
+      }
+    },
+    "/curation/crops/{crop_id}/vlm_dismiss": {
+      "post": {
+        "description": "Reject the VLM's class suggestion on this item.\n\nRecords ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /\n``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,\n``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer\napply it. The class itself is untouched (label or discard it as a\nseparate write). Returns the post-write item; ``409`` when the item has\nno VLM suggestion.",
+        "operationId": "dismiss_vlm_suggestion_curation_crops__crop_id__vlm_dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dismiss Vlm Suggestion Curation Crops  Crop Id  Vlm Dismiss Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Vlm Suggestion",
+        "tags": [
+          "Curation"
         ]
       }
     },
@@ -6952,13 +7536,13 @@
         "operationId": "pipeline_auto_label_curation_pipeline_auto_label_post",
         "parameters": [
           {
-            "description": "Re-train FAISS on the items index before promote/VLM steps.",
+            "description": "Re-train clusters on the items index before promote/VLM.",
             "in": "query",
             "name": "train_clusters",
             "required": false,
             "schema": {
               "default": true,
-              "description": "Re-train FAISS on the items index before promote/VLM steps.",
+              "description": "Re-train clusters on the items index before promote/VLM.",
               "title": "Train Clusters",
               "type": "boolean"
             }
@@ -7012,13 +7596,13 @@
             }
           },
           {
-            "description": "0 = all unvalidated",
+            "description": "0 = all in scope",
             "in": "query",
             "name": "max_vlm_crops",
             "required": false,
             "schema": {
               "default": 0,
-              "description": "0 = all unvalidated",
+              "description": "0 = all in scope",
               "maximum": 100000,
               "minimum": 0,
               "title": "Max Vlm Crops",
@@ -7026,13 +7610,13 @@
             }
           },
           {
-            "description": "Skip the VLM for classifier-labeled crops at or above this confidence. Defaults to 0.80 — saves the dominant VLM cost at scale without sacrificing label quality.",
+            "description": "Skip the VLM for classifier-labeled items at or above this confidence (global sweep only; a cluster-scoped run labels every unvalidated member).",
             "in": "query",
             "name": "classifier_confidence_skip_vlm",
             "required": false,
             "schema": {
               "default": 0.8,
-              "description": "Skip the VLM for classifier-labeled crops at or above this confidence. Defaults to 0.80 — saves the dominant VLM cost at scale without sacrificing label quality.",
+              "description": "Skip the VLM for classifier-labeled items at or above this confidence (global sweep only; a cluster-scoped run labels every unvalidated member).",
               "maximum": 1.0,
               "minimum": 0.0,
               "title": "Classifier Confidence Skip Vlm",
@@ -7040,7 +7624,7 @@
             }
           },
           {
-            "description": "Residual-pool clusterer. \"hdbscan\" (default, cuML GPU) or \"ahc\" (sklearn fallback — heartbeat-risk at large n). The refine endpoint always uses AHC regardless.",
+            "description": "Residual-pool clusterer id from GET /methods (axis=cluster).",
             "in": "query",
             "name": "clustering_method",
             "required": false,
@@ -7053,7 +7637,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Residual-pool clusterer. \"hdbscan\" (default, cuML GPU) or \"ahc\" (sklearn fallback — heartbeat-risk at large n). The refine endpoint always uses AHC regardless.",
+              "description": "Residual-pool clusterer id from GET /methods (axis=cluster).",
               "title": "Clustering Method"
             }
           },
@@ -7173,6 +7757,24 @@
               ],
               "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
               "title": "Class Id"
+            }
+          },
+          {
+            "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "in": "query",
+            "name": "cluster_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "title": "Cluster Id"
             }
           },
           {
@@ -7372,13 +7974,13 @@
             }
           },
           {
-            "description": "Merge candidate clusters mode.",
+            "description": "Merge candidate clusters.",
             "in": "query",
             "name": "recluster_unvalidated",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Merge candidate clusters mode.",
+              "description": "Merge candidate clusters.",
               "title": "Recluster Unvalidated",
               "type": "boolean"
             }
@@ -7475,6 +8077,24 @@
               ],
               "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
               "title": "Class Id"
+            }
+          },
+          {
+            "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "in": "query",
+            "name": "cluster_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "title": "Cluster Id"
             }
           },
           {
@@ -7828,7 +8448,7 @@
     },
     "/curation/regions/batch_status": {
       "post": {
-        "description": "Bulk-set region status over many crops — the cluster-view triage op.\n\nMark regions ``false_positive`` / ``no_region_visible`` in one call, or\nbulk-confirm with ``region_status='detected'`` + ``region_verified=True``.\nMirrors ``patch_crop_region_meta`` (human edits are terminal →\n``region_validated=True`` so they leave the /review queue).",
+        "description": "Bulk-set region status over many crops — the cluster-view triage op.\n\nApplies the same lifecycle invariants as ``PATCH region_meta``:\n``no_region_visible`` clears the box, ``region_verified`` follows the\nstatus (a request's ``region_verified`` is ignored), ``detected``\nwithout a box lands in ``invalid``. Human edits are terminal\n(``region_validated=True``). Returns ``updated``, ``conflicts``,\n``invalid`` and ``items`` (post-write wire items).",
         "operationId": "batch_set_region_status_curation_regions_batch_status_post",
         "requestBody": {
           "content": {
@@ -8157,21 +8777,53 @@
         ]
       }
     },
+    "/curation/regions/statuses": {
+      "get": {
+        "description": "The region lifecycle vocabulary: every status with its ``label``,\n``role``, ``terminal``, ``human_writable``, ``clears_box`` and\n``wants_reason``, plus the ``confirm_status`` / ``reject_status`` /\n``false_positive_status`` values. Generated from\n``src/config/region_state.py``; the human writers enforce it.",
+        "operationId": "region_statuses_curation_regions_statuses_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Region Statuses Curation Regions Statuses Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Region Statuses",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/regions/suspected_false_positives": {
       "get": {
         "description": "Rank non-FP region crops by similarity to the known FP **sub-centroids**.\n\nEach candidate is matched against every FP sub-type centroid and scored by\nits nearest one (``nearest_fp_subid``), so a crop that resembles only one\nflavour of false positive (e.g. a bumper but not a sticker) is still caught.\nAssists auto-labeling: an operator reviews the nearest matches and\nbulk-confirms via ``POST {api_prefix}/regions/batch_status`` (which routes them into\nthe permanent FP bucket). Requires :func:`build_fp_centroids_endpoint` to\nhave run; otherwise returns an empty result with ``centroids_built=false``.",
         "operationId": "suspected_false_positives_curation_regions_suspected_false_positives_get",
         "parameters": [
           {
+            "description": "Max distance; default 0.35.",
             "in": "query",
             "name": "threshold",
             "required": false,
             "schema": {
-              "default": 0.35,
-              "maximum": 2.0,
-              "minimum": 0.0,
-              "title": "Threshold",
-              "type": "number"
+              "anyOf": [
+                {
+                  "maximum": 2.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Max distance; default 0.35.",
+              "title": "Threshold"
             }
           },
           {
@@ -8314,6 +8966,66 @@
         ]
       }
     },
+    "/curation/review/new_class_proposals/summary": {
+      "get": {
+        "description": "The VLM's proposed new-class names across ``vlm_new_class_pending``\nitems: ``{total_pending, top_terms: [{label, count, sample_crop_ids}]}``,\nmost common first — the input for deciding which classes to add.",
+        "operationId": "review_new_class_summary_curation_review_new_class_proposals_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "samples",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 20,
+              "minimum": 0,
+              "title": "Samples",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Review New Class Summary Curation Review New Class Proposals Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review New Class Summary",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/review/raw_label_clusters": {
       "get": {
         "description": "Top-N hierarchical clusters of ``vlm_raw_label`` for the labeler UI.\n\nSurfaces the output of ``scripts/curation/cluster_raw_labels.py``\n(field contract: :mod:`src.services.curation.raw_label_clusters`) so\nthe labeler can:\n\n1. Show fine-grained sub-classes the registry doesn't have yet\n   (e.g. \"ford f150\" + \"ford ranger\" rolled up under\n   ``ford_pickup`` → suggested registry parent ``pickup``).\n2. Surface candidate registry promotions ranked by crop volume.\n3. Let curators bulk-relabel a whole cluster at once instead of\n   clicking through individual ``vlm_unmatched`` crops.\n\nThe endpoint runs purely against the configured items index — no clustering\nhappens here, only aggregation. Cluster ids / names are written by\nthe offline script; if no crops have ``vlm_label_cluster_id`` yet\nthe endpoint returns an empty list with a populated ``hint``.\n\nNOTE on route ordering: this endpoint MUST be declared before the\nparameterised ``/review/{tab}`` below — FastAPI dispatches the first\nmatching route, and ``raw_label_clusters`` would otherwise be eaten\nby the ``{tab}`` matcher.\n\nArgs:\n    size: Number of clusters to return (default 50).\n    samples_per_cluster: How many ``vlm_raw_label`` samples to\n        include per cluster (default 5 — enough to read at a glance).\n\nReturns:\n    ``{\"status\": \"ok|empty\", \"clusters\": [{cluster_id, cluster_name,\n    n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``",
@@ -8424,16 +9136,16 @@
     },
     "/curation/review/{tab}": {
       "get": {
-        "description": "Human review queue for the labeler ``/review`` page.\n\nEach tab maps to a deterministic OpenSearch query against the\nconfigured items index plus a ``reason`` string the labeler renders to\nexplain why the crop landed in this queue. Items already validated by\na human are excluded from every tab — except ``model_disagreements``,\nwhere validated crops are exactly the input set (we want to know\nwhere the new model thinks the human was wrong), and ``regions``,\nwhich reviews the region annotation independently of the item's\nclass validation.",
+        "description": "Human review queue for the labeler ``/review`` page.\n\nEach tab maps to a deterministic OpenSearch query against the\nconfigured items index plus a ``reason`` string the labeler renders to\nexplain why the crop landed in this queue. Items already validated by\na human are excluded from every tab — except ``model_disagreements``,\nwhere validated crops are exactly the input set, and ``regions``,\nwhich reviews the region annotation independently of the item's\nclass validation. Order: the applied sort (``sort_applied``), then\n``crop_id``.",
         "operationId": "review_queue_curation_review__tab__get",
         "parameters": [
           {
-            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots",
+            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
             "in": "path",
             "name": "tab",
             "required": true,
             "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots",
+              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
               "title": "Tab",
               "type": "string"
             }
@@ -8472,7 +9184,7 @@
             }
           },
           {
-            "description": "Regions-tab only: case-insensitive substring search on region_text. Ignored on other tabs.",
+            "description": "Regions tab only: case-insensitive substring search on region_text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -8485,11 +9197,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Regions-tab only: case-insensitive substring search on region_text. Ignored on other tabs.",
+              "description": "Regions tab only: case-insensitive substring search on region_text.",
               "title": "Text"
             }
           },
           {
+            "description": "Keep crop_rank_in_image <= this.",
             "in": "query",
             "name": "max_rank",
             "required": false,
@@ -8503,10 +9216,12 @@
                   "type": "null"
                 }
               ],
+              "description": "Keep crop_rank_in_image <= this.",
               "title": "Max Rank"
             }
           },
           {
+            "description": "Clarity floor (null-safe).",
             "in": "query",
             "name": "min_blur_ratio",
             "required": false,
@@ -8520,10 +9235,12 @@
                   "type": "null"
                 }
               ],
+              "description": "Clarity floor (null-safe).",
               "title": "Min Blur Ratio"
             }
           },
           {
+            "description": "Mistakenness floor (null-safe).",
             "in": "query",
             "name": "min_mistakenness",
             "required": false,
@@ -8537,21 +9254,100 @@
                   "type": "null"
                 }
               ],
+              "description": "Mistakenness floor (null-safe).",
               "title": "Min Mistakenness"
             }
           },
           {
+            "description": "Hide non-representative near-duplicates.",
             "in": "query",
             "name": "hide_near_duplicates",
             "required": false,
             "schema": {
               "default": false,
+              "description": "Hide non-representative near-duplicates.",
               "title": "Hide Near Duplicates",
               "type": "boolean"
             }
           },
           {
-            "description": "Review-sort strategy id from GET /curation/methods (axis=sort). Omitted or 'default' uses this tab's legacy default sort. An unknown, shadow, or disabled id returns 400.",
+            "description": "Only items of this class.",
+            "in": "query",
+            "name": "class_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items of this class.",
+              "title": "Class Id"
+            }
+          },
+          {
+            "description": "Only items with this ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items with this ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Inclusive confidence band.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -8564,7 +9360,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Review-sort strategy id from GET /curation/methods (axis=sort). Omitted or 'default' uses this tab's legacy default sort. An unknown, shadow, or disabled id returns 400.",
+              "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
               "title": "Sort"
             }
           }
@@ -8594,6 +9390,267 @@
           }
         },
         "summary": "Review Queue",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/review/{tab}/locate": {
+      "get": {
+        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
+        "operationId": "review_locate_curation_review__tab__locate_get",
+        "parameters": [
+          {
+            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+            "in": "path",
+            "name": "tab",
+            "required": true,
+            "schema": {
+              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+              "title": "Tab",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The item to find.",
+            "in": "query",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "description": "The item to find.",
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Regions tab only: case-insensitive substring search on region_text.",
+            "in": "query",
+            "name": "text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only: case-insensitive substring search on region_text.",
+              "title": "Text"
+            }
+          },
+          {
+            "description": "Keep crop_rank_in_image <= this.",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Keep crop_rank_in_image <= this.",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "Clarity floor (null-safe).",
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Clarity floor (null-safe).",
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "description": "Mistakenness floor (null-safe).",
+            "in": "query",
+            "name": "min_mistakenness",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Mistakenness floor (null-safe).",
+              "title": "Min Mistakenness"
+            }
+          },
+          {
+            "description": "Hide non-representative near-duplicates.",
+            "in": "query",
+            "name": "hide_near_duplicates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Hide non-representative near-duplicates.",
+              "title": "Hide Near Duplicates",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Only items of this class.",
+            "in": "query",
+            "name": "class_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items of this class.",
+              "title": "Class Id"
+            }
+          },
+          {
+            "description": "Only items with this ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items with this ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Inclusive confidence band.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Review Locate Curation Review  Tab  Locate Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Locate",
         "tags": [
           "Curation"
         ]
@@ -9095,7 +10152,7 @@
     },
     "/curation/stats/classes": {
       "get": {
-        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count}``) joined against\nthe registry for the names. The labeler's ``getStats()`` (Export + Home\npages) consumes ``classes`` — the aggregation alone has no class names, so\nwithout this join the Export dataset table renders empty.",
+        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, adequacy,\naug_target, aug_gap}``, plus the ``thresholds`` behind them) joined against\nthe registry for the names. The labeler's ``getStats()`` (Export + Home\npages) consumes ``classes`` — the aggregation alone has no class names, so\nwithout this join the Export dataset table renders empty.",
         "operationId": "stats_classes_curation_stats_classes_get",
         "responses": {
           "200": {
@@ -9796,6 +10853,60 @@
         ]
       }
     },
+    "/curation/training_cohorts": {
+      "get": {
+        "description": "``{cohorts: [{id, label, description, cutoffs, endpoint, params,\nrow_kind}]}`` — fetch a cohort's rows with ``GET {prefix}{endpoint}``\nand ``params``. Region cohorts appear only with a region profile.",
+        "operationId": "training_cohorts_curation_training_cohorts_get",
+        "parameters": [
+          {
+            "description": "Fold into every cohort query.",
+            "in": "query",
+            "name": "class_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fold into every cohort query.",
+              "title": "Class Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Training Cohorts Curation Training Cohorts Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Training Cohorts",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/viz/projection": {
       "get": {
         "description": "Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers\na fit (see ``embedding_viz.get_cached_projection``'s docstring and\n``tests/curation/test_curation_viz_router.py::\ntest_get_projection_never_imports_or_calls_fit`` for the enforcement).\nReturns ``{'status': 'not_built'}`` if nothing has been fit yet.",
@@ -10020,6 +11131,69 @@
           }
         },
         "summary": "Vlm Label Batch",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/vlm/label_cluster/{cluster_id}": {
+      "post": {
+        "description": "VLM-label every unvalidated member of one cluster, as a background job.\n\nQueues the auto-label job scoped to ``cluster_id`` with only the VLM\nstage (no re-clustering, no auto-promote, no cap): the server selects\nevery unvalidated, non-holdout, non-excluded member and chunks them.\nReturns the job state; poll ``GET /pipeline/auto_label/status`` —\n``total`` is the number selected, ``result.stages.vlm`` the outcome.\n``409`` while another auto-label job runs.",
+        "operationId": "vlm_label_cluster_curation_vlm_label_cluster__cluster_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "title": "Cluster Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
+            "in": "query",
+            "name": "prompt_pack",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Per-run VLM prompt_pack (an id from GET /methods axis=prompt_pack) used by the labeling stage. Overrides the settings default for this job only; never written to settings. Unset = settings default. Unknown id -> 422.",
+              "title": "Prompt Pack"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Vlm Label Cluster Curation Vlm Label Cluster  Cluster Id  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Vlm Label Cluster",
         "tags": [
           "Curation"
         ]

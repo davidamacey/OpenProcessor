@@ -1,8 +1,7 @@
 """Tests for `src/routers/curation/classes.py`.
 
-Server-side reserved-hotkey guard on `PUT /curation/classes/{class_id}`.
-Mirrors the labeler frontend's own reserved-letter list (the
-non-`/` subset — `/` has no backend hotkey entry point to guard).
+Server-side reserved-hotkey guard on class create/update. The backend
+owns the reserved set and serves it on `GET /classes`.
 
 We mount the shared curation `router` (all sub-modules register onto
 one `APIRouter`, see `src/routers/curation/_common.py`) on a minimal
@@ -86,35 +85,11 @@ def test_put_class_accepts_nonreserved_hotkey(
     assert entry.hotkey_letter == 's'
 
 
-def test_reserved_set_matches_frontend() -> None:
-    """Backend and frontend reserved-letter lists can't silently drift.
-
-    The labeler frontend additionally reserves '/' (opens the
-    /review fuzzy-search picker), which has no PUT-time backend
-    equivalent to guard here — deliberately excluded from this comparison.
-    """
-    assert frozenset({'g', 'n', 'd', 'z', 'x', 'u', 'a', 'm'}) == RESERVED_HOTKEY_LETTERS
-
-
-# =============================================================================
-# POST /curation/classes structurally cannot set a hotkey
-# =============================================================================
-
-
-def test_post_class_cannot_set_hotkey(app_client: TestClient) -> None:
-    """`ClassCreateRequest` has no `hotkey_letter` field: the extra key is
-    silently ignored by pydantic, and the created class has no hotkey.
-    """
-    resp = app_client.post(
-        '/curation/classes', json={'name': 'hatchback', 'group': 'vehicle', 'hotkey_letter': 'd'}
-    )
-    assert resp.status_code == 201, resp.text
-    class_id = resp.json()['class_id']
-
-    list_resp = app_client.get('/curation/classes')
-    assert list_resp.status_code == 200
-    entry = next(c for c in list_resp.json()['classes'] if c['class_id'] == class_id)
-    assert entry['hotkey_letter'] is None
+def test_reserved_set_covers_every_single_key_labeler_action() -> None:
+    """The backend owns the full reserved set: the global labeling actions
+    (accept, skip, discard, undo, ignore, un-ignore, select-all, move), the
+    class-picker key '/' and the region-review keys (d/f/e/b)."""
+    assert frozenset('gndzxuam/feb') == RESERVED_HOTKEY_LETTERS
 
 
 # =============================================================================

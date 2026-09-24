@@ -79,8 +79,17 @@ class _FakeRegionOS:
 def fake_os() -> _FakeRegionOS:
     return _FakeRegionOS(
         {
-            'crop-1': {'crop_id': 'crop-1', F.status: 'pending_detection'},
-            'crop-2': {'crop_id': 'crop-2', F.status: 'pending_detection'},
+            # A box on each: confirming ('detected') needs one.
+            'crop-1': {
+                'crop_id': 'crop-1',
+                F.status: 'pending_detection',
+                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+            },
+            'crop-2': {
+                'crop_id': 'crop-2',
+                F.status: 'pending_detection',
+                F.bbox_norm: [0.1, 0.1, 0.2, 0.2],
+            },
         }
     )
 
@@ -307,7 +316,7 @@ def test_batch_set_region_status_empty_crop_ids_is_a_noop(app_client: TestClient
         json={'crop_ids': [], 'region_status': 'detected'},
     )
     assert resp.status_code == 200
-    assert resp.json() == {'updated': 0, 'conflicts': []}
+    assert resp.json() == {'updated': 0, 'conflicts': [], 'invalid': [], 'items': []}
 
 
 def test_batch_set_region_status_missing_crop_reports_conflict_not_500(

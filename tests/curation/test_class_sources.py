@@ -136,9 +136,9 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     # Registry reclassification; the only unmatched source written is
     # 'vlm_unmatched' (default prefix 'vlm').
     'source.reclassified_source': 'vlm_reclassified',
-    # PUT /crops/{id}/label, PUT /crops/batch_label: caller-chosen,
-    # default 'human'.
-    'payload.label_source': 'human',
+    # PUT /crops/{id}/label, PUT /crops/batch_label: always 'human'
+    # (label_source is caller-chosen among the human sources only).
+    'HUMAN_CLASS_SOURCE': 'human',
     # Label import: caller-chosen, default 'external_label'.
     'label_source': 'external_label',
     'item.class_source': None,

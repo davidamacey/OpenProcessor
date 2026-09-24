@@ -340,16 +340,12 @@ async def build_sort(
 
     Returns ``(clause, applied_id, fallback_reason)``:
 
-    * ``sort_id`` is ``None`` or ``'default'`` → resolves to a
-      shared-settings override for the ``'sort'`` axis if one is set (see
-      ``src.services.curation.strategy_registry.resolve_effective_default``)
-      and still selectable, otherwise :func:`default_sort_for_tab`; always
-      succeeds; ``fallback_reason`` is ``None``. With no override configured
-      (``opensearch=None``, or nothing has ever been ``PUT`` to
-      ``/curation/settings``) this is the byte-identical-to-legacy path
-      every existing tab hit before the shared-settings feature existed —
-      a global override is strictly additive on top of the untouched
-      per-tab defaults, never a replacement for them.
+    * ``sort_id`` is ``None`` or ``'default'`` → the tab's own default
+      (:func:`default_sort_for_tab`) when it has one; otherwise the
+      shared-settings override for the ``'sort'`` axis (see
+      ``src.services.curation.strategy_registry.resolve_effective_default``);
+      otherwise ``'recent'``. A deployment default never overrides a
+      tab's own default. Always succeeds; ``fallback_reason`` is ``None``.
     * ``sort_id`` names a ``'stable'``/``'experimental'`` entry → that
       entry's clause is used; ``fallback_reason`` is ``None``.
     * ``sort_id`` is unknown, or names a ``'shadow'``/``'disabled'`` entry →
@@ -369,22 +365,22 @@ async def build_sort(
 
     ``opensearch``, when given, is threaded into
     :func:`~src.services.curation.strategy_registry.resolve_effective_default`
-    so a request that omits ``?sort`` picks up a live shared-settings
-    override. ``None`` (the default) skips the lookup entirely, same as
-    every other ``resolve_effective_default`` caller with no client handy.
+    for a tab without its own default. ``None`` skips the lookup.
     """
     registry = get_review_sorts()
 
     if sort_id is None or sort_id == 'default':
-        applied_id = None
-        if opensearch is not None:
+        # A tab's own default wins: it is tuned to what the tab surfaces (the
+        # regions tab sorts by region score; a deployment default on a field
+        # the tab's items may not carry would scramble it). A deployment
+        # default applies only to a tab without one.
+        applied_id = _TAB_DEFAULTS.get(tab)
+        if applied_id is None and opensearch is not None:
             from src.services.curation.strategy_registry import resolve_effective_default
 
-            override_id = await resolve_effective_default('sort', opensearch)
-            if override_id is not None:
-                applied_id = override_id
+            applied_id = await resolve_effective_default('sort', opensearch)
         if applied_id is None:
-            applied_id = default_sort_for_tab(tab)
+            applied_id = 'recent'
         return list(registry[applied_id].clause), applied_id, None
 
     rs = registry.get(sort_id)

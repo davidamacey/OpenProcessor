@@ -21,6 +21,7 @@ from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 from src.services.curation.ingest_class_sources import unlabeled_proposal_class_sources
+from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 
 
 KNOWN_TABS: tuple[str, ...] = (
@@ -33,6 +34,7 @@ KNOWN_TABS: tuple[str, ...] = (
     'regions',
     'primary_low_conf',
     'coco_blind_spots',
+    'new_class_proposals',
 )
 
 
@@ -57,10 +59,9 @@ def build_tab_query(
     must: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = [
         {'term': {'class_validated': True}},
-        # Crops the operator explicitly dismissed via /review's Discard
-        # button stay out of every queue forever (until an /undismiss is
-        # added). The Discard handler at DELETE /curation/crops/{id}/label
-        # stamps ``review_dismissed_at``.
+        # Items dismissed from review (POST /crops/{id}/discard with
+        # dismiss_from_review, or the legacy review_dismiss) stay out of
+        # every queue until undone / POST /crops/{id}/review_undismiss.
         {'exists': {'field': 'review_dismissed_at'}},
     ]
     if not include_test:
@@ -242,7 +243,7 @@ def build_tab_query(
             {
                 'bool': {
                     'should': [
-                        {'range': {'classifier_raw_confidence': {'lt': 0.75}}},
+                        {'range': {'classifier_raw_confidence': {'lt': LOW_CONFIDENCE_MAX}}},
                         {'bool': {'must_not': {'exists': {'field': 'classifier_raw_confidence'}}}},
                         {'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}},
                     ],
@@ -263,15 +264,25 @@ def build_tab_query(
         must_not.append({'term': {'class_excluded': True}})
         # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
+    elif tab == 'new_class_proposals':
+        # Items that need a class the registry doesn't have yet: flagged by
+        # a human (POST /crops/flag_new_class) or proposed by the VLM.
+        must.append(
+            {
+                'bool': {
+                    'should': [
+                        {'term': {'needs_new_class': True}},
+                        {'term': {'class_source': 'vlm_new_class_pending'}},
+                    ],
+                    'minimum_should_match': 1,
+                }
+            }
+        )
+        reason = 'needs a class the registry does not have yet'
     else:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f'unknown review tab: {tab}. '
-                'Must be one of: all, mismatches, vlm_low_conf, outliers, '
-                'uncertainty, model_disagreements, regions, primary_low_conf, '
-                'coco_blind_spots'
-            ),
+            detail=f'unknown review tab: {tab}. Must be one of: {", ".join(KNOWN_TABS)}',
         )
 
     return must, must_not, reason

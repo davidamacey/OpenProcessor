@@ -70,7 +70,7 @@ def _dump_json(data: Any) -> str:
 
 
 def _item_doc_model():
-    from src.routers.curation._common import ItemDoc
+    from src.routers.curation._item_models import ItemDoc
 
     return ItemDoc
 
@@ -104,7 +104,7 @@ def render_item_wire_json(facts: dict[str, Any]) -> str:
         {
             'generated_by': SCRIPT_REL,
             'source': {
-                'model': 'src/routers/curation/_common.py:ItemDoc',
+                'model': 'src/routers/curation/_item_models.py:ItemDoc',
                 'serializer': 'src/services/curation/wire.py:serialize_item',
             },
             'notes': (
@@ -204,7 +204,7 @@ def render_item_wire_ts(facts: dict[str, Any]) -> str:
     refs: set[str] = set()
     fields = [f'  {key}: {ts_type(props[key], refs)};' for key in facts['item_keys']]
     lines = [
-        _ts_header('src/routers/curation/_common.py (ItemDoc), src/services/curation/wire.py'),
+        _ts_header('src/routers/curation/_item_models.py (ItemDoc), src/services/curation/wire.py'),
         *ts_interfaces(schema, refs),
         '/**',
         ' * The wire item every item-returning curation endpoint emits. Every key is',

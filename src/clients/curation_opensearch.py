@@ -211,9 +211,12 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
         'restorable': {'type': 'boolean'},
         'writer': {'type': 'keyword'},
         'at': {'type': 'date'},
+        'review_dismissed_at': {'type': 'date'},
+        'review_dismissed_by': {'type': 'keyword'},
     },
 }
 
+# Exclusion plus the other per-item human review decisions.
 _EXCLUSION_MAPPING: dict[str, Any] = {
     'class_excluded': {'type': 'boolean'},
     'excluded_at': {'type': 'date'},
@@ -222,6 +225,13 @@ _EXCLUSION_MAPPING: dict[str, Any] = {
     'excluded_prior_class_validated': {'type': 'boolean'},
     'excluded_prior_cluster_id': {'type': 'integer'},
     'excluded_prior_cluster_subid': {'type': 'keyword'},
+    # Review-queue dismissal (POST /crops/{id}/review_dismiss, /discard).
+    'review_dismissed_at': {'type': 'date'},
+    'review_dismissed_by': {'type': 'keyword'},
+    # Rejected VLM suggestion (POST /crops/{id}/vlm_dismiss).
+    'vlm_dismissed_class_id': {'type': 'integer'},
+    'vlm_dismissed_class_name': {'type': 'keyword'},
+    'vlm_dismissed_at': {'type': 'date'},
 }
 
 
@@ -379,6 +389,8 @@ def _items_body() -> dict[str, Any]:
                 'class_labeled_at': {'type': 'date'},
                 'test_holdout': {'type': 'boolean'},
                 'probe_pred_class': {'type': 'keyword'},
+                # Registry id of probe_pred_class (null if not in the registry).
+                'probe_pred_class_id': {'type': 'integer'},
                 'probe_pred_entropy': {'type': 'float'},
                 # Probe-model provenance + real per-class posterior
                 # derivatives.
@@ -1333,6 +1345,7 @@ async def ensure_items_probe_fields(
     """
     index = config.items_index
     fields = [
+        'probe_pred_class_id',
         'probe_pred_confidence',
         'probe_disagreement',
         'probe_pred_margin',
@@ -1341,6 +1354,7 @@ async def ensure_items_probe_fields(
     ]
     body = {
         'properties': {
+            'probe_pred_class_id': {'type': 'integer'},
             'probe_pred_confidence': {'type': 'float'},
             'probe_disagreement': {'type': 'boolean'},
             'probe_pred_margin': {'type': 'float'},

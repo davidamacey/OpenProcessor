@@ -40,7 +40,9 @@ one-off ``update_by_query`` to rewrite those two status strings.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class RegionStatus(str, Enum):
@@ -79,17 +81,85 @@ PENDING_STATUSES: frozenset[RegionStatus] = frozenset(
 )
 
 
-# The values an operator may write by hand. The detector / verify pipeline
-# also writes transient states (pending_*, detection_failed) that a human
-# never sets directly.
+@dataclass(frozen=True)
+class RegionStatusInfo:
+    """What one status means to a reviewer and to the human writers.
+
+    ``role`` groups statuses the way a UI treats them (``pending``,
+    ``positive``, ``rejected``, ``absent``, ``false_positive``,
+    ``failed``). ``clears_box``: a human write of this status removes the
+    region box and score. ``wants_reason``: a human writing it may attach
+    a ``region_rejection_reason``.
+    """
+
+    label: str
+    role: str
+    human_writable: bool
+    clears_box: bool = False
+    wants_reason: bool = False
+
+
+REGION_STATUS_INFO: dict[RegionStatus, RegionStatusInfo] = {
+    RegionStatus.PENDING_DETECTION: RegionStatusInfo('pending detection', 'pending', False),
+    RegionStatus.PENDING_VERIFICATION: RegionStatusInfo('pending verification', 'pending', False),
+    RegionStatus.DETECTED: RegionStatusInfo('detected (region visible)', 'positive', True),
+    RegionStatus.VERIFY_REJECTED: RegionStatusInfo(
+        'rejected (bad detection)', 'rejected', True, wants_reason=True
+    ),
+    RegionStatus.NO_REGION_BOX: RegionStatusInfo('no box found', 'absent', False, clears_box=True),
+    RegionStatus.NO_REGION_VISIBLE: RegionStatusInfo(
+        'no region visible', 'absent', True, clears_box=True, wants_reason=True
+    ),
+    RegionStatus.DETECTION_FAILED: RegionStatusInfo('detection failed', 'failed', False),
+    RegionStatus.FALSE_POSITIVE: RegionStatusInfo(
+        'false positive (box kept)', 'false_positive', True
+    ),
+}
+
+# A human confirming a region writes this; "there is no region" writes
+# REJECT; "the detector's box is wrong, keep it for training" writes FP.
+CONFIRM_STATUS = RegionStatus.DETECTED
+REJECT_STATUS = RegionStatus.NO_REGION_VISIBLE
+FALSE_POSITIVE_STATUS = RegionStatus.FALSE_POSITIVE
+
+# The values an operator may write by hand, derived from REGION_STATUS_INFO.
+# The pipeline also writes transient states (pending_*, detection_failed)
+# a human never sets directly.
 HUMAN_WRITABLE_STATUSES: frozenset[RegionStatus] = frozenset(
-    {
-        RegionStatus.DETECTED,
-        RegionStatus.NO_REGION_VISIBLE,
-        RegionStatus.VERIFY_REJECTED,
-        RegionStatus.FALSE_POSITIVE,
-    }
+    s for s, info in REGION_STATUS_INFO.items() if info.human_writable
 )
 
 
-__all__ = ['HUMAN_WRITABLE_STATUSES', 'PENDING_STATUSES', 'TERMINAL_STATUSES', 'RegionStatus']
+def region_status_catalog() -> dict[str, Any]:
+    """The lifecycle vocabulary served by ``GET {prefix}/regions/statuses``."""
+    return {
+        'statuses': [
+            {
+                'value': status.value,
+                'label': info.label,
+                'role': info.role,
+                'terminal': status in TERMINAL_STATUSES,
+                'human_writable': info.human_writable,
+                'clears_box': info.clears_box,
+                'wants_reason': info.wants_reason,
+            }
+            for status, info in ((s, REGION_STATUS_INFO[s]) for s in RegionStatus)
+        ],
+        'confirm_status': CONFIRM_STATUS.value,
+        'reject_status': REJECT_STATUS.value,
+        'false_positive_status': FALSE_POSITIVE_STATUS.value,
+    }
+
+
+__all__ = [
+    'CONFIRM_STATUS',
+    'FALSE_POSITIVE_STATUS',
+    'HUMAN_WRITABLE_STATUSES',
+    'PENDING_STATUSES',
+    'REGION_STATUS_INFO',
+    'REJECT_STATUS',
+    'TERMINAL_STATUSES',
+    'RegionStatus',
+    'RegionStatusInfo',
+    'region_status_catalog',
+]

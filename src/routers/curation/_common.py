@@ -36,6 +36,10 @@ from src.config import IndexRole, get_curation_config, index_name
 from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
+from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
+
+# Runtime import: pydantic resolves the Literal annotation from module globals.
+from src.services.curation.class_sources import HumanLabelSource  # noqa: TC001
 from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_LABEL_SOURCE
 
 
@@ -74,6 +78,15 @@ _INDEXES_BOOTSTRAPPED = False
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def is_not_found(exc: BaseException) -> bool:
+    """A single-doc read failed because the doc doesn't exist (vs. an outage)."""
+    return (
+        isinstance(exc, KeyError)
+        or getattr(exc, 'status_code', None) == 404
+        or 'NotFound' in type(exc).__name__
+    )
 
 
 def _registry_dep() -> ClassRegistry:
@@ -235,137 +248,16 @@ class ImportLabelsBatchRequest(BaseModel):
     items: list[ImportLabelsRequest]
 
 
-class ItemTextLine(BaseModel):
-    """One OCR text line on the item crop (``box_norm`` in the item-crop
-    frame; ``rel_height`` = line height / crop height)."""
-
-    text: str | None = None
-    box_norm: list[float] | None = None
-    confidence: float | None = None
-    rel_height: float | None = None
-
-
-class ItemDoc(BaseModel):
-    """The wire item every item-returning endpoint emits.
-
-    Documentation/OpenAPI model only: handlers return
-    ``src.services.curation.wire.serialize_item`` output directly (a test
-    pins this model's fields to that serializer's keys), so a stored value
-    of an unexpected type never 500s a browse page. Region attributes use
-    the fixed ``region_<attr>`` wire names regardless of any
-    ``OP_REGION_FIELD_*`` storage override.
-    """
-
-    id: str
-    crop_id: str
-    image_id: str = ''
-    image_path: str = ''
-    source_image_path: str = ''
-    bbox_norm: list[float] = Field(default_factory=list)
-    class_id: int | None = None
-    class_name: str | None = ''
-    class_source: str | None = ''
-    confidence: float = 0.0
-    classifier_raw_confidence: float | None = None
-    # label_source is nullable: VLM writers set it to None when
-    # overwriting a prior validation tag.
-    label_source: str | None = ''
-    # Derived: class_validated OR region_validated.
-    label_validated: bool = False
-    class_validated: bool = False
-    class_detector: str | None = None
-    class_detector_version: str | None = None
-    class_labeled_at: str | None = None
-    class_labeler: str | None = None
-    vlm_confidence: str | None = None
-    # VLM class suggestion: the registry class the VLM chose while the
-    # label is unvalidated (class_source vlm / vlm_reclassified), or, for
-    # vlm_new_class_pending, the proposed new class name with a null id.
-    vlm_proposed_class_id: int | None = None
-    vlm_proposed_class_name: str | None = None
-    cluster_id: int | None = None
-    cluster_distance: float | None = None
-    # AHC sub-cluster id (e.g. "47a"); cleared whenever cluster_id changes.
-    cluster_subid: str | None = None
-    test_holdout: bool = False
-    crop_rank_in_image: int | None = None
-    crop_area_norm: float | None = None
-    blur_lap_ratio: float | None = None
-    proposal_name: str | None = None
-    probe_pred_class: Any = None
-    probe_pred_entropy: float | None = None
-    mistakenness_score: float | None = None
-    mistakenness_method: str | None = None
-    mistakenness_version: str | None = None
-    mistakenness_scored_at: str | None = None
-    uniqueness_score: float | None = None
-    dup_group_id: Any = None
-    dup_group_size: int | None = None
-    dup_is_representative: bool | None = None
-    updated_at: str = ''
-    thumbnail_url: str = ''
-    region_thumbnail_url: str = ''
-    region_bbox_norm: list[float] | None = None
-    region_bbox_frame: str | None = None
-    region_bbox_correct: bool | None = None
-    region_status: str | None = None
-    region_score: float | None = None
-    region_confidence: Any = None
-    region_reason: str | None = None
-    region_rejection_reason: str | None = None
-    region_text: str | None = None
-    region_text_raw: str | None = None
-    region_text_confidence: float | None = None
-    region_text_source: str | None = None
-    region_text_engine_version: str | None = None
-    region_text_vlm: str | None = None
-    region_text_ocr: str | None = None
-    region_text_disagreement: bool | None = None
-    region_validated: bool | None = None
-    region_verified: bool | None = None
-    region_verified_at: str | None = None
-    region_verifier: str | None = None
-    region_verifier_version: str | None = None
-    region_visible: bool | None = None
-    region_detector: str | None = None
-    region_detector_version: str | None = None
-    region_detector_chain: list[str] | None = None
-    region_detected_at: str | None = None
-    region_cluster_id: int | None = None
-    region_cluster_subid: str | None = None
-    region_cluster_distance: float | None = None
-    region_class_id: int | None = None
-    region_label_source: str | None = None
-    region_source: str | None = None
-    region_pairing: Any = None
-    region_skip_verify: bool | None = None
-    # Every OCR line read on the item crop ([] when none / not yet read).
-    item_text_lines: list[ItemTextLine] = Field(default_factory=list)
-
-
-class CropsPageResponse(BaseModel):
-    total: int
-    page: int
-    page_size: int
-    crops: list[ItemDoc]
-    # Only set for a pool-scale overlay ordering (order='outliers' /
-    # 'diverse') — the operator-facing "from N crops in scope" caption
-    # needs to know it's looking at a ranked overlay rather than the
-    # default newest-first sort. Absent (None) for every other ordering.
-    method: str | None = None
-    version: str | None = None
-    n_pool: int | None = None
-
-
 class CropLabelRequest(BaseModel):
     class_id: int
-    label_source: str = 'human'
+    # A human source only; the server writes class_source='human' itself.
+    label_source: HumanLabelSource = 'human'
 
 
 class CropBatchLabelRequest(BaseModel):
     crop_ids: list[str]
     class_id: int
-    label_source: str = 'human'
+    label_source: HumanLabelSource = 'human'
 
 
 class CropMoveRequest(BaseModel):
@@ -399,11 +291,27 @@ class CropUndoBatchRequest(BaseModel):
     crop_ids: list[str]
 
 
+class CropDiscardRequest(BaseModel):
+    """Discard an item: clear its class (it doesn't belong where it is),
+    dismiss it from every review queue, or both. Recorded like a label
+    write, so ``POST /crops/{id}/label/undo`` reverses it."""
+
+    model_config = {'extra': 'forbid'}
+
+    clear_class: bool = True
+    dismiss_from_review: bool = False
+
+
+class CropDiscardBatchRequest(CropDiscardRequest):
+    crop_ids: list[str]
+
+
 class ItemRegionRequest(BaseModel):
     """Set or clear the region-of-interest sub-bbox on a single item.
 
-    ``region_bbox_norm`` is in the **source-image** coordinate frame; the
-    client converts from crop-frame to source-frame before sending.
+    ``frame`` says which frame ``region_bbox_norm`` is in: ``'source'``
+    (the source image, the stored frame) or ``'parent'`` (the item crop;
+    the server projects it through the item's own ``bbox_norm``).
     ``None`` clears the box and marks the item
     ``region_status='no_region_visible'`` (a deliberate human decision,
     distinct from "not yet detected").
@@ -413,6 +321,7 @@ class ItemRegionRequest(BaseModel):
 
     region_bbox_norm: tuple[float, float, float, float] | None
     region_label_source: str = 'human'
+    frame: Literal['source', 'parent'] = 'source'
 
 
 class ItemBatchRegionRequest(BaseModel):
@@ -424,11 +333,13 @@ class ItemBatchRegionRequest(BaseModel):
     crop_ids: list[str]
     region_bbox_norm: tuple[float, float, float, float] | None
     region_label_source: str = 'human'
+    # 'parent' boxes are projected through each item's own bbox_norm.
+    frame: Literal['source', 'parent'] = 'source'
 
 
-# Whitelist of region status values an operator may write. Defined next to
-# the enum (stdlib-only) so the TypeScript contract codegen can export it
-# without importing the app.
+# Region status values an operator may write — the lifecycle entries marked
+# human_writable in src/config/region_state.py (stdlib-only, so the TS
+# contract codegen exports the same set without importing the app).
 HUMAN_REGION_STATUS_VALUES = HUMAN_WRITABLE_STATUSES
 
 
@@ -437,15 +348,19 @@ class CropBatchStatusRequest(BaseModel):
 
     Lets an operator select an outlier sub-cluster and mark every region
     ``false_positive`` / ``no_region_visible`` in one call, or bulk-confirm
-    good regions (``region_status='detected'`` + ``region_verified=True``).
+    good regions (``region_status='detected'``).
     ``region_status`` must be one of ``HUMAN_REGION_STATUS_VALUES``.
+    ``region_verified`` is accepted but ignored: the server derives it
+    from ``region_status``.
     """
 
     model_config = {'extra': 'forbid'}
 
     crop_ids: list[str]
     region_status: str
-    region_verified: bool | None = None
+    region_verified: bool | None = Field(
+        default=None, deprecated=True, description='Ignored; derived from region_status.'
+    )
     region_label_source: str = 'human'
 
 
@@ -490,20 +405,32 @@ class ClassEntry(BaseModel):
     # Validated server-side: must be one ASCII char, unique across active
     # classes, not collide with reserved shortcuts.
     hotkey_letter: str | None = None
+    # ok / warn / block from validated_count (dataset_thresholds.py).
+    adequacy: Literal['ok', 'warn', 'block'] = 'block'
+    added_at: str | None = None
 
 
 class ClassListResponse(BaseModel):
     classes: list[ClassEntry]
+    thresholds: dict[str, int] = Field(default_factory=dict)
+    # Single keys a class hotkey may not use (labeling actions).
+    reserved_hotkeys: list[str] = Field(default_factory=list)
+
+
+# Class names are slugs: they become export / training class names.
+CLASS_NAME_PATTERN = r'^[a-z0-9_]+$'
 
 
 class ClassCreateRequest(BaseModel):
-    name: str
+    name: str = Field(pattern=CLASS_NAME_PATTERN)
     group: str = 'unknown'
     notes: str = ''
+    # Optional; same rules as on update (one char, not reserved, unique).
+    hotkey_letter: str | None = None
 
 
 class ClassUpdateRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, pattern=CLASS_NAME_PATTERN)
     group: str | None = None
     # ``""`` clears the binding; ``None`` leaves it unchanged. Single ASCII
     # char only; uniqueness checked server-side at write time.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
@@ -20,6 +20,7 @@ from src.routers.curation._common import (
 from src.routers.curation.pipeline_params import (
     AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
+    CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
@@ -27,8 +28,9 @@ from src.routers.curation.pipeline_params import (
     resolve_run_prompt_pack,
 )
 from src.routers.curation.vlm import _get_vlm_labeler
+from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query
+from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.event_hub import publish_crop_classified
-from src.services.curation.ingest_class_sources import classifier_class_sources
 
 
 # Fields the VLM sweep reads per unvalidated item.
@@ -43,25 +45,26 @@ VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
 @router.post('/pipeline/auto_label/start')
 async def pipeline_auto_label_start(
     opensearch: OpenSearchDep,
-    train_clusters: bool = Query(True),
-    promote_min_purity: float = Query(0.85, ge=0.5, le=1.0),
-    promote_min_members: int = Query(4, ge=2, le=1000),
-    vlm_batch_size: int = Query(32, ge=4, le=64),
-    vlm_concurrency: int = Query(16, ge=1, le=128),
-    max_vlm_crops: int = Query(0, ge=0, le=100000),
-    classifier_confidence_skip_vlm: float = Query(0.80, ge=0.0, le=1.0),
-    clustering_method: str | None = Query(None),
-    run_vlm: bool = Query(False, description=_RUN_VLM_DESC),
-    recluster_unvalidated: bool = Query(False, description='Merge candidate clusters mode.'),
-    run_auto_promote: bool = Query(False, description=_AUTO_PROMOTE_DESC),
-    reassign_only: bool = Query(False, description=_REASSIGN_ONLY_DESC),
-    # Cluster scope (primary-subject gate) — see /pipeline/auto_label/start.
-    gate_max_rank: int | None = Query(None, ge=1),
-    gate_min_blur_ratio: float | None = Query(None, ge=0.0),
-    n_clusters: int | None = Query(None, ge=2, le=4096),
-    class_id: int | None = Query(None, description=_CLASS_ID_DESC),
-    detection_profile: str | None = Query(None, include_in_schema=False),
-    prompt_pack: str | None = Query(None, description=_PROMPT_PACK_DESC),
+    train_clusters: Annotated[bool, Query()] = True,
+    promote_min_purity: Annotated[float, Query(ge=0.5, le=1.0)] = PROMOTE_MIN_PURITY,
+    promote_min_members: Annotated[int, Query(ge=2, le=1000)] = PROMOTE_MIN_MEMBERS,
+    vlm_batch_size: Annotated[int, Query(ge=4, le=64)] = 32,
+    vlm_concurrency: Annotated[int, Query(ge=1, le=128)] = 16,
+    max_vlm_crops: Annotated[int, Query(ge=0, le=100000)] = 0,
+    classifier_confidence_skip_vlm: Annotated[float, Query(ge=0.0, le=1.0)] = 0.80,
+    clustering_method: Annotated[str | None, Query()] = None,
+    run_vlm: Annotated[bool, Query(description=_RUN_VLM_DESC)] = False,
+    recluster_unvalidated: Annotated[bool, Query(description='Merge candidate clusters.')] = False,
+    run_auto_promote: Annotated[bool, Query(description=_AUTO_PROMOTE_DESC)] = False,
+    reassign_only: Annotated[bool, Query(description=_REASSIGN_ONLY_DESC)] = False,
+    # Cluster scope (primary-subject gate).
+    gate_max_rank: Annotated[int | None, Query(ge=1)] = None,
+    gate_min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
+    n_clusters: Annotated[int | None, Query(ge=2, le=4096)] = None,
+    class_id: Annotated[int | None, Query(description=_CLASS_ID_DESC)] = None,
+    cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
+    detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
+    prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
 ) -> dict[str, Any]:
     """Kick off auto_label as a background job. Returns immediately.
 
@@ -95,6 +98,7 @@ async def pipeline_auto_label_start(
                 'gate_min_blur_ratio': gate_min_blur_ratio,
                 'n_clusters': n_clusters,
                 'class_id': class_id,
+                'cluster_id': cluster_id,
                 'prompt_pack': prompt_pack,
             },
         )
@@ -106,44 +110,44 @@ async def pipeline_auto_label_start(
 @router.post('/pipeline/auto_label')
 async def pipeline_auto_label(
     opensearch: OpenSearchDep,
-    train_clusters: bool = Query(
-        True,
-        description='Re-train FAISS on the items index before promote/VLM steps.',
-    ),
-    promote_min_purity: float = Query(0.85, ge=0.5, le=1.0),
-    promote_min_members: int = Query(4, ge=2, le=1000),
-    vlm_batch_size: int = Query(32, ge=4, le=64),
-    vlm_concurrency: int = Query(8, ge=1, le=128),
-    max_vlm_crops: int = Query(0, ge=0, le=100000, description='0 = all unvalidated'),
-    classifier_confidence_skip_vlm: float = Query(
-        0.80,
-        ge=0.0,
-        le=1.0,
-        description=(
-            'Skip the VLM for classifier-labeled crops at or above this confidence. Defaults '
-            'to 0.80 — saves the dominant VLM cost at scale without '
-            'sacrificing label quality.'
+    # Annotated defaults (not `= Query(...)`): the auto-label worker calls
+    # this function directly with only the args in its trigger file, and a
+    # `Query(...)` default would leak in as a FieldInfo object.
+    train_clusters: Annotated[
+        bool, Query(description='Re-train clusters on the items index before promote/VLM.')
+    ] = True,
+    promote_min_purity: Annotated[float, Query(ge=0.5, le=1.0)] = PROMOTE_MIN_PURITY,
+    promote_min_members: Annotated[int, Query(ge=2, le=1000)] = PROMOTE_MIN_MEMBERS,
+    vlm_batch_size: Annotated[int, Query(ge=4, le=64)] = 32,
+    vlm_concurrency: Annotated[int, Query(ge=1, le=128)] = 8,
+    max_vlm_crops: Annotated[int, Query(ge=0, le=100000, description='0 = all in scope')] = 0,
+    classifier_confidence_skip_vlm: Annotated[
+        float,
+        Query(
+            ge=0.0,
+            le=1.0,
+            description=(
+                'Skip the VLM for classifier-labeled items at or above this confidence '
+                '(global sweep only; a cluster-scoped run labels every unvalidated member).'
+            ),
         ),
-    ),
-    clustering_method: str | None = Query(
-        None,
-        description=(
-            'Residual-pool clusterer. "hdbscan" (default, cuML GPU) or '
-            '"ahc" (sklearn fallback — heartbeat-risk at large n). The '
-            'refine endpoint always uses AHC regardless.'
-        ),
-    ),
-    run_vlm: bool = Query(False, description='Run the VLM stage. See /start.'),
-    recluster_unvalidated: bool = Query(False, description='Merge candidate clusters.'),
-    reassign_only: bool = Query(False, description=_REASSIGN_ONLY_DESC),
-    run_auto_promote: bool = Query(False, description=_AUTO_PROMOTE_DESC),
+    ] = 0.80,
+    clustering_method: Annotated[
+        str | None,
+        Query(description='Residual-pool clusterer id from GET /methods (axis=cluster).'),
+    ] = None,
+    run_vlm: Annotated[bool, Query(description='Run the VLM stage. See /start.')] = False,
+    recluster_unvalidated: Annotated[bool, Query(description='Merge candidate clusters.')] = False,
+    reassign_only: Annotated[bool, Query(description=_REASSIGN_ONLY_DESC)] = False,
+    run_auto_promote: Annotated[bool, Query(description=_AUTO_PROMOTE_DESC)] = False,
     # Cluster scope (primary-subject gate) — see /pipeline/auto_label/start.
-    gate_max_rank: int | None = Query(None, ge=1),
-    gate_min_blur_ratio: float | None = Query(None, ge=0.0),
-    n_clusters: int | None = Query(None, ge=2, le=4096),
-    class_id: int | None = Query(None, description=_CLASS_ID_DESC),
-    detection_profile: str | None = Query(None, include_in_schema=False),
-    prompt_pack: str | None = Query(None, description=_PROMPT_PACK_DESC),
+    gate_max_rank: Annotated[int | None, Query(ge=1)] = None,
+    gate_min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
+    n_clusters: Annotated[int | None, Query(ge=2, le=4096)] = None,
+    class_id: Annotated[int | None, Query(description=_CLASS_ID_DESC)] = None,
+    cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
+    detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
+    prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
     progress: Any = None,
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end:
@@ -167,7 +171,12 @@ async def pipeline_auto_label(
 
     reject_detection_profile(detection_profile)
     prompt_pack = await resolve_run_prompt_pack(opensearch, prompt_pack)
-    summary: dict[str, Any] = {'stages': {}, 'class_id': class_id, 'prompt_pack': prompt_pack}
+    summary: dict[str, Any] = {
+        'stages': {},
+        'class_id': class_id,
+        'cluster_id': cluster_id,
+        'prompt_pack': prompt_pack,
+    }
 
     # Snapshot counts at entry for a real before/after.
     summary['baseline'] = await pipeline_health_snapshot(opensearch)
@@ -277,10 +286,7 @@ async def pipeline_auto_label(
             progress.start_stage('vlm', total=0)
             progress.start_stage('finalize')
         try:
-            bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
-            if class_id is not None:
-                bool_q['must'] = [{'term': {'class_id': class_id}}]
-            body = {'query': {'bool': bool_q}}
+            body = {'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)}
             cnt = await opensearch.count(index=CURATION_ITEMS_INDEX, body=body)
             summary['unvalidated_remaining'] = int(cnt.get('count', 0))
         except Exception:
@@ -288,61 +294,16 @@ async def pipeline_auto_label(
         summary['after'] = await pipeline_health_snapshot(opensearch)
         return summary
 
-    # Per the ensemble design: the VLM ONLY runs on items that need
-    # clarification, i.e. ones where v6 detection did NOT give us a
-    # confident class. Specifically, skip:
-    #   - already-validated items
-    #   - item_model items above the classifier_confidence_skip_vlm threshold
-    #   - vlm_unmatched items — the VLM already failed once, asking
-    #     again won't help
-    # The VLM DOES run on:
-    #   - coco_yolo11_proposal (a generic detector found an object, v6
-    #     didn't recognize the class)
-    #   - item_model with confidence < threshold (low-conf v6, needs
-    #     clarification)
-    #   - residual AHC clusters (negative cluster_id, truly-unknown)
-    # Scroll through the FULL unvalidated cohort instead of capping at a
-    # single 10k page:
-    #   * max_vlm_crops == 0 -> process every unvalidated item
-    #   * max_vlm_crops > 0  -> cap total processed at that number
-    # Scroll batches are 1000 docs; iteration stops when either the
-    # cohort is exhausted or the per-run cap is reached.
+    # Selection (global sweep vs cluster scope) lives in
+    # services/curation/autolabel/selection.py. Scroll the FULL scope:
+    # max_vlm_crops == 0 processes everything, > 0 caps the run.
     SCROLL_PAGE = 1000
     SCROLL_TTL = '5m'
-    # Items whose class was resolved via the detection worker's combined
-    # class+region+OCR call within the last 24h carry
-    # ``vlm_verify_completed_at``. Skip them here so we don't fire a
-    # duplicate class call. The 24h window expires the skip so genuine
-    # re-runs (e.g. after a registry change) still re-classify.
-    from datetime import UTC, datetime, timedelta
-
-    _combined_recent_cutoff = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
-    unvalidated_query = {
-        'bool': {
-            'must_not': [
-                {'term': {'class_validated': True}},
-                {
-                    'bool': {
-                        'must': [
-                            {'terms': {'class_source': sorted(classifier_class_sources())}},
-                            {'range': {'confidence': {'gte': classifier_confidence_skip_vlm}}},
-                        ],
-                    },
-                },
-                {'term': {'class_source': 'vlm_unmatched'}},
-                # Skip items the detection worker already classified via
-                # the combined call within the last 24h.
-                {
-                    'range': {
-                        'vlm_verify_completed_at': {'gte': _combined_recent_cutoff},
-                    },
-                },
-            ],
-        },
-    }
-    if class_id is not None:
-        # Task d: a positive filter, not another must_not exclusion.
-        unvalidated_query['bool'].setdefault('must', []).append({'term': {'class_id': class_id}})
+    unvalidated_query = vlm_selection_query(
+        class_id=class_id,
+        cluster_id=cluster_id,
+        classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
+    )
     initial_body = {
         'size': SCROLL_PAGE,
         '_source': list(VLM_SWEEP_SOURCE_FIELDS),
@@ -658,7 +619,7 @@ async def pipeline_auto_label(
     try:
         cnt_resp = await opensearch.count(
             index=CURATION_ITEMS_INDEX,
-            body={'query': {'bool': {'must_not': [{'term': {'class_validated': True}}]}}},
+            body={'query': unvalidated_count_query(class_id=class_id, cluster_id=cluster_id)},
         )
         remaining = int(cnt_resp.get('count', 0))
     except Exception:

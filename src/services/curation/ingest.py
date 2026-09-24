@@ -69,6 +69,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger, get_request_id
+from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, ingest_passes_gate
 from src.services.curation.event_hub import publish_crop_created
 from src.services.curation.ingest_detect import (
@@ -111,7 +112,6 @@ logger = get_logger(__name__)
 # OP_MAX_INGEST_CONCURRENCY (no rebuild required).
 MAX_INGEST_CONCURRENCY = int(os.getenv('OP_MAX_INGEST_CONCURRENCY', '16'))
 
-RESIDUAL_CLUSTER_ID_OFFSET = 10000
 PARKED_CLUSTER_ID = -3
 
 

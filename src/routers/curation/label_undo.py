@@ -1,4 +1,6 @@
-"""Curation router sub-module — undo of human class writes.
+"""Curation router sub-module — undo of human class writes, the other
+recorded per-item decisions (discard, VLM-suggestion dismissal) and the
+item's class history.
 
 Every human class write (``PUT /crops/{id}/label``, ``PUT
 /crops/batch_label``, ``POST /crops/move``) records the item's full
@@ -19,15 +21,22 @@ from fastapi import HTTPException
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
+    CropDiscardBatchRequest,
+    CropDiscardRequest,
     CropUndoBatchRequest,
     OpenSearchDep,
     _now_iso,
+    is_not_found,
     logger,
     router,
 )
+from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.exclusion import park_restored_state_while_excluded
 from src.services.curation.history import (
+    CLASS_STATE_FIELDS,
+    HUMAN_DISCARD_WRITER,
     HUMAN_UNLABEL_WRITER,
+    REVIEW_DISMISS_FIELDS,
     find_undo_snapshot,
     record_class_snapshot,
     restore_class_state,
@@ -174,3 +183,205 @@ async def unlabel_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
     """
     await _undo_one(opensearch, crop_id, require_history=False)
     return {'crop_id': crop_id, 'reset': True}
+
+
+def _discard_merger(payload: CropDiscardRequest) -> Any:
+    def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        now = _now_iso()
+        update: dict[str, Any] = {
+            'class_id_history': record_class_snapshot(
+                current, writer=HUMAN_DISCARD_WRITER, restorable=True
+            ),
+            'updated_at': now,
+        }
+        if payload.clear_class:
+            update.update(dict.fromkeys(CLASS_STATE_FIELDS))
+            update['class_validated'] = False
+        if payload.dismiss_from_review:
+            update['review_dismissed_at'] = now
+            update['review_dismissed_by'] = 'human'
+        return update
+
+    return _merge
+
+
+def _require_effect(payload: CropDiscardRequest) -> None:
+    if not (payload.clear_class or payload.dismiss_from_review):
+        raise HTTPException(
+            status_code=422, detail='discard needs clear_class and/or dismiss_from_review'
+        )
+
+
+async def _discard_one(opensearch: Any, crop_id: str, payload: CropDiscardRequest) -> None:
+    try:
+        await occ_update_one(
+            opensearch,
+            doc_id=crop_id,
+            merger=_discard_merger(payload),
+            refresh=True,
+            writer_id=HUMAN_DISCARD_WRITER,
+        )
+    except OCCFinalConflictError:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+
+
+@router.post('/crops/{crop_id}/discard')
+async def discard_crop(
+    crop_id: str, payload: CropDiscardRequest, opensearch: OpenSearchDep
+) -> dict[str, Any]:
+    """Discard an item, as a recorded human write.
+
+    ``clear_class`` (default ``true``): the item doesn't belong in its
+    class/cluster — class, provenance and validation are cleared and it
+    drops to the residual pool (``cluster_id: null``).
+    ``dismiss_from_review`` (default ``false``): hide it from every
+    ``/review`` tab (``review_dismissed_at``). The pre-write state is
+    snapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it
+    exactly. Returns the post-write item. ``422`` when neither is set.
+    """
+    _require_effect(payload)
+    await _discard_one(opensearch, crop_id, payload)
+    items = await _items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]
+
+
+@router.post('/crops/discard_batch')
+async def discard_crops(
+    payload: CropDiscardBatchRequest, opensearch: OpenSearchDep
+) -> dict[str, Any]:
+    """Batch form of ``POST /crops/{crop_id}/discard``. Returns ``items``
+    (post-write wire items), ``discarded``, and ``conflicts`` /
+    ``not_found`` id lists. Undo with ``POST /crops/label/undo_batch``
+    passing the discarded ids."""
+    _require_effect(payload)
+    crop_ids = list(dict.fromkeys(payload.crop_ids))
+
+    async def _one(crop_id: str) -> str:
+        try:
+            await _discard_one(opensearch, crop_id, payload)
+        except OCCFinalConflictError:
+            return 'conflicts'
+        except HTTPException:
+            return 'not_found'
+        except Exception as exc:
+            logger.warning('discard_failed', crop_id=crop_id, error=str(exc))
+            return 'conflicts'
+        return 'discarded'
+
+    outcomes = await asyncio.gather(*(_one(cid) for cid in crop_ids))
+    by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': []}
+    for crop_id, outcome in zip(crop_ids, outcomes, strict=True):
+        by[outcome].append(crop_id)
+    return {
+        'items': await _items_by_ids(opensearch, by['discarded']),
+        'discarded': len(by['discarded']),
+        'conflicts': by['conflicts'],
+        'not_found': by['not_found'],
+    }
+
+
+class _NoSuggestionError(Exception):
+    pass
+
+
+@router.post('/crops/{crop_id}/vlm_dismiss')
+async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """Reject the VLM's class suggestion on this item.
+
+    Records ``vlm_dismissed_class_id`` / ``vlm_dismissed_class_name`` /
+    ``vlm_dismissed_at``; while the VLM's suggestion is the dismissed one,
+    ``vlm_proposed_class_*`` are null and ``proposed_class_*`` no longer
+    apply it. The class itself is untouched (label or discard it as a
+    separate write). Returns the post-write item; ``409`` when the item has
+    no VLM suggestion.
+    """
+
+    def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        class_id, class_name = vlm_suggestion(current)
+        if class_name is None:
+            raise _NoSuggestionError
+        return {
+            'vlm_dismissed_class_id': class_id,
+            'vlm_dismissed_class_name': class_name,
+            'vlm_dismissed_at': _now_iso(),
+            'updated_at': _now_iso(),
+        }
+
+    try:
+        await occ_update_one(
+            opensearch, doc_id=crop_id, merger=_merge, refresh=True, writer_id='human:vlm_dismiss'
+        )
+    except _NoSuggestionError as exc:
+        raise HTTPException(status_code=409, detail=f'no VLM suggestion on {crop_id}') from exc
+    except OCCFinalConflictError:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
+    items = await _items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]
+
+
+_HISTORY_KEYS: tuple[str, ...] = (*CLASS_STATE_FIELDS, *REVIEW_DISMISS_FIELDS, 'writer', 'at')
+
+
+@router.get('/crops/{crop_id}/history')
+async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """The item's class history, oldest first: ``{crop_id, entries}``.
+
+    Each entry is the item's class state *before* one write
+    (``class_id``, ``class_name``, ``class_source``, ``label_source``,
+    ``confidence``, ``class_detector*``, ``class_labeler``,
+    ``class_labeled_at``, ``class_validated``, ``cluster_id``,
+    ``cluster_subid``; ``review_dismissed_*`` on discards) plus ``writer``
+    (who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and
+    ``at``. Keys a writer didn't record are ``null``.
+    """
+    try:
+        resp = await opensearch.get(
+            index=CURATION_ITEMS_INDEX, id=crop_id, _source_includes=['class_id_history']
+        )
+    except Exception as exc:
+        if is_not_found(exc):
+            raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+    history = (resp.get('_source') or {}).get('class_id_history') or []
+    entries = [
+        {k: entry.get(k) for k in _HISTORY_KEYS} for entry in history if isinstance(entry, dict)
+    ]
+    return {'crop_id': crop_id, 'entries': entries}
+
+
+@router.post('/crops/{crop_id}/review_undismiss')
+async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """Return an item hidden from review to the queues (clears
+    ``review_dismissed_at`` / ``review_dismissed_by``). For a dismissal made
+    by ``POST /crops/{id}/discard``, ``label/undo`` does the same and also
+    restores the class. Returns the post-write item."""
+    try:
+        await occ_update_one(
+            opensearch,
+            doc_id=crop_id,
+            merger=lambda _c: {
+                'review_dismissed_at': None,
+                'review_dismissed_by': None,
+                'updated_at': _now_iso(),
+            },
+            refresh=True,
+            writer_id='human:review_undismiss',
+        )
+    except OCCFinalConflictError:
+        raise
+    except Exception as exc:
+        if is_not_found(exc):
+            raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}') from exc
+        raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
+    items = await _items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]

@@ -15,7 +15,7 @@ It also derives the VLM class suggestion carried on every wire item
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, get_args
 
 from src.config.ingest_profiles import ingest_primary_profile, ingest_secondary_profile
 from src.services.curation.ingest_class_sources import (
@@ -33,6 +33,13 @@ VLM_NEW_CLASS_PENDING_CLASS_SOURCE = 'vlm_new_class_pending'
 VLM_RECLASSIFIED_CLASS_SOURCE = 'vlm_reclassified'
 HUMAN_MOVE_CLASS_SOURCE = 'human_move'
 CLASS_MERGE_CLASS_SOURCE = 'class_merge'
+
+# ``label_source`` values a human class write may carry. The server always
+# writes ``class_source='human'`` for these writes itself; a client can only
+# say how the human decided (typed a label vs confirmed a suggestion), never
+# make a human write look machine-made.
+HumanLabelSource = Literal['human', 'human_confirmed']
+HUMAN_LABEL_SOURCES: tuple[str, ...] = get_args(HumanLabelSource)
 
 # Sources where the VLM picked a registry class that is still only a
 # machine suggestion (until class_validated flips).
@@ -114,14 +121,7 @@ def class_source_catalog() -> list[dict[str, str]]:
     return out
 
 
-def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
-    """``(class_id, class_name)`` the VLM suggests for a stored item.
-
-    * ``vlm`` / ``vlm_reclassified`` and not ``class_validated``: the
-      registry class the VLM chose (the item's current class).
-    * ``vlm_new_class_pending``: ``(None, <proposed new class name>)``.
-    * anything else, or a human-validated class: ``(None, None)``.
-    """
+def _raw_vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     if src.get('class_validated'):
         return None, None
     source = src.get('class_source')
@@ -134,14 +134,40 @@ def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     return None, None
 
 
+def vlm_suggestion_dismissed(src: dict[str, Any]) -> bool:
+    """True when the operator rejected exactly the VLM's current suggestion
+    (``POST /crops/{id}/vlm_dismiss``); a different later one is live again."""
+    class_id, name = _raw_vlm_suggestion(src)
+    if class_id is not None:
+        return src.get('vlm_dismissed_class_id') == class_id
+    return name is not None and src.get('vlm_dismissed_class_name') == name
+
+
+def vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
+    """``(class_id, class_name)`` the VLM suggests for a stored item.
+
+    * ``vlm`` / ``vlm_reclassified`` and not ``class_validated``: the
+      registry class the VLM chose (the item's current class).
+    * ``vlm_new_class_pending``: ``(None, <proposed new class name>)``.
+    * anything else, a human-validated class, or a suggestion the operator
+      dismissed: ``(None, None)``.
+    """
+    if vlm_suggestion_dismissed(src):
+        return None, None
+    return _raw_vlm_suggestion(src)
+
+
 __all__ = [
     'CLASS_MERGE_CLASS_SOURCE',
     'CLASS_SOURCE_ROLES',
+    'HUMAN_LABEL_SOURCES',
     'HUMAN_MOVE_CLASS_SOURCE',
     'VLM_NEW_CLASS_PENDING_CLASS_SOURCE',
     'VLM_RECLASSIFIED_CLASS_SOURCE',
     'VLM_SUGGESTION_CLASS_SOURCES',
     'VLM_UNMATCHED_CLASS_SOURCE',
+    'HumanLabelSource',
     'class_source_catalog',
     'vlm_suggestion',
+    'vlm_suggestion_dismissed',
 ]

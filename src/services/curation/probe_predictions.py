@@ -6,6 +6,8 @@ exported ONNX-without-NMS-baked-in. We run it across every non-holdout
 item document and record:
 
 - ``probe_pred_class`` — top-1 class name predicted on the crop.
+- ``probe_pred_class_id`` — that name's class-registry id (``None`` when the
+  registry has no active class of that name).
 - ``probe_pred_confidence`` — top-1 softmax score, ``p(ŷ)``.
 - ``probe_pred_entropy`` — real Shannon entropy of the class posterior.
 - ``probe_pred_margin`` — ``p(top1) - p(top2)`` (feeds the
@@ -336,6 +338,18 @@ def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, s
 # =============================================================================
 
 
+def _registry_class_ids(cfg: CurationConfig) -> dict[str, int]:
+    """Active class name -> id from the configured registry ({} when absent)."""
+    from src.clients.curation_opensearch import ClassRegistry
+
+    try:
+        reg = ClassRegistry(path=cfg.class_registry_path).load()
+    except Exception as exc:
+        logger.warning('probe_registry_unavailable', error=str(exc))
+        return {}
+    return {c.class_name: c.class_id for c in reg.classes if not c.deprecated}
+
+
 async def run_probe_inference(
     model_path: Path,
     opensearch: AsyncOpenSearch,
@@ -347,6 +361,7 @@ async def run_probe_inference(
     architecture: str = 'yolo11',
     page_size: int = 1000,
     resume: bool = False,
+    class_ids: dict[str, int] | None = None,
 ) -> int:
     """Run the probe checkpoint over every non-holdout item and record
     uncertainty.
@@ -373,6 +388,8 @@ async def run_probe_inference(
         resume: Skip items whose ``probe_model_version`` already equals
             this run's version tag, so an interrupted pass picks up
             where it stopped instead of re-scoring everything.
+        class_ids: class name -> registry id, for ``probe_pred_class_id``.
+            Defaults to the active classes of the configured registry.
 
     Returns:
         Number of item docs updated.
@@ -384,6 +401,8 @@ async def run_probe_inference(
     from PIL import Image
 
     cfg = config or get_curation_config()
+    if class_ids is None:
+        class_ids = _registry_class_ids(cfg)
 
     logger.info('probe_init', model=str(model_path), architecture=architecture)
     predict_fn, default_version = _build_predictor(model_path, architecture)
@@ -452,6 +471,7 @@ async def run_probe_inference(
                     body={
                         'doc': {
                             'probe_pred_class': pred_cls,
+                            'probe_pred_class_id': class_ids.get(pred_cls),
                             'probe_pred_confidence': pred_conf,
                             'probe_pred_entropy': entropy,
                             'probe_pred_margin': margin,
