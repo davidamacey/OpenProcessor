@@ -267,13 +267,11 @@
     {#if advisoryVisible}
       <section class="surface flex flex-col gap-4 border-dashed p-5">
         <h2 class="text-base font-semibold text-zinc-300">
-          Advertised but not yet wired
+          Set by the backend's startup config
         </h2>
         <p class="text-xs text-zinc-400">
-          These axes appear on this backend's /methods response and the settings API would
-          accept a default for them, but nothing that runs reads it — the backend picks
-          them from its startup config. Setting a default here would change what /methods
-          displays and nothing else, so Cropwright does not offer one.
+          These axes are chosen by the backend's startup config, not by a shared default —
+          the settings API rejects one for them. Shown here so you can see what is active.
         </p>
         {#each advisoryAxes(strategiesStore.methods) as spec (spec.axis)}
           {@const options = axisOptions(strategiesStore.methods, spec)}
