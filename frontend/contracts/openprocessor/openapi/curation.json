@@ -6118,7 +6118,7 @@
     },
     "/curation/crops/move": {
       "post": {
-        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  or a class-range id that isn't in the registry. Nothing is written.",
+        "description": "Move crops to a different cluster.\n\n* Class cluster (``cluster_id == class_id``): also a relabel — the\n  crops get that registry class (``class_source='human_move'``,\n  ``class_validated=True``): \"move this to the X cluster\" means \"this\n  is an X\".\n* Candidate cluster: placement only. The crops join the group; a\n  human-owned class is cleared (the human just said it isn't that\n  class), a machine suggestion is kept, and nothing is validated —\n  the group has no class until one is assigned.\n* ``400`` for an unassigned (negative) target (use exclude/discard)\n  a class-range id that isn't in the registry, or a candidate id with\n  no current members (it doesn't exist). Nothing is written.",
         "operationId": "move_crops_curation_crops_move_post",
         "requestBody": {
           "content": {
@@ -8074,7 +8074,7 @@
             }
           },
           {
-            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -8087,12 +8087,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
               "title": "Class Id"
             }
           },
           {
-            "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -8105,7 +8105,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
               "title": "Cluster Id"
             }
           },
@@ -8192,7 +8192,7 @@
     },
     "/curation/pipeline/auto_label/start": {
       "post": {
-        "description": "Kick off auto_label as a background job. Returns immediately.\n\nThe labeler polls ``GET /pipeline/auto_label/status`` for progress.\nOnly one job runs at a time; a second start request returns HTTP 409\nwhile a job is in flight.",
+        "description": "Kick off auto_label as a background job. Returns immediately.\n\nPoll ``GET /pipeline/auto_label/status/{job_id}`` (the returned\n``job_id``) for this job's progress.\nOnly one job runs at a time; a second start request returns HTTP 409\nwhile a job is in flight.",
         "operationId": "pipeline_auto_label_start_curation_pipeline_auto_label_start_post",
         "parameters": [
           {
@@ -8394,7 +8394,7 @@
             }
           },
           {
-            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+            "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -8407,12 +8407,12 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection). Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
+              "description": "Scope the VLM labeling stage to a single registry class (labeling-assist item selection); its cluster-id upkeep touches only the selected items. Clustering and auto-promote are not scoped. Unset runs the full unvalidated cohort, unchanged from before this parameter existed.",
               "title": "Class Id"
             }
           },
           {
-            "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
             "in": "query",
             "name": "cluster_id",
             "required": false,
@@ -8425,7 +8425,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Scope the VLM labeling stage to one cluster: every unvalidated, non-holdout, non-excluded member is labeled (the global sweep's cost skips do not apply). POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
+              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members, so the index-wide clustering and auto-promote stages are skipped. POST /vlm/label_cluster/{cluster_id} starts exactly this run.",
               "title": "Cluster Id"
             }
           },
@@ -8497,6 +8497,51 @@
           }
         },
         "summary": "Pipeline Auto Label Status",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/pipeline/auto_label/status/{job_id}": {
+      "get": {
+        "description": "State of one auto_label job by the ``job_id`` its start returned.\n\nSame shape as ``GET /pipeline/auto_label/status``. Answers for the job\neven after a later job replaced it as the current one (its final\nstate is kept; the newest 50 are retained). ``404`` for an unknown id.",
+        "operationId": "pipeline_auto_label_job_status_curation_pipeline_auto_label_status__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pipeline Auto Label Job Status Curation Pipeline Auto Label Status  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pipeline Auto Label Job Status",
         "tags": [
           "Curation"
         ]
@@ -9785,7 +9830,7 @@
     },
     "/curation/review/{tab}/locate": {
       "get": {
-        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
+        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
         "operationId": "review_locate_curation_review__tab__locate_get",
         "parameters": [
           {
@@ -11548,7 +11593,7 @@
     },
     "/curation/vlm/label_cluster/{cluster_id}": {
       "post": {
-        "description": "VLM-label every unvalidated member of one cluster, as a background job.\n\nQueues the auto-label job scoped to ``cluster_id`` with only the VLM\nstage (no re-clustering, no auto-promote, no cap): the server selects\nevery unvalidated, non-holdout, non-excluded member and chunks them.\nReturns the job state; poll ``GET /pipeline/auto_label/status`` —\n``total`` is the number selected, ``result.stages.vlm`` the outcome.\n``409`` while another auto-label job runs.",
+        "description": "VLM-label every unvalidated member of one cluster, as a background job.\n\nQueues the auto-label job scoped to ``cluster_id`` with only the VLM\nstage (no re-clustering, no auto-promote, no cap): the server selects\nevery unvalidated, non-holdout, non-excluded member and chunks them.\nReturns the job state; poll ``GET /pipeline/auto_label/status/{job_id}`` —\n``total`` is the number selected, ``result.stages.vlm`` the outcome.\n``409`` while another auto-label job runs.",
         "operationId": "vlm_label_cluster_curation_vlm_label_cluster__cluster_id__post",
         "parameters": [
           {
