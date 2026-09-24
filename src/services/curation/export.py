@@ -90,9 +90,9 @@ from src.services.curation.export_support import (
     _resolve_source_path,
     atomic_symlink_flip,
     atomic_write_text,
-    dataset_checksum,
     even_stratified_sample,
     hash_split,
+    label_content_sha,
     scroll_hits,
     stratified_split,
 )
@@ -160,6 +160,7 @@ class ExportResult:
     unlabeled_items_on_exported_images: int = 0
     images_with_unlabeled_items: int = 0
     images_dropped_not_fully_labeled: int = 0
+    skipped_items: dict[str, int] = field(default_factory=dict)
 
 
 def _class_split_rows(
@@ -548,7 +549,11 @@ class GenericYoloExportService:
             max_workers=max_image_workers,
         )
 
-        checksum = dataset_checksum(item_ids)
+        # Computed AFTER every label file is on disk — hashes what was
+        # actually written (frames, splits, boxes), plus the ordered class
+        # names, not just which item ids were selected. See
+        # export_support.label_content_sha.
+        checksum = label_content_sha(resolved_export_dir, names, truncate=None)
         finished_at = datetime.now(UTC).isoformat()
 
         data_yaml_path = resolved_export_dir / ARTIFACT_FILENAMES['data_yaml']
@@ -645,6 +650,7 @@ class GenericYoloExportService:
             unlabeled_items_on_exported_images=partial['unlabeled_items_on_exported_images'],
             images_with_unlabeled_items=partial['images_with_unlabeled_items'],
             images_dropped_not_fully_labeled=partial['images_dropped_not_fully_labeled'],
+            skipped_items=skipped_items,
         )
 
 
@@ -657,9 +663,9 @@ __all__ = [
     'SplitCounts',
     'atomic_symlink_flip',
     'atomic_write_text',
-    'dataset_checksum',
     'even_stratified_sample',
     'hash_split',
+    'label_content_sha',
     'resolve_current_export_dir',
     'stratified_split',
 ]

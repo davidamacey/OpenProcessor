@@ -41,6 +41,18 @@ def _resolve_current_export_dir() -> Path:
     return resolve_current_export_dir()
 
 
+class ExportSkippedItems(BaseModel):
+    """Validated items scrolled off the index but left out of the export,
+    by reason (see :meth:`GenericYoloExportService._hits_to_rows`)."""
+
+    no_image_id: int = Field(
+        default=0, description='Had a usable box + class but no image_id to group on.'
+    )
+    no_usable_box_or_class: int = Field(
+        default=0, description='Missing an item id, a usable box, or a class id.'
+    )
+
+
 @router.post('/export/yolo')
 async def export_yolo(
     payload: ExportYoloRequest,
@@ -93,6 +105,7 @@ async def export_yolo(
         'unlabeled_items_on_exported_images': result.unlabeled_items_on_exported_images,
         'images_with_unlabeled_items': result.images_with_unlabeled_items,
         'images_dropped_not_fully_labeled': result.images_dropped_not_fully_labeled,
+        'skipped_items': ExportSkippedItems(**result.skipped_items),
         'dedup': payload.dedup_threshold,
         'started_at': result.started_at or None,
         'finished_at': result.finished_at or None,
@@ -296,12 +309,20 @@ class ExportStatusResponse(BaseModel):
         default=None,
         description='Images left out by require_fully_labeled_images (0 when it was off).',
     )
+    skipped_items: ExportSkippedItems | None = Field(
+        default=None,
+        description=(
+            'Validated items left out of the export, by reason. Null for an export written '
+            'before this field existed, not a fabricated zero.'
+        ),
+    )
 
 
 def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusResponse:
     split_counts = meta.get('split_counts')
     split_objects = meta.get('split_object_counts')
     class_rows = meta.get('class_split_counts')
+    skipped_items = meta.get('skipped_items')
     return ExportStatusResponse(
         status='success',
         path=str(target),
@@ -322,6 +343,9 @@ def _status_from_manifest(target: Path, meta: dict[str, Any]) -> ExportStatusRes
         unlabeled_items_on_exported_images=meta.get('unlabeled_items_on_exported_images'),
         images_with_unlabeled_items=meta.get('images_with_unlabeled_items'),
         images_dropped_not_fully_labeled=meta.get('images_dropped_not_fully_labeled'),
+        skipped_items=(
+            ExportSkippedItems(**skipped_items) if isinstance(skipped_items, dict) else None
+        ),
         class_split_counts=(
             [ExportClassSplitCounts(**row) for row in class_rows]
             if isinstance(class_rows, list)

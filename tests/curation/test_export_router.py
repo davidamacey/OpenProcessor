@@ -110,6 +110,43 @@ async def test_export_yolo_handler_passes_the_partial_frame_flag_and_reports_cou
     assert response['images_with_unlabeled_items'] == 0
 
 
+@pytest.mark.asyncio
+async def test_export_yolo_response_surfaces_skipped_items(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``POST /curation/export/yolo`` must surface the manifest's
+    ``skipped_items`` (items scrolled off the index but left out of the
+    export, by reason) — it was silently dropped on the wire before."""
+
+    async def _fake_export_dataset(self: GenericYoloExportService, **_kwargs: Any) -> ExportResult:
+        return ExportResult(
+            export_dir='/tmp/fake-export',
+            version_tag='',
+            manifest_path='/tmp/fake-export/manifest.json',
+            data_yaml_path='/tmp/fake-export/data.yaml',
+            dataset_sha='deadbeef',
+            split_counts=SplitCounts(),
+            image_count=0,
+            class_count=0,
+            started_at='2026-01-01T00:00:00+00:00',
+            finished_at='2026-01-01T00:00:01+00:00',
+            current_symlink='/tmp/fake-export/current',
+            skipped_items={'no_image_id': 3, 'no_usable_box_or_class': 5},
+        )
+
+    monkeypatch.setattr(
+        'src.services.curation.export.GenericYoloExportService.export_dataset',
+        _fake_export_dataset,
+    )
+
+    response = await export_yolo_handler(ExportYoloRequest(), MagicMock(), MagicMock())
+
+    assert response['skipped_items'].model_dump() == {
+        'no_image_id': 3,
+        'no_usable_box_or_class': 5,
+    }
+
+
 # =============================================================================
 # Registry artifact download endpoint
 # =============================================================================

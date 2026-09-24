@@ -1289,6 +1289,25 @@
         "title": "ExportSingleClassRequest",
         "type": "object"
       },
+      "ExportSkippedItems": {
+        "description": "Validated items scrolled off the index but left out of the export,\nby reason (see :meth:`GenericYoloExportService._hits_to_rows`).",
+        "properties": {
+          "no_image_id": {
+            "default": 0,
+            "description": "Had a usable box + class but no image_id to group on.",
+            "title": "No Image Id",
+            "type": "integer"
+          },
+          "no_usable_box_or_class": {
+            "default": 0,
+            "description": "Missing an item id, a usable box, or a class id.",
+            "title": "No Usable Box Or Class",
+            "type": "integer"
+          }
+        },
+        "title": "ExportSkippedItems",
+        "type": "object"
+      },
       "ExportSplitCounts": {
         "description": "Counts per split (images or objects — see the field using it).",
         "properties": {
@@ -1469,6 +1488,17 @@
               }
             ],
             "title": "Seed"
+          },
+          "skipped_items": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExportSkippedItems"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Validated items left out of the export, by reason. Null for an export written before this field existed, not a fabricated zero."
           },
           "split_counts": {
             "anyOf": [
