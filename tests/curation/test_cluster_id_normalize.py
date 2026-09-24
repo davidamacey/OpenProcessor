@@ -114,3 +114,30 @@ async def test_forwards_conflicts_and_refresh_params():
     _, kwargs = client.update_by_query.call_args
     assert kwargs['conflicts'] == 'proceed'
     assert kwargs['refresh'] is True
+
+
+# =============================================================================
+# CM-6: force_cluster_id_equals_class_id must never pull an excluded item
+# back into its class cluster.
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_force_cluster_id_equals_class_id_excludes_excluded_items():
+    from src.services.curation.clustering.id_normalize import force_cluster_id_equals_class_id
+
+    client = AsyncMock()
+    client.update_by_query = AsyncMock(return_value={'task': 'node1:1'})
+    client.tasks = AsyncMock()
+    client.tasks.get = AsyncMock(
+        return_value={'completed': True, 'response': {'updated': 0, 'batches': 1}}
+    )
+
+    await force_cluster_id_equals_class_id(client)
+
+    _, kwargs = client.update_by_query.call_args
+    body = kwargs['body']
+    assert {'term': {'class_excluded': True}} in body['query']['bool']['must_not']
+    # Defense in depth: the script itself also no-ops on a freshly
+    # excluded doc (a write racing the query match).
+    assert 'class_excluded' in body['script']['source']
