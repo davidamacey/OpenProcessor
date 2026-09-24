@@ -17,9 +17,11 @@ import {
   getDataYamlUrl,
   getManifestUrl,
   getMethods,
+  getNewClassProposalsSummary,
   getReviewQueue,
   getSelectStatus,
   getVizProjection,
+  locateInReviewQueue,
   normalizeApiPrefix,
   putCurationDefaults,
   rebuildVizProjection,
@@ -318,6 +320,206 @@ describe('getReviewQueue', () => {
 
     const res = await getReviewQueue('all', 1, 30, {});
     expect(res.items[0]?.mistakenness_score).toBeNull();
+  });
+
+  // 2026-09-24 logic-moves W5: proposed_class_id/name are served on every
+  // crop-shaped item now (item 11) and flow through mapRawCrop — no more
+  // review-only special casing — while probe_pred_class_id/needs_new_class/
+  // needs_new_class_note (item 14) are still review-item-only extras.
+  it('maps proposed_class_id/_name, probe_pred_class_id and needs_new_class through onto each item', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [
+          {
+            crop_id: 'c1',
+            image_path: '/x/y.jpg',
+            bbox_norm: [0, 0, 1, 1],
+            proposed_class_id: 12,
+            proposed_class_name: 'suv',
+            probe_pred_class: 'sedan',
+            probe_pred_class_id: 7,
+            probe_pred_entropy: 0.42,
+            needs_new_class: true,
+            needs_new_class_note: 'looks like a boat trailer',
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    const item = res.items[0];
+    expect(item?.proposed_class_id).toBe(12);
+    expect(item?.proposed_class_name).toBe('suv');
+    expect(item?.probe_pred_class).toBe('sedan');
+    expect(item?.probe_pred_class_id).toBe(7);
+    expect(item?.probe_pred_entropy).toBe(0.42);
+    expect(item?.needs_new_class).toBe(true);
+    expect(item?.needs_new_class_note).toBe('looks like a boat trailer');
+  });
+
+  it('defaults proposed_class_id/probe_pred_class_id/needs_new_class when the server omits them', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 1,
+        page: 1,
+        page_size: 30,
+        items: [{ crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1] }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    const item = res.items[0];
+    expect(item?.proposed_class_id).toBeNull();
+    expect(item?.probe_pred_class_id).toBeNull();
+    expect(item?.needs_new_class).toBe(false);
+    expect(item?.needs_new_class_note).toBeNull();
+  });
+
+  it('surfaces sort_applied from the raw response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total: 0,
+        page: 1,
+        page_size: 30,
+        items: [],
+        sort_applied: 'atypicality_default',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    expect(res.sort_applied).toBe('atypicality_default');
+  });
+
+  it('defaults sort_applied to null when the server omits it', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getReviewQueue('all', 1, 30, {});
+    expect(res.sort_applied).toBeNull();
+  });
+});
+
+/**
+ * `GET {API_PREFIX}/review/{tab}/locate` (item 10, 2026-09-24 logic-moves
+ * W5) — powers the `/review?crop_id=` deep link without paging through
+ * the queue by hand.
+ */
+describe('locateInReviewQueue', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends crop_id/page_size/filters and parses an in-queue result', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        crop_id: 'c1',
+        in_queue: true,
+        rank: 41,
+        page: 2,
+        page_size: 30,
+        total: 109,
+        reason: null,
+        sort_applied: 'atypicality',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await locateInReviewQueue('all', 'c1', 30, { class_id: 5 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toContain('/review/all/locate');
+    expect(url).toContain('crop_id=c1');
+    expect(url).toContain('page_size=30');
+    expect(url).toContain('class_id=5');
+    expect(res).toEqual({
+      crop_id: 'c1',
+      in_queue: true,
+      rank: 41,
+      page: 2,
+      page_size: 30,
+      total: 109,
+      reason: null,
+      sort_applied: 'atypicality',
+    });
+  });
+
+  it('parses a not-in-queue result with a reason and null page/rank', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        crop_id: 'c1',
+        in_queue: false,
+        rank: null,
+        page: null,
+        page_size: 30,
+        total: 0,
+        reason: 'filtered_out',
+        sort_applied: 'uncertainty_entropy',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await locateInReviewQueue('uncertainty', 'c1', 30);
+    expect(res.in_queue).toBe(false);
+    expect(res.page).toBeNull();
+    expect(res.rank).toBeNull();
+    expect(res.reason).toBe('filtered_out');
+  });
+});
+
+/**
+ * `GET {API_PREFIX}/review/new_class_proposals/summary` (2026-09-24
+ * logic-moves W5) — the aggregate `/classes`'s Proposals section renders.
+ */
+describe('getNewClassProposalsSummary', () => {
+  const jsonResponse = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('parses total_pending and top_terms', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        total_pending: 8,
+        top_terms: [{ label: 'boat', count: 5, sample_crop_ids: ['a', 'b'] }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getNewClassProposalsSummary();
+    expect(res.total_pending).toBe(8);
+    expect(res.top_terms).toEqual([
+      { label: 'boat', count: 5, sample_crop_ids: ['a', 'b'] },
+    ]);
+  });
+
+  it('defaults to zero/empty when the backend is degraded (e.g. an opensearch outage)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ detail: 'opensearch unavailable' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await getNewClassProposalsSummary();
+    expect(res.total_pending).toBe(0);
+    expect(res.top_terms).toEqual([]);
   });
 });
 

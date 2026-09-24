@@ -1,9 +1,14 @@
 <script lang="ts">
   import {
+    addClass,
+    bulkLabel,
+    getNewClassProposalsSummary,
+    getThumbUrl,
     mergeClasses,
     previewClassMerge,
     renameClass,
     syncClassesToOpensearch,
+    type NewClassProposalsSummary,
   } from '$lib/api';
   import AddClassModal from '$components/AddClassModal.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
@@ -13,6 +18,7 @@
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
+  import { onMount } from 'svelte';
 
   $effect(() => {
     keyboardStore.setScope('classes');
@@ -242,6 +248,110 @@
       busy = false;
     }
   }
+
+  // -- New-class proposals (2026-09-24 logic-moves W5) ---------------------
+  //
+  // Aggregate view of the same cohort the `/review` "New Class Proposals"
+  // tab pages through one crop at a time — top VLM-proposed-but-unmatched
+  // terms with counts and a handful of sample crop ids each
+  // (GET {API_PREFIX}/review/new_class_proposals/summary). Two actions per
+  // term: create a brand-new class and bulk-assign the samples to it, or
+  // map the samples onto an existing class. Both act only on the served
+  // `sample_crop_ids` — a small preview batch, not the full cohort behind
+  // the term (the review tab is where the rest gets triaged one at a
+  // time).
+  let proposalsSummary = $state<NewClassProposalsSummary | null>(null);
+  let proposalsError = $state<string | null>(null);
+  let proposalsLoading = $state<boolean>(false);
+  // Per-term inline form state, keyed by term label.
+  let newClassNameByTerm = $state<Record<string, string>>({});
+  let mapTargetByTerm = $state<Record<string, number | null>>({});
+  let proposalBusyTerm = $state<string | null>(null);
+
+  async function loadProposals(): Promise<void> {
+    proposalsLoading = true;
+    proposalsError = null;
+    try {
+      proposalsSummary = await getNewClassProposalsSummary();
+    } catch (e) {
+      // Observed live: this aggregate can 500 on an opensearch outage even
+      // while the rest of /classes works fine — degrade to an inline error
+      // rather than breaking the page.
+      proposalsError = (e as Error).message;
+    } finally {
+      proposalsLoading = false;
+    }
+  }
+
+  onMount(() => void loadProposals());
+
+  function dismissProposalTerm(label: string): void {
+    if (!proposalsSummary) return;
+    proposalsSummary = {
+      ...proposalsSummary,
+      top_terms: proposalsSummary.top_terms.filter((t) => t.label !== label),
+    };
+  }
+
+  async function createClassAndAssign(term: {
+    label: string;
+    sample_crop_ids: string[];
+  }): Promise<void> {
+    const name = (newClassNameByTerm[term.label] ?? term.label).trim();
+    if (!name) {
+      toastStore.error('Class name is required.');
+      return;
+    }
+    if (term.sample_crop_ids.length === 0) {
+      toastStore.error('No sample crops to assign.');
+      return;
+    }
+    proposalBusyTerm = term.label;
+    try {
+      // No client-side slug check — POST {API_PREFIX}/classes 422s on a bad
+      // name with the pattern in its detail; that message is what the
+      // toast shows.
+      const created = await addClass({ name, group: '' });
+      const res = await bulkLabel(term.sample_crop_ids, created.class_id);
+      toastStore.success(
+        `Created "${created.class_name}" and assigned ${res.updated_ids?.length ?? term.sample_crop_ids.length} sample crop(s).`,
+      );
+      dismissProposalTerm(term.label);
+      await classesStore.clearAndRefetch();
+    } catch (e) {
+      toastStore.error(`Create & assign failed: ${(e as Error).message}`);
+    } finally {
+      proposalBusyTerm = null;
+    }
+  }
+
+  async function mapToExisting(term: {
+    label: string;
+    sample_crop_ids: string[];
+  }): Promise<void> {
+    const targetId = mapTargetByTerm[term.label];
+    if (targetId == null) {
+      toastStore.error('Pick an existing class first.');
+      return;
+    }
+    if (term.sample_crop_ids.length === 0) {
+      toastStore.error('No sample crops to assign.');
+      return;
+    }
+    proposalBusyTerm = term.label;
+    try {
+      const res = await bulkLabel(term.sample_crop_ids, targetId);
+      const cls = classesStore.byId(targetId);
+      toastStore.success(
+        `Assigned ${res.updated_ids?.length ?? term.sample_crop_ids.length} sample crop(s) to "${cls?.name ?? targetId}".`,
+      );
+      dismissProposalTerm(term.label);
+    } catch (e) {
+      toastStore.error(`Assign failed: ${(e as Error).message}`);
+    } finally {
+      proposalBusyTerm = null;
+    }
+  }
 </script>
 
 <div class="mx-auto flex h-full max-w-7xl flex-col p-6">
@@ -280,6 +390,120 @@
         → '{c.hotkey_letter}'{/each} — bound before this key became reserved for a labeling
       action. The binding is kept; rebind to a free letter when convenient.
     </div>
+  {/if}
+
+  <!-- New-class proposals (2026-09-24 logic-moves W5) — aggregate view of
+       the same cohort /review's "New Class Proposals" tab pages one crop
+       at a time. Absent (not shown as an error banner) while nothing has
+       loaded yet or the pool is empty; shown as an inline error when the
+       backend genuinely failed (e.g. the opensearch aggregation 500 seen
+       live), never a page-breaking crash. -->
+  {#if proposalsLoading}
+    <div class="surface mb-4 p-4 text-xs text-zinc-500">Loading proposals…</div>
+  {:else if proposalsError}
+    <div class="surface mb-4 flex items-center gap-3 p-4 text-xs text-red-300">
+      <span>Proposals unavailable: {proposalsError}</span>
+      <button type="button" class="btn-sm" onclick={() => void loadProposals()}>
+        retry
+      </button>
+    </div>
+  {:else if proposalsSummary && proposalsSummary.top_terms.length > 0}
+    <section class="surface mb-4 p-4">
+      <h2 class="mb-1 text-sm font-semibold text-zinc-200">
+        New class proposals
+        <span class="ml-1 font-normal text-zinc-500"
+          >({proposalsSummary.total_pending} pending)</span
+        >
+      </h2>
+      <p class="mb-3 text-xs text-zinc-500">
+        Crops the VLM flagged as needing a class the registry doesn't have yet. Each row
+        is a proposed term with a few sample crops — create a class and assign the
+        samples, or map them onto an existing class. The full cohort for each term is
+        triaged one at a time on <code>/review</code>'s "New Class Proposals" tab.
+      </p>
+      <ul class="flex flex-col gap-3">
+        {#each proposalsSummary.top_terms as term (term.label)}
+          <li
+            class="flex flex-wrap items-center gap-3 rounded border border-zinc-800 p-2"
+          >
+            <div class="flex shrink-0 items-center gap-1">
+              {#each term.sample_crop_ids.slice(0, 4) as cropId (cropId)}
+                <img
+                  src={getThumbUrl(cropId, 64)}
+                  alt=""
+                  loading="lazy"
+                  class="h-10 w-10 rounded object-cover"
+                />
+              {/each}
+            </div>
+            <div class="min-w-0 shrink-0">
+              <div class="text-sm text-zinc-100">{term.label}</div>
+              <div class="text-[11px] text-zinc-500">{term.count} crop(s)</div>
+            </div>
+            <span class="grow"></span>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <input
+                type="text"
+                placeholder={term.label}
+                value={newClassNameByTerm[term.label] ?? ''}
+                oninput={(e) => {
+                  newClassNameByTerm = {
+                    ...newClassNameByTerm,
+                    [term.label]: (e.currentTarget as HTMLInputElement).value,
+                  };
+                }}
+                class="input-sm w-32"
+                disabled={proposalBusyTerm === term.label}
+              />
+              <button
+                type="button"
+                class="btn-sm btn-primary"
+                disabled={proposalBusyTerm === term.label}
+                onclick={() => void createClassAndAssign(term)}
+              >
+                Create class & assign
+              </button>
+            </div>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <select
+                class="select-sm"
+                value={mapTargetByTerm[term.label] ?? ''}
+                onchange={(e) => {
+                  const v = (e.currentTarget as HTMLSelectElement).value;
+                  mapTargetByTerm = {
+                    ...mapTargetByTerm,
+                    [term.label]: v === '' ? null : Number(v),
+                  };
+                }}
+                disabled={proposalBusyTerm === term.label}
+              >
+                <option value="">map to existing…</option>
+                {#each allClasses.filter((c) => !c.deprecated) as cls (cls.id)}
+                  <option value={cls.id}>{cls.name}</option>
+                {/each}
+              </select>
+              <button
+                type="button"
+                class="btn-sm"
+                disabled={proposalBusyTerm === term.label ||
+                  mapTargetByTerm[term.label] == null}
+                onclick={() => void mapToExisting(term)}
+              >
+                Assign
+              </button>
+            </div>
+            <button
+              type="button"
+              class="btn-sm btn-icon"
+              title="Dismiss this term from the list (doesn't touch the crops)"
+              onclick={() => dismissProposalTerm(term.label)}
+            >
+              ×
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
   {/if}
 
   <!-- Active classes -->

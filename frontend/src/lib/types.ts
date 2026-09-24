@@ -270,7 +270,18 @@ export interface Crop {
   class_detector_version?: string | null;
   class_labeled_at?: string | null;
   class_labeler?: string | null;
-  hdd_source?: string | null;
+  /** Ingest source tag (`GET {API_PREFIX}/review/{tab}?source=` /
+   *  `GET {API_PREFIX}/crops?source=`). Replaces the old `hdd_source` field the
+   *  backend never actually populated (2026-09-24 logic-moves cutover) —
+   *  `source` is the live wire key. */
+  source?: string | null;
+  /** The backend's confirmable suggestion for this crop — what
+   *  Enter/Confirm assigns. Served on every crop-shaped item, not just
+   *  review-queue rows (undo/restore, `/crops/{id}`, diverse selection
+   *  hydration all carry it too), so it lives on `Crop` rather than only
+   *  `ReviewItem`. */
+  proposed_class_id: number | null;
+  proposed_class_name: string | null;
   test_holdout: boolean;
   outlier_flagged?: boolean;
   outlier_score?: number | null;
@@ -401,14 +412,29 @@ export type CoreReviewTab =
   | 'uncertainty'
   | 'model_disagreements'
   | 'primary_low_conf'
-  | 'coco_blind_spots';
+  | 'coco_blind_spots'
+  // New-class-proposal queue (2026-09-24 logic-moves W5): crops the VLM
+  // couldn't match to any registered class (`class_source:
+  // 'vlm_new_class_pending'`). Backed by the same `{API_PREFIX}/review/{tab}`
+  // shape as every other core tab; `/classes`'s Proposals section reads
+  // the separate `.../summary` aggregate instead (see api.ts).
+  | 'new_class_proposals';
 
 export type ReviewTab = CoreReviewTab | SlotReviewTab;
 
 export interface ReviewItem extends Crop {
   reason: string;
-  proposed_class_id: number | null;
-  proposed_class_name: string | null;
+  // proposed_class_id/name live on Crop now (served on every crop-shaped
+  // item, not just review rows) — not re-declared here.
+  /** The freshly-promoted model's predicted class id for this crop
+   *  (`model_disagreements` tab). Lets "Accept model's class" call
+   *  `assign()` directly instead of needing a name→id lookup. */
+  probe_pred_class_id?: number | null;
+  /** Set when a human (or the VLM) flagged this crop as needing a class
+   *  the registry doesn't have yet — drives the `new_class_proposals`
+   *  queue and the note shown inline. */
+  needs_new_class?: boolean;
+  needs_new_class_note?: string | null;
   // Phase 5 — populated for the model_disagreements tab. The new model's
   // prediction for this crop, plus how confident it was. Lets the
   // labeler render "human said X, model said Y" inline.
@@ -439,6 +465,13 @@ export interface PaginatedResponse<T> {
    *  toast — this isn't an error, just a degraded request. Absent on
    *  every other endpoint and on a request that didn't ask for a sort. */
   sort_fallback_reason?: string | null;
+  /** The sort id `{API_PREFIX}/review/{tab}` actually used — the tab's own
+   *  default when no `?sort=` was sent, or the requested id when it was
+   *  honored. Shown in the StrategyBar summary chip so the operator can
+   *  see what's actually ordering the queue, not just what they last
+   *  picked (2026-09-24 logic-moves W5). Absent on endpoints that don't
+   *  report it. */
+  sort_applied?: string | null;
   /** Provenance for a pool-scale overlay ordering (curation-strategy plan
    *  Phase 4 — currently only `{API_PREFIX}/crops?order=diverse`): which
    *  overlay/version produced this selection, and how large the pool it

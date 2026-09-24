@@ -54,6 +54,12 @@ describe('mapRawCrop full field mapping', () => {
     expect(crop.class_detector_version).toBe(raw.class_detector_version);
     expect(crop.class_labeled_at).toBe(raw.class_labeled_at);
     expect(crop.class_labeler).toBe(raw.class_labeler);
+    // source (2026-09-24 logic-moves item 14/G3 — replaces the dead
+    // hdd_source field) and proposed_class_id/_name (item 11 — served on
+    // every crop-shaped item, not just review-queue rows).
+    expect(crop.source).toBe(raw.source);
+    expect(crop.proposed_class_id).toBe(raw.proposed_class_id);
+    expect(crop.proposed_class_name).toBe(raw.proposed_class_name);
     expect(crop.test_holdout).toBe(true);
     expect(crop.crop_rank_in_image).toBe(raw.crop_rank_in_image);
     expect(crop.crop_area_norm).toBe(raw.crop_area_norm);

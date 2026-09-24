@@ -17,20 +17,28 @@ import {
 } from './reviewTabs';
 
 describe('REVIEW_TABS (2026-09 tab consolidation)', () => {
-  it('has exactly 5 top-level tabs, down from 9', () => {
-    expect(REVIEW_TABS).toHaveLength(5);
+  it('has exactly 6 top-level tabs — the 5 from the 2026-09 consolidation plus new_class_proposals', () => {
+    expect(REVIEW_TABS).toHaveLength(6);
   });
 
-  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / slot:license_plate', () => {
+  it('is exactly all / uncertainty / model_disagreements / coco_blind_spots / new_class_proposals / slot:license_plate', () => {
     expect(REVIEW_TABS.map((t) => t.id)).toEqual([
       'all',
       'uncertainty',
       'model_disagreements',
       'coco_blind_spots',
+      'new_class_proposals',
       'slot:license_plate',
     ]);
     // urlId is the bookmark contract — 'plates' stays alive there.
     expect(REVIEW_TABS.find((t) => t.id === 'slot:license_plate')?.urlId).toBe('plates');
+    // new_class_proposals (2026-09-24 logic-moves W5) is a real core tab —
+    // its urlId/endpointId are the raw backend tab id, same as every
+    // other core tab.
+    expect(REVIEW_TABS.find((t) => t.id === 'new_class_proposals')).toMatchObject({
+      urlId: 'new_class_proposals',
+      endpointId: 'new_class_proposals',
+    });
   });
 
   it('never renders Outliers as a tab', () => {

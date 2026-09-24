@@ -9,6 +9,7 @@
     getSelectStatus,
     getSourceImageWithBbox,
     getThumbUrl,
+    locateInReviewQueue,
     putCropLabel,
     selectDiverse,
     setSlotBox,
@@ -76,19 +77,16 @@
   // tab (below); Outliers retired entirely (see reviewTabs.ts doc
   // comment). The remaining 4 narrower tabs stay available for
   // diagnosing where uncertainty came from — each is a real, distinct
-  // signal, not a rebrand of "everything."
+  // signal, not a rebrand of "everything." `new_class_proposals` (added
+  // 2026-09-24, logic-moves W5) is a 6th real tab, not a preset — a
+  // distinct triage workflow (confirm / map-to-existing / create-a-class)
+  // over crops the VLM flagged as needing a class the registry doesn't
+  // have yet.
   // `/review?tab=<urlId>&crop_id=<id>` deep links (bookmarks, /train's
   // cohort preview) open that tab and jump to that crop.
   const deepLink = reviewDeepLink(page.url.searchParams);
   let tab = $state<ReviewTab>(deepLink.tab);
   let pendingCropId: string | null = deepLink.cropId;
-  // How far to page forward looking for a deep-linked crop before
-  // saying it isn't in this queue.
-  const DEEP_LINK_MAX_ITEMS = 300;
-  // G3: GET /review/{tab} doesn't support class_id/hdd_source/conf_min/
-  // conf_max yet — flip once the backend ships them (see the filter bar
-  // below and _filter()).
-  const REVIEW_SERVER_FILTERS_ENABLED = false;
   // The slot backing the current tab, if any — the single derived value
   // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
   // hangs every former `tab === 'plates'` call site off, instead of a
@@ -117,6 +115,10 @@
   // yet). Rendered as a small inline note, never a toast — this isn't a
   // failure, just a degraded request.
   let sortFallbackReason = $state<string | null>(null);
+  // The sort id the backend actually applied (item 10, 2026-09-24
+  // logic-moves) — passed to StrategyBar so its summary chip can show
+  // it next to whatever the operator picked (or didn't).
+  let sortApplied = $state<string | null>(null);
 
   // -- diverse overlay (P2-10, pool-scale k-center-greedy selection) ----
   // Entered via the same StrategyBar sort dropdown as every other sort —
@@ -146,7 +148,7 @@
     // the UI while diverseMode is active (see the filter bar below) so
     // this never silently drops something the operator thinks is applied.
     const f: Record<string, unknown> = {};
-    if (hddSource) f.hdd_source = hddSource;
+    if (sourceFilter) f.hdd_source = sourceFilter;
     if (classFilter != null) f.class_id = classFilter;
     return f;
   }
@@ -240,12 +242,14 @@
    * Diverse mode replaces the queue's item source entirely — the pager's
    * fetchPage slices `diverseSelection.crop_ids` into page_size chunks
    * and hydrates each id via getCrop, since {API_PREFIX}/select/diverse only
-   * returns ids, not full crop records. Each hydrated item is widened
-   * into a ReviewItem with no per-item proposal (nothing in diverse mode
-   * suggests a class) — resolveConfirmClassId/canConfirm already falls
-   * back to the crop's existing class_id when proposed_class_id is null
-   * (classPicker.ts), so Enter still does the right thing: confirms the
-   * existing label if any, otherwise opens the class picker.
+   * returns ids, not full crop records. Each hydrated crop already
+   * carries its own served `proposed_class_id`/`_name` (item 11,
+   * 2026-09-24 logic-moves — promoted onto `Crop`/`mapRawCrop`, so
+   * `getCrop` returns it same as `getReviewQueue`) — no client fill-in
+   * needed. resolveConfirmClassId/canConfirm falls back to the crop's
+   * existing class_id when it's null (classPicker.ts), so Enter still
+   * does the right thing either way: confirms the proposal or existing
+   * label if either exists, otherwise opens the class picker.
    */
   async function fetchDiversePage(
     page: number,
@@ -261,8 +265,6 @@
     const items: ReviewItem[] = crops.map((crop) => ({
       ...crop,
       reason: 'diverse selection (k-center-greedy)',
-      proposed_class_id: null,
-      proposed_class_name: null,
     }));
     return { items, total: selection.crop_ids.length };
   }
@@ -283,6 +285,7 @@
         _filter(),
       );
       sortFallbackReason = res.sort_fallback_reason ?? null;
+      sortApplied = res.sort_applied ?? null;
       return res;
     },
     keyOf: (i) => i.id,
@@ -334,8 +337,13 @@
   // that read is inside an async callback, never in a reactive context.
   const handledIds = new Set<string>();
 
-  // Filter bar
-  let hddSource = $state<string>('');
+  // Filter bar. `sourceFilter` sends `source` to {API_PREFIX}/review/{tab} (item
+  // 14/G3, 2026-09-24 logic-moves — renamed off the old `hdd_source`
+  // control, which the endpoint never actually read). `termFilters()`
+  // below (the diverse-selection scope, a different endpoint) still
+  // sends the same value under `hdd_source` — that contract hasn't
+  // changed.
+  let sourceFilter = $state<string>('');
   let classFilter = $state<number | null>(null);
   let confMin = $state<number>(0);
   let confMax = $state<number>(1);
@@ -357,11 +365,17 @@
 
   function _filter(): Record<string, unknown> {
     const f: Record<string, unknown> = {};
-    // G3: GET /review/{tab} (review.py's review_queue()) has no
-    // class_id/hdd_source/conf_min/conf_max params — they were silently
-    // ignored (live: total unchanged across none / class_id=99999 /
-    // hdd_source=nonexistent / conf_min=0.99). Not sent, and their
-    // controls are hidden below, until the backend adds them.
+    // GET /review/{tab} accepts class_id/source/conf_min/conf_max as of
+    // the 2026-09-24 logic-moves cutover (item 14/G3 — verified live
+    // against the real backend). Diverse mode disables these controls
+    // (see the filter bar below) since POST {API_PREFIX}/select/diverse's
+    // `scope.filters` doesn't support conf_min/conf_max at all, and
+    // takes class_id/source through its own `termFilters()` instead of
+    // this function.
+    if (classFilter != null) f.class_id = classFilter;
+    if (sourceFilter) f.source = sourceFilter;
+    if (confMin > 0) f.conf_min = confMin;
+    if (confMax < 1) f.conf_max = confMax;
     const textFilter = activeSlot?.capabilities.queue?.textFilter;
     if (textFilter && plateTextQuery) f[textFilter.param] = plateTextQuery;
     // max_rank / min_blur_ratio apply across every tab and preset — the
@@ -369,8 +383,8 @@
     // across tabs"). These used to be gated to only primary_low_conf /
     // coco_blind_spots, which meant the rank-scope and clarity controls
     // silently appeared/disappeared depending on which tab or quick-filter
-    // chip was active — confusing and inconsistent with Conf/Class/HDD
-    // source, which were never gated. Always available now, like those.
+    // chip was active — confusing and inconsistent with Conf/Class/Source,
+    // which were never gated. Always available now, like those.
     if (subjectScope !== 0) f.max_rank = subjectScope;
     if (minBlurRatio != null) f.min_blur_ratio = minBlurRatio;
     Object.assign(f, strategyBar.toQueryParams());
@@ -386,21 +400,61 @@
   const loadFirst = () => queue.loadFirst();
   const loadMore = () => queue.loadMore();
 
-  $effect(() => {
-    if (pendingCropId == null || queue.loading || queue.loadingMore) return;
-    if (queue.loadedPages === 0) return; // first page not in yet
-    const idx = queue.items.findIndex((i) => i.id === pendingCropId);
-    if (idx >= 0) {
-      cursor = idx;
+  // `/review?crop_id=` deep link (item 10, 2026-09-24 logic-moves W5):
+  // ask the backend exactly where the crop sits under the active tab's
+  // filters/sort via GET {API_PREFIX}/review/{tab}/locate, rather than the old
+  // approach of blindly paging forward up to 300 items hoping to find
+  // it. `in_queue: false` means it doesn't match this tab (already
+  // handled, filtered out, etc.) — `reason` explains why when the
+  // backend sends one.
+  let jumpingToCrop = $state(false);
+  async function jumpToPendingCrop(): Promise<void> {
+    const cropId = pendingCropId;
+    if (cropId == null) return;
+    if (diverseMode || searchModeActive) {
+      // Neither a pool-scale overlay selection nor a semantic-search
+      // result set has a stable server-side "locate" — drop the deep
+      // link rather than spin forever waiting for a match that can
+      // never resolve.
       pendingCropId = null;
-    } else if (queue.hasMore && queue.items.length < DEEP_LINK_MAX_ITEMS) {
-      void loadMore();
-    } else {
-      toastStore.info(
-        'That crop is not in this review queue (it may already be reviewed).',
+      return;
+    }
+    jumpingToCrop = true;
+    try {
+      const loc = await locateInReviewQueue(
+        endpointForTab(effectiveTab),
+        cropId,
+        pageSize,
+        _filter(),
       );
+      if (!loc.in_queue || loc.page == null) {
+        toastStore.info(
+          loc.reason
+            ? `That crop is not in this review queue: ${loc.reason}`
+            : 'That crop is not in this review queue (it may already be reviewed).',
+        );
+        return;
+      }
+      while (queue.loadedPages < loc.page && queue.hasMore) {
+        await queue.loadMore();
+      }
+      const idx = queue.items.findIndex((i) => i.id === cropId);
+      cursor =
+        idx >= 0 ? idx : Math.max(0, Math.min(loc.rank ?? 0, queue.items.length - 1));
+    } catch (e) {
+      toastStore.error(`Locate failed: ${(e as Error).message}`);
+    } finally {
+      jumpingToCrop = false;
       pendingCropId = null;
     }
+  }
+
+  $effect(() => {
+    if (pendingCropId == null || queue.loading || queue.loadingMore || jumpingToCrop) {
+      return;
+    }
+    if (queue.loadedPages === 0) return; // first page not in yet
+    void jumpToPendingCrop();
   });
 
   $effect(() => {
@@ -464,7 +518,7 @@
 
   // Tab + class filter fire loadFirst() immediately (single-click changes
   // are intentional). Text + slider filters debounce by 250ms so typing
-  // hddSource or dragging the confidence sliders doesn't cause a refetch
+  // sourceFilter or dragging the confidence sliders doesn't cause a refetch
   // per keystroke.
   // Guards this effect the same way lastFilterKey guards the debounced one
   // below: observed live, this effect's body can execute an extra time
@@ -513,7 +567,7 @@
   // body runs for the same values.
   let lastFilterKey: string | null = null;
   $effect(() => {
-    void hddSource;
+    void sourceFilter;
     void plateTextQuery;
     void confMin;
     void confMax;
@@ -529,7 +583,7 @@
     void strategyBar.hideNearDuplicates;
     void strategyBar.k;
     const key = JSON.stringify([
-      hddSource,
+      sourceFilter,
       plateTextQuery,
       confMin,
       confMax,
@@ -711,6 +765,15 @@
       return;
     }
     await assign(proposed);
+  }
+
+  /** "Accept model's class" (item 14, 2026-09-24 logic-moves): the
+   *  model_disagreements tab's probe prediction now carries its own
+   *  `probe_pred_class_id`, so this assigns it directly — no name→id
+   *  lookup needed (closes G4). */
+  async function acceptModelClass(): Promise<void> {
+    if (!current || current.probe_pred_class_id == null) return;
+    await assign(current.probe_pred_class_id);
   }
 
   function skip(): void {
@@ -1134,12 +1197,14 @@
     // the restored item at the cursor so the operator can see (and
     // re-verify) what the undo brought back.
     handledIds.delete(crop.id);
-    // The queue-only fields have no meaningful value for a restored item.
+    // `crop` (from POST {API_PREFIX}/crops/{id}/label/undo) already carries its
+    // own served proposed_class_id/_name (item 11, 2026-09-24
+    // logic-moves) — no client fill-in. `reason` is the only field this
+    // page adds; every other queue-only field has no meaningful value
+    // for a restored item.
     const restored: ReviewItem = {
       ...crop,
       reason: 'restored by undo',
-      proposed_class_id: crop.class_id,
-      proposed_class_name: crop.class_name ?? null,
     };
     const without = queue.items.filter((it) => it.id !== crop.id);
     const at = Math.min(cursor, without.length);
@@ -1314,13 +1379,12 @@
           cursor = 0;
           handledIds.clear();
           queue.items = res.items.map((it) => {
+            // it already carries its own served proposed_class_id/_name
+            // (item 11, 2026-09-24 logic-moves — searchCrops maps
+            // through the same mapRawCrop as getReviewQueue) — no
+            // client fill-in.
             const { similarity_score: _score, ...rest } = it;
-            return {
-              ...rest,
-              reason: '',
-              proposed_class_id: null,
-              proposed_class_name: null,
-            };
+            return { ...rest, reason: '' };
           });
           queue.total = res.total;
         }}
@@ -1334,6 +1398,7 @@
     <StrategyBar
       bar={strategyBar}
       offerDiverse={diverseAvailable}
+      appliedSort={sortApplied}
       diverseKDefault={DIVERSE_K_DEFAULT}
       diverseKMax={DIVERSE_K_MAX}
       diverseMeta={diverseSelection
@@ -1379,58 +1444,55 @@
   <div
     class="flex min-w-0 flex-wrap items-center gap-3 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2 text-xs"
   >
-    <!-- G3: hidden until GET /review/{tab} accepts class_id/hdd_source/
-         conf_min/conf_max (review.py has no such params today — the
-         totals didn't change when these were sent). Re-enable unchanged
-         once the backend ships them; no client-side filtering here. -->
-    {#if REVIEW_SERVER_FILTERS_ENABLED}
-      <label class="flex shrink-0 items-center gap-1.5">
-        <span class="text-zinc-400">HDD source</span>
-        <input
-          type="text"
-          bind:value={hddSource}
-          placeholder="any"
-          class="input-sm w-32"
-        />
-      </label>
+    <!-- GET /review/{tab} accepts class_id/source/conf_min/conf_max as of
+         the 2026-09-24 logic-moves cutover (item 14/G3) — re-enabled,
+         server-side, unconditionally (no client-side filtering here). -->
+    <label class="flex shrink-0 items-center gap-1.5">
+      <span class="text-zinc-400">Source</span>
+      <input
+        type="text"
+        bind:value={sourceFilter}
+        placeholder="any"
+        class="input-sm w-32"
+      />
+    </label>
 
-      <label class="flex shrink-0 items-center gap-1.5">
-        <span class="text-zinc-400">Class</span>
-        <select bind:value={classFilter} class="select-sm">
-          <option value={null}>any</option>
-          {#each filterableClasses as cls (cls.id)}
-            <option value={cls.id}>{cls.name}</option>
-          {/each}
-        </select>
-      </label>
+    <label class="flex shrink-0 items-center gap-1.5">
+      <span class="text-zinc-400">Class</span>
+      <select bind:value={classFilter} class="select-sm">
+        <option value={null}>any</option>
+        {#each filterableClasses as cls (cls.id)}
+          <option value={cls.id}>{cls.name}</option>
+        {/each}
+      </select>
+    </label>
 
-      <label
-        class="flex shrink-0 items-center gap-1.5"
-        class:opacity-40={diverseMode}
-        title={diverseMode ? 'not applied to diverse selection' : undefined}
-      >
-        <span class="text-zinc-400">Conf</span>
-        <input
-          type="number"
-          min="0"
-          max="1"
-          step="0.05"
-          bind:value={confMin}
-          disabled={diverseMode}
-          class="input-sm w-16"
-        />
-        <span class="text-zinc-500">..</span>
-        <input
-          type="number"
-          min="0"
-          max="1"
-          step="0.05"
-          bind:value={confMax}
-          disabled={diverseMode}
-          class="input-sm w-16"
-        />
-      </label>
-    {/if}
+    <label
+      class="flex shrink-0 items-center gap-1.5"
+      class:opacity-40={diverseMode}
+      title={diverseMode ? 'not applied to diverse selection' : undefined}
+    >
+      <span class="text-zinc-400">Conf</span>
+      <input
+        type="number"
+        min="0"
+        max="1"
+        step="0.05"
+        bind:value={confMin}
+        disabled={diverseMode}
+        class="input-sm w-16"
+      />
+      <span class="text-zinc-500">..</span>
+      <input
+        type="number"
+        min="0"
+        max="1"
+        step="0.05"
+        bind:value={confMax}
+        disabled={diverseMode}
+        class="input-sm w-16"
+      />
+    </label>
 
     {#if activeSlot?.capabilities.queue?.textFilter}
       <label
@@ -1549,7 +1611,7 @@
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>source</span>
           <span class="grow"></span>
-          <span class="font-mono">{current.hdd_source ?? ''}</span>
+          <span class="font-mono">{current.source ?? ''}</span>
         </div>
         <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
           <img
@@ -1632,16 +1694,33 @@
           <dd class="text-yellow-200">{current.proposed_class_name ?? '—'}</dd>
 
           {#if current.probe_pred_class}
-            <!-- G4: display only — no "accept" action here. The backend
-                 serves a class NAME (`probe_pred_class`), not an id; a
-                 name-to-id lookup belongs server-side
-                 (`probe_pred_class_id`, requested but not shipped). -->
+            <!-- G4 closed 2026-09-24 (logic-moves item 14): the backend
+                 now serves `probe_pred_class_id` alongside the display
+                 name, so "Accept" no longer needs a client-side
+                 name→id lookup — assign() takes the served id directly. -->
             <dt class="text-zinc-500">Model predicts</dt>
             <dd class="flex flex-wrap items-center gap-1.5 text-zinc-200">
               {current.probe_pred_class}
               {#if current.probe_pred_entropy != null}
                 <ScoreChip label="entropy" value={current.probe_pred_entropy} size="sm" />
               {/if}
+              {#if current.probe_pred_class_id != null && current.probe_pred_class_id !== current.class_id}
+                <button
+                  type="button"
+                  class="rounded border border-blue-500/60 bg-blue-500/15 px-1.5 py-0.5 text-[11px] text-blue-100 hover:bg-blue-500/25"
+                  onclick={acceptModelClass}
+                >
+                  Accept model's class
+                </button>
+              {/if}
+            </dd>
+          {/if}
+
+          {#if current.needs_new_class}
+            <dt class="text-zinc-500">Needs new class</dt>
+            <dd class="text-amber-200">
+              {current.needs_new_class_note ||
+                'flagged — no matching class in the registry'}
             </dd>
           {/if}
 
