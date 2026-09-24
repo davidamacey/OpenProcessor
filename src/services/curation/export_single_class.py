@@ -74,6 +74,7 @@ from src.services.curation.export_support import (
     atomic_symlink_flip,
     atomic_write_text,
     even_stratified_sample,
+    label_content_sha,
     stratified_split,
 )
 from src.services.detection.frame_dedup import dedup_rows_by_embedding
@@ -310,7 +311,7 @@ class SingleClassExportService:
         self._write_class_registry(resolved_dir, names)
         self._write_label_stats(resolved_dir, names)
 
-        dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir)
+        dataset_sha = await asyncio.to_thread(label_content_sha, resolved_dir, names)
         frozen_test_sha = await asyncio.to_thread(frozen_test_sha_of, resolved_dir)
         finished = datetime.now(UTC)
 
@@ -583,32 +584,6 @@ class SingleClassExportService:
 # =============================================================================
 # Integrity + rendering helpers
 # =============================================================================
-
-
-def label_content_sha(export_dir: Path) -> str:
-    """Checksum over the exported label *content*, not just its identity.
-
-    Hashes sorted ``(relative label path, sha256(file bytes))`` pairs, so
-    two exports agree only if the same frames AND the same boxes were
-    written. A checksum over item ids alone would call two datasets
-    identical after a box was corrected, which is exactly the change a
-    training lineage most needs to see.
-
-    Truncated to 16 hex chars: long enough that an accidental collision is
-    not a practical concern, short enough to read in a log line or a
-    manifest diff.
-    """
-    labels_dir = export_dir / 'labels'
-    if not labels_dir.is_dir():
-        return ''
-    h = hashlib.sha256()
-    for path in sorted(labels_dir.rglob('*.txt')):
-        rel = path.relative_to(export_dir).as_posix()
-        h.update(rel.encode('utf-8'))
-        h.update(b'\0')
-        h.update(hashlib.sha256(path.read_bytes()).hexdigest().encode('ascii'))
-        h.update(b'\n')
-    return h.hexdigest()[:16]
 
 
 def frozen_test_sha_of(export_dir: Path) -> str:

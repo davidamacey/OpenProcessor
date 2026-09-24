@@ -329,9 +329,53 @@ async def scroll_hits(
     return out
 
 
-def dataset_checksum(item_ids: list[str]) -> str:
-    """Checksum over the sorted set of item ids that went into an export."""
-    return hashlib.sha256('\n'.join(sorted(item_ids)).encode()).hexdigest()
+def label_content_sha(
+    export_dir: Path,
+    class_names: Sequence[str] | None = None,
+    *,
+    truncate: int | None = 16,
+) -> str:
+    """Checksum over the exported label *content* (not just item identity).
+
+    Hashes sorted ``(relative label path, sha256(file bytes))`` pairs, so
+    two exports agree only if the same frames, in the same splits, AND
+    the same boxes were written. A checksum over item ids alone (the
+    dropped ``dataset_checksum``) called two datasets identical after a
+    split reassignment or a corrected box — exactly the changes a
+    training lineage most needs to see. The relative path includes the
+    split directory (``labels/<split>/...``), so moving an item between
+    splits changes the digest even when its label bytes don't.
+
+    Label files only carry dense integer class ids, not names, so two
+    exports with byte-identical label files but a different class map
+    (e.g. a registry rename with no id change, or a differently-ordered
+    ``names:`` list) would otherwise collide. Pass ``class_names`` (the
+    export's ordered id -> name list) to fold that into the digest too;
+    callers whose class map can never vary independently of the label
+    bytes (or that don't need the distinction) may omit it.
+
+    ``truncate`` (default 16 hex chars) is enough that an accidental
+    collision is not a practical concern while staying short enough to
+    read in a log line or a manifest diff; pass ``None`` for the full
+    64-char sha256 hex digest.
+    """
+    labels_dir = export_dir / 'labels'
+    if not labels_dir.is_dir():
+        return ''
+    h = hashlib.sha256()
+    for path in sorted(labels_dir.rglob('*.txt')):
+        rel = path.relative_to(export_dir).as_posix()
+        h.update(rel.encode('utf-8'))
+        h.update(b'\0')
+        h.update(hashlib.sha256(path.read_bytes()).hexdigest().encode('ascii'))
+        h.update(b'\n')
+    if class_names is not None:
+        h.update(b'\0names\0')
+        for name in class_names:
+            h.update(name.encode('utf-8'))
+            h.update(b'\n')
+    digest = h.hexdigest()
+    return digest[:truncate] if truncate else digest
 
 
 def _build_export_id_map(classes: list[RegistryClassEntry]) -> dict[int, int]:
@@ -529,9 +573,9 @@ __all__ = [
     'SplittableRow',
     'atomic_symlink_flip',
     'atomic_write_text',
-    'dataset_checksum',
     'even_stratified_sample',
     'hash_split',
+    'label_content_sha',
     'scroll_hits',
     'stratified_split',
 ]
