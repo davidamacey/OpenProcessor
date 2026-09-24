@@ -40,9 +40,12 @@ async def review_unmatched_terms(
     :py:class:`LegacyClassEntry` entries (or new ``SYNONYMS`` mappings if the
     raw label is just a phrasing of an existing class).
 
-    Pair with an offline registry-reclassification script (see ``scripts/``)
-    once the registry has been updated to convert matched crops from
-    ``class_source='gemma_unmatched'`` to ``class_source='gemma_reclassified'``.
+    Once the registry (or the prompt pack's synonyms) has grown, run
+    ``scripts/curation/reclassify_after_registry_growth.py`` with
+    ``--label-prefix`` set to the prefix of the ``class_source`` /
+    raw-label pair aggregated here; it promotes every ``<prefix>_unmatched``
+    item whose raw label now resolves to ``<prefix>_reclassified`` (never
+    setting ``class_validated``).
 
     Args:
         size: Maximum number of distinct raw labels to return. Capped at

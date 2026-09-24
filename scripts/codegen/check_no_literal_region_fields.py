@@ -254,6 +254,11 @@ PORTED_PATHS: tuple[str, ...] = (
     # Operator tooling — probe-inference backfill driver.
     'scripts/curation/run_probe.py',
     'tests/curation/test_run_probe_cli.py',
+    # Operator tooling — registry-growth reclassification.
+    'src/services/curation/registry_reclassify.py',
+    'scripts/curation/reclassify_after_registry_growth.py',
+    'tests/curation/query_fakes.py',
+    'tests/curation/test_registry_reclassify.py',
 )
 
 # Hardcoded exemptions — never touched by PORTED_PATHS growth.
