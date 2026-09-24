@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 
 @router.get('/methods')
-async def legacy_methods(opensearch: OpenSearchDep) -> dict[str, Any]:
+async def get_methods(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Every strategy across every axis (cluster / score / sort / overlay),
     plus the feature flags that gated each entry's status and a real
     ``field_coverage`` (exists-count) / ``field_coverage_total`` (pool
@@ -45,5 +45,5 @@ async def legacy_methods(opensearch: OpenSearchDep) -> dict[str, Any]:
     try:
         return await get_registry(opensearch)
     except Exception as exc:
-        logger.warning('legacy_methods_registry_failed', error=str(exc))
+        logger.warning('curation_methods_registry_failed', error=str(exc))
         return await get_registry(None)

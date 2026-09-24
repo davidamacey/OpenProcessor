@@ -8353,14 +8353,14 @@
     "/curation/methods": {
       "get": {
         "description": "Every strategy across every axis (cluster / score / sort / overlay),\nplus the feature flags that gated each entry's status and a real\n``field_coverage`` (exists-count) / ``field_coverage_total`` (pool\nsize) per entry that declares a ``requires_field``. Frontend renders\nonly ``stable``/``experimental`` entries; ``shadow``/``disabled`` are\ncomputed+logged (or not computed at all) but never offered as a\n``?sort=`` value. Frontend also hides an entry whose ``field_coverage``\nis exactly ``0`` (genuinely inert — no data has ever been backfilled)\nwhile still showing one whose coverage is ``None`` (unknown, e.g. a\ntransient OpenSearch failure) — see ``StrategyBar.svelte``'s\n``hasFieldCoverage``.",
-        "operationId": "legacy_methods_curation_methods_get",
+        "operationId": "get_methods_curation_methods_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Legacy Methods Curation Methods Get",
+                  "title": "Response Get Methods Curation Methods Get",
                   "type": "object"
                 }
               }
@@ -8368,7 +8368,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Legacy Methods",
+        "summary": "Get Methods",
         "tags": [
           "Curation"
         ]
@@ -10226,12 +10226,12 @@
         "operationId": "review_queue_curation_review__tab__get",
         "parameters": [
           {
-            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
             "in": "path",
             "name": "tab",
             "required": true,
             "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
               "title": "Tab",
               "type": "string"
             }
@@ -10505,12 +10505,12 @@
         "operationId": "review_locate_curation_review__tab__locate_get",
         "parameters": [
           {
-            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+            "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
             "in": "path",
             "name": "tab",
             "required": true,
             "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | coco_blind_spots | new_class_proposals",
+              "description": "One of: all | mismatches | vlm_low_conf | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals",
               "title": "Tab",
               "type": "string"
             }

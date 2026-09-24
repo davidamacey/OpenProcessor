@@ -61,7 +61,7 @@ def test_field_removed_from_crop_sort_fields() -> None:
         'regions',
         'model_disagreements',
         'primary_low_conf',
-        'coco_blind_spots',
+        'classifier_blind_spots',
         'new_class_proposals',
     ],
 )
@@ -80,7 +80,7 @@ def test_outlier_flagged_removed_from_every_tab() -> None:
         'regions',
         'model_disagreements',
         'primary_low_conf',
-        'coco_blind_spots',
+        'classifier_blind_spots',
         'new_class_proposals',
     ):
         must, must_not, _reason = build_tab_query(tab, include_test=False, text=None, max_rank=None)

@@ -87,7 +87,7 @@ def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
     for entry in score_entries.values():
         assert entry['status'] == 'disabled'
         assert entry['default'] is False
-    assert body['flags']['legacy_scores_enabled'] is False
+    assert body['flags']['scores_enabled'] is False
 
 
 def test_score_entries_shadow_when_enabled_and_shadow(
@@ -118,11 +118,11 @@ def test_score_entries_shadow_when_enabled_and_shadow(
     # OP_VIZ_PROJECTION_ENABLED, OP_SEMANTIC_SEARCH_ENABLED) joined this
     # envelope; unset here so this test's env matches its own setup above.
     assert body['flags'] == {
-        'legacy_scores_enabled': True,
-        'legacy_scores_shadow': True,
-        'legacy_select_diverse_enabled': False,
-        'legacy_viz_projection_enabled': False,
-        'legacy_semantic_search_enabled': False,
+        'scores_enabled': True,
+        'scores_shadow': True,
+        'select_diverse_enabled': False,
+        'viz_projection_enabled': False,
+        'semantic_search_enabled': False,
     }
 
 
@@ -160,7 +160,7 @@ def test_diverse_overlay_entry_present_and_disabled_by_default(app_client: TestC
     assert entry['status'] == 'disabled'
     assert entry['default'] is False
     assert entry['writes'] == []
-    assert body['flags']['legacy_select_diverse_enabled'] is False
+    assert body['flags']['select_diverse_enabled'] is False
 
 
 def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
@@ -176,7 +176,7 @@ def test_diverse_overlay_experimental_when_flag_on_but_never_stable(
     entry = next(s for s in body['strategies'] if s['id'] == 'diverse')
     assert entry['status'] == 'experimental'
     assert entry['status'] != 'stable'
-    assert body['flags']['legacy_select_diverse_enabled'] is True
+    assert body['flags']['select_diverse_enabled'] is True
 
 
 def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestClient) -> None:
@@ -188,7 +188,7 @@ def test_viz_projection_entry_present_and_disabled_by_default(app_client: TestCl
     assert entry['default'] is False
     assert set(entry['writes']) == {'viz_x', 'viz_y', 'viz_projection_version'}
     assert entry['requires_field'] == 'viz_x'
-    assert body['flags']['legacy_viz_projection_enabled'] is False
+    assert body['flags']['viz_projection_enabled'] is False
 
 
 def test_viz_projection_experimental_when_flag_on_but_never_stable(
@@ -205,7 +205,7 @@ def test_viz_projection_experimental_when_flag_on_but_never_stable(
     entry = next(s for s in body['strategies'] if s['id'] == 'viz_projection')
     assert entry['status'] == 'experimental'
     assert entry['status'] != 'stable'
-    assert body['flags']['legacy_viz_projection_enabled'] is True
+    assert body['flags']['viz_projection_enabled'] is True
 
 
 def test_viz_projection_carries_measured_purity_and_banner_flag(app_client: TestClient) -> None:

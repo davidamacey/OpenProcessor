@@ -127,7 +127,7 @@ def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None
         assert tab['label']
         assert tab['description']
     by_id = {t['id']: t for t in body['tabs']}
-    assert by_id['coco_blind_spots']['label'] == 'Classifier blind spots'
+    assert by_id['classifier_blind_spots']['label'] == 'Classifier blind spots'
 
 
 def test_review_tabs_serves_region_status_filter_spec(client: TestClient) -> None:

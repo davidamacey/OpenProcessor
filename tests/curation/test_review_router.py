@@ -26,7 +26,7 @@ ALL_TABS = (
     'model_disagreements',
     'regions',
     'primary_low_conf',
-    'coco_blind_spots',
+    'classifier_blind_spots',
 )
 
 LEGACY_SORT_CLAUSE = {
@@ -62,7 +62,7 @@ LEGACY_SORT_CLAUSE = {
             }
         },
     ],
-    'coco_blind_spots': [
+    'classifier_blind_spots': [
         {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
         {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
     ],
@@ -77,7 +77,7 @@ EXPECTED_DEFAULT_SORT_ID = {
     'model_disagreements': 'disagreement_entropy_asc',
     'regions': 'region_score',
     'primary_low_conf': 'primary_low_conf_default',
-    'coco_blind_spots': 'coco_blind_spots_default',
+    'classifier_blind_spots': 'classifier_blind_spots_default',
 }
 
 

@@ -38,12 +38,12 @@ KNOWN_TABS: tuple[str, ...] = (
     'model_disagreements',
     'regions',
     'primary_low_conf',
-    'coco_blind_spots',
+    'classifier_blind_spots',
     'new_class_proposals',
 )
 
 # W0: a display label + description per tab, so the frontend stops
-# hardcoding them (F7's "Classifier blind spots" for coco_blind_spots in
+# hardcoding them (F7's "Classifier blind spots" for classifier_blind_spots in
 # particular -- the id itself is renamed in a later wave). Served by
 # ``GET {prefix}/review/tabs``.
 TAB_LABELS: dict[str, tuple[str, str]] = {
@@ -64,7 +64,7 @@ TAB_LABELS: dict[str, tuple[str, str]] = {
         'Primary low confidence',
         'Largest subject — classifier unsure or missed',
     ),
-    'coco_blind_spots': (
+    'classifier_blind_spots': (
         'Classifier blind spots',
         'Detector proposed an item the classifier missed entirely',
     ),
@@ -96,7 +96,7 @@ TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {'regions': ('text', 'region_sta
 PRIMARY_SUBJECT_MAX_RANK = 2
 TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'primary_low_conf': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
-    'coco_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
+    'classifier_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
     'regions': {'region_status': 'all'},
 }
 
@@ -475,13 +475,13 @@ def build_tab_query(
         )
         # Default sort: 'primary_low_conf_default' — see review_sorts.py.
         reason = 'largest subject — classifier unsure or missed'
-    elif tab == 'coco_blind_spots':
+    elif tab == 'classifier_blind_spots':
         # The cleanest blind spot: the item detector proposed an item that the classifier
         # missed entirely, on a primary subject. class_source is the exact
         # signal: an ingest proposal nothing classified. The stored
         # proposal score lives in ``confidence``.
         must.append({'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}})
-        # Default sort: 'coco_blind_spots_default' — see review_sorts.py.
+        # Default sort: 'classifier_blind_spots_default' — see review_sorts.py.
         reason = 'detector proposed an item the classifier missed (blind spot)'
     elif tab == 'new_class_proposals':
         # Items that need a class the registry doesn't have yet: flagged by

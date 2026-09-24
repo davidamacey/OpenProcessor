@@ -562,11 +562,11 @@ score — DQ-M8).
 
 `GET /review/{tab}` tabs: `all`, `mismatches`, `vlm_low_conf`, `outliers`,
 `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`,
-`coco_blind_spots`, **`new_class_proposals`** (items flagged
+`classifier_blind_spots`, **`new_class_proposals`** (items flagged
 `needs_new_class` by a human, or `class_source: vlm_new_class_pending`).
 Filters (every tab): `include_test`, `max_rank` (`crop_rank_in_image <=
 max_rank`; omitted = no limit, except `primary_low_conf` /
-`coco_blind_spots`, which default to `2`), `min_blur_ratio`,
+`classifier_blind_spots`, which default to `2`), `min_blur_ratio`,
 `min_mistakenness`, `hide_near_duplicates`, **`class_id`**, **`source`**,
 **`conf_min` / `conf_max`** (inclusive band on `confidence`, `400` if
 min > max), `sort`; `text` and `region_status` on the `regions` tab only
@@ -1251,7 +1251,7 @@ ids verbatim. `tests/curation/test_class_sources.py` scans every
 `class_source` write in `src/` and `scripts/` and fails if a written
 value is missing from the catalog. The
 `classifier_confidence_skip_vlm` skip, auto-promote, the
-`primary_low_conf` / `coco_blind_spots` review tabs and the
+`primary_low_conf` / `classifier_blind_spots` review tabs and the
 `/stats/dataset` rollup all filter on these derived sets, never on one
 deployment's detector names.
 
@@ -1410,7 +1410,7 @@ backend rows of the frontend's contract audit
 
 Not renamed, deliberately: Prometheus metric names (a later wave), the
 `needs_gemma_stop` Python alias in the GPU arbiter (not wire), and the
-review tab id `coco_blind_spots` (a proposer-named tab id; left for the
+review tab id `classifier_blind_spots` (a proposer-named tab id; left for the
 owners to decide, it now filters on the configured proposal sources —
 `GET /review/tabs` serves it a generic "Classifier blind spots" label).
 The internal-only `v6_embedding` storage field (never on the wire) *was*

@@ -663,11 +663,11 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     return {
         'strategies': strategies,
         'flags': {
-            'legacy_scores_enabled': _scores_enabled(),
-            'legacy_scores_shadow': _scores_shadow(),
-            'legacy_select_diverse_enabled': _select_diverse_enabled(),
-            'legacy_viz_projection_enabled': _viz_projection_enabled(),
-            'legacy_semantic_search_enabled': _semantic_search_enabled(),
+            'scores_enabled': _scores_enabled(),
+            'scores_shadow': _scores_shadow(),
+            'select_diverse_enabled': _select_diverse_enabled(),
+            'viz_projection_enabled': _viz_projection_enabled(),
+            'semantic_search_enabled': _semantic_search_enabled(),
         },
     }
 
