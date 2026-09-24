@@ -42,10 +42,28 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// TrainForm mounts both the GPU picker (`getTrainGpus`) and
+// `AugmentationPanel` (`getAugmentationPresets`) — each hits `fetch`
+// independently, so a single shared `Response` (`mockResolvedValue`)
+// would have its body consumed by whichever call wins the race, failing
+// the other's `res.json()`. Route by URL and return a fresh `Response`
+// per call instead.
+function routeByUrl(
+  gpuBody: unknown,
+  augmentationBody: unknown = { presets: [], default: 'balanced_default' },
+): (url: string) => Promise<Response> {
+  return (url: string) =>
+    Promise.resolve(
+      url.includes('augmentation_presets')
+        ? jsonResponse(augmentationBody)
+        : jsonResponse(gpuBody),
+    );
+}
+
 describe('TrainForm — GPU picker', () => {
   it('renders the served GPU options and preselects the backend default', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
+    const fetchMock = vi.fn().mockImplementation(
+      routeByUrl({
         options: [
           {
             value: '0',
@@ -109,8 +127,8 @@ describe('TrainForm — GPU picker', () => {
   it('shows a free-text field when the backend is unrestricted', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(
-        jsonResponse({ options: [], allowed_ids: [], unrestricted: true }),
+      .mockImplementation(
+        routeByUrl({ options: [], allowed_ids: [], unrestricted: true }),
       );
     vi.stubGlobal('fetch', fetchMock);
 

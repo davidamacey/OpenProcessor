@@ -42,6 +42,7 @@
     type ServedTrainingCohort,
     type TrainingCohortMode,
   } from '$lib/api';
+  import { formatCount } from '$lib/formatCount';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import MonitoringLinks from '$lib/components/MonitoringLinks.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
@@ -65,7 +66,7 @@
   import { datasetExportForSlot } from '$lib/annotations/datasetExport';
   import { isDatasetExportAvailable } from '$lib/strategies';
   import { strategiesStore } from '$stores/strategies.svelte';
-  import type { Crop, ExportDataset, ReviewItem } from '$lib/types';
+  import type { Crop, ExportDataset, ExportStatus, ReviewItem } from '$lib/types';
   import type {
     ClassSubsetPreset,
     PreflightReport,
@@ -138,6 +139,14 @@
   const MULTI_CLASS = 'yolo';
   let datasetKind = $state<string>(MULTI_CLASS);
   let vehiclesDir = $state<string>('');
+  // Full GET {API_PREFIX}/export/status response for the current
+  // multi-class export — `class_split_counts`/`split_counts`/
+  // `image_count`/`class_count` drive the dataset card's "current
+  // export" numbers below, in place of the classesStore-wide validated
+  // total (which double-counted holdout crops). `null`/missing fields
+  // on a pre-6c77deb backend fall back to the labelled global-pool
+  // numbers — see the card markup.
+  let vehiclesExportState = $state<ExportStatus | null>(null);
   let singleClassExportDir = $state<string>('');
   // All materialized dataset versions on disk (both kinds), newest first.
   let datasets = $state<ExportDataset[]>([]);
@@ -187,6 +196,7 @@
     try {
       const [e, ds] = await Promise.all([exportStatus(), listDatasets()]);
       vehiclesDir = e.export_dir ?? '';
+      vehiclesExportState = e;
       datasets = ds.datasets ?? [];
       if (!vehiclesDir) {
         datasetMessage =
@@ -436,11 +446,22 @@
   function maybeRenderPreflight(err: unknown): void {
     if (err instanceof ApiError && err.body && typeof err.body === 'object') {
       const body = err.body as {
-        detail?: { preflight?: PreflightReport; message?: string };
+        detail?: {
+          preflight?: PreflightReport;
+          message?: string;
+          // 6c77deb: an unknown `augmentation.preset` 422s with
+          // `{message, field: 'augmentation.preset', valid_presets}`
+          // instead of/alongside a preflight report.
+          field?: string;
+          valid_presets?: string[];
+        };
       };
       const pf = body.detail?.preflight;
       if (pf) preflight = pf;
-      const msg = body.detail?.message ?? err.message;
+      let msg = body.detail?.message ?? err.message;
+      if (body.detail?.field === 'augmentation.preset' && body.detail.valid_presets) {
+        msg += ` (valid presets: ${body.detail.valid_presets.join(', ')})`;
+      }
       toastStore.error(`Start failed: ${msg}`);
     } else {
       toastStore.error(`Start failed: ${(err as Error).message}`);
@@ -977,17 +998,109 @@
         <p class="mt-2 text-xs text-zinc-400">
           {datasetExportSpec.blurb}
         </p>
+      {:else if !selectedExportDir && vehiclesExportState?.class_split_counts}
+        <!-- Current export's own contents (OpenProcessor 6c77deb's
+             GET {API_PREFIX}/export/status) — only valid for the `current`
+             symlink, so this branch is gated on no explicit past-version
+             pick above. m-train-card (2026-09-24): this used to show the
+             classesStore-wide validated total (which counted
+             test_holdout crops too), a different — and often much
+             bigger — number than what this specific export actually
+             contains. -->
+        <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+          {#if vehiclesExportState.class_count != null}
+            <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
+              {vehiclesExportState.class_count} classes
+            </span>
+          {/if}
+          {#if vehiclesExportState.image_count != null || vehiclesExportState.object_count != null}
+            <span
+              class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
+            >
+              {formatCount(vehiclesExportState.object_count)} objects in {formatCount(
+                vehiclesExportState.image_count,
+              )} images
+              {#if vehiclesExportState.group_key}
+                <span class="text-zinc-500">(by {vehiclesExportState.group_key})</span>
+              {/if}
+            </span>
+          {/if}
+          {#if vehiclesExportState.split_counts}
+            <span
+              class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
+              title="Images per split"
+            >
+              images: train {vehiclesExportState.split_counts.train.toLocaleString()} · val
+              {vehiclesExportState.split_counts.val.toLocaleString()}
+              · test {vehiclesExportState.split_counts.test.toLocaleString()}
+            </span>
+          {/if}
+          {#if vehiclesExportState.split_object_counts}
+            <span
+              class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
+              title="Objects (label lines) per split"
+            >
+              objects: train {vehiclesExportState.split_object_counts.train.toLocaleString()}
+              · val {vehiclesExportState.split_object_counts.val.toLocaleString()}
+              · test {vehiclesExportState.split_object_counts.test.toLocaleString()}
+            </span>
+          {/if}
+        </div>
+        <details class="mt-2 text-xs text-zinc-400">
+          <summary class="cursor-pointer hover:text-zinc-200">
+            per-class object counts ({vehiclesExportState.class_split_counts.length})
+          </summary>
+          <div class="mt-1 max-h-48 overflow-auto rounded border border-zinc-800">
+            <table class="w-full text-xs">
+              <thead
+                class="sticky top-0 border-b border-zinc-800 bg-zinc-950 text-left uppercase text-zinc-500"
+              >
+                <tr>
+                  <th class="px-2 py-1 font-medium">Class</th>
+                  <th class="px-2 py-1 text-right font-medium">Train (objects)</th>
+                  <th class="px-2 py-1 text-right font-medium">Val (objects)</th>
+                  <th class="px-2 py-1 text-right font-medium">Test (objects)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each vehiclesExportState.class_split_counts as c (c.class_id)}
+                  {@const missing = c.train === 0 || c.val === 0}
+                  <tr
+                    class="border-b border-zinc-900 {missing
+                      ? 'bg-red-500/10 text-red-200'
+                      : 'text-zinc-300'}"
+                  >
+                    <td class="px-2 py-1">{c.class_name}</td>
+                    <td class="px-2 py-1 text-right font-mono"
+                      >{c.train.toLocaleString()}</td
+                    >
+                    <td class="px-2 py-1 text-right font-mono"
+                      >{c.val.toLocaleString()}</td
+                    >
+                    <td class="px-2 py-1 text-right font-mono"
+                      >{c.test.toLocaleString()}</td
+                    >
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </details>
       {:else}
+        <!-- Fallback: no per-export split data (older backend, or the
+             operator picked a specific past export version this endpoint
+             can't describe) — clearly labelled as the dataset-wide global
+             pool, not this export's own contents. -->
         <p class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
           <span class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5">
-            {classesStore.classes.filter((c) => !c.deprecated).length} classes
+            {classesStore.classes.filter((c) => !c.deprecated).length} classes (global pool)
           </span>
           <span
             class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono"
           >
             {classesStore.classes
               .reduce((acc, c) => acc + (c.validated_count ?? 0), 0)
-              .toLocaleString()} validated crops
+              .toLocaleString()} validated crops (global pool, not this export)
           </span>
         </p>
       {/if}

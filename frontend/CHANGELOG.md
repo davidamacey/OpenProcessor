@@ -8,6 +8,115 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Adopted OpenProcessor `main` d5343cb ("export one image + one label
+  file per source image (standard YOLO layout), partial-frame policy and
+  counts"; contracts synced via `npm run contract:sync`). Landed live
+  during this pass — verified against the newly-deployed backend, not
+  just the stubbed/vendored contract.
+  - **Images vs. objects, everywhere they were conflated.** The export
+    now writes one image + one label file per source image (previously,
+    a multi-object frame could be written once per object). `ExportStatus`/
+    `ExportResult`/`ExportDataset` gain `object_count`/`split_object_counts`
+    (objects = label lines) alongside the existing `image_count`/
+    `split_counts` (images) — `/export` and `/train`'s dataset card both
+    read "N objects in M images" and separate "images: train/val/test"
+    vs "objects: train/val/test" badges, so the two counts are never
+    shown as one ambiguous number again. The per-class table is
+    relabeled "objects" (it always counted objects; the shape didn't
+    change, just the honesty of the header).
+  - **Partial-frame policy.** New opt-in checkbox on `/export`, "Only
+    images whose every object is labeled" (`require_fully_labeled_images`,
+    `POST {API_PREFIX}/export/yolo`) — when checked, the server drops any
+    exported image that still has an unlabeled object on it rather than
+    teaching the detector to learn that object as background. A 422
+    ("nothing to export: …", when the drop leaves nothing) surfaces via
+    the existing generic `ApiError` toast. `unlabeled_items_on_exported_images`/
+    `images_with_unlabeled_items`/`images_dropped_not_fully_labeled`/the
+    echoed `require_fully_labeled_images` render on `/export` (main panel
+    and progress modal) whenever the backend serves them.
+  - **New `formatCount()` helper** (`src/lib/formatCount.ts`) — every one
+    of the fields above is `null` (not `0`) on an export written before
+    the backend recorded it; every render site for one of these fields
+    goes through this instead of a bare `.toLocaleString()`, so a missing
+    count reads "—", never a false "0".
+  - `resize_mode: 'letterbox'` was refused server-side in this same
+    change — verified `rg` finds no `resize_mode` picker anywhere in this
+    frontend (single-class export's own image-mode/size controls are a
+    different, unaffected pair of options), so there was nothing to
+    remove.
+  - New preflight check `export_unlabeled_objects` (warn; "unknown" for
+    an older export with no recorded count) needed no frontend change —
+    `TrainForm`'s generic name/severity/message/detail preflight renderer
+    already covers it, same as the three checks added by 6c77deb below.
+  - Tests: extended `exportStatusContract.test.ts` (object counts, the
+    `require_fully_labeled_images` checkbox sending/omitting the flag, a
+    `null`-field-renders-"—" case) and `formatCount.test.ts`; extended
+    `e2e/stubbed/test_export_freeze_split_counts_6c77deb.py` with an
+    object-count assertion and a new require-fully-labeled-images test.
+    Verified live via `CROPWRIGHT_LIVE_URL=http://localhost:5184 npm run
+test:live` against the real, newly-deployed d5343cb backend (21/21).
+- Adopted OpenProcessor `main` 6c77deb ("export splits by source image,
+  split-coverage preflight checks, honest holdout freeze, validated
+  augmentation presets"; contracts synced via `npm run contract:sync`).
+  **6c77deb is merged upstream but not deployed yet** — every change
+  below degrades gracefully against the currently-deployed (pre-6c77deb)
+  backend, verified live via `CROPWRIGHT_LIVE_URL=http://localhost:5184
+npm run test:live`:
+  - **`/export` split counts.** `GET {API_PREFIX}/export/status`
+    (`ExportStatus` in `types.ts`) gained `image_count`/`class_count`/
+    `group_key`/`split_counts`/`class_split_counts` (new
+    `ExportSplitCounts`/`ExportClassSplitCounts` types) — all
+    optional/nullable, so a pre-6c77deb response (missing every one)
+    renders exactly as before. `/export` now shows the served
+    train/val/test totals and a collapsible per-class table, with any
+    class at 0 train or 0 val highlighted using the served numbers only
+    (no client threshold).
+  - **Honest test-holdout freeze.** `POST {API_PREFIX}/test_holdout/freeze`'s
+    body is now `{percent}` only — an extra field like `seed` is a 422
+    (`additionalProperties: false`), since selection is deterministic
+    (SHA1 of each crop id, per class). The Seed field is gone from the
+    freeze modal (`freezeTestHoldout()` in `api.ts` no longer accepts
+    it); the response's new `selection`/`min_per_class` render in the
+    success toast when served.
+  - **Served augmentation presets.** New `GET
+{API_PREFIX}/train/augmentation_presets` replaces
+    `AugmentationPanel`'s hand-maintained `PRESETS` id list — the panel
+    now renders the served `{id, label, description,
+orientation_sensitive}` list, defaults to the served `default`, and
+    shows the selected preset's description (tooltip) and an
+    orientation-sensitive note. A pre-6c77deb backend 404s this endpoint;
+    the panel falls back to a read-only display of the current preset
+    value instead of guessing at a list. `src/lib/contract/
+augmentPresets.test.ts` (the old local-checkout diff against the
+    trainer's hardcoded table) is deleted; replaced by
+    `AugmentationPanel.test.ts` (mount-based, served-list + 404-fallback
+    coverage). `/train/start`/`/start_campaign`'s 422 on an unknown
+    `augmentation.preset` (`{detail: {message, field, valid_presets}}`)
+    now has its `valid_presets` appended to the toast, not just the bare
+    message.
+  - **New preflight checks.** `export_splits_nonempty`,
+    `export_class_split_coverage` (blocks per class, thresholds served as
+    `min_train_per_class`/`min_val_per_class`) and `augmentation_preset`
+    all render through `TrainForm`'s existing generic
+    name/severity/message loop with no per-check code — the message text
+    itself already names the offending classes. Each check's `detail`
+    object (new: per-class gaps for `export_class_split_coverage`) now
+    also renders in a collapsible JSON block on every preflight row.
+  - **`/train` dataset card** now shows the _current export's own_
+    image/class/split counts (`class_split_counts` from `GET
+{API_PREFIX}/export/status`) in place of the dataset-wide validated
+    total, which double-counted `test_holdout` crops and had no relation
+    to what the selected export actually contains. The old global total
+    survives as a clearly-labelled "(global pool)" fallback for a
+    pre-6c77deb backend or a specific past export version this endpoint
+    can't describe.
+  - Tests: `AugmentationPanel.test.ts`, `exportStatusContract.test.ts`
+    (mount-based, `/export` split display + freeze-modal-no-seed),
+    `augmentationPreset422.test.ts`, an extra `TrainForm.preflightChecks.test.ts`
+    case for per-class `detail` rendering, and a new stubbed e2e module
+    `e2e/stubbed/test_export_freeze_split_counts_6c77deb.py`. Every new
+    assertion was verified to fail against a hand-mutated copy of the
+    code it covers before being trusted (byte-for-byte restored after).
 - **Live read-only e2e tier** (`e2e/live/`, `npm run test:live`) — drives
   the real, currently-deployed build against a live OpenProcessor
   backend (default `http://localhost:5184`) instead of the stubbed
@@ -1199,9 +1308,10 @@ class`) so an operator can see where a crop lives before relabeling
   doesn't have (`outdoor_traffic`, `motorcycle_tilt`, `plates`,
   `plates_aggressive`, `custom`). Picking one failed the run with
   "unknown augmentation preset", but only after it had started and
-  stopped the VLM. It now lists the trainer's own ids. A contract test
-  (`src/lib/contract/augmentPresets.test.ts`) compares them against the
-  backend checkout's `docker/trainer/augment.py`.
+  stopped the VLM. It now lists the trainer's own ids. (Superseded by
+  the OpenProcessor 6c77deb adoption below, which replaces the pinned
+  id list with the served `GET {API_PREFIX}/train/augmentation_presets`
+  catalog.)
 - Four bugs found by the `train-smoke` live UI smoke test
   (`artifacts_local/cw-live/train-smoke/`):
   - **`/export`** — after a successful export the "frozen multi-class

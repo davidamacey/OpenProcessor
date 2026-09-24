@@ -61,6 +61,7 @@ import type {
   UnloadModelResponse,
 } from './types';
 import type {
+  AugmentationPresetsResponse,
   CancelResponse,
   LogTailResponse,
   PresetsResponse,
@@ -2861,11 +2862,16 @@ export async function searchCrops(
  * manifest (Section L14). Server returns 202 + job id while it runs.
  */
 export function exportYolo(
-  opts: { version_tag?: string } = {},
+  opts: { version_tag?: string; require_fully_labeled_images?: boolean } = {},
   signal?: AbortSignal,
 ): Promise<ExportResult> {
   const body: Record<string, unknown> = {};
   if (opts.version_tag) body.version_tag = opts.version_tag;
+  // Default is false server-side — only send it when the operator opted
+  // in, so the payload stays minimal for the common case.
+  if (opts.require_fully_labeled_images) {
+    body.require_fully_labeled_images = true;
+  }
   return apiFetch<ExportResult>(
     `${API_PREFIX}/export/yolo`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -3139,13 +3145,20 @@ export function flagNeedsNewClass(
 
 // -- test holdout --------------------------------------------------------
 
+/**
+ * `POST {API_PREFIX}/test_holdout/freeze` — deterministic (SHA1-of-
+ * `crop_id` per class), so the body is `{percent}` only as of
+ * OpenProcessor 6c77deb; an extra field such as `seed` is a 422
+ * (`additionalProperties: false`). `force` re-runs an existing freeze
+ * and is a query param, not a body field.
+ */
 export function freezeTestHoldout(
-  payload: { percent: number; seed: number },
+  payload: { percent: number; force?: boolean },
   signal?: AbortSignal,
 ): Promise<TestHoldoutFreezeResult> {
   return apiFetch<TestHoldoutFreezeResult>(
-    `${API_PREFIX}/test_holdout/freeze`,
-    { method: 'POST', body: JSON.stringify(payload) },
+    `${API_PREFIX}/test_holdout/freeze${qs({ force: payload.force ? true : undefined })}`,
+    { method: 'POST', body: JSON.stringify({ percent: payload.percent }) },
     signal,
   );
 }
@@ -3397,6 +3410,22 @@ export function defaultGpuValue(res: TrainGpuOptionsResponse): string {
 
 export function getTrainPresets(signal?: AbortSignal): Promise<PresetsResponse> {
   return apiFetch<PresetsResponse>(`${API_PREFIX}/train/presets`, {}, signal);
+}
+
+/**
+ * `GET {API_PREFIX}/train/augmentation_presets` (OpenProcessor 6c77deb) —
+ * the trainer's real preset catalog, for `AugmentationPanel`'s picker.
+ * 404s on a pre-6c77deb backend; callers must catch and degrade to a
+ * read-only display rather than a hardcoded id list.
+ */
+export function getAugmentationPresets(
+  signal?: AbortSignal,
+): Promise<AugmentationPresetsResponse> {
+  return apiFetch<AugmentationPresetsResponse>(
+    `${API_PREFIX}/train/augmentation_presets`,
+    {},
+    signal,
+  );
 }
 
 export function promoteTrainJob(

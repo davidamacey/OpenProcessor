@@ -9,7 +9,8 @@
    * Parent owns `value: AugmentationSpec | null`. We mutate it via a
    * setter so reactivity updates clearly cross the component boundary.
    */
-  import type { AugmentationSpec } from '$lib/types_train';
+  import { getAugmentationPresets } from '$lib/api';
+  import type { AugmentationPresetsResponse, AugmentationSpec } from '$lib/types_train';
 
   interface Props {
     value: AugmentationSpec | null;
@@ -18,19 +19,37 @@
 
   let { value, setValue }: Props = $props();
 
-  // Must match the trainer's own PRESETS table (OpenProcessor
-  // docker/trainer/augment.py); an id it doesn't know raises "unknown
-  // augmentation preset" only after the run has started and stopped the
-  // VLM. Replace with the served list once the backend exposes one.
-  const PRESETS = [
-    'none',
-    'balanced_default',
-    'outdoor_scene',
-    'heavy_tilt',
-    'low_light',
-    'text_targets',
-    'text_targets_aggressive',
-  ] as const;
+  // Served from `GET {API_PREFIX}/train/augmentation_presets`
+  // (OpenProcessor 6c77deb) — the trainer's own catalog
+  // (`docker/trainer/augment.py` builds its `PRESETS` from the same
+  // ids), so the picker can never offer an id the trainer will reject.
+  // `null` while loading; `presetsUnavailable` when the endpoint 404s
+  // (a pre-6c77deb backend) — degrade to a read-only display of the
+  // current value rather than a hardcoded id list.
+  let presetsResponse = $state<AugmentationPresetsResponse | null>(null);
+  let presetsUnavailable = $state<boolean>(false);
+
+  $effect(() => {
+    const ctrl = new AbortController();
+    getAugmentationPresets(ctrl.signal)
+      .then((res) => {
+        presetsResponse = res;
+      })
+      .catch((e: unknown) => {
+        if ((e as Error).name === 'AbortError') return;
+        presetsUnavailable = true;
+      });
+    return () => ctrl.abort();
+  });
+
+  // Fallback id used before the served list has loaded (or when it never
+  // does) — matches the trainer's own `DEFAULT_AUGMENTATION_PRESET`.
+  const FALLBACK_DEFAULT_PRESET = 'balanced_default';
+  const servedDefault = $derived(presetsResponse?.default ?? FALLBACK_DEFAULT_PRESET);
+  const selectedPresetOption = $derived(
+    presetsResponse?.presets.find((p) => p.id === (value?.preset ?? servedDefault)) ??
+      null,
+  );
 
   let expanded = $state<boolean>(false);
 
@@ -39,7 +58,7 @@
     return {
       enabled: true,
       multiplier: 3,
-      preset: 'balanced_default',
+      preset: servedDefault,
       albumentations: {},
       per_class_multiplier: {},
     };
@@ -180,15 +199,42 @@
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="block">
             <span class="mb-1 block text-xs text-zinc-400">Preset</span>
-            <select
-              value={spec.preset ?? 'balanced_default'}
-              onchange={(e) => setPreset((e.currentTarget as HTMLSelectElement).value)}
-              class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
-            >
-              {#each PRESETS as p (p)}
-                <option value={p}>{p}</option>
-              {/each}
-            </select>
+            {#if presetsResponse}
+              <select
+                value={spec.preset ?? servedDefault}
+                onchange={(e) => setPreset((e.currentTarget as HTMLSelectElement).value)}
+                class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+              >
+                {#each presetsResponse.presets as p (p.id)}
+                  <option value={p.id} title={p.description}>
+                    {p.label}{p.orientation_sensitive ? ' (no h-flip)' : ''}
+                  </option>
+                {/each}
+              </select>
+              {#if selectedPresetOption}
+                <p
+                  class="mt-1 text-[11px] text-zinc-500"
+                  title={selectedPresetOption.description}
+                >
+                  {selectedPresetOption.description}
+                  {#if selectedPresetOption.orientation_sensitive}
+                    · horizontal flip disabled for this preset
+                  {/if}
+                </p>
+              {/if}
+            {:else if presetsUnavailable}
+              <div
+                class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-300"
+              >
+                {spec.preset ?? servedDefault}
+              </div>
+              <p class="mt-1 text-[11px] text-zinc-500">
+                Preset list unavailable (backend doesn't serve
+                `train/augmentation_presets` yet) — showing the current value read-only.
+              </p>
+            {:else}
+              <p class="text-[11px] text-zinc-500">Loading presets…</p>
+            {/if}
           </label>
 
           <label class="block">

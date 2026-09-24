@@ -205,6 +205,27 @@ export interface PresetsResponse {
   class_subset_presets: ClassSubsetPreset[];
 }
 
+/**
+ * One selectable `augmentation.preset` — `GET
+ * {API_PREFIX}/train/augmentation_presets` (OpenProcessor 6c77deb).
+ */
+export interface AugmentationPresetOption {
+  id: string;
+  label: string;
+  description: string;
+  /** Horizontal flip is disabled for the whole run with this preset. */
+  orientation_sensitive: boolean;
+}
+
+/** `GET {API_PREFIX}/train/augmentation_presets` response. Absent on a
+ *  pre-6c77deb backend (404) — `AugmentationPanel` falls back to a
+ *  read-only display of the current value when this fails to load. */
+export interface AugmentationPresetsResponse {
+  presets: AugmentationPresetOption[];
+  /** Preset used when a job omits `augmentation.preset`. */
+  default: string;
+}
+
 /** POST {API_PREFIX}/train/promote/{job_id} body. */
 export interface PromoteRequest {
   triton_name: string;

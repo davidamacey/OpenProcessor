@@ -102,20 +102,86 @@ export interface ClassMergeDryRun {
   blocked: boolean;
 }
 
-/** Server response from `GET {API_PREFIX}/export/status`. */
+/** Instance counts per split — `GET {API_PREFIX}/export/status`'s
+ *  `split_counts` (OpenProcessor `ExportSplitCounts`, 6c77deb). */
+export interface ExportSplitCounts {
+  train: number;
+  val: number;
+  test: number;
+}
+
+/** One class's instance counts per split, as recorded in the export
+ *  manifest (OpenProcessor `ExportClassSplitCounts`, 6c77deb). */
+export interface ExportClassSplitCounts {
+  /** Registry class id. */
+  class_id: number;
+  /** Dense class id written into the label files. */
+  export_id: number;
+  class_name: string;
+  train: number;
+  val: number;
+  test: number;
+}
+
+/**
+ * Server response from `GET {API_PREFIX}/export/status` (OpenProcessor
+ * `ExportStatusResponse`, 6c77deb). `status` is `'idle' | 'unknown' |
+ * 'success'` on the vendored 6c77deb backend — the GET endpoint now only
+ * ever describes the *last completed* export (`idle` = none yet, every
+ * other field null; `unknown` = the `current` manifest is missing/
+ * unreadable). The `progress`/`job_id`/`error` fields below are NOT part
+ * of that response; they're kept only because `/export`'s `runExport()`
+ * synthesizes an `ExportStatus`-shaped object from `POST /export/yolo`'s
+ * synchronous `ExportResult` response (a different endpoint, still
+ * `running`/`failed`/`success`-capable) and assigns it to the same
+ * `exportState` variable. Every field below `status` is optional/nullable
+ * so a pre-6c77deb backend's GET response (missing all of them) renders
+ * exactly as it did before — no page break on a missing field.
+ */
 export interface ExportStatus {
-  /** 'idle' | 'running' | 'success' | 'failed' | 'unknown'. */
   status: string;
   last_run: string | null;
-  /** 0..1 for active jobs. */
+  /** 0..1 for active jobs (synthesized from `ExportResult` only — the GET
+   *  response never carries this). */
   progress?: number;
   job_id?: string | null;
-  /** On success: directory the manifest was written to. */
+  /** On success: directory the manifest was written to. Same as `path`. */
   export_dir?: string | null;
-  /** On failure: the error message. */
+  /** On failure: the error message (synthesized from `ExportResult`
+   *  only — the GET response never carries this). */
   error?: string | null;
   /** Optional human-readable detail. */
   message?: string | null;
+  /** Resolved export directory — same value as `export_dir`. */
+  path?: string | null;
+  version_tag?: string | null;
+  dataset_sha?: string | null;
+  seed?: number | null;
+  /** Row attribute the split grouped on (`'image_id'`). */
+  group_key?: string | null;
+  /** Exported images (OpenProcessor d5343cb: one image + one label file
+   *  per source image, one line per object). */
+  image_count?: number | null;
+  /** Exported objects (label lines) across all images. */
+  object_count?: number | null;
+  class_count?: number | null;
+  /** Images per split. */
+  split_counts?: ExportSplitCounts | null;
+  /** Objects (label lines) per split. */
+  split_object_counts?: ExportSplitCounts | null;
+  /** Objects per class per split. `null` for an export written before
+   *  this was recorded. */
+  class_split_counts?: ExportClassSplitCounts[] | null;
+  /** Whether images with an unlabeled object were left out. */
+  require_fully_labeled_images?: boolean | null;
+  /** Objects on exported images the export did not label (unreviewed, or
+   *  on a class it leaves out); learned as background. */
+  unlabeled_items_on_exported_images?: number | null;
+  /** Exported images holding at least one unlabeled object. */
+  images_with_unlabeled_items?: number | null;
+  /** Images left out by `require_fully_labeled_images` (0 when it was
+   *  off). */
+  images_dropped_not_fully_labeled?: number | null;
 }
 
 /**
@@ -134,7 +200,24 @@ export interface ExportResult {
   version_tag?: string | null;
   manifest_path?: string | null;
   dataset_sha?: string | null;
+  /** Images per split. */
   split_counts?: Record<string, number> | null;
+  /** Exported images. */
+  image_count?: number | null;
+  /** Exported objects (label lines) across all images. */
+  object_count?: number | null;
+  /** Objects (label lines) per split. */
+  split_object_counts?: Record<string, number> | null;
+  /** Echoed from the request — whether images with an unlabeled object
+   *  were left out. */
+  require_fully_labeled_images?: boolean | null;
+  /** Objects on exported images the export did not label; learned as
+   *  background. */
+  unlabeled_items_on_exported_images?: number | null;
+  /** Exported images holding at least one unlabeled object. */
+  images_with_unlabeled_items?: number | null;
+  /** Images left out by `require_fully_labeled_images`. */
+  images_dropped_not_fully_labeled?: number | null;
   dedup?: number | null;
   started_at?: string | null;
   finished_at?: string | null;
@@ -193,6 +276,8 @@ export interface ExportDataset {
   export_dir: string;
   version_tag: string;
   image_count?: number | null;
+  /** Exported objects (label lines) across all images. */
+  object_count?: number | null;
   split_counts?: Record<string, number> | null;
   dataset_sha?: string | null;
   exported_at?: string | null;
@@ -211,12 +296,26 @@ export interface ExportDatasetList {
   count: number;
 }
 
-/** Server response from `POST {API_PREFIX}/test_holdout/freeze`. */
+/**
+ * Server response from `POST {API_PREFIX}/test_holdout/freeze`. As of
+ * OpenProcessor 6c77deb the request body is `{percent}` only — no
+ * `seed` (selection is deterministic, SHA1-of-`crop_id` per class; an
+ * unknown field like `seed` is now a 422, not silently ignored) — and
+ * the response gained `selection`/`min_per_class` (both required on
+ * 6c77deb; optional here so a pre-6c77deb backend's response, which
+ * doesn't serve them, still type-checks and renders without them).
+ */
 export interface TestHoldoutFreezeResult {
   n_frozen: number;
   n_classes_covered: number;
   test_holdout_sha: string;
   per_class_counts: Record<string, number>;
+  /** Selection method name — `'sha1_per_class'` on 6c77deb. */
+  selection?: string;
+  /** Target holdout percent per class, echoed from the request. */
+  percent?: number;
+  /** Floor per class — all of a class smaller than this is frozen. */
+  min_per_class?: number;
 }
 
 /** Server response from `GET {API_PREFIX}/test_holdout/stats`. */
