@@ -77,6 +77,18 @@ def _get_vlm_labeler(pack_name: str | None = None) -> Any:
     return inst
 
 
+def _class_locked(source: dict[str, Any]) -> bool:
+    """True when a VLM class write must not touch this item.
+
+    Besides human-owned classes, any validated class (cluster auto-promote,
+    label import, ...) is locked: a VLM write only sets some class fields
+    (``vlm_unmatched`` sets class_source but not class_id), so letting it
+    through left items with ``class_source='vlm_unmatched'`` yet a
+    validated class_id set by a different writer.
+    """
+    return is_human_owned_class(source) or bool(source.get('class_validated'))
+
+
 async def _default_pack_name(opensearch: Any) -> str | None:
     """The ``prompt_pack`` axis's effective default (settings-doc override
     when set and advertised, else the process default pack)."""
@@ -249,10 +261,10 @@ async def vlm_label_batch(
             logger.warning('curation_vlm_crop_missing', crop_id=crop_id, error=str(exc))
             continue
         src = doc.get('_source') or {}
-        # Never send a human-owned crop to the VLM for reclassification —
-        # there is no upstream query filter on this caller-supplied-id
-        # endpoint, so this check runs per-crop here.
-        if is_human_owned_class(src):
+        # Never send a human-owned or class-validated crop to the VLM for
+        # reclassification — there is no upstream query filter on this
+        # caller-supplied-id endpoint, so this check runs per-crop here.
+        if _class_locked(src):
             continue
         image_path = src.get('image_path', '')
         bbox = src.get('bbox_norm')
@@ -374,7 +386,7 @@ async def vlm_label_batch(
             # but re-check here against the freshest `current` (OCC
             # re-fetches with seq_no) in case a human write landed
             # between the fetch loop and this merge.
-            if is_human_owned_class(current):
+            if _class_locked(current):
                 return {}
             update = dict(updates_by_id[doc_id])
             if 'class_id' in update:
