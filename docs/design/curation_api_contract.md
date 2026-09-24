@@ -322,11 +322,12 @@ rank just the first `k` k-center-greedy picks; `total` is then `k`).
 
 ### Classes
 
-- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`, `adequacy`
-- `ClassListResponse`: `classes`, `thresholds`
-- `ClassCreateRequest`: `name`, `group`, `notes`
+- `ClassEntry`: `class_id`, `class_name`, `group`, `sample_count`, `validated_count`, `cluster_size`, `deprecated`, `hotkey_letter`, `adequacy`, `added_at` (from the registry)
+- `ClassListResponse`: `classes`, `thresholds`, `reserved_hotkeys` (sorted single keys no class may bind: `/ a b d e f g m n u x z` — the labeling actions, the class picker and the region-review keys)
+- `ClassCreateRequest`: `name`, `group`, `notes`, `hotkey_letter` (optional)
 - `ClassUpdateRequest`: `name`, `group`, `hotkey_letter`
-- `ClassMergeRequest`: `source_id`, `target_id`
+- Class names must match `^[a-z0-9_]+$` on create and rename (`422` otherwise; they become export/training class names). Hotkeys, on create and update: one character (`400`), not reserved (`422`), not bound to another active class (`409`); `""` on update clears. A create that fails any hotkey rule writes nothing.
+- `ClassMergeRequest`: `source_id`, `target_id`. `POST /classes/merge?dry_run=true` writes nothing and returns `{dry_run: true, source_id, target_id, would_relabel, would_unvalidate, holdout_blocking, blocked}` — `would_relabel` counts every non-holdout item of the source class (validated or not), `would_unvalidate` the validated ones among them (a merge relabels with `class_source: class_merge` and clears validation), `blocked` = the real merge would `409` on frozen test-holdout items. `400` for an unknown id or a self-merge.
 - `GET /class_sources` -> `{"class_sources": [{"id", "label", "role", "short_label"}, ...]}` — see "`class_source` values" below
 
 ### VLM labeling/verification

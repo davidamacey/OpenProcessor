@@ -393,21 +393,30 @@ class ClassEntry(BaseModel):
     hotkey_letter: str | None = None
     # ok / warn / block from validated_count (dataset_thresholds.py).
     adequacy: Literal['ok', 'warn', 'block'] = 'block'
+    added_at: str | None = None
 
 
 class ClassListResponse(BaseModel):
     classes: list[ClassEntry]
     thresholds: dict[str, int] = Field(default_factory=dict)
+    # Single keys a class hotkey may not use (labeling actions).
+    reserved_hotkeys: list[str] = Field(default_factory=list)
+
+
+# Class names are slugs: they become export / training class names.
+CLASS_NAME_PATTERN = r'^[a-z0-9_]+$'
 
 
 class ClassCreateRequest(BaseModel):
-    name: str
+    name: str = Field(pattern=CLASS_NAME_PATTERN)
     group: str = 'unknown'
     notes: str = ''
+    # Optional; same rules as on update (one char, not reserved, unique).
+    hotkey_letter: str | None = None
 
 
 class ClassUpdateRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, pattern=CLASS_NAME_PATTERN)
     group: str | None = None
     # ``""`` clears the binding; ``None`` leaves it unchanged. Single ASCII
     # char only; uniqueness checked server-side at write time.
