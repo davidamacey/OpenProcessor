@@ -47,3 +47,11 @@ export const PENDING_REGION_STATUSES: readonly RegionStatusValue[] = [
   'pending_detection',
   'pending_verification',
 ] as const;
+
+// Statuses an operator may set by hand (region status / batch status writes).
+export const HUMAN_REGION_STATUSES: readonly RegionStatusValue[] = [
+  'detected',
+  'verify_rejected',
+  'no_region_visible',
+  'false_positive',
+] as const;

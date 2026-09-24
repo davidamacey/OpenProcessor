@@ -8,7 +8,13 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from src.config.region_state import PENDING_STATUSES, TERMINAL_STATUSES, RegionStatus
+from src.config.region_state import (
+    HUMAN_WRITABLE_STATUSES,
+    PENDING_STATUSES,
+    TERMINAL_STATUSES,
+    RegionStatus,
+)
+from src.routers.curation._common import HUMAN_REGION_STATUS_VALUES
 
 
 if TYPE_CHECKING:
@@ -54,9 +60,16 @@ def test_subsets_follow_python_sets() -> None:
     text = mod.render_ts()
     terminal_block = text.split('TERMINAL_REGION_STATUSES')[1].split('] as const;')[0]
     pending_block = text.split('PENDING_REGION_STATUSES')[1].split('] as const;')[0]
+    human_block = text.split('HUMAN_REGION_STATUSES')[1].split('] as const;')[0]
     for member in RegionStatus:
         assert (f"'{member.value}'" in terminal_block) == (member in TERMINAL_STATUSES)
         assert (f"'{member.value}'" in pending_block) == (member in PENDING_STATUSES)
+        assert (f"'{member.value}'" in human_block) == (member in HUMAN_WRITABLE_STATUSES)
+
+
+def test_human_statuses_are_the_router_whitelist() -> None:
+    # The exported subset must be the exact set the region write routes accept.
+    assert HUMAN_REGION_STATUS_VALUES == HUMAN_WRITABLE_STATUSES
 
 
 def test_check_fails_on_stale_file(tmp_path: Path) -> None:

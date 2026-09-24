@@ -7,7 +7,8 @@ returns over the API. A TypeScript frontend that switches on those
 strings must not hand-copy them — a Python-side rename (e.g. the B2
 ``no_region_box`` / ``no_region_visible`` change) would otherwise drift
 silently. This script renders the enum, a string-literal union type, the
-ordered value list, and the terminal / pending subsets into one ``.ts``
+ordered value list, and the terminal / pending / human-writable subsets
+into one ``.ts``
 file, and ``--check`` fails when the committed file is stale (wired as a
 pre-commit hook).
 
@@ -52,6 +53,7 @@ _region_state = _load_region_state()
 RegionStatus = _region_state.RegionStatus
 TERMINAL_STATUSES = _region_state.TERMINAL_STATUSES
 PENDING_STATUSES = _region_state.PENDING_STATUSES
+HUMAN_WRITABLE_STATUSES = _region_state.HUMAN_WRITABLE_STATUSES
 
 DEFAULT_TARGET = REPO_ROOT / 'contracts' / 'ts' / 'regionStatus.ts'
 
@@ -95,6 +97,9 @@ def render_ts() -> str:
     lines.extend(_const_array('TERMINAL_REGION_STATUSES', _subset(TERMINAL_STATUSES)))
     lines.append('')
     lines.extend(_const_array('PENDING_REGION_STATUSES', _subset(PENDING_STATUSES)))
+    lines.append('')
+    lines.append('// Statuses an operator may set by hand (region status / batch status writes).')
+    lines.extend(_const_array('HUMAN_REGION_STATUSES', _subset(HUMAN_WRITABLE_STATUSES)))
     lines.append('')
     return '\n'.join(lines)
 

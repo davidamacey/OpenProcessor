@@ -203,6 +203,16 @@ repos:
         pass_filenames: false
         files: ^(src/config/region_state\.py|contracts/ts/regionStatus\.ts|scripts/codegen/export_region_status_to_ts\.py)$
 
+      # Imports the app (~10s), so it re-runs itself under the project venv
+      # with a scrubbed env; it only fires when Python source or its own
+      # outputs change. Regenerate with `make contracts`.
+      - id: api-contracts-drift
+        name: Item wire / class-source / curation OpenAPI contracts are in sync
+        entry: python3 scripts/codegen/export_api_contracts.py --check
+        language: system
+        pass_filenames: false
+        files: ^(src/.*\.py|contracts/json/item_wire\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime)\.py)$
+
   # Commit message linting (conventional commits)
   # Note: Disabled for now - requires separate hook installation with:
   # pre-commit install --hook-type commit-msg
