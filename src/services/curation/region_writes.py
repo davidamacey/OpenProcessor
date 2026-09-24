@@ -8,8 +8,12 @@ client picks:
 - a status whose lifecycle entry ``clears_box`` also clears the box and
   score (``REGION_STATUS_INFO`` in ``src/config/region_state.py``);
 - ``region_verified`` follows the status: true for the confirm status,
-  false for every other human-written status. Clients never send it;
+  false for every other human-written status. Clients never send it. A
+  write that re-asserts the stored status re-derives nothing (verified and
+  the region-cluster placement stay as stored);
 - the confirm status needs a box to confirm (:class:`RegionWriteError`);
+- a box PUT that equals the stored box is a confirmation: detector,
+  version, score and detection time are kept (:func:`region_box_write`);
 - a false-positive mark parks the region in the permanent FP cluster,
   and moving off it releases the region for re-clustering.
 
@@ -92,11 +96,20 @@ def human_status_fields(region_status: str, current: dict[str, Any]) -> dict[str
         raise RegionWriteError(
             f'cannot mark {status.value!r} without a region box; set one with PUT region'
         )
-    doc: dict[str, Any] = {F.status: status.value, F.verified: status == CONFIRM_STATUS}
+    doc: dict[str, Any] = {F.status: status.value}
+    if current.get(F.status) == status.value:
+        # Re-asserting the stored status (a bulk write over a mixed
+        # selection) changes nothing derived from it: verified and the
+        # region-cluster placement stay as stored. Confirming is the one
+        # exception — it is an explicit verification.
+        if status == CONFIRM_STATUS:
+            doc[F.verified] = True
+    else:
+        doc[F.verified] = status == CONFIRM_STATUS
+        doc.update(fp_cluster_fields(status.value))
     if info.clears_box:
         doc[F.bbox_norm] = None
         doc[F.score] = None
-    doc.update(fp_cluster_fields(status.value))
     return doc
 
 
@@ -148,6 +161,65 @@ def region_box_doc(
     }
 
 
+BOX_MATCH_TOLERANCE = 1e-4
+"""Max per-coordinate difference (normalized source frame) for a PUT box
+to count as the stored box: well under a pixel at any practical image
+size, well over the float noise of a frame projection round trip."""
+
+
+def same_box(a: Any, b: Any, *, tol: float = BOX_MATCH_TOLERANCE) -> bool:
+    """True when ``a`` and ``b`` are both 4-number boxes within ``tol``."""
+    if not isinstance(a, list | tuple) or not isinstance(b, list | tuple):
+        return False
+    if len(a) != 4 or len(b) != 4:
+        return False
+    try:
+        return all(abs(float(x) - float(y)) <= tol for x, y in zip(a, b, strict=True))
+    except (TypeError, ValueError):
+        return False
+
+
+def region_confirm_doc(current: dict[str, Any], *, label_source: str, now: str) -> dict[str, Any]:
+    """Update doc for a human confirming the stored box unchanged.
+
+    Records the confirmation only — status, verified, validated and the
+    human verifier. The detector, its version, score and detection time
+    describe who *found* the box, which a confirmation doesn't change.
+    """
+    F = get_region_fields()
+    human = region_profile_or_neutral()
+    doc = human_status_fields(CONFIRM_STATUS.value, current)
+    doc.update(
+        {
+            # The stored box, not the request's noisy copy of it.
+            F.bbox_norm: list(current[F.bbox_norm]),
+            F.label_source: label_source,
+            F.validated: True,
+            F.verifier: human.human_detector_name,
+            F.verifier_version: human.human_detector_version,
+            F.verified_at: now,
+            'updated_at': now,
+        }
+    )
+    return doc
+
+
+def region_box_write(
+    current: dict[str, Any],
+    region_bbox_norm: list[float] | None,
+    *,
+    label_source: str,
+    now: str,
+) -> dict[str, Any]:
+    """Update doc for ``PUT region``: a confirmation when the box equals the
+    stored one (:func:`same_box`), else a human box write
+    (:func:`region_box_doc`)."""
+    F = get_region_fields()
+    if region_bbox_norm is not None and same_box(region_bbox_norm, current.get(F.bbox_norm)):
+        return region_confirm_doc(current, label_source=label_source, now=now)
+    return region_box_doc(region_bbox_norm, label_source=label_source, now=now)
+
+
 def post_write_item(
     current: dict[str, Any], update: dict[str, Any], crop_id: str
 ) -> dict[str, Any]:
@@ -156,11 +228,15 @@ def post_write_item(
 
 
 __all__ = [
+    'BOX_MATCH_TOLERANCE',
     'RegionWriteError',
     'fp_cluster_fields',
     'human_status_fields',
     'parent_to_source_bbox',
     'post_write_item',
     'region_box_doc',
+    'region_box_write',
+    'region_confirm_doc',
+    'same_box',
     'validate_bbox_norm',
 ]

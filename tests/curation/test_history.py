@@ -269,7 +269,8 @@ class _FakeAutoPromoteOS:
         # Scroll-init search for doc ids matching the promote query.
         return {
             '_scroll_id': 'scroll-1',
-            'hits': {'hits': [{'_id': 'crop-a'}]},
+            # The promote scroll reads the class state it votes on.
+            'hits': {'hits': [{'_id': 'crop-a', '_source': dict(_AUTO_PROMOTE_SOURCE)}]},
         }
 
     async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
@@ -281,14 +282,7 @@ class _FakeAutoPromoteOS:
     async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
         from curation.occ_fakes import make_mget_response
 
-        source = {
-            'class_id': 7,
-            'class_name': 'honda',
-            'class_source': 'item_model',
-            'class_validated': False,
-            'test_holdout': False,
-        }
-        found = {d['_id']: source for d in body['docs']}
+        found = {d['_id']: dict(_AUTO_PROMOTE_SOURCE) for d in body['docs']}
         return make_mget_response(found)
 
     async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
@@ -300,6 +294,15 @@ class _FakeAutoPromoteOS:
             self.update_calls.append(doc['doc'])
             items.append(make_bulk_update_item(doc_id, status=200))
         return make_bulk_response(items)
+
+
+_AUTO_PROMOTE_SOURCE: dict[str, Any] = {
+    'class_id': 7,
+    'class_name': 'honda',
+    'class_source': 'item_model',
+    'class_validated': False,
+    'test_holdout': False,
+}
 
 
 async def _run_auto_promote_case() -> list[dict[str, Any]]:
@@ -345,6 +348,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
     from scripts.curation.worker.bulk_writer import _bulk_update
     from scripts.curation.worker.state import _ItemTask
     from src.config import get_region_fields
+    from src.services.curation.class_write_guard import class_state_token
 
     F = get_region_fields()
     t = _ItemTask(
@@ -373,6 +377,8 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
         # Still in the pending state the task was fetched in.
         F.status: 'pending',
     }
+    # ... and the class state it was fetched in.
+    t.class_token = class_state_token(source)
 
     from unittest.mock import AsyncMock
 

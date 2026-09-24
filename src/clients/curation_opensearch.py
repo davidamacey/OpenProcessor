@@ -225,6 +225,11 @@ _EXCLUSION_MAPPING: dict[str, Any] = {
     'vlm_dismissed_class_id': {'type': 'integer'},
     'vlm_dismissed_class_name': {'type': 'keyword'},
     'vlm_dismissed_at': {'type': 'date'},
+    # Undo snapshots of region writes + VLM dismissals
+    # (src/services/curation/edit_history.py). Stored, never indexed:
+    # entries hold arbitrary-typed field snapshots and are only ever read
+    # back whole by the undo routes.
+    'edit_history': {'type': 'object', 'enabled': False},
 }
 
 

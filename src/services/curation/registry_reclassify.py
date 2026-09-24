@@ -37,9 +37,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.history import record_class_history
 
 
@@ -188,7 +189,12 @@ async def reclassify_unmatched(
     while True:
         body: dict[str, Any] = {
             'size': page_size,
-            '_source': ['crop_id', source.raw_label_field, source.confidence_field],
+            '_source': [
+                'crop_id',
+                source.raw_label_field,
+                source.confidence_field,
+                *CLASS_GUARD_SOURCE_FIELDS,
+            ],
             'query': unmatched_query(source),
             'sort': [{'crop_id': 'asc'}],
         }
@@ -203,23 +209,29 @@ async def reclassify_unmatched(
         cursor = hits[-1].get('sort')
 
         targets: dict[str, str] = {}
+        guard = ClassWriteGuard('registry_reclassify')
         for hit in hits:
             resolved = _resolve(hit.get('_source') or {})
             if resolved is not None:
                 targets[hit['_id']] = resolved
+                guard.remember(hit['_id'], hit.get('_source') or {})
                 result.by_class[resolved] += 1
         result.matched += len(targets)
 
         if targets and not dry_run:
             now = datetime.now(UTC).isoformat()
 
-            def _merge(_doc_id: str, current: dict[str, Any], _now: str = now) -> dict[str, Any]:
+            def _merge(
+                doc_id: str,
+                current: dict[str, Any],
+                _now: str = now,
+                _guard: ClassWriteGuard = guard,
+            ) -> dict[str, Any]:
                 if (
                     current.get('class_source') != source.unmatched_source
-                    or current.get('class_validated')
                     or current.get('test_holdout')
                     or current.get('class_excluded')
-                    or is_human_owned_class(current)
+                    or not _guard.allows(doc_id, current)
                 ):
                     return {}
                 resolved = _resolve(current)

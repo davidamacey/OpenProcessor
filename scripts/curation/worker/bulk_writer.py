@@ -13,13 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from src.clients.occ import (
-    is_human_owned_class,
-    occ_skip_on_conflict_bulk,
-    strip_class_write_fields,
-)
+from src.clients.occ import CLASS_WRITE_FIELDS, occ_skip_on_conflict_bulk, strip_class_write_fields
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
+from src.services.curation.class_write_guard import class_write_allowed
 from src.services.curation.history import merge_region_chain, record_class_history
 from src.services.curation.wire import region_event_payload
 
@@ -84,15 +81,17 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         # Item text read this pass rides on the region write; it is not
         # class data, so the human-label guard below leaves it alone.
         update.update(task.item_text_update)
-        # P0-2 defense-in-depth: runner.py's _should_classify already
-        # prevents class fields from ever landing in task.update_doc for
-        # a human-owned crop, so this should be a no-op in practice —
-        # kept as a second layer against a future code path that
-        # forgets to consult that gate. Scoped to class fields only
-        # (strip_class_write_fields) so a region write in the SAME
-        # update_doc (the combined class+region write) is never
-        # dropped.
-        if is_human_owned_class(current):
+        # Class fields land only on the exact class state this task was
+        # read in, never on a human-owned/validated class: a human write
+        # (an undo, a relabel) during this pass wins. runner.py's
+        # _should_classify gates human-owned crops at read time; this is
+        # the write-time half. Scoped to class fields only
+        # (strip_class_write_fields) so the region write in the SAME
+        # update_doc (the combined class+region write) still lands.
+        if CLASS_WRITE_FIELDS & update.keys() and not class_write_allowed(
+            task.class_token, current
+        ):
+            logger.info('class_write_stale_skip', doc_id=doc_id, writer_id='region_worker')
             update = strip_class_write_fields(update)
         # Phase 3 (b): the worker's combined-VLM path writes class_id
         # without appending class_id_history unless we do it here — the

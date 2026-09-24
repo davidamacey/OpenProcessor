@@ -16,6 +16,7 @@ from PIL import Image
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
 from src.services.detection.cascade_detect import (
     PaddleOcrTextRecognizer,
     RegionCandidate,
@@ -136,6 +137,7 @@ async def _fetch_pending(
             'confidence',
             'request_id',
             'test_holdout',
+            *CLASS_GUARD_SOURCE_FIELDS,
         ],
         'track_total_hits': False,
         'query': _build_pending_query(exclude_ids=exclude_ids),
@@ -177,6 +179,7 @@ async def _fetch_pending(
                 lpr_plate_in_source=lpr_in_source,
                 lpr_score=float(src.get(F.score) or 0.0),
                 request_id=str(src.get('request_id') or '-'),
+                class_token=class_state_token(src),
             )
         )
     return tasks

@@ -30,7 +30,7 @@ from fastapi import HTTPException
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from src.clients.occ import is_human_owned_class, occ_skip_on_conflict_bulk
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config, get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
@@ -39,6 +39,11 @@ from src.routers.curation._common import (
     get_class_registry,
     logger,
     router,
+)
+from src.services.curation.class_write_guard import (
+    CLASS_GUARD_SOURCE_FIELDS,
+    ClassWriteGuard,
+    class_write_locked,
 )
 from src.services.curation.history import record_class_history
 from src.services.curation.image_serving import (
@@ -86,7 +91,7 @@ def _class_locked(source: dict[str, Any]) -> bool:
     through left items with ``class_source='vlm_unmatched'`` yet a
     validated class_id set by a different writer.
     """
-    return is_human_owned_class(source) or bool(source.get('class_validated'))
+    return class_write_locked(source)
 
 
 async def _default_pack_name(opensearch: Any) -> str | None:
@@ -255,15 +260,20 @@ async def vlm_label_batch(
     cache_hits = 0
     cache_misses = 0
     # F-26: one mget_crops() call instead of N separate opensearch.get()
-    # round trips.
+    # round trips. The guard's fields are fetched too: its read token must be
+    # built from the same class state the write-time re-check compares.
     from src.clients.curation_opensearch import mget_crops
 
     docs_by_id = await mget_crops(
         opensearch,
         list(payload.crop_ids),
         index=ITEMS_INDEX,
-        source_includes=['class_source', 'class_validated', 'image_path', 'bbox_norm'],
+        source_includes=sorted(
+            {'class_source', 'class_validated', 'image_path', 'bbox_norm'}
+            | set(CLASS_GUARD_SOURCE_FIELDS)
+        ),
     )
+    guard = ClassWriteGuard('vlm_label_batch')
     for crop_id in payload.crop_ids:
         doc = docs_by_id.get(crop_id)
         if doc is None:
@@ -275,6 +285,7 @@ async def vlm_label_batch(
         # caller-supplied-id endpoint, so this check runs per-crop here.
         if _class_locked(src):
             continue
+        guard.remember(crop_id, src)
         image_path = src.get('image_path', '')
         bbox = src.get('bbox_norm')
         if not image_path or not bbox or len(bbox) != 4:
@@ -390,12 +401,10 @@ async def vlm_label_batch(
             # a documented noop in occ_skip_on_conflict_bulk.
             if _is_frozen_test_holdout(current):
                 return {}
-            # Defense-in-depth: the fetch loop above already skips
-            # human-owned crops before they ever reach `updates_by_id`,
-            # but re-check here against the freshest `current` (OCC
-            # re-fetches with seq_no) in case a human write landed
-            # between the fetch loop and this merge.
-            if _class_locked(current):
+            # The VLM call takes seconds: write only onto the exact class
+            # state this batch read (a human undo/relabel in between wins),
+            # never onto a human-owned or validated class.
+            if not guard.allows(doc_id, current):
                 return {}
             update = dict(updates_by_id[doc_id])
             if 'class_id' in update:
