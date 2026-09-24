@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -56,11 +57,40 @@ logger = get_logger(__name__)
 
 # Same default as src/routers/models.py — the Triton model repo mounted
 # into the API container. Override at construction time for tests.
+#
+# TR-1: this used to be a plain module-level constant, so a deployment
+# that mounts the Triton repo somewhere other than /app/models (the
+# private deployment overlay mounts it at /models) silently wrote
+# promoted models into a directory Triton never sees, with no error —
+# the copy + config-write both "succeed" against a path in the
+# container's writable layer. Resolving OP_TRITON_MODEL_REPO here, at
+# construction time rather than import time, means the env var set for
+# this container is always honored, and tests can still monkeypatch
+# os.environ before constructing a TritonPromoter.
 DEFAULT_TRITON_MODELS_DIR = Path('/app/models')
+
+
+def resolve_triton_models_dir() -> Path:
+    """``OP_TRITON_MODEL_REPO``, falling back to :data:`DEFAULT_TRITON_MODELS_DIR`."""
+    override = os.environ.get('OP_TRITON_MODEL_REPO')
+    return Path(override) if override else DEFAULT_TRITON_MODELS_DIR
+
 
 # Triton's HTTP control endpoint. The yolo-api container shares the
 # triton_net network so this resolves through Docker DNS.
 DEFAULT_TRITON_HTTP_URL = 'http://triton-server:8000'
+
+
+def resolve_triton_http_url() -> str:
+    """``OP_TRITON_HTTP_URL`` (falling back to the legacy ``TRITON_HTTP_URL``
+    name if that's the only one set anywhere in this deployment), else
+    :data:`DEFAULT_TRITON_HTTP_URL`.
+    """
+    return (
+        os.environ.get('OP_TRITON_HTTP_URL')
+        or os.environ.get('TRITON_HTTP_URL')
+        or DEFAULT_TRITON_HTTP_URL
+    )
 
 
 # =============================================================================
@@ -205,8 +235,8 @@ class TritonPromoter:
     def __init__(
         self,
         *,
-        triton_models_dir: Path = DEFAULT_TRITON_MODELS_DIR,
-        triton_http_url: str = DEFAULT_TRITON_HTTP_URL,
+        triton_models_dir: Path | None = None,
+        triton_http_url: str | None = None,
         # 30s was too short for a real TensorRT JIT-build on /load (the
         # engine gets compiled synchronously on first load for a model
         # the .onnx cache doesn't already have a plan for). 300s
@@ -215,8 +245,16 @@ class TritonPromoter:
         # hard-fail-on-4xx distinction in _trigger_load is unchanged.
         http_timeout: float = 300.0,
     ) -> None:
-        self.triton_models_dir = triton_models_dir
-        self.triton_http_url = triton_http_url.rstrip('/')
+        # TR-1: resolved from OP_TRITON_MODEL_REPO / OP_TRITON_HTTP_URL at
+        # construction time (not import time), so a caller that doesn't
+        # pass these explicitly still gets whatever this container's env
+        # actually says, and tests can monkeypatch os.environ per-test.
+        self.triton_models_dir = (
+            triton_models_dir if triton_models_dir is not None else resolve_triton_models_dir()
+        )
+        self.triton_http_url = (
+            triton_http_url if triton_http_url is not None else resolve_triton_http_url()
+        ).rstrip('/')
         self.http_timeout = http_timeout
 
     # ------------------------------------------------------------------
@@ -632,6 +670,8 @@ __all__ = [
     'build_class_id_to_name',
     'promote_yolo26_to_triton',
     'resolve_class_remap',
+    'resolve_triton_http_url',
+    'resolve_triton_models_dir',
     'unload_triton_model',
 ]
 
