@@ -16,7 +16,11 @@
  * missing endpoint never breaks `/review`'s tab bar.
  */
 
-import { getReviewTabsVocabulary, type ReviewTabVocabularyEntry } from '$lib/api';
+import {
+  getReviewTabsVocabulary,
+  type ReviewFilterSpec,
+  type ReviewTabVocabularyEntry,
+} from '$lib/api';
 
 class ReviewTabsVocabularyStore {
   list = $state<ReviewTabVocabularyEntry[]>([]);
@@ -72,6 +76,15 @@ class ReviewTabsVocabularyStore {
   filterDefault(endpointId: string, key: string): unknown | null {
     const v = this.#byId.get(endpointId)?.filter_defaults?.[key];
     return v === undefined ? null : v;
+  }
+
+  /** This tab's served self-describing enum filters (840beb8 adoption) —
+   *  empty array when the endpoint is absent, not yet loaded, or the tab
+   *  declares none. Drives the generic served-enum filter bar: a future
+   *  spec on any tab renders with zero page-specific code, since the
+   *  page never reads a `param` by name. */
+  filterSpecsFor(endpointId: string): ReviewFilterSpec[] {
+    return this.#byId.get(endpointId)?.filter_specs ?? [];
   }
 }
 

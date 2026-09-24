@@ -42,7 +42,9 @@ describe('reviewTabsVocabularyStore.init', () => {
 
     await reviewTabsVocabularyStore.init();
 
-    expect(reviewTabsVocabularyStore.list).toEqual(PAYLOAD.tabs);
+    expect(reviewTabsVocabularyStore.list).toEqual(
+      PAYLOAD.tabs.map((t) => ({ ...t, filter_specs: [] })),
+    );
     expect(reviewTabsVocabularyStore.loaded).toBe(true);
   });
 
@@ -159,5 +161,62 @@ describe('reviewTabsVocabularyStore.filterSupported / filtersFor / filterDefault
       2,
     );
     expect(reviewTabsVocabularyStore.filterDefault('regions', 'max_rank')).toBeNull();
+  });
+});
+
+// 840beb8 adoption: GET {API_PREFIX}/review/tabs now also serves each tab's
+// self-describing enum filter_specs (e.g. Plates' region_status) — the
+// generic served-enum filter bar renders one <select> per entry with zero
+// param-specific code.
+const FILTER_SPECS_PAYLOAD = {
+  tabs: [
+    {
+      id: 'regions',
+      label: 'Plates',
+      filters: ['text', 'region_status'],
+      filter_defaults: { region_status: 'all' },
+      filter_specs: [
+        {
+          param: 'region_status',
+          kind: 'enum',
+          label: 'Status',
+          options: [
+            { value: 'all', label: 'All (accepted + rejected candidates)' },
+            { value: 'detected', label: 'Detected only' },
+            { value: 'verify_rejected', label: 'Verifier-rejected candidates only' },
+          ],
+        },
+      ],
+    },
+    // No filter_specs at all — every other tab today.
+    { id: 'all', label: 'All' },
+  ],
+};
+
+describe('reviewTabsVocabularyStore.filterSpecsFor', () => {
+  it('returns the served specs for a tab that has one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, FILTER_SPECS_PAYLOAD)),
+    );
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.filterSpecsFor('regions')).toEqual(
+      FILTER_SPECS_PAYLOAD.tabs[0].filter_specs,
+    );
+  });
+
+  it('returns [] for a tab with none, an unknown tab, or before load', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, FILTER_SPECS_PAYLOAD)),
+    );
+
+    expect(reviewTabsVocabularyStore.filterSpecsFor('regions')).toEqual([]);
+
+    await reviewTabsVocabularyStore.init();
+
+    expect(reviewTabsVocabularyStore.filterSpecsFor('all')).toEqual([]);
+    expect(reviewTabsVocabularyStore.filterSpecsFor('nonexistent_tab')).toEqual([]);
   });
 });
