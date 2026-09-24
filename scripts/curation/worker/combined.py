@@ -3,8 +3,8 @@
 Extracted from ``cascade.py`` so the cascade module stays under the
 700-LOC ceiling (PR7 §1 / §2). Houses:
 
-* ``COHORT_V6_MISSED`` — the ``class_source`` marker that triggers the
-  combined VLM call.
+* ``_is_combined_cohort`` — which ``class_source`` values (derived from
+  the configured ingest profiles) trigger the combined VLM call.
 * ``_try_combined_class_region`` — the per-crop helper that runs the
   single VLM round-trip and (on success) writes a fully-formed
   ``update_doc``. Always stashes the class-side update on
@@ -33,6 +33,11 @@ from scripts.curation.worker.verify import (
 from src.config import get_region_fields
 from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
+from src.services.curation.ingest_class_sources import (
+    CLUSTER_MAJORITY_CLASS_SOURCE,
+    classifier_class_sources,
+    unlabeled_proposal_class_sources,
+)
 from src.services.detection.cascade_detect import (
     RegionDetector,
     crop_norm_to_source_norm,
@@ -49,41 +54,34 @@ if TYPE_CHECKING:
 logger = get_logger('curation_worker')
 
 
-# Cohort marker on the items index. ``coco_yolo11_proposal`` is written
-# by ingest when the primary classifier misses and we fall back to a
-# generic proposal. Those crops still need a class label; rolling class
-# + region-verify + OCR into a single VLM call cuts ~2 round-trips per
-# crop.
-COHORT_V6_MISSED = 'coco_yolo11_proposal'
-
-# Phase C: broaden the cohort to include low-confidence primary /
-# cluster-primary crops so we get class + region-verify + OCR in ONE
-# VLM call instead of TWO (one for class, one for region-verify). The
-# threshold mirrors the pipeline's ``v6_confidence_skip_gemma`` default
-# (0.80) — crops at or above that confidence are trusted enough that
-# re-asking the VLM adds no signal, so the legacy two-call path runs.
-_LOW_CONF_CLASS_SOURCES: frozenset[str] = frozenset({'v6_model', 'cluster_v6_majority_agreement'})
+# Cohort markers come from the configured ingest profiles
+# (src.services.curation.ingest_class_sources): an item the ingest
+# detectors left unlabeled (a primary proposal / low-conf box) still needs
+# a class, so class + region-verify + OCR roll into one VLM call.
+#
+# Phase C: also low-confidence classifier / cluster-majority crops, so
+# they get class + region-verify + OCR in ONE VLM call instead of TWO.
+# The threshold mirrors the pipeline's VLM-skip confidence default (0.80)
+# -- crops at or above it are trusted enough that re-asking adds nothing.
 _V6_LOW_CONF_THRESHOLD = 0.80
 
 
 def _is_combined_cohort(class_source: str, class_confidence: float) -> bool:
     """Return True when this crop should take the combined VLM call path.
 
-    Cohort rule (Phase C):
-      * ``class_source == 'coco_yolo11_proposal'`` (the original B-PR5
-        cohort — the primary classifier missed entirely) OR
-      * ``class_source`` in {'v6_model', 'cluster_v6_majority_agreement'}
-        AND confidence < 0.80 (the primary classifier fired but with
-        low confidence, so the class still needs VLM clarification).
+    Cohort rule:
+      * ``class_source`` is an unlabeled ingest proposal
+        (``unlabeled_proposal_class_sources()``) -- no classifier fired, OR
+      * ``class_source`` is a configured classifier source or the
+        cluster-majority source AND confidence < 0.80.
 
-    High-confidence primary-classifier crops fall through to the legacy
-    two-call path because the class is already trustworthy; combining
-    would waste the larger VLM prompt budget on a crop whose only open
-    question is region verification.
+    High-confidence classifier crops fall through to the legacy two-call
+    path because the class is already trustworthy.
     """
-    if class_source == COHORT_V6_MISSED:
+    if class_source in unlabeled_proposal_class_sources():
         return True
-    return class_source in _LOW_CONF_CLASS_SOURCES and class_confidence < _V6_LOW_CONF_THRESHOLD
+    low_conf_sources = classifier_class_sources() | {CLUSTER_MAJORITY_CLASS_SOURCE}
+    return class_source in low_conf_sources and class_confidence < _V6_LOW_CONF_THRESHOLD
 
 
 def _finalize_no_region(task: _ItemTask) -> None:

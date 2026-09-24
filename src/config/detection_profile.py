@@ -70,6 +70,16 @@ class DetectionProfile:
     # become items. Empty = every class. Lets a generic proposer (e.g. an
     # 80-class COCO model) be narrowed to the classes a deployment curates.
     class_ids: frozenset[int] = field(default_factory=frozenset)
+    # Ingest primary only: does this model's class space *be* the class
+    # registry? False (the default) = it is a generic proposer (e.g. COCO)
+    # whose class ids mean nothing in the registry, so its detections are
+    # always unlabeled proposals and a secondary / VLM / human assigns the
+    # class. True = confident detections take their class id from the
+    # registry directly.
+    assigns_class: bool = False
+    # Ingest primary only: labels.txt-style file naming the model's own
+    # classes (line index = class id), recorded as the proposal name.
+    labels_path: str = ''
 
     @classmethod
     def from_env(

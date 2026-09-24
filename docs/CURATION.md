@@ -112,7 +112,14 @@ trainer. A deployment supplies:
   `OP_INGEST_PRIMARY_<FIELD>`, read by `_get_detection_profile()` in
   `routers/curation/ingest.py`). It proposes the item crops in each
   image; `OP_INGEST_PRIMARY_CLASS_IDS` narrows which of its classes
-  become items (unset = all). Ingest returns `503` until one is
+  become items (unset = all). By default the primary is treated as a
+  generic proposer (`OP_INGEST_PRIMARY_ASSIGNS_CLASS=false`): its
+  detections are unlabeled `<name>_proposal` items carrying the model's
+  own label (`OP_INGEST_PRIMARY_LABELS_PATH`), never a registry class
+  looked up by its id. Set it `true` only when the primary was trained on
+  your class registry. The `class_source` values the worker and
+  clustering code filter on are derived from these profile names
+  (`src/services/curation/ingest_class_sources.py`). Ingest returns `503` until one is
   configured and loaded. An optional raw-output secondary detector
   (`OP_INGEST_SECONDARY_DETECTOR_MODEL` + `OP_INGEST_SECONDARY_<FIELD>`)
   overrides the primary's class on IoU-matched boxes. The retired
