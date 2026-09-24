@@ -92,7 +92,10 @@ export interface ItemWire {
   region_text_vlm: string | null;
   region_text_ocr: string | null;
   region_text_disagreement: boolean | null;
+  region_text_choice: string | null;
+  region_text_vlm_invalid: string | null;
   region_validated: boolean | null;
+  region_auto_confirmed: boolean | null;
   region_verified: boolean | null;
   region_verified_at: string | null;
   region_verifier: string | null;
@@ -102,6 +105,12 @@ export interface ItemWire {
   region_detector_version: string | null;
   region_detector_chain: string[] | null;
   region_detected_at: string | null;
+  region_candidate_bbox_norm: number[] | null;
+  region_candidate_score: number | null;
+  region_candidate_detector: string | null;
+  region_candidate_detector_version: string | null;
+  region_candidate_source: string | null;
+  region_candidate_bbox_in_parent: number[] | null;
   region_cluster_id: number | null;
   region_cluster_subid: string | null;
   region_cluster_distance: number | null;
@@ -193,7 +202,10 @@ export const ITEM_WIRE_KEYS = [
   'region_text_vlm',
   'region_text_ocr',
   'region_text_disagreement',
+  'region_text_choice',
+  'region_text_vlm_invalid',
   'region_validated',
+  'region_auto_confirmed',
   'region_verified',
   'region_verified_at',
   'region_verifier',
@@ -203,6 +215,12 @@ export const ITEM_WIRE_KEYS = [
   'region_detector_version',
   'region_detector_chain',
   'region_detected_at',
+  'region_candidate_bbox_norm',
+  'region_candidate_score',
+  'region_candidate_detector',
+  'region_candidate_detector_version',
+  'region_candidate_source',
+  'region_candidate_bbox_in_parent',
   'region_cluster_id',
   'region_cluster_subid',
   'region_cluster_distance',
@@ -232,7 +250,10 @@ export const REGION_WIRE_KEYS = [
   'region_text_vlm',
   'region_text_ocr',
   'region_text_disagreement',
+  'region_text_choice',
+  'region_text_vlm_invalid',
   'region_validated',
+  'region_auto_confirmed',
   'region_verified',
   'region_verified_at',
   'region_verifier',
@@ -242,6 +263,11 @@ export const REGION_WIRE_KEYS = [
   'region_detector_version',
   'region_detector_chain',
   'region_detected_at',
+  'region_candidate_bbox_norm',
+  'region_candidate_score',
+  'region_candidate_detector',
+  'region_candidate_detector_version',
+  'region_candidate_source',
   'region_cluster_id',
   'region_cluster_subid',
   'region_cluster_distance',
