@@ -275,6 +275,11 @@ def _items_body() -> dict[str, Any]:
                 # fields have an indirection mechanism in Phase 2.
                 'vlm_raw_label': {'type': 'keyword'},
                 'vlm_raw_label_conf': {'type': 'float'},
+                # Marker: class + region resolved in one combined VLM call
+                # (scripts/curation/worker/verify.py). Downstream pipeline
+                # stages range-query this to skip a redundant class call
+                # (src/services/curation/autolabel/selection.py).
+                'vlm_verify_completed_at': {'type': 'date'},
                 # VLM-extracted make/model hint. Field names kept as-is for
                 # the same reason as above (no region-of-interest concept
                 # applies to a vehicle make/model).
@@ -694,6 +699,7 @@ async def ensure_items_vlm_raw_label_fields(
         'properties': {
             'vlm_raw_label': {'type': 'keyword'},
             'vlm_raw_label_conf': {'type': 'float'},
+            'vlm_verify_completed_at': {'type': 'date'},
         }
     }
     try:

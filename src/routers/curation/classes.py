@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, status
 
-from src.clients.curation_opensearch import ClassRegistryError
+from src.clients.curation_opensearch import ClassRegistry, ClassRegistryError
 from src.config.region_fields import get_region_fields
 from src.routers.curation._common import (
     CURATION_ITEMS_INDEX,
@@ -189,19 +189,28 @@ async def get_class(class_id: int, opensearch: OpenSearchDep) -> ClassEntry:
     raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
 
 
-@router.post('/classes', status_code=status.HTTP_201_CREATED)
-async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
-    """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
-    an optional ``hotkey_letter`` is validated like on update before
-    anything is written."""
-    reg = get_class_registry()
+def create_registry_class(
+    reg: ClassRegistry,
+    *,
+    name: str,
+    group: str = 'unknown',
+    notes: str = '',
+    hotkey_letter: str | None = None,
+) -> dict[str, Any]:
+    """Shared class-creation path: ``POST /classes`` and the new-class
+    proposal resolve route (``POST /review/new_class_proposals/resolve``)
+    both create through this one function so there is exactly one place
+    that adds a class and writes its optional hotkey.
+
+    ``hotkey_letter`` (if given) is validated the same way as on
+    ``PUT /classes/{id}`` *before* anything is written. Raises
+    ``ClassRegistryError`` on a duplicate (non-deprecated) name — the
+    caller maps that to ``409``.
+    """
     letter = None
-    if payload.hotkey_letter is not None:
-        letter = _validated_hotkey(payload.hotkey_letter, class_id=None, registry_obj=reg.load())
-    try:
-        new_id = reg.add_class(payload.name, group=payload.group, notes=payload.notes)
-    except ClassRegistryError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if hotkey_letter is not None:
+        letter = _validated_hotkey(hotkey_letter, class_id=None, registry_obj=reg.load())
+    new_id = reg.add_class(name, group=group, notes=notes)
     if letter is not None:
         registry_obj = reg.load()
         for c in registry_obj.classes:
@@ -210,10 +219,28 @@ async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
         reg._atomic_write(registry_obj)
     return {
         'class_id': new_id,
-        'class_name': payload.name,
-        'group': payload.group,
+        'class_name': name,
+        'group': group,
         'hotkey_letter': letter,
     }
+
+
+@router.post('/classes', status_code=status.HTTP_201_CREATED)
+async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
+    """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
+    an optional ``hotkey_letter`` is validated like on update before
+    anything is written."""
+    reg = get_class_registry()
+    try:
+        return create_registry_class(
+            reg,
+            name=payload.name,
+            group=payload.group,
+            notes=payload.notes,
+            hotkey_letter=payload.hotkey_letter,
+        )
+    except ClassRegistryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.put('/classes/{class_id}')

@@ -11,6 +11,9 @@ SHELL := /bin/bash
 # Variables
 COMPOSE := docker compose
 V := .venv/bin
+# Prefer the project venv's interpreter when it exists; fall back to
+# system python3 for a fresh checkout that hasn't created .venv yet.
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 API_SERVICE := yolo-api
 TRITON_SERVICE := triton-server
 OPENSEARCH_SERVICE := opensearch
@@ -219,11 +222,11 @@ test: ## Run the pytest suite
 
 .PHONY: contracts
 contracts: ## Regenerate the committed API contracts under contracts/
-	python3 scripts/codegen/generate_contracts.py
+	$(PYTHON) scripts/codegen/generate_contracts.py
 
 .PHONY: contracts-check
 contracts-check: ## Fail if any committed API contract under contracts/ is stale
-	python3 scripts/codegen/generate_contracts.py --check
+	$(PYTHON) scripts/codegen/generate_contracts.py --check
 
 # ==================================================================================
 # Benchmarking

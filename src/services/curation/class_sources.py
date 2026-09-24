@@ -36,9 +36,10 @@ CLASS_MERGE_CLASS_SOURCE = 'class_merge'
 
 # ``label_source`` values a human class write may carry. The server always
 # writes ``class_source='human'`` for these writes itself; a client can only
-# say how the human decided (typed a label vs confirmed a suggestion), never
-# make a human write look machine-made.
-HumanLabelSource = Literal['human', 'human_confirmed']
+# say how the human decided (typed a label vs confirmed a suggestion, or
+# bulk-resolved a VLM new-class proposal), never make a human write look
+# machine-made.
+HumanLabelSource = Literal['human', 'human_confirmed', 'new_class_proposal']
 HUMAN_LABEL_SOURCES: tuple[str, ...] = get_args(HumanLabelSource)
 
 # Sources where the VLM picked a registry class that is still only a

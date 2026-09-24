@@ -442,6 +442,46 @@ class ClassMergeRequest(BaseModel):
     target_id: int
 
 
+class ResolveNewClassCreate(BaseModel):
+    """``create`` payload on ``POST /review/new_class_proposals/resolve``:
+    register a brand-new registry class before resolving the term. Same
+    slug rule as ``ClassCreateRequest.name`` (``class_name`` here, to
+    match the term the VLM proposed rather than an internal field name)."""
+
+    class_name: str = Field(pattern=CLASS_NAME_PATTERN)
+    group: str = 'unknown'
+    notes: str | None = None
+
+
+class ResolveNewClassRequest(BaseModel):
+    """Bulk-resolve every pending ``vlm_new_class_pending`` item proposing
+    ``label``. Exactly one of ``class_id`` (map to an existing registry
+    class) / ``create`` (register a new one first) must be set."""
+
+    label: str = Field(min_length=1)
+    class_id: int | None = None
+    create: ResolveNewClassCreate | None = None
+    label_source: HumanLabelSource = 'new_class_proposal'
+
+
+class ResolveConflict(BaseModel):
+    crop_id: str
+    current_source: str | None = None
+
+
+class ResolveNewClassResponse(BaseModel):
+    class_id: int | None
+    class_name: str
+    created: bool
+    label: str
+    matched: int
+    matched_ids: list[str] = Field(default_factory=list)
+    updated: int
+    updated_ids: list[str] = Field(default_factory=list)
+    conflicts: list[ResolveConflict] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+
+
 class TestHoldoutFreezeRequest(BaseModel):
     percent: int = Field(default=10, ge=1, le=50)
     # No longer used: selection is deterministic (SHA1-of-crop_id per

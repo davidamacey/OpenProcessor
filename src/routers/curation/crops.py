@@ -27,22 +27,9 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.crop_browse import confidence_band, crops_page, parse_crop_sort
-from src.services.curation.ingest_class_sources import HUMAN_CLASS_SOURCE
+from src.services.curation.human_label import human_class_provenance, human_label_update
 from src.services.curation.item_text import item_text_query
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.detection.cascade_detect import class_provenance
-
-
-def _human_class_provenance() -> dict[str, Any]:
-    """Class provenance for every human class write in this module."""
-    from src.services.detection.profile_registry import region_profile_or_neutral
-
-    human = region_profile_or_neutral()
-    return class_provenance(
-        detector=human.human_detector_name,
-        detector_version=human.human_detector_version,
-        labeler='human',
-    )
 
 
 _MAX_IDS = 500
@@ -350,31 +337,15 @@ async def label_crop(
         raise HTTPException(status_code=400, detail=f'unknown class_id {payload.class_id}')
     entry = reg.get(payload.class_id)
     class_name = entry.class_name if entry is not None else ''
-    from src.services.curation.history import record_class_snapshot
 
     def _merge_label(current: dict[str, Any]) -> dict[str, Any]:
-        history = record_class_snapshot(current, writer='human:label_crop', restorable=True)
-        return {
-            'class_id': payload.class_id,
-            'class_name': class_name,
-            'class_source': HUMAN_CLASS_SOURCE,
-            # Human class label. Sets class_validated; the region-side
-            # validated flag is independent and unaffected.
-            'class_validated': True,
-            'label_source': payload.label_source,
-            'class_id_history': history,
-            # cluster_id mirrors class_id in the default ensemble — without
-            # this the relabeled crop stays visually in its old cluster
-            # bucket on the next page reload, even though its class is now
-            # different.
-            'cluster_id': payload.class_id,
-            # cluster_subid is only meaningful within its origin cluster.
-            # A class change moves the crop to a new bucket; the prior
-            # AHC sub-cluster grouping no longer applies.
-            'cluster_subid': None,
-            **_human_class_provenance(),
-            'updated_at': _now_iso(),
-        }
+        return human_label_update(
+            current,
+            class_id=payload.class_id,
+            class_name=class_name,
+            label_source=payload.label_source,
+            writer='human:label_crop',
+        )
 
     try:
         await occ_update_one(
@@ -413,23 +384,14 @@ async def batch_label_crops(
     if not payload.crop_ids:
         return {'updated': 0, 'updated_ids': [], 'conflicts': []}
 
-    from src.services.curation.history import record_class_snapshot
-
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
-        history = record_class_snapshot(current, writer='human:batch_label_crops', restorable=True)
-        return {
-            'class_id': payload.class_id,
-            'class_name': class_name,
-            'class_source': HUMAN_CLASS_SOURCE,
-            'class_validated': True,
-            'label_source': payload.label_source,
-            'class_id_history': history,
-            'cluster_id': payload.class_id,
-            # See label_crop above — subid is cluster-local.
-            'cluster_subid': None,
-            **_human_class_provenance(),
-            'updated_at': _now_iso(),
-        }
+        return human_label_update(
+            current,
+            class_id=payload.class_id,
+            class_name=class_name,
+            label_source=payload.label_source,
+            writer='human:batch_label_crops',
+        )
 
     async def _label_one(crop_id: str) -> tuple[bool, dict[str, Any] | None]:
         try:
@@ -503,7 +465,7 @@ async def move_crops(
             # See label_crop above — subid only applies inside the crop's
             # original cluster; clear on move.
             'cluster_subid': None,
-            **_human_class_provenance(),
+            **human_class_provenance(),
             'updated_at': _now_iso(),
         }
 

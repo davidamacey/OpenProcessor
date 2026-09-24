@@ -53,6 +53,11 @@ def test_aggregatable_region_fields_are_keyword(attr: str) -> None:
         ('vlm_raw_class', 'keyword'),
         ('vlm_proposed_class', 'keyword'),
         ('needs_new_class', 'boolean'),
+        # scripts/curation/worker/verify.py writes this on every combined
+        # VLM verify call; src/services/curation/autolabel/selection.py
+        # range-queries it. Found unmapped in a live mapping diff audit —
+        # see docs/design/new_class_proposal_resolve_plan.md.
+        ('vlm_verify_completed_at', 'date'),
     ],
 )
 def test_item_label_fields_are_mapped(field: str, expected: str) -> None:

@@ -1,4 +1,9 @@
-"""Curation review-queue router — ``GET/POST /curation/review/*``."""
+"""Curation review-queue router — ``GET/POST /curation/review/*``.
+
+``POST /review/new_class_proposals/resolve`` lives in the sibling
+``review_resolve.py`` module (LOC-ceiling split — see that file's
+docstring), registered on this same shared ``router``.
+"""
 
 from __future__ import annotations
 

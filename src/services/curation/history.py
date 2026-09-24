@@ -107,7 +107,13 @@ def record_class_history(
 HUMAN_DISCARD_WRITER = 'human:discard_crop'
 
 HUMAN_LABEL_WRITERS = frozenset(
-    {'human:label_crop', 'human:batch_label_crops', 'human:move_crops', HUMAN_DISCARD_WRITER}
+    {
+        'human:label_crop',
+        'human:batch_label_crops',
+        'human:move_crops',
+        'human:resolve_new_class',
+        HUMAN_DISCARD_WRITER,
+    }
 )
 """Writers whose write the labeler's Undo (``POST /crops/{id}/label/undo``)
 reverses."""

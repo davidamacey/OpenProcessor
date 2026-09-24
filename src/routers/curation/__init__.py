@@ -36,6 +36,7 @@ import src.routers.curation.pipeline_health
 import src.routers.curation.regions
 import src.routers.curation.regions_fp
 import src.routers.curation.review
+import src.routers.curation.review_resolve
 import src.routers.curation.scores
 import src.routers.curation.search
 import src.routers.curation.select
