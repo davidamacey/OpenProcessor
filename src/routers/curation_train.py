@@ -56,8 +56,10 @@ from src.services.curation.dataset_thresholds import (
     dataset_thresholds,
 )
 from src.services.curation.export_readiness import (
+    export_class_split_check,
     export_generation_check,
     export_size_check,
+    export_splits_check,
     items_index_generation,
 )
 from src.services.training import jobs as train_jobs
@@ -863,10 +865,25 @@ async def _run_preflight(
                     )
                 )
 
-    # ---- export readiness (DQ-M9): not empty, built from the current index -
+    # ---- export readiness (DQ-M9): not empty, trainable splits, built from
+    # the current index. Per-class coverage is multi-class only: a
+    # single-class export has one target class, which the overall
+    # train/val check already covers.
     export_manifest = _read_export_manifest(spec.dataset_export_dir)
+    class_split_result = (
+        (
+            'ok',
+            'not applicable for this dataset kind (single-class: covered by '
+            'export_splits_nonempty)',
+            {},
+        )
+        if _is_lpr
+        else export_class_split_check(export_manifest, spec.include_classes)
+    )
     for name, (severity, message, detail) in (
         ('export_not_empty', export_size_check(export_manifest)),
+        ('export_splits_nonempty', export_splits_check(export_manifest)),
+        ('export_class_split_coverage', class_split_result),
         (
             'export_generation',
             export_generation_check(

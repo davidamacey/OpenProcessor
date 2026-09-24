@@ -35,6 +35,10 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from src.core.logging import get_logger
+from src.services.curation.dataset_thresholds import (
+    MIN_TRAIN_INSTANCES_PER_CLASS,
+    MIN_VAL_INSTANCES_PER_CLASS,
+)
 
 
 logger = get_logger(__name__)
@@ -136,12 +140,110 @@ def export_size_check(manifest: dict[str, Any]) -> CheckResult:
     return 'ok', f'export contains {count:,} images', detail
 
 
+_TRAINING_SPLITS = ('train', 'val')
+
+
+def export_splits_check(manifest: dict[str, Any]) -> CheckResult:
+    """``(severity, message, detail)`` for the ``export_splits_nonempty`` row.
+
+    Blocks when the export has no instance in ``train`` or in ``val`` —
+    a run needs both, and a non-empty export can still have neither (every
+    item in ``test``).
+    """
+    splits = manifest.get('split_counts')
+    if not isinstance(splits, dict) or not all(
+        isinstance(splits.get(s), int) for s in _TRAINING_SPLITS
+    ):
+        return 'unknown', 'export manifest records no train/val split counts', {}
+    counts = {s: int(v) for s, v in splits.items() if isinstance(v, int)}
+    empty = [s for s in _TRAINING_SPLITS if counts[s] <= 0]
+    detail = {'split_counts': counts, 'empty_splits': empty}
+    summary = ', '.join(f'{s}={n:,}' for s, n in counts.items())
+    if empty:
+        names = ' and '.join(repr(s) for s in empty)
+        return (
+            'block',
+            f'export has 0 images in {names} ({summary}); training needs both train and val. '
+            'Re-export once there are enough non-holdout validated items.',
+            detail,
+        )
+    return 'ok', f'export has train and val images ({summary})', detail
+
+
+def export_class_split_check(
+    manifest: dict[str, Any], include_classes: list[int] | None
+) -> CheckResult:
+    """``(severity, message, detail)`` for the ``export_class_split_coverage`` row.
+
+    Judges every class the run trains on — ``include_classes`` (registry
+    ids), else every class in the export — against the manifest's
+    ``class_split_counts``: fewer than :data:`MIN_TRAIN_INSTANCES_PER_CLASS`
+    train or :data:`MIN_VAL_INSTANCES_PER_CLASS` val instances blocks. An
+    ``include_classes`` id the export doesn't have is left to the
+    ``include_classes_resolvable`` check.
+    """
+    rows = manifest.get('class_split_counts')
+    if not isinstance(rows, list):
+        return (
+            'unknown',
+            'export manifest records no per-class split counts (exported before they were '
+            'recorded); re-export to check per-class train/val coverage',
+            {},
+        )
+    wanted = set(include_classes) if include_classes else None
+    judged = [
+        r for r in rows if isinstance(r, dict) and (wanted is None or r.get('class_id') in wanted)
+    ]
+    minimums = {'train': MIN_TRAIN_INSTANCES_PER_CLASS, 'val': MIN_VAL_INSTANCES_PER_CLASS}
+    gaps: list[dict[str, Any]] = []
+    for row in judged:
+        missing = [s for s in _TRAINING_SPLITS if int(row.get(s) or 0) < minimums[s]]
+        if missing:
+            gaps.append(
+                {
+                    'class_id': row.get('class_id'),
+                    'class_name': row.get('class_name'),
+                    'train': int(row.get('train') or 0),
+                    'val': int(row.get('val') or 0),
+                    'test': int(row.get('test') or 0),
+                    'missing_splits': missing,
+                }
+            )
+    detail = {
+        'classes': gaps,
+        'judged_classes': len(judged),
+        'min_train_per_class': MIN_TRAIN_INSTANCES_PER_CLASS,
+        'min_val_per_class': MIN_VAL_INSTANCES_PER_CLASS,
+    }
+    if gaps:
+        listed = '; '.join(
+            f'{g["class_name"]} (class {g["class_id"]}): '
+            + ', '.join(f'{s}={g[s]}' for s in g['missing_splits'])
+            for g in gaps
+        )
+        return (
+            'block',
+            f'{len(gaps)} class(es) this run trains on are below the per-class minimum of '
+            f'{MIN_TRAIN_INSTANCES_PER_CLASS} train / {MIN_VAL_INSTANCES_PER_CLASS} val '
+            f'instance(s): {listed}. Validate more items for them, or leave them out via '
+            'include_classes, then re-export.',
+            detail,
+        )
+    return (
+        'ok',
+        f'all {len(judged)} class(es) this run trains on have train and val instances',
+        detail,
+    )
+
+
 __all__ = [
     'MANIFEST_GENERATION_KEY',
     'CheckResult',
     'NothingToExportError',
     'Severity',
+    'export_class_split_check',
     'export_generation_check',
     'export_size_check',
+    'export_splits_check',
     'items_index_generation',
 ]

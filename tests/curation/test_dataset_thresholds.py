@@ -23,6 +23,8 @@ EXPECTED = {
     'block_below': T.HARD_MIN_CROPS_PER_CLASS,
     'warn_below': T.WARN_MIN_CROPS_PER_CLASS,
     'min_test_per_class': T.MIN_TEST_CROPS_PER_CLASS,
+    'min_train_per_class': T.MIN_TRAIN_INSTANCES_PER_CLASS,
+    'min_val_per_class': T.MIN_VAL_INSTANCES_PER_CLASS,
     'aug_target_min': T.AUG_TARGET_MIN,
     'aug_target_max': T.AUG_TARGET_MAX,
 }
