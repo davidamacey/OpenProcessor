@@ -235,7 +235,9 @@ class QueryFakeOpenSearch:
         self._bump(index, id)
         return {'result': 'updated'}
 
-    async def mget(self, *, body: dict[str, Any], index: str | None = None) -> dict[str, Any]:
+    async def mget(
+        self, *, body: dict[str, Any], index: str | None = None, **_kw: Any
+    ) -> dict[str, Any]:
         out = []
         specs = body.get('docs') or [{'_id': i, '_index': index} for i in body.get('ids', [])]
         for spec in specs:

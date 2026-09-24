@@ -373,6 +373,12 @@ class CropUnexcludeRequest(BaseModel):
     crop_ids: list[str]
 
 
+class CropUndoBatchRequest(BaseModel):
+    """Undo the most recent human class write on each crop."""
+
+    crop_ids: list[str]
+
+
 class ItemRegionRequest(BaseModel):
     """Set or clear the region-of-interest sub-bbox on a single item.
 

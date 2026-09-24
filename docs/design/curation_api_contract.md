@@ -58,16 +58,17 @@ Request bodies follow the same rule: a body key that writes a
 
 ## Route surface
 
-Full route list (111 distinct paths / 115 method routes under
-`/curation` as of this wave — the latest addition is
-`GET /class_sources`), grouped
+Full route list (113 distinct paths / 117 method routes under
+`/curation` as of this wave — the latest additions are
+`POST /crops/{crop_id}/label/undo` and `POST /crops/label/undo_batch`), grouped
 by router module; every path is relative to the configured
 `api_prefix`:
 
 | Router module | Routes |
 |---|---|
 | `classes.py` | `GET /class_sources`, `GET,POST /classes`, `POST /classes/merge`, `POST /classes/sync_to_opensearch`, `GET,PUT /classes/{class_id}`, `GET /classes/{class_id}/crops` |
-| `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `DELETE /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
+| `crops.py` | `GET /crops`, `GET /crops/{crop_id}`, `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`, `POST /crops/move`, `POST /crops/flag_new_class`, `POST /crops/batch_exclude`, `POST /crops/batch_unexclude`, `POST /crops/{crop_id}/review_dismiss` |
+| `label_undo.py` | `POST /crops/{crop_id}/label/undo`, `POST /crops/label/undo_batch`, `DELETE /crops/{crop_id}/label` |
 | `regions.py` / `regions_fp.py` | `GET /regions`, `PUT /crops/{crop_id}/region`, `PUT /crops/batch_region`, `PATCH /crops/{crop_id}/region_meta`, `POST /regions/batch_status`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/clusters`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/fp_centroids/build`, `GET /regions/fp_centroids/status`, `GET /regions/suspected_false_positives`, `GET /regions/training_candidates`, `GET /crops/{crop_id}/region_thumbnail` |
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
@@ -123,12 +124,77 @@ output (`test_item_doc_model_documents_exactly_the_serializer_keys`).
 - `CropMoveRequest`: `crop_ids`, `cluster_id`
 - `CropExcludeRequest`: `crop_ids`, `reason`
 - `CropUnexcludeRequest`: `crop_ids`
+- `CropUndoBatchRequest` (`POST /crops/label/undo_batch`): `crop_ids`
 - `ItemRegionRequest` (`PUT /crops/{crop_id}/region`): `region_bbox_norm` (source-image frame `[x1,y1,x2,y2]`, or `null` = "no region visible"), `region_label_source` (default `human`). Response: `crop_id`, `region_bbox_norm`, `region_status`.
 - `ItemBatchRegionRequest` (`PUT /crops/batch_region`): `crop_ids`, `region_bbox_norm`, `region_label_source`. Response: `updated`, `conflicts`.
 - `CropBatchStatusRequest` (`POST /regions/batch_status`): `crop_ids`, `region_status`, `region_verified`, `region_label_source` — `region_status` must be one of `HUMAN_REGION_STATUS_VALUES` = `{'detected', 'no_region_visible', 'verify_rejected', 'false_positive'}` (transient pipeline states like `pending_detection` are never set by hand)
 - `ItemRegionMetaRequest` (`PATCH /crops/{crop_id}/region_meta`): `region_text`, `region_status`, `region_rejection_reason`, `region_label_source` (all optional; only provided fields are written). Response: `crop_id`, `updated_fields` (wire names, e.g. `["region_status", "region_text"]`).
 - All four region request models set `extra='forbid'`: a stale key (`bbox_norm`, `plate_status`, `label_source`, …) is a `422`, never a silent no-op.
 - `CropFlagNewClassRequest`: `crop_ids`, `note`
+
+### Undo of human class writes
+
+Every human class write — `PUT /crops/{crop_id}/label`,
+`PUT /crops/batch_label`, `POST /crops/move` — appends a full snapshot of
+the item's pre-write class state to `class_id_history` (`class_id`,
+`class_name`, `class_source`, `label_source`, `confidence`,
+`class_detector`, `class_detector_version`, `class_labeler`,
+`class_labeled_at`, `class_validated`, `cluster_id`, `cluster_subid`,
+with `restorable: true`). The undo routes restore that snapshot; the
+frontend never decides between re-applying an earlier label and
+reverting — it calls undo and renders the returned item.
+
+- `POST /crops/{crop_id}/label/undo` — restores the crop to its state
+  before its most recent not-yet-undone human class write, whatever that
+  was (an earlier validated human label, a VLM suggestion, an ingest
+  proposal, unlabeled). Repeated calls step back through successive human
+  writes (each undo cancels one write). Response: the restored item
+  (shared wire format). `404` unknown crop; `409` nothing left to undo.
+- `POST /crops/label/undo_batch` (`CropUndoBatchRequest`) — the same,
+  per crop, independently; undo a `batch_label` / `move` by passing the
+  same `crop_ids`. Response: `items` (restored wire items), `undone`,
+  `nothing_to_undo`, `conflicts`, `not_found` (crop id lists). `409` when
+  no crop had anything to undo.
+- `DELETE /crops/{crop_id}/label` — kept for compatibility; same restore,
+  but with nothing on record it resets the crop to unlabeled (class and
+  provenance cleared, nothing invented) instead of `409`. Response:
+  `crop_id`, `reset`.
+
+Cluster placement on restore: a restored validated class sits in its
+class cluster (`cluster_id == class_id`, keeping the recorded
+`cluster_subid` only if it belonged to that cluster); anything else goes
+back to the cluster recorded before the write (`null` = residual pool).
+Undo on an excluded crop keeps it excluded and stores the restored
+validation/placement as the state `batch_unexclude` will apply.
+
+Human writes made before snapshots were recorded carry only
+`class_id`/`class_name`/`class_source`/`label_source`/`confidence`;
+undo restores those and leaves the rest `null`/unvalidated.
+
+### Exclude / un-exclude
+
+`POST /crops/batch_exclude` sets `class_excluded`, moves the crop to
+cluster `-2` and clears `class_validated`, recording the prior
+validation and placement in `excluded_prior_class_validated`,
+`excluded_prior_cluster_id`, `excluded_prior_cluster_subid` (re-excluding
+keeps the first record). `POST /crops/batch_unexclude` restores them: a
+validated crop returns to `cluster_id == class_id` (sub-cluster kept if
+it was in that cluster); an unvalidated one drops to the residual pool
+(`cluster_id: null`). Crops that aren't excluded are left untouched.
+Response shapes unchanged (`excluded`/`unexcluded`, `errors`; a
+concurrent-write conflict counts as an error).
+
+### Cluster cards (`GET /clusters`)
+
+`labelled_count` is the number of members with any `class_name`;
+`dominant_count` / `purity` describe the top class among them. For a
+candidate cluster (`cluster_id >= cluster_id_offset`)
+`dominant_class_name` is set only for a unique top class with at least
+3 members and at least half of the labelled members
+(`CANDIDATE_DOMINANT_MIN_COUNT` / `CANDIDATE_DOMINANT_MIN_SHARE` in
+`src/routers/curation/clusters.py`), else `null`; `dominant_class_id` is
+always `null` for candidates. Class clusters report their top class as
+before.
 
 `GET /crops` query parameters: `page` (≥1), `page_size` (1–500, default
 50), `limit` (1–500; alias for `page_size`, wins when both are set),

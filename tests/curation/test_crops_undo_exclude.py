@@ -21,6 +21,7 @@ import pytest
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.curation_opensearch import ClassRegistry
 from src.config import get_curation_config
+from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 
 
@@ -136,7 +137,7 @@ async def test_undo_restores_ingest_proposal_field_for_field(crops, registry, id
     assert labeled['class_id'] == ids['gizmo']
     assert labeled['class_validated'] is True
 
-    await crops.unlabel_crop('c1', fake)
+    await label_undo.unlabel_crop('c1', fake)
     assert _class_state(fake.docs(ITEMS)['c1']) == before
 
 
@@ -159,7 +160,7 @@ async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
     before = _class_state(fake.docs(ITEMS)['c2'])
 
     await _label(crops, fake, registry, 'c2', ids['gadget'])
-    await crops.unlabel_crop('c2', fake)
+    await label_undo.unlabel_crop('c2', fake)
 
     after = fake.docs(ITEMS)['c2']
     assert _class_state(after) == before
@@ -180,8 +181,8 @@ async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
     await crops.move_crops(CropMoveRequest(crop_ids=['m'], cluster_id=ids['widget']), fake)
     assert fake.docs(ITEMS)['m']['class_source'] == 'human_move'
 
-    await crops.unlabel_crop('b', fake)
-    await crops.unlabel_crop('m', fake)
+    await label_undo.unlabel_crop('b', fake)
+    await label_undo.unlabel_crop('m', fake)
     assert {k: _class_state(v) for k, v in fake.docs(ITEMS).items()} == before
 
 
@@ -194,17 +195,17 @@ async def test_successive_undos_step_back_through_human_labels(crops, registry, 
     first_label = _class_state(fake.docs(ITEMS)['c3'])
     await _label(crops, fake, registry, 'c3', ids['gadget'])
 
-    await crops.unlabel_crop('c3', fake)
+    await label_undo.unlabel_crop('c3', fake)
     restored = _class_state(fake.docs(ITEMS)['c3'])
     # Back to the first human label: still validated, in its class cluster.
     assert restored == first_label
     assert restored['cluster_id'] == ids['widget']
 
-    await crops.unlabel_crop('c3', fake)
+    await label_undo.unlabel_crop('c3', fake)
     assert _class_state(fake.docs(ITEMS)['c3']) == original
 
     # Nothing left to undo: unlabeled, no invented provenance.
-    await crops.unlabel_crop('c3', fake)
+    await label_undo.unlabel_crop('c3', fake)
     final = fake.docs(ITEMS)['c3']
     assert final['class_id'] is None
     assert final['class_name'] is None
@@ -228,7 +229,7 @@ async def test_undo_without_history_clears_class(crops) -> None:
         cluster_id=4,
     )
     fake = QueryFakeOpenSearch({ITEMS: {'legacy': doc}})
-    await crops.unlabel_crop('legacy', fake)
+    await label_undo.unlabel_crop('legacy', fake)
     after = fake.docs(ITEMS)['legacy']
     assert after['class_id'] is None
     assert after['class_validated'] is False
@@ -328,7 +329,7 @@ async def test_undo_label_on_excluded_item_keeps_it_excluded(crops, registry, id
     await _label(crops, fake, registry, 'x', ids['gadget'])
     await _exclude(crops, fake, ['x'])
 
-    await crops.unlabel_crop('x', fake)
+    await label_undo.unlabel_crop('x', fake)
     x = fake.docs(ITEMS)['x']
     assert x['class_excluded'] is True
     assert x['cluster_id'] == -2
@@ -339,3 +340,85 @@ async def test_undo_label_on_excluded_item_keeps_it_excluded(crops, registry, id
     x = fake.docs(ITEMS)['x']
     assert x['class_validated'] is True
     assert x['cluster_id'] == ids['widget']
+
+
+# =============================================================================
+# Undo routes: single-crop undo and undo_batch
+# =============================================================================
+
+
+@pytest.fixture
+def client_for():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from src.routers.curation import _raw_opensearch_dep, router as curation_router
+
+    def _make(fake: QueryFakeOpenSearch) -> TestClient:
+        app = FastAPI()
+        app.include_router(curation_router)
+        app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+        return TestClient(app)
+
+    return _make
+
+
+@pytest.mark.asyncio
+async def test_undo_route_restores_and_returns_the_wire_item(
+    crops, registry, ids, client_for
+) -> None:
+    fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
+    before = _class_state(fake.docs(ITEMS)['c1'])
+    await _label(crops, fake, registry, 'c1', ids['widget'])
+    first = _class_state(fake.docs(ITEMS)['c1'])
+    await _label(crops, fake, registry, 'c1', ids['gadget'])
+    client = client_for(fake)
+
+    r = client.post('/curation/crops/c1/label/undo')
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['crop_id'] == 'c1'
+    assert body['class_id'] == ids['widget']
+    # The earlier validated human label comes back as it was.
+    assert _class_state(fake.docs(ITEMS)['c1']) == first
+
+    r = client.post('/curation/crops/c1/label/undo')
+    assert r.status_code == 200, r.text
+    assert r.json()['class_id'] is None
+    assert _class_state(fake.docs(ITEMS)['c1']) == before
+
+    r = client.post('/curation/crops/c1/label/undo')
+    assert r.status_code == 409
+    assert _class_state(fake.docs(ITEMS)['c1']) == before
+
+
+def test_undo_route_unknown_crop_is_404(client_for) -> None:
+    client = client_for(QueryFakeOpenSearch({ITEMS: {}}))
+    assert client.post('/curation/crops/nope/label/undo').status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None:
+    from src.routers.curation._common import CropBatchLabelRequest
+
+    fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('b1', 'b2', 'untouched')}})
+    before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}
+    await crops.batch_label_crops(
+        CropBatchLabelRequest(crop_ids=['b1', 'b2'], class_id=ids['gizmo']), fake
+    )
+    client = client_for(fake)
+
+    r = client.post(
+        '/curation/crops/label/undo_batch', json={'crop_ids': ['b1', 'b2', 'untouched', 'gone']}
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['undone'] == 2
+    assert sorted(i['crop_id'] for i in body['items']) == ['b1', 'b2']
+    assert body['nothing_to_undo'] == ['untouched']
+    assert body['not_found'] == ['gone']
+    assert body['conflicts'] == []
+    assert {k: _class_state(v) for k, v in fake.docs(ITEMS).items()} == before
+
+    r = client.post('/curation/crops/label/undo_batch', json={'crop_ids': ['b1', 'untouched']})
+    assert r.status_code == 409

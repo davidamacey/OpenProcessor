@@ -610,57 +610,6 @@ async def batch_unexclude_crops(
     return {'unexcluded': len(payload.crop_ids) - n_errors, 'errors': n_errors}
 
 
-@router.delete('/crops/{crop_id}/label')
-async def unlabel_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Undo the most recent human class label (the labeler's Undo path).
-
-    Every human label write (single label, batch label, move) records the
-    item's full pre-write class state — class, provenance, validation and
-    cluster placement — in ``class_id_history``. Undo restores exactly
-    that state. Successive undos step back through successive human
-    labels (each unlabel entry cancels one label entry). With no human
-    label on record the item is reset to unlabeled (class and provenance
-    cleared, nothing invented).
-
-    Only the class side is touched; the region-side validated flag is
-    independent. ``refresh=True`` so the next /review fetch sees it.
-    """
-    from src.services.curation.exclusion import park_restored_state_while_excluded
-    from src.services.curation.history import (
-        HUMAN_UNLABEL_WRITER,
-        find_undo_snapshot,
-        record_class_snapshot,
-        restore_class_state,
-    )
-
-    def _merge_unlabel(current: dict[str, Any]) -> dict[str, Any]:
-        restored = restore_class_state(find_undo_snapshot(current.get('class_id_history')))
-        if current.get('class_excluded'):
-            # Still excluded: the restored validation/placement is what
-            # un-exclude should bring back, not what applies right now.
-            restored = park_restored_state_while_excluded(restored)
-        history = record_class_snapshot(current, writer=HUMAN_UNLABEL_WRITER, restorable=False)
-        return {
-            **restored,
-            'class_id_history': history,
-            'updated_at': _now_iso(),
-        }
-
-    try:
-        await occ_update_one(
-            opensearch,
-            doc_id=crop_id,
-            merger=_merge_unlabel,
-            refresh=True,
-            writer_id=HUMAN_UNLABEL_WRITER,
-        )
-    except OCCFinalConflictError:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
-    return {'crop_id': crop_id, 'reset': True}
-
-
 @router.post('/crops/{crop_id}/review_dismiss')
 async def review_dismiss_crop(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
     """Permanently dismiss a crop from every /review queue.
