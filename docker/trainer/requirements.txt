@@ -39,7 +39,12 @@ albumentations>=2.0,<3
 
 # Experiment tracking (docker/trainer/mlflow_callbacks.py). Optional at
 # runtime -- every hook degrades to a warning when the server is unreachable.
-mlflow>=2.18
+# ML-2: pinned to the same major as the `curation-mlflow` server image
+# (ghcr.io/mlflow/mlflow:v2.19.0, docker-compose.yml). `create_model_version`
+# / `transition_model_version_stage` (on_train_end) and the model-registry
+# REST surface are not guaranteed compatible across the 2.x/3.x boundary --
+# bump this only in lockstep with the server image.
+mlflow>=2.18,<3
 
 # GPU telemetry published on status.json's `gpu` block.
 pynvml>=11.5
