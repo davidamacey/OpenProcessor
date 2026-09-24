@@ -34,6 +34,9 @@ class _RecordingOS:
             ]
         }
 
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {'count': len(self.docs)}
+
 
 @pytest.fixture
 def fake_os() -> _RecordingOS:

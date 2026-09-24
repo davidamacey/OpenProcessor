@@ -42,6 +42,9 @@ class _FakeScrollBulkOS:
     async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         return {}
 
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        return {'count': len(self._docs)}
+
     async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
         self.bulk_calls.append(body)
         return {'errors': False}

@@ -31,6 +31,7 @@ from src.services.curation.crop_browse import (
     classifier_low_confidence_clause,
     confidence_band,
     crops_page,
+    embedding_pool_query_and_count,
     parse_crop_sort,
 )
 from src.services.curation.ingest_class_sources import HUMAN_CLASS_SOURCE
@@ -289,14 +290,20 @@ async def list_crops(
         raise HTTPException(status_code=503, detail=f'opensearch unavailable: {exc}') from exc
     total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
     # Outlier ordering: rank this cluster's members by distance from their
-    # centroid (most atypical first) so operators can cherry-pick the worst
-    # offenders. Computed on-the-fly + cached; falls through to the default
-    # newest-first sort if the cluster is too large or has no embeddings.
+    # centroid (most atypical first). Computed on-the-fly + cached; falls
+    # through to the default newest-first sort if too large / no embeddings.
     if order == 'outliers' and cluster_id is not None:
-        from src.services.curation.clustering.outliers import compute_outlier_order
+        from src.services.curation.clustering.outliers import (
+            OUTLIER_EMBEDDING_FIELD,
+            compute_outlier_order,
+        )
 
+        # F-16: pool query + exact count scoped to the embedding-bearing subset.
+        pool_query, pool_count = await embedding_pool_query_and_count(
+            opensearch, CURATION_ITEMS_INDEX, query_clause, OUTLIER_EMBEDDING_FIELD
+        )
         ordered_ids = await compute_outlier_order(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total)
+            opensearch, CURATION_ITEMS_INDEX, pool_query, current_count=pool_count
         )
         if ordered_ids is not None:
             page_ids = ordered_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]
@@ -311,14 +318,15 @@ async def list_crops(
             )
 
     # Diversity ordering: k-center-greedy coverage over the matched pool,
-    # same fallback contract as 'outliers' above — None means "disabled, or
-    # pool too large for an inline full-pool ranking", and the caller falls
-    # back to the default newest-first sort computed below.
+    # same fallback contract as 'outliers' above.
     if order == 'diverse':
-        from src.routers.curation.select import compute_diverse_order
+        from src.routers.curation.select import EMBEDDING_FIELD, compute_diverse_order
 
+        pool_query, pool_count = await embedding_pool_query_and_count(
+            opensearch, CURATION_ITEMS_INDEX, query_clause, EMBEDDING_FIELD
+        )
         diverse_ids = await compute_diverse_order(
-            opensearch, CURATION_ITEMS_INDEX, query_clause, current_count=int(total), k=k
+            opensearch, CURATION_ITEMS_INDEX, pool_query, current_count=pool_count, k=k
         )
         if diverse_ids is not None:
             page_ids = diverse_ids[(page - 1) * page_size : (page - 1) * page_size + page_size]

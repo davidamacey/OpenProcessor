@@ -184,6 +184,35 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
     assert result == []
 
 
+@pytest.mark.asyncio
+async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F-16: the cache stores the pool size (len(ids)), not len(order)
+    (which is capped at k) — otherwise a second call with the same
+    current_count=pool_size could never hit the cache when k < pool_size,
+    since len(order) < pool_size would never equal the fresh current_count."""
+    from src.routers.curation.select import compute_diverse_order
+
+    monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
+    pool = _orthonormal_pool(6)
+    fake_os = _fake_scroll_client(pool)
+
+    first = await compute_diverse_order(
+        fake_os, 'legacy_vehicle_crops', {'match_all': {}}, current_count=6, k=2
+    )
+    assert first is not None
+    assert len(first) == 2
+    assert fake_os.search.await_count == 1
+
+    second = await compute_diverse_order(
+        fake_os, 'legacy_vehicle_crops', {'match_all': {}}, current_count=6, k=2
+    )
+    assert second == first
+    # Still 1 -- the second call hit the cache instead of re-scrolling.
+    assert fake_os.search.await_count == 1
+
+
 # =============================================================================
 # GET /curation/crops?order=diverse — full router integration
 # =============================================================================
@@ -222,6 +251,9 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
             ]
         }
     )
+    # F-16: order=diverse/outliers do a dedicated exact count of the
+    # embedding-bearing pool before ranking.
+    fake_os.count = AsyncMock(return_value={'count': 2})
     app = FastAPI()
     app.include_router(legacy_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os

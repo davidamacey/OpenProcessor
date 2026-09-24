@@ -429,6 +429,34 @@ async def refine_cluster(
     log = logger.bind(cluster_id=cluster_id, index=index, cluster_id_field=cluster_id_field)
     log.info('legacy_refine_cluster_start')
 
+    # F-16: count before scrolling every member's embedding — a cluster
+    # far past max_members should never pay for that fetch just to
+    # discover it's too large to refine.
+    count_resp = await client.count(
+        index=index, body={'query': {'term': {cluster_id_field: cluster_id}}}
+    )
+    precount = int((count_resp or {}).get('count', 0))
+    if precount > max_members:
+        log.warning(
+            'legacy_refine_cluster_skipped_too_large_precount',
+            n_members=precount,
+            max_allowed=max_members,
+        )
+        return {
+            'cluster_id': cluster_id,
+            'n_members': precount,
+            'n_subclusters': 0,
+            # Purity isn't computed here — that would need the same full
+            # fetch this precount check exists to avoid paying for.
+            'purity': None,
+            'action': 'skipped_too_large',
+            'reason': (
+                f'> {max_members} members ({precount} counted); AHC builds a full '
+                '~8*n^2-byte pairwise matrix — raise OP_MAX_REFINE_MEMBERS / '
+                'max_members if RAM allows'
+            ),
+        }
+
     members = await _fetch_cluster_members(
         client,
         cluster_id,

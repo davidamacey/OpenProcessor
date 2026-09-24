@@ -124,10 +124,34 @@ def crops_page(
     }
 
 
+def with_exists_filter(query_clause: dict[str, Any], field: str) -> dict[str, Any]:
+    """AND an ``exists`` filter onto ``query_clause`` (F-16) — docs without
+    the ranking field can't be scored, so excluding them up front keeps
+    the outliers/diverse pool query and its exact count in sync with
+    what the ranker actually fetches."""
+    exists_clause = {'exists': {'field': field}}
+    if 'bool' in query_clause:
+        merged = dict(query_clause['bool'])
+        merged['filter'] = [*(merged.get('filter') or []), exists_clause]
+        return {'bool': merged}
+    return {'bool': {'must': [query_clause], 'filter': [exists_clause]}}
+
+
+async def embedding_pool_query_and_count(
+    opensearch: Any, index: str, query_clause: dict[str, Any], field: str
+) -> tuple[dict[str, Any], int]:
+    """Narrow ``query_clause`` to docs with ``field`` + its exact count."""
+    pool_query = with_exists_filter(query_clause, field)
+    resp = await opensearch.count(index=index, body={'query': pool_query})
+    return pool_query, int((resp or {}).get('count', 0))
+
+
 __all__ = [
     'CROP_SORT_FIELDS',
     'DEFAULT_CROP_SORT',
     'confidence_band',
     'crops_page',
+    'embedding_pool_query_and_count',
     'parse_crop_sort',
+    'with_exists_filter',
 ]
