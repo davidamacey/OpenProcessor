@@ -253,6 +253,29 @@ def extract_message_content(response: dict[str, Any]) -> str:
         return ''
 
 
+def extract_reasoning_content(response: dict[str, Any]) -> str:
+    """Pull the assistant's reasoning-channel text, or ``''``.
+
+    A server running a reasoning parser (vLLM ``--reasoning-parser``)
+    splits the model output into ``reasoning_content`` (``reasoning`` on
+    newer releases) and ``content``. When the model never emits the
+    end-of-thinking marker the parser leaves the whole answer -- JSON
+    included -- in the reasoning channel and ``content`` empty (or a
+    trailing fragment such as ``"]"``).
+    """
+    try:
+        message = response['choices'][0]['message']
+    except (KeyError, TypeError, IndexError):
+        return ''
+    if not isinstance(message, dict):
+        return ''
+    for key in ('reasoning_content', 'reasoning'):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return ''
+
+
 __all__ = [
     'DEFAULT_API_KEY',
     'DEFAULT_BASE_URL',
@@ -267,5 +290,6 @@ __all__ = [
     'build_auth_headers',
     'build_http_client',
     'extract_message_content',
+    'extract_reasoning_content',
     'post_chat_with_retry',
 ]

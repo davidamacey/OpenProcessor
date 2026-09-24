@@ -111,8 +111,15 @@ def _build_pending_query(v6_skip_conf: float, exclude_ids: list[str] | None = No
     """
     # Lazy: keeps the module import light; src.config is all this pulls in.
     from src.services.curation.ingest_class_sources import classifier_class_sources
+    from src.services.curation.vlm_class_attempt import recent_empty_answer_clause
 
-    must_not: list[dict] = [{'term': {'class_validated': True}}]
+    must_not: list[dict] = [
+        {'term': {'class_validated': True}},
+        # Asked recently and the answer had no class: not again until the
+        # retry window passes (the class fields are untouched, so nothing
+        # else keeps the item out of this query).
+        recent_empty_answer_clause(),
+    ]
     classifier_sources = sorted(classifier_class_sources())
     if classifier_sources:
         # classifier already confident

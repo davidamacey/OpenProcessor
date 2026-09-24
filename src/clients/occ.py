@@ -361,9 +361,8 @@ def is_human_owned_class(source: dict[str, Any]) -> bool:
     return _is_human_marker(source.get('class_source'))
 
 
-# Fields an automated class writer must never apply on top of a
-# human-owned class row. Kept as a single source of truth so every
-# consumer strips/skips the same surface — see ``is_human_owned_class``.
+# Fields an automated class writer must never apply on top of a human-owned
+# class row: the one surface every consumer strips/skips (``is_human_owned_class``).
 CLASS_WRITE_FIELDS = frozenset(
     {
         'class_id',
@@ -377,6 +376,8 @@ CLASS_WRITE_FIELDS = frozenset(
         'vlm_raw_class',
         'vlm_raw_label',
         'vlm_proposed_class',
+        'vlm_class_attempted_at',
+        'vlm_class_empty_reason',
         'needs_new_class',
         'class_detector',
         'class_detector_version',

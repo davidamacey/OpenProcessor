@@ -136,7 +136,11 @@ class TestCombinedClassUpdateResetsProvenance:
         assert update['class_validated'] is False
 
     def test_vlm_unmatched_also_resets_provenance(self) -> None:
-        reply = VlmCombinedReply(img_id='crop-1', class_id=-1, class_confidence='low')
+        # A named label outside the catalog (an empty / -1 answer leaves the
+        # class untouched instead -- tests/curation/test_vlm_empty_class_answer.py).
+        reply = VlmCombinedReply(
+            img_id='crop-1', class_id=None, class_raw='hoverbike', class_confidence='low'
+        )
         update = _combined_class_update(reply, ['adventurebike'])
         assert update['class_source'] == 'vlm_unmatched'
         assert update['label_source'] == 'vlm'

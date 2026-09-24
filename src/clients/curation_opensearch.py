@@ -58,6 +58,7 @@ from src.config import (
 )
 from src.core.logging import get_logger
 from src.services.curation.item_text import ITEM_TEXT_MAPPING
+from src.services.curation.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 
 
 if TYPE_CHECKING:
@@ -278,6 +279,9 @@ def _items_body() -> dict[str, Any]:
                 # stages range-query this to skip a redundant class call
                 # (src/services/curation/autolabel/selection.py).
                 'vlm_verify_completed_at': {'type': 'date'},
+                # Last VLM class attempt + why it gave no class
+                # (src/services/curation/vlm_class_attempt.py).
+                **VLM_CLASS_ATTEMPT_MAPPING,
                 # VLM-extracted make/model hint. Field names kept as-is for
                 # the same reason as above (no region-of-interest concept
                 # applies to a vehicle make/model).
@@ -786,6 +790,7 @@ async def ensure_items_vlm_raw_label_fields(
             'vlm_raw_label': {'type': 'keyword'},
             'vlm_raw_label_conf': {'type': 'float'},
             'vlm_verify_completed_at': {'type': 'date'},
+            **VLM_CLASS_ATTEMPT_MAPPING,
         }
     }
     try:
