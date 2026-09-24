@@ -167,18 +167,46 @@ def parse_cuda_visible_devices(spec_value: str | None) -> list[int]:
 
 
 def needs_multi_gpu_stop(cuda_visible_devices: str | None) -> bool:
-    """Does this claim require stopping GPU-resident services entirely?
+    """Does this claim span more than one GPU id?
 
-    True whenever the claim spans more than one GPU id. A single-GPU claim
-    leaves the other configured GPU(s) untouched, so only the paired
-    worker's sentinel is set (see :func:`pause_gpu_worker`).
+    Only used to decide the fallback behavior for *unscoped* containers
+    (see :func:`containers_to_stop`) -- an unscoped container is stopped
+    only when the claim spans more than one GPU, matching the original
+    (pre-scoping) semantics. Whether any container actually gets stopped
+    is decided by :func:`containers_to_stop` / :func:`needs_service_stop`,
+    not this function directly.
     """
     devices = parse_cuda_visible_devices(cuda_visible_devices)
     return len(devices) > 1
 
 
-# Back-compat alias for the reference implementation's name.
-needs_gemma_stop = needs_multi_gpu_stop
+def containers_to_stop(cuda_visible_devices: str | None) -> tuple[str, ...]:
+    """Ordered names of configured containers this claim must stop.
+
+    A *scoped* container (``name@ids`` in ``OP_GPU_ARBITER_CONTAINERS``,
+    see :class:`src.config.gpu_arbiter.GpuArbiterConfig`) is stopped
+    whenever the claim intersects its GPU set, regardless of claim size --
+    a lone-GPU claim on a GPU that hosts a large service must stop that
+    service, not just pause a paired worker. An *unscoped* container keeps
+    the original behavior: stopped only when the claim spans more than one
+    GPU. Order follows ``GpuArbiterConfig.container_gpus`` (== the order
+    containers were configured in).
+    """
+    claim = frozenset(parse_cuda_visible_devices(cuda_visible_devices))
+    multi_gpu_claim = len(claim) > 1
+    names: list[str] = []
+    for name, scope in get_gpu_arbiter_config().container_gpus:
+        if scope is None:
+            if multi_gpu_claim:
+                names.append(name)
+        elif claim & scope:
+            names.append(name)
+    return tuple(names)
+
+
+def needs_service_stop(cuda_visible_devices: str | None) -> bool:
+    """``True`` iff this claim requires stopping at least one configured container."""
+    return bool(containers_to_stop(cuda_visible_devices))
 
 
 def sentinel_path(custom: Path | None = None) -> Path:
@@ -470,10 +498,18 @@ async def claim_gpus_for_training(
     containers and before the trainer writes ``job.json`` -- so the
     reconcile loop can never race in during that window and restart the
     services we are about to stop.
+
+    Which containers stop is decided by GPU scope
+    (:func:`containers_to_stop`), not claim size: a single-GPU claim that
+    intersects a *scoped* container's GPU set stops that container just
+    like a multi-GPU claim would. ``stop_gpu_services`` sets the pause
+    sentinel too (belt-and-suspenders), so the paired worker never fights
+    a stopped service either way.
     """
     set_training_lock(cuda_visible_devices)
-    if needs_multi_gpu_stop(cuda_visible_devices):
-        return await stop_gpu_services()
+    names = containers_to_stop(cuda_visible_devices)
+    if names:
+        return await stop_gpu_services(containers=names)
     return await pause_gpu_worker()
 
 
@@ -482,16 +518,17 @@ async def release_gpus_after_training(
 ) -> ArbiterAction:
     """Inverse of :func:`claim_gpus_for_training`.
 
-    For a multi-GPU run this restarts the configured containers; for a
-    single-GPU run it just clears the pause sentinel. Idempotent -- safe
-    to call when nothing was stopped (e.g. crash before claim). In
+    Restarts exactly the containers :func:`containers_to_stop` says this
+    claim stopped; otherwise just clears the pause sentinel. Idempotent --
+    safe to call when nothing was stopped (e.g. crash before claim). In
     practice the API's reconcile loop (:func:`reconcile_on_startup`) is
     the backstop that restarts services once no run is active, since the
     trainer container may have no docker socket.
     """
     clear_training_lock()
-    if needs_multi_gpu_stop(cuda_visible_devices):
-        return await start_gpu_services()
+    names = containers_to_stop(cuda_visible_devices)
+    if names:
+        return await start_gpu_services(containers=names)
     return await resume_gpu_worker()
 
 
@@ -545,17 +582,27 @@ async def reconcile_on_startup(
       "idle".
 
     The active run's ``cuda_visible_devices`` (read from job.json, or the
-    lock) decides the enforcement: a **multi-GPU** run keeps the
-    configured containers stopped; a **single-GPU** run only keeps the
-    worker paused. When nothing is active we clear the lock + sentinel
-    and start the containers back up.
+    lock) decides the enforcement via :func:`containers_to_stop`: the
+    **union** of ``containers_to_stop(cvd)`` over every active run is kept
+    stopped; every other configured container is (re)started; the pause
+    sentinel stays set the whole time a run is active. An unknown device
+    set (unreadable ``job.json``) is treated conservatively -- every
+    configured container is kept stopped, since we can't tell which GPUs
+    it actually claims. When nothing is active we clear the lock +
+    sentinel and start every configured container back up.
     """
     sentinel_target = sentinel_path(sentinel)
     jobs_dir = train_jobs_dir if train_jobs_dir is not None else _resolve_train_jobs_dir()
     status_states: dict[str, str | None] = {}
     active_stems: set[str] = set()
-    active_multi = False
-    active_single = False
+    all_configured = tuple(name for name, _ in get_gpu_arbiter_config().container_gpus)
+    stop_names: set[str] = set()
+
+    def _accumulate(cvd: str | None) -> None:
+        if cvd is None:
+            stop_names.update(all_configured)
+        else:
+            stop_names.update(containers_to_stop(cvd))
 
     if jobs_dir.exists():
         for status_file in jobs_dir.glob('*.status.json'):
@@ -581,13 +628,7 @@ async def reconcile_on_startup(
                 cvd = json.loads(job_file.read_text(encoding='utf-8')).get('cuda_visible_devices')
             except (OSError, ValueError):
                 cvd = None
-            # Unknown device set -> assume multi-GPU (conservative: keep the
-            # configured containers free rather than risk contending with a
-            # live run).
-            if cvd is None or needs_multi_gpu_stop(cvd):
-                active_multi = True
-            else:
-                active_single = True
+            _accumulate(cvd)
 
     # The lock closes the window before job.json is visible, and ages out so
     # a crashed claim can't reserve the GPUs forever.
@@ -596,30 +637,38 @@ async def reconcile_on_startup(
         claimed_at = float(lock.get('claimed_at', 0.0) or 0.0)
         if (time.time() - claimed_at) < LOCK_GRACE_SECONDS:
             active_stems.add('__lock__')
-            if needs_multi_gpu_stop(lock.get('cuda_visible_devices')):
-                active_multi = True
-            else:
-                active_single = True
+            _accumulate(lock.get('cuda_visible_devices'))
 
-    # A queued/running bake-off claims the same containers as a multi-GPU
-    # train (only meaningful when a bake-off jobs dir is configured).
+    # A queued/running bake-off claims every configured container (only
+    # meaningful when a bake-off jobs dir is configured) -- conservative,
+    # same as an unknown device set.
     if bakeoff_active():
         active_stems.add('__bakeoff__')
-        active_multi = True
+        stop_names.update(all_configured)
 
-    if active_multi:
-        # BLOCKING: keep the configured containers down for the whole run.
-        # Stopping an already-stopped container is a no-op, so this is
-        # cheap steady-state.
-        logger.info('arbiter_enforce_stopped', active_jobs=len(active_stems), mode='multi')
-        return await stop_gpu_services()
-
-    if active_single:
-        # Single-GPU run: only the worker stays paused; containers keep
-        # running on their own GPU. Re-assert the sentinel in case a
-        # worker cleared it.
-        logger.info('arbiter_enforce_paused', active_jobs=len(active_stems), mode='single')
-        return await pause_gpu_worker(sentinel=sentinel_target)
+    if active_stems:
+        ordered_stop = tuple(name for name in all_configured if name in stop_names)
+        to_start = tuple(name for name in all_configured if name not in stop_names)
+        start_result: ArbiterAction | None = None
+        if to_start:
+            start_result = await start_gpu_services(containers=to_start)
+        stop_result: ArbiterAction | None = None
+        if ordered_stop:
+            stop_result = await stop_gpu_services(containers=ordered_stop)
+        # Reassert the sentinel last -- a run is active regardless of which
+        # containers moved, so the paired worker must stay paused.
+        pause_result = await pause_gpu_worker(sentinel=sentinel_target)
+        logger.info(
+            'arbiter_enforce_active',
+            active_jobs=len(active_stems),
+            stopped=list(ordered_stop),
+            started=list(to_start),
+        )
+        if start_result is not None:
+            return start_result
+        if stop_result is not None:
+            return stop_result
+        return pause_result
 
     # Nothing active -- release everything: clear the (stale) lock +
     # sentinel and bring the configured containers back up. This is the
@@ -637,9 +686,10 @@ __all__ = [
     'bakeoff_active',
     'claim_gpus_for_training',
     'clear_training_lock',
+    'containers_to_stop',
     'lock_path',
-    'needs_gemma_stop',
     'needs_multi_gpu_stop',
+    'needs_service_stop',
     'parse_cuda_visible_devices',
     'pause_gpu_worker',
     'probe_trainer_reachable',

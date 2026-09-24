@@ -196,6 +196,86 @@ def test_campaign_spec_rejects_gpu1_when_allowlist_configured() -> None:
 
 
 # =============================================================================
+# default_train_gpu_value
+# =============================================================================
+
+
+def test_default_train_gpu_value_unrestricted_is_zero() -> None:
+    assert train_jobs.default_train_gpu_value() == '0'
+
+
+def test_default_train_gpu_value_unset_env_var_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('OP_TRAIN_DEFAULT_GPUS', raising=False)
+    assert train_jobs.default_train_gpu_value() == '0'
+
+
+@pytest.mark.usefixtures('restricted_gpu_ids')
+def test_default_train_gpu_value_uses_smallest_allowed_id() -> None:
+    """OP_GPU_ALLOWED_IDS=0,2 (no OP_TRAIN_DEFAULT_GPUS) -> smallest id, '0'."""
+    assert train_jobs.default_train_gpu_value() == '0'
+
+
+def test_default_train_gpu_value_uses_smallest_allowed_id_gpu2_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OP_GPU_ALLOWED_IDS=2 -> default is '2', not '0' (which isn't allowed)."""
+    import src.config.gpu_arbiter as gpu_arbiter_config_module
+
+    monkeypatch.setattr(
+        gpu_arbiter_config_module,
+        '_default_gpu_arbiter_config',
+        GpuArbiterConfig(allowed_gpu_ids=frozenset({2})),
+    )
+    assert train_jobs.default_train_gpu_value() == '2'
+
+
+def test_default_train_gpu_value_honors_explicit_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    import src.config.gpu_arbiter as gpu_arbiter_config_module
+
+    monkeypatch.setattr(
+        gpu_arbiter_config_module,
+        '_default_gpu_arbiter_config',
+        GpuArbiterConfig(allowed_gpu_ids=frozenset({0, 2}), default_train_gpus='2'),
+    )
+    assert train_jobs.default_train_gpu_value() == '2'
+
+
+def test_default_train_gpu_value_rejects_env_outside_allowlist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A misconfigured OP_TRAIN_DEFAULT_GPUS outside the allowlist must fail
+    loudly (through the same validator specs use) rather than silently
+    default to a disallowed GPU."""
+    import src.config.gpu_arbiter as gpu_arbiter_config_module
+
+    monkeypatch.setattr(
+        gpu_arbiter_config_module,
+        '_default_gpu_arbiter_config',
+        GpuArbiterConfig(allowed_gpu_ids=frozenset({0, 2}), default_train_gpus='1'),
+    )
+    with pytest.raises(ValueError, match='allowed GPU id'):
+        train_jobs.default_train_gpu_value()
+
+
+def test_spec_default_uses_default_train_gpu_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TrainJobSpec()/TrainCampaignSpec() with no cuda_visible_devices pick up
+    the configured default, not a hardcoded '0'."""
+    import src.config.gpu_arbiter as gpu_arbiter_config_module
+
+    monkeypatch.setattr(
+        gpu_arbiter_config_module,
+        '_default_gpu_arbiter_config',
+        GpuArbiterConfig(allowed_gpu_ids=frozenset({2})),
+    )
+    spec = TrainJobSpec(dataset_export_dir='/data/exports/x')
+    assert spec.cuda_visible_devices == '2'
+    campaign = TrainCampaignSpec(
+        dataset_export_dir='/data/exports/x', runs=[CampaignRunSpec(profile='probe')]
+    )
+    assert campaign.cuda_visible_devices == '2'
+
+
+# =============================================================================
 # frozen_test_sha + registry pin
 # =============================================================================
 
