@@ -137,6 +137,15 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     )
 
 
+@router.get('/classes/{class_id}', response_model=ClassEntry)
+async def get_class(class_id: int, opensearch: OpenSearchDep) -> ClassEntry:
+    """One registry class with the same live counts ``GET /classes`` reports."""
+    for entry in (await list_classes(opensearch)).classes:
+        if entry.class_id == class_id:
+            return entry
+    raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
+
+
 @router.post('/classes', status_code=status.HTTP_201_CREATED)
 async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
     """Append-only add."""

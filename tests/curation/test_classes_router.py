@@ -115,3 +115,20 @@ def test_post_class_cannot_set_hotkey(app_client: TestClient) -> None:
     assert list_resp.status_code == 200
     entry = next(c for c in list_resp.json()['classes'] if c['class_id'] == class_id)
     assert entry['hotkey_letter'] is None
+
+
+# =============================================================================
+# GET /curation/classes/{id} (contract audit: MISSING row)
+# =============================================================================
+
+
+def test_get_class_returns_the_same_entry_as_the_list(app_client: TestClient) -> None:
+    listed = app_client.get('/curation/classes').json()['classes']
+    target = listed[1]
+    resp = app_client.get(f'/curation/classes/{target["class_id"]}')
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == target
+
+
+def test_get_class_unknown_id_is_404(app_client: TestClient) -> None:
+    assert app_client.get('/curation/classes/9999').status_code == 404
