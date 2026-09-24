@@ -421,12 +421,20 @@ def _items_body() -> dict[str, Any]:
                 # Encoder embedding of the region-of-interest (cropped at
                 # the region bbox, pad-to-square). Lets regions be
                 # clustered / AHC-refined like item classes so
-                # false-positives and bad boxes surface as outliers. Plain
-                # float (not knn_vector) to match how the other overlay
-                # embeddings actually persist on a live index (index.knn
-                # disabled); clustering scroll-reads it and runs AHC/IVF in
-                # Python, so no ANN index is needed.
-                F.embedding: {'type': 'float'},
+                # false-positives and bad boxes surface as outliers.
+                # F-23/D-2: knn_vector, not a plain indexed float array. A
+                # 1024-value float array indexed 1024 BKD points plus
+                # useless sorted/deduplicated doc values and stored ~22KiB
+                # of JSON in _source per doc (measured fetch cost 50-70ms
+                # per 60 docs even with it _source-excluded, since derived
+                # source still has to skip past it). knn_vector gets
+                # binary derived source instead of JSON and becomes
+                # kNN-searchable for region FP matching. The previous
+                # comment here claimed index.knn was disabled on live
+                # indexes -- that's no longer true (op_items has
+                # index.knn: true), so the plain-float rationale no
+                # longer applies.
+                F.embedding: _knn_field(dim=config.encoder_embedding_dim),
                 # History: nested array recording every class write so
                 # operators can answer "who labeled this and when" after a
                 # model drift investigation. Cap at MAX_HISTORY_ENTRIES (32,
@@ -1166,17 +1174,20 @@ async def ensure_items_region_embedding(
     cluster / AHC-refine regions so false-positives and bad boxes surface
     as outliers. Additive ``PUT <index>/_mapping`` — idempotent.
 
-    The region embedding is a plain ``float`` array (NOT knn_vector): a
-    live items index commonly has ``index.knn`` disabled — so do the other
-    overlay embeddings (also plain float) — and adding an HNSW field to it
-    fails. Clustering reads embeddings via scroll and runs AHC/IVF in
-    Python, so no ANN index is needed anyway.
+    F-23/D-2: ``knn_vector``, matching the current items mapping
+    (``op_items`` has ``index.knn: true``; the earlier plain-``float``
+    rationale here assumed ``index.knn`` was disabled, which is no longer
+    true). A ``put_mapping`` against an index still carrying the old plain
+    ``float`` mapping fails with a recoverable ``illegal_argument_exception``
+    (field type can't change in place — see ``_is_recoverable_mapping_conflict``)
+    and is logged at info, not error; the type change itself only takes
+    effect on a fresh index or a reindex.
     """
     index = config.items_index
     fields = [F.embedding, F.cluster_id, F.cluster_distance, F.cluster_subid]
     body = {
         'properties': {
-            F.embedding: {'type': 'float'},
+            F.embedding: _knn_field(dim=config.encoder_embedding_dim),
             F.cluster_id: {'type': 'integer'},
             F.cluster_distance: {'type': 'float'},
             F.cluster_subid: {'type': 'keyword'},
