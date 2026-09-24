@@ -79,4 +79,17 @@ PENDING_STATUSES: frozenset[RegionStatus] = frozenset(
 )
 
 
-__all__ = ['PENDING_STATUSES', 'TERMINAL_STATUSES', 'RegionStatus']
+# The values an operator may write by hand. The detector / verify pipeline
+# also writes transient states (pending_*, detection_failed) that a human
+# never sets directly.
+HUMAN_WRITABLE_STATUSES: frozenset[RegionStatus] = frozenset(
+    {
+        RegionStatus.DETECTED,
+        RegionStatus.NO_REGION_VISIBLE,
+        RegionStatus.VERIFY_REJECTED,
+        RegionStatus.FALSE_POSITIVE,
+    }
+)
+
+
+__all__ = ['HUMAN_WRITABLE_STATUSES', 'PENDING_STATUSES', 'TERMINAL_STATUSES', 'RegionStatus']

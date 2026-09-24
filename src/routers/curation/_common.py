@@ -32,7 +32,7 @@ from src.clients.curation_opensearch import (
     ensure_items_vlm_raw_label_fields,
 )
 from src.config import IndexRole, get_curation_config, index_name
-from src.config.region_state import RegionStatus
+from src.config.region_state import HUMAN_WRITABLE_STATUSES
 from src.core.dependencies import get_opensearch
 from src.core.logging import get_logger
 from src.services.curation.label_import import DEFAULT_LABEL_SOURCE as _DEFAULT_LABEL_SOURCE
@@ -406,18 +406,10 @@ class ItemBatchRegionRequest(BaseModel):
     region_label_source: str = 'human'
 
 
-# Whitelist of region status values an operator may write. The detector /
-# verify pipeline writes additional values ('pending_detection',
-# 'pending_verification', 'detection_failed') that represent transient
-# pipeline state — humans never set those by hand.
-HUMAN_REGION_STATUS_VALUES = frozenset(
-    {
-        RegionStatus.DETECTED,
-        RegionStatus.NO_REGION_VISIBLE,
-        RegionStatus.VERIFY_REJECTED,
-        RegionStatus.FALSE_POSITIVE,
-    }
-)
+# Whitelist of region status values an operator may write. Defined next to
+# the enum (stdlib-only) so the TypeScript contract codegen can export it
+# without importing the app.
+HUMAN_REGION_STATUS_VALUES = HUMAN_WRITABLE_STATUSES
 
 
 class CropBatchStatusRequest(BaseModel):

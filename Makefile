@@ -217,6 +217,14 @@ test-api-health: ## Test API health
 test: ## Run the pytest suite
 	$(V)/python -m pytest tests/ -q
 
+.PHONY: contracts
+contracts: ## Regenerate the committed API contracts under contracts/
+	python3 scripts/codegen/generate_contracts.py
+
+.PHONY: contracts-check
+contracts-check: ## Fail if any committed API contract under contracts/ is stale
+	python3 scripts/codegen/generate_contracts.py --check
+
 # ==================================================================================
 # Benchmarking
 # ==================================================================================
