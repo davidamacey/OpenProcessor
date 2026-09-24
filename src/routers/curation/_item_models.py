@@ -65,6 +65,9 @@ class ItemDoc(BaseModel):
     # null reason = it answered. An empty answer leaves the class untouched.
     vlm_class_attempted_at: str | None = None
     vlm_class_empty_reason: str | None = None
+    # The VLM's class answer verbatim (for vlm_unmatched: the label it
+    # named that is not in the registry).
+    vlm_raw_class: str | None = None
     # VLM class suggestion: the registry class the VLM chose while the
     # label is unvalidated (class_source vlm / vlm_reclassified), or, for
     # vlm_new_class_pending, the proposed new class name with a null id.

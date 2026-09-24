@@ -2467,6 +2467,17 @@
               }
             ],
             "title": "Vlm Proposed Class Name"
+          },
+          "vlm_raw_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Raw Class"
           }
         },
         "required": [

@@ -34,6 +34,7 @@
     "vlm_confidence",
     "vlm_class_attempted_at",
     "vlm_class_empty_reason",
+    "vlm_raw_class",
     "vlm_proposed_class_id",
     "vlm_proposed_class_name",
     "proposed_class_id",
@@ -1172,6 +1173,18 @@
         ],
         "default": null,
         "title": "Vlm Proposed Class Name"
+      },
+      "vlm_raw_class": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Vlm Raw Class"
       }
     },
     "required": [

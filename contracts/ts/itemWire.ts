@@ -37,6 +37,7 @@ export interface ItemWire {
   vlm_confidence: string | null;
   vlm_class_attempted_at: string | null;
   vlm_class_empty_reason: string | null;
+  vlm_raw_class: string | null;
   vlm_proposed_class_id: number | null;
   vlm_proposed_class_name: string | null;
   proposed_class_id: number | null;
@@ -137,6 +138,7 @@ export const ITEM_WIRE_KEYS = [
   'vlm_confidence',
   'vlm_class_attempted_at',
   'vlm_class_empty_reason',
+  'vlm_raw_class',
   'vlm_proposed_class_id',
   'vlm_proposed_class_name',
   'proposed_class_id',

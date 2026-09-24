@@ -206,6 +206,10 @@ def serialize_item(
         # Last VLM class attempt, and why it gave no class (null = it did).
         'vlm_class_attempted_at': src.get('vlm_class_attempted_at'),
         'vlm_class_empty_reason': src.get('vlm_class_empty_reason'),
+        # The VLM's class answer verbatim — for vlm_unmatched, the label it
+        # named outside the registry (class_name is whatever the item
+        # already carried).
+        'vlm_raw_class': src.get('vlm_raw_class'),
         # The VLM's unvalidated class choice (registry id + name), or a
         # proposed new class (name only). Null otherwise.
         'vlm_proposed_class_id': vlm_class_id,
