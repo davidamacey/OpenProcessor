@@ -85,7 +85,7 @@ async def _async_main(args: argparse.Namespace) -> int:
         from src.services.curation.item_scores.job import bulk_write_result
 
         extra_must = [{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}]
-        ids, embeddings = await embedding_reduce.fetch_residual_v6_embeddings_parallel(
+        ids, embeddings = await embedding_reduce.fetch_residual_embeddings_parallel(
             client, extra_must=extra_must
         )
         if args.limit is not None:

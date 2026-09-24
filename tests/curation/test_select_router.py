@@ -94,9 +94,9 @@ def test_scope_query_cluster_id_filter() -> None:
 def test_scope_query_generic_filters_scalar_and_list() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(filters={'class_id': 7, 'hdd_source': ['a', 'b']}))
+    q = _build_scope_query(SelectDiverseScope(filters={'class_id': 7, 'source': ['a', 'b']}))
     assert {'term': {'class_id': 7}} in q['bool']['must']
-    assert {'terms': {'hdd_source': ['a', 'b']}} in q['bool']['must']
+    assert {'terms': {'source': ['a', 'b']}} in q['bool']['must']
 
 
 def test_scope_query_review_tab_reuses_review_queries() -> None:

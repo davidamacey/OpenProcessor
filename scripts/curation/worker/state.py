@@ -27,6 +27,11 @@ if TYPE_CHECKING:
 
 logger = get_logger('curation_worker')
 
+# S3: stored ``region_source`` / ``candidate_source`` provenance values are
+# defined in src/config/region_source.py (imported above) so both this
+# worker and the API router (region_vocabulary.py) share one source of
+# truth without a scripts -> src layering violation.
+
 _config = get_curation_config()
 
 CURATION_ITEMS_INDEX = _config.items_index
@@ -38,11 +43,7 @@ DEFAULT_SAM3 = os.environ.get('SAM3_URL', 'http://sam3:8000')
 # the parallelism across GPUs adds up. SAM3_URL is kept as the
 # single-URL fallback for backwards compatibility.
 DEFAULT_SAM3_URLS = os.environ.get('SAM3_URLS', '').strip()
-DEFAULT_GEMMA = (
-    os.environ.get('VLM_URL')
-    or os.environ.get('GEMMA_URL')
-    or os.environ.get('OPENWEBUI_BASE_URL', '')
-)
+DEFAULT_GEMMA = os.environ.get('OP_VLM_URL', '')
 DEFAULT_PAUSE_SENTINEL = Path(
     os.environ.get(
         'OP_WORKER_PAUSE_SENTINEL',
@@ -145,7 +146,9 @@ class _ItemTask:
     crop_jpeg: bytes | None = None
     # Two-stage pipeline state — Stage A (primary/secondary/OCR-det)
     # writes these, Stage B (VLM verify) consumes them.
-    candidate_source: str = ''  # 'lpr' / 'lpr_existing' / 'sam3' / 'paddle' / 'paddleocr_rec' / ''
+    candidate_source: str = (
+        ''  # 'detector' / 'detector_existing' / 'segmenter' / 'segmenter_text_hint' / ''
+    )
     candidate_in_crop: tuple[float, float, float, float] | None = None
     candidate_in_source: tuple[float, float, float, float] | None = None
     candidate_score: float = 0.0

@@ -66,7 +66,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
                 'image_path': img.get('image_path'),
                 'width': img.get('width'),
                 'height': img.get('height'),
-                'source': img.get('hdd_source') or img.get('source') or '',
+                'source': img.get('source') or '',
                 'indexed_at': img.get('indexed_at'),
             }
         body = {

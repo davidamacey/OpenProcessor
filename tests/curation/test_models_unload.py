@@ -51,10 +51,7 @@ def _mock_unload(monkeypatch: pytest.MonkeyPatch, **overrides) -> AsyncMock:
 # =============================================================================
 
 
-@pytest.mark.parametrize(
-    'model_name',
-    ['lpr_nanov11_640', 'paddleocr_det_trt', 'paddleocr_rec_trt', 'lpr_some_future_model'],
-)
+@pytest.mark.parametrize('model_name', ['paddleocr_det_trt', 'paddleocr_rec_trt'])
 def test_unload_refuses_region_protected_model(app_client, monkeypatch, model_name):
     mock = _mock_unload(monkeypatch)
     resp = app_client.delete(f'/curation/models/{model_name}')
@@ -62,13 +59,42 @@ def test_unload_refuses_region_protected_model(app_client, monkeypatch, model_na
     mock.assert_not_awaited()
 
 
-@pytest.mark.parametrize('model_name', ['lpr_nanov11_640', 'paddleocr_det_trt'])
+@pytest.mark.usefixtures('reference_region_profile')
+def test_unload_refuses_active_profiles_detector_model(app_client, monkeypatch):
+    """S8: the guard has no hardcoded 'lpr_' prefix. A model is protected
+    because it IS the active profile's configured detector_model, not
+    because of its name's shape."""
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete('/curation/models/license_plate_detector')
+    assert resp.status_code == 403
+    mock.assert_not_awaited()
+
+
+def test_unload_allows_an_unconfigured_lpr_shaped_name(app_client, monkeypatch):
+    """No hardcoded 'lpr_' prefix guard: an lpr-shaped name that isn't the
+    active profile's detector_model (here: no profile configured at all)
+    unloads like any other throwaway model."""
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete('/curation/models/lpr_some_future_model')
+    assert resp.status_code == 200, resp.text
+    mock.assert_awaited_once()
+
+
+@pytest.mark.parametrize('model_name', ['paddleocr_det_trt'])
 def test_unload_refuses_region_protected_model_even_with_force(app_client, monkeypatch, model_name):
     """force=true must NOT bypass the region-detector guard — this is the
     one guard in the whole endpoint with no override, per the "never
     touch the configured detection pipeline's models" constraint."""
     mock = _mock_unload(monkeypatch)
     resp = app_client.delete(f'/curation/models/{model_name}', params={'force': 'true'})
+    assert resp.status_code == 403
+    mock.assert_not_awaited()
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_unload_refuses_active_profiles_detector_model_even_with_force(app_client, monkeypatch):
+    mock = _mock_unload(monkeypatch)
+    resp = app_client.delete('/curation/models/license_plate_detector', params={'force': 'true'})
     assert resp.status_code == 403
     mock.assert_not_awaited()
 
@@ -204,10 +230,20 @@ def test_discover_promoted_models_corrupt_promote_json_is_skipped_not_fatal(tmp_
 def test_is_region_protected_model_matches_names_and_prefixes():
     import src.routers.curation.models as models_mod
 
-    assert models_mod._is_region_protected_model('lpr_nanov11_640') is True
+    # No hardcoded 'lpr_' prefix (S8): an lpr-shaped name is not protected
+    # merely by its name, only via the active profile's detector_model or
+    # the fixed paddleocr_ OCR prefix.
+    assert models_mod._is_region_protected_model('lpr_nanov11_640') is False
     assert models_mod._is_region_protected_model('paddleocr_det_trt') is True
-    assert models_mod._is_region_protected_model('lpr_some_future_model') is True
     assert models_mod._is_region_protected_model('op_vehicle_smoke_v1') is False
+
+
+@pytest.mark.usefixtures('reference_region_profile')
+def test_is_region_protected_model_matches_the_active_profiles_detector_model():
+    import src.routers.curation.models as models_mod
+
+    assert models_mod._is_region_protected_model('license_plate_detector') is True
+    assert models_mod._is_region_protected_model('lpr_some_future_model') is False
 
 
 def test_core_pipeline_models_includes_clip_and_face_models():

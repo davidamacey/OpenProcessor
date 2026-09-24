@@ -175,6 +175,22 @@ def test_label_vehicle_batch_chunks_more_than_four_crops_into_multiple_calls():
     assert n_images_second == 1
 
 
+def test_construction_fails_loudly_with_a_url_but_no_model():
+    """S7: there is no hardcoded vendor model-id default. A base_url with
+    an empty model must raise at construction, not silently talk to a
+    vendor-named model."""
+    with pytest.raises(ValueError, match='OP_VLM_MODEL'):
+        VlmLabeler(base_url='http://fake/v1', model='')
+
+
+def test_construction_with_no_url_and_no_model_does_not_raise():
+    """An unconfigured deployment (no OP_VLM_URL) must not fail merely for
+    lacking a model id -- the VLM leg is simply off."""
+    labeler = VlmLabeler(base_url='', model='')
+    assert labeler.model == ''
+    _run(labeler.aclose())
+
+
 def test_label_vehicle_batch_clamps_max_images_per_call_above_hard_cap():
     """Constructor clamps anything above the hard cap (8) down to it."""
 

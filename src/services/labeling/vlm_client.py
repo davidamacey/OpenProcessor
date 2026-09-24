@@ -41,10 +41,13 @@ from src.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-# Defaults (env-overridable).
-DEFAULT_BASE_URL = os.environ.get('OPENWEBUI_BASE_URL', 'http://host.docker.internal:8012/v1')
-DEFAULT_MODEL = os.environ.get('OPENWEBUI_MODEL', 'gemma-4-e4b')
-DEFAULT_API_KEY = os.environ.get('OPENWEBUI_API_KEY', 'EMPTY')
+# Defaults (env-overridable). No hardcoded vendor model id (S7): a
+# deployment that sets OP_VLM_URL without OP_VLM_MODEL must fail loudly at
+# VlmLabeler construction (see its __init__) rather than silently talking
+# to the reference deployment's model name.
+DEFAULT_BASE_URL = os.environ.get('OP_VLM_URL', '')
+DEFAULT_MODEL = os.environ.get('OP_VLM_MODEL', '')
+DEFAULT_API_KEY = os.environ.get('OP_VLM_API_KEY', 'EMPTY')
 
 
 def _env_max_images_per_call(default: int = 8) -> int:

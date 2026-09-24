@@ -52,7 +52,7 @@ def _fake() -> QueryFakeOpenSearch:
                     'image_path': '/data/a.jpg',
                     'width': 1920,
                     'height': 1080,
-                    'hdd_source': 'disk_a',
+                    'source': 'disk_a',
                     'indexed_at': '2026-09-01T00:00:00+00:00',
                     'pe_embedding': [0.0] * 4,
                 }

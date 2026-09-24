@@ -383,6 +383,39 @@ def test_preflight_blocks_unresolvable_include_classes(
     assert out['blocked'] is True
 
 
+def test_preflight_lpr_single_class_alias_is_retired(app_client: TestClient, tmp_path: Any) -> None:
+    """S6: the accepted alias 'lpr_single_class' for dataset_kind is
+    dropped; only 'single_class' is recognized. A manifest carrying the
+    retired alias must be treated as an ordinary multi-class export, so
+    the include_classes-resolvable check runs (and blocks on an
+    unresolvable class id) instead of being skipped."""
+    import json
+
+    export_dir = tmp_path / 'export_lpr_legacy'
+    export_dir.mkdir()
+    (export_dir / 'manifest.json').write_text(
+        json.dumps(
+            {
+                'dataset_kind': 'lpr_single_class',
+                'positive_images': 1000,
+                'split_counts': {'test': 100},
+            }
+        )
+    )
+
+    body = {
+        'dataset_export_dir': str(export_dir),
+        'profile': 'medium',
+        'include_classes': [999],
+    }
+    r = app_client.post('/curation/train/preflight', json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    check = next(c for c in out['checks'] if c['name'] == 'include_classes_resolvable')
+    assert check['severity'] == 'block'
+    assert 999 in check['detail']['unresolvable_class_ids']
+
+
 def test_preflight_skips_include_classes_check_for_lpr(
     app_client: TestClient, tmp_path: Any
 ) -> None:
@@ -395,7 +428,7 @@ def test_preflight_skips_include_classes_check_for_lpr(
     (export_dir / 'manifest.json').write_text(
         json.dumps(
             {
-                'dataset_kind': 'lpr_single_class',
+                'dataset_kind': 'single_class',
                 'positive_images': 1000,
                 'split_counts': {'test': 100},
             }
@@ -486,7 +519,7 @@ def test_preflight_lpr_export_skips_scan_and_reports_not_applicable(
     (export_dir / 'manifest.json').write_text(
         json.dumps(
             {
-                'dataset_kind': 'lpr_single_class',
+                'dataset_kind': 'single_class',
                 'positive_images': 900,
                 'total_images': 1000,
                 'split_counts': {'test': 100},

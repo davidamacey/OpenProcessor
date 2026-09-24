@@ -227,7 +227,7 @@ def test_text_ready_flag():
 def test_encode_text_and_encode_images_share_embedding_space():
     """Both paths must land in the *same* 1024-d unit-norm space so a
     kNN query built from ``encode_text`` output can score against
-    ``pe_embedding``/``v6_embedding`` docs written by the image path
+    ``pe_embedding``/``backbone_embedding`` docs written by the image path
     (the curation ingest pipeline's PE image-encoder Triton calls).
 
     This only asserts the *shape contract* (dim, dtype, L2-normalization)

@@ -84,7 +84,7 @@ def test_upload_ingests_bytes_under_client_identifiers(
 
     docs = {d['image_path']: d for d in fake_opensearch.images.values()}
     assert set(docs) == set(ids)
-    assert {d['hdd_source'] for d in docs.values()} == {'upload_test'}
+    assert {d['source'] for d in docs.values()} == {'upload_test'}
     # The identifiers do not exist on the server: the whole-frame
     # embedding must come from the uploaded bytes, never a path re-read.
     assert pe.whole_frame_paths == []

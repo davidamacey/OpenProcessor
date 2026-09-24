@@ -1,0 +1,128 @@
+"""``GET /regions/vocabulary`` and ``GET /review/tabs`` (W0 of
+``docs/design/naming_sweep_plan.md`` -- finding m9).
+
+After S3/S7 the detector/segmenter/VLM identifiers the worker writes come
+entirely from deployment config, so the frontend can no longer hardcode a
+label/palette map keyed on ``lpr_nanov11_640`` / ``sam3`` / ``gemma-4-e4b``.
+These two endpoints are the served vocabulary a client renders from
+instead.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from src.config.region_source import CANDIDATE_SOURCES
+from src.services.curation.review_queries import KNOWN_TABS
+
+
+@pytest.fixture
+def client() -> Any:
+    from src.routers.curation import router as curation_router
+
+    app = FastAPI()
+    app.include_router(curation_router)
+    with TestClient(app) as c:
+        yield c
+
+
+def test_regions_vocabulary_has_no_active_profile_by_default(client: TestClient) -> None:
+    """The neutral default (no OP_REGION_PROFILE) still serves a vocabulary
+    -- just without a detector/segmenter, only the fixed 'human' entry."""
+    resp = client.get('/curation/regions/vocabulary')
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert set(body) == {'detectors', 'region_sources', 'chain_actors'}
+    detector_ids = {d['id'] for d in body['detectors']}
+    assert 'human' in detector_ids
+    human_entry = next(d for d in body['detectors'] if d['id'] == 'human')
+    assert human_entry['role'] == 'human'
+    assert human_entry['filterable'] is True
+    # No hardcoded private model id ever appears.
+    assert 'lpr_nanov11_640' not in detector_ids
+    assert 'sam3' not in detector_ids
+    assert 'gemma-4-e4b' not in detector_ids
+
+
+def test_regions_vocabulary_reflects_the_active_profile(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    profile_registry._reset_registry_for_tests()
+    try:
+        resp = client.get('/curation/regions/vocabulary')
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        by_id = {d['id']: d for d in body['detectors']}
+        assert by_id['license_plate_detector']['role'] == 'detector'
+        assert by_id['license_plate_detector']['filterable'] is True
+        assert by_id['sam3']['role'] == 'segmenter'
+        assert by_id['sam3']['filterable'] is True
+        # OCR text-hint locates text but never sets the region bbox --
+        # never filterable.
+        assert by_id['paddleocr_det_trt']['role'] == 'ocr'
+        assert by_id['paddleocr_det_trt']['filterable'] is False
+        # VLM model comes from OP_VLM_MODEL (conftest.py sets it globally
+        # for the suite), never a hardcoded default.
+        assert by_id['test-vlm-model']['role'] == 'verifier'
+        assert by_id['test-vlm-model']['filterable'] is False
+    finally:
+        profile_registry._reset_registry_for_tests()
+
+
+def test_regions_vocabulary_env_configured_detector_reflected(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vocabulary reflects env-configured detector/VLM/segmenter names --
+    swap the profile's detector_model via env and confirm the served
+    vocabulary follows, proving nothing is hardcoded."""
+    from src.services.detection import profile_registry
+
+    monkeypatch.setenv('OP_REGION_PROFILE', 'license_plate')
+    monkeypatch.setenv('OP_REGION_DETECTION_DETECTOR_MODEL', 'my_custom_region_yolo')
+    profile_registry._reset_registry_for_tests()
+    try:
+        resp = client.get('/curation/regions/vocabulary')
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        detector_ids = {d['id'] for d in body['detectors']}
+        assert 'my_custom_region_yolo' in detector_ids
+        assert 'license_plate_detector' not in detector_ids
+    finally:
+        profile_registry._reset_registry_for_tests()
+
+
+def test_regions_vocabulary_covers_every_s3_region_source_value(client: TestClient) -> None:
+    resp = client.get('/curation/regions/vocabulary')
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    served_ids = {s['id'] for s in body['region_sources']}
+    assert set(CANDIDATE_SOURCES).issubset(served_ids)
+    assert 'human' in served_ids
+
+
+def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None:
+    resp = client.get('/curation/review/tabs')
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    served_ids = {t['id'] for t in body['tabs']}
+    assert served_ids == set(KNOWN_TABS)
+    for tab in body['tabs']:
+        assert tab['label']
+        assert tab['description']
+    by_id = {t['id']: t for t in body['tabs']}
+    assert by_id['coco_blind_spots']['label'] == 'Classifier blind spots'
+
+
+def test_review_tabs_route_not_shadowed_by_the_tab_path_param(client: TestClient) -> None:
+    """'/review/tabs' must resolve to the tab-catalog route, not
+    'GET /review/{tab}' with tab='tabs' (an unknown tab -> 400)."""
+    resp = client.get('/curation/review/tabs')
+    assert resp.status_code == 200
+    assert 'tabs' in resp.json()

@@ -124,7 +124,6 @@ async def list_crops(
     label_source: str | None = None,
     class_source: str | None = None,
     label_validated: bool | None = None,
-    hdd_source: str | None = None,
     source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
     needs_new_class: bool | None = None,
     review_dismissed: Annotated[
@@ -226,8 +225,8 @@ async def list_crops(
         # Legacy query param maps to class_validated (the class-side flag —
         # the common case for the labeler /clusters filter).
         filt.append({'term': {'class_validated': label_validated}})
-    if source or hdd_source:
-        filt.append({'term': {'hdd_source': source or hdd_source}})
+    if source:
+        filt.append({'term': {'source': source}})
     if review_dismissed is not None:
         dismissed: dict[str, Any] = {'exists': {'field': 'review_dismissed_at'}}
         filt.append(dismissed if review_dismissed else {'bool': {'must_not': dismissed}})

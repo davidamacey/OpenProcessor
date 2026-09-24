@@ -212,7 +212,7 @@ def test_single_class_dataset_with_backgrounds(
     assert len(labels) == 5
     assert {doc['class_id'] for doc in labels} == {0}
     assert {doc['label_source'] for doc in labels} == {'dataset_v1'}
-    sources = {d['hdd_source'] for d in fake_opensearch.images.values()}
+    sources = {d['source'] for d in fake_opensearch.images.values()}
     assert sources == {'ds:train', 'ds:val'}
 
     report = [json.loads(line) for line in (state / 'disagreements.jsonl').read_text().splitlines()]

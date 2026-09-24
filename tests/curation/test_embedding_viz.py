@@ -122,7 +122,7 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
 
     pool = [(f'crop-{i}', [float(i), float(i + 1)]) for i in range(6)]
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_v6_embeddings_parallel',
+        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
         _fake_residual_fetch(pool),
     )
 
@@ -180,7 +180,7 @@ async def test_run_projection_job_empty_pool_completes_with_zero_written(
 
     monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_v6_embeddings_parallel',
+        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
         _fake_residual_fetch([]),
     )
 

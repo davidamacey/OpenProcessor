@@ -103,13 +103,13 @@ def test_search_text_happy_path(app_client: TestClient):
     # encode_text was offloaded, never called with the wrong signature.
     app_client.fake_encoder.encode_text.assert_called_once_with(['white pickup truck'])
 
-    # kNN query body never carries pe_embedding/v6_embedding/region_embedding
+    # kNN query body never carries pe_embedding/backbone_embedding/region_embedding
     # or class_id_history (F-25 -- this is a paginated list endpoint).
     _args, kwargs = app_client.fake_os.search.call_args
     body_sent = kwargs.get('body') or _args[-1]
     assert set(body_sent['_source']['excludes']) == {
         'pe_embedding',
-        'v6_embedding',
+        'backbone_embedding',
         'region_embedding',
         'class_id_history',
     }

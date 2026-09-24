@@ -998,7 +998,7 @@ async def cluster_residuals(
     # PIT + sliced parallel fetch by default (~8x faster than scroll
     # on n=347k). Falls back internally to the sequential scroll
     # variant if PIT isn't available on the cluster.
-    ids, embeddings = await embedding_reduce.fetch_residual_v6_embeddings_parallel(
+    ids, embeddings = await embedding_reduce.fetch_residual_embeddings_parallel(
         client,
         include_candidate_clusters=recluster_unvalidated,
         candidate_cluster_id_min=RESIDUAL_CLUSTER_ID_OFFSET,

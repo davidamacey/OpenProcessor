@@ -81,7 +81,7 @@ def test_items_has_required_fields() -> None:
         'crop_id',
         'image_id',
         'image_path',
-        'hdd_source',
+        'source',
         'bbox_norm',
         'class_id',
         'class_name',
@@ -99,17 +99,18 @@ def test_items_has_required_fields() -> None:
         'created_at',
         'updated_at',
         'pe_embedding',
-        'v6_embedding',
+        'backbone_embedding',
         # Primary-subject rank + blur quality.
         'crop_rank_in_image',
         'crop_area_norm',
         'blur_lap_ratio',
     }
     assert required_keys.issubset(props.keys()), f'missing: {required_keys - props.keys()}'
-    # PE + v6 embeddings are k-NN vectors.
+    # PE + backbone embeddings are k-NN vectors.
     assert props['pe_embedding']['type'] == 'knn_vector'
     assert props['pe_embedding']['dimension'] == config.encoder_embedding_dim
-    assert props['v6_embedding']['type'] == 'knn_vector'
+    assert props['backbone_embedding']['type'] == 'knn_vector'
+    assert 'v6_embedding' not in props
 
 
 def test_items_has_region_of_interest_fields_via_region_fields() -> None:

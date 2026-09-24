@@ -188,7 +188,7 @@ async def _run_cluster_residuals(
         lambda: _FakeBackendInfo(),
     )
     monkeypatch.setattr(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_v6_embeddings_parallel',
+        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
         _fake_fetch,
     )
     labels = np.array([i % 2 for i in range(len(pool_ids))])

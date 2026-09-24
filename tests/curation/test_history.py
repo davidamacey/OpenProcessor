@@ -400,7 +400,7 @@ async def _run_curation_worker_case() -> list[dict[str, Any]]:
 async def test_curation_worker_appends_history() -> None:
     history = await _run_curation_worker_case()
     assert history, 'curation worker: no class_id_history entry was written'
-    assert history[-1]['writer'] == 'sam_worker'
+    assert history[-1]['writer'] == 'region_worker'
     assert history[-1]['class_id'] == 5
     assert history[-1]['class_source'] == 'item_model'
 

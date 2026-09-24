@@ -92,7 +92,7 @@ docker compose exec yolo-api python /app/export/export_models.py \
 ### Dual-Head Detector (detections + backbone embedding source)
 
 The curation subsystem stores a per-item **backbone embedding**
-(`v6_embedding`, dimension `CurationConfig.backbone_embedding_dim`) and
+(`backbone_embedding`, dimension `CurationConfig.backbone_embedding_dim`) and
 consumes it in residual clustering, the embedding visualization, item
 scores and the OCC conflict handler. It is produced by RoI-pooling a
 detector's backbone feature map over each detection box

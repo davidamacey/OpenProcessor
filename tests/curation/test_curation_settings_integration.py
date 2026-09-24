@@ -117,7 +117,7 @@ async def test_put_new_cluster_default_changes_real_cluster_residuals_call(
     app_client.put('/curation/settings', json={'defaults': {'cluster': non_default}})
 
     with patch(
-        'src.services.curation.clustering.embedding_reduce.fetch_residual_v6_embeddings_parallel',
+        'src.services.curation.clustering.embedding_reduce.fetch_residual_embeddings_parallel',
         new=AsyncMock(return_value=([], [])),
     ):
         result = await orchestrator.cluster_residuals(app_client.fake_os, clustering_method=None)

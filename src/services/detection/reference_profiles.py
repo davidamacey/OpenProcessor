@@ -21,7 +21,10 @@ from src.config import DetectionProfile
 
 REFERENCE_LICENSE_PLATE_PROFILE = DetectionProfile(
     name='license_plate',
-    detector_model='lpr_nanov11_640',
+    # D9: no hardcoded proprietary Triton model id. A neutral example id;
+    # a real deployment sets OP_REGION_DETECTION_DETECTOR_MODEL to its
+    # actual Triton model name.
+    detector_model='license_plate_detector',
     detector_version='1',
     input_size=640,
     confidence_floor=0.4,

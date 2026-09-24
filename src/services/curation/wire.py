@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
+from src.config.curation import BACKBONE_EMBEDDING_FIELD, ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.class_sources import vlm_suggestion, vlm_suggestion_dismissed
 from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_kind, cluster_similarity
@@ -49,7 +50,7 @@ REGION_WIRE_KEYS: tuple[str, ...] = tuple(region_wire_key(a) for a in REGION_WIR
 
 # Heavy vectors never shipped to a client. Callers pass the storage
 # instance so an overridden embedding key is excluded too.
-_EMBEDDING_SOURCE_EXCLUDES = ('pe_embedding', 'v6_embedding')
+_EMBEDDING_SOURCE_EXCLUDES = (ITEM_EMBEDDING_FIELD, BACKBONE_EMBEDDING_FIELD)
 
 
 def item_source_excludes(storage: RegionFields | None = None) -> list[str]:
@@ -202,8 +203,7 @@ def serialize_item(
         'excluded_at': src.get('excluded_at'),
         # Set = hidden from every /review tab (discard / review_dismiss).
         'review_dismissed_at': src.get('review_dismissed_at'),
-        # Ingest source tag (stored under the legacy ``hdd_source`` key).
-        'source': src.get('hdd_source') or src.get('source') or '',
+        'source': src.get('source') or '',
         'test_holdout': bool(src.get('test_holdout', False)),
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),

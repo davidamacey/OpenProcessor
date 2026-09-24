@@ -324,7 +324,7 @@ class TestRegionDetectorSingle:
         result = await detector.detect(_make_jpeg())
         assert result is not None
         assert isinstance(result, RegionCandidate)
-        assert result.source == 'lpr_nanov11_640'
+        assert result.source == 'license_plate_detector'
         assert result.rectangularity is None
         assert 0.0 <= result.bbox_norm[0] < result.bbox_norm[2] <= 1.0
         assert 0.0 <= result.bbox_norm[1] < result.bbox_norm[3] <= 1.0

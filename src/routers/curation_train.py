@@ -337,11 +337,10 @@ def _unresolvable_include_classes(
 
 # Export manifests whose data sufficiency must be judged from the manifest
 # itself rather than the multi-class registry. ``single_class`` is what
-# :mod:`src.services.curation.export_single_class` writes;
-# ``lpr_single_class`` is the reference implementation's own value for the
-# same shape, accepted so an export produced before that exporter existed
-# still preflights.
-SINGLE_CLASS_DATASET_KINDS: frozenset[str] = frozenset({'single_class', 'lpr_single_class'})
+# :mod:`src.services.curation.export_single_class` writes. The retired
+# ``lpr_single_class`` alias is not accepted (S6): a manifest carrying it
+# must be re-exported, not silently treated as single-class.
+SINGLE_CLASS_DATASET_KINDS: frozenset[str] = frozenset({'single_class'})
 
 
 def _single_class_label(manifest: dict[str, Any]) -> str:

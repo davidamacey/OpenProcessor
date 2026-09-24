@@ -73,7 +73,7 @@ CLASS_NAMES = (
 )
 
 N_IMAGES = 60
-HDD_SOURCE = 'verify_src'
+SEED_SOURCE = 'verify_src'
 
 
 @dataclass(frozen=True)
@@ -204,7 +204,7 @@ def _write_images(source_root: Path, count: int) -> list[dict[str, Any]]:
             {
                 'image_id': f'img_{i:03d}',
                 'image_path': str(path),
-                'hdd_source': HDD_SOURCE,
+                'source': SEED_SOURCE,
                 'width': 96,
                 'height': 96,
                 'imohash': f'imo{i:06d}',
@@ -276,7 +276,7 @@ def _build_items(
                     'crop_id': crop_id,
                     'image_id': image['image_id'],
                     'image_path': image['image_path'],
-                    'hdd_source': HDD_SOURCE,
+                    'source': SEED_SOURCE,
                     'request_id': 'seed',
                     'bbox_norm': _bbox_for(global_index),
                     'class_id': class_id,

@@ -78,6 +78,12 @@ from scripts.curation.worker.verify import (
     _combined_write_doc,
     _region_write_doc,
 )
+from src.config.region_source import (
+    CANDIDATE_DETECTOR,
+    CANDIDATE_DETECTOR_EXISTING,
+    CANDIDATE_SEGMENTER,
+    CANDIDATE_SEGMENTER_TEXT_HINT,
+)
 
 
 if TYPE_CHECKING:
@@ -247,10 +253,10 @@ async def run(args: argparse.Namespace) -> int:
     # the item's class name.
     pack = resolve_prompt_pack()
     logger.info('vlm_prompt_pack_resolved', pack=pack.name)
-    # No VLM URL at all (VLM_URL / GEMMA_URL / OPENWEBUI_BASE_URL all
-    # unset) = a deployment without an image LLM: no visibility filter, no
-    # verify call; detector regions are accepted unverified and their
-    # text is read by OCR (region_text_stage.accept_without_vlm).
+    # No VLM URL at all (OP_VLM_URL unset) = a deployment without an image
+    # LLM: no visibility filter, no verify call; detector regions are
+    # accepted unverified and their text is read by OCR
+    # (region_text_stage.accept_without_vlm).
     vlm_available = bool((args.gemma_url or '').strip())
     validate_text_reader(profile.text_reader)
     item_text_enabled = get_curation_config().item_text_enabled and bool(profile.ocr_pipeline_model)
@@ -555,7 +561,7 @@ async def run(args: argparse.Namespace) -> int:
                     t.plate_status in _PENDING_VERIFICATION_ALIASES
                     and t.lpr_plate_in_source is not None
                 ):
-                    t.candidate_source = 'lpr_existing'
+                    t.candidate_source = CANDIDATE_DETECTOR_EXISTING
                     t.candidate_in_crop = _source_to_crop(
                         t.lpr_plate_in_source, t.vehicle_bbox_norm
                     )
@@ -586,7 +592,7 @@ async def run(args: argparse.Namespace) -> int:
                     ).observe(time.monotonic() - _lpr_t0)
                     if cand is not None:
                         t.detection_trace.append(f'{region_profile().detector_model}:hit')
-                        t.candidate_source = 'lpr'
+                        t.candidate_source = CANDIDATE_DETECTOR
                         t.candidate_in_crop = cand.bbox_norm
                         t.candidate_in_source = crop_norm_to_source_norm(
                             cand.bbox_norm, t.vehicle_bbox_norm
@@ -876,7 +882,7 @@ async def run(args: argparse.Namespace) -> int:
                     # Else: queue the secondary-segmenter candidate for
                     # combined VLM call.
                     t.detection_trace.append(f'{region_profile().segmenter_name}:hit')
-                    t.candidate_source = 'sam3'
+                    t.candidate_source = CANDIDATE_SEGMENTER
                     t.candidate_in_crop = sam_candidate.bbox_norm
                     t.candidate_in_source = crop_norm_to_source_norm(
                         sam_candidate.bbox_norm, t.vehicle_bbox_norm
@@ -912,7 +918,7 @@ async def run(args: argparse.Namespace) -> int:
                         t.crop_jpeg, ocr_pick.bbox_norm, sam3
                     )
                     if sub_cand is not None:
-                        t.candidate_source = 'sam3_text_hint'
+                        t.candidate_source = CANDIDATE_SEGMENTER_TEXT_HINT
                         t.candidate_in_crop = sub_cand.bbox_norm
                         t.candidate_in_source = crop_norm_to_source_norm(
                             sub_cand.bbox_norm, t.vehicle_bbox_norm

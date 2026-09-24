@@ -73,7 +73,7 @@ def build_image_doc(
     doc: dict[str, Any] = {
         'image_id': image_id,
         'image_path': image_path,
-        'hdd_source': source,
+        'source': source,
         'width': width,
         'height': height,
         'imohash': imohash,
@@ -123,7 +123,7 @@ def build_item_doc(
         'crop_id': crop_id,
         'image_id': image_id,
         'image_path': image_path,
-        'hdd_source': source,
+        'source': source,
         'request_id': request_id,
         'bbox_norm': bbox_norm,
         'class_source': item.class_source,

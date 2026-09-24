@@ -6,6 +6,7 @@ Provides centralized configuration using Pydantic Settings with environment vari
 
 from src.config.curation import (
     BACKBONE_EMBEDDING_FIELD,
+    ITEM_EMBEDDING_FIELD,
     CurationConfig,
     IndexRole,
     get_curation_config,
@@ -20,6 +21,7 @@ from src.config.settings import Settings, get_settings
 
 __all__ = [
     'BACKBONE_EMBEDDING_FIELD',
+    'ITEM_EMBEDDING_FIELD',
     'PENDING_STATUSES',
     'TERMINAL_STATUSES',
     'CurationConfig',

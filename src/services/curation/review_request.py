@@ -87,7 +87,7 @@ async def build_review_request(
     if filters.class_id is not None:
         must.append({'term': {'class_id': filters.class_id}})
     if filters.source:
-        must.append({'term': {'hdd_source': filters.source}})
+        must.append({'term': {'source': filters.source}})
     band = confidence_band(filters.conf_min, filters.conf_max)
     if band is not None:
         must.append(band)

@@ -6,7 +6,7 @@ Before this phase the endpoint was completely broken end to end:
 1. Its cohort filter referenced ``label_source`` values
    (``v6_original_label`` / ``hdd_user_label``) that nothing in the repo
    ever writes — 0 matches, always.
-2. Its composite aggregation grouped on the bare ``hdd_source`` field,
+2. Its composite aggregation grouped on the bare ``source`` field,
    which is ``text`` + ``.keyword`` on the live index — OpenSearch throws
    ``illegal_argument_exception`` on that (surfaces as a 503), and even if
    it hadn't, the single ``size: 1000`` composite page silently dropped any
@@ -106,13 +106,13 @@ def _strata_response(
     }
 
 
-def _bucket(class_id: int, hdd_source: str, doc_count: int) -> dict[str, Any]:
+def _bucket(class_id: int, source: str, doc_count: int) -> dict[str, Any]:
     """A composite-agg bucket -- key + doc_count only. The endpoint no
     longer carries a ``top_hits`` sample per bucket (that 400s past
     OpenSearch's default ``index.max_inner_result_window`` on any real
     stratum over 100 crops); it real-scans each stratum separately via
     :func:`_make_search_dispatcher`'s per-stratum branch below."""
-    return {'key': {'class_id': class_id, 'hdd_source': hdd_source}, 'doc_count': doc_count}
+    return {'key': {'class_id': class_id, 'source': source}, 'doc_count': doc_count}
 
 
 def _crop_ids(prefix: str, n: int) -> list[str]:
@@ -151,12 +151,10 @@ def _make_search_dispatcher(
         class_id = next(
             m['term']['class_id'] for m in filt if 'term' in m and 'class_id' in m['term']
         )
-        hdd_source = next(
-            m['term']['hdd_source'] for m in filt if 'term' in m and 'hdd_source' in m['term']
-        )
+        source = next(m['term']['source'] for m in filt if 'term' in m and 'source' in m['term'])
         if body.get('search_after') is not None:
             return {'hits': {'hits': []}}
-        ids = crop_ids_by_stratum.get((class_id, hdd_source), [])
+        ids = crop_ids_by_stratum.get((class_id, source), [])
         return {
             'hits': {'hits': [{'_source': {'crop_id': cid}, 'sort': [cid, cid]} for cid in ids]}
         }
@@ -202,13 +200,13 @@ def test_freeze_selects_human_validated_cohort(app_client: Any, fake_opensearch:
 
 
 # =============================================================================
-# 2. Composite agg on hdd_source
+# 2. Composite agg on source
 # =============================================================================
 
 
 def test_freeze_aggregates_on_keyword_subfield(app_client: Any, fake_opensearch: AsyncMock) -> None:
-    """The composite agg source for ``hdd_source`` must use the bare
-    ``hdd_source`` field name — it is mapped ``keyword`` directly on the
+    """The composite agg source for ``source`` must use the bare
+    ``source`` field name — it is mapped ``keyword`` directly on the
     live index (no ``.keyword`` sub-field exists), so appending
     ``.keyword`` would 400 against a real index (``illegal_argument_exception``,
     the same class of bug review_queries.py's model_disagreements script
@@ -227,8 +225,8 @@ def test_freeze_aggregates_on_keyword_subfield(app_client: Any, fake_opensearch:
     call = fake_opensearch.search.call_args_list[0]
     body = call.kwargs['body']
     sources = body['aggs']['strata']['composite']['sources']
-    hdd_source_field = next(s['hdd_source']['terms']['field'] for s in sources if 'hdd_source' in s)
-    assert hdd_source_field == 'hdd_source'
+    source_field = next(s['source']['terms']['field'] for s in sources if 'source' in s)
+    assert source_field == 'source'
 
 
 # =============================================================================
@@ -239,7 +237,7 @@ def test_freeze_aggregates_on_keyword_subfield(app_client: Any, fake_opensearch:
 def test_freeze_paginates_beyond_one_composite_page(
     app_client: Any, fake_opensearch: AsyncMock
 ) -> None:
-    """A cohort with more distinct (class_id, hdd_source) strata than fit
+    """A cohort with more distinct (class_id, source) strata than fit
     on one composite page must not be silently truncated to page 1 — the
     endpoint must follow ``after_key`` until it's absent, and every
     stratum's crops must make it into the final selection.
@@ -248,7 +246,7 @@ def test_freeze_paginates_beyond_one_composite_page(
     follow-up -> only the first page's class ever appears in the response,
     the second page's class is silently dropped.
     """
-    after_key_1 = {'class_id': 1, 'hdd_source': 'hdd:demo_hdd01'}
+    after_key_1 = {'class_id': 1, 'source': 'hdd:demo_hdd01'}
     strata_pages = [
         ([_bucket(1, 'hdd:demo_hdd01', 6)], after_key_1),
         ([_bucket(2, 'hdd:demo_hdd01', 6)], None),
@@ -434,7 +432,7 @@ def test_select_test_holdout_min_five_floor_and_determinism() -> None:
 
 # =============================================================================
 # F-8 — class_id 0 must not be misbucketed as "unknown", and docs missing
-# class_id/hdd_source must get an explicit stratum instead of being
+# class_id/source must get an explicit stratum instead of being
 # silently dropped from the composite agg.
 # =============================================================================
 
@@ -467,8 +465,8 @@ async def test_fetch_cohort_strata_class_zero_is_not_treated_as_missing() -> Non
 
 
 @pytest.mark.asyncio
-async def test_fetch_cohort_strata_missing_class_id_and_hdd_source_get_a_stratum() -> None:
-    """A doc with no class_id/hdd_source must still surface as its own
+async def test_fetch_cohort_strata_missing_class_id_and_source_get_a_stratum() -> None:
+    """A doc with no class_id/source must still surface as its own
     stratum (composite ``missing_bucket: true``), not vanish from the
     strata enumeration entirely."""
     from src.services.curation.holdout import (
@@ -482,14 +480,12 @@ async def test_fetch_cohort_strata_missing_class_id_and_hdd_source_get_a_stratum
     async def _dispatch(*_args: Any, **kwargs: Any) -> dict[str, Any]:
         body = kwargs['body']
         if 'strata' in (body.get('aggs') or {}):
-            return _strata_response(
-                [{'key': {'class_id': None, 'hdd_source': None}, 'doc_count': 2}]
-            )
+            return _strata_response([{'key': {'class_id': None, 'source': None}, 'doc_count': 2}])
         # Per-stratum scan for the missing-key bucket: assert it queries by
         # must_not exists rather than a literal term match on the sentinel.
         filt = body['query']['bool']['filter']
         assert {'bool': {'must_not': [{'exists': {'field': 'class_id'}}]}} in filt
-        assert {'bool': {'must_not': [{'exists': {'field': 'hdd_source'}}]}} in filt
+        assert {'bool': {'must_not': [{'exists': {'field': 'source'}}]}} in filt
         return {
             'hits': {
                 'hits': [
@@ -503,5 +499,5 @@ async def test_fetch_cohort_strata_missing_class_id_and_hdd_source_get_a_stratum
     strata = await fetch_cohort_strata(fake, 'test_items', {'match_all': {}})
     assert len(strata) == 1
     assert strata[0]['class_id'] == _MISSING_CLASS_ID_STRATUM
-    assert strata[0]['hdd_source'] == _MISSING_HOLDOUT_SOURCE_STRATUM
+    assert strata[0]['source'] == _MISSING_HOLDOUT_SOURCE_STRATUM
     assert strata[0]['crop_ids'] == _crop_ids('m', 2)

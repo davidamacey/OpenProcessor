@@ -3,7 +3,7 @@
 Two genuinely separate things live in this module, and only one of
 them touches real clustering:
 
-1. :func:`fetch_residual_v6_embeddings_parallel` — pulls v6/PE
+1. :func:`fetch_residual_embeddings_parallel` — pulls v6/PE
    embeddings for residual crops (no ``cluster_id`` assigned). This
    part IS shared with the real clustering path:
    :func:`~src.services.curation.clustering.orchestrator.cluster_residuals`
@@ -82,7 +82,7 @@ UMAP_RANDOM_STATE = 42
 # Embedding field to reduce. ``pe_embedding`` is PE-Core-L14-336's
 # foundation visual encoder (1024-d), trained on broad web imagery —
 # better at grouping out-of-distribution vehicles by semantic similarity
-# than ``v6_embedding`` (the v6 classifier's penultimate layer, which
+# than ``backbone_embedding`` (the v6 classifier's penultimate layer, which
 # clusters by framing/lighting outside its confident range). The
 # 2026-05-18 visual audit picked pe_embedding as the residual default.
 RESIDUAL_EMBEDDING_FIELD = os.environ.get('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
@@ -128,7 +128,7 @@ def _state_paths_for(backend: str) -> tuple[str, str]:
     return UMAP_STATE_JOBLIB_PATH, 'current'
 
 
-async def fetch_residual_v6_embeddings(
+async def fetch_residual_embeddings(
     client: AsyncOpenSearch,
     *,
     include_candidate_clusters: bool = False,
@@ -270,7 +270,7 @@ PARALLEL_FETCH_PAGE_SIZE = 2000
 PARALLEL_FETCH_PIT_KEEPALIVE = '5m'
 
 
-async def fetch_residual_v6_embeddings_parallel(
+async def fetch_residual_embeddings_parallel(
     client: AsyncOpenSearch,
     *,
     include_candidate_clusters: bool = False,
@@ -280,7 +280,7 @@ async def fetch_residual_v6_embeddings_parallel(
     page_size: int = PARALLEL_FETCH_PAGE_SIZE,
     progress: Any | None = None,
 ) -> tuple[list[str], np.ndarray]:
-    """Same shape as :func:`fetch_residual_v6_embeddings`, PIT + slice impl.
+    """Same shape as :func:`fetch_residual_embeddings`, PIT + slice impl.
 
     Freezes a Point-In-Time view of the index and dispatches
     ``n_slices`` parallel async scrolls (each owning ``slice {id: i,
@@ -342,7 +342,7 @@ async def fetch_residual_v6_embeddings_parallel(
             raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
     except Exception as exc:
         logger.warning('legacy_embedding_pit_unavailable_fallback_scroll', error=str(exc))
-        return await fetch_residual_v6_embeddings(
+        return await fetch_residual_embeddings(
             client,
             include_candidate_clusters=include_candidate_clusters,
             candidate_cluster_id_min=candidate_cluster_id_min,
@@ -651,7 +651,7 @@ async def umap_rebuild(client: AsyncOpenSearch) -> dict[str, Any]:
     consume this module's UMAP-reduced output; see the module
     docstring.
     """
-    ids, embeddings = await fetch_residual_v6_embeddings(client)
+    ids, embeddings = await fetch_residual_embeddings(client)
     if len(ids) == 0:
         return {
             'status': 'no_residuals',
@@ -681,7 +681,7 @@ __all__ = [
     'UMAP_STATE_INDEX',
     'UMAP_STATE_JOBLIB_PATH',
     'UMAP_STATE_JOBLIB_PATH_CUML',
-    'fetch_residual_v6_embeddings',
+    'fetch_residual_embeddings',
     'get_or_fit_reducer',
     'umap_rebuild',
 ]

@@ -42,9 +42,9 @@ from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 # crops) — see Appendix C Decision 1.
 MIN_TEST_PER_CLASS = MIN_TEST_CROPS_PER_CLASS
 
-# Composite-agg page size (max distinct (class_id, hdd_source) strata per
+# Composite-agg page size (max distinct (class_id, source) strata per
 # page) and the per-stratum scan page size. Today's cohort (~380 human-
-# validated crops across ~30 classes x 1 hdd_source) is nowhere near
+# validated crops across ~30 classes x 1 source) is nowhere near
 # either limit.
 #
 # A per-bucket ``top_hits`` was tried first and rejected: OpenSearch's
@@ -57,13 +57,13 @@ MIN_TEST_PER_CLASS = MIN_TEST_CROPS_PER_CLASS
 _STRATA_PAGE_SIZE = 1000
 _STRATUM_SCAN_PAGE_SIZE = 1000
 # Safety valve against a pathological/buggy infinite loop, not a real cap:
-# 500 pages x 1000/page = 500k crop_ids for one (class_id, hdd_source)
+# 500 pages x 1000/page = 500k crop_ids for one (class_id, source)
 # stratum, ~1300x today's entire cohort (382 crops).
 _STRATUM_SCAN_MAX_PAGES = 500
 
 # F-8 sentinels for the composite agg's missing_bucket strata (a doc with no
-# class_id or no hdd_source). class_id uses -1 (never a real class id);
-# hdd_source uses an explicit string sentinel since '' was already a
+# class_id or no source). class_id uses -1 (never a real class id);
+# source uses an explicit string sentinel since '' was already a
 # plausible (if unlikely) real value and would be ambiguous with "missing".
 _MISSING_CLASS_ID_STRATUM = -1
 _MISSING_HOLDOUT_SOURCE_STRATUM = '__none__'
@@ -98,9 +98,9 @@ def build_cohort_query() -> dict[str, Any]:
 
 
 async def scan_stratum_crop_ids(
-    opensearch: Any, index: str, cohort_query: dict[str, Any], class_id: int, hdd_source: str
+    opensearch: Any, index: str, cohort_query: dict[str, Any], class_id: int, source: str
 ) -> list[str]:
-    """Real per-(class_id, hdd_source) scan for every matching ``crop_id``,
+    """Real per-(class_id, source) scan for every matching ``crop_id``,
     via ``search_after`` — no OpenSearch result-window limit, unlike
     ``top_hits`` (which 400s past ``index.max_inner_result_window``, 100 by
     default, on any stratum bigger than that; see the module-level
@@ -111,7 +111,7 @@ async def scan_stratum_crop_ids(
             'filter': [
                 cohort_query,
                 _equals_or_missing('class_id', class_id, _MISSING_CLASS_ID_STRATUM),
-                _equals_or_missing('hdd_source', hdd_source, _MISSING_HOLDOUT_SOURCE_STRATUM),
+                _equals_or_missing('source', source, _MISSING_HOLDOUT_SOURCE_STRATUM),
             ]
         }
     }
@@ -141,7 +141,7 @@ async def scan_stratum_crop_ids(
         raise HTTPException(
             status_code=503,
             detail=(
-                f'stratum (class_id={class_id}, hdd_source={hdd_source}) exceeded '
+                f'stratum (class_id={class_id}, source={source}) exceeded '
                 f'{_STRATUM_SCAN_MAX_PAGES} scan pages; refusing to freeze a '
                 'possibly-truncated sample'
             ),
@@ -152,13 +152,13 @@ async def scan_stratum_crop_ids(
 async def fetch_cohort_strata(
     opensearch: Any, index: str, query: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """Enumerate every ``(class_id, hdd_source)`` stratum in the
+    """Enumerate every ``(class_id, source)`` stratum in the
     cohort via composite agg (following ``after_key`` across pages), then
     real-scan each stratum for its full ``crop_id`` list.
 
     Plan Phase 2 item 2, three bugs in one call site:
 
-    - ``hdd_source`` is mapped ``keyword`` directly on the live index — no
+    - ``source`` is mapped ``keyword`` directly on the live index — no
       ``.keyword`` subfield exists; querying one either 400s or (composite
       agg) silently returns nothing.
     - The original single ``size: 1000`` composite page silently dropped
@@ -170,7 +170,7 @@ async def fetch_cohort_strata(
       scan (:func:`scan_stratum_crop_ids`), matching the plan's "real
       per-stratum scan" alternative.
 
-    Returns one dict per stratum: ``{'class_id': int, 'hdd_source': str,
+    Returns one dict per stratum: ``{'class_id': int, 'source': str,
     'crop_ids': list[str]}``.
     """
     buckets: list[dict[str, Any]] = []
@@ -179,13 +179,13 @@ async def fetch_cohort_strata(
         composite: dict[str, Any] = {
             'size': _STRATA_PAGE_SIZE,
             'sources': [
-                # F-8: missing_bucket keeps docs with no class_id/hdd_source
+                # F-8: missing_bucket keeps docs with no class_id/source
                 # in the strata enumeration (as an explicit null key)
                 # instead of silently dropping them from the composite agg
                 # entirely -- a doc missing one of these fields would
                 # otherwise never be frozen into any stratum at all.
                 {'class_id': {'terms': {'field': 'class_id', 'missing_bucket': True}}},
-                {'hdd_source': {'terms': {'field': 'hdd_source', 'missing_bucket': True}}},
+                {'source': {'terms': {'field': 'source', 'missing_bucket': True}}},
             ],
         }
         if after_key:
@@ -207,14 +207,10 @@ async def fetch_cohort_strata(
             # back to the sentinel now.
             raw_class_id = key.get('class_id')
             class_id = int(raw_class_id) if raw_class_id is not None else _MISSING_CLASS_ID_STRATUM
-            raw_hdd_source = key.get('hdd_source')
-            hdd_source = (
-                str(raw_hdd_source)
-                if raw_hdd_source is not None
-                else _MISSING_HOLDOUT_SOURCE_STRATUM
-            )
-            crop_ids = await scan_stratum_crop_ids(opensearch, index, query, class_id, hdd_source)
-            buckets.append({'class_id': class_id, 'hdd_source': hdd_source, 'crop_ids': crop_ids})
+            raw_source = key.get('source')
+            source = str(raw_source) if raw_source is not None else _MISSING_HOLDOUT_SOURCE_STRATUM
+            crop_ids = await scan_stratum_crop_ids(opensearch, index, query, class_id, source)
+            buckets.append({'class_id': class_id, 'source': source, 'crop_ids': crop_ids})
         after_key = strata.get('after_key')
         if not after_key or not page_buckets:
             break

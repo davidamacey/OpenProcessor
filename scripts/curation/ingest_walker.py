@@ -169,9 +169,7 @@ def main() -> None:
         default=f'http://localhost:4603{get_curation_config().api_prefix}',
         help='Curation API base URL (no trailing slash)',
     )
-    parser.add_argument(
-        '--source', default='ingest_walker', help='hdd_source tag for ingested images'
-    )
+    parser.add_argument('--source', default='ingest_walker', help='source tag for ingested images')
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument(
         '--concurrency', type=int, default=4, help='Concurrent in-flight batch POSTs'

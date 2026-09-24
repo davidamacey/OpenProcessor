@@ -59,7 +59,7 @@ async def test_concurrent_callers_run_the_bootstrap_sequence_exactly_once(
         'ensure_items_exclusion_fields',
         'ensure_items_text_reader_fields',
         'ensure_items_validation_split_fields',
-        'ensure_items_pe_v6_embedding_fields',
+        'ensure_items_embedding_fields',
     ):
 
         async def _noop(_opensearch: object) -> None:

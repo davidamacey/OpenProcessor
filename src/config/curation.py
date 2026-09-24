@@ -31,9 +31,8 @@ if TYPE_CHECKING:
 # Items-index field holding the per-item backbone embedding (a detector's
 # feature map RoI-pooled over the item bbox, ``CurationConfig.
 # backbone_embedding_dim`` wide). The mapping and the ingest writer both
-# read this constant so they cannot drift; the name is kept for
-# compatibility with existing indexes.
-BACKBONE_EMBEDDING_FIELD = 'v6_embedding'
+# read this constant so they cannot drift.
+BACKBONE_EMBEDDING_FIELD = 'backbone_embedding'
 
 # Items-index field holding the per-item encoder embedding
 # (``CurationConfig.encoder_embedding_dim`` wide). Queues that gate on "the

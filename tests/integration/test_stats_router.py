@@ -125,8 +125,8 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
 
     in_progress = body.get('in_progress')
     assert isinstance(in_progress, dict)
-    assert isinstance(in_progress.get('sam_drain_total_unfinished'), int)
-    assert in_progress['sam_drain_total_unfinished'] >= 0
+    assert isinstance(in_progress.get('region_drain_total_unfinished'), int)
+    assert in_progress['region_drain_total_unfinished'] >= 0
 
     clusters = body.get('clusters')
     assert isinstance(clusters, dict)
@@ -171,13 +171,13 @@ def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None
         'humans always validate when they label, so this is impossible'
     )
 
-    # sam_drain_total_unfinished equals pending_detection + pending_verification
+    # region_drain_total_unfinished equals pending_detection + pending_verification
     # by construction.
     pending_d = int(body['unlabeled']['pending_detection'])
     pending_v = int(body['unlabeled']['pending_verification'])
-    sam_total = int(body['in_progress']['sam_drain_total_unfinished'])
+    sam_total = int(body['in_progress']['region_drain_total_unfinished'])
     assert sam_total == pending_d + pending_v, (
-        f'sam_drain_total_unfinished={sam_total} '
+        f'region_drain_total_unfinished={sam_total} '
         f'!= pending_detection({pending_d}) + pending_verification({pending_v})'
     )
 

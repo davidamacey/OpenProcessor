@@ -99,7 +99,7 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         # ``_combined_class_update``), the history snapshot happens
         # here where the pre-write ``current`` doc is available.
         if 'class_id' in update:
-            update['class_id_history'] = record_class_history(current, writer='sam_worker')
+            update['class_id_history'] = record_class_history(current, writer='region_worker')
         # Merge this pass's entries onto whatever chain is stored (a human
         # or an earlier pass may have appended) — ordered, de-duplicated,
         # normalized to ``<actor>:<event>``, capped.
@@ -120,7 +120,7 @@ async def _bulk_update(opensearch: AsyncOpenSearch, tasks: list[_ItemTask]) -> t
         # pending search first, so a refresh-lagged search can't hand the
         # same crop out again.
         refresh='wait_for',
-        writer_id='sam_worker',
+        writer_id='region_worker',
     )
     n_written = int(result.get('updated', 0))
     n_skipped_conflict = int(result.get('skipped_due_to_conflict', 0))

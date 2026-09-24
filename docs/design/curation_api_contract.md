@@ -81,7 +81,7 @@ by router module; every path is relative to the configured
 | `events.py` | `GET /events`, `POST /events/publish`, `GET /events/stats` |
 | `export.py` | `POST /export/yolo`, `GET /export/datasets`, `GET /export/status`, `GET /export/registry/{artifact}` |
 | `export_single_class.py` | `POST /export/single_class`, `GET /export/single_class/status` |
-| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/sam_drain`, `POST /ingest/path_lookup` |
+| `ingest.py` | `POST /ingest/image`, `POST /ingest/batch`, `POST /ingest/upload`, `POST /import_labels`, `POST /import_labels/batch`, `GET /ingest/status`, `GET /ingest/region_drain`, `POST /ingest/path_lookup` |
 | `models.py` | `GET /health`, `GET /models/status`, `DELETE /models/{model_name}` |
 | `search.py` | `GET /search/text` |
 | `stats.py` | `GET /stats/classes`, `GET /stats/dataset` |
@@ -458,7 +458,8 @@ paging concept at all.
 `cluster_distance`, `mistakenness_score`, `uniqueness_score`; anything
 else is a `400`; ignored by `order=outliers|diverse`), `class_id`,
 `cluster_id`, `label_source`, `class_source`, `label_validated`,
-`hdd_source` / `source` (same filter; `source` is the wire name),
+`source` (ingest source tag; the retired `hdd_source` query param name
+is removed, S2),
 `needs_new_class` (bool), `review_dismissed` (bool), `ids` (comma-separated, max 500: returns exactly
 those items in that order, missing ids dropped, every other filter ignored —
 use it to hydrate a `POST /select/diverse` page in one call),
@@ -738,8 +739,8 @@ Derived keys (computed by the serializer, never stored):
 - Pass-throughs: `needs_new_class` (bool), `needs_new_class_note`,
   `class_excluded` (bool), `excluded_reason`, `excluded_at`,
   `probe_pred_class_id` (registry id of `probe_pred_class`, written by the
-  probe pass), `source` (ingest source tag; stored under the legacy
-  `hdd_source` key — the wire name is `source`).
+  probe pass), `source` (ingest source tag; stored under the `source`
+  key — the retired `hdd_source` storage key is gone, S2).
 
 `label_validated` is derived (`class_validated` OR `region_validated`).
 `thumbnail_url` / `region_thumbnail_url` are built from the configured
@@ -788,8 +789,8 @@ outer `text_border_margin` band of the crop, minus `text_stopwords`,
 ordered in rows top-to-bottom / left-to-right, normalized
 (`text_uppercase`, `text_charset`), joined with `text_join`, and accepted
 only within `text_len_min`..`text_len_max` and above
-`text_min_confidence`. With no VLM configured (no `VLM_URL` /
-`GEMMA_URL` / `OPENWEBUI_BASE_URL`) the worker never calls a VLM:
+`text_min_confidence`. With no VLM configured (`OP_VLM_URL` unset) the
+worker never calls a VLM:
 detector regions are written `detected` with `region_verified=false`
 (`<src>:accepted_unverified` on the chain) and their text is read by OCR.
 
@@ -965,7 +966,7 @@ deployment's detector names.
 ## Errors: read endpoints fail closed
 
 A backend outage is a `503`, never an empty or zero answer that reads as
-real data. `GET /ingest/sam_drain` (its `total_unfinished: 0` is the
+real data. `GET /ingest/region_drain` (its `total_unfinished: 0` is the
 "worker caught up" signal), `GET /ingest/status`, `GET /classes` (live
 counts) and `GET /stats/classes` (registry join) used to answer zeros /
 empty lists on failure and now `503`. Single-item reads added in this
@@ -1115,11 +1116,14 @@ backend rows of the frontend's contract audit
 | Route (new) | — | `GET /classes/{class_id}` |
 | Env var | `GEMMA_URL`, `GEMMA_IMAGES_PER_CALL`, `GEMMA_HTTPX_MAX_CONNECTIONS`, `GEMMA_HTTPX_KEEPALIVE`, `SAM_WORKER_GEMMA_CONCURRENCY`, `SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY`, `SAM3_SKIP_GEMMA_VERIFY_SCORE` | `VLM_URL`, `VLM_IMAGES_PER_CALL`, `VLM_HTTPX_MAX_CONNECTIONS`, `VLM_HTTPX_KEEPALIVE`, `SAM_WORKER_VLM_CONCURRENCY`, `SAM_WORKER_VLM_VISIBLE_CONCURRENCY`, `SAM3_SKIP_VLM_VERIFY_SCORE` (old names still read as fallbacks) |
 
-Not renamed, deliberately: the internal-only `v6_embedding` storage
-field (never on the wire), Prometheus metric names, the
+Not renamed, deliberately: Prometheus metric names (a later wave), the
 `needs_gemma_stop` Python alias in the GPU arbiter (not wire), and the
 review tab id `coco_blind_spots` (a proposer-named tab id; left for the
-owners to decide, it now filters on the configured proposal sources).
+owners to decide, it now filters on the configured proposal sources —
+`GET /review/tabs` serves it a generic "Classifier blind spots" label).
+The internal-only `v6_embedding` storage field (never on the wire) *was*
+renamed to `backbone_embedding` in the naming sweep's W1 (S1) — the
+`CurationConfig.BACKBONE_EMBEDDING_FIELD` constant, not a wire key.
 
 - This doc is the shared source of truth for the `/curation` API. Point
   any consumer's docs here instead of duplicating the field list.
