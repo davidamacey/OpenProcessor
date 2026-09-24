@@ -18,11 +18,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
 
 describe('DQ-p2: the status bar reads the pager that actually backs the visible grid', () => {
-  it('branches on isSlotFilter to read slotGallery.pager in gallery mode', () => {
+  it('branches on slotGallery to read its pager in gallery mode', () => {
     const idx = src.indexOf('DQ-p2 (docs/design/data-quality-pass-2026-09-24.md)');
     expect(idx).toBeGreaterThan(-1);
     const slice = src.slice(idx, idx + 1200);
-    expect(slice).toMatch(/\{#if isSlotFilter\}/);
+    expect(slice).toMatch(/\{#if slotGallery\}/);
     expect(slice).toMatch(
       /\{slotGallery\.pager\.items\.length\} \/ \{slotGallery\.pager\.total\}/,
     );

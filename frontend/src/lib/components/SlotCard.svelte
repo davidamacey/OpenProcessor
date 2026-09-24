@@ -35,17 +35,14 @@
     type RegionBrowseItem,
   } from '$lib/api';
   import { readSlot } from '$lib/annotations/readSlot';
-  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import type { SlotSpec, XYXY } from '$lib/annotations/types';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
   interface Props {
     crop: RegionBrowseItem;
-    /** Which slot's capabilities to render this card with. Defaults to
-     *  the built-in license_plate profile — the only configured
-     *  instance today — but any `SlotSpec` whose wire field names
-     *  match this crop's properties works unchanged. */
-    slot?: SlotSpec;
+    /** Which slot's capabilities to render this card with. Required: the
+     *  caller always knows the slot it is browsing. */
+    slot: SlotSpec;
     onclick?: (crop: RegionBrowseItem, e: MouseEvent) => void;
     /** Edit affordance (✎): parent opens the sub-bbox editor for this slot. */
     onedit?: (crop: RegionBrowseItem) => void;
@@ -59,7 +56,7 @@
 
   let {
     crop,
-    slot = licensePlateSlot,
+    slot,
     onclick,
     onedit,
     onmarkfp,

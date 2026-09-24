@@ -51,6 +51,7 @@ import {
   COHORT_PLACEHOLDERS,
 } from './allowLists';
 import { validatePathTemplate, renderPathTemplate } from './templatePath';
+import { builtinSlots } from '../registeredSlots';
 
 /** Conservative ReDoS shape check. Catches the catastrophic-backtracking
  *  family `(x+)+`, `(x*)*`, `(x+)*`, `(x{n,})+` — a group whose body ends
@@ -1350,25 +1351,33 @@ function parseStats(
 /* ------------------------------------------------------------------ */
 
 /**
- * Seeded from CORE_REVIEW_TABS + REVIEW_PRESETS (../../reviewTabs.ts) and
- * licensePlateSlot's keymap (../profiles/licensePlate.ts) — kept as a
- * literal here rather than importing those modules, to avoid this parser
- * depending on application wiring it is meant to sit in front of. Used as
- * the default for any `ParseContext` field the caller does not supply —
+ * The default for any `ParseContext` field the caller does not supply, so
  * a bare `parseSlotConfig(raw)` call (no ctx, e.g. every unit test that
  * isn't specifically exercising cross-slot collision) still rejects a
  * `urlId`/`endpointId`/`key`/keymap combo that would collide with a real
  * deployment's resolved state.
+ *
+ * Slot keys and keymap combos come from the build's own tier-1 slots
+ * (`builtinSlots`), read at call time. The review tab and preset ids are
+ * CORE_REVIEW_TABS + REVIEW_PRESETS (../../reviewTabs.ts), kept as a
+ * literal rather than importing that module, to avoid this parser
+ * depending on the application wiring it sits in front of.
  */
 function defaultParseContext(): Required<ParseContext> {
+  const claimedCombos = new Map<string, string>();
+  const takenKeys = new Set<string>();
+  for (const slot of builtinSlots) {
+    takenKeys.add(slot.key);
+    const keymap: Record<string, readonly string[] | undefined> =
+      slot.capabilities.queue?.keymap ?? {};
+    for (const [action, combos] of Object.entries(keymap)) {
+      for (const combo of combos ?? []) {
+        if (!claimedCombos.has(combo)) claimedCombos.set(combo, action);
+      }
+    }
+  }
   return {
-    claimedCombos: new Map([
-      ['d', 'reject'],
-      ['f', 'markFalsePositive'],
-      ['e', 'editBox'],
-      ['b', 'back'],
-      ['arrowleft', 'back'],
-    ]),
+    claimedCombos,
     takenUrlIds: new Set([
       'all',
       'uncertainty',
@@ -1384,7 +1393,7 @@ function defaultParseContext(): Required<ParseContext> {
       'model_disagreements',
       'coco_blind_spots',
     ]),
-    takenKeys: new Set(['license_plate']),
+    takenKeys,
   };
 }
 

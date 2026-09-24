@@ -3,16 +3,16 @@
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { getThumbUrl, getSourceImageWithBbox } from '$lib/api';
   import type { BBoxNorm, Crop } from '$lib/types';
-  import { slotOf } from '$lib/annotations/cropSlots';
-  import { slotForClassName } from '$lib/annotations/registeredSlots';
+  import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
+  import { slotRegistry } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import SlotBboxEditor from './SlotBboxEditor.svelte';
 
   interface Props {
     crop: Crop;
-    /** Slot whose sub-box/ring this card overlays. Defaults to whatever
-     *  slot is bound to the crop's own class — every current call site
-     *  relies on that default rather than passing one explicitly. */
+    /** Slot whose sub-box/ring this card overlays and edits. Defaults to
+     *  `subBoxSlotFor` over the registered slots; with no sub-box slot the
+     *  card shows no ring and no ✎. */
     slot?: SlotSpec;
     selected?: boolean;
     onclick?: (crop: Crop, e: MouseEvent) => void;
@@ -43,7 +43,7 @@
     ondetail,
   }: Props = $props();
 
-  const activeSlot = $derived(slot ?? slotForClassName(crop.class_name));
+  const activeSlot = $derived(slot ?? subBoxSlotFor(crop, slotRegistry.all));
 
   let expanded = $state<boolean>(false);
   let editorOpen = $state<boolean>(false);
@@ -233,18 +233,20 @@
       </span>
     {/if}
 
-    <button
-      type="button"
-      class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
-      onclick={(e) => {
-        e.stopPropagation();
-        editorOpen = true;
-      }}
-      aria-label="Edit {activeSlot?.label.singular ?? 'box'}"
-      title="Edit {activeSlot?.label.singular ?? 'box'} (✎)"
-    >
-      ✎
-    </button>
+    {#if activeSlot}
+      <button
+        type="button"
+        class="absolute top-1 right-7 rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+        onclick={(e) => {
+          e.stopPropagation();
+          editorOpen = true;
+        }}
+        aria-label="Edit {activeSlot.label.singular}"
+        title="Edit {activeSlot.label.singular} (✎)"
+      >
+        ✎
+      </button>
+    {/if}
 
     {#if ondetail}
       <button
@@ -378,7 +380,7 @@
   {/if}
 </div>
 
-{#if editorOpen}
+{#if editorOpen && activeSlot}
   <SlotBboxEditor
     {crop}
     slot={activeSlot}

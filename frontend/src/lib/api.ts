@@ -896,15 +896,10 @@ export function getSuspectedFalsePositives(
   );
 }
 
-// Wave 2 C14: 'lpr_blind_spots' -> 'detector_blind_spots',
-// 'lpr_low_conf_correct' -> 'low_conf_correct' (the wire ?mode= values
-// licensePlateSlot's cohorts now send — see licensePlate.ts).
-export type TrainingCohortMode =
-  | 'detector_blind_spots'
-  | 'low_conf_correct'
-  | 'disagreement'
-  | 'human_corrected'
-  | 'false_positives';
+// A region training-candidate `?mode=` value. Not a closed union: the
+// modes are served (`GET {API_PREFIX}/training_cohorts`), and the server
+// rejects one it doesn't know.
+export type TrainingCohortMode = string;
 
 export function getTrainingCandidates(
   mode: TrainingCohortMode,
@@ -2347,7 +2342,7 @@ export interface BatchStatusInvalidEntry {
 export async function batchRegionStatus(
   spec: SlotSpec,
   cropIds: string[],
-  status: 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
+  status: string,
   opts: { verified?: boolean; labelSource?: string } = {},
   signal?: AbortSignal,
 ): Promise<{

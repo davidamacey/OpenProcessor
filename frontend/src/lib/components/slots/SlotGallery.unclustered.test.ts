@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotGallery from './SlotGallery.svelte';
 import { createSlotGalleryController } from '../../../routes/clusters/slotGalleryController.svelte';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Cluster } from '$lib/types';
 
 vi.mock('$lib/api', async () => {
@@ -63,7 +64,7 @@ afterEach(() => {
 describe('SlotGallery — plates reachable when only the FP bucket is clustered', () => {
   it('offers a "Browse all plates" entry point alongside the FP-only cluster grid', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [fpCluster()] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
@@ -76,7 +77,7 @@ describe('SlotGallery — plates reachable when only the FP bucket is clustered'
   it('clicking it opens the flat gallery view (viewingAll) with no region_cluster_id filter', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [fpCluster()] } as never);
     vi.mocked(getRegions).mockResolvedValue({ items: [], total: 0 } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
@@ -101,7 +102,7 @@ describe('SlotGallery — plates reachable when only the FP bucket is clustered'
 
   it('never leaks the stray `gallery.pager.items` template literal into the counter strip', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [fpCluster()] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 

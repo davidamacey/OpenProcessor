@@ -48,3 +48,23 @@ export function slotOf(
 ): SlotData | null {
   return spec ? (crop.slots?.[spec.key] ?? null) : null;
 }
+
+/**
+ * The sub-box slot a crop card overlays and edits. A region lives on an
+ * item of a *different* class than the slot's own bound class, so the
+ * crop's own class never selects it (the same reasoning as
+ * `CropMetaPanel`'s `presentSlots`). Picks the first sub-box-capable slot
+ * this crop carries evidence for; with no evidence, the only sub-box slot
+ * when exactly one is registered (so a box can still be drawn); otherwise
+ * none.
+ */
+export function subBoxSlotFor(
+  crop: { slots?: Record<SlotKey, SlotData> },
+  slots: readonly SlotSpec[],
+): SlotSpec | undefined {
+  const boxSlots = slots.filter((s) => s.capabilities.subBox != null);
+  return (
+    boxSlots.find((s) => slotIsPresent(slotOf(crop, s))) ??
+    (boxSlots.length === 1 ? boxSlots[0] : undefined)
+  );
+}

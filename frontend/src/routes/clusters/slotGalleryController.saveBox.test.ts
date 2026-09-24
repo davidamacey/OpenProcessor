@@ -11,7 +11,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSlotGalleryController } from './slotGalleryController.svelte';
-import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import type { Crop } from '$lib/types';
 import type { SlotData } from '$lib/annotations/types';
 import type { RegionBrowseItem } from '$lib/api';
@@ -32,7 +32,7 @@ function fakeCropWithSlot(id: string, slot: SlotData): Crop {
     cluster_subid: null,
     test_holdout: false,
     updated_at: '',
-    slots: { [licensePlateSlot.key]: slot },
+    slots: { [widgetTagSlot.key]: slot },
   } as Crop;
 }
 
@@ -76,9 +76,9 @@ describe('saveBox — no redundant write', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     gallery.editCrop = fakeCropWithSlot('c1', {
-      key: licensePlateSlot.key,
+      key: widgetTagSlot.key,
       subBox: {
         rawXyxy: [0.4, 0.45, 0.6, 0.55],
         frame: 'source',
@@ -113,9 +113,9 @@ describe('saveBox — no redundant write', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     gallery.editCrop = fakeCropWithSlot('c2', {
-      key: licensePlateSlot.key,
+      key: widgetTagSlot.key,
       subBox: {
         rawXyxy: null,
         frame: 'source',

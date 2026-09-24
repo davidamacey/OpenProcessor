@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotGallery from './SlotGallery.svelte';
 import { createSlotGalleryController } from '../../../routes/clusters/slotGalleryController.svelte';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 
 vi.mock('$lib/api', async () => {
@@ -57,7 +58,7 @@ describe('SlotGallery detector filter — served vocabulary (m9)', () => {
       { id: 'human', label: 'Human', role: 'human', filterable: false },
     ];
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
@@ -74,7 +75,7 @@ describe('SlotGallery detector filter — served vocabulary (m9)', () => {
   it('renders only the "any" option when the vocabulary has no filterable detectors', async () => {
     regionVocabularyStore.detectors = [];
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 

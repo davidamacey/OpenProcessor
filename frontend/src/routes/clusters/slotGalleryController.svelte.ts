@@ -1,23 +1,17 @@
 /**
- * Plate-gallery controller — the state + logic behind the license_plate
- * "plates list" view on /clusters, extracted verbatim out of
- * clusters/+page.svelte (P2.6, docs/genericization-plan-2026-09-13.md
- * §3.4/§5a) so `SlotGallery.svelte` can own the rendering while this
- * module owns the ~30-item state/logic surface: the plate pager,
- * multi-select, the secondary AHC plate-clustering sub-system (buckets,
- * sub-cluster refine, FP centroids, suspected-FP triage), the filter
- * strip, and the bbox-editor modal wiring.
+ * Slot-gallery controller — the state + logic behind a region slot's
+ * gallery view on /clusters (`SlotGallery.svelte` renders it): the
+ * browse pager over the slot's `queue.browsePath`, multi-select, the
+ * secondary region-clustering sub-system (buckets, sub-cluster refine,
+ * FP centroids, suspected-FP triage), the filter strip, and the
+ * bbox-editor modal wiring.
  *
- * Follows this codebase's existing `createPager`/`createSelection`
- * factory-function convention (a plain object of `$state` fields +
- * closures, not a class) rather than inventing a new pattern for this
- * extraction.
+ * One controller per slot: `createSlotGalleryController(slot)` reads every
+ * slot-specific value (browse path, lifecycle states, slot key) from the
+ * `SlotSpec` it is given, never from a specific profile.
  *
- * Deliberately NOT parameterized yet (P2.6 is a verbatim move; P2.7
- * parameterizes). Every field/method name here is identical to what
- * `clusters/+page.svelte` used to have inline — this is the "moves
- * everything the plate view needs, changes nothing about it" half of
- * the plan's two-commit split.
+ * Follows this codebase's `createPager`/`createSelection` factory-function
+ * convention (a plain object of `$state` fields + closures, not a class).
  */
 
 import {
@@ -40,48 +34,36 @@ import { createSelection } from '$lib/selection.svelte';
 import type { Cluster, Crop } from '$lib/types';
 import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
-import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+import type { SlotSpec } from '$lib/annotations/types';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
-// m9 (2026-09-24 interactive pass): the review tab reads
-// confirm/reject/false_positive status from the served
-// `GET {API_PREFIX}/regions/statuses` (`regionStatusesStore`); this gallery
-// used to read only the hand-maintained slot-profile literal. Now tries
-// the served value first and falls back to the profile — same
-// degrade-to-static-default contract `regionStatusesStore`'s own doc
-// comment documents, so a missing/pre-rollout endpoint never breaks the
-// bulk-status buttons.
-export function PLATE_CONFIRM_STATE(): string {
-  return (
-    regionStatusesStore.confirmStatus ??
-    licensePlateSlot.capabilities.lifecycle!.confirmState
-  );
-}
-export function PLATE_REJECT_STATE(): string {
-  return (
-    regionStatusesStore.rejectStatus ??
-    licensePlateSlot.capabilities.lifecycle!.rejectState
-  );
-}
-export function PLATE_FALSE_POSITIVE_STATE(): string {
-  return (
-    regionStatusesStore.falsePositiveStatus ??
-    licensePlateSlot.capabilities.lifecycle!.falsePositiveState!
-  );
-}
-
-/** Mirrors FALSE_POSITIVE_PLATE_CLUSTER_ID in the API (clustering/orchestrator.py). */
-export const FP_PLATE_CLUSTER_ID = -100;
+// TODO(naming-w2): switch the FP-bucket check to the served
+// `cluster_kind === 'false_positive'` on the selected region cluster and
+// delete this constant. Until then this is the one place the frontend
+// mirrors the backend's reserved false-positive region-cluster id.
+export const FALSE_POSITIVE_REGION_CLUSTER_ID = -100;
 
 const GALLERY_PAGE_SIZE = 60;
 
-export function createSlotGalleryController() {
+export function createSlotGalleryController(slot: SlotSpec) {
+  // m9 (2026-09-24 interactive pass): the served `GET
+  // {API_PREFIX}/regions/statuses` confirm/reject/false-positive statuses
+  // win; the slot's own lifecycle states are the fallback for a
+  // missing/pre-rollout endpoint, so the bulk-status buttons never break.
+  const confirmState = (): string | undefined =>
+    regionStatusesStore.confirmStatus ?? slot.capabilities.lifecycle?.confirmState;
+  const rejectState = (): string | undefined =>
+    regionStatusesStore.rejectStatus ?? slot.capabilities.lifecycle?.rejectState;
+  const falsePositiveState = (): string | undefined =>
+    regionStatusesStore.falsePositiveStatus ??
+    slot.capabilities.lifecycle?.falsePositiveState;
+
+  const browsePath = slot.capabilities.queue?.browsePath;
   const pager = createPager<RegionBrowseItem>({
-    fetchPage: async (page) =>
-      await getRegions(
-        licensePlateSlot.capabilities.queue!.browsePath,
-        browseQuery(page),
-      ),
+    fetchPage: async (page) => {
+      if (!browsePath) throw new Error(`slot "${slot.key}" declares no browse path`);
+      return await getRegions(browsePath, browseQuery(page));
+    },
     keyOf: (p) => p.crop_id,
   });
 
@@ -428,22 +410,18 @@ export function createSlotGalleryController() {
     }
   }
 
-  async function applyStatus(cropIds: string[], status: string): Promise<void> {
-    if (cropIds.length === 0 || busy) return;
+  async function applyStatus(
+    cropIds: string[],
+    status: string | undefined,
+  ): Promise<void> {
+    if (cropIds.length === 0 || busy || !status) return;
     busy = true;
     sel.clear();
     try {
-      // Callers only ever pass one of the profile's own state values
-      // (PLATE_CONFIRM_STATE / PLATE_REJECT_STATE / PLATE_FALSE_POSITIVE_STATE);
-      // the cast just satisfies batchRegionStatus's still-literal wire
-      // type (that union is api.ts's Wave 2 concern, not this file's).
+      // The server validates `status` against its own /regions/statuses.
       // `region_verified` is not sent — the server derives it from
       // `region_status` and ignores the field when present.
-      const res = await batchRegionStatus(
-        licensePlateSlot,
-        cropIds,
-        status as 'detected' | 'no_region_visible' | 'verify_rejected' | 'false_positive',
-      );
+      const res = await batchRegionStatus(slot, cropIds, status);
       // Render exactly what the server wrote. `items` covers every crop
       // actually updated; conflicted/invalid ids are left untouched here
       // and reported in the toast below.
@@ -491,7 +469,7 @@ export function createSlotGalleryController() {
     const cropId = item.id;
     toastStore.success('Plate saved');
     editCrop = null;
-    const slotData = item.slots?.[licensePlateSlot.key];
+    const slotData = item.slots?.[slot.key];
     // Patch just this card in place rather than reloading page 1 (which
     // would wipe the list and reset scroll). The plate thumbnail is a
     // server-rendered URL, so bust its cache to pull the re-cropped box.
@@ -526,7 +504,7 @@ export function createSlotGalleryController() {
     pager.items = pager.items.map((p) => {
       const restored = byId.get(p.crop_id);
       if (!restored) return p;
-      const slotData = restored.slots?.[licensePlateSlot.key];
+      const slotData = restored.slots?.[slot.key];
       return {
         ...p,
         region_status: slotData?.lifecycle?.status ?? p.region_status,
@@ -544,6 +522,12 @@ export function createSlotGalleryController() {
   }
 
   return {
+    get slot() {
+      return slot;
+    },
+    confirmState,
+    rejectState,
+    falsePositiveState,
     get pager() {
       return pager;
     },

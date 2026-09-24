@@ -34,16 +34,14 @@
   import { bboxNormToXYXY } from '$lib/bboxFrames';
   import { projectFromParent } from '$lib/annotations/readSlot';
   import { slotOf } from '$lib/annotations/cropSlots';
-  import { slotForClassName } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { toastStore } from '$stores/toast.svelte';
   import type { BBoxNorm, Crop } from '$lib/types';
 
   interface Props {
     crop: Crop;
-    /** Slot whose sub-box this modal edits. Defaults to whatever slot is
-     *  bound to the crop's own class, matching CropCard's own default. */
-    slot?: SlotSpec;
+    /** Slot whose sub-box this modal edits. */
+    slot: SlotSpec;
     /** Called after a successful save (or clear) with the server's
      *  returned item. */
     onsave?: (item: Crop) => void;
@@ -57,7 +55,7 @@
 
   let { crop, slot, onsave, onclose, thumbSize }: Props = $props();
 
-  const activeSlot = $derived(slot ?? slotForClassName(crop.class_name));
+  const activeSlot = $derived(slot);
   const editorThumbSize = $derived(
     thumbSize ?? activeSlot?.capabilities.subBox?.editor.thumbSize ?? 512,
   );

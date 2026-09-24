@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotGallery from './SlotGallery.svelte';
 import { createSlotGalleryController } from '../../../routes/clusters/slotGalleryController.svelte';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
@@ -88,7 +89,7 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
       },
     ];
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
@@ -101,7 +102,7 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
 
   it('renders only the "any" option when the status vocabulary is empty', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 
@@ -122,7 +123,7 @@ describe('SlotGallery status filter — served vocabulary (dq-region)', () => {
       },
     ];
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [] } as never);
-    const gallery = createSlotGalleryController();
+    const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.loadClusters();
     const el = renderGallery(gallery);
 

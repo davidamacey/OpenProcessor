@@ -55,6 +55,7 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { slotRegistry, registeredSlots } from '$lib/annotations/registeredSlots';
+  import type { SlotSpec } from '$lib/annotations/types';
   import {
     CORE_COHORTS,
     cohortsForClass,
@@ -864,6 +865,16 @@
     }
   }
 
+  /** The slot a region cohort's rows render with: the slot bound to this
+   *  class group, else the only registered queue slot with a sub-box.
+   *  `undefined` renders no region cards rather than guessing a slot. */
+  function regionSlotForGroup(group: CohortGroup): SlotSpec | undefined {
+    const bound = slotRegistry.forClass(group.classId, classesById)[0];
+    if (bound) return bound;
+    const regionSlots = slotRegistry.queues.filter((s) => s.capabilities.subBox != null);
+    return regionSlots.length === 1 ? regionSlots[0] : undefined;
+  }
+
   /** Click target from `reviewTarget` (§9.3 step 7) — kills the last
    *  hardcoded `?tab=plates` literal on this route. */
   function openCohortItem(
@@ -1220,11 +1231,15 @@
                 >
                   {#each cohortPreview as item ('crop_id' in item ? item.crop_id : item.id)}
                     {#if activeCohort.rowKind === 'slot'}
-                      <SlotCard
-                        crop={item as RegionBrowseItem}
-                        onclick={(p) => openCohortItem(group, activeCohort, p)}
-                        compact
-                      />
+                      {@const cohortSlot = regionSlotForGroup(group)}
+                      {#if cohortSlot}
+                        <SlotCard
+                          crop={item as RegionBrowseItem}
+                          slot={cohortSlot}
+                          onclick={(p) => openCohortItem(group, activeCohort, p)}
+                          compact
+                        />
+                      {/if}
                     {:else}
                       <CropCard
                         crop={item as Crop}

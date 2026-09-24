@@ -1,27 +1,16 @@
 /**
- * C4b (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.3):
- * slotGalleryController.svelte.ts and SlotGallery.svelte used to
- * hardcode 'false_positive' | 'no_plate_visible' | 'detected' as raw
- * lifecycle-state literals — a state literal that silently means
- * nothing for another slot, and (per the plan) the highest-risk class
- * of straggler in this codebase.
- *
- * m9 (2026-09-24 interactive pass): PLATE_CONFIRM_STATE / etc. were
- * `export const`s derived from licensePlateSlot alone — the plate
- * gallery's bulk-status buttons ignored the served
- * `GET {API_PREFIX}/regions/statuses` vocabulary the review tab already
- * reads. They're now functions that prefer `regionStatusesStore`'s
- * loaded value and fall back to the profile literal only when the
- * store hasn't loaded (or the endpoint 404s) — same degrade contract
- * `regionStatuses.svelte.ts`'s own doc comment describes.
+ * The gallery's bulk-status buttons read confirm / reject / false-positive
+ * states from the served `GET {API_PREFIX}/regions/statuses` vocabulary
+ * (`regionStatusesStore`) first, and fall back to the controller's own
+ * slot lifecycle only when the store hasn't loaded (or the endpoint 404s),
+ * the same degrade contract `regionStatuses.svelte.ts` documents. The
+ * states come from the slot the controller was created with, never from
+ * a specific profile.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  PLATE_CONFIRM_STATE,
-  PLATE_REJECT_STATE,
-  PLATE_FALSE_POSITIVE_STATE,
-} from './slotGalleryController.svelte';
-import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
+import { createSlotGalleryController } from './slotGalleryController.svelte';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import type { SlotSpec } from '$lib/annotations/types';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 afterEach(() => {
@@ -30,21 +19,49 @@ afterEach(() => {
   regionStatusesStore.falsePositiveStatus = null;
 });
 
-describe('slotGalleryController status constants', () => {
-  it('fall back to licensePlateSlot when the served vocabulary has not loaded', () => {
-    const lifecycle = licensePlateSlot.capabilities.lifecycle!;
-    expect(PLATE_CONFIRM_STATE()).toBe(lifecycle.confirmState);
-    expect(PLATE_REJECT_STATE()).toBe(lifecycle.rejectState);
-    expect(PLATE_FALSE_POSITIVE_STATE()).toBe(lifecycle.falsePositiveState);
+describe('slotGalleryController lifecycle states', () => {
+  it("fall back to the controller's own slot when the served vocabulary has not loaded", () => {
+    const slot: SlotSpec = {
+      ...widgetTagSlot,
+      capabilities: {
+        ...widgetTagSlot.capabilities,
+        lifecycle: {
+          ...widgetTagSlot.capabilities.lifecycle!,
+          confirmState: 'slot_confirm',
+          rejectState: 'slot_reject',
+          falsePositiveState: 'slot_fp',
+        },
+      },
+    };
+    const gallery = createSlotGalleryController(slot);
+    expect(gallery.slot).toBe(slot);
+    expect(gallery.confirmState()).toBe('slot_confirm');
+    expect(gallery.rejectState()).toBe('slot_reject');
+    expect(gallery.falsePositiveState()).toBe('slot_fp');
   });
 
-  it('prefer the served regionStatusesStore values once loaded, over the static profile', () => {
+  it('prefer the served regionStatusesStore values once loaded, over the slot', () => {
     regionStatusesStore.confirmStatus = 'served_confirm';
     regionStatusesStore.rejectStatus = 'served_reject';
     regionStatusesStore.falsePositiveStatus = 'served_fp';
 
-    expect(PLATE_CONFIRM_STATE()).toBe('served_confirm');
-    expect(PLATE_REJECT_STATE()).toBe('served_reject');
-    expect(PLATE_FALSE_POSITIVE_STATE()).toBe('served_fp');
+    const gallery = createSlotGalleryController(widgetTagSlot);
+    expect(gallery.confirmState()).toBe('served_confirm');
+    expect(gallery.rejectState()).toBe('served_reject');
+    expect(gallery.falsePositiveState()).toBe('served_fp');
+  });
+
+  it('has no false-positive state for a slot that declares none', () => {
+    const slot: SlotSpec = {
+      ...widgetTagSlot,
+      capabilities: {
+        ...widgetTagSlot.capabilities,
+        lifecycle: {
+          ...widgetTagSlot.capabilities.lifecycle!,
+          falsePositiveState: undefined,
+        },
+      },
+    };
+    expect(createSlotGalleryController(slot).falsePositiveState()).toBeUndefined();
   });
 });

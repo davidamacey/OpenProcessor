@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import SlotCard from './SlotCard.svelte';
 import type { RegionBrowseItem } from '$lib/api';
+import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 
 function fakeRegionItem(overrides: Partial<RegionBrowseItem> = {}): RegionBrowseItem {
   return {
@@ -48,7 +49,7 @@ let instance: unknown;
 function renderCard(crop: RegionBrowseItem) {
   target = document.createElement('div');
   document.body.appendChild(target);
-  instance = mount(SlotCard, { target, props: { crop } });
+  instance = mount(SlotCard, { target, props: { crop, slot: widgetTagSlot } });
   flushSync();
   return target;
 }

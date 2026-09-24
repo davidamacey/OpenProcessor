@@ -16,13 +16,9 @@
   import SlotBboxEditor from '$lib/components/SlotBboxEditor.svelte';
   import SlotCard from '$lib/components/SlotCard.svelte';
   import {
-    FP_PLATE_CLUSTER_ID,
-    PLATE_CONFIRM_STATE,
-    PLATE_REJECT_STATE,
-    PLATE_FALSE_POSITIVE_STATE,
+    FALSE_POSITIVE_REGION_CLUSTER_ID,
     type SlotGalleryController,
   } from '../../../routes/clusters/slotGalleryController.svelte';
-  import { licensePlateSlot } from '$lib/annotations/profiles/licensePlate';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
@@ -97,15 +93,18 @@
           class="input-sm w-16"
         />
       </label>
-      <label class="flex items-center gap-1.5">
-        <span class="text-zinc-400">Text</span>
-        <input
-          type="text"
-          bind:value={gallery.textQuery}
-          placeholder="e.g. S14"
-          class="input-sm w-28"
-        />
-      </label>
+      {#if gallery.slot.capabilities.queue?.textFilter}
+        {@const textFilter = gallery.slot.capabilities.queue.textFilter}
+        <label class="flex items-center gap-1.5">
+          <span class="text-zinc-400">{textFilter.label}</span>
+          <input
+            type="text"
+            bind:value={gallery.textQuery}
+            placeholder={textFilter.placeholder}
+            class="input-sm w-28"
+          />
+        </label>
+      {/if}
 
       <!-- Top-N largest-crop gate. The sort runs on the largest 1-3
          crops, so this is the key filter for the plates that matter. -->
@@ -210,7 +209,7 @@
         >
           ← Clusters
         </button>
-        {#if gallery.selectedCluster === FP_PLATE_CLUSTER_ID}
+        {#if gallery.selectedCluster === FALSE_POSITIVE_REGION_CLUSTER_ID}
           <span
             class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
           >
@@ -275,7 +274,7 @@
           disabled={gallery.busy}
           class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
           onclick={() =>
-            gallery.applyStatus([...gallery.sel.ids], PLATE_FALSE_POSITIVE_STATE())}
+            gallery.applyStatus([...gallery.sel.ids], gallery.falsePositiveState())}
         >
           ✗ Mark false positive
         </button>
@@ -283,7 +282,7 @@
           type="button"
           disabled={gallery.busy}
           class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
-          onclick={() => gallery.applyStatus([...gallery.sel.ids], PLATE_REJECT_STATE())}
+          onclick={() => gallery.applyStatus([...gallery.sel.ids], gallery.rejectState())}
         >
           No plate
         </button>
@@ -291,7 +290,8 @@
           type="button"
           disabled={gallery.busy}
           class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
-          onclick={() => gallery.applyStatus([...gallery.sel.ids], PLATE_CONFIRM_STATE())}
+          onclick={() =>
+            gallery.applyStatus([...gallery.sel.ids], gallery.confirmState())}
         >
           ✓ Verify
         </button>
@@ -414,11 +414,12 @@
         {#each g.items as p (p.crop_id)}
           <SlotCard
             crop={p}
+            slot={gallery.slot}
             selected={gallery.sel.has(p.crop_id)}
             onclick={gallery.toggleSelect}
             onedit={gallery.openEditor}
             onmarkfp={(c) =>
-              gallery.applyStatus([c.crop_id], PLATE_FALSE_POSITIVE_STATE())}
+              gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
           />
         {/each}
       </div>
@@ -445,7 +446,7 @@
 {#if gallery.editCrop}
   <SlotBboxEditor
     crop={gallery.editCrop}
-    slot={licensePlateSlot}
+    slot={gallery.slot}
     onsave={gallery.saveBox}
     onclose={() => (gallery.editCrop = null)}
   />
