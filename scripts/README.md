@@ -69,6 +69,8 @@ see [`docs/CURATION.md`](../docs/CURATION.md) for the full guide.
 | `sam_worker_main.py` | Detection-cascade worker entrypoint (`curation-detection-worker` service). |
 | `worker/` | Shared worker library: cascade runner, HTTP clients (segmenter, VLM), state/checkpoint handling. |
 | `backfill_scores.py` | One-off CLI to backfill item-quality scores onto existing indexed items. |
+| `cluster_raw_labels.py` | Clusters the VLM's free-text class labels (text embedding + average-linkage) into candidate sub-classes ranked by item volume, and writes the cluster fields `GET /curation/review/raw_label_clusters` reads. `--dry-run --report` to preview. |
+| `seed_class_registry.py` | Seeds / extends `class_registry.json` from a detector ONNX's embedded `names` (or a `data.yaml`), append-only; `--check` fails on model-vs-registry class-order drift. |
 | `seed_live_harness.py` | Seeds the throwaway `docker/test/compose.yml` live-verification stack with deterministic data — **never point this at a real deployment** (it refuses to run against an index without a `verify_` prefix). |
 | `bakeoff/` | Detector bake-off evaluation harness (`curation-evaluator` compose service runs this on demand). |
 
