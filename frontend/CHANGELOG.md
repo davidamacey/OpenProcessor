@@ -1090,6 +1090,19 @@ which the old check (`combo === 'shift+\``) never matched — fixed
     followed by a re-acquire. Both stores now defer the actual teardown
     by one macrotask, cancelled by a re-acquire before it fires — a
     burst of release-then-reacquire now coalesces into a no-op.
+  - **p1** — a 422 validation-error toast/modal message showed the raw
+    pydantic sentence verbatim ("String should match pattern
+    '^[a-z0-9_]+$'"), no field context. `errorDetail()`'s array branch
+    now runs each `{loc, msg}` entry through `formatValidationEntry()`,
+    which prefixes the real field name from `loc` ("name: must match
+    pattern ^[a-z0-9_]+$") and reworks that one common phrasing — still
+    entirely the server's own field/regex, nothing invented.
+  - **p10** — CLAUDE.md's routes table still described `/` as a
+    reachable "legacy" stats/recent-crops/Gemma-run page; it's a bare
+    307 redirect to `/dashboard` today (`src/routes/+page.ts`, merged
+    2026-09), and the top-bar logo/"Dashboard" link both point at
+    `/dashboard` directly, not `/`. Removed the stale table row and
+    fixed the routes-section intro sentence.
 - Dashboard/export stats resilience (frontend-coverage-audit-2026-09-24.md
   G1): `DatasetStats.svelte` no longer crashes when `GET /stats/dataset`
   (or its SSE `snapshot`/`stats` frames) returns an `{error}` envelope —

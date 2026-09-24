@@ -5552,22 +5552,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "hdd_source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Hdd Source"
-            }
-          },
-          {
             "description": "Ingest source tag (wire `source`).",
             "in": "query",
             "name": "source",
@@ -7818,10 +7802,10 @@
         ]
       }
     },
-    "/curation/ingest/sam_drain": {
+    "/curation/ingest/region_drain": {
       "get": {
-        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ~10s and proceeds when ``pending`` reaches 0 (with a\nstability window).\n\nReturns a dict with five keys (transitional legacy-name rollup):\n\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n                              Legacy ``'pending'`` rows roll up here\n                              too during the migration window.\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n                              Legacy ``'pending_verify'`` rows included.\n* ``pending``              — legacy alias, sum of any rows still on\n                              the old short name (transitional).\n* ``pending_verify``       — legacy alias for the same reason.\n* ``total_unfinished``     — sum of all four; what the walker polls.",
-        "operationId": "ingest_sam_drain_curation_ingest_sam_drain_get",
+        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ~10s and proceeds when ``total_unfinished`` reaches 0\n(with a stability window).\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what the walker polls.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names (S5), so there is no legacy rollup.",
+        "operationId": "ingest_region_drain_curation_ingest_region_drain_get",
         "responses": {
           "200": {
             "content": {
@@ -7830,7 +7814,7 @@
                   "additionalProperties": {
                     "type": "integer"
                   },
-                  "title": "Response Ingest Sam Drain Curation Ingest Sam Drain Get",
+                  "title": "Response Ingest Region Drain Curation Ingest Region Drain Get",
                   "type": "object"
                 }
               }
@@ -7838,7 +7822,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Ingest Sam Drain",
+        "summary": "Ingest Region Drain",
         "tags": [
           "Curation"
         ]
@@ -7846,7 +7830,7 @@
     },
     "/curation/ingest/status": {
       "get": {
-        "description": "Recent ingest summary — counts grouped by hdd_source.",
+        "description": "Recent ingest summary — counts grouped by source.",
         "operationId": "ingest_status_curation_ingest_status_get",
         "responses": {
           "200": {
@@ -9494,6 +9478,30 @@
         ]
       }
     },
+    "/curation/regions/vocabulary": {
+      "get": {
+        "description": "The deployment-configured detector/segmenter/verifier vocabulary\n(W0: naming sweep finding m9).\n\n``{detectors: [{id, label, role, filterable}], region_sources:\n[{id, label, role}], chain_actors: [{id, label, role}]}``. Built from\nthe active region profile / ingest profiles / ``OP_VLM_MODEL`` --\nnever a hardcoded model id. ``filterable`` marks the values that can\nappear in stored ``region_detector`` (the detector filter's exact\noption list). The frontend renders this instead of hardcoding a\nlabel/palette map keyed on private model ids.",
+        "operationId": "regions_vocabulary_curation_regions_vocabulary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Regions Vocabulary Curation Regions Vocabulary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Regions Vocabulary",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/review/new_class_proposals/resolve": {
       "post": {
         "description": "Bulk-resolve every ``vlm_new_class_pending`` item proposing ``label``.\n\nUnlike relabeling ``GET /review/new_class_proposals/summary``'s\n``sample_crop_ids`` (capped at 20) one at a time, this selects and\nwrites **every** matching, still-pending item for the term in one\ncall — the backend owns the \"resolve this term\" decision, not the\nclient re-issuing ``PUT /crops/batch_label`` per page of samples.\n\nExactly one of ``class_id`` (map to an existing registry class) /\n``create`` (register a new one first, through the same path as\n``POST /classes``) must be set — ``422`` otherwise. An unknown\n``class_id`` is ``400``; a duplicate ``create.class_name`` is ``409``\nand writes nothing. ``create`` happens before any item write — if\nnothing matches, the class is still created (the operator asked for\nit) and ``matched`` reports ``0``.\n\nEach matching item is written independently via ``occ_update_one``\n(bounded concurrency), re-checking at write time that it is still\npending this exact proposal; an item whose state changed in the\nmeantime is reported in ``skipped``, not written. Every write records\na restorable ``class_id_history`` snapshot, so\n``POST /crops/label/undo_batch`` on ``updated_ids`` puts the item\nback exactly as a pending proposal.\n\n``?dry_run=true`` reports ``matched`` / ``matched_ids`` and writes or\ncreates nothing (``class_id`` is ``null`` when ``create`` was given).",
@@ -9665,6 +9673,38 @@
           }
         },
         "summary": "Review Raw Label Clusters",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/review/tabs": {
+      "get": {
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) — the frontend renders this instead of hardcoding\ntab labels. Must be registered before ``GET /review/{tab}`` so it\nisn't shadowed as ``tab='tabs'``.",
+        "operationId": "review_tabs_curation_review_tabs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "title": "Response Review Tabs Curation Review Tabs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Review Tabs",
         "tags": [
           "Curation"
         ]
@@ -10760,7 +10800,7 @@
     },
     "/curation/stats/dataset": {
       "get": {
-        "description": "Overall dataset balance + label-source + pipeline breakdown.\n\nSingle ``_search?size=0`` with composite aggregations. Backwards-\ncompatible: legacy callers still see ``total_crops``, ``validated``,\n``test_holdout``, ``by_source``.\n\nNew fields for the dashboard:\n\n- ``as_of`` — ISO8601 timestamp of the query.\n- ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts\n  derived from ``class_source`` plus the ``class_validated`` /\n  region-validated flags.\n- ``unlabeled.{pending_detection, pending_verification, no_label_source}`` —\n  the region-status field plus crops with no ``class_id``.\n- ``in_progress.sam_drain_total_unfinished`` — matches the value\n  returned by ``/curation/ingest/sam_drain``.\n- ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —\n  sourced from the persisted ``auto_label_job`` state when present;\n  ``cluster_count`` falls back to live ``cluster_id`` cardinality.",
+        "description": "Overall dataset balance + label-source + pipeline breakdown.\n\nSingle ``_search?size=0`` with composite aggregations. Backwards-\ncompatible: legacy callers still see ``total_crops``, ``validated``,\n``test_holdout``, ``by_source``.\n\nNew fields for the dashboard:\n\n- ``as_of`` — ISO8601 timestamp of the query.\n- ``labeled.{by_human, by_vlm, by_classifier, other}`` — rolled-up counts\n  derived from ``class_source`` plus the ``class_validated`` /\n  region-validated flags.\n- ``unlabeled.{pending_detection, pending_verification, no_label_source}`` —\n  the region-status field plus crops with no ``class_id``.\n- ``in_progress.region_drain_total_unfinished`` — matches the value\n  returned by ``/curation/ingest/region_drain``.\n- ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —\n  sourced from the persisted ``auto_label_job`` state when present;\n  ``cluster_count`` falls back to live ``cluster_id`` cardinality.",
         "operationId": "stats_dataset_curation_stats_dataset_get",
         "responses": {
           "200": {

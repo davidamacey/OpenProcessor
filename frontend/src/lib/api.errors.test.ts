@@ -4,7 +4,7 @@
  * `{detail: {error}}` body must still yield readable text.
  */
 import { describe, expect, it } from 'vitest';
-import { ApiError, unknownStrategyDetail } from './api';
+import { ApiError, formatValidationEntry, unknownStrategyDetail } from './api';
 
 const body422 = {
   detail: {
@@ -55,10 +55,13 @@ describe('Pydantic validation-error arrays (W4, 2026-09-24)', () => {
     ],
   };
 
-  it('extracts the msg field from a single-entry validation array', () => {
+  it('p1 (2026-09-24 interactive pass): prefixes the field name and reworks the raw pydantic pattern phrasing', () => {
     const e = new ApiError(422, '/curation/classes', nameValidationBody);
-    expect(e.detail).toBe("String should match pattern '^[a-z0-9_]+$'");
-    expect(e.message).toContain("String should match pattern '^[a-z0-9_]+$'");
+    expect(e.detail).toBe('name: must match pattern ^[a-z0-9_]+$');
+    expect(e.message).toContain('name: must match pattern ^[a-z0-9_]+$');
+    // Never the raw pydantic sentence verbatim — the field context and
+    // reworded phrasing are the fix.
+    expect(e.detail).not.toContain('String should match pattern');
   });
 
   it('joins multiple validation entries with "; "', () => {
@@ -72,5 +75,47 @@ describe('Pydantic validation-error arrays (W4, 2026-09-24)', () => {
   it('falls back to null (not a crash) when no entry has a msg string', () => {
     const e = new ApiError(422, '/x', { detail: [{ loc: ['body'] }] });
     expect(e.detail).toBeNull();
+  });
+});
+
+describe('formatValidationEntry (p1, 2026-09-24 interactive pass)', () => {
+  it('prefixes the last string loc segment as the field name', () => {
+    expect(formatValidationEntry({ loc: ['body', 'name'], msg: 'field required' })).toBe(
+      'name: field required',
+    );
+  });
+
+  it('skips "body"/"query" loc segments to find the real field', () => {
+    expect(formatValidationEntry({ loc: ['query', 'class_id'], msg: 'invalid' })).toBe(
+      'class_id: invalid',
+    );
+  });
+
+  it('reworks "String should match pattern \'X\'" into "must match pattern X"', () => {
+    expect(
+      formatValidationEntry({
+        loc: ['body', 'name'],
+        msg: "String should match pattern '^[a-z0-9_]+$'",
+      }),
+    ).toBe('name: must match pattern ^[a-z0-9_]+$');
+  });
+
+  it('passes an unrecognized message through unreworded', () => {
+    expect(
+      formatValidationEntry({ loc: ['body', 'x'], msg: 'some other pydantic error' }),
+    ).toBe('x: some other pydantic error');
+  });
+
+  it('falls back to the bare message when loc has no field segment', () => {
+    expect(formatValidationEntry({ loc: ['body'], msg: 'bare message' })).toBe(
+      'bare message',
+    );
+    expect(formatValidationEntry({ msg: 'no loc at all' })).toBe('no loc at all');
+  });
+
+  it('returns null for a non-object entry or a missing/non-string msg', () => {
+    expect(formatValidationEntry(null)).toBeNull();
+    expect(formatValidationEntry('a string')).toBeNull();
+    expect(formatValidationEntry({ loc: ['body', 'x'] })).toBeNull();
   });
 });

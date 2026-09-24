@@ -127,6 +127,30 @@ const DETAIL_MAX_CHARS = 200;
  * the app shows `API 422 http://…/batch_label` and the operator has no idea
  * what the server objected to — the callsites all render `Error.message`.
  */
+/**
+ * p1 (2026-09-24 interactive pass): humanize one pydantic/FastAPI
+ * validation-error entry (`{loc: ['body', 'name'], msg: "String should
+ * match pattern '^[a-z0-9_]+$'", ...}`) into "name: must match pattern
+ * ^[a-z0-9_]+$" — the field it's actually complaining about, and the
+ * one most common message shape reworded away from pydantic's internal
+ * phrasing. Still entirely the server's own field name / regex / value;
+ * this never invents validation rules of its own.
+ */
+export function formatValidationEntry(entry: unknown): string | null {
+  if (!entry || typeof entry !== 'object') return null;
+  const e = entry as { loc?: unknown; msg?: unknown };
+  if (typeof e.msg !== 'string' || !e.msg) return null;
+  let msg = e.msg;
+  const patternMatch = /^String should match pattern '(.+)'$/.exec(msg);
+  if (patternMatch) msg = `must match pattern ${patternMatch[1]}`;
+
+  const loc = Array.isArray(e.loc) ? e.loc : [];
+  const field = loc
+    .filter((p): p is string => typeof p === 'string' && p !== 'body' && p !== 'query')
+    .pop();
+  return field ? `${field}: ${msg}` : msg;
+}
+
 function errorDetail(body: unknown): string | null {
   let raw: unknown = null;
   if (typeof body === 'string') {
@@ -138,15 +162,15 @@ function errorDetail(body: unknown): string | null {
     // e.g. the 422 for a class name that doesn't match `^[a-z0-9_]+$`) —
     // join every entry's `msg` so the server's validation text reaches the
     // toast instead of falling through to a generic "API 422" message.
+    // p1 (2026-09-24 interactive pass): the raw pydantic sentence
+    // ("String should match pattern '^[a-z0-9_]+$'") gave no field
+    // context and read as internal-error jargon. Each entry now renders
+    // "field: message" (from the server's own `loc`), and the one most
+    // common pydantic phrasing gets a lighter wording — still the
+    // server's own regex/value, never invented.
     if (Array.isArray(raw)) {
       const msgs = raw
-        .map((entry) =>
-          entry &&
-          typeof entry === 'object' &&
-          typeof (entry as { msg?: unknown }).msg === 'string'
-            ? (entry as { msg: string }).msg
-            : null,
-        )
+        .map((entry) => formatValidationEntry(entry))
         .filter((m): m is string => !!m);
       raw = msgs.length ? msgs.join('; ') : null;
     }
