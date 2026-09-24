@@ -568,14 +568,45 @@ export-mobileclip: ## Export MobileCLIP models
 	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_mobileclip_text_encoder.py
 	@$(MAKE) restart-triton
 
-.PHONY: export-pe
-export-pe: ## Export the PE-Core image encoder (curation pe_embedding) to ONNX + TensorRT
-	@echo "Exporting PE-Core-L14-336 image encoder to ONNX..."
+# PE-Core-L14-336 (curation embeddings). Walkthrough: export/README.md
+# "PE-Core Encoders". Steps run in the API container (torch +
+# perception_models + the mounted HF cache); the TRT build shells out to
+# the Triton image for trtexec.
+.PHONY: pe-download
+pe-download: ## PE-Core: download + SHA-256 verify the pinned checkpoint into the HF cache
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/download_pe_weights.py
+
+.PHONY: pe-export-image
+pe-export-image: ## PE-Core: image tower -> pytorch_models/pe_image_encoder.onnx (+ config.pbtxt)
 	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_image_encoder.py
-	@echo "Building the TensorRT engine (Path 1)..."
-	@echo "  On failure, fall back to: bash export/build_pe_ort_fallback.sh"
+
+.PHONY: pe-build-trt
+pe-build-trt: ## PE-Core: image ONNX -> TensorRT plan in models/pe_image_encoder (Path 1)
 	ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh
+
+.PHONY: pe-build-ort
+pe-build-ort: ## PE-Core: serve the image ONNX via Triton onnxruntime instead (Path 2 fallback)
+	ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_ort_fallback.sh
+
+.PHONY: pe-export-text
+pe-export-text: ## PE-Core: text tower -> pytorch_models/pe_text_encoder.onnx (parity-gated vs PyTorch)
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_text_encoder.py
+
+.PHONY: pe-export-text-triton
+pe-export-text-triton: ## PE-Core: text export + install as optional Triton model pe_text_encoder
+	$(COMPOSE) exec $(API_SERVICE) python /app/export/export_pe_text_encoder.py \
+		--install-triton --models-dir /app/models
+
+.PHONY: pe-text-status
+pe-text-status: ## PE-Core: which text backend the API is using (GET /health/pe_text)
+	@curl -s http://localhost:$(API_PORT)/health/pe_text | jq . 2>/dev/null || \
+		echo "API not reachable on port $(API_PORT)"
+
+.PHONY: export-pe
+export-pe: pe-download pe-export-image pe-build-trt pe-export-text ## PE-Core: full chain (weights, image ONNX + TRT, text ONNX)
+	@echo "If pe-build-trt failed on attention-pool ops: make pe-build-ort"
 	@$(MAKE) restart-triton
+	@echo "Restart the API to pick up the text ONNX: $(COMPOSE) restart $(API_SERVICE)"
 
 .PHONY: export-status
 export-status: ## Show status of all exported models
