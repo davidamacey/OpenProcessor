@@ -52,7 +52,7 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
                     'mismatched_cluster': {
                         'filter': {
                             'bool': {
-                                'must': [{'exists': {'field': 'class_id'}}],
+                                'filter': [{'exists': {'field': 'class_id'}}],
                                 'must_not': [
                                     {
                                         'script': {

@@ -23,7 +23,8 @@ def _matches(doc: dict[str, Any], query: dict[str, Any] | None) -> bool:
     if not query:
         return True
     if 'bool' in query:
-        return all(_matches(doc, q) for q in query['bool'].get('must', []))
+        clauses = [*query['bool'].get('must', []), *query['bool'].get('filter', [])]
+        return all(_matches(doc, q) for q in clauses)
     if 'exists' in query:
         return doc.get(query['exists']['field']) is not None
     if 'term' in query:

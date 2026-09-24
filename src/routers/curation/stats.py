@@ -300,7 +300,7 @@ def _build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
             'regions_validated_by_human': {
                 'filter': {
                     'bool': {
-                        'must': [{'term': {fields.validated: True}}],
+                        'filter': [{'term': {fields.validated: True}}],
                         'should': [
                             {'term': {fields.detector: 'human'}},
                             {'term': {fields.verifier: 'human'}},

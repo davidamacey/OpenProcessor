@@ -152,7 +152,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             body={
                 'query': {
                     'bool': {
-                        'must': [
+                        'filter': [
                             {'exists': {'field': fields.bbox_norm}},
                             {'term': {'class_validated': True}},
                         ]
@@ -278,12 +278,12 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
         resp = await opensearch.count(index=CURATION_ITEMS_INDEX, body={'query': query})
         return int(resp.get('count', 0))
 
-    holdout = await _count({'bool': {'must': [of_source], 'filter': [not_holdout]}})
-    relabel = await _count({'bool': {'must': [of_source], 'must_not': [not_holdout]}})
+    holdout = await _count({'bool': {'filter': [of_source, not_holdout]}})
+    relabel = await _count({'bool': {'filter': [of_source], 'must_not': [not_holdout]}})
     unvalidate = await _count(
         {
             'bool': {
-                'must': [of_source, {'term': {'class_validated': True}}],
+                'filter': [of_source, {'term': {'class_validated': True}}],
                 'must_not': [not_holdout],
             }
         }
@@ -322,8 +322,10 @@ async def merge_class(
         body={
             'query': {
                 'bool': {
-                    'must': [{'term': {'class_id': payload.source_id}}],
-                    'filter': [{'term': {'test_holdout': True}}],
+                    'filter': [
+                        {'term': {'class_id': payload.source_id}},
+                        {'term': {'test_holdout': True}},
+                    ],
                 },
             },
         },
@@ -353,7 +355,7 @@ async def merge_class(
     }
     merge_query = {
         'bool': {
-            'must': [{'term': {'class_id': payload.source_id}}],
+            'filter': [{'term': {'class_id': payload.source_id}}],
             'must_not': [{'term': {'test_holdout': True}}],
         },
     }

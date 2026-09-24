@@ -52,7 +52,7 @@ async def test_query_body_has_two_sibling_filter_aggs_sharing_class_scope() -> N
     assert set(aggs) == {'validated_by_class', 'test_by_class'}
     assert aggs['validated_by_class']['filter'] == {'term': {'class_validated': True}}
     assert aggs['test_by_class']['filter'] == {
-        'bool': {'must': [{'term': {'class_validated': True}}, {'term': {'test_holdout': True}}]}
+        'bool': {'filter': [{'term': {'class_validated': True}}, {'term': {'test_holdout': True}}]}
     }
     for agg_name in ('validated_by_class', 'test_by_class'):
         assert aggs[agg_name]['aggs']['by_class']['terms']['field'] == 'class_id'

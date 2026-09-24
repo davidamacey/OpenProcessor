@@ -116,7 +116,7 @@ def build_tab_query(
                         {
                             'bool': {
                                 'must_not': [{'exists': {'field': 'class_id'}}],
-                                'must': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
+                                'filter': [{'exists': {'field': ITEM_EMBEDDING_FIELD}}],
                             }
                         },
                     ],
@@ -259,7 +259,7 @@ def build_tab_query(
                     'should': [
                         {
                             'bool': {
-                                'must': [
+                                'filter': [
                                     {'terms': {'class_source': sorted(classifier_class_sources())}},
                                     {'range': {'confidence': {'lt': LOW_CONFIDENCE_MAX}}},
                                 ]

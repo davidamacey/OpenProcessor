@@ -146,7 +146,7 @@ async def _count_validated_and_test_per_class(
             'test_by_class': {
                 'filter': {
                     'bool': {
-                        'must': [
+                        'filter': [
                             {'term': {'class_validated': True}},
                             {'term': {'test_holdout': True}},
                         ]

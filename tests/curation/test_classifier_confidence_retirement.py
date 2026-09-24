@@ -106,12 +106,12 @@ def test_primary_low_conf_gates_confidence_on_classifier_sources() -> None:
     classifier_gate = next(
         c
         for c in should_clauses
-        if 'bool' in c and any('class_source' in m.get('terms', {}) for m in c['bool']['must'])
+        if 'bool' in c and any('class_source' in m.get('terms', {}) for m in c['bool']['filter'])
     )
     assert {'terms': {'class_source': sorted(classifier_class_sources())}} in classifier_gate[
         'bool'
-    ]['must']
-    assert any('confidence' in m.get('range', {}) for m in classifier_gate['bool']['must'])
+    ]['filter']
+    assert any('confidence' in m.get('range', {}) for m in classifier_gate['bool']['filter'])
 
 
 def test_primary_low_conf_matches_a_low_confidence_classifier_item(
@@ -230,9 +230,9 @@ def test_classifier_conf_lt_filter_uses_confidence_field() -> None:
     classifier_branch = next(
         c
         for c in should
-        if 'bool' in c and any('class_source' in m.get('terms', {}) for m in c['bool']['must'])
+        if 'bool' in c and any('class_source' in m.get('terms', {}) for m in c['bool']['filter'])
     )
     assert {'terms': {'class_source': sorted(classifier_class_sources())}} in classifier_branch[
         'bool'
-    ]['must']
-    assert {'range': {'confidence': {'lt': 0.5}}} in classifier_branch['bool']['must']
+    ]['filter']
+    assert {'range': {'confidence': {'lt': 0.5}}} in classifier_branch['bool']['filter']

@@ -139,10 +139,10 @@ def resolve_embedder(name: str, st_model: str) -> tuple[Callable[[list[str]], np
 
 
 def _base_query(unmatched_only: bool) -> dict[str, Any]:
-    must: list[dict[str, Any]] = [{'exists': {'field': RAW_LABEL_FIELD}}]
+    filters: list[dict[str, Any]] = [{'exists': {'field': RAW_LABEL_FIELD}}]
     if unmatched_only:
-        must.append({'term': {'class_source': UNMATCHED_CLASS_SOURCE}})
-    return {'bool': {'must': must}}
+        filters.append({'term': {'class_source': UNMATCHED_CLASS_SOURCE}})
+    return {'bool': {'filter': filters}}
 
 
 async def fetch_label_counts(

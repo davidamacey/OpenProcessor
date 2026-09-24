@@ -89,7 +89,7 @@ def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
             'should': [
                 {
                     'bool': {
-                        'must': [
+                        'filter': [
                             {'terms': {'class_source': sorted(classifier_class_sources())}},
                             {'range': {'confidence': {'lt': lt}}},
                         ]
@@ -134,7 +134,7 @@ def with_exists_filter(query_clause: dict[str, Any], field: str) -> dict[str, An
         merged = dict(query_clause['bool'])
         merged['filter'] = [*(merged.get('filter') or []), exists_clause]
         return {'bool': merged}
-    return {'bool': {'must': [query_clause], 'filter': [exists_clause]}}
+    return {'bool': {'filter': [query_clause, exists_clause]}}
 
 
 async def embedding_pool_query_and_count(
