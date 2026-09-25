@@ -82,6 +82,21 @@ class IndexName(str, Enum):
     OCR = 'visual_search_ocr'  # Text detection and recognition
 
 
+class IndexMappingError(RuntimeError):
+    """An index exists but its embedding field isn't mapped as knn_vector.
+
+    F-25 (fresh-start E2E findings 2026-09-25): this happens when
+    something writes to an index (e.g. the first POST /ingest) before
+    ``create_all_indexes`` ever runs against it -- OpenSearch then
+    dynamically maps the embedding field as a plain ``float`` array
+    instead of ``knn_vector``, and every k-NN search against it fails
+    with a message like "Field 'global_embedding' is not knn_vector
+    type". That failure must not be swallowed into an empty result list:
+    an outage/misconfiguration is not the same answer as "no similar
+    images", and a caller has no way to tell them apart otherwise.
+    """
+
+
 class DetectionCategory(str, Enum):
     """Detection categories for routing."""
 
@@ -1555,6 +1570,21 @@ class OpenSearchClient:
             return results
 
         except Exception as e:
+            message = str(e)
+            if 'knn_vector' in message and 'is not' in message:
+                # F-25: don't swallow this one -- an unmapped/misconfigured
+                # index is not the same thing as "no similar images", and
+                # the caller (a router that turns an unhandled exception
+                # into a 500) needs to see it as an error, not a success
+                # with an empty results list.
+                logger.error(f'{index_name}.{embedding_field} is not knn_vector-mapped: {e}')
+                raise IndexMappingError(
+                    f"'{index_name}' exists but '{embedding_field}' is not a knn_vector "
+                    f'field -- it was likely auto-created by a write before the index was '
+                    f'properly initialized. Delete it and restart the API (startup now '
+                    f'calls create_all_indexes on every boot), or call '
+                    f'OpenSearchClient.create_all_indexes(force_recreate=True) directly.'
+                ) from e
             logger.error(f'Search failed on {index_name}: {e}')
             return []
 
