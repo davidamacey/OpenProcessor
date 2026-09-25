@@ -61,7 +61,7 @@
       {formatCount(c.dataset.n_images)} test images · {formatCount(c.dataset.n_objects)} objects
       · ranked by {metricLabel(c.rank_by)} over
       {c.rank_scope === 'common'
-        ? `the ${c.common_classes.length} classes every model covers`
+        ? `the ${c.common_classes.length} class${c.common_classes.length === 1 ? '' : 'es'} every model covers`
         : "each model's own classes (not comparable)"}
       {#if c.profile}· profile <span class="font-mono">{c.profile}</span>{/if}
     </div>
@@ -100,7 +100,7 @@
               <td class="px-2 py-2 text-right tabular-nums"
                 >{formatMetric(r.rank, 'rank')}</td
               >
-              <td class="px-3 py-2 text-xs">
+              <td class="min-w-[14rem] px-3 py-2 text-xs">
                 <div class="font-mono">{r.display_name}</div>
                 <div class="text-[10px] text-zinc-500">
                   {r.source} · {r.runtime}{r.imgsz ? ` · ${r.imgsz}px` : ''} · mapping {r

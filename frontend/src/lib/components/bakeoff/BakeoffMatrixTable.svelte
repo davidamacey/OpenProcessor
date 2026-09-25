@@ -61,7 +61,7 @@
               <div class="font-mono text-zinc-300">{datasetName(ds.id)}</div>
               <div class="text-[10px] text-zinc-500">
                 {ds.rank_scope === 'common'
-                  ? `${ds.n_common_classes} common classes`
+                  ? `${ds.n_common_classes} common class${ds.n_common_classes === 1 ? '' : 'es'}`
                   : ds.rank_scope === 'overall'
                     ? "each model's own classes"
                     : ''}
