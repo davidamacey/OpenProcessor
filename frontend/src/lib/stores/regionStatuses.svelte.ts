@@ -21,6 +21,14 @@ class RegionStatusesStore {
   loaded = $state<boolean>(false);
   #inflight: Promise<void> | null = null;
 
+  /** The served label for a stored status value, or `null` when the
+   *  vocabulary isn't loaded or doesn't know the value (callers fall back
+   *  to the slot profile's own label). */
+  labelFor(value: string | null | undefined): string | null {
+    if (!value) return null;
+    return this.list.find((s) => s.value === value)?.label ?? null;
+  }
+
   async init(): Promise<void> {
     if (this.loaded) return;
     if (this.#inflight) return this.#inflight;

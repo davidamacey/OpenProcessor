@@ -7,12 +7,19 @@
   import { slotIsPresent } from '$lib/annotations/types';
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
+  import { regionStatusesStore } from '$stores/regionStatuses.svelte';
+  import { humanizeId } from '$lib/humanizeId';
 
   interface Props {
     crop: Crop;
+    /** Embedded under /review's own item panel, which already shows the
+     *  class, label source, detector score and VLM confidence directly
+     *  above — hide those rows here instead of repeating them (visual
+     *  audit 2026-09-24, R11). */
+    embedded?: boolean;
   }
 
-  let { crop }: Props = $props();
+  let { crop, embedded = false }: Props = $props();
 
   const vlmConf = $derived<string | null>(crop.vlm_confidence ?? null);
   const classSource = $derived<string | null>(crop.class_source ?? null);
@@ -127,27 +134,36 @@
 {/if}
 
 <dl class="grid grid-cols-2 gap-y-1 text-xs">
-  <dt class="text-zinc-500">Class</dt>
-  <dd class="text-zinc-200">
-    {crop.class_name ?? '—'}
-    {#if classSource}
-      <span class="ml-1 text-zinc-500">({classSource})</span>
-    {/if}
-  </dd>
+  {#if !embedded}
+    <dt class="text-zinc-500">Class</dt>
+    <dd class="text-zinc-200">
+      <!-- R6 (visual audit 2026-09-24): a class-less crop read
+         "Class (vlm_new_class_pending)" with a blank name and a raw id. -->
+      {#if crop.class_name}
+        {crop.class_name}
+      {:else}
+        <span class="italic text-zinc-500">no class yet</span>
+      {/if}
+      {#if classSource}
+        <span class="ml-1 text-zinc-500" title={classSource}
+          >({classSourcesStore.labelFor(classSource)})</span
+        >
+      {/if}
+    </dd>
 
-  <dt class="text-zinc-500">Label source</dt>
-  <dd class="text-zinc-200">
-    {crop.label_source ?? '—'}
-    {#if crop.class_validated}
-      <span
-        class="ml-1 rounded border border-green-500/40 bg-green-500/15 px-1 text-[10px] text-green-200"
-      >
-        validated
-      </span>
-    {/if}
-  </dd>
+    <dt class="text-zinc-500">Label source</dt>
+    <dd class="text-zinc-200">
+      {crop.label_source ?? '—'}
+      {#if crop.class_validated}
+        <span
+          class="ml-1 rounded border border-green-500/40 bg-green-500/15 px-1 text-[10px] text-green-200"
+        >
+          validated
+        </span>
+      {/if}
+    </dd>
 
-  <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md): `label_confidence`
+    <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md): `label_confidence`
        (wire `confidence`) is the vehicle-detector/v6 score on EVERY row,
        including ones the VLM labeled — never the VLM's own confidence.
        Calling it plain "Confidence" next to a VLM-sourced label reads as
@@ -156,12 +172,13 @@
        whenever the class came from the VLM, and show the VLM's own
        categorical confidence (`vlm_confidence`, served separately) as
        its own row instead of folding it in as a same-row detail. -->
-  <dt class="text-zinc-500">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
-  <dd class="font-mono">{pct(crop.label_confidence)}</dd>
+    <dt class="text-zinc-500">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
+    <dd class="font-mono">{pct(crop.label_confidence)}</dd>
 
-  {#if vlmConf}
-    <dt class="text-zinc-500">VLM confidence</dt>
-    <dd class="font-mono text-zinc-200">{vlmConf}</dd>
+    {#if vlmConf}
+      <dt class="text-zinc-500">VLM confidence</dt>
+      <dd class="font-mono text-zinc-200">{vlmConf}</dd>
+    {/if}
   {/if}
 
   <!-- dq-queues cutover (2026-09-24): `class_confidence` is the served
@@ -184,7 +201,9 @@
 
   {#if crop.vlm_class_empty_reason}
     <dt class="text-zinc-500">VLM empty reason</dt>
-    <dd class="text-orange-300">{crop.vlm_class_empty_reason}</dd>
+    <dd class="text-orange-300" title={crop.vlm_class_empty_reason}>
+      {humanizeId(crop.vlm_class_empty_reason)}
+    </dd>
   {/if}
 
   {#if crop.vlm_suggested_class_id != null}
@@ -237,12 +256,16 @@
         {spec.label.title}
       </div>
       <dl class="grid grid-cols-2 gap-y-1 text-xs">
-        {#if data?.lifecycle?.state}
+        <!-- R7 (visual audit 2026-09-24): the served status label first,
+             so Details and the review panel's status dropdown use one
+             vocabulary; the slot profile's own label only as a fallback. -->
+        {#if data?.lifecycle?.status || data?.lifecycle?.state}
           <dt class="text-zinc-500">Status</dt>
-          <dd class="text-zinc-200">{data.lifecycle.state.label}</dd>
-        {:else if data?.lifecycle?.status}
-          <dt class="text-zinc-500">Status</dt>
-          <dd class="text-zinc-200">{data.lifecycle.status}</dd>
+          <dd class="text-zinc-200">
+            {regionStatusesStore.labelFor(data.lifecycle.status) ??
+              data.lifecycle.state?.label ??
+              data.lifecycle.status}
+          </dd>
         {/if}
 
         <!-- dq-region (2026-09-24): human-validated (region_validated,

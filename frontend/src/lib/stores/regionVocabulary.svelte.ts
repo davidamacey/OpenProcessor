@@ -14,6 +14,7 @@
  * endpoint never breaks a page that renders provenance chips.
  */
 
+import { humanizeId } from '$lib/humanizeId';
 import {
   getRegionVocabulary,
   type RegionTextRules,
@@ -31,7 +32,7 @@ import {
  *  the call site with the served label the moment the backend adds one
  *  — this is a stand-in, not a hand-maintained label table. */
 function titlecaseId(id: string): string {
-  return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return humanizeId(id);
 }
 
 class RegionVocabularyStore {
