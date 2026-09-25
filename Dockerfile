@@ -36,7 +36,9 @@ COPY requirements.txt .
 RUN pip install --user --no-cache-dir --upgrade pip \
     && pip install --user --no-cache-dir --no-warn-script-location \
         --extra-index-url https://pypi.nvidia.com \
-        -r requirements.txt
+        -r requirements.txt \
+    && pip install --user --no-cache-dir --no-warn-script-location --no-deps \
+        "perception_models @ git+https://github.com/facebookresearch/perception_models.git@3e352cca660658d4b5c90f42a7808b11469e4c66"
 
 # Isolated YOLO11 EfficientNMS export toolchain (ultralytics pinned <8.4 for
 # the vendored end2end patch; CPU torch — see requirements-export-y11.txt).

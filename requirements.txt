@@ -75,15 +75,13 @@ faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
 # Duplicate Detection
 imohash  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)
 
-# Perception Encoder (PE) text tower for text-to-image curation search
-# (src/clients/pe_encoder.py, lazily imported in warm_text_encoder()).
-# Not on PyPI under a normal name -- the pip distribution is named
-# `perception_models`, but the package it installs is top-level `core`
-# (verified against facebookresearch/perception_models' own pyproject.toml).
-# This was previously undeclared entirely (comment in pe_encoder.py claimed
-# it was already here) -- same missing-dependency bug class as the
-# clustering packages above, just not one of the four the audit named.
-perception_models @ git+https://github.com/facebookresearch/perception_models.git
+# Perception Encoder (PE) runtime deps. The `perception_models` package
+# itself (top-level `core`) is installed by the Dockerfile with --no-deps:
+# its own requirements exact-pin ~30 research packages (timm==1.0.15,
+# numpy==2.1.2, wandb, lm-eval, ...) that conflict with open-clip-torch>=3.2
+# (timm>=1.0.17). core.vision_encoder only needs the packages below.
+einops
+regex
 
 # Text-detection lean/angle recovery (src/services/detection/region_lean.py,
 # lazily imported in default_detector()). Also currently undeclared anywhere;
