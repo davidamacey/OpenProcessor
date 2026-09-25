@@ -1,0 +1,36 @@
+# Opt-in overlay: mounts the host Docker socket into yolo-api so the GPU
+# arbiter (src/services/training/gpu_arbiter.py) can stop/restart
+# GPU-resident sibling containers around a training run
+# (OP_GPU_ARBITER_CONTAINERS, OP_GPU_ARBITER_TRAINER_CONTAINER -- see
+# env.template). Without this overlay, OP_GPU_ARBITER_CONTAINERS still
+# works as *config* but every stop/start call fails open (logs one
+# `arbiter_docker_unavailable` warning per process, then no-ops) because
+# the API container has no way to reach the docker daemon.
+#
+# Security tradeoff (read before enabling): mounting
+# /var/run/docker.sock into any container gives that container's process
+# root-equivalent control over the whole Docker host -- it can start,
+# stop or inspect *any* container, not just the ones this project owns,
+# and a container-escape bug in yolo-api's dependency stack becomes a
+# host-level compromise. This is why it's a separate, explicitly opt-in
+# file instead of a default mount. Only enable it on a host you trust
+# yolo-api's dependency stack on, and prefer scoping
+# OP_GPU_ARBITER_CONTAINERS to the smallest container list a deployment
+# actually needs coordinated.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu-arbiter.yml \
+#     --profile training up -d
+#
+# Then set in .env:
+#   OP_GPU_ARBITER_CONTAINERS=<container-name-or-name@ids>,...
+#   OP_GPU_ARBITER_TRAINER_CONTAINER=<container-name>
+
+services:
+  yolo-api:
+    volumes:
+      # NOT :ro -- stop/start calls over the socket need write access;
+      # a read-only bind only restricts the mount point, not what the
+      # daemon will accept over it, so :ro buys no real safety here and
+      # would just break the stop/start calls this exists for.
+      - /var/run/docker.sock:/var/run/docker.sock
