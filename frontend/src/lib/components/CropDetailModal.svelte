@@ -30,7 +30,7 @@
   tabindex="-1"
 >
   <div
-    class="relative grid max-h-[92vh] w-full max-w-6xl grid-cols-1 gap-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 p-4 md:grid-cols-[1fr_320px]"
+    class="relative grid max-h-[92vh] w-full max-w-6xl grid-cols-1 gap-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950 p-4 lg:grid-cols-[1fr_320px]"
   >
     <!-- K5 (visual audit 2026-09-24): the close button sits inside the
          panel's padding (it was half outside the top-right corner) and the
@@ -40,8 +40,20 @@
          rendering matches across surfaces. -->
     <div class="flex min-h-0 flex-col gap-2">
       <div class="text-xs uppercase tracking-wider text-zinc-500">Source</div>
-      <div class="flex min-h-0 flex-1 items-center justify-center bg-black">
-        <SourceImageOverlay cropId={crop.id} class="max-h-[78vh] max-w-full" />
+      <!-- K5-follow-up (visual audit): below the lg breakpoint the two columns
+           stack (grid-cols-1 above), so this no longer needs flex-1 to fill a
+           shared grid row's height — that forced a narrow column into a tall,
+           mostly-empty box around a small object-contain'd image. Below lg it
+           sizes to its own content (max-h caps it instead of flex-1 stretching
+           it); at lg+ (the two-column layout) flex-1 fills the shared row as
+           before. -->
+      <div
+        class="flex max-h-[50vh] min-h-0 items-center justify-center bg-black lg:max-h-none lg:flex-1"
+      >
+        <SourceImageOverlay
+          cropId={crop.id}
+          class="max-h-[50vh] max-w-full lg:max-h-[78vh]"
+        />
       </div>
       <div class="flex items-center gap-3">
         <div class="text-xs text-zinc-500">Crop</div>
