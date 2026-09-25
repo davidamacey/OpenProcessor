@@ -11,14 +11,12 @@ status is on disk (so siblings always see a consistent picture):
   the API's own promote endpoint.
 
 :func:`write_quant_bakeoff_job` is the other cross-process hand-off: an opt-in
-job file for the bake-off evaluator.
+``POST {api_prefix}/bakeoff/run`` that benchmarks the finished run.
 """
 
 from __future__ import annotations
 
-import json
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from job_protocol import (
@@ -36,20 +34,15 @@ from logutil import get_logger
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from job_protocol import JobSpec, StatusState
 
 
 logger = get_logger('trainer.campaign')
 
 
-# Bake-off jobs directory, for the opt-in auto-quantize hand-off. Same default
-# as docker/evaluator/Dockerfile's OP_BAKEOFF_JOBS_DIR.
-BAKEOFF_JOBS_DIR = Path(
-    os.environ.get('OP_BAKEOFF_JOBS_DIR', '/var/lib/openprocessor/bakeoff_jobs')
-)
-BAKEOFF_OUT_DIR = Path(os.environ.get('OP_BAKEOFF_OUT_DIR', '/var/lib/openprocessor/bakeoff_out'))
-
-# API base + prefix for the campaign auto-promote callback. The trainer and the
+# API base + prefix for the campaign auto-promote and auto-quantize callbacks. The trainer and the
 # API share a compose network, so the service name resolves via Docker DNS.
 API_BASE_URL = os.environ.get('OP_API_BASE_URL', 'http://yolo-api:8000')
 API_PREFIX = os.environ.get('OP_API_PREFIX', '/curation')
@@ -255,52 +248,45 @@ def maybe_handle_campaign(spec: JobSpec, state: StatusState) -> None:
 
 
 def write_quant_bakeoff_job(spec: JobSpec, state: StatusState) -> None:
-    """Drop a bake-off job that exports + benchmarks this finished run.
+    """Ask the API to export + benchmark this finished run (``POST {api_prefix}/bakeoff/run``).
 
-    The on-demand evaluator (``docker/evaluator/``,
-    ``scripts/curation/bakeoff/bakeoff_runner.py``) watches the bake-off jobs
-    dir; a job carrying a ``quantize`` block exports the checkpoint to portable
-    ONNX (fp32/fp16/int8) and scores those variants on the frozen split, so a
-    quantization panel updates with no manual step. Opt-in per training job via
-    ``job.json``'s ``auto_quantize_bakeoff``.
+    The bake-off job (``scripts/curation/bakeoff/bakeoff_runner.py`` in the
+    evaluator container) exports the checkpoint to portable ONNX
+    (fp32/fp16/int8) and scores the run and those variants on the test split
+    of the export it trained on, so a quantization panel updates with no
+    manual step. Going through the API (not a job file) lets it resolve the
+    run's checkpoint, imgsz and class mapping and claim the GPU. Opt-in per
+    training job via ``job.json``'s ``auto_quantize_bakeoff``; called after
+    the terminal status and the run manifest are on disk.
+
+    A failed POST is logged and swallowed: the training run already finished.
     """
     if not state.checkpoint_path:
         logger.warning('auto-quantize skipped: no checkpoint', job_id=spec.job_id)
         return
-    BAKEOFF_JOBS_DIR.mkdir(parents=True, exist_ok=True)
-    bakeoff_id = f'{spec.job_id}_quant'
-    dataset = str(spec.dataset_export_dir)
-    job = {
-        'job_id': bakeoff_id,
-        'datasets': [{'name': 'curated', 'path': dataset}],
-        'verify_frozen': True,
-        'out_dir': str(BAKEOFF_OUT_DIR / bakeoff_id),
-        # The .pt itself as the FP32 reference row alongside the exported
-        # variants.
-        'models': [
-            {
-                'backend': 'ultralytics',
-                'weights': state.checkpoint_path,
-                'name': 'candidate',
-                'imgsz': DEFAULT_INPUT_SIZE,
-                'mode': 'full',
-                'device': 'cuda',
-            }
-        ],
+    try:
+        import requests
+    except ImportError:
+        logger.warning('auto-quantize skipped: requests unavailable', job_id=spec.job_id)
+        return
+    url = f'{API_BASE_URL.rstrip("/")}{API_PREFIX}/bakeoff/run'
+    payload = {
+        'job_id': f'{spec.job_id}_quant',
+        'datasets': [{'id': f'run:{spec.job_id}'}],
+        'models': [{'source': 'run', 'run_id': spec.job_id}],
         'quantize': {
-            'model_id': f'{spec.job_id}_{spec.model_family}{spec.model_size}',
-            'checkpoint': state.checkpoint_path,
-            'calib_dataset': dataset,
+            'run_id': spec.job_id,
             'formats': ['fp32_onnx', 'fp16_onnx', 'int8_onnx'],
             'n_calib': 1000,
-            'out_root': str(BAKEOFF_OUT_DIR / 'quant'),
-            # Also run the steady-state throughput sweep (best-effort inside the
-            # evaluator). No 'coreml': that export leg is not shipped, and asking
-            # for it only records a failed stage in the job status.
             'throughput': True,
         },
     }
-    tmp = BAKEOFF_JOBS_DIR / f'.{bakeoff_id}.job.json.tmp'
-    tmp.write_text(json.dumps(job, indent=2), encoding='utf-8')
-    tmp.rename(BAKEOFF_JOBS_DIR / f'{bakeoff_id}.job.json')
-    logger.info('auto-quantize bake-off enqueued', job_id=spec.job_id, bakeoff_id=bakeoff_id)
+    try:
+        resp = requests.post(url, json=payload, timeout=120)
+        resp.raise_for_status()
+    except Exception as exc:  # any transport/HTTP failure is non-fatal
+        logger.warning(
+            'auto-quantize bake-off POST failed', job_id=spec.job_id, url=url, error=str(exc)
+        )
+        return
+    logger.info('auto-quantize bake-off enqueued', job_id=spec.job_id, bakeoff_id=payload['job_id'])
