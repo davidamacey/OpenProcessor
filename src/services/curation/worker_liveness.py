@@ -38,14 +38,10 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from src.core.logging import get_logger
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-
-logger = get_logger(__name__)
 
 HEARTBEAT_DIR = Path(os.environ.get('OP_HEARTBEAT_DIR', '/tmp/openprocessor_heartbeat'))  # nosec B108 — container-local, no mount needed
 
@@ -120,7 +116,11 @@ async def heartbeat_loop(
         try:
             write_heartbeat(name, tasks_fn())
         except Exception as exc:  # pragma: no cover — defensive, never crash the worker
-            logger.warning('heartbeat_write_failed', worker=name, error=str(exc))
+            # Imported here: the healthcheck CLI runs this file by path under a
+            # 5 s timeout, and src.core pulls in the whole services package.
+            from src.core.logging import get_logger
+
+            get_logger(__name__).warning('heartbeat_write_failed', worker=name, error=str(exc))
         try:
             await asyncio.wait_for(stop.wait(), timeout=interval_s)
         except TimeoutError:

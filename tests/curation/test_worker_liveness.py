@@ -90,3 +90,21 @@ def test_cli_exit_codes(heartbeat_dir: Path) -> None:
     write_heartbeat('vlm_worker', {'producer': False})
     unhealthy = _run_cli('vlm_worker', heartbeat_dir)
     assert unhealthy.returncode == 1
+
+
+def test_cli_by_path_imports_nothing_heavy(heartbeat_dir: Path) -> None:
+    """The compose healthcheck runs the module by file path under a 5 s
+    timeout; importing ``src.services`` (Triton client, ultralytics) there
+    takes ~6 s and turned every worker unhealthy. Keep the CLI stdlib-only."""
+    write_heartbeat('detection_worker', {'producer': True})
+    script = Path(__file__).resolve().parents[2] / 'src/services/curation/worker_liveness.py'
+    proc = subprocess.run(
+        [sys.executable, '-X', 'importtime', str(script), 'check', 'detection_worker'],
+        env={'OP_HEARTBEAT_DIR': str(heartbeat_dir), 'PATH': '/usr/bin:/bin'},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    heavy = [m for m in ('src.', 'ultralytics', 'numpy', 'tritonclient') if m in proc.stderr]
+    assert not heavy, heavy
