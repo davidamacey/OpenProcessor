@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **F-78: the region tab intermittently vanished with a spurious "region
+  profile changed — reload" toast.** A slow or aborted first `/health`
+  read (2 s timeout) seeded "no region profile" and the next poll
+  disagreed. Boot now retries (3 tries, short backoff); a timeout or
+  network error leaves the profile unknown (not "not configured"), and
+  the first successful `/health` poll seeds it and brings the region tab
+  in without a reload (the layout re-mounts on the seed). Only a served
+  change after a successful read raises the reload notice.
+- `/review?tab=<id>` that resolves to no tab (e.g. the region tab on a
+  backend with no region profile) now says why instead of silently
+  showing All.
+- The region tab's Detector row no longer carries a stray mistakenness
+  score chip; it shows only in the Scores row.
+
 - **Region bbox editor could not change a box** (data safety). The
   `/review` region tab's reseed effect tracked `editedSlotBox`, so the
   first drag tick or arrow nudge re-ran it, reset the box to the server

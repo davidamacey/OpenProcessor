@@ -60,7 +60,10 @@
     tabHonorsPinnedSortDefault,
     type ReviewPresetId,
     reviewDeepLink,
+    unavailableTabMessage,
   } from '$lib/reviewTabs';
+  import { REGION_TAB_ID } from '$lib/annotations/servedRegionSlot';
+  import { regionProfileStore } from '$stores/regionProfile.svelte';
   import { isDiverseOverlayAvailable } from '$lib/strategies';
   import type {
     BBoxNorm,
@@ -107,6 +110,18 @@
   // cohort preview) open that tab and jump to that crop.
   const deepLink = reviewDeepLink(page.url.searchParams);
   let tab = $state<ReviewTab>(deepLink.tab);
+  // A `?tab=` that resolved to no tab (e.g. the region tab on a backend
+  // with no region profile) falls back to All with a visible reason.
+  let unavailableTabNotice = $state<string | null>(
+    deepLink.unavailableTab
+      ? unavailableTabMessage(
+          deepLink.unavailableTab,
+          REGION_TAB_ID,
+          regionProfileStore.configured,
+          regionProfileStore.unknown,
+        )
+      : null,
+  );
   let pendingCropId = $state<string | null>(deepLink.cropId);
   // DQ-M7 (2026-09-24 data-quality pass): true from mount until a
   // `?crop_id=` deep link either lands on its target or gives up. While
@@ -1730,6 +1745,14 @@
         </button>
       {/each}
     </ScrollStrip>
+    {#if regionProfileStore.unknown}
+      <!-- F-78: boot couldn't read the region profile yet; the region tab
+           appears once a /health poll answers (the layout re-mounts). -->
+      <span
+        class="shrink-0 pl-2 text-[11px] text-zinc-500"
+        data-testid="region-profile-loading">loading region profile…</span
+      >
+    {/if}
     <span
       data-testid="queue-counter"
       class="shrink-0 pl-2 font-mono text-xs text-zinc-500"
@@ -2041,6 +2064,19 @@
       {/if}
     </span>
   </div>
+
+  {#if unavailableTabNotice}
+    <div
+      class="mx-4 mt-3 flex items-center gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+      data-testid="tab-unavailable"
+      role="status"
+    >
+      <span class="grow">{unavailableTabNotice}</span>
+      <button type="button" class="btn-sm" onclick={() => (unavailableTabNotice = null)}
+        >Dismiss</button
+      >
+    </div>
+  {/if}
 
   <!-- Body -->
   <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
@@ -2470,15 +2506,8 @@
                 {:else}
                   <span class="text-zinc-500">—</span>
                 {/if}
-                {#if current.mistakenness_score != null}
-                  <ScoreChip
-                    label="mistakenness"
-                    value={current.mistakenness_score}
-                    method={current.mistakenness_method}
-                    version={current.mistakenness_version}
-                    size="sm"
-                  />
-                {/if}
+                <!-- The mistakenness chip lives in the Scores row above, not
+                     next to the detector provenance chips. -->
                 {#if editedSlotBoxIsCandidate && !editMode}
                   {@const candidateKind = regionVocabularyStore.rejectionReasonKind(
                     slotData?.lifecycle?.rejectionReason,

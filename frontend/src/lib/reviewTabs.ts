@@ -187,8 +187,13 @@ export function reviewDeepLink(params: URLSearchParams): {
   tab: ReviewTab;
   cropId: string | null;
   preset: ReviewPresetId | null;
+  /** The requested `?tab=` value when it resolved to no tab (so the page
+   *  fell back to All) — the page says why instead of switching silently. */
+  unavailableTab: string | null;
 } {
-  const tab = tabFromUrlId(params.get('tab') ?? '') ?? 'all';
+  const requested = params.get('tab') ?? '';
+  const resolved = tabFromUrlId(requested);
+  const tab = resolved ?? 'all';
   const rawPreset = params.get('preset');
   const preset =
     tab === 'all' && rawPreset && isReviewPresetId(rawPreset) ? rawPreset : null;
@@ -196,7 +201,28 @@ export function reviewDeepLink(params: URLSearchParams): {
     tab,
     cropId: params.get('crop_id') || null,
     preset,
+    unavailableTab: requested !== '' && resolved == null ? requested : null,
   };
+}
+
+/**
+ * The notice for a `?tab=` that resolved to no tab. The region tab only
+ * exists while the backend serves a region profile, so a region-tab link
+ * on a backend without one gets that reason, not a silent switch to All.
+ */
+export function unavailableTabMessage(
+  requested: string,
+  regionTabId: string,
+  regionConfigured: boolean,
+  regionUnknown = false,
+): string {
+  if (requested === regionTabId && regionUnknown) {
+    return "The region tab isn't available yet: the region profile hasn't loaded. Showing All; it appears once the backend answers.";
+  }
+  if (requested === regionTabId && !regionConfigured) {
+    return "The region tab isn't available: the backend reports no region profile. Showing All instead.";
+  }
+  return `There is no "${requested}" review tab. Showing All instead.`;
 }
 
 /** `{API_PREFIX}/review/{endpointId}` — what `getReviewQueue` should

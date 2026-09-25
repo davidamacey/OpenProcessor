@@ -1213,11 +1213,20 @@ region surface at all and calls none of them.
 - `regionProfileStore` / `loadRegionProfile()`
   (`src/lib/stores/regionProfile.svelte.ts`) reads the prefixed
   `{API_PREFIX}/health` once in the root layout's `load()` (bounded at
-  2 s, alongside the tier-2 load). A failure, a timeout, or a backend
-  that predates the field counts as not configured (fail closed). The
-  UI is built from that one reading; if a later `healthStore` poll (or
-  a region route's 409) disagrees, one sticky "reload to apply" notice
-  shows. Tabs are never hot-swapped.
+  2 s per try, 3 tries with a short backoff, alongside the tier-2 load).
+  Only a successful read seeds: a served `region_profile: null` (or a
+  backend that predates the field) is "not configured", but a timeout or
+  network error leaves the store `unknown` (F-78) — still no region route
+  is called, `/review` shows "loading region profile…", and the first
+  successful `healthStore` poll seeds it and installs the slot. The root
+  layout keys its content on `regionProfileStore.seedVersion`, so that
+  late seed re-mounts the page with the region tab, no reload. Only a
+  successful read that differs from an earlier successful one (or a
+  region route's 409 after seeding) raises the one sticky "reload to
+  apply" notice. Tabs are never hot-swapped otherwise. A `?tab=` that
+  resolves to no tab falls back to All with a visible notice
+  (`unavailableTabMessage`, `reviewTabs.ts`), naming the missing region
+  profile for the region tab id.
 - `regionSlotFromServedProfile()` (`src/lib/annotations/servedRegionSlot.ts`)
   builds the region `SlotSpec`: `key` = profile `name`, `bind.className`
   = `region_class_name` (falls back to `name`), tab label / plural noun /

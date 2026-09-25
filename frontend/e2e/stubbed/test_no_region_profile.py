@@ -116,6 +116,10 @@ def test_region_surfaces_absent(stub, page, app_url):
     # /review: exactly the core tabs; a ?tab=regions bookmark opens All.
     page.goto(f"{app_url}/review?tab=regions")
     assert tab_labels(page) == CORE_TABS
+    # ...and says why, instead of switching to All silently.
+    notice = page.get_by_test_id("tab-unavailable")
+    notice.wait_for(timeout=15000)
+    assert "no region profile" in notice.inner_text()
 
     # /dashboard: no region detections panel.
     page.goto(f"{app_url}/dashboard")
