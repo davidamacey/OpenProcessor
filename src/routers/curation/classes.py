@@ -387,10 +387,42 @@ async def restore_class(class_id: int) -> RegistryClassEntry:
     """Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;
     ``409`` if a non-deprecated class already uses this class's name
     (the registry's name-uniqueness rule, enforced the same way
-    ``rename_class`` enforces it)."""
+    ``rename_class`` enforces it).
+
+    A class merged via ``POST /classes/merge`` (``merged_into`` set) is
+    NOT restorable this way — its crops were already bulk-relabeled onto
+    the merge target, so flipping ``deprecated`` back to ``false`` would
+    resurrect an empty class while the data stays on the target. ``409``
+    with a structured detail naming the merge target and pointing at the
+    manual-relabel path instead. A plainly deprecated class (no
+    ``merged_into``) restores as before.
+    """
     reg = get_class_registry()
-    if reg.get(class_id) is None:
+    entry = reg.get(class_id)
+    if entry is None:
         raise HTTPException(status_code=404, detail=f'unknown class_id {class_id}')
+    if entry.merged_into is not None:
+        target = reg.get(entry.merged_into)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                'error': 'class_merged',
+                'message': (
+                    f'class_id {class_id} was merged into class_id {entry.merged_into} and '
+                    'cannot be restored directly; its crops were already relabeled onto the '
+                    'merge target'
+                ),
+                'class_id': class_id,
+                'merged_into': {
+                    'class_id': entry.merged_into,
+                    'class_name': target.class_name if target is not None else None,
+                },
+                'hint': (
+                    'relabel the crops you want back on this class manually '
+                    '(PUT /crops/{id}/label or /crops/batch_label) rather than restoring it'
+                ),
+            },
+        )
     try:
         return reg.set_deprecated(class_id, False)
     except ClassRegistryError as exc:

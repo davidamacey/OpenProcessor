@@ -55,7 +55,7 @@ def record_class_history(
     Args:
         current_source: The pre-write OpenSearch ``_source`` dict.
             Reads ``class_id``, ``class_name``, ``class_source``,
-            ``label_source``, ``confidence`` from it.
+            ``label_source``, ``confidence``, ``class_validated`` from it.
         writer: Identifier for the new history entry's writer
             (``ingest``, ``human``, ``vlm_pipeline``, ``region_worker``,
             ``seed_backfill``, etc.).
@@ -79,6 +79,10 @@ def record_class_history(
         'class_source': current_source.get('class_source'),
         'label_source': current_source.get('label_source'),
         'confidence': current_source.get('confidence'),
+        # Pre-write validation state, so an audit of e.g. a class merge
+        # can tell a validated crop's class assignment apart from an
+        # unvalidated one without re-deriving it from elsewhere.
+        'class_validated': bool(current_source.get('class_validated')),
         'writer': writer,
         'at': now or _now_iso(),
     }
