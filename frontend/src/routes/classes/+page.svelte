@@ -661,8 +661,8 @@
           class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400"
         >
           <tr>
-            <!-- L5: ID and Added hide below md so the table fits 800px. -->
-            <th class="hidden px-3 py-2 font-medium md:table-cell">ID</th>
+            <!-- L5: ID and Added hide below lg (1024px) so the table fits 800px. -->
+            <th class="hidden px-3 py-2 font-medium lg:table-cell">ID</th>
             <th class="px-3 py-2 font-medium">Name</th>
             <th class="px-3 py-2 font-medium">Group</th>
             <th class="px-3 py-2 text-center font-medium">Hotkey</th>
@@ -687,7 +687,7 @@
             >
               Total (in cluster)
             </th>
-            <th class="hidden px-3 py-2 font-medium md:table-cell">Added</th>
+            <th class="hidden px-3 py-2 font-medium lg:table-cell">Added</th>
             <th class="px-3 py-2"></th>
           </tr>
         </thead>
@@ -698,7 +698,7 @@
               class="border-b border-zinc-900 hover:bg-zinc-900/40"
               data-testid="class-row-{cls.id}"
             >
-              <td class="hidden px-3 py-1.5 font-mono text-xs text-zinc-400 md:table-cell"
+              <td class="hidden px-3 py-1.5 font-mono text-xs text-zinc-400 lg:table-cell"
                 >{cls.id}</td
               >
               <td class="px-3 py-1.5">
@@ -781,7 +781,7 @@
                 class="px-3 py-1.5 text-right font-mono text-zinc-400"
                 data-testid="in-cluster">{cls.cluster_size ?? 0}</td
               >
-              <td class="hidden px-3 py-1.5 text-xs text-zinc-500 md:table-cell">
+              <td class="hidden px-3 py-1.5 text-xs text-zinc-500 lg:table-cell">
                 {formatDateOnly(cls.added_at)}
               </td>
               <td class="px-3 py-1.5 text-right">

@@ -135,6 +135,6 @@ def test_classes_table_fits_800px(stub, page, app_url):
     width = table.evaluate("t => t.scrollWidth")
     container = table.evaluate("t => t.parentElement.clientWidth")
     assert width <= container + 1, (width, container)
-    headers = [h.strip() for h in table.locator("thead th:visible").all_inner_texts()]
-    assert "ID" not in headers and "Added" not in headers, headers
-    assert "Validated" in " ".join(headers), headers
+    headers = [h.strip().lower() for h in table.locator("thead th:visible").all_inner_texts()]
+    assert "id" not in headers and "added" not in headers, headers
+    assert "validated" in headers, headers
