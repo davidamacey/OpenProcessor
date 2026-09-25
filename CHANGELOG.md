@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed (BREAKING)
+- **Compose/install portability (fresh-start gaps batch B).** `docker-compose.yml`
+  no longer hardcodes `name: openprocessor` or any `container_name:` — both are
+  now interpolated from `COMPOSE_PROJECT_NAME` (default `openprocessor`, so an
+  existing single-stack deployment behaves identically). **Migration hint:**
+  if you script against container names directly (e.g. `docker exec yolo-api
+  ...`, `docker logs triton-server`), switch to `docker compose exec
+  yolo-api ...` / `docker compose logs triton-server` — those already resolve
+  by service name regardless of the interpolated container name, and keep
+  working the same way after this change. Every host port
+  (`API_PORT`, `TRITON_HTTP_PORT`, `TRITON_GRPC_PORT`, `TRITON_METRICS_PORT`,
+  `PROMETHEUS_PORT`, `GRAFANA_PORT`, `LOKI_PORT`, `OPENSEARCH_PORT`,
+  `OPENSEARCH_DASHBOARDS_PORT`, plus new `MLFLOW_PORT`, `DCGM_PORT`,
+  `SEGMENTER_PORT`, `VLM_PORT`) is now interpolated from `.env`/the shell
+  instead of hardcoded, so a second isolated stack on the same host only
+  needs a `.env` with a different `COMPOSE_PROJECT_NAME` and remapped ports.
+  `env.template`'s `TRITON_HTTP`/`TRITON_GRPC`/`TRITON_METRICS` were renamed to
+  `TRITON_HTTP_PORT`/`TRITON_GRPC_PORT`/`TRITON_METRICS_PORT` to match the
+  Makefile's existing names — update any script/CI reading the old names.
+  `Makefile`'s port variables now use `?=` and load `.env` (`-include .env`),
+  so both `.env` and `make API_PORT=... TRITON_HTTP_PORT=... <target>` work.
 - **One generic curation wire vocabulary.** Every region field is `region_<attr>`
   on the wire, fixed regardless of `OP_REGION_FIELD_*` storage overrides;
   `plate_thumbnail_url` → `region_thumbnail_url`; `gemma_*` → `vlm_*` and `v6_*` →
@@ -156,6 +176,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measurement.
 
 ### Added
+- **Fresh-start gaps batch B: compose and install portability.**
+  - `yolo-api` and `curation-detection-worker` both mount a source-image root
+    at the same container path (`${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro`,
+    `OP_SOURCE_ROOT=/data/source`) and `./examples:/app/examples:ro`, so
+    `OP_REGION_PROFILE_PATH=/app/examples/region_profiles/license_plate.json`
+    (the env.template example) actually resolves in both containers.
+  - `pe_image_encoder` is now in `triton-server`'s default `--load-model`
+    list (CURATION.md already called it required, not optional). `make
+    export-all`/`./scripts/setup.sh`'s automated export flow now builds it
+    (weights download, image-tower ONNX, TensorRT with an ONNX Runtime
+    fallback, text-tower ONNX) before Triton's first start — it needs this
+    like every other listed model, since Triton's explicit
+    `model-control-mode` exits at startup if a listed model fails to load.
+  - New optional `vlm` compose profile (`docker compose --profile vlm up -d`):
+    a pinned-tag vLLM service serving Gemma 4 E4B, configurable via
+    `VLM_IMAGE`/`VLM_MODEL`/`VLM_SERVED_MODEL_NAME`/`VLM_DTYPE`/
+    `VLM_MAX_MODEL_LEN`/`VLM_GPU_MEMORY_UTILIZATION`/`VLM_LIMIT_MM_IMAGES`/
+    `VLM_GPU_ID`/`VLM_PORT`. `yolo-api` and `curation-vlm-worker` both carry
+    `extra_hosts: ["host.docker.internal:host-gateway"]` so the
+    `OP_VLM_URL=http://host.docker.internal:<port>/v1` (external VLM) example
+    resolves on Linux, not just Docker Desktop.
+  - New optional `docker-compose.gpu-arbiter.yml` overlay: mounts
+    `/var/run/docker.sock` into `yolo-api` so `OP_GPU_ARBITER_CONTAINERS`
+    coordination actually works, documented as an explicit opt-in with its
+    security tradeoff spelled out. Without it, the arbiter now logs exactly
+    one `arbiter_docker_unavailable` warning per outage (was: one per
+    call) when it fails open.
+  - `yolo-api` carries a network alias `op-api` so Cropwright's default
+    `API_UPSTREAM=http://op-api:8000` resolves without an override; see
+    `docs/CURATION.md` "Wiring up Cropwright" and the README's Cropwright
+    paragraph for the exact env vars and docker network name.
+  - `curation-trainer`'s `OP_TRAIN_GPU_ORDER` and `device_ids` are both
+    interpolated from the same `OP_TRAIN_GPU_ORDER` env var (was hardcoded
+    to `0` in `environment:`); a multi-GPU order still needs a compose
+    override for `device_ids` (documented inline).
+  - `scripts/setup.sh` gained `--force` (never overwrites an existing `.env`
+    otherwise) and `--curation` (prints the curation-subsystem next steps:
+    PE export, class registry, VLM, segmenter, `--profile`); its smoke tests
+    and `unload_models_for_export`/`check_triton_container` now read the
+    deployment's actual configured ports/compose-service state instead of
+    hardcoded `4600`/`4603`/`4607` and a hardcoded `triton-server` container
+    name.
+  - `tests/test_full_system.py` reads `API_PORT`/`TRITON_HTTP_PORT`/
+    `OPENSEARCH_PORT` from the environment; README's Testing section gained
+    a Docker-only path (`docker compose exec yolo-api pytest tests/ -q`).
+  - `tests/test_compose_contract.py` gained invariants pinning all of the
+    above (no fixed project name, no hardcoded host ports, source root +
+    examples mounted on both services, `pe_image_encoder` in the default
+    load list).
 - **S-2: heartbeat-based curation worker healthchecks.** The four
   curation background workers (detection, VLM, auto-label,
   cluster-refresh) now write a heartbeat file on their main loop —

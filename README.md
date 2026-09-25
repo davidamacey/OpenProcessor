@@ -281,8 +281,22 @@ authentication, same as the rest of this API.
 consumer of the `/curation` API — a labeling UI for the cascade above.
 It is not required: every curation route works from `curl`/`httpx`/the
 generated OpenAPI client too. Cropwright is not published in this
-repo; point it at your running `yolo-api` container's `/curation`
-prefix if you use it.
+repo; if you build one, wire it up like this:
+
+- **Docker network:** join the compose network this stack created —
+  `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` (e.g.
+  `openprocessor_triton_net` with an unset `COMPOSE_PROJECT_NAME`; see
+  `docker network ls` after `docker compose up`).
+- **API upstream:** `API_UPSTREAM=http://op-api:8000`. `yolo-api` carries a
+  network alias `op-api` specifically so a frontend's out-of-the-box
+  default (many default to `op-api`, not this repo's `yolo-api` service
+  name) resolves without extra configuration — `http://yolo-api:8000`
+  works identically if your frontend's default is the service name
+  instead.
+- **API prefix:** `PUBLIC_API_PREFIX=/curation` (must equal this API's
+  `OP_API_PREFIX`, default `/curation`).
+
+See `docs/CURATION.md` "Wiring up Cropwright" for the full env var list.
 
 ### Security: local tool, no authentication
 
@@ -536,14 +550,40 @@ command: --workers=2   # Development
 device_ids: ['0', '2']  # Use GPUs 0 and 2
 ```
 
+### GPU sizing — segmenter (curation region cascade)
+
+The optional `segmenter` service (`--profile segmenter`) is the single
+biggest curation VRAM line item after Triton. Two knobs trade VRAM for
+throughput (`SEGMENTER_INSTANCES`, `SEGMENTER_SHARED_WEIGHTS` in
+`.env` — see `env.template`):
+
+| `SEGMENTER_INSTANCES` | `SEGMENTER_SHARED_WEIGHTS` | Approx. VRAM | Notes |
+|---|---|---|---|
+| 1 | 0 or 1 | ~2 GB | Fits a 12GB card alongside Triton |
+| 2 | 1 (recommended) | ~4 GB | One weight copy, per-instance activations only |
+| 2 | 0 | ~4-6 GB | Each instance loads its own weight copy — no benefit over shared, higher VRAM |
+| 4 | 1 | ~7-8 GB | 48GB-class cards (A6000/A100) with headroom for training too |
+
+`SEGMENTER_SHARED_WEIGHTS=1` is recommended whenever more than one
+instance is configured: instances share one copy of the model weights and
+only pay per-instance activation memory, instead of each loading its own
+full copy. Measure your actual footprint with `nvidia-smi` after the
+service reports `"loaded":true` on its `/health` endpoint — the numbers
+above are a starting point, not a guarantee, and depend on image
+resolution and batch size.
+
 ---
 
 ## Testing
 
-Run comprehensive test suite to verify all functionality:
+Run comprehensive test suite to verify all functionality. `test_full_system.py`
+and `validate_visual_results.py` hit the running stack over HTTP, so they read
+their target ports from the environment (`API_PORT`, `TRITON_HTTP_PORT`,
+`OPENSEARCH_PORT` — same names as `.env`/`docker-compose.yml`; default to
+4603/4600/4607 if unset, so this is a no-op unless you remapped ports):
 
 ```bash
-# Full system test (32 tests covering all endpoints)
+# Full system test (32 tests covering all endpoints) — host venv path
 .venv/bin/python tests/test_full_system.py 2>&1 | tee test_results/test_results.txt
 
 # Visual validation (draws bounding boxes on test images)
@@ -554,6 +594,14 @@ ls test_results/*.jpg
 
 # Full offline pytest suite (see docs/CURATION.md for the curation-only suite)
 .venv/bin/python -m pytest tests/ -q
+```
+
+**Docker-only path** — no host `.venv` required, since `yolo-api` already has
+every test dependency installed:
+
+```bash
+# Full offline pytest suite, from inside the running container
+docker compose exec yolo-api pytest tests/ -q --ignore=tests/live
 ```
 
 **Test Coverage:**

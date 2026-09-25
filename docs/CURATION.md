@@ -350,6 +350,96 @@ Without `OP_SEGMENTER_URL` the detection worker constructs a disabled
 client and the segmenter leg is skipped entirely — no HTTP call, no
 failure.
 
+## Mounting your image source
+
+Ingest resolves item paths against `OP_SOURCE_ROOT` (default
+`/data/source` in this repo's `docker-compose.yml`). **Both** `yolo-api`
+and `curation-detection-worker` mount the same host directory at the
+same container path:
+
+```yaml
+# docker-compose.yml (already wired; override OP_SOURCE_ROOT_HOST in .env)
+volumes:
+  - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+```
+
+Point `OP_SOURCE_ROOT_HOST` (in `.env`) at wherever your images actually
+live on the host — `OP_SOURCE_ROOT` itself normally stays at its
+container-side default. If only `yolo-api` has the mount, ingest
+succeeds (it reads bytes to embed/hash at ingest time) but every later
+detection-worker read of that same path fails with
+`detection_failed`/`reason=image_unavailable`, since the worker is a
+separate container with its own filesystem view.
+
+## VLM
+
+Three ways to get a VLM behind `OP_VLM_URL` (`src/services/labeling/vlm_client.py`):
+
+1. **Run the shipped `vlm` service** (`--profile vlm`, Gemma 4 E4B by
+   default — see the `vlm` service in `docker-compose.yml` and the
+   "In-compose VLM" section of `env.template`):
+
+   ```bash
+   docker compose --profile vlm up -d
+   ```
+
+   Then in `.env`: `OP_VLM_URL=http://vlm:8000/v1`,
+   `OP_VLM_MODEL=gemma-4-e4b` (or your `VLM_SERVED_MODEL_NAME`).
+
+2. **Point at a VLM already running on this host, outside compose**
+   (e.g. a standalone vLLM/Ollama/llama.cpp server you started
+   yourself): `OP_VLM_URL=http://host.docker.internal:<port>/v1`. On
+   Linux this only resolves because `yolo-api` and
+   `curation-vlm-worker` both carry `extra_hosts:
+   ["host.docker.internal:host-gateway"]` in `docker-compose.yml` —
+   Docker Desktop adds this mapping automatically; the Linux engine does
+   not, so without that overlay this example silently fails to connect.
+
+3. **Point at a VLM anywhere else on the network:**
+   `OP_VLM_URL=http://<host>:<port>/v1`.
+
+**Coupling you must keep in sync:** the client-side image cap
+(`OP_VLM_MAX_IMAGES_PER_CALL`, default 8) and the server-side cap (vLLM's
+`--limit-mm-per-prompt '{"image": N}'`, exposed here as
+`VLM_LIMIT_MM_IMAGES`) are two ends of one contract. A request above
+whichever is smaller gets a `400`. Keep them numerically equal — this is
+the most common "VLM labeling returns 400s in the worker logs" cause.
+
+## GPU arbiter container coordination
+
+`OP_GPU_ARBITER_CONTAINERS` (see "Environment variables" below) lets a
+training job stop/restart named sibling containers around the run so
+they don't fight it for GPU memory. Doing that from inside the `yolo-api`
+container requires Docker socket access, which is **not** mounted by
+default:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu-arbiter.yml \
+  --profile training up -d
+```
+
+**Security tradeoff (read `docker-compose.gpu-arbiter.yml`'s header
+comment before enabling):** mounting `/var/run/docker.sock` into any
+container gives that container's process root-equivalent control over
+the *entire* Docker host, not just this project's containers. Only
+enable this overlay on a host you trust `yolo-api`'s dependency stack
+on. Without it, `OP_GPU_ARBITER_CONTAINERS` still validates as config,
+but every stop/start call fails open (no-op) and the API logs one
+`arbiter_docker_unavailable` warning per outage (not per call) so the gap
+is visible instead of silent.
+
+## Wiring up Cropwright
+
+Cropwright (or any `/curation`-consuming frontend) needs three things to
+reach this API from inside the same compose network:
+
+| Cropwright env var | Value | Why |
+|---|---|---|
+| `API_UPSTREAM` | `http://op-api:8000` | `yolo-api` carries a network alias `op-api` (see its `networks:` block in `docker-compose.yml`) specifically so a frontend defaulting to `op-api` needs no override. `http://yolo-api:8000` (the actual service name) works identically. |
+| `PUBLIC_API_PREFIX` | `/curation` | Must equal this API's `OP_API_PREFIX` (default `/curation`). |
+| `PUBLIC_TRITON_API_URL` | *(leave empty in Docker)* | Cropwright talks to Triton only through the API, never directly. |
+| Docker network | `${COMPOSE_PROJECT_NAME:-openprocessor}_triton_net` | The network `docker-compose.yml` creates (`triton_net`, prefixed with the compose project name) — join it as an `external: true` network in Cropwright's own compose file, or attach the container to it directly. |
+
 ## Seed / bootstrap path for a fresh install
 
 **No dataset to ingest yet?** `make sample-coco` /
