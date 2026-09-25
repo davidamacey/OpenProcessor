@@ -3,7 +3,12 @@
  * and R6 (raw ids in the deep-link toast / VLM empty reason).
  */
 import { describe, expect, it } from 'vitest';
-import { emptyQueueMessage, locateMissMessage, vlmEmptyReasonText } from './reviewCopy';
+import {
+  emptyQueueMessage,
+  locateMissMessage,
+  queuePosition,
+  vlmEmptyReasonText,
+} from './reviewCopy';
 import { humanizeId } from '$lib/humanizeId';
 
 describe('locateMissMessage (R6)', () => {
@@ -121,5 +126,17 @@ describe('vlmEmptyReasonText / humanizeId (R6)', () => {
     expect(humanizeId('vlm_preferred')).toBe('VLM preferred');
     expect(humanizeId('ocr_only')).toBe('OCR only');
     expect(humanizeId('readers_agree')).toBe('Readers agree');
+  });
+});
+
+describe('queuePosition (F8 D6)', () => {
+  it('is the served rank + 1 for a crop located on a later page', () => {
+    // /locate: rank 67, page_size 30 -> page 3, index 7 within that page.
+    expect(queuePosition(3, 30, 7)).toBe(68);
+  });
+
+  it('is the cursor + 1 when the buffer starts at page 1', () => {
+    expect(queuePosition(1, 30, 0)).toBe(1);
+    expect(queuePosition(1, 30, 45)).toBe(46);
   });
 });

@@ -42,7 +42,7 @@ def test_deep_link_lands_on_the_requested_crop(guarded_page: Any, live_url: str)
         """
         () => {
           const el = document.querySelector('[data-testid="queue-counter"]');
-          return !!el && /^\\d+ \\/ \\d+ loaded/.test(el.textContent.trim());
+          return !!el && /^#\\d+ · \\d+ loaded/.test(el.textContent.trim());
         }
         """,
         timeout=15_000,

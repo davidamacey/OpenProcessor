@@ -24,6 +24,10 @@ export interface Pager<T> {
   readonly loading: boolean;
   readonly loadingMore: boolean;
   readonly loadedPages: number;
+  /** The server page `items[0]` came from: 1 after `loadFirst()`, `page`
+   *  after `loadPage(page)`. With the served page size this places the
+   *  buffer in the whole queue (F8 D6). */
+  readonly firstPage: number;
   readonly hasMore: boolean;
   /** Reset and fetch page 1. */
   loadFirst(): Promise<void>;
@@ -58,6 +62,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
   let items = $state<T[]>([]);
   let total = $state<number>(0);
   let loadedPages = $state<number>(0);
+  let firstPage = $state<number>(1);
   let loading = $state<boolean>(false);
   let loadingMore = $state<boolean>(false);
   let error = $state<string | null>(null);
@@ -104,6 +109,9 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
     get loadedPages() {
       return loadedPages;
     },
+    get firstPage() {
+      return firstPage;
+    },
     get hasMore() {
       return hasMore;
     },
@@ -125,6 +133,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = 1;
+        firstPage = 1;
       } catch (e) {
         if (myEpoch !== epoch) return;
         error = (e as Error).message;
@@ -180,6 +189,7 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         items = fresh;
         total = res?.total ?? fresh.length;
         loadedPages = page;
+        firstPage = page;
       } catch (e) {
         if (myEpoch !== epoch) return;
         error = (e as Error).message;

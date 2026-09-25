@@ -168,6 +168,19 @@ describe('createPager', () => {
     expect(pager.loadedPages).toBe(101);
   });
 
+  it('F8 D6: firstPage records which served page the buffer starts at', async () => {
+    const pager = createPager<Row>({
+      fetchPage: async (page: number) => ({ items: rows(`p${page}`), total: 100 }),
+      keyOf: (r) => r.id,
+    });
+    await pager.loadPage(3);
+    expect(pager.firstPage).toBe(3);
+    await pager.loadMore();
+    expect(pager.firstPage).toBe(3);
+    await pager.loadFirst();
+    expect(pager.firstPage).toBe(1);
+  });
+
   it('loadPage discards the buffer from any prior loadFirst/loadMore', async () => {
     let call = 0;
     const pager = createPager<Row>({

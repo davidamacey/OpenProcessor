@@ -339,8 +339,11 @@ preset)` is the single place that decides which queue actually gets
 `GET {API_PREFIX}/review/{tab}/locate?crop_id=&page_size=&<filters/sort>`
 (`locateInReviewQueue`, `api.ts`) — the backend reports `{in_queue, rank,
 page, reason, sort_applied}` for that exact crop under the tab's active
-filters/sort, so the page loads pages up to `rank`'s page and jumps the
-cursor there directly. `in_queue: false` (already handled, filtered out,
+filters/sort, so the page loads `rank`'s page and jumps the
+cursor there directly. The queue counter shows the item's position in the
+whole served queue (`#N`, from the loaded page's offset — `queuePosition`,
+`reviewCopy.ts`; `rank + 1` for the located crop), not its index within the
+loaded buffer (F8 D6). `in_queue: false` (already handled, filtered out,
 etc.) shows the backend's `reason` in a toast instead of guessing. This
 replaced an older approach that paged forward up to 300 items hoping to
 find the crop — deleted along with it.
@@ -1571,8 +1574,8 @@ dataset` `clusters.cluster_count`; `/review?tab=regions`'s queue-counter
 {API_PREFIX}/review/regions?region_status=verify_rejected&page_size=1`
   (skips if none), opens `/review?tab=regions&region_status=
 verify_rejected&crop_id=<id>`, and asserts it actually lands: "Locating
-  crop…" clears, the queue counter reports a real `rank / loaded`
-  position, and no "not in this review queue" toast appears.
+  crop…" clears, the queue counter reports a real `#position · N loaded`
+  position (the served queue position, F8 D6), and no "not in this review queue" toast appears.
 
 ### Mutation testing
 

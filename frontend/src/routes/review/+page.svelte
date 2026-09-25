@@ -35,6 +35,7 @@
     emptyQueueMessage,
     locateMissMessage,
     NO_CLASS_YET,
+    queuePosition,
     vlmEmptyReasonText,
   } from '$lib/review/reviewCopy';
   import {
@@ -552,6 +553,10 @@
   // drained every page upfront, which on the busy 'all' tab fired ~4
   // chained network calls before first paint and made the page feel
   // frozen on slow connections. Lazy paging keeps first-paint snappy.
+  // F8 D6: the served queue position, not the index within the loaded
+  // buffer (a deep link loads only the located page).
+  const currentPosition = $derived(queuePosition(queue.firstPage, pageSize, cursor));
+
   const loadFirst = () => queue.loadFirst();
   const loadMore = () => queue.loadMore();
 
@@ -1757,7 +1762,8 @@
       data-testid="queue-counter"
       class="shrink-0 pl-2 font-mono text-xs text-zinc-500"
     >
-      {queue.items.length > 0 ? `${cursor + 1} / ${queue.items.length}` : '—'} loaded · {queue.total}
+      {queue.items.length > 0 ? `#${currentPosition}` : '—'} · {queue.items.length} loaded ·
+      {queue.total}
       total
     </span>
     <span class="shrink-0 pl-2"><ShortcutsButton /></span>
@@ -2079,7 +2085,13 @@
   {/if}
 
   <!-- Body -->
-  <div class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-2">
+  <!-- F8 D4: below lg the two panels stack; the body scrolls as a whole
+       there instead of squeezing each panel into half the height (the
+       metadata pane was ~79px tall at 800px). -->
+  <div
+    class="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-4 lg:grid-cols-2 lg:overflow-hidden"
+    data-testid="review-body"
+  >
     {#if queue.loading && queue.items.length === 0}
       <p class="col-span-full text-sm text-zinc-500">Loading...</p>
     {:else if awaitingDeepLink}
@@ -2112,22 +2124,27 @@
       </div>
     {:else}
       <!-- Source image with bbox -->
-      <div class="flex min-h-0 flex-col surface p-2" data-testid="review-source-panel">
+      <div
+        class="flex h-[45vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
+        data-testid="review-source-panel"
+      >
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>source</span>
           <span class="grow"></span>
           <span class="font-mono">{current.source ?? ''}</span>
         </div>
-        <div class="flex min-h-0 flex-1 items-center justify-center bg-zinc-950">
+        <!-- V-3: top-aligned, so on a tall pane the image sits at the top
+             rather than mid-way down an empty black panel. -->
+        <div class="flex min-h-0 flex-1 items-start justify-center bg-zinc-950">
           <!-- K6: boxes/labels are drawn client-side from
                GET {API_PREFIX}/crops/{id}/context — the server no longer
                burns an overlay into this image. -->
-          <SourceImageOverlay cropId={current.id} maxDim={1280} />
+          <SourceImageOverlay cropId={current.id} maxDim={1280} align="start" />
         </div>
       </div>
 
       <!-- Crop + meta -->
-      <div class="flex min-h-0 flex-col surface p-2">
+      <div class="flex flex-col surface p-2 lg:min-h-0" data-testid="review-crop-panel">
         <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
           <span>crop</span>
           <span class="grow"></span>
@@ -2151,8 +2168,10 @@
              (BboxCanvas is still square-aspect within it) while fitting.
              Verified at 1280×720, 1600×1000 and 1920×1080 — see
              artifacts_local/cw-live/phase-b-fixes/. -->
+        <!-- F8 D4: overflow-hidden so a region canvas never paints over the
+             first metadata row (the Reason row read half-clipped). -->
         <div
-          class="flex min-h-[210px] max-h-[40%] shrink-0 items-center justify-center bg-zinc-950"
+          class="flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
         >
           {#if activeSlot?.capabilities.subBox && editMode}
             <!-- Edit mode — drag/resize the proposal directly, then hit
@@ -2223,7 +2242,10 @@
         <!-- Everything below the image scrolls in its own region — the
              image above keeps its floor height regardless of how much
              metadata/Details content is open. -->
-        <div class="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+        <div
+          class="mt-3 pr-1 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+          data-testid="review-meta-pane"
+        >
           <dl class="grid grid-cols-2 gap-y-1 text-xs">
             {#if currentSlotRejectionReason}
               {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
@@ -2829,7 +2851,7 @@
     class="flex items-center justify-between gap-3 border-t border-zinc-800 px-4 py-2 text-sm"
   >
     <span class="font-mono text-xs text-zinc-500">
-      {Math.min(cursor + 1, queue.items.length)} / {queue.total}
+      {queue.items.length > 0 ? currentPosition : 0} / {queue.total}
       {#if queue.items.length < queue.total}
         <span class="ml-1 text-zinc-600">(loaded {queue.items.length})</span>
       {/if}

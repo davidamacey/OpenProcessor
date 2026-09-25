@@ -99,3 +99,18 @@ export function emptyQueueMessage(input: EmptyQueueInput): EmptyQueueMessage {
   }
   return { title: `The ${input.label} queue is empty.`, lines, link };
 }
+
+/**
+ * F8 D6: the item's position in the whole served queue, 1-based. A deep
+ * link loads only the located page (`firstPage`), so the cursor's index
+ * within the loaded buffer (e.g. 8) is not the queue position (the served
+ * rank 67 → 68th). The served `/locate` places a crop at
+ * `rank = (page - 1) * page_size + index`, so this is `rank + 1` for it.
+ */
+export function queuePosition(
+  firstPage: number,
+  pageSize: number,
+  cursor: number,
+): number {
+  return (Math.max(1, firstPage) - 1) * pageSize + cursor + 1;
+}

@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`/review` layout and counter (V-3, F8 D4, F8 D6).** The source image
+  is top-aligned instead of floating mid-way down a tall empty pane
+  (`SourceImageOverlay`'s new `align` prop). Below the `lg` breakpoint the
+  review body scrolls as a whole, so the metadata list is no longer
+  squeezed into a ~79px inner pane at 800px, and the crop box no longer
+  paints over the first metadata row. The queue counter shows the item's
+  position in the whole served queue (`#68 · 30 loaded · 7787 total` for
+  a deep link to rank 67), not its index within the loaded page
+  (`Pager.firstPage`, `queuePosition`).
+
 - **F-78: the region tab intermittently vanished with a spurious "region
   profile changed — reload" toast.** A slow or aborted first `/health`
   read (2 s timeout) seeded "no region profile" and the next poll
