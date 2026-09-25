@@ -139,7 +139,7 @@ describe('R7: region Status uses the served status vocabulary', () => {
     const slots = mapCropSlots(REGION_RAW, [0, 0, 1, 1]);
     expect(Object.keys(slots).length).toBeGreaterThan(0);
     const el = render({ crop: crop({ slots } as Partial<Crop>) });
-    expect(el.textContent).toContain(WIDGET_TAG_PROFILE.display_name);
+    expect(el.textContent).toContain('Region');
     expect(rowValue(el, 'Status')).toBe('served-label-for-detected');
   });
 });
@@ -153,6 +153,6 @@ describe('no region profile (domain-neutral audit §5.4)', () => {
     expect(slots).toEqual({});
     const el = render({ crop: crop({ slots } as Partial<Crop>) });
     expect(rowValue(el, 'Status')).toBeNull();
-    expect(el.textContent).not.toContain(WIDGET_TAG_PROFILE.display_name);
+    expect(el.textContent).not.toContain('Region');
   });
 });

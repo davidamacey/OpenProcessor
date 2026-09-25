@@ -175,7 +175,10 @@ export function regionSlotFromServedProfile(p: ServedRegionProfile): SlotSpec {
   return {
     key: p.name,
     bind: { className },
-    label: { singular: 'region', plural: noun, title: noun },
+    // `title` reads as a singular in the UI ("Confirm Region", "Region
+    // score"); the served noun is a plural collection name ("Widget tags"), so
+    // it labels the tab, gallery and stats panel instead.
+    label: { singular: 'region', plural: noun, title: 'Region' },
     capabilities: {
       ...REGION_WIRE_CAPABILITIES,
       text: hasText ? REGION_TEXT : undefined,

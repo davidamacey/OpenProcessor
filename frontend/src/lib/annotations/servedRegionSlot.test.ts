@@ -40,11 +40,13 @@ describe('regionSlotFromServedProfile', () => {
     expect(slot.bind).toEqual({ className: WIDGET_TAG_PROFILE.region_class_name });
   });
 
-  it('display_name is the tab label, the plural/title noun and the stats panel title', () => {
+  it('display_name is the tab label, the plural noun and the stats panel title', () => {
     const noun = WIDGET_TAG_PROFILE.display_name;
     expect(slot.capabilities.queue?.tabLabel).toBe(noun);
     expect(slot.label.plural).toBe(noun);
-    expect(slot.label.title).toBe(noun);
+    // The singular-context title stays generic ("Confirm Region").
+    expect(slot.label.title).toBe('Region');
+    expect(slot.label.singular).toBe('region');
     expect(slot.stats?.panelTitle).toBe(noun);
   });
 
@@ -96,7 +98,7 @@ describe('regionSlotFromServedProfile', () => {
   it('falls back to a generic noun when display_name is empty', () => {
     const s = regionSlotFromServedProfile({ ...WIDGET_TAG_PROFILE, display_name: '  ' });
     expect(s.capabilities.queue?.tabLabel).toBe('Regions');
-    expect(s.label.title).toBe('Regions');
+    expect(s.label.plural).toBe('Regions');
   });
 
   it('binds to the profile name when region_class_name is empty', () => {
