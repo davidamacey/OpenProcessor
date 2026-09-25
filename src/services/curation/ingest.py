@@ -57,6 +57,7 @@ Sibling modules, split out of this one to keep each to one concern:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import os
@@ -91,7 +92,7 @@ from src.services.curation.item_doc import (
     build_item_doc,
     region_seed_status,
 )
-from src.services.curation.source_image_cache import write_crop_cache
+from src.services.curation.source_image_cache import maybe_prune_crop_cache, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import (
     bbox_norm as _bbox_norm_fn,
@@ -548,6 +549,10 @@ class CurationIngestService:
                     region_status=self.region_seed_status,
                 )
             )
+
+        await asyncio.to_thread(
+            maybe_prune_crop_cache, self.config.crop_cache_dir, self.config.crop_cache_max_bytes
+        )
 
         created_ids: list[str] = []
         try:

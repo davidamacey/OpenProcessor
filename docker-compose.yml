@@ -89,12 +89,17 @@ services:
       # a given request.
       - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
+      # ST-1: shared tmpfs item-crop cache with curation-detection-worker.
+      # curation-vlm-worker doesn't need it -- it reads crops through the
+      # API's /vlm/label_batch.
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
     environment:
       # Triton gRPC endpoint (Docker service name)
       - TRITON_URL=triton-server:8001
       # HuggingFace cache configuration (appuser home directory)
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+      - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
       # Curation/labeling API prefix (CurationConfig.api_prefix, generic
       # default /curation — see env.template). Every curation router
       # builds its prefix at *module import*, so this must be set before
@@ -182,9 +187,12 @@ services:
       - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
       - openprocessor-state:/var/lib/openprocessor
+      # ST-1: shared with yolo-api -- see that service's mount comment.
+      - openprocessor-crop-cache:/var/cache/openprocessor/crops
     environment:
       - TRITON_URL=triton-server:8001
       - OPENSEARCH_URL=http://opensearch:9200
+      - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
       # D5: the segmenter leg is opt-in. Empty OP_SEGMENTER_URL makes it a
       # documented no-op (see scripts/curation/worker/client.py
       # SegmenterClient). Set OP_SEGMENTER_URL=http://segmenter:8000 to use the
@@ -727,3 +735,13 @@ volumes:
   openprocessor-state:
   openprocessor-jobs:
   mlflow_data:
+  # ST-1: shared tmpfs item-crop cache (yolo-api + curation-detection-worker).
+  # Size is the OS-level ceiling; OP_CROP_CACHE_MAX_BYTES (default 3 GiB,
+  # see CurationConfig.crop_cache_max_bytes) prunes the *content* down
+  # before this fills.
+  openprocessor-crop-cache:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=4g,uid=1000,gid=999,mode=0770"

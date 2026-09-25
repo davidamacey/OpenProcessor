@@ -216,6 +216,27 @@ def test_auto_label_worker_caps_blas_threads() -> None:
     assert 'MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}' in env_str
 
 
+def test_api_and_detection_worker_share_crop_cache() -> None:
+    """ST-1: yolo-api and curation-detection-worker must mount the SAME
+    named crop-cache volume at the SAME target, with OP_CROP_CACHE_DIR set
+    to that target in both -- otherwise the worker's cache reads never see
+    what the API's ingest path wrote."""
+    services = _services()
+    target = '/var/cache/openprocessor/crops'
+    for name in ('yolo-api', 'curation-detection-worker'):
+        mounts = [str(v) for v in (services[name].get('volumes') or [])]
+        matching = [m for m in mounts if m.endswith(f':{target}')]
+        assert matching, f'{name} has no crop-cache mount at {target}: {mounts}'
+        volume_name = matching[0].split(':', 1)[0]
+        assert volume_name == 'openprocessor-crop-cache', (name, matching[0])
+
+        env = [str(e) for e in (services[name].get('environment') or [])]
+        assert f'OP_CROP_CACHE_DIR={target}' in env, (name, env)
+
+    top_level_volumes = _load_compose()['volumes']
+    assert 'openprocessor-crop-cache' in top_level_volumes
+
+
 def test_segmenter_hf_cache_mounted_at_appuser_home() -> None:
     """ST-2: the segmenter container runs as uid 1000 (``appuser``) with
     ``HF_HOME=/home/appuser/.cache/huggingface``. A cache bind at
