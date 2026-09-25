@@ -114,6 +114,23 @@ class TestRules:
     def test_text_key(self) -> None:
         assert text_key(' not_readable! ') == 'NOTREADABLE'
 
+    def test_whole_reading_that_is_a_stopword_is_rejected(self) -> None:
+        """A reading that IS a configured stopword (e.g. a region-profile
+        text-rule word) is not text -- distinct from OCR-line stopword
+        filtering, which is unchanged and only strips a stopword line out
+        of a larger multi-line reading."""
+        profile = dataclasses.replace(REF, text_stopwords=frozenset({'USA', 'CA'}))
+        rules = RegionTextRules.from_profile(profile)
+        assert rules.invalid_reason('USA') == 'stopword'
+        assert rules.invalid_reason('ca') == 'stopword'
+
+    def test_stopword_does_not_reject_text_that_merely_contains_it(self) -> None:
+        profile = dataclasses.replace(REF, text_stopwords=frozenset({'USA', 'CA'}))
+        rules = RegionTextRules.from_profile(profile)
+        assert rules.invalid_reason('USA123') is None
+        assert rules.invalid_reason('CAT1') is None
+        assert rules.invalid_reason('KING') is None
+
 
 def _ocr(text: str) -> Any:
     return read_dominant_text([OcrLine(text, (0.1, 0.3, 0.9, 0.7), 0.91)], REF_CFG)
