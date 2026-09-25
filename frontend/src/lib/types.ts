@@ -626,6 +626,9 @@ export interface ServedRegionProfile {
   /** The region noun shown to operators (tab label, gallery copy). May be
    *  empty when the profile doesn't set one. */
   display_name: string;
+  /** Singular form of `display_name` (OpenProcessor 8acacae). Carried
+   *  verbatim; not yet read by the region slot's copy. May be empty. */
+  display_name_singular: string;
   /** The class whose items ARE regions (e.g. the class a region export
    *  writes). May be empty. */
   region_class_name: string;
@@ -1072,6 +1075,9 @@ export interface IngestImageResult {
   n_crops: number;
   n_regions: number;
   error: string | null;
+  /** Served since OpenProcessor BA-1..7 ingest hardening; not yet rendered. */
+  error_kind?: string | null;
+  source_identifier?: string | null;
 }
 
 export interface BatchIngestSummary {

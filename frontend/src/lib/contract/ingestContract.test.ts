@@ -37,11 +37,13 @@ describe('ingest contract', () => {
   it('IngestImageResult (types.ts) has exactly the served IngestImageResponse properties', () => {
     const IMAGE_RESULT_KEYS = [
       'error',
+      'error_kind',
       'image_id',
       'image_path',
       'imohash',
       'n_crops',
       'n_regions',
+      'source_identifier',
       'status',
     ] satisfies (keyof IngestImageResult)[];
     expect([...IMAGE_RESULT_KEYS].sort()).toEqual(keysOf('IngestImageResponse'));
@@ -70,10 +72,10 @@ describe('ingest contract', () => {
     ] satisfies (keyof BatchIngestResponse)[];
     // The generated schema name is mangled by the module path FastAPI
     // resolved the model from (two `BatchIngestResponse`-titled models
-    // exist server-side); `src__routers__curation___common__` is the
+    // exist server-side); `src__routers__curation___common_models__` is the
     // real one this endpoint's response references.
     expect([...RESPONSE_KEYS].sort()).toEqual(
-      keysOf('src__routers__curation___common__BatchIngestResponse'),
+      keysOf('src__routers__curation___common_models__BatchIngestResponse'),
     );
   });
 
@@ -86,10 +88,16 @@ describe('ingest contract', () => {
     expect(served).toEqual([...client].sort());
   });
 
-  it('the upload multipart body field names match the served request schema', () => {
-    const schema = schemas['Body_curation_ingest_upload_curation_ingest_upload_post'];
-    expect(Object.keys(schema.properties ?? {}).sort()).toEqual(
-      ['image_paths', 'images', 'source'].sort(),
-    );
+  it('every upload multipart field the client sends is in the served request schema', () => {
+    // The served body also accepts an optional `run_id` the client does
+    // not send yet; the check is that nothing the client sends is unknown.
+    const schema = schemas['Body_curation_ingest_upload_curation_ingest_upload_post'] as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    const sent = ['image_paths', 'images', 'source'];
+    const served = Object.keys(schema.properties ?? {});
+    for (const f of sent) expect(served).toContain(f);
+    for (const r of schema.required ?? []) expect(sent).toContain(r);
   });
 });

@@ -1,6 +1,107 @@
 {
   "components": {
     "schemas": {
+      "AcceptedDataset": {
+        "properties": {
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Test Sha"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "n_eval_classes": {
+            "title": "N Eval Classes",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Label Sha"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "frozen_test_sha",
+          "test_label_sha",
+          "n_eval_classes"
+        ],
+        "title": "AcceptedDataset",
+        "type": "object"
+      },
+      "AcceptedModel": {
+        "properties": {
+          "class_mapping": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ClassMapping"
+            },
+            "description": "Per dataset id",
+            "title": "Class Mapping",
+            "type": "object"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "model": {
+            "description": "Model key: run:<id>, run:<id>:onnx, baseline:<name>, custom:<name>",
+            "title": "Model",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "run",
+              "baseline",
+              "custom"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "train_test_overlap": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TrainTestOverlap"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "Per dataset id",
+            "title": "Train Test Overlap",
+            "type": "object"
+          }
+        },
+        "required": [
+          "model",
+          "display_name",
+          "source",
+          "class_mapping",
+          "train_test_overlap"
+        ],
+        "title": "AcceptedModel",
+        "type": "object"
+      },
       "AugmentationPresetOption": {
         "description": "One selectable ``augmentation.preset``.",
         "properties": {
@@ -90,15 +191,33 @@
         "title": "AugmentationSpec",
         "type": "object"
       },
-      "BakeoffModelSpec": {
-        "description": "One model to score. Mirrors the harness CLI flags.",
+      "BakeoffComparison": {
         "properties": {
-          "backend": {
-            "description": "ultralytics | triton | open-image-models | lpdnet | two-stage | onnxruntime | coreml",
-            "title": "Backend",
-            "type": "string"
+          "common_classes": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Common Classes",
+            "type": "array"
           },
-          "device": {
+          "dataset": {
+            "$ref": "#/components/schemas/ComparisonDataset"
+          },
+          "eval_classes": {
+            "items": {
+              "$ref": "#/components/schemas/EvalClassGt"
+            },
+            "title": "Eval Classes",
+            "type": "array"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/FailedModel"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "job_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -107,110 +226,18 @@
                 "type": "null"
               }
             ],
-            "title": "Device"
+            "title": "Job Id"
           },
-          "gt_class_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gt Class Id"
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonRow"
+            },
+            "title": "Models",
+            "type": "array"
           },
-          "gt_class_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gt Class Name"
-          },
-          "imgsz": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Imgsz"
-          },
-          "lpdnet_variant": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lpdnet Variant"
-          },
-          "mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mode"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "pred_class_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pred Class Id"
-          },
-          "primary_classes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primary Classes"
-          },
-          "primary_imgsz": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primary Imgsz"
-          },
-          "primary_weights": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Primary Weights"
+          "n_models": {
+            "title": "N Models",
+            "type": "integer"
           },
           "profile": {
             "anyOf": [
@@ -223,7 +250,91 @@
             ],
             "title": "Profile"
           },
-          "secondary_backend": {
+          "rank_by": {
+            "title": "Rank By",
+            "type": "string"
+          },
+          "rank_scope": {
+            "enum": [
+              "common",
+              "overall"
+            ],
+            "title": "Rank Scope",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 2,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Thresholds",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "job_id",
+          "profile",
+          "thresholds",
+          "dataset",
+          "eval_classes",
+          "common_classes",
+          "rank_by",
+          "rank_scope",
+          "models",
+          "failed",
+          "warnings",
+          "n_models"
+        ],
+        "title": "BakeoffComparison",
+        "type": "object"
+      },
+      "BakeoffMatrix": {
+        "properties": {
+          "best": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            "description": "best[dataset id][metric] = every tied winning model key",
+            "title": "Best",
+            "type": "object"
+          },
+          "cells": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "$ref": "#/components/schemas/MatrixCell"
+              },
+              "type": "object"
+            },
+            "description": "cells[model key][dataset id]",
+            "title": "Cells",
+            "type": "object"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/MatrixDataset"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "job_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -232,9 +343,545 @@
                 "type": "null"
               }
             ],
-            "title": "Secondary Backend"
+            "title": "Job Id"
           },
-          "secondary_imgsz": {
+          "metrics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/MatrixModel"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "rank_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank By"
+          },
+          "schema_version": {
+            "const": 2,
+            "title": "Schema Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "job_id",
+          "rank_by",
+          "datasets",
+          "models",
+          "metrics",
+          "cells",
+          "best"
+        ],
+        "title": "BakeoffMatrix",
+        "type": "object"
+      },
+      "BakeoffProfileList": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "default_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Error"
+          },
+          "default_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Profile"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/BakeoffProfileRow"
+            },
+            "title": "Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "count",
+          "default_profile"
+        ],
+        "title": "BakeoffProfileList",
+        "type": "object"
+      },
+      "BakeoffProfileRow": {
+        "properties": {
+          "baselines_path": {
+            "title": "Baselines Path",
+            "type": "string"
+          },
+          "class_filter": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Class Filter",
+            "type": "array"
+          },
+          "conf_floor": {
+            "title": "Conf Floor",
+            "type": "number"
+          },
+          "context_class_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Context Class Ids",
+            "type": "array"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "default_backend": {
+            "title": "Default Backend",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "imgsz": {
+            "title": "Imgsz",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "registered",
+              "configured"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nms_iou": {
+            "title": "Nms Iou",
+            "type": "number"
+          },
+          "op_conf": {
+            "title": "Op Conf",
+            "type": "number"
+          },
+          "op_iou": {
+            "title": "Op Iou",
+            "type": "number"
+          },
+          "rank_metric": {
+            "title": "Rank Metric",
+            "type": "string"
+          },
+          "triton_model": {
+            "title": "Triton Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "kind",
+          "default",
+          "class_filter",
+          "imgsz",
+          "conf_floor",
+          "nms_iou",
+          "op_conf",
+          "op_iou",
+          "rank_metric",
+          "default_backend",
+          "triton_model",
+          "context_class_ids",
+          "baselines_path"
+        ],
+        "title": "BakeoffProfileRow",
+        "type": "object"
+      },
+      "BakeoffRunAccepted": {
+        "properties": {
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedDataset"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedModel"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "status": {
+            "const": "enqueued",
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "job_id",
+          "profile",
+          "datasets",
+          "models",
+          "warnings"
+        ],
+        "title": "BakeoffRunAccepted",
+        "type": "object"
+      },
+      "BakeoffRunList": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/BakeoffRunRow"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs"
+        ],
+        "title": "BakeoffRunList",
+        "type": "object"
+      },
+      "BakeoffRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/DatasetRef"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "models": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "baseline": "#/components/schemas/BaselineModelRef",
+                  "custom": "#/components/schemas/CustomModelRef",
+                  "run": "#/components/schemas/RunModelRef"
+                },
+                "propertyName": "source"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RunModelRef"
+                },
+                {
+                  "$ref": "#/components/schemas/BaselineModelRef"
+                },
+                {
+                  "$ref": "#/components/schemas/CustomModelRef"
+                }
+              ]
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BakeoffProfile name (GET /bakeoff/profiles) or a profile .json path; omitted = the configured default",
+            "title": "Profile"
+          },
+          "quantize": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuantizeRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "BakeoffRunRequest",
+        "type": "object"
+      },
+      "BakeoffRunRow": {
+        "properties": {
+          "datasets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "profile",
+          "datasets",
+          "models",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "BakeoffRunRow",
+        "type": "object"
+      },
+      "BakeoffStatus": {
+        "properties": {
+          "completed": {
+            "items": {
+              "$ref": "#/components/schemas/CompletedTask"
+            },
+            "title": "Completed",
+            "type": "array"
+          },
+          "datasets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/FailedTask"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/JobProgress"
+          },
+          "schema_version": {
+            "const": 2,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "job_id",
+          "state",
+          "profile",
+          "datasets",
+          "models",
+          "started_at",
+          "finished_at",
+          "progress",
+          "completed",
+          "failed",
+          "error"
+        ],
+        "title": "BakeoffStatus",
+        "type": "object"
+      },
+      "BaselineModel": {
+        "additionalProperties": false,
+        "description": "A configured external model (also the baseline-registry entry schema).",
+        "properties": {
+          "backend": {
+            "description": "A built-in or plugin-registered harness backend",
+            "title": "Backend",
+            "type": "string"
+          },
+          "backend_options": {
+            "additionalProperties": true,
+            "title": "Backend Options",
+            "type": "object"
+          },
+          "class_map": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "{\"<model class id>\": \"<eval class name>\"}; null = by name",
+            "title": "Class Map"
+          },
+          "imgsz": {
             "anyOf": [
               {
                 "type": "integer"
@@ -243,7 +890,22 @@
                 "type": "null"
               }
             ],
-            "title": "Secondary Imgsz"
+            "title": "Imgsz"
+          },
+          "mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "crop",
+              "both"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+            "title": "Name",
+            "type": "string"
           },
           "training_data": {
             "anyOf": [
@@ -267,17 +929,6 @@
             ],
             "title": "Triton Model"
           },
-          "triton_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Triton Url"
-          },
           "weights": {
             "anyOf": [
               {
@@ -287,65 +938,42 @@
                 "type": "null"
               }
             ],
+            "description": "Path inside the evaluator",
             "title": "Weights"
           }
         },
         "required": [
-          "backend",
-          "name"
+          "name",
+          "backend"
         ],
-        "title": "BakeoffModelSpec",
+        "title": "BaselineModel",
         "type": "object"
       },
-      "BakeoffRequest": {
-        "description": "Body for ``POST /bakeoff/run``.\n\nProvide ``datasets`` (the matrix form: every model is scored on every\ndataset) or the legacy single ``dataset``. ``models`` may use ``mode:\n'both'`` to score full-frame and crop mode.",
+      "BaselineModelList": {
         "properties": {
-          "dataset": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Legacy single frozen export root",
-            "title": "Dataset"
-          },
-          "datasets": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/DatasetRef"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Matrix: frozen datasets",
-            "title": "Datasets"
-          },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
-          "models": {
+          "baselines": {
             "items": {
-              "$ref": "#/components/schemas/BakeoffModelSpec"
+              "$ref": "#/components/schemas/BaselineModel"
             },
-            "title": "Models",
+            "title": "Baselines",
             "type": "array"
           },
-          "profile": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "baselines",
+          "count"
+        ],
+        "title": "BaselineModelList",
+        "type": "object"
+      },
+      "BaselineModelRef": {
+        "additionalProperties": false,
+        "properties": {
+          "display_name": {
             "anyOf": [
               {
                 "type": "string"
@@ -354,29 +982,23 @@
                 "type": "null"
               }
             ],
-            "description": "BakeoffProfile name (see GET /bakeoff/profiles) or a profile .json path on the evaluator; omitted = the evaluator default (generic)",
-            "title": "Profile"
+            "title": "Display Name"
           },
-          "quantize": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Auto-export + score quantized ONNX variants",
-            "title": "Quantize"
+          "name": {
+            "title": "Name",
+            "type": "string"
           },
-          "verify_frozen": {
-            "default": true,
-            "title": "Verify Frozen",
-            "type": "boolean"
+          "source": {
+            "const": "baseline",
+            "title": "Source",
+            "type": "string"
           }
         },
-        "title": "BakeoffRequest",
+        "required": [
+          "source",
+          "name"
+        ],
+        "title": "BaselineModelRef",
         "type": "object"
       },
       "BatchIngestSummaryResponse": {
@@ -436,7 +1058,7 @@
                 "type": "null"
               }
             ],
-            "description": "JSON list of stable identifiers, one per image, stored as image_path (default: the upload filenames). Need not exist on the server.",
+            "description": "JSON list of stable identifiers, one per image, stored as source_identifier (default: the upload filenames). Need not exist on the server -- BA-1: image_path is now the server-persisted path the uploaded bytes were written under.",
             "title": "Image Paths"
           },
           "images": {
@@ -447,6 +1069,18 @@
             },
             "title": "Images",
             "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BA-4: optional tag for this upload call, recorded as ingest_run_id.",
+            "title": "Run Id"
           },
           "source": {
             "default": "upload",
@@ -627,9 +1261,28 @@
             ],
             "title": "Hotkey Letter"
           },
+          "kind": {
+            "default": "item",
+            "enum": [
+              "item",
+              "region"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "sample_count": {
             "default": 0,
             "title": "Sample Count",
+            "type": "integer"
+          },
+          "trainable": {
+            "default": 0,
+            "title": "Trainable",
+            "type": "integer"
+          },
+          "trainable_gap": {
+            "default": 0,
+            "title": "Trainable Gap",
             "type": "integer"
           },
           "validated_count": {
@@ -673,6 +1326,66 @@
           "classes"
         ],
         "title": "ClassListResponse",
+        "type": "object"
+      },
+      "ClassMapping": {
+        "properties": {
+          "method": {
+            "enum": [
+              "explicit",
+              "run_class_remap",
+              "registry_ids",
+              "names",
+              "single_class_fallback"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model_to_eval": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "{\"<model class id>\": <eval class id>}; null = matched by name in the evaluator",
+            "title": "Model To Eval"
+          },
+          "not_covered_eval_classes": {
+            "items": {
+              "$ref": "#/components/schemas/NotCoveredClass"
+            },
+            "title": "Not Covered Eval Classes",
+            "type": "array"
+          },
+          "unmapped_model_classes": {
+            "items": {
+              "$ref": "#/components/schemas/UnmappedModelClass"
+            },
+            "title": "Unmapped Model Classes",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "method",
+          "model_to_eval",
+          "unmapped_model_classes",
+          "not_covered_eval_classes",
+          "warnings"
+        ],
+        "title": "ClassMapping",
         "type": "object"
       },
       "ClassMergeRequest": {
@@ -731,6 +1444,366 @@
           }
         },
         "title": "ClassUpdateRequest",
+        "type": "object"
+      },
+      "CommonMetricBlock": {
+        "description": "The same metrics restricted to the comparison's common_classes.",
+        "properties": {
+          "f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F1"
+          },
+          "fn": {
+            "title": "Fn",
+            "type": "integer"
+          },
+          "fp": {
+            "title": "Fp",
+            "type": "integer"
+          },
+          "map_50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50"
+          },
+          "map_50_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50 95"
+          },
+          "n_classes": {
+            "title": "N Classes",
+            "type": "integer"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "recall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recall"
+          },
+          "tp": {
+            "title": "Tp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n_classes",
+          "map_50",
+          "map_50_95",
+          "precision",
+          "recall",
+          "f1",
+          "tp",
+          "fp",
+          "fn"
+        ],
+        "title": "CommonMetricBlock",
+        "type": "object"
+      },
+      "ComparisonDataset": {
+        "properties": {
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Test Sha"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "n_background_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Background Images"
+          },
+          "n_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Images"
+          },
+          "n_objects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Objects"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Label Sha"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "ComparisonDataset",
+        "type": "object"
+      },
+      "ComparisonRow": {
+        "properties": {
+          "class_mapping": {
+            "$ref": "#/components/schemas/RowClassMapping"
+          },
+          "common": {
+            "$ref": "#/components/schemas/CommonMetricBlock"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/Coverage"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "fps": {
+            "title": "Fps",
+            "type": "number"
+          },
+          "imgsz": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imgsz"
+          },
+          "latency_ms": {
+            "$ref": "#/components/schemas/LatencyStats"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/MetricBlock"
+          },
+          "per_class": {
+            "items": {
+              "$ref": "#/components/schemas/PerClassRow"
+            },
+            "title": "Per Class",
+            "type": "array"
+          },
+          "per_stratum": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StratumMetrics"
+            },
+            "title": "Per Stratum",
+            "type": "object"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Competition rank (1, 1, 3); null = not rankable",
+            "title": "Rank"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "runtime": {
+            "title": "Runtime",
+            "type": "string"
+          },
+          "size_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Mb"
+          },
+          "source": {
+            "enum": [
+              "run",
+              "baseline",
+              "custom"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "train_test_overlap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainTestOverlap"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "training_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Data"
+          }
+        },
+        "required": [
+          "rank",
+          "model",
+          "display_name",
+          "source",
+          "run_id",
+          "runtime",
+          "imgsz",
+          "training_data",
+          "overall",
+          "common",
+          "per_class",
+          "coverage",
+          "class_mapping",
+          "train_test_overlap",
+          "latency_ms",
+          "fps",
+          "size_mb",
+          "per_stratum"
+        ],
+        "title": "ComparisonRow",
+        "type": "object"
+      },
+      "CompletedTask": {
+        "properties": {
+          "dataset": {
+            "title": "Dataset",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "model"
+        ],
+        "title": "CompletedTask",
+        "type": "object"
+      },
+      "Coverage": {
+        "properties": {
+          "n_covered": {
+            "title": "N Covered",
+            "type": "integer"
+          },
+          "n_eval_classes": {
+            "title": "N Eval Classes",
+            "type": "integer"
+          },
+          "not_covered": {
+            "items": {
+              "$ref": "#/components/schemas/NotCoveredClass"
+            },
+            "title": "Not Covered",
+            "type": "array"
+          },
+          "predictions_outside_scored_classes": {
+            "title": "Predictions Outside Scored Classes",
+            "type": "integer"
+          },
+          "unmapped_model_classes": {
+            "items": {
+              "$ref": "#/components/schemas/UnmappedModelClass"
+            },
+            "title": "Unmapped Model Classes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "n_eval_classes",
+          "n_covered",
+          "not_covered",
+          "unmapped_model_classes",
+          "predictions_outside_scored_classes"
+        ],
+        "title": "Coverage",
         "type": "object"
       },
       "CropBatchLabelRequest": {
@@ -1118,10 +2191,33 @@
         "title": "CurationSettingsUpdateRequest",
         "type": "object"
       },
-      "DatasetRef": {
-        "description": "One frozen evaluation dataset (a column in the matrix).",
+      "CustomModelRef": {
+        "additionalProperties": false,
         "properties": {
-          "name": {
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "backend_options": {
+            "additionalProperties": true,
+            "title": "Backend Options",
+            "type": "object"
+          },
+          "class_map": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Map"
+          },
+          "display_name": {
             "anyOf": [
               {
                 "type": "string"
@@ -1130,17 +2226,344 @@
                 "type": "null"
               }
             ],
-            "title": "Name"
+            "title": "Display Name"
           },
-          "path": {
-            "title": "Path",
+          "imgsz": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imgsz"
+          },
+          "mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "crop",
+              "both"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "const": "custom",
+            "title": "Source",
+            "type": "string"
+          },
+          "triton_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triton Model"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          }
+        },
+        "required": [
+          "source",
+          "name",
+          "backend"
+        ],
+        "title": "CustomModelRef",
+        "type": "object"
+      },
+      "DatasetRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "An eval dataset id, or run:<job_id> = the export that run trained on",
+            "title": "Id",
             "type": "string"
           }
         },
         "required": [
-          "path"
+          "id"
         ],
         "title": "DatasetRef",
+        "type": "object"
+      },
+      "EvalClassGt": {
+        "properties": {
+          "eval_class_id": {
+            "title": "Eval Class Id",
+            "type": "integer"
+          },
+          "n_gt": {
+            "title": "N Gt",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eval_class_id",
+          "name",
+          "n_gt"
+        ],
+        "title": "EvalClassGt",
+        "type": "object"
+      },
+      "EvalDataset": {
+        "properties": {
+          "classes": {
+            "items": {
+              "$ref": "#/components/schemas/EvalDatasetClass"
+            },
+            "title": "Classes",
+            "type": "array"
+          },
+          "dataset_kind": {
+            "enum": [
+              "multi_class",
+              "single_class",
+              "external"
+            ],
+            "title": "Dataset Kind",
+            "type": "string"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "exported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exported At"
+          },
+          "frozen_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "External only: the test split still matches its freeze lock",
+            "title": "Frozen Ok"
+          },
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Test-split identity: which frames (filenames only), 16 hex",
+            "title": "Frozen Test Sha"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "curated | public | sample for external; null for export",
+            "title": "Group"
+          },
+          "id": {
+            "description": "export:<path under export_root> or external:<group>/<name>",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "n_background_images": {
+            "title": "N Background Images",
+            "type": "integer"
+          },
+          "n_images": {
+            "title": "N Images",
+            "type": "integer"
+          },
+          "n_objects": {
+            "title": "N Objects",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nc": {
+            "description": "Size of the label space (data.yaml names)",
+            "title": "Nc",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "sha_source": {
+            "description": "Where test_label_sha came from: the export manifest / freeze lock, or computed from the label files",
+            "enum": [
+              "manifest",
+              "computed"
+            ],
+            "title": "Sha Source",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "export",
+              "external"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Test-split content: which boxes (label file contents), 16 hex; the hash the evaluator verifies before scoring",
+            "title": "Test Label Sha"
+          },
+          "unlabeled_items_on_exported_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unlabeled Items On Exported Images"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "group",
+          "name",
+          "path",
+          "is_current",
+          "dataset_kind",
+          "nc",
+          "classes",
+          "n_images",
+          "n_objects",
+          "n_background_images",
+          "frozen_test_sha",
+          "test_label_sha",
+          "sha_source",
+          "dataset_sha",
+          "exported_at",
+          "unlabeled_items_on_exported_images",
+          "frozen_ok"
+        ],
+        "title": "EvalDataset",
+        "type": "object"
+      },
+      "EvalDatasetClass": {
+        "description": "One class with at least one object in the dataset's test split.",
+        "properties": {
+          "eval_class_id": {
+            "title": "Eval Class Id",
+            "type": "integer"
+          },
+          "n_images": {
+            "title": "N Images",
+            "type": "integer"
+          },
+          "n_objects": {
+            "title": "N Objects",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "registry_class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Class-registry id (inverse of class_registry.json export_id_map); null when the export has no registry mapping for it",
+            "title": "Registry Class Id"
+          }
+        },
+        "required": [
+          "eval_class_id",
+          "name",
+          "registry_class_id",
+          "n_objects",
+          "n_images"
+        ],
+        "title": "EvalDatasetClass",
+        "type": "object"
+      },
+      "EvalDatasetList": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/EvalDataset"
+            },
+            "title": "Datasets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "datasets",
+          "count"
+        ],
+        "title": "EvalDatasetList",
         "type": "object"
       },
       "ExportClassSplitCounts": {
@@ -1358,6 +2781,18 @@
             ],
             "description": "Objects per class per split.",
             "title": "Class Split Counts"
+          },
+          "classes_with_objects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Of class_count registry classes, how many have >=1 object.",
+            "title": "Classes With Objects"
           },
           "dataset_sha": {
             "anyOf": [
@@ -1615,6 +3050,80 @@
         "title": "ExportYoloRequest",
         "type": "object"
       },
+      "FailedModel": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "error"
+        ],
+        "title": "FailedModel",
+        "type": "object"
+      },
+      "FailedTask": {
+        "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          }
+        },
+        "required": [
+          "stage",
+          "dataset",
+          "model",
+          "error"
+        ],
+        "title": "FailedTask",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1630,6 +3139,18 @@
       },
       "HealthResponse": {
         "properties": {
+          "mlflow_public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "T1: the browser-reachable MLflow base URL (CurationConfig.mlflow_public_url / OP_MLFLOW_PUBLIC_URL), null when unset. A served train run may carry its own mlflow_run_url that is correct host-side but unreachable from an operator browser -- a client should build the link from this base rather than guessing a port.",
+            "title": "Mlflow Public Url"
+          },
           "opensearch": {
             "additionalProperties": true,
             "title": "Opensearch",
@@ -1726,6 +3247,32 @@
         "title": "ImportLabelsRequest",
         "type": "object"
       },
+      "IngestBatchConfig": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_items": {
+            "title": "Max Items",
+            "type": "integer"
+          },
+          "source_roots": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Roots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "max_items",
+          "source_roots"
+        ],
+        "title": "IngestBatchConfig",
+        "type": "object"
+      },
       "IngestBatchItem": {
         "description": "One batch entry: an image, and optionally its ground-truth labels.\n\n``label_txt_path`` is what makes an \"ingest an already-labeled\ndataset and compare the detector against ground truth\" pass a single\ncall instead of an ingest followed by a second\n``POST /import_labels/batch`` round trip.",
         "properties": {
@@ -1784,6 +3331,26 @@
         "title": "IngestBatchRequest",
         "type": "object"
       },
+      "IngestConfigResponse": {
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/IngestBatchConfig"
+          },
+          "region_drain": {
+            "$ref": "#/components/schemas/IngestRegionDrainConfig"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/IngestUploadConfig"
+          }
+        },
+        "required": [
+          "upload",
+          "batch",
+          "region_drain"
+        ],
+        "title": "IngestConfigResponse",
+        "type": "object"
+      },
       "IngestImageRequest": {
         "properties": {
           "path": {
@@ -1817,6 +3384,17 @@
             ],
             "title": "Error"
           },
+          "error_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Kind"
+          },
           "image_id": {
             "default": "",
             "title": "Image Id",
@@ -1841,6 +3419,17 @@
             "title": "N Regions",
             "type": "integer"
           },
+          "source_identifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Identifier"
+          },
           "status": {
             "enum": [
               "success",
@@ -1856,6 +3445,127 @@
           "image_path"
         ],
         "title": "IngestImageResponse",
+        "type": "object"
+      },
+      "IngestRegionDrainConfig": {
+        "properties": {
+          "poll_interval_s": {
+            "title": "Poll Interval S",
+            "type": "number"
+          },
+          "stable_polls": {
+            "title": "Stable Polls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "poll_interval_s",
+          "stable_polls"
+        ],
+        "title": "IngestRegionDrainConfig",
+        "type": "object"
+      },
+      "IngestRegionDrainResponse": {
+        "properties": {
+          "drained": {
+            "title": "Drained",
+            "type": "boolean"
+          },
+          "observed_at": {
+            "title": "Observed At",
+            "type": "string"
+          },
+          "pending_detection": {
+            "title": "Pending Detection",
+            "type": "integer"
+          },
+          "pending_verification": {
+            "title": "Pending Verification",
+            "type": "integer"
+          },
+          "stable_for_s": {
+            "title": "Stable For S",
+            "type": "number"
+          },
+          "total_unfinished": {
+            "title": "Total Unfinished",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending_detection",
+          "pending_verification",
+          "total_unfinished",
+          "drained",
+          "stable_for_s",
+          "observed_at"
+        ],
+        "title": "IngestRegionDrainResponse",
+        "type": "object"
+      },
+      "IngestStatusResponse": {
+        "properties": {
+          "by_day": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "By Day",
+            "type": "array"
+          },
+          "by_source": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "By Source",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "title": "IngestStatusResponse",
+        "type": "object"
+      },
+      "IngestUploadConfig": {
+        "properties": {
+          "accepted_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Extensions",
+            "type": "array"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_bytes_per_request": {
+            "title": "Max Bytes Per Request",
+            "type": "integer"
+          },
+          "max_images_per_request": {
+            "title": "Max Images Per Request",
+            "type": "integer"
+          },
+          "persists_bytes": {
+            "default": true,
+            "title": "Persists Bytes",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "max_images_per_request",
+          "max_bytes_per_request",
+          "accepted_extensions"
+        ],
+        "title": "IngestUploadConfig",
         "type": "object"
       },
       "ItemBatchRegionRequest": {
@@ -3126,6 +4836,52 @@
         "title": "ItemTextLine",
         "type": "object"
       },
+      "JobProgress": {
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "done",
+          "total"
+        ],
+        "title": "JobProgress",
+        "type": "object"
+      },
+      "LatencyStats": {
+        "properties": {
+          "mean": {
+            "title": "Mean",
+            "type": "number"
+          },
+          "p50": {
+            "title": "P50",
+            "type": "number"
+          },
+          "p90": {
+            "title": "P90",
+            "type": "number"
+          },
+          "p99": {
+            "title": "P99",
+            "type": "number"
+          }
+        },
+        "required": [
+          "mean",
+          "p50",
+          "p90",
+          "p99"
+        ],
+        "title": "LatencyStats",
+        "type": "object"
+      },
       "LogTailResponse": {
         "properties": {
           "job_id": {
@@ -3145,6 +4901,520 @@
           "lines"
         ],
         "title": "LogTailResponse",
+        "type": "object"
+      },
+      "MatrixCell": {
+        "properties": {
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "n_covered / n_eval_classes",
+            "title": "Coverage"
+          },
+          "f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F1"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "map_50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50"
+          },
+          "map_50_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50 95"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "recall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recall"
+          },
+          "size_mb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Mb"
+          }
+        },
+        "required": [
+          "map_50",
+          "map_50_95",
+          "precision",
+          "recall",
+          "f1",
+          "latency_ms",
+          "size_mb",
+          "coverage",
+          "rank"
+        ],
+        "title": "MatrixCell",
+        "type": "object"
+      },
+      "MatrixDataset": {
+        "properties": {
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Test Sha"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "n_common_classes": {
+            "title": "N Common Classes",
+            "type": "integer"
+          },
+          "rank_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "common",
+                  "overall"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Scope"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Label Sha"
+          }
+        },
+        "required": [
+          "id",
+          "frozen_test_sha",
+          "test_label_sha",
+          "rank_scope",
+          "n_common_classes"
+        ],
+        "title": "MatrixDataset",
+        "type": "object"
+      },
+      "MatrixModel": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "run",
+              "baseline",
+              "custom"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "display_name",
+          "source"
+        ],
+        "title": "MatrixModel",
+        "type": "object"
+      },
+      "MetricBlock": {
+        "description": "Metrics over a model's own covered classes (AP: class mean; P/R/F1: micro).",
+        "properties": {
+          "ap_large": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap Large"
+          },
+          "ap_medium": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap Medium"
+          },
+          "ap_small": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap Small"
+          },
+          "f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F1"
+          },
+          "fn": {
+            "title": "Fn",
+            "type": "integer"
+          },
+          "fp": {
+            "title": "Fp",
+            "type": "integer"
+          },
+          "map_50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50"
+          },
+          "map_50_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50 95"
+          },
+          "map_75": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 75"
+          },
+          "mean_iou": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Iou"
+          },
+          "n_classes": {
+            "title": "N Classes",
+            "type": "integer"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "recall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recall"
+          },
+          "tp": {
+            "title": "Tp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n_classes",
+          "map_50",
+          "map_50_95",
+          "map_75",
+          "ap_small",
+          "ap_medium",
+          "ap_large",
+          "precision",
+          "recall",
+          "f1",
+          "mean_iou",
+          "tp",
+          "fp",
+          "fn"
+        ],
+        "title": "MetricBlock",
+        "type": "object"
+      },
+      "NotCoveredClass": {
+        "properties": {
+          "eval_class_id": {
+            "title": "Eval Class Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eval_class_id",
+          "name"
+        ],
+        "title": "NotCoveredClass",
+        "type": "object"
+      },
+      "PerClassRow": {
+        "properties": {
+          "ap50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap50"
+          },
+          "ap50_95": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap50 95"
+          },
+          "ap75": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap75"
+          },
+          "covered": {
+            "title": "Covered",
+            "type": "boolean"
+          },
+          "eval_class_id": {
+            "title": "Eval Class Id",
+            "type": "integer"
+          },
+          "f1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F1"
+          },
+          "fn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fn"
+          },
+          "fp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fp"
+          },
+          "model_class_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Model Class Ids",
+            "type": "array"
+          },
+          "n_gt": {
+            "title": "N Gt",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "recall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recall"
+          },
+          "tp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tp"
+          }
+        },
+        "required": [
+          "eval_class_id",
+          "name",
+          "n_gt",
+          "covered",
+          "model_class_ids",
+          "ap50",
+          "ap50_95",
+          "ap75",
+          "precision",
+          "recall",
+          "f1",
+          "tp",
+          "fp",
+          "fn"
+        ],
+        "title": "PerClassRow",
         "type": "object"
       },
       "PreflightCheck": {
@@ -3235,6 +5505,141 @@
           }
         },
         "title": "PresetsResponse",
+        "type": "object"
+      },
+      "ProbeRunRequest": {
+        "properties": {
+          "architecture": {
+            "default": "yolo11",
+            "title": "Architecture",
+            "type": "string"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "resume": {
+            "default": false,
+            "title": "Resume",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "ProbeRunRequest",
+        "type": "object"
+      },
+      "ProbeStatusResponse": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "train_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Job Id"
+          },
+          "updated_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Count"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ProbeStatusResponse",
         "type": "object"
       },
       "Profile": {
@@ -3394,11 +5799,62 @@
         "title": "PromoteResponse",
         "type": "object"
       },
+      "QuantizeRequest": {
+        "additionalProperties": false,
+        "description": "Export a run to ONNX variants and score them in the same job.",
+        "properties": {
+          "calib_split": {
+            "default": "train",
+            "enum": [
+              "train",
+              "val"
+            ],
+            "title": "Calib Split",
+            "type": "string"
+          },
+          "formats": {
+            "items": {
+              "enum": [
+                "fp32_onnx",
+                "fp16_onnx",
+                "int8_onnx"
+              ],
+              "type": "string"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
+          "n_calib": {
+            "default": 1000,
+            "minimum": 1.0,
+            "title": "N Calib",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "throughput": {
+            "default": false,
+            "title": "Throughput",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "QuantizeRequest",
+        "type": "object"
+      },
       "RegionProfileSummary": {
         "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
         "properties": {
           "display_name": {
             "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_singular": {
+            "title": "Display Name Singular",
             "type": "string"
           },
           "name": {
@@ -3417,6 +5873,7 @@
         "required": [
           "name",
           "display_name",
+          "display_name_singular",
           "region_class_name",
           "text_reader"
         ],
@@ -3495,6 +5952,76 @@
           "rejection_reasons"
         ],
         "title": "RegionVocabularyResponse",
+        "type": "object"
+      },
+      "RegistryClassEntry": {
+        "description": "Single class entry in ``class_registry.json``.\n\nThe on-disk file uses ``id`` / ``name`` keys for backward\ncompatibility with older label-file schemas. Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "unknown",
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "sample_count": {
+            "default": 0,
+            "title": "Sample Count",
+            "type": "integer"
+          },
+          "validated_count": {
+            "default": 0,
+            "title": "Validated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "RegistryClassEntry",
         "type": "object"
       },
       "RejectionReasonEntry": {
@@ -3723,6 +6250,25 @@
         "title": "ResolveNewClassResponse",
         "type": "object"
       },
+      "ReviewEmptyState": {
+        "description": "C3: underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
+        "properties": {
+          "has_item_scores": {
+            "title": "Has Item Scores",
+            "type": "boolean"
+          },
+          "has_probe_predictions": {
+            "title": "Has Probe Predictions",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_probe_predictions",
+          "has_item_scores"
+        ],
+        "title": "ReviewEmptyState",
+        "type": "object"
+      },
       "ReviewFilterOption": {
         "properties": {
           "label": {
@@ -3824,6 +6370,9 @@
       },
       "ReviewTabsResponse": {
         "properties": {
+          "empty_state": {
+            "$ref": "#/components/schemas/ReviewEmptyState"
+          },
           "tabs": {
             "items": {
               "$ref": "#/components/schemas/ReviewTab"
@@ -3833,9 +6382,89 @@
           }
         },
         "required": [
-          "tabs"
+          "tabs",
+          "empty_state"
         ],
         "title": "ReviewTabsResponse",
+        "type": "object"
+      },
+      "RowClassMapping": {
+        "properties": {
+          "method": {
+            "enum": [
+              "explicit",
+              "run_class_remap",
+              "registry_ids",
+              "names",
+              "single_class_fallback"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "method",
+          "warnings"
+        ],
+        "title": "RowClassMapping",
+        "type": "object"
+      },
+      "RunModelRef": {
+        "additionalProperties": false,
+        "properties": {
+          "backend": {
+            "default": "ultralytics",
+            "description": "onnxruntime scores the run's exported ONNX next to best.pt",
+            "enum": [
+              "ultralytics",
+              "onnxruntime"
+            ],
+            "title": "Backend",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "crop",
+              "both"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "source": {
+            "const": "run",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "run_id"
+        ],
+        "title": "RunModelRef",
         "type": "object"
       },
       "RunsListResponse": {
@@ -3988,6 +6617,55 @@
           "preflight"
         ],
         "title": "StartTrainResponse",
+        "type": "object"
+      },
+      "StratumMetrics": {
+        "properties": {
+          "map_50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map 50"
+          },
+          "n_images": {
+            "title": "N Images",
+            "type": "integer"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "recall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recall"
+          }
+        },
+        "required": [
+          "n_images",
+          "map_50",
+          "recall",
+          "precision"
+        ],
+        "title": "StratumMetrics",
         "type": "object"
       },
       "TestHoldoutFreezeRequest": {
@@ -4701,6 +7379,257 @@
         "title": "TrainJobStatus",
         "type": "object"
       },
+      "TrainTestOverlap": {
+        "description": "Eval test images also present in a run's training export train/val splits.",
+        "properties": {
+          "fraction": {
+            "title": "Fraction",
+            "type": "number"
+          },
+          "n_images": {
+            "title": "N Images",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n_images",
+          "fraction"
+        ],
+        "title": "TrainTestOverlap",
+        "type": "object"
+      },
+      "TrainedModel": {
+        "properties": {
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign Id"
+          },
+          "checkpoint_path": {
+            "title": "Checkpoint Path",
+            "type": "string"
+          },
+          "class_names": {
+            "description": "The model's classes, by model class id",
+            "items": {
+              "type": "string"
+            },
+            "title": "Class Names",
+            "type": "array"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "for_dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainedModelForDataset"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present only when ?dataset_id= is given"
+          },
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Test Sha"
+          },
+          "imgsz": {
+            "title": "Imgsz",
+            "type": "integer"
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "model_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Size"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "single_cls": {
+            "title": "Single Cls",
+            "type": "boolean"
+          },
+          "train_export_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "export: id of the export the run trained on; null if it is not under the export root",
+            "title": "Train Export Id"
+          },
+          "trainer_map50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trainer's own Ultralytics mAP50 (status eval.map50); not a comparison metric",
+            "title": "Trainer Map50"
+          },
+          "trainer_map50_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which split trainer_map50 was measured on (status eval.split)",
+            "title": "Trainer Map50 Split"
+          }
+        },
+        "required": [
+          "run_id",
+          "display_name",
+          "model_family",
+          "model_size",
+          "imgsz",
+          "checkpoint_path",
+          "finished_at",
+          "campaign_id",
+          "train_export_id",
+          "dataset_sha",
+          "frozen_test_sha",
+          "class_names",
+          "single_cls",
+          "trainer_map50",
+          "trainer_map50_split"
+        ],
+        "title": "TrainedModel",
+        "type": "object"
+      },
+      "TrainedModelForDataset": {
+        "properties": {
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "n_classes_mapped": {
+            "title": "N Classes Mapped",
+            "type": "integer"
+          },
+          "same_export": {
+            "title": "Same Export",
+            "type": "boolean"
+          },
+          "same_frozen_test": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run lineage frozen_test_sha == the dataset's; null when either is unknown",
+            "title": "Same Frozen Test"
+          },
+          "train_test_overlap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainTestOverlap"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset_id",
+          "same_export",
+          "same_frozen_test",
+          "n_classes_mapped",
+          "train_test_overlap"
+        ],
+        "title": "TrainedModelForDataset",
+        "type": "object"
+      },
+      "TrainedModelList": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/TrainedModel"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "count"
+        ],
+        "title": "TrainedModelList",
+        "type": "object"
+      },
       "UnloadModelResponse": {
         "properties": {
           "directory_removed": {
@@ -4738,6 +7667,42 @@
           "forced"
         ],
         "title": "UnloadModelResponse",
+        "type": "object"
+      },
+      "UnmappedModelClass": {
+        "properties": {
+          "model_class_id": {
+            "title": "Model Class Id",
+            "type": "integer"
+          },
+          "n_predictions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Predictions of this class that could not be scored",
+            "title": "N Predictions"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "model_class_id"
+        ],
+        "title": "UnmappedModelClass",
         "type": "object"
       },
       "ValidationError": {
@@ -5174,7 +8139,7 @@
         "title": "_PublishEvent",
         "type": "object"
       },
-      "src__routers__curation___common__BatchIngestResponse": {
+      "src__routers__curation___common_models__BatchIngestResponse": {
         "properties": {
           "disagreements": {
             "items": {
@@ -5222,7 +8187,7 @@
   "paths": {
     "/curation/bakeoff/baseline_models": {
       "get": {
-        "description": "Baseline detectors from the editable registry.\n\nWith ``?profile=<name>`` (a registered/example name, not a path) the\nprofile's own ``baselines_path`` is read instead, falling back to the\ndefault registry when it names none.",
+        "description": "External models from the baseline registry (empty by default).\n\nWith ``?profile=<name>`` (a registered name, not a path) the profile's own\n``baselines_path`` is read instead.",
         "operationId": "bakeoff_baseline_models_curation_bakeoff_baseline_models_get",
         "parameters": [
           {
@@ -5247,9 +8212,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Baseline Models Curation Bakeoff Baseline Models Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BaselineModelList"
                 }
               }
             },
@@ -5274,20 +8237,50 @@
     },
     "/curation/bakeoff/eval_datasets": {
       "get": {
-        "description": "Auto-discover frozen evaluation datasets (matrix columns).\n\nAny directory with a ``TEST_FROZEN.json`` under the curated/public/sample\nroots is selectable --- so adding a dataset is just freezing a dir, no code\nchange. Returns name, path, kind, and the frozen label count.",
+        "description": "Eval datasets: every export with a labelled test split, plus frozen external sets.\n\nClass counts and test-split hashes are computed from the files; see\n``src/services/curation/eval_datasets.py``.",
         "operationId": "bakeoff_eval_datasets_curation_bakeoff_eval_datasets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "export",
+                    "external"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Eval Datasets Curation Bakeoff Eval Datasets Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EvalDatasetList"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Bakeoff Eval Datasets",
@@ -5298,7 +8291,7 @@
     },
     "/curation/bakeoff/matrix/{job_id}": {
       "get": {
-        "description": "Return the model x dataset matrix.json for a finished matrix job.",
+        "description": "Model x dataset matrix of a finished job; ``best`` lists every tied winner.",
         "operationId": "bakeoff_matrix_curation_bakeoff_matrix__job_id__get",
         "parameters": [
           {
@@ -5316,9 +8309,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Matrix Curation Bakeoff Matrix  Job Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BakeoffMatrix"
                 }
               }
             },
@@ -5343,16 +8334,14 @@
     },
     "/curation/bakeoff/profiles": {
       "get": {
-        "description": "Registered + example BakeoffProfiles, flagging the default.\n\n``kind`` says where a profile comes from (``registered`` in code,\n``example`` from ``examples/<name>/profile.json``, ``configured`` for a\ndefault that is neither -- e.g. ``OP_BAKEOFF_PROFILE`` naming a .json\npath). ``default`` marks the profile a job gets when it names none\n(``OP_BAKEOFF_PROFILE``, else ``generic`` plus ``OP_BAKEOFF_PROFILE_*``\noverrides); the default row carries those effective field values. The\ntop-level ``default_profile`` repeats its name (null if the configured\ndefault does not resolve -- see ``default_error``). Resolved from this\nAPI process's environment, which the deployment is expected to share\nwith the evaluator.",
+        "description": "Registered profiles, flagging the default a job gets when it names none.\n\n``kind``: ``registered`` (in code) or ``configured`` (the default,\nresolved from ``OP_BAKEOFF_PROFILE`` naming a ``.json`` path). Example\nprofiles under ``examples/`` are opt-in by path and not listed. The\ndefault row carries its effective values (``OP_BAKEOFF_PROFILE_*``\noverrides included). Resolved from this process's environment, which the\ndeployment shares with the evaluator.",
         "operationId": "bakeoff_profiles_curation_bakeoff_profiles_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Profiles Curation Bakeoff Profiles Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BakeoffProfileList"
                 }
               }
             },
@@ -5367,7 +8356,7 @@
     },
     "/curation/bakeoff/results/{job_id}": {
       "get": {
-        "description": "Return the ranked comparison rows for a finished job.",
+        "description": "Ranked comparison of every model on one dataset (default: the job's first).",
         "operationId": "bakeoff_results_curation_bakeoff_results__job_id__get",
         "parameters": [
           {
@@ -5378,6 +8367,22 @@
               "title": "Job Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "dataset_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
           }
         ],
         "responses": {
@@ -5385,9 +8390,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Results Curation Bakeoff Results  Job Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BakeoffComparison"
                 }
               }
             },
@@ -5412,13 +8415,13 @@
     },
     "/curation/bakeoff/run": {
       "post": {
-        "description": "Enqueue a bake-off job for the evaluator container to execute.",
+        "description": "Enqueue a comparison job for the evaluator container.\n\nOrder: resolve + validate (400/422) -> ``status.json`` ``queued`` -> job\nfile (atomic) -> stop GPU-resident containers. If they cannot be stopped\nthe job file is removed, the status set to ``error`` and the answer is 409.",
         "operationId": "bakeoff_run_curation_bakeoff_run_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BakeoffRequest"
+                "$ref": "#/components/schemas/BakeoffRunRequest"
               }
             }
           },
@@ -5429,9 +8432,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Run Curation Bakeoff Run Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BakeoffRunAccepted"
                 }
               }
             },
@@ -5456,16 +8457,14 @@
     },
     "/curation/bakeoff/runs": {
       "get": {
-        "description": "List bake-off runs (most recent first) with their state.",
+        "description": "Comparison jobs, newest first. Directories without a v2 ``status.json`` are skipped.",
         "operationId": "bakeoff_runs_curation_bakeoff_runs_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Runs Curation Bakeoff Runs Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BakeoffRunList"
                 }
               }
             },
@@ -5480,7 +8479,7 @@
     },
     "/curation/bakeoff/status/{job_id}": {
       "get": {
-        "description": "Return the evaluator's status.json for a job.",
+        "description": "The job's ``status.json`` (``queued`` until the evaluator picks it up).",
         "operationId": "bakeoff_status_curation_bakeoff_status__job_id__get",
         "parameters": [
           {
@@ -5498,9 +8497,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Status Curation Bakeoff Status  Job Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BakeoffStatus"
                 }
               }
             },
@@ -5525,9 +8522,25 @@
     },
     "/curation/bakeoff/trained_models": {
       "get": {
-        "description": "Finished training runs (with a checkpoint) selectable as bake-off contenders.\n\nLets the UI pick an already-trained model directly from the backend\ninstead of downloading + re-uploading weights. The evaluator container\nmounts ``/runs`` read-only, so it loads each run's ``best.pt`` by the\nsame path the trainer recorded in ``status.json``. Future progressive\nsizes (s/m/l) appear here automatically as they finish.",
+        "description": "Finished training runs (checkpoint on disk) selectable as contenders.\n\nWith ``?dataset_id=`` each row carries ``for_dataset``: same export /\nsame frozen test split as the dataset, how many of its classes map onto\nthe dataset's, and the train/test image overlap (a leakage warning).",
         "operationId": "bakeoff_trained_models_curation_bakeoff_trained_models_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "dataset_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
           {
             "in": "query",
             "name": "limit",
@@ -5544,9 +8557,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bakeoff Trained Models Curation Bakeoff Trained Models Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TrainedModelList"
                 }
               }
             },
@@ -5914,6 +8925,92 @@
           }
         },
         "summary": "Class Crops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/classes/{class_id}/deprecate": {
+      "post": {
+        "description": "Retire a class created by mistake that has no data yet.\n\nUnlike ``POST /classes/merge`` (which deprecates a source class while\nrelabeling its items into a target), this needs no target — it only\nflips ``deprecated`` on a class nothing references. Refuses with\n``409`` (naming the blocking counts) while any item or confirmed-label\ndoc still carries this ``class_id`` — merge instead. ``404`` for an\nunknown id. Idempotent: calling this on an already-deprecated class\njust returns it (no reference re-check). Clears any bound\n``hotkey_letter``.",
+        "operationId": "deprecate_class_curation_classes__class_id__deprecate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "class_id",
+            "required": true,
+            "schema": {
+              "title": "Class Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryClassEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deprecate Class",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/classes/{class_id}/restore": {
+      "post": {
+        "description": "Undo ``POST /classes/{id}/deprecate``. ``404`` for an unknown id;\n``409`` if a non-deprecated class already uses this class's name\n(the registry's name-uniqueness rule, enforced the same way\n``rename_class`` enforces it).",
+        "operationId": "restore_class_curation_classes__class_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "class_id",
+            "required": true,
+            "schema": {
+              "title": "Class Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryClassEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Class",
         "tags": [
           "Curation"
         ]
@@ -7363,7 +10460,7 @@
     },
     "/curation/crops/{crop_id}/image": {
       "get": {
-        "description": "Source image with the item bbox drawn.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one bbox at a time and\na sub-MB preview is plenty. If the item also carries a\nregion-of-interest sub-bbox (``RegionFields.bbox_norm``), it is\ndrawn as a second overlay.",
+        "description": "The clean source image for this crop's parent frame — no box, label\nor other overlay drawn (K6). Only resize, EXIF-transpose and RGB\nconversion apply.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one item at a time and a\nsub-MB preview is plenty. The frontend draws the item box, the\nregion box and any rejected-candidate box itself, from the geometry\n``GET {prefix}/crops/{id}/context`` serves in source-image-normalized\ncoordinates.",
         "operationId": "crop_full_image_curation_crops__crop_id__image_get",
         "parameters": [
           {
@@ -8661,7 +11758,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common__BatchIngestResponse"
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
                 }
               }
             },
@@ -8679,6 +11776,28 @@
           }
         },
         "summary": "Curation Ingest Batch",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/ingest/config": {
+      "get": {
+        "description": "Typed ingest capability + limits (BA-2).\n\n``upload``/``batch``/``region_drain`` are all real config, not\nhardcoded client-side constants: ``upload.max_images_per_request`` /\n``max_bytes_per_request`` / ``accepted_extensions`` are enforced (413 /\nper-item ``unsupported_type``) by ``POST /ingest/upload``;\n``batch.max_items`` is enforced by ``POST /ingest/batch``;\n``region_drain.*`` are the parameters ``GET /ingest/region_drain``'s\nstability verdict uses.",
+        "operationId": "ingest_config_curation_ingest_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ingest Config",
         "tags": [
           "Curation"
         ]
@@ -8728,7 +11847,7 @@
     },
     "/curation/ingest/path_lookup": {
       "post": {
-        "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Safe because ingest writes\nimage_path verbatim and image_path is mapped as keyword on the\nimages index.",
+        "description": "Filter a list of paths down to those already ingested.\n\nUsed by an ingest walker to short-circuit the read+hash work for\nre-scans of immutable archive media. Matches on ``image_path`` OR\n``source_identifier`` (BA-1): a byte-upload ingest's client identifier\nis recorded as ``source_identifier`` now that ``image_path`` is the\nserver-persisted path, so a re-scan driver that only knows its own\nidentifiers still gets a hit. Both fields are mapped keyword on the\nimages index.",
         "operationId": "curation_ingest_path_lookup_curation_ingest_path_lookup_post",
         "requestBody": {
           "content": {
@@ -8770,18 +11889,14 @@
     },
     "/curation/ingest/region_drain": {
       "get": {
-        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ~10s and proceeds when ``total_unfinished`` reaches 0\n(with a stability window).\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what the walker polls.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names (S5), so there is no legacy rollup.",
+        "description": "Region-detection worklog: how many items are still waiting for the\ndetection worker.\n\nUsed by an ingest walker to decide when the asynchronous\ndetect-then-verify chain has caught up after a folder finishes, before\ntriggering ``/curation/pipeline/auto_label``. The walker polls this\nendpoint every ``region_drain.poll_interval_s`` (``GET /ingest/config``)\nand proceeds once ``drained`` is true (BA-3) -- computed server-side\nnow, not invented client-side from ``total_unfinished == 0``.\n\nReturns:\n* ``pending_detection``    — items the detection worker hasn't reached\n                              yet (region status == 'pending_detection').\n* ``pending_verification`` — items where the detector found a\n                              candidate and the verify step is queued.\n* ``total_unfinished``     — sum of the two; what a legacy walker polled.\n* ``drained``              — true once ``total_unfinished`` has read 0\n                              for ``region_drain.stable_polls`` consecutive\n                              polls of this endpoint.\n* ``stable_for_s``         — seconds since the last non-zero reading.\n* ``observed_at``          — this poll's timestamp.\n\nRe-ingested data can never carry the retired ``'pending'`` /\n``'pending_verify'`` short names (S5), so there is no legacy rollup.",
         "operationId": "ingest_region_drain_curation_ingest_region_drain_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "title": "Response Ingest Region Drain Curation Ingest Region Drain Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IngestRegionDrainResponse"
                 }
               }
             },
@@ -8796,20 +11911,48 @@
     },
     "/curation/ingest/status": {
       "get": {
-        "description": "Recent ingest summary — counts grouped by source.",
+        "description": "Recent ingest summary — counts grouped by source.\n\n``run_id`` scopes ``total``/``by_source``/``by_day`` to images carrying\nthat ``ingest_run_id`` (BA-4) -- an upload run's own images doc field,\nset by ``POST /ingest/upload``'s optional ``run_id`` form field.",
         "operationId": "ingest_status_curation_ingest_status_get",
+        "parameters": [
+          {
+            "description": "BA-4: scope counts to one POST /ingest/upload run_id.",
+            "in": "query",
+            "name": "run_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "BA-4: scope counts to one POST /ingest/upload run_id.",
+              "title": "Run Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ingest Status Curation Ingest Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/IngestStatusResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Ingest Status",
@@ -8820,7 +11963,7 @@
     },
     "/curation/ingest/upload": {
       "post": {
-        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n``image_paths`` are identifiers, recorded verbatim — keep them stable\nacross runs so ``/ingest/path_lookup`` can pre-filter a re-scan.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference, so a\ncrashed upload run can simply be restarted. The whole-frame embedding\nis computed from the uploaded bytes, not by re-opening the path.",
+        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nBA-1: the uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(imohash over the uploaded bytes) and one already in the images index\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
         "operationId": "curation_ingest_upload_curation_ingest_upload_post",
         "requestBody": {
           "content": {
@@ -8837,11 +11980,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common__BatchIngestResponse"
+                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "413": {
+            "description": "Too many images, or total upload bytes, in one request."
           },
           "422": {
             "content": {
@@ -8886,7 +12032,7 @@
     },
     "/curation/models/status": {
       "get": {
-        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM service. Each entry\ncarries enough metadata for the labeler ``/models`` page to render a\nself-explanatory card without requiring access to Triton/Prometheus directly.",
+        "description": "Status + usage stats for the models that drive the curation labeling pipeline.\n\nReturns a single ``{\"models\": [...]}`` object describing each Triton model\nthe labeler depends on, plus the external VLM and segmenter services.\nEach entry carries enough metadata for the labeler ``/models`` page to\nrender a self-explanatory card without requiring access to\nTriton/Prometheus directly.",
         "operationId": "models_status_curation_models_status_get",
         "responses": {
           "200": {
@@ -8910,7 +12056,7 @@
     },
     "/curation/models/{model_name}": {
       "delete": {
-        "description": "Unload ``model_name`` from Triton and delete its model repo directory.\n\nGuardrails:\n- Region-detector + OCR models (per the active ``DetectionProfile``)\n  can **never** be unloaded here, even with ``force=true`` — 403\n  unconditionally.\n- Other core pipeline models (CLIP image encoder, face\n  detect/recognition) need ``force=true`` — without it, 409 with a\n  loud explanation. Unloading any of them breaks live serving until\n  something else is loaded.",
+        "description": "Unload ``model_name`` from Triton and delete its model repo directory.\n\nGuardrails:\n- External-service entries (the segmenter, the VLM) are rejected\n  unconditionally: there is no Triton repository entry to unload, and\n  treating their name as one would just surface a confusing Triton\n  404.\n- Region-detector + OCR models (per the active ``DetectionProfile``)\n  can **never** be unloaded here, even with ``force=true`` — 403\n  unconditionally.\n- Other core pipeline models (CLIP image encoder, face\n  detect/recognition) need ``force=true`` — without it, 409 with a\n  loud explanation. Unloading any of them breaks live serving until\n  something else is loaded.",
         "operationId": "unload_model_curation_models__model_name__delete",
         "parameters": [
           {
@@ -9663,6 +12809,94 @@
           }
         },
         "summary": "Pipeline Events",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/cancel": {
+      "post": {
+        "description": "Best-effort cancel of the active probe job.",
+        "operationId": "probe_cancel_curation_probe_cancel_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Probe Cancel Curation Probe Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe Cancel",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/run": {
+      "post": {
+        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. GPU claim\n(when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "operationId": "probe_run_curation_probe_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/probe/status": {
+      "get": {
+        "description": "Poll the current/last probe job.",
+        "operationId": "probe_status_curation_probe_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Probe Status",
         "tags": [
           "Curation"
         ]
@@ -10662,7 +13896,7 @@
     },
     "/curation/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.",
+        "description": "Every review tab's ``id``/``label``/``description`` (W0: naming\nsweep finding m9) plus ``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.\n\nC3: also carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\ntab's zero-result state (the same reasons ``GET /review/{tab}``'s own\n``empty_reason`` uses) without a per-tab round trip.",
         "operationId": "review_tabs_curation_review_tabs_get",
         "responses": {
           "200": {
@@ -11784,7 +15018,7 @@
     },
     "/curation/stats/classes": {
       "get": {
-        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, adequacy,\naug_target, aug_gap}``, plus the ``thresholds`` behind them) joined against\nthe registry for the names. The labeler's ``getStats()`` (Export + Home\npages) consumes ``classes`` — the aggregation alone has no class names, so\nwithout this join the Export dataset table renders empty.",
+        "description": "Per-class total/validated breakdown.\n\nReturns both the raw ``by_class`` aggregation and a flattened ``classes``\narray (``{class_id, class_name, count, validated_count, trainable,\ntrainable_gap, adequacy, aug_target, aug_gap}``, plus the ``thresholds``\nbehind them) joined against the registry for the names. The labeler's\n``getStats()`` (Export + Home pages) consumes ``classes`` — the\naggregation alone has no class names, so without this join the Export\ndataset table renders empty.\n\n``trainable`` = validated minus frozen test-holdout minus human-excluded\ncrops — the frontend used to compute ``validated - holdout`` itself\nclient-side; this serves the real number (also excluding\n``class_excluded`` crops, which the client-side version didn't\naccount for) so every page agrees. ``trainable_gap`` is the shortfall\nagainst :func:`dataset_thresholds`'s per-class minimum, floored at 0.",
         "operationId": "stats_classes_curation_stats_classes_get",
         "responses": {
           "200": {

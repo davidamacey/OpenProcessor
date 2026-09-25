@@ -49,6 +49,7 @@ describe('the shipped annotation-profiles.example.json — integration gate', ()
   const servedProfile: ServedRegionProfile = {
     name: 'pallet_label',
     display_name: 'Pallet labels',
+    display_name_singular: 'Pallet label',
     region_class_name: 'pallet_label',
     text_reader: 'ocr',
   };

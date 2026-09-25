@@ -76,6 +76,7 @@ describe('getRegionVocabulary', () => {
       region_profile: {
         name: 'widget_tag',
         display_name: 'Widget tags',
+        display_name_singular: 'Widget tag',
         region_class_name: 'widget_tag',
         text_reader: 'ocr',
       },
