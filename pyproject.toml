@@ -61,7 +61,7 @@ dependencies = [
     "timm",
     "huggingface_hub",
     "ftfy",
-    "open-clip-torch>=2.24.0",
+    "open-clip-torch>=3.2.0",  # F-13(b): 2.x has no MobileCLIP2 configs; native support landed in 3.2.0
     "faiss-gpu-cu12>=1.10.0",
     "imohash",
     "prometheus-client>=0.20",

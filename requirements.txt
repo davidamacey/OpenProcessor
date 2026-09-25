@@ -62,7 +62,12 @@ transformers>=4.30.0  # CLIP tokenizer for text-to-image search
 timm  # pytorch-image-models - required for MobileCLIP architecture
 huggingface_hub  # For downloading MobileCLIP checkpoints
 ftfy  # Text cleaning for CLIP tokenizer (required by open_clip)
-open-clip-torch>=2.24.0  # OpenCLIP with native MobileCLIP2-S2 support
+# F-13(b) (fresh-start E2E findings 2026-09-25): >=2.24.0 resolved to
+# 2.32.0 in the built image, which has no MobileCLIP2 configs at all
+# ("Model config for MobileCLIP2-S2 not found") -- native MobileCLIP2-S2
+# support landed in 3.2.0. Floor bumped so a fresh build can't regress to
+# a pre-3.2 release; requires an image rebuild to take effect.
+open-clip-torch>=3.2.0  # OpenCLIP with native MobileCLIP2-S2 support
 
 # FAISS Clustering (GPU-accelerated vector clustering)
 faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
