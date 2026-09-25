@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Triton serves a partial model set.** `triton-server` now runs with
+  `--exit-on-error=false --strict-readiness=false`, so one missing or failed
+  engine (the minimal setup profile skips OCR; setup continues past a failed
+  export) leaves only that model unloaded instead of stopping the server.
+  The minimal profile's export now also builds the PE-Core image encoder that
+  curation ingest needs. `TRITON_GPU_ID` (default `0`) selects Triton's GPU.
+- **`vlm` profile image pinned by digest** to the vLLM Gemma 4 build this
+  stack is tested against (`vllm/vllm-openai:gemma4-cu130@sha256:0d1525...`);
+  the earlier `v0.11.0` default predates Gemma 4.
+
 ### Changed (BREAKING)
 - **Compose/install portability (fresh-start gaps batch B).** `docker-compose.yml`
   no longer hardcodes `name: openprocessor` or any `container_name:` — both are

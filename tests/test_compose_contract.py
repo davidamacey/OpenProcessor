@@ -438,3 +438,17 @@ def test_gpu_arbiter_overlay_exists_and_mounts_docker_socket() -> None:
     # an opt-in overlay).
     base_mounts = [str(v) for v in (_services()['yolo-api'].get('volumes') or [])]
     assert not any('docker.sock' in m for m in base_mounts), base_mounts
+
+
+def test_triton_serves_partial_model_sets() -> None:
+    """The minimal setup profile skips OCR, and setup continues past a failed
+    export; with Triton's default exit-on-error a single missing engine in the
+    --load-model list kills the server, so nothing is served at all."""
+    cmd = [str(c) for c in _services()['triton-server']['command']]
+    assert '--exit-on-error=false' in cmd, cmd
+    assert '--strict-readiness=false' in cmd, cmd
+
+
+def test_vlm_image_pinned_by_digest() -> None:
+    image = str(_services()['vlm']['image'])
+    assert '@sha256:' in image, image
