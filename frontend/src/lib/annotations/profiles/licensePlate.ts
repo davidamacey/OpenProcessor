@@ -59,7 +59,9 @@ export const licensePlateSlot: SlotSpec = {
       choiceField: 'region_text_choice',
       invalidReasonField: 'region_text_vlm_invalid',
       label: 'Plate text',
-      placeholder: 'ABC123',
+      // R9 (visual audit 2026-09-24): 'ABC123' is exactly the VLM's known
+      // placeholder hallucination, so an empty field read as a VLM reading.
+      placeholder: 'type the text…',
       transform: 'uppercase',
       monospace: true,
     },

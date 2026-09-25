@@ -119,17 +119,23 @@
 </svelte:head>
 
 <div class="mx-auto max-w-6xl px-4 py-6">
-  <header class="mb-6 flex items-end justify-between">
-    <div>
+  <!-- M1 (visual audit 2026-09-24): the status/refresh group is its own
+       shrink-0 slot (wrapping below on narrow widths) so "Updated …" never
+       runs into the description. -->
+  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0 flex-1 basis-80">
       <h1 class="text-xl font-semibold tracking-tight">Models</h1>
       <p class="mt-1 text-sm text-zinc-400">
         Inference services that drive the labeling pipeline. Triton models live on the GPU
         box; the VLM is an external vLLM service. Auto-refreshes every 15 seconds.
       </p>
     </div>
-    <div class="flex items-center gap-3 text-xs text-zinc-500">
+    <div
+      class="flex shrink-0 items-center gap-3 text-xs text-zinc-500"
+      data-testid="models-status"
+    >
       {#if lastUpdated}
-        <span>Updated {relTime(lastUpdated)}</span>
+        <span class="whitespace-nowrap">Updated {relTime(lastUpdated)}</span>
       {/if}
       <button
         type="button"

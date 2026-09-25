@@ -220,7 +220,9 @@
   // What the backend actually ordered by, when it differs from what the
   // operator picked (a tab default beating an unset selection, or a
   // requested sort falling back) — null when there's nothing to add.
-  const appliedLabel = $derived(formatAppliedSort(bar.sort, appliedSort));
+  const appliedLabel = $derived(
+    formatAppliedSort(bar.sort, appliedSort, strategiesStore.methods.review_sorts),
+  );
 
   // The k stepper only renders once 'diverse' is both selected AND
   // actually offered. isDiverseOverlayAvailable is the same predicate
@@ -270,11 +272,11 @@
   let expanded = $state(false);
 </script>
 
-<div class="inline-flex flex-wrap items-center gap-1.5 text-xs">
+<div class="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-xs">
   {#if !expanded}
     <button
       type="button"
-      class="btn-sm {bar.isDefault
+      class="btn-sm min-w-0 max-w-full {bar.isDefault
         ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
@@ -291,9 +293,13 @@
         </span>
       {/if}
       {#if fallbackReason}
+        <!-- R3 (visual audit 2026-09-24): the served reason is a long
+             sentence — truncated here (full text in the tooltip) so it can
+             never push the bar past a narrow viewport. -->
         <span
-          class="rounded border border-amber-500/60 bg-amber-500/15 px-1 text-[10px] text-amber-200"
-          title="The requested sort couldn't be honored server-side (0% field coverage) — showing the fallback order instead."
+          data-testid="sort-fallback-chip"
+          class="inline-block max-w-[16rem] truncate rounded border border-amber-500/60 bg-amber-500/15 px-1 align-middle text-[10px] text-amber-200 md:max-w-[28rem]"
+          title={`The requested sort couldn't be honored server-side — showing the fallback order instead. ${fallbackReason}`}
         >
           fallback: {fallbackReason}
         </span>

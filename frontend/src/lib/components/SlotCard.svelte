@@ -214,24 +214,27 @@
       </span>
     {/if}
   </div>
-  <div class="flex flex-col gap-1 p-2 text-[11px]">
-    <div class="flex items-center justify-between gap-1 font-mono">
-      <span class="flex min-w-0 items-center gap-1 truncate text-zinc-300">
-        <span class="truncate">{data.text?.value ?? '—'}</span>
-        {#if data.text?.disagreement}
-          <span
-            class="shrink-0 rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[9px] font-sans text-orange-200"
-            title="vlm: {data.text.vlmValue ?? '∅'} · ocr: {data.text.ocrValue ?? '∅'}"
-          >
-            ⚠ disagree
-          </span>
-        {/if}
-      </span>
-      <span class="text-zinc-500">
+  <div class="flex min-w-0 flex-col gap-1 p-2 text-[11px]">
+    <!-- C3 (visual audit 2026-09-24): the text value keeps its own
+         width; the disagree badge wraps under it instead of squeezing the
+         value to "6…" on a narrow card. C6: plain text, no emoji glyph. -->
+    <div class="flex min-w-0 flex-wrap items-center justify-between gap-1 font-mono">
+      <span class="min-w-0 truncate text-zinc-300" data-testid="slot-text-value"
+        >{data.text?.value ?? '—'}</span
+      >
+      <span class="shrink-0 text-zinc-500">
         {data.subBox?.score != null ? `${(data.subBox.score * 100).toFixed(0)}%` : '—'}
       </span>
+      {#if data.text?.disagreement}
+        <span
+          class="shrink-0 rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[9px] font-sans text-orange-200"
+          title="vlm: {data.text.vlmValue ?? '∅'} · ocr: {data.text.ocrValue ?? '∅'}"
+        >
+          readers disagree
+        </span>
+      {/if}
     </div>
-    <div class="flex flex-wrap items-center gap-1">
+    <div class="flex min-w-0 flex-wrap items-center gap-1">
       <ProvenanceChip detector={data.provenance?.detector ?? null} size="sm" />
       {#if data.provenance?.verifier}
         <ProvenanceChip detector={data.provenance.verifier} tag="verify" size="sm" />
@@ -256,14 +259,15 @@
       {/if}
       {#if crop.class_name}
         <span
-          class="rounded border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-300"
+          class="max-w-full truncate rounded border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-300"
+          title={crop.class_name}
         >
           {crop.class_name}
         </span>
       {/if}
     </div>
     {#if !compact && slot.capabilities.provenance?.showChainOnCard && data.provenance?.chain && data.provenance.chain.length > 0}
-      <div class="flex flex-wrap gap-0.5">
+      <div class="flex min-w-0 flex-wrap gap-0.5">
         {#each data.provenance.chain as entry (entry)}
           <ProvenanceChip raw={entry} size="sm" />
         {/each}

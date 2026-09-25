@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `/export`'s class table buried the classes that have data under dozens
+  of empty ones. The default gap sort put every empty class (+500) first,
+  and the table shrank to a few rows at narrow widths. Classes with
+  validated or held-out crops now come first, the rest fold behind a
+  "N classes with no validated crops" toggle, and the table keeps a
+  readable minimum height.
+- **Visual audit 2026-09-24 page fixes (`/clusters`, `/clusters/[id]`,
+  `/dashboard`, `/export`, `/train`, `/models`, `/bakeoff`, `CropCard`)**
+  — see `docs/design/visual-audit-2026-09-24.md` for each finding's commit.
+  - `/clusters` card subtitle shows the served `label_purity` as
+    "N% of labeled"; the chip names geometry purity ("3% geometry"). The
+    class filter chip shows the class name. Region-gallery chips stay
+    inside their cards; region counts say "listed" and explain their
+    scope. Ignored mode hides the grid controls and counts the ignored
+    bucket in the footer.
+  - `/clusters/[id]` header labels the class registry's class-wide counts
+    and the cluster's own size separately; the footer says "listed".
+  - `CropCard`: the class name gets its own width; the source chip is a
+    short role code with the served label in its tooltip; a crop with no
+    class reads "Unlabeled" (no "Labeled by the VLM" chip); readable VLM
+    empty reasons. Crop grids use min-width auto-fill columns.
+  - Crop detail modal: close button and meta column stay inside the
+    panel; history rows name the resulting class and a labelled source;
+    timestamps are formatted.
+  - `/dashboard`: class balance shows trainable crops (served validated
+    minus served test holdout) with the test count, no bars for zero,
+    zero classes collapsed and overflow counted; the recluster card
+    stacks at narrow widths; last-run summary is a stage table; no
+    hardcoded model/vendor/HDD copy.
+  - `/export`: Trainable column and a gap measured against it; "N classes
+    with objects (M in registry)"; empty classes collapsed; "Source
+    distribution".
+  - `/train`: the MLflow link comes from the served runs'
+    `mlflow_run_url` origin (no hardcoded `:5000`; hidden when nothing is
+    served); the zero-cohort count says "so far" while loading; the
+    results panel names its run.
+  - `/models`: "Updated ..." no longer collides with the description.
+  - No gradients or emoji glyphs on these pages.
+
 ### Added
 
 - **`/settings` "Curation scores" card (G10).** Review queues (Uncertainty,
@@ -1437,6 +1478,33 @@ class`) so an operator can see where a crop lives before relabeling
 - Back-to-all-clusters link on `/clusters/[id]`'s header.
 
 ### Fixed
+
+- **`/review`, `/classes` and top-nav findings from the 2026-09-24 visual
+  audit** (`docs/design/visual-audit-2026-09-24.md`):
+  - R1: the `/` class picker and the quick-assign row no longer offer a
+    slot-bound region class (resolved through the slot registry; TODO for
+    a served class kind), and rank the item's own proposal / current /
+    VLM / model classes first instead of global validated count. The
+    picker's "Search all N classes" counts what it lists.
+  - R2 + narrow nav: new `ScrollStrip` component for the review tab bar
+    and the primary nav — a chevron on each side with hidden items, and
+    the active tab/link scrolled into view. The review action row is
+    sticky so Confirm/Skip/Discard stay on screen at 800px.
+  - R3: an empty queue says which queue it is, what it holds (served tab
+    description) and the served sort-fallback reason; tabs last seen
+    empty are dimmed with a 0. The long fallback chip truncates.
+  - R4: the applied-sort chip shows the served `/methods` label, not the
+    raw id; stale "COCO Blind Spots" copy renamed.
+  - R6/R7/R11: no blank class values, readable locate reasons and VLM
+    empty reasons, served label for a machine rejection reason, served
+    `/regions/statuses` label in Details, and embedded Details no longer
+    repeats the rows above it. The subject toggle's default explains
+    itself.
+  - R9: the region-text placeholder no longer looks like a reading.
+  - L1/L2/L5 (`/classes`): "Total (in cluster)" shows `cluster_size`;
+    every proposal term, flagged or not, is listed biggest-first with a
+    way to resolve it (Create stays limited to un-flagged terms);
+    Validated shows "incl. N test"; ID/Added hide below 1024px.
 
 - `/train` run results adopt OpenProcessor e9aac68. The overall eval figures
   are labelled by the served `eval.split`, with the last validation epoch

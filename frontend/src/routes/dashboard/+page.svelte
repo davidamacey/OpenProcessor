@@ -25,23 +25,24 @@
    * the gap between polls.
    */
   import { apiBase } from '$lib/api';
-  import { sortClassBalance } from '$lib/dashboard/classBalance';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { trapFocus } from '$lib/actions/trapFocus';
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
+  import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
   import {
     exportYolo,
     getCrops,
     getStats,
+    getTestHoldoutStats,
     getThumbUrl,
     pollAutoLabelJob,
     runVlmOnCluster,
     type AutoLabelJobState,
   } from '$lib/api';
-  import type { Crop, ExportResult, StatsSummary } from '$lib/types';
+  import type { Crop, ExportResult, StatsSummary, TestHoldoutStats } from '$lib/types';
   import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
@@ -51,6 +52,9 @@
   // ---- Class balance + recent labels (from the legacy `/` page) --------
 
   let legacyStats = $state<StatsSummary | null>(null);
+  // Served per-class test holdout, so the balance chart shows trainable
+  // counts (D2). null = unavailable; the chart says so rather than guessing.
+  let holdoutStats = $state<TestHoldoutStats | null>(null);
   let recent = $state<Crop[]>([]);
   let legacyLoading = $state<boolean>(false);
 
@@ -93,7 +97,7 @@
   async function refreshLegacy(): Promise<void> {
     legacyLoading = true;
     try {
-      const [s, c] = await Promise.allSettled([
+      const [s, c, h] = await Promise.allSettled([
         getStats(),
         getCrops({
           label_validated: true,
@@ -101,8 +105,10 @@
           limit: 20,
           page: 1,
         }),
+        getTestHoldoutStats(),
       ]);
       legacyStats = s.status === 'fulfilled' ? s.value : null;
+      holdoutStats = h.status === 'fulfilled' ? h.value : null;
       recent = c.status === 'fulfilled' ? c.value.items : [];
     } finally {
       legacyLoading = false;
@@ -177,32 +183,6 @@
       exportRunning = false;
     }
   }
-
-  const balance = $derived.by(() => {
-    if (!legacyStats?.per_class) return [];
-    const max = Math.max(1, ...legacyStats.per_class.map((c) => c.validated_count));
-    // DQ-m11 (docs/design/data-quality-pass-2026-09-24.md): plain
-    // `sort(validated_count desc)` degenerates to the server's own
-    // per_class order (alphabetical) whenever every class ties at 0
-    // validated — the live state throughout the audit — which cut the
-    // top-30 slice to the first 30 names alphabetically and hid `pickup`
-    // (557 crops) and `suv` behind small early-alphabet classes.
-    // sortClassBalance() breaks that tie by total crop count instead, so
-    // the classes actually worth a curator's attention surface first.
-    return sortClassBalance(legacyStats.per_class)
-      .slice(0, 30)
-      .map((c) => ({
-        ...c,
-        pct: Math.max(2, Math.round((c.validated_count / max) * 100)),
-        tier: c.adequacy ?? 'block',
-      }));
-  });
-
-  function tierBg(t: string): string {
-    if (t === 'ok') return 'bg-green-500';
-    if (t === 'warn') return 'bg-orange-500';
-    return 'bg-red-500';
-  }
 </script>
 
 <div class="mx-auto max-w-7xl space-y-6 p-6">
@@ -250,45 +230,16 @@
 
   <DatasetStats />
 
-  <!-- Class balance -->
+  <!-- Class balance (D2, visual audit 2026-09-24): ClassBalanceChart. -->
   <section class="surface p-4">
-    <header class="mb-3 flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-zinc-300">Class balance (validated)</h2>
-      <!-- m6 (2026-09-24 interactive pass): the legend used to hardcode
-           500/100, contradicting the served thresholds
-           (block_below/warn_below on legacyStats.thresholds, the same
-           values the bar colors are already computed from). Render the
-           real numbers, or nothing once loaded but absent, rather than
-           a number that never matches the bars. -->
-      <span class="text-xs text-zinc-500">
-        {#if legacyStats?.thresholds}
-          green &ge;{legacyStats.thresholds.warn_below} · orange {legacyStats.thresholds
-            .block_below}–{legacyStats.thresholds.warn_below - 1} · red &lt;{legacyStats
-            .thresholds.block_below}
-        {/if}
-      </span>
-    </header>
-
     {#if !legacyStats}
       <p class="text-sm text-zinc-500">Loading...</p>
-    {:else if balance.length === 0}
-      <p class="text-sm text-zinc-500">No classes yet.</p>
     {:else}
-      <ul class="space-y-1.5">
-        {#each balance as row (row.class_id)}
-          <li class="flex items-center gap-3 text-xs">
-            <span class="w-32 shrink-0 truncate text-zinc-300" title={row.class_name}>
-              {row.class_name}
-            </span>
-            <div class="relative h-4 grow overflow-hidden rounded bg-zinc-900">
-              <div class="h-full {tierBg(row.tier)}" style:width="{row.pct}%"></div>
-            </div>
-            <span class="w-16 shrink-0 text-right font-mono text-zinc-400">
-              {row.validated_count}
-            </span>
-          </li>
-        {/each}
-      </ul>
+      <ClassBalanceChart
+        rows={legacyStats.per_class}
+        holdout={holdoutStats}
+        thresholds={legacyStats.thresholds ?? null}
+      />
     {/if}
   </section>
 

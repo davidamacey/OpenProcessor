@@ -3,6 +3,7 @@ import {
   buildExportRows,
   hasCurrentMulticlassExport,
   isNothingExportable,
+  splitExportClasses,
   type ExportRow,
 } from './exportDatasetRows';
 import type { ExportDataset, StatsSummary, TestHoldoutStats } from '$lib/types';
@@ -157,6 +158,8 @@ function row(over: Partial<ExportRow>): ExportRow {
     aug_target: 0,
     gap: null,
     test_count: 0,
+    trainable: 5,
+    trainableGap: null,
     testDeficient: false,
     adequacy: 'ok',
     ...over,
@@ -197,5 +200,37 @@ describe('isNothingExportable (DQ-M9 frontend half)', () => {
 
   it('false when adequacy is unserved (null) but validated crops exist — never guesses a threshold', () => {
     expect(isNothingExportable([row({ validated: 20, adequacy: null })])).toBe(false);
+  });
+});
+
+describe('E1/E2 (visual audit 2026-09-24): trainable vs held out, classes with objects', () => {
+  it('trainable excludes the served frozen test crops and the gap is measured against it', () => {
+    const rows = buildExportRows(
+      perClass({ class_id: 52, validated_count: 35, aug_target: 500, aug_gap: 465 }),
+      { total: 5, by_class: [{ key: 52, doc_count: 5 }] },
+    );
+    expect(rows[0]).toMatchObject({
+      validated: 35,
+      test_count: 5,
+      trainable: 30,
+      gap: 465,
+      trainableGap: 470,
+    });
+  });
+
+  it('trainableGap stays null when aug_gap is not served', () => {
+    const rows = buildExportRows(perClass({ aug_gap: undefined }), null);
+    expect(rows[0]?.trainableGap).toBeNull();
+    expect(rows[0]?.trainable).toBe(8);
+  });
+
+  it('splitExportClasses separates classes with any exported object from empty ones', () => {
+    const { withObjects, empty } = splitExportClasses([
+      { class_id: 1, train: 0, val: 0, test: 0 },
+      { class_id: 2, train: 0, val: 0, test: 5 },
+      { class_id: 3, train: 24, val: 1, test: 5 },
+    ]);
+    expect(withObjects.map((c) => c.class_id)).toEqual([2, 3]);
+    expect(empty.map((c) => c.class_id)).toEqual([1]);
   });
 });

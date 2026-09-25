@@ -9,6 +9,8 @@ their own collapsed section with the served reason, and offers no
 
 from __future__ import annotations
 
+import re
+
 CLASSES = [
     {
         "id": 67,
@@ -68,13 +70,14 @@ PROPOSALS_SUMMARY = {
 }
 
 
-def test_classes_flagged_terms_render_separately_with_no_create_action(stub, page, app_url):
+def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_url):
     stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
     stub.on(
         "GET",
         r"/review/new_class_proposals/summary(\?|$)",
         PROPOSALS_SUMMARY,
     )
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
 
     page.goto(f"{app_url}/classes")
 
@@ -85,32 +88,79 @@ def test_classes_flagged_terms_render_separately_with_no_create_action(stub, pag
     assert page.get_by_text("classic_car").count() >= 1
     assert page.get_by_text("Create class & assign").count() == 1
 
-    # flagged_terms: collapsed <details>, not expanded by default.
-    details = page.locator("details", has_text="Flagged terms")
-    details.wait_for(timeout=15000)
-    assert details.get_attribute("open") is None
+    # Visual audit 2026-09-24 L2: flagged terms share the one list (sorted
+    # by count) instead of a collapsed, action-less <details>; each shows
+    # its served reason and never a create action.
+    rows = page.get_by_test_id("proposal-row")
+    rows.first.wait_for(timeout=15000)
+    for label, reason in (
+        ("motorcycle", "generic parent"),
+        ("suv", "existing class"),
+        ("abstract_blur", "not an object"),
+    ):
+        row = rows.filter(
+            has=page.locator("div.text-sm", has_text=re.compile(rf"^{label}$"))
+        ).first
+        text = row.inner_text()
+        assert reason in text, (label, text)
+        assert row.get_by_text("Create class & assign").count() == 0, label
 
-    # Expand it and check every flagged term's reason renders, with no
-    # create action anywhere inside the flagged section.
-    details.locator("summary").click()
-    page.wait_for_timeout(200)
-
-    details_text = details.inner_text()
-    assert "motorcycle" in details_text
-    assert "generic parent" in details_text
-    assert "suv" in details_text
-    assert "existing class" in details_text
-    assert "abstract_blur" in details_text
-    assert "not an object" in details_text
-
-    # No "Create class & assign" button inside the flagged section.
-    assert details.get_by_text("Create class & assign").count() == 0
-
-    # existing_class term gets a map-to-class button naming the class.
-    assert details.get_by_role("button", name="Map to suv").count() == 1
+    # existing_class term gets a map-to-class button naming the class;
+    # the other flagged terms get "map to existing".
+    assert page.get_by_role("button", name="Map to suv").count() == 1
+    assert rows.filter(has_text="motorcycle").first.locator("select").count() == 1
 
     # without_term and term_rules surface as help text somewhere on the
     # page (not silently dropped).
     body_text = page.locator("body").inner_text()
     assert "12" in body_text  # without_term count
     assert "abstract_blur" in body_text  # term_rules non_object_terms
+
+
+def test_classes_table_fits_800px(stub, page, app_url):
+    """Visual audit 2026-09-24 L5: at 800px the class table was 932px wide
+    and scrolled sideways; the ID and Added columns now hide below lg."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", PROPOSALS_SUMMARY)
+    stub.on(
+        "GET",
+        r"/test_holdout/stats(\?|$)",
+        {"total": 5, "by_class": [{"key": CLASSES[0]["id"], "doc_count": 5}]},
+    )
+    page.set_viewport_size({"width": 800, "height": 1000})
+    page.goto(f"{app_url}/classes")
+    table = page.locator("table").first
+    table.wait_for(timeout=15000)
+    page.get_by_test_id("validated-test-suffix").first.wait_for(timeout=10000)
+    width = table.evaluate("t => t.scrollWidth")
+    container = table.evaluate("t => t.parentElement.clientWidth")
+    assert width <= container + 1, (width, container)
+    headers = [h.strip().lower() for h in table.locator("thead th:visible").all_inner_texts()]
+    assert "id" not in headers and "added" not in headers, headers
+    assert "validated" in headers, headers
+
+
+def test_class_table_keeps_its_height_under_a_long_proposals_list(stub, page, app_url):
+    """With ~60 proposal rows above it, the flex-1/overflow-auto table
+    section used to collapse to almost nothing (seen live at 800px)."""
+    many = dict(PROPOSALS_SUMMARY)
+    many["top_terms"] = [
+        {
+            "label": f"term_{i:02d}",
+            "count": 1,
+            "sample_crop_ids": [],
+            "flag": None,
+            "class_id": None,
+        }
+        for i in range(60)
+    ]
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on("GET", r"/review/new_class_proposals/summary(\?|$)", many)
+    stub.on("GET", r"/test_holdout/stats(\?|$)", {"total": 0, "by_class": []})
+    page.set_viewport_size({"width": 800, "height": 1000})
+    page.goto(f"{app_url}/classes")
+    table = page.locator("table").first
+    table.wait_for(timeout=15000)
+    page.get_by_test_id("proposal-row").nth(59).wait_for(timeout=10000)
+    height = table.evaluate("t => t.closest('section').getBoundingClientRect().height")
+    assert height >= 300, height

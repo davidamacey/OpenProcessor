@@ -15,6 +15,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, unmount, flushSync } from 'svelte';
 import StrategyBar from './StrategyBar.svelte';
 import { createStrategyBar } from '$lib/strategyBar.svelte';
+import { FALLBACK_METHODS } from '$lib/strategies';
+import { strategiesStore } from '$stores/strategies.svelte';
 
 let target: HTMLDivElement;
 let instance: unknown;
@@ -55,6 +57,28 @@ describe('StrategyBar — applied-sort summary', () => {
     const el = render({ bar, appliedSort: 'atypicality' });
 
     expect(el.textContent).not.toContain('→');
+  });
+
+  // R4 (docs/design/visual-audit-2026-09-24.md): the chip showed raw ids
+  // ("→ coco_blind_spots_default") though /methods serves a label for each.
+  it('shows the served /methods label for the applied sort, not its raw id', () => {
+    strategiesStore.methods = {
+      ...FALLBACK_METHODS,
+      review_sorts: [
+        {
+          id: 'primary_low_conf_default',
+          axis: 'sort',
+          label: 'Largest subject, least confident',
+          status: 'stable',
+        },
+      ],
+    } as never;
+    const bar = createStrategyBar();
+    const el = render({ bar, appliedSort: 'primary_low_conf_default' });
+
+    expect(el.textContent).toContain('→ Largest subject, least confident');
+    expect(el.textContent).not.toContain('primary_low_conf_default');
+    strategiesStore.methods = FALLBACK_METHODS;
   });
 
   it('shows nothing when no applied sort was reported', () => {

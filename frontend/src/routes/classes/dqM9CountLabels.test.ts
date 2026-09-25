@@ -25,6 +25,6 @@ describe('DQ-m9: /classes labels its Total column as the cluster bucket size', (
   it("carries a tooltip distinguishing it from /export's Total column", () => {
     const idx = src.indexOf('Total (in cluster)');
     const before = src.slice(Math.max(0, idx - 400), idx);
-    expect(before).toMatch(/title="Class-cluster bucket size/);
+    expect(before).toMatch(/title="Class-cluster size \(cluster_size\)/);
   });
 });

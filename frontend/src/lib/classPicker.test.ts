@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { resolveConfirmClassId, searchClasses } from './classPicker';
+import {
+  itemHintClassIds,
+  quickAssignClasses,
+  resolveConfirmClassId,
+  searchClasses,
+} from './classPicker';
+import { isItemClassTarget } from '$lib/classVisibility';
+import { registeredSlots } from '$lib/annotations/registeredSlots';
 import type { RegistryClass } from '$lib/types';
 
 function cls(over: Partial<RegistryClass> & { id: number; name: string }): RegistryClass {
@@ -105,5 +112,67 @@ describe('resolveConfirmClassId', () => {
     expect(resolveConfirmClassId({ proposed_class_id: null })).toBeNull();
     expect(resolveConfirmClassId(null)).toBeNull();
     expect(resolveConfirmClassId(undefined)).toBeNull();
+  });
+});
+
+// R1 (docs/design/visual-audit-2026-09-24.md): the slot-bound region class
+// topped the picker and quick-assign row (most validated), so `/` + Enter
+// labeled an item as a region. Resolved through the live slot registry,
+// never a hardcoded name.
+describe('item-class targets (visual audit R1)', () => {
+  const slotClassName = registeredSlots.find((s) => s.bind.className)?.bind
+    .className as string;
+
+  function poolWithSlotClass(): RegistryClass[] {
+    return [
+      cls({ id: 80, name: slotClassName, validated_count: 163 }),
+      cls({ id: 1, name: 'miata', validated_count: 35 }),
+      cls({ id: 2, name: 'touringbike', validated_count: 0 }),
+      cls({ id: 3, name: 'class_b', validated_count: 3 }),
+    ];
+  }
+
+  it('the registry binds at least one slot to a class (precondition)', () => {
+    expect(slotClassName).toBeTruthy();
+    expect(isItemClassTarget({ name: slotClassName })).toBe(false);
+    expect(isItemClassTarget({ name: 'miata' })).toBe(true);
+  });
+
+  it('quickAssignClasses never offers the slot-bound class, however validated', () => {
+    const row = quickAssignClasses(poolWithSlotClass(), [], 10);
+    expect(row.map((c) => c.name)).not.toContain(slotClassName);
+    expect(row[0].name).toBe('miata');
+  });
+
+  it("quickAssignClasses puts the item's own hinted classes first, in hint order", () => {
+    const row = quickAssignClasses(poolWithSlotClass(), [2, null, 3], 10);
+    expect(row.map((c) => c.id)).toEqual([2, 3, 1]);
+  });
+
+  it('quickAssignClasses ignores a hint pointing at the slot-bound class', () => {
+    const row = quickAssignClasses(poolWithSlotClass(), [80], 10);
+    expect(row.map((c) => c.id)).toEqual([1, 3, 2]);
+  });
+
+  it('searchClasses with an empty query ranks preferred ids first', () => {
+    const out = searchClasses(poolWithSlotClass(), '', undefined, [3]);
+    expect(out[0].id).toBe(3);
+  });
+
+  it('searchClasses ignores preferred ids once the operator types a query', () => {
+    const out = searchClasses(poolWithSlotClass(), 'mia', undefined, [3]);
+    expect(out.map((c) => c.id)).toEqual([1]);
+  });
+
+  it('itemHintClassIds reads proposal, current, VLM and model ids in that order', () => {
+    expect(
+      itemHintClassIds({
+        proposed_class_id: 5,
+        class_id: null,
+        vlm_suggested_class_id: 7,
+        probe_pred_class_id: 9,
+      }),
+    ).toEqual([5, 7, 9]);
+    expect(itemHintClassIds(null)).toEqual([]);
   });
 });

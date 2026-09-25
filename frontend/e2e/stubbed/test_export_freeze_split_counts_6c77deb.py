@@ -210,3 +210,54 @@ def test_require_fully_labeled_images_checkbox_sends_the_flag(stub, page, app_ur
 
     errors = [c for c in stub.console_errors if c.startswith("pageerror")]
     assert not errors, f"no pageerror expected: {errors[:3]}"
+
+
+def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page, app_url):
+    """Visual audit 2026-09-24 E1/E2: Validated included frozen test crops
+    (so GAP was 5 too small) and "classes 84" counted the registry, not
+    the classes that actually have exported objects."""
+    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
+    stub.on(
+        "GET",
+        r"/stats/classes(\?|$)",
+        {
+            "classes": [
+                {"class_id": 1, "class_name": "bmw", "count": 108, "validated_count": 35,
+                 "adequacy": "warn", "aug_target": 500, "aug_gap": 465},
+                {"class_id": 2, "class_name": "audi", "count": 10, "validated_count": 0,
+                 "adequacy": "block", "aug_target": 500, "aug_gap": 500},
+            ],
+            "thresholds": {"block_below": 20, "warn_below": 500, "min_test": 5},
+        },
+    )
+    stub.on("GET", r"/stats/dataset(\?|$)", STATS_DATASET)
+    stub.on(
+        "GET",
+        r"/test_holdout/stats(\?|$)",
+        {"total": 5, "by_class": [{"key": 1, "doc_count": 5, "deficient": False}],
+         "min_test_per_class": 5},
+    )
+    status = dict(EXPORT_STATUS_SUCCESS)
+    status["class_split_counts"] = [
+        {"class_id": 1, "export_id": 0, "class_name": "bmw", "train": 24, "val": 6, "test": 5},
+        {"class_id": 2, "export_id": 1, "class_name": "audi", "train": 0, "val": 0, "test": 0},
+    ]
+    stub.on("GET", r"/export/status(\?|$)", status)
+    stub.on("GET", r"/export/datasets(\?|$)", {"datasets": []})
+
+    page.goto(f"{app_url}/export")
+    bmw = page.locator("table tr", has_text="bmw").first
+    bmw.wait_for(timeout=15000)
+    cells = [c.strip() for c in bmw.locator("td").all_inner_texts()]
+    # Class, ID, Total, Validated, Trainable, Aug target, Gap, Test, Adequacy
+    assert cells[3:8] == ["35", "30", "500", "+470", "5"], cells
+
+    chip = " ".join(page.locator('[data-testid="export-class-count"]').inner_text().split())
+    assert chip == "1 classes with objects (2 in registry)", chip
+
+    page.get_by_text("Per-class object counts", exact=False).click()
+    details = page.locator("details", has_text="Per-class object counts")
+    assert details.locator("tr", has_text="audi").count() == 0
+    assert "1 class with no objects" in details.inner_text()
+    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
+    assert not errors, errors[:3]

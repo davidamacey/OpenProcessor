@@ -1886,6 +1886,50 @@ describe('getClusters purity_tier/promotable/core_similarity_min', () => {
     expect(res.purity_thresholds).toMatchObject({ pure_min: 0.85, mixed_min: 0.6 });
   });
 
+  it('C1: dominant_pct is the served label_purity, never the geometry purity', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              cluster_id: 64,
+              cluster_kind: 'class',
+              size: 616,
+              validated_count: 0,
+              labelled_count: 616,
+              dominant_class_id: 64,
+              dominant_class_name: 'class_b',
+              dominant_count: 616,
+              purity: 0.03,
+              purity_n: 616,
+              purity_basis: 'nearest_centroid',
+              purity_tier: 'noisy',
+              label_purity: 1.0,
+              labelled_share: 1.0,
+              promotable: false,
+              is_unlabeled: false,
+              n_subclusters: 0,
+              updated_at: null,
+              representatives: [],
+            },
+          ],
+          total: 1,
+          total_class_clusters: 1,
+          total_candidate_clusters: 0,
+          cluster_id_offset: 10000,
+        }),
+      ),
+    );
+    const res = await getClusters();
+    expect(res.items[0]).toMatchObject({
+      dominant_pct: 1.0,
+      purity: 0.03,
+      dominant_count: 616,
+      labelled_count: 616,
+    });
+  });
+
   it('getClusters reports purity_thresholds as null when the server omits it, never a stale hardcoded value', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

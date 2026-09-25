@@ -51,6 +51,14 @@ describe('RunResults — val vs test labelling', () => {
     expect(el.textContent).toContain('test split (frozen holdout)');
   });
 
+  it('T5 (visual audit 2026-09-24): names the run it belongs to inside the open panel', () => {
+    getTrainManifestMock.mockResolvedValue(trainManifestFixture);
+    const el = renderRunResults(trainStatusFixture);
+    expect(
+      el.querySelector('[data-testid="run-results-title"]')?.textContent?.trim(),
+    ).toBe(`Results for ${trainStatusFixture.job_id}`);
+  });
+
   it('labels best/last metric as validation, never as test', () => {
     getTrainManifestMock.mockResolvedValue(trainManifestFixture);
     const el = renderRunResults(trainStatusFixture);

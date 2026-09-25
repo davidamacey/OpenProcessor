@@ -15,18 +15,22 @@ import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+// Visual audit D2 moved the chart into ClassBalanceChart /
+// buildClassBalance(); the tiebreak must still go through sortClassBalance.
+const balanceSrc = readFileSync(
+  path.join(here, '../../lib/dashboard/classBalance.ts'),
+  'utf-8',
+);
 
 describe('DQ-m11: the dashboard class-balance strip breaks validated_count ties by total count', () => {
-  it('balance uses sortClassBalance(), not a raw validated_count-only sort', () => {
-    expect(src).toMatch(/return sortClassBalance\(legacyStats\.per_class\)/);
+  it('the page renders the shared chart over the served per_class rows', () => {
+    expect(src).toMatch(/<ClassBalanceChart\s+rows=\{legacyStats\.per_class\}/);
     expect(src).not.toMatch(
       /\.sort\(\(a, b\) => b\.validated_count - a\.validated_count\)/,
     );
   });
 
-  it('imports the shared, unit-tested helper rather than reimplementing the tiebreak inline', () => {
-    expect(src).toMatch(
-      /import \{ sortClassBalance \} from '\$lib\/dashboard\/classBalance';/,
-    );
+  it('buildClassBalance orders rows with the shared, unit-tested sortClassBalance', () => {
+    expect(balanceSrc).toMatch(/const sorted = sortClassBalance\(rows\);/);
   });
 });
