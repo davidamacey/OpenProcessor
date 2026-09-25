@@ -348,8 +348,28 @@ services:
       # protocol POST /curation/pipeline/auto_label writes into (see
       # OP_AUTO_LABEL_STATE_DIR, default /jobs/auto_label).
       - openprocessor-jobs:/jobs
+      # F-33/F-34: this worker runs the full VLM auto-label pipeline
+      # in-process (pipeline -> _common -> cascade_detect ->
+      # profile_registry / class registry / source-image serving), not a
+      # thin HTTP client like vlm-worker/cluster-refresh -- it needs the
+      # same three mounts as curation-detection-worker and yolo-api, at
+      # the same container paths, or it 404s/FileNotFoundErrors on its
+      # first claimed job while its idle healthcheck stays green.
+      # Source images (OP_SOURCE_ROOT): without this every thumbnail
+      # fetch 404s and the VLM stage silently predicts 0 (job still
+      # reports "completed").
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      # Class registry (OP_REGISTRY_PATH, default ./data/class_registry.json):
+      # without this the registry loads empty and the stage raises
+      # "class_names or class_catalog must be supplied".
+      - ./data:/app/data
+      # Region profiles (OP_REGION_PROFILE_PATH): without this the worker
+      # dies with FileNotFoundError the moment it claims a job that needs
+      # a region profile (e.g. license_plate.json).
+      - ./examples:/app/examples:ro
     environment:
       - OPENSEARCH_URL=http://opensearch:9200
+      - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
       - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
       - OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}
       - MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}
