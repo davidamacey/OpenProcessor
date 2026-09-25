@@ -22,16 +22,16 @@ describe('/bakeoff availability gate', () => {
     );
   });
 
-  // onMount must gate the four discovery GETs behind the probe — firing
-  // them unconditionally is the exact "never 404" violation this gate
-  // exists to remove (see /train's datasetExportGate.test.ts sibling
-  // assertion).
-  it('onMount does not call refreshDatasets before the availability check', () => {
+  // onMount must gate the discovery GETs (controller.init) behind the
+  // probe — firing them unconditionally is the exact "never 404" violation
+  // this gate exists to remove (see /train's datasetExportGate.test.ts
+  // sibling assertion).
+  it('onMount does not call controller.init before the availability check', () => {
     const onMountMatch = pageSrc.match(/onMount\(async \(\) => \{[\s\S]*?\n {2}\}\);/);
     expect(onMountMatch).not.toBeNull();
     const body = onMountMatch![0];
-    const availabilityIdx = body.indexOf('bakeoffAvailability');
-    const refreshIdx = body.indexOf('refreshDatasets');
+    const availabilityIdx = body.indexOf('bakeoffAvailability.available === false');
+    const refreshIdx = body.indexOf('controller.init()');
     expect(availabilityIdx).toBeGreaterThan(-1);
     expect(refreshIdx).toBeGreaterThan(-1);
     expect(availabilityIdx).toBeLessThan(refreshIdx);
